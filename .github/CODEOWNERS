@@ -1,0 +1,5 @@
+# List of source code paths and code owners
+# common services & repos
+*:
+ - whynowy
+ - vigith

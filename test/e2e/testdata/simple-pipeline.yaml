@@ -1,0 +1,23 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-pipeline
+spec:
+  vertices:
+    - name: input
+      source:
+        generator:
+          rpu: 5
+          duration: 1s
+    - name: p1
+      udf:
+        builtin:
+          name: cat
+    - name: output
+      sink:
+        log: {}
+  edges:
+    - from: input
+      to: p1
+    - from: p1
+      to: output

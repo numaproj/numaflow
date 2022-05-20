@@ -1,0 +1,29 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+  name: numaflow-aggregate-to-admin
+rules:
+  - apiGroups:
+      - numaflow.numaproj.io
+    resources:
+      - interstepbufferservices
+      - interstepbufferservices/finalizer
+      - interstepbufferservices/status
+      - pipelines
+      - pipelines/finalizers
+      - pipelines/status
+      - vertices
+      - vertices/finalizers
+      - vertices/status
+      - vertices/scale
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch

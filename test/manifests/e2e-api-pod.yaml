@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e2e-api-pod
+spec:
+  containers:
+    - name: main
+      image: quay.io/numaproj/e2eapi:latest
+      imagePullPolicy: Never
+      resources:
+        limits:
+          cpu: 100m
+          memory: 140Mi

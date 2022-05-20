@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+  name: numaflow-aggregate-to-view
+rules:
+  - apiGroups:
+      - numaflow.numaproj.io
+    resources:
+      - interstepbufferservices
+      - interstepbufferservices/finalizers
+      - interstepbufferservices/status
+      - pipelines
+      - pipelines/finalizers
+      - pipelines/status
+      - vertices
+      - vertices/finalizers
+      - vertices/status
+      - vertices/scale
+    verbs:
+      - get
+      - list
+      - watch

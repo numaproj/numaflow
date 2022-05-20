@@ -1,0 +1,53 @@
+syntax = "proto2";
+option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/daemon";
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+
+package daemon;
+
+// BufferInfo is used to provide information about the buffer including
+// pending messages count, if it has unprocessed data etc which helps in pipeline/buffer deletion etc
+message BufferInfo {
+  required string pipeline = 1;
+  required string fromVertex = 2;
+  required string toVertex = 3;
+  required string bufferName = 4;
+  required int64 pendingCount = 5;
+  required int64 ackPendingCount = 6;
+  // Total messages existing in the buffer, including pending, ackPending and acked.
+  required int64 totalMessages = 7;
+  required int64 bufferLength = 8;
+  required double bufferUsageLimit = 9;
+  required double bufferUsage = 10;
+  required bool isFull = 11;
+}
+
+message ListBuffersRequest {
+    required string pipeline = 1;
+}
+
+message ListBuffersResponse {
+    repeated BufferInfo buffers = 1;
+}
+
+message GetBufferRequest {
+  required string pipeline = 1;
+  required string buffer = 2;
+}
+
+message GetBufferResponse {
+    required BufferInfo buffer = 1;
+}
+
+// DaemonService is a grpc service that is used to provide APIs for giving any pipeline information.
+service DaemonService {
+
+  rpc ListBuffers (ListBuffersRequest) returns (ListBuffersResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/buffers";
+  };
+
+  rpc GetBuffer (GetBufferRequest) returns (GetBufferResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/buffers/{buffer}";
+  };
+}
