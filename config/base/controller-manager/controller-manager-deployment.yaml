@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: numaflow
+      app.kubernetes.io/component: controller-manager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: numaflow
+        app.kubernetes.io/component: controller-manager
+    spec:
+      serviceAccountName: numaflow-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 9737
+      containers:
+        - name: controller-manager
+          image: quay.io/numaproj/numaflow:latest
+          imagePullPolicy: Always
+          args:
+            - controller
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NUMAFLOW_IMAGE
+              value: quay.io/numaproj/numaflow:latest
+          volumeMounts:
+            - mountPath: /etc/numaflow
+              name: controller-config-volume
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 3
+            periodSeconds: 3
+      volumes:
+        - name: controller-config-volume
+          configMap:
+            name: numaflow-controller-config

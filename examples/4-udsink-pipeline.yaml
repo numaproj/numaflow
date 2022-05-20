@@ -1,0 +1,26 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: udsink-pipeline
+spec:
+  vertices:
+    - name: input
+      source:
+        generator:
+          rpu: 1
+          duration: 1s
+          msgSize: 10
+    - name: p1
+      udf:
+        builtin:
+          name: cat
+    - name: output
+      sink:
+        udsink:
+          container:
+            image: my-sink:latest
+  edges:
+    - from: input
+      to: p1
+    - from: p1
+      to: output

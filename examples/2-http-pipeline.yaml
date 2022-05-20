@@ -1,0 +1,31 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: http-pipeline
+spec:
+  vertices:
+    - name: input
+      source:
+        # A self data generating source
+        http:
+          # Whether to create a ClusterIP Service, defaults to false
+          service: true
+          # Optional bearer token auth
+          auth:
+            # A secret selector pointing to the secret contains token
+            token:
+              name: my-secret
+              key: my-key
+    - name: cat
+      udf:
+        builtin:
+          name: cat # A builtin UDF which simply cats the message
+    - name: output
+      sink:
+        # A simple log printing sink
+        log: {}
+  edges:
+    - from: input
+      to: cat
+    - from: cat
+      to: output

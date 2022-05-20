@@ -1,0 +1,33 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: filter-pipeline
+spec:
+  vertices:
+    - name: input
+      source:
+        # A self data generating source
+        http:
+          # Whether to create a ClusterIP Service, defaults to false
+          service: true
+          # Optional bearer token auth
+          auth:
+            # A secret selector pointing to the secret contains token
+            token:
+              name: my-secret
+              key: my-key
+    - name: filter
+      udf:
+        builtin:
+          name: filter
+          kwargs:
+            expression: int(json(payload).id) < 100
+    - name: output
+      sink:
+        # A simple log printing sink
+        log: {}
+  edges:
+    - from: input
+      to: filter
+    - from: filter
+      to: output
