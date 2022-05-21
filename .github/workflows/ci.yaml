@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - "main"
+      - "ci"
       - "release-*"
   pull_request:
     branches: [ main ]
