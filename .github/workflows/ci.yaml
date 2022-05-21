@@ -109,7 +109,7 @@ jobs:
       max-parallel: 4
       matrix:
         driver: [jetstream]
-        case: [e2e, kafka-e2e]
+        case: [e2e]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
