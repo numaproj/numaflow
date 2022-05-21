@@ -92,7 +92,7 @@ test-%:
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp=controller-manager,app.kubernetes.io/part-of=numaflow
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
-	kubectl -n numaflow-system apply -f  test/manifests/e2e-api-pod.yaml
+	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
 	go test -v -timeout 10m -count 1 --tags test -p 1 ./test/$*
 
