@@ -41,6 +41,15 @@ jobs:
           sudo find /usr/local/include -type d | xargs sudo chmod a+rx
           rm -f $PROTOC_ZIP
           ls /usr/local/include/google/protobuf/
+      - name: Install pandoc
+        run: |
+          set -eux -o pipefail
+          PANDOC_VERSION=2.17.1
+          PANDOC_ZIP=pandoc-$PANDOC_VERSION-linux-amd64.tar.gz
+          curl -OL https://github.com/jgm/pandoc/releases/download/$PANDOC_VERSION/$PANDOC_ZIP
+          sudo tar xvzf $PANDOC_ZIP --strip-components 1 -C /usr/local
+          rm -f $PANDOC_ZIP
+          echo /usr/local/pandoc-$PANDOC_VERSION/bin >> $GITHUB_PATH
       - name: Get dependencies
         run: go mod download
       - name: Make codegen
