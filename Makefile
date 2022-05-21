@@ -12,6 +12,7 @@ GIT_TREE_STATE=$(shell if [ -z "`git status --porcelain`" ]; then echo "clean" ;
 DOCKER_PUSH?=false
 IMAGE_NAMESPACE?=quay.io/numaproj
 VERSION?=latest
+BASE_VERSION:=latest
 
 override LDFLAGS += \
   -X ${PACKAGE}.version=${VERSION} \
@@ -140,7 +141,7 @@ lint: $(GOPATH)/bin/golangci-lint
 .PHONY: start
 start: image
 	kubectl apply -f test/manifests/numaflow-ns.yaml
-	kubectl kustomize test/manifests | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
+	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
 	kubectl -n numaflow-system wait --for=condition=Ready --timeout 60s pod --all
 
 
