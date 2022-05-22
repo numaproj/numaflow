@@ -1,0 +1,158 @@
+name: test
+on:
+  push:
+    branches:
+      - "main"
+      - "release-*"
+  pull_request:
+    branches: [ main ]
+jobs:
+  codegen:
+    name: Codegen
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Restore go build cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-v1-${{ hashFiles('**/go.mod') }}
+      - name: Setup Golang
+        uses: actions/setup-go@v3.1.0
+        with:
+          go-version: "1.17"
+      - name: Add bins to PATH
+        run: |
+          echo /home/runner/go/bin >> $GITHUB_PATH
+          echo /usr/local/bin >> $GITHUB_PATH
+      - name: Install protoc
+        run: |
+          set -eux -o pipefail
+          PROTOC_VERSION=3.19.4
+          PROTOC_ZIP=protoc-$PROTOC_VERSION-linux-x86_64.zip
+          curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP
+          sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+          sudo unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
+          sudo chmod +x /usr/local/bin/protoc
+          sudo find /usr/local/include -type f | xargs sudo chmod a+r
+          sudo find /usr/local/include -type d | xargs sudo chmod a+rx
+          rm -f $PROTOC_ZIP
+          ls /usr/local/include/google/protobuf/
+      - name: Install pandoc
+        run: |
+          set -eux -o pipefail
+          PANDOC_VERSION=2.17.1
+          PANDOC_ZIP=pandoc-$PANDOC_VERSION-linux-amd64.tar.gz
+          curl -OL https://github.com/jgm/pandoc/releases/download/$PANDOC_VERSION/$PANDOC_ZIP
+          sudo tar xvzf $PANDOC_ZIP --strip-components 1 -C /usr/local
+          rm -f $PANDOC_ZIP
+          echo /usr/local/pandoc-$PANDOC_VERSION/bin >> $GITHUB_PATH
+      - name: Get dependencies
+        run: go mod download
+      - name: Make codegen
+        run: |
+          echo 'GOPATH=/home/runner/go' >> $GITHUB_ENV
+          make -B codegen
+      - name: Ensure nothing changed
+        run: git diff --exit-code
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v3.1.0
+        with:
+          go-version: "1.17"
+        id: go
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+      - name: Restore Go build cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
+      - name: Get dependencies
+        run: go mod download
+      - name: Install JetStream
+        run: |
+          set -eux -o pipefail
+          JS_VERSION=2.8.2
+          curl -L https://github.com/nats-io/nats-server/releases/download/v$JS_VERSION/nats-server-v$JS_VERSION-linux-amd64.zip -o nats-server.zip
+          sudo unzip nats-server.zip -d nats-server
+          nats-server/nats-server-v$JS_VERSION-linux-amd64/nats-server -js &
+      - name: Insall Redis
+        uses: shogo82148/actions-setup-redis@v1
+        with:
+          redis-version: '6.2'
+      - run: redis-cli ping
+      - name: Test
+        run: make test-code
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GOPATH: /home/runner/go
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Golang
+        uses: actions/setup-go@v3.1.0
+        with:
+          go-version: "1.17"
+      - name: Restore Go build cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
+      - run: make lint
+      - run: git diff --exit-code
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        driver: [jetstream]
+        case: [e2e]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Restore go build cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-v2-${{ hashFiles('**/go.mod') }}
+      - name: Setup Golang
+        uses: actions/setup-go@v3.1.0
+        with:
+          go-version: "1.17"
+      - name: Add bins to PATH
+        run: |
+          echo /home/runner/go/bin >> $GITHUB_PATH
+          echo /usr/local/bin >> $GITHUB_PATH
+      - name: Install k3d
+        run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
+      - name: Create a registry and a cluster
+        run: |
+          k3d registry create e2e-registry --port 5111
+          k3d cluster create e2e --registry-use k3d-e2e-registry:5111
+          k3d kubeconfig get e2e > ~/.kube/numaflow-e2e-config
+          echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
+      - name: Install NumaFlow
+        env:
+          GOPATH: /home/runner/go
+        run: |
+          KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true make start
+      - name: Run tests
+        env:
+          GOPATH: /home/runner/go
+        run: KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
+
