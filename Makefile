@@ -12,6 +12,7 @@ GIT_TREE_STATE=$(shell if [ -z "`git status --porcelain`" ]; then echo "clean" ;
 DOCKER_PUSH?=false
 IMAGE_NAMESPACE?=quay.io/numaproj
 VERSION?=latest
+BASE_VERSION:=latest
 
 override LDFLAGS += \
   -X ${PACKAGE}.version=${VERSION} \
@@ -91,11 +92,9 @@ test-%:
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp=controller-manager,app.kubernetes.io/part-of=numaflow
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
-	kubectl -n numaflow-system apply -f  test/manifests/e2e-api-pod.yaml
+	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
 	go test -v -timeout 10m -count 1 --tags test -p 1 ./test/$*
-
-
 
 .PHONY: image
 image: clean dist/$(BINARY_NAME)-linux-amd64
@@ -140,13 +139,14 @@ lint: $(GOPATH)/bin/golangci-lint
 .PHONY: start
 start: image
 	kubectl apply -f test/manifests/numaflow-ns.yaml
-	kubectl kustomize test/manifests | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
+	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
 	kubectl -n numaflow-system wait --for=condition=Ready --timeout 60s pod --all
 
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
 	DOCKER_BUILDKIT=1 docker build . --build-arg "ARCH=amd64" --platform=linux/amd64 --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
+	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
 ifeq ($(K3D),true)
 	k3d image import $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
