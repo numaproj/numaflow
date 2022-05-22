@@ -108,6 +108,13 @@ image-linux-%: dist/$(BINARY_NAME)-linux-$*
 	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=$*" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$* --platform "linux/$*" --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$*; fi
 
+image-multi: set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
+	docker buildx build --tag $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file ./Dockerfile ${PUSH_OPTION} .
+
+set-qemu:
+	docker pull tonistiigi/binfmt:latest
+	docker run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
+
 .PHONY: codegen
 codegen:
 	./hack/generate-proto.sh
@@ -150,3 +157,8 @@ e2eapi-image: clean dist/e2eapi
 ifeq ($(K3D),true)
 	k3d image import $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
+
+.PHONY: checksums
+checksums:
+	for f in ./dist/$(BINARY_NAME)-*.gz; do openssl dgst -sha256 "$$f" | awk ' { print $$2 }' > "$$f".sha256 ; done
+
