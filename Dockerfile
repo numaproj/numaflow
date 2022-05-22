@@ -1,3 +1,4 @@
+ARG ARCH=$TARGETARCH
 ####################################################################################################
 # base
 ####################################################################################################
@@ -13,9 +14,7 @@ RUN chmod +x /bin/numaflow
 ####################################################################################################
 # numaflow
 ####################################################################################################
-# Temporarily use alpine as base image
-#FROM scratch as numaflow
-FROM alpine:3.12.3 as numaflow
+FROM scratch as numaflow
 ARG ARCH
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt

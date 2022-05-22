@@ -1,0 +1,133 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+      - dev-*
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-binaries:
+    runs-on: ubuntu-20.04
+    if: github.repository == 'numaproj/numaflow'
+    name: Build binaries
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v3.1.0
+        with:
+          go-version: 1.17
+
+      - name: Build binaries
+        run: |
+          make build
+          chmod -R +x dist
+      - name: Make checksums
+        run: make checksums
+      - name: store artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: dist
+
+  build-push-linux-multi:
+    name: Build & push linux/amd64 and linux/arm64
+    needs: [ build-binaries ]
+    runs-on: ubuntu-20.04
+    if: github.repository == 'numaproj/numaflow'
+    strategy:
+      matrix:
+        target: [ numaflow ]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: binaries
+          path: dist/
+
+      - name: Registry Login
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAYIO_USERNAME }}
+          password: ${{ secrets.QUAYIO_PASSWORD }}
+
+      - name: set Version
+        id: version
+        run: |
+          tag=$(basename $GITHUB_REF)
+          if [ $tag = "main" ]; then
+            tag="latest"
+          fi
+          echo "::set-output name=VERSION::$tag"
+
+      - name: Container build and push with arm64/amd64
+        run: |
+          IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true make image-multi
+
+  bom:
+    runs-on: ubuntu-latest
+    if: github.repository == 'numaproj/numaflow'
+    needs: [ build-push-linux-multi ]
+    steps:
+      # https://stackoverflow.com/questions/58033366/how-to-get-current-branch-within-github-actions
+      - run: |
+          if [ ${GITHUB_REF##*/} = main ]; then
+           echo "VERSION=latest" >> $GITHUB_ENV
+          else
+            echo "VERSION=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          fi
+      - uses: actions/setup-go@v3.1.0
+        with:
+          go-version: 1.17
+      - uses: actions/checkout@v3
+      - run: go install sigs.k8s.io/bom/cmd/bom@v0.2.0
+      - run: go install github.com/spdx/spdx-sbom-generator/cmd/generator@v0.0.13
+      - run: mkdir -p dist
+      - run: generator -o dist -p .
+      - run: bom generate --image quay.io/numaproj/numaflow:$VERSION -o dist/numaflow.spdx
+      # pack the boms into one file to make it easy to download
+      - run: tar -zcf sbom.tar.gz dist/*.spdx
+      - uses: actions/upload-artifact@v3
+        with:
+          name: sbom.tar.gz
+          path: sbom.tar.gz
+
+  release:
+    runs-on: ubuntu-latest
+    if: github.repository == 'numaproj/numaflow'
+    needs: [ build-push-linux-multi, bom ]
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: binaries
+          path: dist/
+      - uses: actions/download-artifact@v3
+        with:
+          name: sbom.tar.gz
+          path: sbom.tar.gz
+      - name: Release binaries
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist/*.gz
+            dist/*.gz.sha256
+            manifests/*.yaml
+            sbom.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
