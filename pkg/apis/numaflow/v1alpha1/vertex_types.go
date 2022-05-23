@@ -113,6 +113,16 @@ func (v Vertex) getServiceObj(name string, headless bool, port int) *corev1.Serv
 	return svc
 }
 
+func (v Vertex) commonEvns() []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
+		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
+		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
+		{Name: EnvVertexName, Value: v.Spec.Name},
+	}
+}
+
 func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	vertexCopy := &Vertex{
 		ObjectMeta: metav1.ObjectMeta{
@@ -127,14 +137,9 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 	encodedVertexSpec := base64.StdEncoding.EncodeToString(vertexBytes)
 	envVars := []corev1.EnvVar{
-		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
-		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
-		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
-		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
-		{Name: EnvVertexName, Value: v.Spec.Name},
 		{Name: EnvVertexObject, Value: encodedVertexSpec},
-		{Name: "GODEBUG", Value: os.Getenv("GODEBUG")},
 	}
+	envVars = append(envVars, v.commonEvns()...)
 	envVars = append(envVars, req.Env...)
 	resources := standardResources
 	if v.Spec.ContainerTemplate != nil {
@@ -189,6 +194,10 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		InitialDelaySeconds: 3,
 		PeriodSeconds:       3,
 		TimeoutSeconds:      1,
+	}
+
+	if len(containers) > 1 { // udf and udsink
+		containers[1].Env = append(containers[1].Env, v.commonEvns()...)
 	}
 
 	spec := &corev1.PodSpec{
