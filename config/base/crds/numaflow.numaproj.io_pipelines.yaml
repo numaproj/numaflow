@@ -3886,6 +3886,19 @@ spec:
                   - name
                   type: object
                 type: array
+              watermark:
+                default:
+                  propagate: false
+                description: Watermark enables watermark progression across the entire
+                  pipeline. Updating this after the pipeline has been created will
+                  have no impact and will be ignored. To make the pipeline honor any
+                  changes to the setting, the pipeline should be recreated.
+                properties:
+                  propagate:
+                    default: false
+                    description: Propagate toggles the watermark propagation.
+                    type: boolean
+                type: object
             type: object
           status:
             properties:
