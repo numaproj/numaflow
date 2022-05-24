@@ -53,3 +53,13 @@ spec:
         container:
           image: my-python-udf-example:latest
 ```
+
+## Available Environment Variables
+
+Some environment variables are available in the user defined function Pods:
+
+- `NUMAFLOW_NAMESPACE` - Namespace.
+- `NUMAFLOW_POD` - Pod name.
+- `NUMAFLOW_REPLICA` - Replica index.
+- `NUMAFLOW_PIPELINE_NAME` - Name of the pipeline.
+- `NUMAFLOW_VERTEX_NAME` - Name of the vertex.
