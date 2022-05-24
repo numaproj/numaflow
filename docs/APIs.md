@@ -2358,6 +2358,9 @@ settings
 <em>(Optional)</em>
 <p>
 Watermark enables watermark progression across the entire pipeline.
+Updating this after the pipeline has been created will have no impact
+and will be ignored. To make the pipeline honor any changes to the
+setting, the pipeline should be recreated.
 </p>
 </td>
 </tr>
@@ -2547,6 +2550,9 @@ settings
 <em>(Optional)</em>
 <p>
 Watermark enables watermark progression across the entire pipeline.
+Updating this after the pipeline has been created will have no impact
+and will be ignored. To make the pipeline honor any changes to the
+setting, the pipeline should be recreated.
 </p>
 </td>
 </tr>

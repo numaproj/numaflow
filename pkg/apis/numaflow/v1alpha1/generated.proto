@@ -706,7 +706,9 @@ message PipelineSpec {
   // +optional
   optional PipelineLimits limits = 5;
 
-  // Watermark enables watermark progression across the entire pipeline.
+  // Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been
+  // created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline
+  // should be recreated.
   // +kubebuilder:default={"propagate": false}
   // +optional
   optional Watermark watermark = 6;

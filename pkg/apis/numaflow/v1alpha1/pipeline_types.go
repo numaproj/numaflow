@@ -272,7 +272,9 @@ type PipelineSpec struct {
 	// +kubebuilder:default={"readBatchSize": 100, "udfWorkers": 100, "bufferMaxLength": 10000, "bufferUsageLimit": 80}
 	// +optional
 	Limits *PipelineLimits `json:"limits,omitempty" protobuf:"bytes,5,opt,name=limits"`
-	// Watermark enables watermark progression across the entire pipeline.
+	// Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been
+	// created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline
+	// should be recreated.
 	// +kubebuilder:default={"propagate": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"`

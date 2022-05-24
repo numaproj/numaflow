@@ -8612,7 +8612,9 @@ spec:
                 default:
                   propagate: false
                 description: Watermark enables watermark progression across the entire
-                  pipeline.
+                  pipeline. Updating this after the pipeline has been created will
+                  have no impact and will be ignored. To make the pipeline honor any
+                  changes to the setting, the pipeline should be recreated.
                 properties:
                   propagate:
                     default: false
