@@ -707,7 +707,7 @@ message PipelineSpec {
   optional PipelineLimits limits = 5;
 
   // Watermark enables watermark progression across the entire pipeline.
-  // +kubebuilder:default={"on": false}
+  // +kubebuilder:default={"propagate": false}
   // +optional
   optional Watermark watermark = 6;
 }
@@ -924,9 +924,9 @@ message VertexStatus {
 }
 
 message Watermark {
-  // On toggles the watermark progression.
+  // Propagate toggles the watermark propagation.
   // +kubebuilder:default=false
   // +optional
-  optional bool on = 1;
+  optional bool propagate = 1;
 }
 

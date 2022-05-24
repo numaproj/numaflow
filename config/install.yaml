@@ -8610,13 +8610,13 @@ spec:
                 type: array
               watermark:
                 default:
-                  "on": false
+                  propagate: false
                 description: Watermark enables watermark progression across the entire
                   pipeline.
                 properties:
-                  "on":
+                  propagate:
                     default: false
-                    description: On toggles the watermark progression.
+                    description: Propagate toggles the watermark propagation.
                     type: boolean
                 type: object
             type: object

@@ -273,16 +273,16 @@ type PipelineSpec struct {
 	// +optional
 	Limits *PipelineLimits `json:"limits,omitempty" protobuf:"bytes,5,opt,name=limits"`
 	// Watermark enables watermark progression across the entire pipeline.
-	// +kubebuilder:default={"on": false}
+	// +kubebuilder:default={"propagate": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"`
 }
 
 type Watermark struct {
-	// On toggles the watermark progression.
+	// Propagate toggles the watermark propagation.
 	// +kubebuilder:default=false
 	// +optional
-	On bool `json:"on,omitempty" protobuf:"bytes,1,opt,name=on"`
+	Propagate bool `json:"propagate,omitempty" protobuf:"bytes,1,opt,name=propagate"`
 }
 
 type PipelineLimits struct {

@@ -3504,12 +3504,12 @@ Description
 <tbody>
 <tr>
 <td>
-<code>on</code></br> <em> bool </em>
+<code>propagate</code></br> <em> bool </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-On toggles the watermark progression.
+Propagate toggles the watermark propagation.
 </p>
 </td>
 </tr>
