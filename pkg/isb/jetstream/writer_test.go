@@ -156,6 +156,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2))
 	assert.NoError(t, err)
+	time.Sleep(2 * time.Second) // IsFull is initialized as true, wait 2 seconds until is full check runs
 	jw, _ := bw.(*jetStreamWriter)
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
