@@ -159,8 +159,8 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	jw, _ := bw.(*jetStreamWriter)
 	for jw.isFull.Load() {
 		select {
-		case <-time.After(5 * time.Second):
-			t.Fatalf("expected not to be full, %s", ctx.Err())
+		case <-time.After(10 * time.Second):
+			t.Fatalf("expected not to be full")
 		default:
 			time.Sleep(500 * time.Millisecond)
 		}
@@ -176,8 +176,8 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	}
 	for !jw.isFull.Load() {
 		select {
-		case <-time.After(5 * time.Second):
-			t.Fatalf("expected not to be full, %s", ctx.Err())
+		case <-time.After(10 * time.Second):
+			t.Fatalf("expected to be full")
 		default:
 			time.Sleep(500 * time.Millisecond)
 		}
