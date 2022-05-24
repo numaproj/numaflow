@@ -154,24 +154,27 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10))
+	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime)
-
+	messages := testutils.BuildTestWriteMessages(int64(2), startTime)
 	// Add some data to buffer using write and verify no writes are performed when buffer is full
 	_, errs := jw.Write(ctx, messages)
-	assert.Equal(t, len(errs), 10)
-
-	// wait 2 seconds so that the buffer full check is done.
-	time.Sleep(2 * time.Second)
-
+	assert.Equal(t, len(errs), 2)
+	for _, errMsg := range errs {
+		assert.Nil(t, errMsg)
+	}
+	time.Sleep(2 * time.Second) // wait untile is full check has been run
+	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0))
+	_, errs = jw.Write(ctx, messages)
+	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
 		assert.Equal(t, errMsg, isb.BufferWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"})
+		assert.Error(t, errMsg)
+		assert.Contains(t, errMsg.Error(), "full")
 	}
-
 }
 
 // TestGetName is used to test the GetName function
