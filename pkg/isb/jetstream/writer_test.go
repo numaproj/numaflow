@@ -41,11 +41,11 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "testJetStreamBufferWriter"
+	streamName := "TestForwarderJetStreamBuffer"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	toStreamName := "testJetStreamBufferWriter-to"
+	toStreamName := "TestForwarderJetStreamBuffer-to"
 	addStream(t, js, toStreamName)
 	defer deleteStream(js, toStreamName)
 
@@ -150,13 +150,21 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "testJetStreamBufferWrite"
+	streamName := "TestJetStreamBufferWriterBufferFull"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
+	for jw.isFull.Load() {
+		select {
+		case <-time.After(10 * time.Second):
+			t.Fatalf("expected not to be full")
+		default:
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
 	messages := testutils.BuildTestWriteMessages(int64(2), startTime)
@@ -166,7 +174,14 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	for _, errMsg := range errs {
 		assert.Nil(t, errMsg) // Buffer not full, expect no error
 	}
-	time.Sleep(2 * time.Second) // wait until is full check has been run
+	for !jw.isFull.Load() {
+		select {
+		case <-time.After(10 * time.Second):
+			t.Fatalf("expected to be full")
+		default:
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
 	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0))
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
@@ -189,7 +204,7 @@ func TestWriteGetName(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "getName"
+	streamName := "TestWriteGetName"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
@@ -214,7 +229,7 @@ func TestWriteClose(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "close"
+	streamName := "TestWriteClose"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
