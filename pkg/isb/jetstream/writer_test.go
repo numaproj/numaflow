@@ -164,7 +164,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	_, errs := jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
-		assert.Nil(t, errMsg)
+		assert.Nil(t, errMsg) // Buffer not full, expected no error
 	}
 	time.Sleep(2 * time.Second) // wait untile is full check has been run
 	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0))
@@ -172,7 +172,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
 		assert.Error(t, errMsg)
-		assert.Contains(t, errMsg.Error(), "full")
+		assert.Contains(t, errMsg.Error(), "full") // Expect buffer full error
 	}
 }
 
