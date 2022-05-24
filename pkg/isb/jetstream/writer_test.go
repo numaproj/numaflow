@@ -171,7 +171,6 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
-		assert.Equal(t, errMsg, isb.BufferWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"})
 		assert.Error(t, errMsg)
 		assert.Contains(t, errMsg.Error(), "full")
 	}
