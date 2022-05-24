@@ -703,8 +703,15 @@ message PipelineSpec {
 
   // Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, they could be overridden by each vertex's settings
   // +kubebuilder:default={"readBatchSize": 100, "udfWorkers": 100, "bufferMaxLength": 10000, "bufferUsageLimit": 80}
-  // +optinal
+  // +optional
   optional PipelineLimits limits = 5;
+
+  // Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been
+  // created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline
+  // should be recreated.
+  // +kubebuilder:default={"propagate": false}
+  // +optional
+  optional Watermark watermark = 6;
 }
 
 message PipelineStatus {
@@ -916,5 +923,12 @@ message VertexStatus {
   optional string selector = 5;
 
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 4;
+}
+
+message Watermark {
+  // Propagate toggles the watermark propagation.
+  // +kubebuilder:default=false
+  // +optional
+  optional bool propagate = 1;
 }
 

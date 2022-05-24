@@ -85,6 +85,9 @@ const (
 	EnvISBSvcConfig                = "NUMAFLOW_ISBSVC_CONFIG"
 	EnvDebug                       = "NUMAFLOW_DEBUG"
 
+	// Watermark
+	EnvWatermarkOn = "NUMAFLOW_WATERMARK_ON"
+
 	PathVarRun        = "/var/run/numaflow"
 	VertexMetricsPort = 2469
 	VertexHTTPSPort   = 8443
