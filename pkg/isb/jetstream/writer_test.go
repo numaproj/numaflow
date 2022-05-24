@@ -41,11 +41,11 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "testJetStreamBufferWriter"
+	streamName := "TestForwarderJetStreamBuffer"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	toStreamName := "testJetStreamBufferWriter-to"
+	toStreamName := "TestForwarderJetStreamBuffer-to"
 	addStream(t, js, toStreamName)
 	defer deleteStream(js, toStreamName)
 
@@ -150,7 +150,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "testJetStreamBufferWrite"
+	streamName := "TestJetStreamBufferWriterBufferFull"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
@@ -189,7 +189,7 @@ func TestWriteGetName(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "getName"
+	streamName := "TestWriteGetName"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
@@ -214,7 +214,7 @@ func TestWriteClose(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "close"
+	streamName := "TestWriteClose"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
