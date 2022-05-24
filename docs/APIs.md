@@ -2341,10 +2341,23 @@ Lifecycle define the Lifecycle properties
 </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for all the
 vertices of a pipleine, they could be overridden by each vertex’s
 settings
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>watermark</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Watermark enables watermark progression across the entire pipeline.
 </p>
 </td>
 </tr>
@@ -2517,10 +2530,23 @@ Lifecycle define the Lifecycle properties
 </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for all the
 vertices of a pipleine, they could be overridden by each vertex’s
 settings
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>watermark</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Watermark enables watermark progression across the entire pipeline.
 </p>
 </td>
 </tr>
@@ -3451,6 +3477,40 @@ Description
 Kubernetes meta/v1.Time </a> </em>
 </td>
 <td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Watermark">
+Watermark
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>on</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+On toggles the watermark progression.
+</p>
 </td>
 </tr>
 </tbody>

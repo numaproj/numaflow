@@ -270,8 +270,19 @@ type PipelineSpec struct {
 	Lifecycle Lifecycle `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`
 	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, they could be overridden by each vertex's settings
 	// +kubebuilder:default={"readBatchSize": 100, "udfWorkers": 100, "bufferMaxLength": 10000, "bufferUsageLimit": 80}
-	// +optinal
+	// +optional
 	Limits *PipelineLimits `json:"limits,omitempty" protobuf:"bytes,5,opt,name=limits"`
+	// Watermark enables watermark progression across the entire pipeline.
+	// +kubebuilder:default={"on": false}
+	// +optional
+	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"`
+}
+
+type Watermark struct {
+	// On toggles the watermark progression.
+	// +kubebuilder:default=false
+	// +optional
+	On bool `json:"on,omitempty" protobuf:"bytes,1,opt,name=on"`
 }
 
 type PipelineLimits struct {

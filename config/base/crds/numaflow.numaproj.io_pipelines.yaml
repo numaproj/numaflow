@@ -3886,6 +3886,17 @@ spec:
                   - name
                   type: object
                 type: array
+              watermark:
+                default:
+                  "on": false
+                description: Watermark enables watermark progression across the entire
+                  pipeline.
+                properties:
+                  "on":
+                    default: false
+                    description: On toggles the watermark progression.
+                    type: boolean
+                type: object
             type: object
           status:
             properties:
