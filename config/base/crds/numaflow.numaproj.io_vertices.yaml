@@ -1290,6 +1290,19 @@ spec:
                 default: 1
                 format: int32
                 type: integer
+              scale:
+                properties:
+                  max:
+                    default: 1
+                    description: Maximum replicas
+                    format: int32
+                    type: integer
+                  min:
+                    default: 1
+                    description: Minimal replicas
+                    format: int32
+                    type: integer
+                type: object
               securityContext:
                 description: 'SecurityContext holds pod-level security attributes
                   and common container settings. Optional: Defaults to empty.  See
