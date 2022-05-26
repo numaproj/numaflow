@@ -18,14 +18,7 @@ NumaFlow targets to achieve `Exactly-Once` semantics, which means from the data 
 - Install and up and running in < 1 min (minimal setup)
 - Cheaper than Flink, Samza, etc. when TPS is < 10K TPS
 
-## Quick Start
-
-Check [QUICK START](docs/QUICK_START.md) to try it out.
-
-## Development
-
-Refer to [DEVELOPMENT](docs/DEVELOPMENT.md) to set up development environment.
-
-## Contributing
-
-Refer to [CONTRIBUTING](CONTRIBUTING.md) document.
+## Resources
+- Check out [QUICK START](docs/QUICK_START.md) to try it out.
+- Take a look at [DEVELOPMENT](docs/DEVELOPMENT.md) to set up development environment.
+- Refer to [CONTRIBUTING](CONTRIBUTING.md) to contribute to the project.
