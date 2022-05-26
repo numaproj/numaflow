@@ -101,11 +101,7 @@ func (in *AbstractVertex) DeepCopyInto(out *AbstractVertex) {
 		*out = new(VertexLimits)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.Scale != nil {
-		in, out := &in.Scale, &out.Scale
-		*out = new(Scale)
-		(*in).DeepCopyInto(*out)
-	}
+	in.Scale.DeepCopyInto(&out.Scale)
 	return
 }
 
@@ -1198,12 +1194,12 @@ func (in *Scale) DeepCopyInto(out *Scale) {
 	*out = *in
 	if in.Min != nil {
 		in, out := &in.Min, &out.Min
-		*out = new(uint32)
+		*out = new(int32)
 		**out = **in
 	}
 	if in.Max != nil {
 		in, out := &in.Max, &out.Max
-		*out = new(uint32)
+		*out = new(int32)
 		**out = **in
 	}
 	return

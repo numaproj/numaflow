@@ -783,12 +783,12 @@ message Scale {
   // Minimal replicas
   // +kubebuilder:default=1
   // +optional
-  optional uint32 min = 1;
+  optional int32 min = 1;
 
   // Maximum replicas
   // +kubebuilder:default=1
   // +optional
-  optional uint32 max = 2;
+  optional int32 max = 2;
 }
 
 message Sink {

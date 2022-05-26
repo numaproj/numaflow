@@ -2861,7 +2861,7 @@ Description
 <tbody>
 <tr>
 <td>
-<code>min</code></br> <em> uint32 </em>
+<code>min</code></br> <em> int32 </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -2872,7 +2872,7 @@ Minimal replicas
 </tr>
 <tr>
 <td>
-<code>max</code></br> <em> uint32 </em>
+<code>max</code></br> <em> int32 </em>
 </td>
 <td>
 <em>(Optional)</em>
