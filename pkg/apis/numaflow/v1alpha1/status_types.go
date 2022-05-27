@@ -47,6 +47,7 @@ func (s *Status) InitializeConditions(conditionTypes ...ConditionType) {
 		c := metav1.Condition{
 			Type:   string(t),
 			Status: metav1.ConditionUnknown,
+			Reason: "Unknown",
 		}
 		s.setCondition(c)
 	}

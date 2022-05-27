@@ -107,6 +107,9 @@ message AbstractVertex {
   // Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings
   // +optional
   optional VertexLimits limits = 17;
+
+  // +optional
+  optional Scale scale = 18;
 }
 
 message Authorization {
@@ -774,6 +777,18 @@ message RedisSettings {
   // Sentinel settings, will override the global settings from controller config
   // +optional
   optional string sentinel = 4;
+}
+
+message Scale {
+  // Minimal replicas
+  // +kubebuilder:default=1
+  // +optional
+  optional int32 min = 1;
+
+  // Maximum replicas
+  // +kubebuilder:default=1
+  // +optional
+  optional int32 max = 2;
 }
 
 message Sink {

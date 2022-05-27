@@ -6159,6 +6159,19 @@ spec:
                         If not specified, the pod priority will be default or zero
                         if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/'
                       type: string
+                    scale:
+                      properties:
+                        max:
+                          default: 1
+                          description: Maximum replicas
+                          format: int32
+                          type: integer
+                        min:
+                          default: 1
+                          description: Minimal replicas
+                          format: int32
+                          type: integer
+                      type: object
                     securityContext:
                       description: 'SecurityContext holds pod-level security attributes
                         and common container settings. Optional: Defaults to empty.  See
@@ -10015,6 +10028,19 @@ spec:
                 default: 1
                 format: int32
                 type: integer
+              scale:
+                properties:
+                  max:
+                    default: 1
+                    description: Maximum replicas
+                    format: int32
+                    type: integer
+                  min:
+                    default: 1
+                    description: Minimal replicas
+                    format: int32
+                    type: integer
+                type: object
               securityContext:
                 description: 'SecurityContext holds pod-level security attributes
                   and common container settings. Optional: Defaults to empty.  See

@@ -395,10 +395,6 @@ func needsUpdate(old, new *dfv1.Pipeline) bool {
 }
 
 func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
-	defaultReplicas := int32(1)
-	if pl.Status.Phase == dfv1.PipelinePhasePaused {
-		defaultReplicas = int32(0)
-	}
 	result := make(map[string]dfv1.Vertex)
 	for _, v := range pl.Spec.Vertices {
 		vertexFullName := pl.Name + "-" + v.Name
@@ -419,13 +415,25 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		}
 		vCopy := v.DeepCopy()
 		copyLimits(pl, vCopy)
+		replicas := int32(1)
+		if pl.Status.Phase == dfv1.PipelinePhasePaused {
+			replicas = int32(0)
+		} else {
+			x := vCopy.Scale
+			if x.Min != nil && *x.Min > 1 && replicas < *x.Min {
+				replicas = *x.Min
+			}
+			if x.Max != nil && *x.Max > 1 && replicas > *x.Max {
+				replicas = *x.Max
+			}
+		}
 		spec := dfv1.VertexSpec{
 			AbstractVertex:             *vCopy,
 			PipelineName:               pl.Name,
 			InterStepBufferServiceName: pl.Spec.InterStepBufferServiceName,
-			Replicas:                   &defaultReplicas,
 			FromVertices:               fromVertexNames,
 			ToVertices:                 toVertices,
+			Replicas:                   &replicas,
 		}
 		hash := sharedutil.MustHash(spec.WithOutReplicas())
 		obj := dfv1.Vertex{
