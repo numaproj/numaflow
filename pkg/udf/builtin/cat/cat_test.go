@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	funcsdk "github.com/numaproj/numaflow/sdks/golang/function"
+	funcsdk "github.com/numaproj/numaflow-go/function"
 	"github.com/stretchr/testify/assert"
 )
 

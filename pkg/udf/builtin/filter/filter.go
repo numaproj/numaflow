@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	funcsdk "github.com/numaproj/numaflow-go/function"
 	"github.com/numaproj/numaflow/pkg/shared/expr"
-	funcsdk "github.com/numaproj/numaflow/sdks/golang/function"
 )
 
 type filter struct {

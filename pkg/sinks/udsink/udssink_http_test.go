@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	sinksdk "github.com/numaproj/numaflow-go/sink"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	sinksdk "github.com/numaproj/numaflow/sdks/golang/sink"
 	"github.com/stretchr/testify/assert"
 	"github.com/vmihailenco/msgpack/v5"
 )

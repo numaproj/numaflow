@@ -3,7 +3,7 @@ package cat
 import (
 	"context"
 
-	funcsdk "github.com/numaproj/numaflow/sdks/golang/function"
+	funcsdk "github.com/numaproj/numaflow-go/function"
 )
 
 func New() funcsdk.Handle {

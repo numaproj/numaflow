@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
+	sinksdk "github.com/numaproj/numaflow-go/sink"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
-	sinksdk "github.com/numaproj/numaflow/sdks/golang/sink"
 	"go.uber.org/zap"
 )
 
