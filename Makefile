@@ -154,7 +154,7 @@ manifests: crds
 	kubectl kustomize config/cluster-install > config/install.yaml
 
 $(GOPATH)/bin/golangci-lint:
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b `go env GOPATH`/bin v1.42.1
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b `go env GOPATH`/bin v1.46.2
 
 .PHONY: lint
 lint: $(GOPATH)/bin/golangci-lint
