@@ -12,8 +12,10 @@ import (
 	"time"
 )
 
-//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker  --ignore-not-found=true
-//go:generate kubectl apply  -k ../../config/apps/kafka -n numaflow-system
+//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
+//go:generate kubectl apply -k ../../config/apps/kafka -n numaflow-system
+// Wait for zookeeper to come up
+//go:generate sleep 60
 
 type KafkaSuite struct {
 	fixtures.E2ESuite
@@ -73,6 +75,7 @@ func (ks *KafkaSuite) TestKafkaSink() {
 	fixtures.ExpectKafkaTopicCount(outputTopic, 15, 3*time.Second)
 
 }
+
 func (ks *KafkaSuite) TestKafkaSourceSink() {
 	inputTopic := fixtures.CreateKafkaTopic()
 	outputTopic := fixtures.CreateKafkaTopic()
@@ -86,8 +89,9 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 					Name: "input",
 					Source: &dfv1.Source{
 						Kafka: &dfv1.KafkaSource{
-							Brokers: []string{"kafka-broker:9092"},
-							Topic:   inputTopic,
+							Brokers:           []string{"kafka-broker:9092"},
+							Topic:             inputTopic,
+							ConsumerGroupName: "test-group",
 						},
 					},
 				},

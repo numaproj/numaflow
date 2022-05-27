@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/Shopify/sarama"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/Shopify/sarama"
 )
 
 func init() {
@@ -17,12 +18,14 @@ func init() {
 		topic := r.URL.Query().Get("topic")
 		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
 			return
 		}
 		defer admin.Close()
 		if err = admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: 1, ReplicationFactor: 1}, true); err != nil {
+			log.Println(err)
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
 			return
@@ -34,6 +37,7 @@ func init() {
 		topic := r.URL.Query().Get("topic")
 		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
 			return
@@ -49,6 +53,7 @@ func init() {
 	http.HandleFunc("/kafka/list-topics", func(w http.ResponseWriter, r *http.Request) {
 		consumer, err := sarama.NewConsumer(brokers, sarama.NewConfig())
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
 			return
@@ -56,6 +61,7 @@ func init() {
 		defer consumer.Close()
 		topics, err := consumer.Topics()
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
 			return
@@ -68,6 +74,7 @@ func init() {
 		topic := r.URL.Query().Get("topic")
 		count, err := strconv.Atoi(r.URL.Query().Get("count"))
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
 			return
@@ -81,6 +88,7 @@ func init() {
 		defer consumer.Close()
 		pConsumer, err := consumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
 			return
@@ -104,6 +112,7 @@ func init() {
 		key := r.URL.Query().Get("key")
 		buf, err := ioutil.ReadAll(r.Body)
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
 			return
@@ -135,6 +144,7 @@ func init() {
 		mf := newMessageFactory(r.URL.Query())
 		duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(400)
 			_, _ = w.Write([]byte(err.Error()))
 			return
