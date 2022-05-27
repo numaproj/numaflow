@@ -14,7 +14,7 @@ import (
 
 //go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
 //go:generate kubectl apply  -k ../../config/apps/kafka -n numaflow-system
-//go:generate sleep 60 // To wait for zookeeper starting up
+//go:generate sleep 60
 
 type KafkaSuite struct {
 	fixtures.E2ESuite
