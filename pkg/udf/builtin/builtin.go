@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	funcsdk "github.com/numaproj/numaflow-go/function"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/builtin/cat"
 	"github.com/numaproj/numaflow/pkg/udf/builtin/filter"
-	funcsdk "github.com/numaproj/numaflow/sdks/golang/function"
 	"go.uber.org/zap"
 )
 

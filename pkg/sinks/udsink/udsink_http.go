@@ -11,9 +11,9 @@ import (
 	"net/http"
 	"time"
 
+	sinksdk "github.com/numaproj/numaflow-go/sink"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sinksdk "github.com/numaproj/numaflow/sdks/golang/sink"
 	"github.com/vmihailenco/msgpack/v5"
 )
 

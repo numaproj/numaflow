@@ -16,10 +16,10 @@ import (
 	"net/http"
 	"time"
 
+	funcsdk "github.com/numaproj/numaflow-go/function"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	funcsdk "github.com/numaproj/numaflow/sdks/golang/function"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
