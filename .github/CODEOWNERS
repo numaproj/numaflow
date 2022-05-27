@@ -1,5 +1,3 @@
-# List of source code paths and code owners
-# common services & repos
-*:
- - whynowy
- - vigith
+# These owners will be the default owners for everything in
+# the repo. Unless a later match takes precedence
+*       @whynowy @vigith
