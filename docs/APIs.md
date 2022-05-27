@@ -232,6 +232,15 @@ vertices of a pipleine, will override pipeline level settings
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>scale</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Scale"> Scale </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Authorization">
@@ -2824,6 +2833,51 @@ settings from controller config
 <p>
 Sentinel settings, will override the global settings from controller
 config
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Scale">
+Scale
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>min</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Minimal replicas
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>max</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Maximum replicas
 </p>
 </td>
 </tr>

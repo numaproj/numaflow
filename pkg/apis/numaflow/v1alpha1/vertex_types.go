@@ -351,6 +351,19 @@ type AbstractVertex struct {
 	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings
 	// +optional
 	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,17,opt,name=limits"`
+	// +optional
+	Scale Scale `json:"scale,omitempty" protobuf:"bytes,18,opt,name=scale"`
+}
+
+type Scale struct {
+	// Minimal replicas
+	// +kubebuilder:default=1
+	// +optional
+	Min *int32 `json:"min,omitempty" protobuf:"varint,1,opt,name=min"`
+	// Maximum replicas
+	// +kubebuilder:default=1
+	// +optional
+	Max *int32 `json:"max,omitempty" protobuf:"varint,2,opt,name=max"`
 }
 
 type VertexLimits struct {

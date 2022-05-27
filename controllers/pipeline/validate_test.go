@@ -6,6 +6,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 )
 
 var (
@@ -177,5 +178,31 @@ func TestValidatePipeline(t *testing.T) {
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid edge")
+	})
+}
+
+func TestValidateVertex(t *testing.T) {
+	t.Run("bad min", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			Scale: dfv1.Scale{
+				Min: pointer.Int32(0),
+				Max: pointer.Int32(1),
+			},
+		}
+		err := validateVertex(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "greater than 0")
+	})
+
+	t.Run("min > max", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			Scale: dfv1.Scale{
+				Min: pointer.Int32(2),
+				Max: pointer.Int32(1),
+			},
+		}
+		err := validateVertex(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "or equal to")
 	})
 }

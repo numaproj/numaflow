@@ -1,0 +1,31 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: auto-scaling-pipeline
+spec:
+  vertices:
+    - name: input
+      source:
+        # A self data generating source
+        generator:
+          rpu: 50
+          duration: 1s
+    - name: cat
+      scale:
+        min: 2 # Minimal replicas
+        max: 4 # Maximum replicas
+      udf:
+        builtin:
+          name: cat # A builtin UDF which simply cats the message
+    - name: output
+      scale:
+        min: 3 # Minimal replicas
+        max: 5 # Maximum replicas
+      sink:
+        # A simple log printing sink
+        log: {}
+  edges:
+    - from: input
+      to: cat
+    - from: cat
+      to: output

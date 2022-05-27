@@ -109,5 +109,28 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		}
 		toInEdges[e.To] = true
 	}
+
+	for _, v := range pl.Spec.Vertices {
+		if err := validateVertex(v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateVertex(v dfv1.AbstractVertex) error {
+	min, max := int32(1), int32(1)
+	if v.Scale.Min != nil {
+		min = *v.Scale.Min
+	}
+	if v.Scale.Max != nil {
+		max = *v.Scale.Max
+	}
+	if min < 1 {
+		return fmt.Errorf("vertex %q: min number of replicas should be greater than 0", v.Name) // Do not support scale to 0 now.
+	}
+	if min > max {
+		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
+	}
 	return nil
 }
