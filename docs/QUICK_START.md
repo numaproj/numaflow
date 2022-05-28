@@ -1,9 +1,17 @@
 # Quick Start
 
-A Kubernetes cluster is needed to try it out, e.g. [Docker Desktop](https://www.docker.com/products/docker-desktop), or [K3d](https://k3d.io/).
+A Kubernetes cluster is needed to try out NumaFlow. If needed, you can create a cluster locally using 
+[`k3d`](https://k3d.io/).
+
+```shell 
+# Create a cluster with default name k3s-default
+k3d cluster create -i rancher/k3s:v1.21.7-k3s1
+
+# Get kubeconfig for the cluster
+k3d kubeconfig get k3s-default
+```
 
 Deploy into `numaflow-system` namespace:
-
 ```shell
 kubectl create ns numaflow-system
 
@@ -11,13 +19,11 @@ kubectl apply -f ./config/install.yaml
 ```
 
 Create an `ISBSvc (Inter-Step Buffer Service)` object.
-
 ```shell
 kubectl apply -f ./examples/0-isbsvc-jetstream.yaml
 ```
 
 After all the isbsvc pods are up, create a simple pipeline.
-
 ```shell
 kubectl apply -f ./examples/1-simple-pipeline.yaml
 ```
