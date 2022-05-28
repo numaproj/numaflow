@@ -76,7 +76,7 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 	head := p.GetLatestWatermark()
 	assert.Equal(t, processor.Watermark(time.Unix(epoch-60, 0).In(location)).String(), head.String())
 
-	p.Cleanup()
+	p.StopPublisher()
 
 	_, err = js.KeyValue(publishEntity.GetBucketName())
 	assert.Equal(t, nats.ErrBucketNotFound, err)
@@ -147,12 +147,14 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	head := p.GetLatestWatermark()
 	assert.Equal(t, processor.Watermark(time.Unix(epoch-60, 0).In(location)).String(), head.String())
 
-	p.Cleanup()
+	p.StopPublisher()
 
-	_, err = js.KeyValue(publishEntity.GetBucketName())
-	assert.Equal(t, nats.ErrBucketNotFound, err)
+	// run this test only if we are not sharing the bucket
+	if !publishEntity.IsSharedBucket() {
+		_, err = js.KeyValue(publishEntity.GetBucketName())
+		assert.Equal(t, nats.ErrBucketNotFound, err)
+	}
 
 	_, err = p.heartbeatBucket.Get(publishEntity.GetID())
 	assert.Equal(t, nats.ErrKeyNotFound, err)
-
 }

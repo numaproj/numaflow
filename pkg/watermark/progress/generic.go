@@ -24,6 +24,8 @@ type GenericProgress struct {
 	opts            *genericProgressOptions
 }
 
+var _ Progressor = (*GenericProgress)(nil)
+
 // GenericProgressOption sets options for GenericProgress.
 type GenericProgressOption func(options *genericProgressOptions)
 
@@ -50,7 +52,7 @@ func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace
 
 	// publish
 	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace, processor.WithSeparateOTBuckets(opts.separateOTBucket))
-	publishHeartbeatBucket, err := js.KeyValue(publishKeyspace + "_PROCESSORS")
+	publishHeartbeatBucket, err := GetHeartbeatBucket(js, publishKeyspace)
 	if err != nil {
 		log.Fatalw("unable to get the publish heartbeat bucket", zap.String("bucket", publishKeyspace+"_PROCESSORS"), zap.Error(err))
 	}
@@ -90,4 +92,8 @@ func (u *GenericProgress) PublishWatermark(watermark processor.Watermark, offset
 // GetLatestWatermark returns the latest head watermark.
 func (u *GenericProgress) GetLatestWatermark() processor.Watermark {
 	return u.progressPublish.GetLatestWatermark()
+}
+
+func (g *GenericProgress) StopPublisher() {
+	g.progressPublish.StopPublisher()
 }

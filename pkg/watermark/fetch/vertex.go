@@ -25,8 +25,9 @@ type FromVertexer interface {
 // It has the mapping of all the processors which in turn has all the information about each processor
 // timelines.
 type FromVertex struct {
-	ctx                context.Context
-	js                 nats.JetStreamContext
+	ctx context.Context
+	js  nats.JetStreamContext
+	// keyspace is only used if we have a processorHBWatcher
 	keyspace           string
 	processorHBWatcher nats.KeyWatcher
 	heartbeat          *ProcessorHeartbeat
@@ -59,6 +60,7 @@ func NewFromVertex(ctx context.Context, keyspace string, js nats.JetStreamContex
 		opts:               opts,
 	}
 	go v.startRefreshingProcessors()
+	// we do not care about heartbeat watcher if this is a source vertex
 	if v.processorHBWatcher != nil {
 		go v.startHeatBeatWatcher()
 	}

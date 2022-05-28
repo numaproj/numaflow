@@ -21,6 +21,8 @@ type Publisher interface {
 	PublishWatermark(processor.Watermark, isb.Offset)
 	// GetLatestWatermark returns the latest published watermark.
 	GetLatestWatermark() processor.Watermark
+	// StopPublisher stops the publisher
+	StopPublisher()
 }
 
 // Publish publishes the watermark for a processor entity.
@@ -42,6 +44,7 @@ type Publish struct {
 }
 
 // NewPublish returns `Publish`.
+// TODO: remove keyspace from signature
 func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, keyspace string, js nats.JetStreamContext, heartbeatBucket nats.KeyValue, inputOpts ...PublishOption) *Publish {
 	log := logging.FromContext(ctx)
 
@@ -52,7 +55,7 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 		// TODO: move it to control plane. One OT bucket for all the processors in a vertex.
 		bucketConfigs: &nats.KeyValueConfig{
 			Bucket:       processorEntity.GetBucketName(),
-			Description:  fmt.Sprintf("[%s][%s] offset timeline bucket", keyspace, processorEntity.GetBucketName()),
+			Description:  fmt.Sprintf("[%s][%s] offset timeline bucket", processorEntity.GetPublishKeyspace(), processorEntity.GetBucketName()),
 			MaxValueSize: 0,
 			History:      1,
 			TTL:          0,
@@ -121,6 +124,8 @@ func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 		_, err := p.otBucket.Put(key, value)
 		if err != nil {
 			p.log.Errorw("unable to publish watermark", zap.String("entity", p.entity.GetBucketName()), zap.String("key", key), zap.Error(err))
+			// TODO: better exponential backoff
+			time.Sleep(time.Millisecond * 250)
 		} else {
 			break
 		}
@@ -172,22 +177,24 @@ func (p *Publish) publishHeartbeat() {
 	}
 }
 
-// Cleanup cleans up the data associated with key.
-// TODO: move this to control plane
-func (p *Publish) Cleanup() {
+// StopPublisher stops the publisher and cleans up the data associated with key.
+func (p *Publish) StopPublisher() {
 	// TODO: cleanup after processor dies
 	//   - delete the Offset-Timeline bucket
 	//   - remove itself from heartbeat bucket
 
-	// clean up offsetTimeline bucket
-	bucketName := p.entity.GetBucketName()
-	err := p.js.DeleteKeyValue(bucketName)
-	if err != nil {
-		p.log.Errorw("failed to delete bucket (nats.KeyValue)", zap.String("bucket", bucketName), zap.Error(err))
+	// TODO: move this to control plane and as of today control plane supports only shared OT buckets
+	if !p.entity.IsSharedBucket() {
+		// clean up offsetTimeline bucket
+		bucketName := p.entity.GetBucketName()
+		err := p.js.DeleteKeyValue(bucketName)
+		if err != nil {
+			p.log.Errorw("failed to delete bucket (nats.KeyValue)", zap.String("bucket", bucketName), zap.Error(err))
+		}
 	}
 
 	// clean up heartbeat bucket
-	err = p.heartbeatBucket.Delete(p.entity.GetID())
+	err := p.heartbeatBucket.Delete(p.entity.GetID())
 	if err != nil {
 		p.log.Errorw("failed to delete the key in the heartbeat bucket", zap.String("bucket", p.keyspace), zap.String("key", p.entity.GetID()), zap.Error(err))
 	}

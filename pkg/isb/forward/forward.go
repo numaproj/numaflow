@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/progress"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -29,6 +31,7 @@ type InterStepDataForward struct {
 	toBuffers    map[string]isb.BufferWriter
 	FSD          ToWhichStepDecider
 	UDF          udfapplier.Applier
+	wmProgressor progress.Progressor
 	opts         options
 	vertexName   string
 	pipelineName string
@@ -36,12 +39,7 @@ type InterStepDataForward struct {
 }
 
 // NewInterStepDataForward creates an inter-step forwarder.
-func NewInterStepDataForward(vertex *dfv1.Vertex,
-	fromStep isb.BufferReader,
-	toSteps map[string]isb.BufferWriter,
-	fsd ToWhichStepDecider,
-	applyUDF udfapplier.Applier,
-	opts ...Option) (*InterStepDataForward, error) {
+func NewInterStepDataForward(vertex *dfv1.Vertex, fromStep isb.BufferReader, toSteps map[string]isb.BufferWriter, fsd ToWhichStepDecider, applyUDF udfapplier.Applier, wmProgressor progress.Progressor, opts ...Option) (*InterStepDataForward, error) {
 
 	options := &options{
 		retryInterval:  time.Millisecond,
@@ -58,12 +56,13 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	ctx, cancel := context.WithCancel(context.Background())
 
 	isdf := InterStepDataForward{
-		ctx:        ctx,
-		cancelFn:   cancel,
-		fromBuffer: fromStep,
-		toBuffers:  toSteps,
-		FSD:        fsd,
-		UDF:        applyUDF,
+		ctx:          ctx,
+		cancelFn:     cancel,
+		fromBuffer:   fromStep,
+		toBuffers:    toSteps,
+		FSD:          fsd,
+		UDF:          applyUDF,
+		wmProgressor: wmProgressor,
 		// should we do a check here for the values not being null?
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
@@ -79,7 +78,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	return &isdf, nil
 }
 
-// Start starts reading the buffer and forwards to the next buffers. Call `Stop` to stop.
+// Start starts reading the buffer and forwards to the next buffers. Call `StopPublisher` to stop.
 func (isdf *InterStepDataForward) Start() <-chan struct{} {
 	log := logging.FromContext(isdf.ctx)
 	stopped := make(chan struct{})
@@ -125,6 +124,11 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 				log.Infow("Closed buffer writer", zap.String("bufferTo", v.GetName()))
 			}
 		}
+
+		// stop watermark publisher if watermarking is enabled
+		if isdf.wmProgressor != nil {
+			isdf.wmProgressor.StopPublisher()
+		}
 		close(stopped)
 	}()
 
@@ -159,6 +163,15 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	if len(readMessages) == 0 {
 		return
 	}
+
+	// fetch watermark if available
+	// TODO: make it async (concurrent and wait later)
+	var processorWM processor.Watermark
+	if isdf.wmProgressor != nil {
+		// let's track only the last element's watermark
+		processorWM = isdf.wmProgressor.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
+	}
+
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][]isb.Message)
 	var toBuffers string
@@ -216,10 +229,20 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 	// forward the message to the edge buffer (could be multiple edges)
-	_, err = isdf.writeToBuffers(ctx, messageToStep)
+	writeOffsets, err := isdf.writeToBuffers(ctx, messageToStep)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 		return
+	}
+
+	// forward the highest watermark to all the edges to avoid idle edge problem
+	if isdf.wmProgressor != nil {
+		// TODO: sort and get the highest value
+		for _, offsets := range writeOffsets {
+			if len(offsets) > 0 {
+				isdf.wmProgressor.PublishWatermark(processorWM, offsets[len(offsets)-1])
+			}
+		}
 	}
 
 	// let us ack the only if we have successfully forwarded all the messages.

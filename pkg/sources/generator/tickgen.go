@@ -10,12 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sources/types"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/progress"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 )
 
@@ -75,7 +77,15 @@ type memgen struct {
 	// read timeout for the reader
 	readTimeout time.Duration
 
+	// watermark progressor
+	progressor *watermark
+
 	logger *zap.SugaredLogger
+}
+
+type watermark struct {
+	publisher *publish.Publish
+	fetcher   *fetch.EdgeBuffer
 }
 
 type Option func(*memgen) error
@@ -103,13 +113,13 @@ func WithReadTimeOut(timeout time.Duration) Option {
 // msgSize - size of each generated message
 // timeunit - unit of time per tick. could be any golang time.Duration.
 // writers - destinations to write to
-func NewMemGen(vertex *dfv1.Vertex, rpu int, msgSize int32, timeunit time.Duration, writers []isb.BufferWriter, opts ...Option) (*memgen, error) {
+func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit time.Duration, writers []isb.BufferWriter, opts ...Option) (*memgen, error) {
 	gensrc := &memgen{
 		rpu:          rpu,
 		msgSize:      msgSize,
 		timeunit:     timeunit,
-		name:         vertex.Spec.Name,
-		pipelineName: vertex.Spec.PipelineName,
+		name:         metadata.Vertex.Spec.Name,
+		pipelineName: metadata.Vertex.Spec.PipelineName,
 		genfn:        recordGenerator,
 		srcchan:      make(chan record, rpu*5),
 		readTimeout:  3 * time.Second, // default timeout
@@ -136,13 +146,18 @@ func NewMemGen(vertex *dfv1.Vertex, rpu int, msgSize int32, timeunit time.Durati
 	}
 
 	forwardOpts := []forward.Option{forward.WithLogger(gensrc.logger)}
-	if x := vertex.Spec.Limits; x != nil {
+	if x := metadata.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
+
+	var wmProgressor progress.Progressor
+	var err error
+	wmProgressor, err = gensrc.buildWMProgressor(metadata)
+
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertex, gensrc, destinations, forward.All, applier.Terminal, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(metadata.Vertex, gensrc, destinations, forward.All, applier.Terminal, wmProgressor, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
