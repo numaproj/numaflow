@@ -6,16 +6,17 @@ spec:
   vertices:
     - name: input
       source:
-        # A self data generating source
+        # An http endpoint
         http:
           # Whether to create a ClusterIP Service, defaults to false
           service: true
           # Optional bearer token auth
-          auth:
-            # A secret selector pointing to the secret contains token
-            token:
-              name: my-secret
-              key: my-key
+          # xxx examples should be self-contained and runable by the user
+#         auth:
+#           # A secret selector pointing to the secret contains token
+#           token:
+#             name: my-secret
+#             key: my-key
     - name: cat
       udf:
         builtin:
