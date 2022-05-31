@@ -1,7 +1,7 @@
 # Quick Start
 
 A Kubernetes cluster is needed to try out NumaFlow. If needed, you can create a cluster locally using 
-[`k3d`](https://k3d.io/).
+[`k3d`](https://k3d.io/). If you do not have [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/), please install it.
 
 ```shell 
 # Create a cluster with default name k3s-default
@@ -40,4 +40,15 @@ Watch the `output` vertex pod log, you will see messages keep coming.
 2021/12/17 22:14:35 (simple-pipeline-output) {"Data":"oFKrNo6qwRY=","Createdts":1639779267118846624}
 2021/12/17 22:14:35 (simple-pipeline-output) {"Data":"eVarNo6qwRY=","Createdts":1639779267118847609}
 2021/12/17 22:14:35 (simple-pipeline-output) {"Data":"6FmrNo6qwRY=","Createdts":1639779267118848488}
+```
+
+You can delete the pipeline using
+
+```shell
+kubectl delete -f ./examples/1-simple-pipeline.yaml
+```
+
+The interstep buffer can be deleted by 
+```shell
+kubectl delete -f ./examples/0-isbsvc-jetstream.yaml
 ```
