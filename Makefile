@@ -180,3 +180,33 @@ endif
 checksums:
 	for f in ./dist/$(BINARY_NAME)-*.gz; do openssl dgst -sha256 "$$f" | awk ' { print $$2 }' > "$$f".sha256 ; done
 
+# release - targets only available on release branch
+ifneq ($(findstring release,$(GIT_BRANCH)),)
+
+.PHONY: prepare-release
+prepare-release: check-version-warning clean update-manifests-version codegen
+	git status
+	@git diff --quiet || echo "\n\nPlease run 'git diff' to confirm the file changes are correct.\n"
+
+.PHONY: release
+release: check-version-warning
+	@echo "\n1. Make sure you have run 'VERSION=$(VERSION) make prepare-release', and confirmed all the changes are expected."
+	@echo "\n2. Run following commands to commit the changes to the release branch, add give a tag.\n"
+	@echo "git commit -am \"Update manifests to $(VERSION)\""
+	@echo "git push {your-remote}\n"
+	@echo "git tag -a $(VERSION) -m $(VERSION)"
+	@echo "git push {your-remote} $(VERSION)\n"
+
+endif
+
+.PHONY: check-version-warning
+check-version-warning:
+	@if [[ ! "$(VERSION)" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$  ]]; then echo -n "It looks like you're not using a version format like 'v1.2.3', or 'v1.2.3-rc2', that version format is required for our releases. Do you wish to continue anyway? [y/N]" && read ans && [ $${ans:-N} = y ]; fi
+
+.PHONY: update-manifests-version
+update-manifests-version:
+	cat config/base/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/base_kustomization.yaml
+	mv /tmp/base_kustomization.yaml config/base/kustomization.yaml
+	cat Makefile | sed 's/^VERSION?=.*/VERSION?=$(VERSION)/' | sed 's/^BASE_VERSION:=.*/BASE_VERSION:=$(VERSION)/' > /tmp/ae_makefile
+	mv /tmp/ae_makefile Makefile
+
