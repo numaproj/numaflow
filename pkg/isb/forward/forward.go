@@ -328,7 +328,9 @@ retry:
 func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMessagePair <-chan *readWriteMessagePair) {
 	for message := range readMessagePair {
 		start := time.Now()
+		udfReadMessagesCount.With(map[string]string{"vertex": isdf.vertexName, "pipeline": isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
 		writeMessages, err := isdf.applyUDF(ctx, message.readMessage)
+		udfWriteMessagesCount.With(map[string]string{"vertex": isdf.vertexName, "pipeline": isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(writeMessages)))
 		message.writeMessages = append(message.writeMessages, writeMessages...)
 		message.udfError = err
 		udfProcessingTime.With(map[string]string{"vertex": isdf.vertexName, "pipeline": isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))

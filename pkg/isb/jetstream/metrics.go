@@ -46,3 +46,31 @@ var isbBufferSolidUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name:      "buffer_solid_usage",
 	Help:      "percentage of buffer solid usage",
 }, []string{"buffer"})
+
+// isbBufferPending is calculated based on the messages in pending
+var isbBufferPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Subsystem: "isb_jetstream",
+	Name:      "buffer_pending",
+	Help:      "number of pending messages",
+}, []string{"buffer"})
+
+// isbBufferAckPending is calculated based on the messages that are pending ack
+var isbBufferAckPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Subsystem: "isb_jetstream",
+	Name:      "buffer_ack_pending",
+	Help:      "number of messages pending ack",
+}, []string{"buffer"})
+
+// isbBufferWaiting is calculated based on the messages waiting
+var isbBufferWaiting = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Subsystem: "isb_jetstream",
+	Name:      "buffer_waiting",
+	Help:      "number of waiting messages",
+}, []string{"buffer"})
+
+// isbBufferPending is calculated based on the ackFloor
+var isbBufferAckFloor = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Subsystem: "isb_jetstream",
+	Name:      "buffer_ack_floor",
+	Help:      "the ack floor",
+}, []string{"buffer"})
