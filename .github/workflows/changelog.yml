@@ -1,0 +1,24 @@
+name: Changelog
+
+on:
+  push:
+    tags:
+      - v*
+jobs:
+  generate_changelog:
+    if: github.repository == 'numaproj/numaflow'
+    runs-on: ubuntu-latest
+    name: Generate changelog
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: main
+          fetch-depth: 0
+      - run: git fetch --prune --prune-tags
+      - run: git tag -l 'v*'
+      - run: ./hack/changelog.sh > CHANGELOG.md
+      - uses: peter-evans/create-pull-request@v3
+        with:
+          title: 'docs: updated CHANGELOG.md'
+          commit-message: 'docs: updated CHANGELOG.md'
+          signoff: true
