@@ -4,7 +4,7 @@ metadata:
   name: filter-pipeline
 spec:
   vertices:
-    - name: input
+    - name: in
       source:
         # A self data generating source
         http:
@@ -22,12 +22,12 @@ spec:
           name: filter
           kwargs:
             expression: int(json(payload).id) < 100
-    - name: output
+    - name: out
       sink:
         # A simple log printing sink
         log: {}
   edges:
-    - from: input
+    - from: in
       to: filter
     - from: filter
-      to: output
+      to: out
