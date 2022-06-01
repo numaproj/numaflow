@@ -4,7 +4,7 @@ metadata:
   name: udsink-pipeline
 spec:
   vertices:
-    - name: input
+    - name: in
       source:
         generator:
           rpu: 1
@@ -14,13 +14,13 @@ spec:
       udf:
         builtin:
           name: cat
-    - name: output
+    - name: out
       sink:
         udsink:
           container:
             image: my-sink:latest
   edges:
-    - from: input
+    - from: in
       to: p1
     - from: p1
-      to: output
+      to: out
