@@ -14,6 +14,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
 type jetStreamReader struct {
@@ -21,10 +22,13 @@ type jetStreamReader struct {
 	stream                string
 	subject               string
 	conn                  *nats.Conn
+	js                    nats.JetStreamContext
 	sub                   *nats.Subscription
 	opts                  *readOptions
 	inProgessTickDuration time.Duration
 	log                   *zap.SugaredLogger
+	// ackedInfo stores a list of ack seq/timestamp(seconds) information
+	ackedInfo *sharedqueue.OverflowQueue[timestampedSequence]
 }
 
 // NewJetStreamBufferReader is used to provide a new JetStream buffer reader connection
@@ -76,10 +80,15 @@ func NewJetStreamBufferReader(ctx context.Context, client clients.JetStreamClien
 		stream:                stream,
 		subject:               subject,
 		conn:                  conn,
+		js:                    js,
 		sub:                   sub,
 		opts:                  o,
 		inProgessTickDuration: time.Duration(inProgessTickSeconds * int64(time.Second)),
 		log:                   log,
+	}
+	if o.ackInfoCheck {
+		result.ackedInfo = sharedqueue.New[timestampedSequence](1800)
+		go result.runAckInfomationChecker(ctx)
 	}
 	return result, nil
 }
@@ -98,6 +107,67 @@ func (jr *jetStreamReader) Close() error {
 		jr.conn.Close()
 	}
 	return nil
+}
+
+func (jr *jetStreamReader) runAckInfomationChecker(ctx context.Context) {
+	js, err := jr.conn.JetStream()
+	if err != nil {
+		// Let it exit if it fails to start the information checker
+		jr.log.Fatal("Failed to get Jet Stream context, %w", err)
+	}
+	checkAckInfo := func() {
+		c, err := js.ConsumerInfo(jr.stream, jr.stream)
+		if err != nil {
+			jr.log.Errorw("failed to get consumer info in the reader", zap.Error(err))
+			return
+		}
+		ts := timestampedSequence{seq: int64(c.AckFloor.Stream), timestamp: time.Now().Unix()}
+		jr.ackedInfo.Append(ts)
+		jr.log.Debugw("Acknowledge information", zap.Int64("ackSeq", ts.seq), zap.Int64("timestamp", ts.timestamp))
+	}
+	checkAckInfo()
+
+	ticker := time.NewTicker(jr.opts.ackInfoCheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			checkAckInfo()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
+	c, err := jr.js.ConsumerInfo(jr.stream, jr.stream)
+	if err != nil {
+		return isb.PendingNotAvailable, fmt.Errorf("failed to get consumer info, %w", err)
+	}
+	return int64(c.NumPending), nil
+}
+
+// Rate returns the ack rate (tps)
+func (jr *jetStreamReader) Rate(_ context.Context) (float64, error) {
+	if !jr.opts.ackInfoCheck {
+		return isb.RateNotAvailable, nil
+	}
+	timestampedSeqs := jr.ackedInfo.ReversedItems() // ReversedItems makes sure the latest is in the front
+	if len(timestampedSeqs) < 2 {
+		return isb.RateNotAvailable, nil
+	}
+	endSeqInfo := timestampedSeqs[0]
+	startSeqInfo := timestampedSeqs[1]
+	for i := 2; i < len(timestampedSeqs); i++ {
+		if endSeqInfo.timestamp-startSeqInfo.timestamp > jr.opts.rateLookbackSeconds {
+			break
+		}
+	}
+	// Check if it is too stale (use lookbackSeconds + 2 * interval to determine)
+	if endSeqInfo.timestamp-startSeqInfo.timestamp > jr.opts.rateLookbackSeconds+2*int64(jr.opts.ackInfoCheckInterval.Seconds()) {
+		return isb.RateNotAvailable, nil
+	}
+	return float64(endSeqInfo.seq-startSeqInfo.seq) / float64(endSeqInfo.timestamp-startSeqInfo.timestamp), nil
 }
 
 func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
