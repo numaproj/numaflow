@@ -173,11 +173,12 @@ func (h *httpSource) GetName() string {
 
 func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := []*isb.ReadMessage{}
+	timeout := time.After(h.readTimeout)
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-h.messages:
 			msgs = append(msgs, m)
-		case <-time.After(h.readTimeout):
+		case <-timeout:
 			h.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", h.readTimeout), zap.Int("read", len(msgs)))
 			return msgs, nil
 		}

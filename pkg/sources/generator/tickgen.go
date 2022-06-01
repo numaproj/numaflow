@@ -169,7 +169,7 @@ func (mg *memgen) IsEmpty() bool {
 // the context passed to read should be different from the lifecycle context that is used by this vertex.
 func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := make([]*isb.ReadMessage, 0, count)
-
+	timeout := time.After(mg.readTimeout)
 	for i := int64(0); i < count; i++ {
 		// since the Read call is blocking, and runs in an infinite loop
 		// we implement Read With Wait semantics
@@ -177,7 +177,7 @@ func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, er
 		case r := <-mg.srcchan:
 			tickgenSourceReadCount.With(map[string]string{"vertex": mg.name, "pipeline": mg.pipelineName}).Inc()
 			msgs = append(msgs, newreadmessage(r.data, r.offset))
-		case <-time.After(mg.readTimeout):
+		case <-timeout:
 			mg.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
 			return msgs, nil
 		}
