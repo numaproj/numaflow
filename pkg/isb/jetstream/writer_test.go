@@ -157,9 +157,10 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
+	timeout := time.After(10 * time.Second)
 	for jw.isFull.Load() {
 		select {
-		case <-time.After(10 * time.Second):
+		case <-timeout:
 			t.Fatalf("expected not to be full")
 		default:
 			time.Sleep(500 * time.Millisecond)
@@ -174,9 +175,10 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	for _, errMsg := range errs {
 		assert.Nil(t, errMsg) // Buffer not full, expect no error
 	}
+	timeout = time.After(10 * time.Second)
 	for !jw.isFull.Load() {
 		select {
-		case <-time.After(10 * time.Second):
+		case <-timeout:
 			t.Fatalf("expected to be full")
 		default:
 			time.Sleep(500 * time.Millisecond)
