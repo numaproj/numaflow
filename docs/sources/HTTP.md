@@ -30,7 +30,7 @@ spec:
 
 ## ClusterIP Service
 
-An HTTP Source Vertex can generate a `ClusterIP` Service if `service: true` is specified, the service name is in the format of `{pipelineName}-{vertexName}`, so the HTTP Source can be accessed through `https://{pipelineName}-{vertexName}.{namespace}.svc.cluster.local:8443/vertices/{vertexName}`.
+An HTTP Source Vertex can generate a `ClusterIP` Service if `service: true` is specified, the service name is in the format of `{pipelineName}-{vertexName}`, so the HTTP Source can be accessed through `https://{pipelineName}-{vertexName}.{namespace}.svc.cluster.local:8443/vertices/{vertexName}` within the cluster.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -56,7 +56,7 @@ numaflow.numaproj.io/vertex-name: input # vertex name
 
 ## x-numaflow-id
 
-When posting data to the HTTP Source, an optional HTTP header `x-numaflow-id` can be specified, it will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.
+When posting data to the HTTP Source, an optional HTTP header `x-numaflow-id` can be specified, which will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.
 
 ## Auth
 
@@ -92,7 +92,12 @@ When the clients post data to the Source Vertex, add `Authorization: Bearer tr3q
 
 ```sh
 TOKEN="Bearer tr3qhs321fjglwf1e2e67dfda4tr"
+# Post data from a Pod within the same namespace in the cluster
 curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://http-pipeline-input:8443/vertices/input
+
+# Or post data from your local with port-forwarding
+kubectl port-forward svc/http-pipeline-input 8443
+curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://localhost:8443/vertices/input
 ```
 
 ## Health Check
