@@ -4,7 +4,7 @@ metadata:
   name: http-pipeline
 spec:
   vertices:
-    - name: input
+    - name: in
       source:
         # An http endpoint
         http:
@@ -21,12 +21,12 @@ spec:
       udf:
         builtin:
           name: cat # A builtin UDF which simply cats the message
-    - name: output
+    - name: out
       sink:
         # A simple log printing sink
         log: {}
   edges:
-    - from: input
+    - from: in
       to: cat
     - from: cat
-      to: output
+      to: out
