@@ -60,10 +60,3 @@ var isbBufferAckPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name:      "buffer_ack_pending",
 	Help:      "number of messages pending ack",
 }, []string{"buffer"})
-
-// isbBufferWaiting is calculated based on the messages waiting
-var isbBufferWaiting = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Subsystem: "isb_jetstream",
-	Name:      "buffer_waiting",
-	Help:      "number of waiting messages",
-}, []string{"buffer"})
