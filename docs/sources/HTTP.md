@@ -92,7 +92,7 @@ When the clients post data to the Source Vertex, add `Authorization: Bearer tr3q
 
 ```sh
 TOKEN="Bearer tr3qhs321fjglwf1e2e67dfda4tr"
-# Post data from a Pod within the same namespace in the cluster
+# Post data from a Pod in the same namespace of the cluster
 curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://http-pipeline-input:8443/vertices/input
 
 # Or post data from your local with port-forwarding
