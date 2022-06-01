@@ -24,6 +24,7 @@ NumaFlow installs in less than a minute and is easier and cheaper for simple dat
 * Data aggregation (e.g. group-by)
 
 ## Resources
-- Check out [QUICK START](docs/QUICK_START.md) to try it out.
-- Take a look at [DEVELOPMENT](docs/DEVELOPMENT.md) to set up development environment.
-- Refer to [CONTRIBUTING](https://github.com/numaproj/numaproj/blob/main/CONTRIBUTING.md) to contribute to the project.
+- [QUICK_START](docs/QUICK_START.md)
+- [EXAMPLES](examples)
+- [DEVELOPMENT](docs/DEVELOPMENT.md)
+- [CONTRIBUTING](https://github.com/numaproj/numaproj/blob/main/CONTRIBUTING.md)
