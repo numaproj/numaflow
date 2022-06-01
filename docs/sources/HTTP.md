@@ -54,10 +54,6 @@ numaflow.numaproj.io/pipeline-name: http-pipeline # pipeline name
 numaflow.numaproj.io/vertex-name: input # vertex name
 ```
 
-## x-numaflow-id
-
-When posting data to the HTTP Source, an optional HTTP header `x-numaflow-id` can be specified, which will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.
-
 ## Auth
 
 A `Bearer` token can be configured to prevent the HTTP Source from being accessed by unexpected clients. To do so, a Kubernetes Secret needs to be created to store the token, and the valid clients also need to include the token in its HTTP request header.
@@ -98,6 +94,14 @@ curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://http-pipeli
 # Or post data from your local with port-forwarding
 kubectl port-forward svc/http-pipeline-input 8443
 curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://localhost:8443/vertices/input
+```
+
+## x-numaflow-id
+
+When posting data to the HTTP Source, an optional HTTP header `x-numaflow-id` can be specified, which will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.
+
+```sh
+curl -kq -X POST -H "x-numaflow-id: ${id}" -d "hello world" ${http-source-url}
 ```
 
 ## Health Check
