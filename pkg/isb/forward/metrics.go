@@ -84,3 +84,17 @@ var concurrentUDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramO
 	Help:      "Processing times of UDF",
 	Buckets:   prometheus.ExponentialBucketsRange(1, 6000000, 40),
 }, []string{"vertex", "pipeline", "buffer"})
+
+// udfReadMessagesCount is used to indicate the number of messages read by UDF
+var udfReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "forwarder",
+	Name:      "udf_read_total",
+	Help:      "Total number of Messages Read at UDF",
+}, []string{"vertex", "pipeline", "buffer"})
+
+// udfWriteMessagesCount is used to indicate the number of messages read by UDF
+var udfWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "forwarder",
+	Name:      "udf_write_total",
+	Help:      "Total number of Messages Written at UDF",
+}, []string{"vertex", "pipeline", "buffer"})
