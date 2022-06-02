@@ -69,7 +69,7 @@ var forwardAChunkProcessingTime = promauto.NewHistogramVec(prometheus.HistogramO
 	Buckets:   prometheus.ExponentialBucketsRange(1000, 1000000*1800, 60),
 }, []string{"vertex", "pipeline", "from", "to"})
 
-/// udfProcessingTime is a histogram to Observe UDF Processing times as a whole
+// udfProcessingTime is a histogram to Observe UDF Processing times as a whole
 var udfProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "forwarder",
 	Name:      "udf_processing_time",
