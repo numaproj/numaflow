@@ -6,6 +6,7 @@ import (
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/sources/types"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -19,7 +20,12 @@ func TestRead(t *testing.T) {
 	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
 		Name: "memgen",
 	}}
-	mgen, err := NewMemGen(vertex, 5, 8, time.Millisecond, []isb.BufferWriter{dest})
+	m := &types.SourceMetadata{
+		Vertex:   vertex,
+		Hostname: "TestRead",
+		Replica:  0,
+	}
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest})
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -42,7 +48,12 @@ func TestStop(t *testing.T) {
 	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
 		Name: "memgen",
 	}}
-	mgen, err := NewMemGen(vertex, 5, 8, time.Millisecond, []isb.BufferWriter{dest})
+	m := &types.SourceMetadata{
+		Vertex:   vertex,
+		Hostname: "TestRead",
+		Replica:  0,
+	}
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest})
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

@@ -52,7 +52,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, WithReadBatchSize(5))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, nil, WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -112,7 +112,7 @@ func TestNewInterStepDataForward_drop(t *testing.T) {
 		},
 	}}
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, nil, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -172,7 +172,7 @@ func TestNewInterStepDataForward_WithInternalError(t *testing.T) {
 		},
 	}}
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyErrTest{}, myForwardApplyErrTest{}, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyErrTest{}, myForwardApplyErrTest{}, nil, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -217,7 +217,7 @@ func TestNewInterStepDataForward_WhereToError(t *testing.T) {
 		},
 	}}
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, nil, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.True(t, to1.IsEmpty())
 
@@ -264,7 +264,7 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 		},
 	}}
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, nil, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.True(t, to1.IsEmpty())
 
@@ -312,7 +312,7 @@ func TestNewInterStepData_forwardToAll(t *testing.T) {
 		},
 	}}
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, myForwardToAllTest{}, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, myForwardToAllTest{}, nil, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -359,7 +359,7 @@ func TestNewInterStepDataForwardToOneStep(t *testing.T) {
 		},
 	}}
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, nil, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -405,7 +405,7 @@ func TestWriteToBufferError(t *testing.T) {
 		},
 	}}
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, WithReadBatchSize(10))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, nil, WithReadBatchSize(10))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())

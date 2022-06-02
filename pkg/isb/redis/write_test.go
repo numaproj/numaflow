@@ -337,7 +337,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 		},
 	}}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{})
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, nil)
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 
@@ -380,7 +380,7 @@ func TestReadTimeout(t *testing.T) {
 		},
 	}}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{})
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, nil)
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written

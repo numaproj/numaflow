@@ -28,6 +28,7 @@ type EdgeBuffer struct {
 }
 
 // NewEdgeBuffer returns a new EdgeBuffer.
+// TODO: change the signature to take FromVertex as interface.
 func NewEdgeBuffer(ctx context.Context, name string, fromV *FromVertex) *EdgeBuffer {
 	return &EdgeBuffer{
 		ctx:        ctx,

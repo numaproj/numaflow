@@ -10,9 +10,9 @@ type publishOptions struct {
 
 type PublishOption func(*publishOptions)
 
-func WithAutoRefreshHeartbeat(enable bool) PublishOption {
+func WithAutoRefreshHeartbeatDisabled() PublishOption {
 	return func(opts *publishOptions) {
-		opts.autoRefreshHeartbeat = enable
+		opts.autoRefreshHeartbeat = false
 	}
 }
 
