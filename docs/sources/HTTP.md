@@ -11,24 +11,32 @@ metadata:
   name: http-pipeline
 spec:
   vertices:
-    - name: input
+    - name: in
       source:
         http: {}
     - name: p1
       udf:
         builtin:
           name: cat
-    - name: output
+    - name: out
       sink:
         log: {}
   edges:
-    - from: input
+    - from: in
       to: p1
     - from: p1
-      to: output
+      to: out
 ```
 
-## ClusterIP Service
+## Sending Data
+
+Data could be sent to an HTTP source through:
+
+- ClusterIP Service (within the cluster)
+- Ingress or LoadBalancer Service (outside of the cluster)
+- Port-forward (for testing)
+
+### ClusterIP Service
 
 An HTTP Source Vertex can generate a `ClusterIP` Service if `service: true` is specified, the service name is in the format of `{pipelineName}-{vertexName}`, so the HTTP Source can be accessed through `https://{pipelineName}-{vertexName}.{namespace}.svc.cluster.local:8443/vertices/{vertexName}` within the cluster.
 
@@ -39,19 +47,36 @@ metadata:
   name: http-pipeline
 spec:
   vertices:
-    - name: input
+    - name: in
       source:
         http:
           service: true
 ```
 
-## Your Own Service
+### LoadBalancer Service or Ingress
 
-Sometimes you don't need a `ClusterIP` Service but a `LoadBalander` or `NodePort` one, you need to create it by you own. Just remember to use `selector` like following in the Service:
+To create a `LoadBalander` type Service, or a `NodePort` one for Ingress, you need to do it by you own. Just remember to use `selector` like following in the Service:
 
 ```yaml
 numaflow.numaproj.io/pipeline-name: http-pipeline # pipeline name
-numaflow.numaproj.io/vertex-name: input # vertex name
+numaflow.numaproj.io/vertex-name: in # vertex name
+```
+
+### Port-forwarding
+
+To test an HTTP source, you can do it from your local through port-forwarding.
+
+```sh
+kubectl port-forward pod ${pod-name} 8443
+curl -kq -X POST -d "hello world" https://localhost:8443/vertices/in
+```
+
+## x-numaflow-id
+
+When posting data to the HTTP Source, an optional HTTP header `x-numaflow-id` can be specified, which will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.
+
+```sh
+curl -kq -X POST -H "x-numaflow-id: ${id}" -d "hello world" ${http-source-url}
 ```
 
 ## Auth
@@ -75,7 +100,7 @@ metadata:
   name: http-pipeline
 spec:
   vertices:
-    - name: input
+    - name: in
       source:
         http:
           auth:
@@ -89,19 +114,7 @@ When the clients post data to the Source Vertex, add `Authorization: Bearer tr3q
 ```sh
 TOKEN="Bearer tr3qhs321fjglwf1e2e67dfda4tr"
 # Post data from a Pod in the same namespace of the cluster
-curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://http-pipeline-input:8443/vertices/input
-
-# Or post data from your local with port-forwarding
-kubectl port-forward svc/http-pipeline-input 8443
-curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://localhost:8443/vertices/input
-```
-
-## x-numaflow-id
-
-When posting data to the HTTP Source, an optional HTTP header `x-numaflow-id` can be specified, which will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.
-
-```sh
-curl -kq -X POST -H "x-numaflow-id: ${id}" -d "hello world" ${http-source-url}
+curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://http-pipeline-in:8443/vertices/in
 ```
 
 ## Health Check
