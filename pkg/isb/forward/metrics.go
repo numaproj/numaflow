@@ -65,24 +65,24 @@ var platformError = promauto.NewCounterVec(prometheus.CounterOpts{
 var forwardAChunkProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "forwarder",
 	Name:      "forward_chunk_processing_time",
-	Help:      "Processing times of the entire forward a chunk",
-	Buckets:   prometheus.ExponentialBucketsRange(1, 6000000, 40),
+	Help:      "Processing times of the entire forward a chunk (1 millisecond to 30 minutes)",
+	Buckets:   prometheus.ExponentialBucketsRange(1000, 1000000*1800, 60),
 }, []string{"vertex", "pipeline", "from", "to"})
 
-// udfProcessingTime is a histogram to Observe UDF Processing times as a whole
+/// udfProcessingTime is a histogram to Observe UDF Processing times as a whole
 var udfProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "forwarder",
 	Name:      "udf_processing_time",
-	Help:      "Processing times of UDF",
-	Buckets:   prometheus.ExponentialBucketsRange(1, 6000000, 40),
+	Help:      "Processing times of UDF (100 microseconds to 15 minutes)",
+	Buckets:   prometheus.ExponentialBucketsRange(100, 1000000*900, 60),
 }, []string{"vertex", "pipeline", "buffer"})
 
 // concurrentUDFProcessingTime is a histogram to Observe UDF Processing times as a whole
 var concurrentUDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "forwarder",
 	Name:      "concurrent_udf_processing_time",
-	Help:      "Processing times of UDF",
-	Buckets:   prometheus.ExponentialBucketsRange(1, 6000000, 40),
+	Help:      "Processing times of Concurrent UDF (1 millisecond to 30 minutes)",
+	Buckets:   prometheus.ExponentialBucketsRange(1000, 1000000*1800, 60),
 }, []string{"vertex", "pipeline", "buffer"})
 
 // udfReadMessagesCount is used to indicate the number of messages read by UDF
