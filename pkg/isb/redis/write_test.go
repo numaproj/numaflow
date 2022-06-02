@@ -346,7 +346,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 
 }
 
-// TestReadTimeout tests that even though we have a blocking read, our StopPublisher function exits cleanly
+// TestReadTimeout tests that even though we have a blocking read, our Stop function exits cleanly
 func TestReadTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
 	defer cancel()

@@ -39,7 +39,12 @@ type InterStepDataForward struct {
 }
 
 // NewInterStepDataForward creates an inter-step forwarder.
-func NewInterStepDataForward(vertex *dfv1.Vertex, fromStep isb.BufferReader, toSteps map[string]isb.BufferWriter, fsd ToWhichStepDecider, applyUDF udfapplier.Applier, wmProgressor progress.Progressor, opts ...Option) (*InterStepDataForward, error) {
+func NewInterStepDataForward(vertex *dfv1.Vertex,
+	fromStep isb.BufferReader,
+	toSteps map[string]isb.BufferWriter,
+	fsd ToWhichStepDecider, applyUDF udfapplier.Applier,
+	wmProgressor progress.Progressor,
+	opts ...Option) (*InterStepDataForward, error) {
 
 	options := &options{
 		retryInterval:  time.Millisecond,
@@ -78,7 +83,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex, fromStep isb.BufferReader, toS
 	return &isdf, nil
 }
 
-// Start starts reading the buffer and forwards to the next buffers. Call `StopPublisher` to stop.
+// Start starts reading the buffer and forwards to the next buffers. Call `Stop` to stop.
 func (isdf *InterStepDataForward) Start() <-chan struct{} {
 	log := logging.FromContext(isdf.ctx)
 	stopped := make(chan struct{})
