@@ -43,7 +43,7 @@ func TestInterStepDataForward_Stop(t *testing.T) {
 		},
 	}}
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, nil, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// write some data but buffer is not full even though we are not reading
@@ -75,7 +75,7 @@ func TestInterStepDataForward_ForceStop(t *testing.T) {
 		},
 	}}
 
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, nil, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// write some data such that the fromBuffer can be empty, that is toBuffer gets full

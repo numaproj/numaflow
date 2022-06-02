@@ -41,13 +41,16 @@ type ProcessorEntitier interface {
 	GetBucketName() string
 	BuildOTWatcherKey(Watermark) string
 	ParseOTWatcherKey(string) (int64, bool, error)
+	IsSharedBucket() bool
+	GetPublishKeyspace() string
 }
 
 // ProcessorEntity implements ProcessorEntitier.
 type ProcessorEntity struct {
-	name     string
-	keyspace string
-	opts     *entityOptions
+	// name is the name of the entity
+	name            string
+	publishKeyspace string
+	opts            *entityOptions
 }
 
 // _defaultKeySeparator is the key separate when we have shared OT buckets.
@@ -56,7 +59,7 @@ type ProcessorEntity struct {
 const _defaultKeySeparator = "_"
 
 // NewProcessorEntity returns a new `ProcessorEntity`
-func NewProcessorEntity(name string, keyspace string, inputOpts ...EntityOption) *ProcessorEntity {
+func NewProcessorEntity(name string, publishKeyspace string, inputOpts ...EntityOption) *ProcessorEntity {
 	opts := &entityOptions{
 		separateOTBucket: false,
 		keySeparator:     _defaultKeySeparator,
@@ -65,9 +68,9 @@ func NewProcessorEntity(name string, keyspace string, inputOpts ...EntityOption)
 		opt(opts)
 	}
 	return &ProcessorEntity{
-		name:     name,
-		keyspace: keyspace,
-		opts:     opts,
+		name:            name,
+		publishKeyspace: publishKeyspace,
+		opts:            opts,
 	}
 }
 
@@ -76,13 +79,23 @@ func (p *ProcessorEntity) GetID() string {
 	return p.name
 }
 
+// GetPublishKeyspace returns the publishKeyspace of the entity
+func (p *ProcessorEntity) GetPublishKeyspace() string {
+	return p.publishKeyspace
+}
+
 // GetBucketName returns the offset-timeline for the entity.
 func (p *ProcessorEntity) GetBucketName() string {
 	if p.opts.separateOTBucket {
-		return p.keyspace + "_OT_" + p.name
+		return p.publishKeyspace + "_OT_" + p.name
 	} else {
-		return p.keyspace + "_OT"
+		return p.publishKeyspace + "_OT"
 	}
+}
+
+// IsSharedBucket returns true if the bucket is shared.
+func (p *ProcessorEntity) IsSharedBucket() bool {
+	return p.opts.separateOTBucket
 }
 
 // BuildOTWatcherKey builds the offset-timeline key name

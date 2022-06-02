@@ -24,6 +24,8 @@ type GenericProgress struct {
 	opts            *genericProgressOptions
 }
 
+var _ Progressor = (*GenericProgress)(nil)
+
 // GenericProgressOption sets options for GenericProgress.
 type GenericProgressOption func(options *genericProgressOptions)
 
@@ -34,7 +36,7 @@ func WithSeparateOTBuckets(separate bool) GenericProgressOption {
 	}
 }
 
-// NewGenericProgress will move the watermark for all the UDF vertices.
+// NewGenericProgress will move the watermark for all the vertices once consumed from the source.
 func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace string, publishKeyspace string, js nats.JetStreamContext, inputOpts ...GenericProgressOption) *GenericProgress {
 	var log = logging.FromContext(ctx)
 
@@ -50,11 +52,11 @@ func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace
 
 	// publish
 	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace, processor.WithSeparateOTBuckets(opts.separateOTBucket))
-	publishHeartbeatBucket, err := js.KeyValue(publishKeyspace + "_PROCESSORS")
+	publishHeartbeatBucket, err := GetHeartbeatBucket(js, publishKeyspace)
 	if err != nil {
 		log.Fatalw("unable to get the publish heartbeat bucket", zap.String("bucket", publishKeyspace+"_PROCESSORS"), zap.Error(err))
 	}
-	udfPublish := publish.NewPublish(ctx, publishEntity, publishKeyspace, js, publishHeartbeatBucket, publish.WithAutoRefreshHeartbeat(true))
+	udfPublish := publish.NewPublish(ctx, publishEntity, publishKeyspace, js, publishHeartbeatBucket)
 
 	// fetch
 	fetchHeartbeatBucket, err := js.KeyValue(fetchKeyspace + "_PROCESSORS")
@@ -90,4 +92,8 @@ func (u *GenericProgress) PublishWatermark(watermark processor.Watermark, offset
 // GetLatestWatermark returns the latest head watermark.
 func (u *GenericProgress) GetLatestWatermark() processor.Watermark {
 	return u.progressPublish.GetLatestWatermark()
+}
+
+func (g *GenericProgress) StopPublisher() {
+	g.progressPublish.StopPublisher()
 }

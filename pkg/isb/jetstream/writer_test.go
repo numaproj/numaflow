@@ -99,7 +99,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 		"to1": to1,
 	}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{})
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, nil)
 	assert.NoError(t, err)
 
 	stopped := f.Start()

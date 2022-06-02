@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/sources/types"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -107,8 +108,13 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 // getSourcer is used to send the sourcer information
 func (u *SourceProcessor) getSourcer(writers []isb.BufferWriter, logger *zap.SugaredLogger) (Sourcer, error) {
 	src := u.Vertex.Spec.Source
+	m := &types.SourceMetadata{
+		Vertex:   u.Vertex,
+		Hostname: u.Hostname,
+		Replica:  u.Replica,
+	}
 	if x := src.Generator; x != nil {
-		return generator.NewMemGen(u.Vertex, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, generator.WithLogger(logger))
+		return generator.NewMemGen(m, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, generator.WithLogger(logger))
 	} else if x := src.Kafka; x != nil {
 		return kafka.NewKafkaSource(u.Vertex, writers, kafka.WithGroupName(x.ConsumerGroupName), kafka.WithLogger(logger))
 	} else if x := src.HTTP; x != nil {
