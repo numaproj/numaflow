@@ -49,7 +49,7 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 	log := logging.FromContext(ctx)
 
 	opts := &publishOptions{
-		autoRefreshHeartbeat: false,
+		autoRefreshHeartbeat: true,
 		podHeartbeatRate:     5,
 		// TODO: use config to build default values
 		// TODO: move it to control plane. One OT bucket for all the processors in a vertex.

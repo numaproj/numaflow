@@ -43,7 +43,7 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1", keyspace)
 
 	p := NewPublish(ctx, publishEntity, keyspace, js, publishHeartbeatBucket,
-		WithAutoRefreshHeartbeat(true),
+		WithAutoRefreshHeartbeatDisabled(),
 		WithPodHeartbeatRate(1),
 		WithBucketConfigs(&nats.KeyValueConfig{
 			Bucket:       publishEntity.GetBucketName(),
@@ -114,7 +114,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1", keyspace, processor.WithSeparateOTBuckets(true))
 
 	p := NewPublish(ctx, publishEntity, keyspace, js, publishHeartbeatBucket,
-		WithAutoRefreshHeartbeat(true),
+		WithAutoRefreshHeartbeatDisabled(),
 		WithPodHeartbeatRate(1),
 		WithBucketConfigs(&nats.KeyValueConfig{
 			Bucket:       publishEntity.GetBucketName(),

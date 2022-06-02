@@ -6,16 +6,18 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"os"
 	"strconv"
 	"sync/atomic"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sources/types"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/progress"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
@@ -84,8 +86,8 @@ type memgen struct {
 }
 
 type watermark struct {
-	publisher *publish.Publish
-	fetcher   *fetch.EdgeBuffer
+	sourcePublish *publish.Publish
+	wmProgressor  progress.Progressor
 }
 
 type Option func(*memgen) error
@@ -121,8 +123,12 @@ func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit 
 		name:         metadata.Vertex.Spec.Name,
 		pipelineName: metadata.Vertex.Spec.PipelineName,
 		genfn:        recordGenerator,
-		srcchan:      make(chan record, rpu*5),
-		readTimeout:  3 * time.Second, // default timeout
+		progressor: &watermark{
+			sourcePublish: nil,
+			wmProgressor:  nil,
+		},
+		srcchan:     make(chan record, rpu*5),
+		readTimeout: 3 * time.Second, // default timeout
 	}
 
 	for _, o := range opts {
@@ -152,9 +158,16 @@ func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit 
 		}
 	}
 
-	var wmProgressor progress.Progressor
+	var wmProgressor progress.Progressor = nil
 	var err error
-	wmProgressor, err = gensrc.buildWMProgressor(metadata)
+	// TODO: pass it as option
+	if _, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok {
+		err = gensrc.buildWMProgressor(metadata)
+		if err != nil {
+			return nil, err
+		}
+		wmProgressor = gensrc.progressor.wmProgressor
+	}
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
 	forwarder, err := forward.NewInterStepDataForward(metadata.Vertex, gensrc, destinations, forward.All, applier.Terminal, wmProgressor, forwardOpts...)
@@ -184,6 +197,7 @@ func (mg *memgen) IsEmpty() bool {
 // the context passed to read should be different from the lifecycle context that is used by this vertex.
 func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := make([]*isb.ReadMessage, 0, count)
+	// timeout should not be re-triggered for every run of the for loop. it is for the entire Read() call.
 	timeout := time.After(mg.readTimeout)
 	for i := int64(0); i < count; i++ {
 		// since the Read call is blocking, and runs in an infinite loop
@@ -192,6 +206,15 @@ func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, er
 		case r := <-mg.srcchan:
 			tickgenSourceReadCount.With(map[string]string{"vertex": mg.name, "pipeline": mg.pipelineName}).Inc()
 			msgs = append(msgs, newreadmessage(r.data, r.offset))
+			// publish the last message's offset with watermark, this is an optimization to avoid too many insert calls
+			// into the offset timeline store.
+			// Please note that we are inserting the watermark before the data has been persisted into ISB by the forwarder.
+			if mg.progressor.sourcePublish != nil {
+				o := msgs[len(msgs)-1].ReadOffset
+				nanos, _ := o.Sequence()
+				// remove the nanosecond precision
+				mg.progressor.sourcePublish.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
+			}
 		case <-timeout:
 			mg.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
 			return msgs, nil

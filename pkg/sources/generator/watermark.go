@@ -10,37 +10,55 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
-func (mg *memgen) buildWMProgressor(metadata *types.SourceMetadata) (progress.Progressor, error) {
+func (mg *memgen) buildWMProgressor(metadata *types.SourceMetadata) error {
+	ctx := mg.lifecycleCtx
+
 	js, err := progress.GetJetStreamConnection(mg.lifecycleCtx)
+
+	// publish source watermark and this is very much dependent on the source
+	sourcePublishKeySpace := fmt.Sprintf("source-%s", progress.GetPublishKeySpace(metadata.Vertex))
+	// TODO: remove this once bucket creation has been moved to controller
+	err = progress.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", sourcePublishKeySpace), js)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	publishEntity := processor.NewProcessorEntity(fmt.Sprintf("%s-%d", metadata.Vertex.Name, metadata.Replica), progress.GetPublishKeySpace(metadata.Vertex), processor.WithSeparateOTBuckets(false))
-	heartbeatBucket, err := progress.GetHeartbeatBucket(js, progress.GetPublishKeySpace(metadata.Vertex))
+	publishEntity := processor.NewProcessorEntity(fmt.Sprintf("source-%s-%d", metadata.Vertex.Name, metadata.Replica), sourcePublishKeySpace, processor.WithSeparateOTBuckets(false))
+	// for tickgen you need the default heartbeat system because there are no concept of source partitions etc
+	heartbeatBucket, err := progress.GetHeartbeatBucket(js, sourcePublishKeySpace)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	// use this while reading the data from the source.
+	mg.progressor.sourcePublish = publish.NewPublish(mg.lifecycleCtx, publishEntity, progress.GetPublishKeySpace(metadata.Vertex), js, heartbeatBucket)
 
-	w := watermark{}
+	// fall back on the generic progressor and use the source publisher as the input to the generic progressor.
+	// use the source Publisher as the source
+	var wmProgressor progress.Progressor = nil
+	// TODO: remove this once bucket creation has been moved to controller
+	err = progress.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", progress.GetPublishKeySpace(metadata.Vertex)), js)
+	if err != nil {
+		return err
+	}
+	wmProgressor = progress.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", metadata.Vertex.Name, metadata.Replica), sourcePublishKeySpace, progress.GetPublishKeySpace(metadata.Vertex), js)
+	mg.progressor.wmProgressor = wmProgressor
 
-	w.publisher = publish.NewPublish(mg.lifecycleCtx, publishEntity, progress.GetPublishKeySpace(metadata.Vertex), js, heartbeatBucket)
+	mg.logger.Info("Initialized watermark progressor")
 
-	return &w, nil
+	return nil
 }
 
 func (w *watermark) PublishWatermark(watermark processor.Watermark, offset isb.Offset) {
-	w.publisher.PublishWatermark(watermark, offset)
+	w.wmProgressor.PublishWatermark(watermark, offset)
 }
 
 func (w *watermark) GetLatestWatermark() processor.Watermark {
-	return w.publisher.GetLatestWatermark()
+	return w.wmProgressor.GetLatestWatermark()
 }
 
 func (w *watermark) StopPublisher() {
-	w.publisher.StopPublisher()
+	w.wmProgressor.StopPublisher()
 }
 
 func (w *watermark) GetWatermark(offset isb.Offset) processor.Watermark {
-	//TODO implement me
-	panic("implement me")
+	return w.wmProgressor.GetWatermark(offset)
 }

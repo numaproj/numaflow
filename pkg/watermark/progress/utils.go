@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -32,8 +33,13 @@ func GetHeartbeatBucket(js nats.JetStreamContext, publishKeyspace string) (nats.
 
 // GetFetchKeyspace gets the fetch keyspace name from the vertex.
 func GetFetchKeyspace(v *dfv1.Vertex) string {
-	// from vertices is 0 because we do not support diamond DAG
-	return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.FromVertices[0])
+	if len(v.Spec.FromVertices) > 0 {
+		// from vertices is 0 because we do not support diamond DAG
+		return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.FromVertices[0])
+	} else {
+		// sources will not have FromVertices
+		return fmt.Sprintf("%s-%s-%s-source", v.Namespace, v.Spec.PipelineName, v.Name)
+	}
 }
 
 // GetPublishKeySpace gets the publish keyspace name from the vertex
@@ -52,11 +58,12 @@ func CreateProcessorBucketIfMissing(bucketName string, js nats.JetStreamContext)
 				Description:  bucketName,
 				MaxValueSize: 0,
 				History:      0,
-				TTL:          0,
-				MaxBytes:     0,
-				Storage:      0,
-				Replicas:     0,
-				Placement:    nil,
+				// TODO: make it configurable
+				TTL:       5 * time.Minute,
+				MaxBytes:  0,
+				Storage:   0,
+				Replicas:  0,
+				Placement: nil,
 			})
 		}
 	}

@@ -47,6 +47,7 @@ type ProcessorEntitier interface {
 
 // ProcessorEntity implements ProcessorEntitier.
 type ProcessorEntity struct {
+	// name is the name of the entity
 	name            string
 	publishKeyspace string
 	opts            *entityOptions

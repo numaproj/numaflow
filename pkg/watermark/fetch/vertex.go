@@ -165,7 +165,8 @@ func (v *FromVertex) startHeatBeatWatcher() {
 						v.log.Errorw("unable to create the watcher for fromProcessor", zap.String("fromProcessor", value.Key()))
 						continue
 					}
-					var fromProcessor = NewProcessor(v.ctx, entity, 5, watcher)
+					// TODO: make capacity configurable
+					var fromProcessor = NewProcessor(v.ctx, entity, 10, watcher)
 					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else {
