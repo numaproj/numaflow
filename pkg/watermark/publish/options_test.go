@@ -1,22 +1,23 @@
 package publish
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestOptions(t *testing.T) {
 	testOpts := []PublishOption{
-		WithAutoRefreshHeartbeat(true),
+		WithAutoRefreshHeartbeatDisabled(),
 		WithPodHeartbeatRate(10),
 	}
 	opts := &publishOptions{
-		autoRefreshHeartbeat: false,
+		autoRefreshHeartbeat: true,
 		podHeartbeatRate:     5,
 	}
 	for _, opt := range testOpts {
 		opt(opts)
 	}
-	assert.True(t, opts.autoRefreshHeartbeat)
+	assert.False(t, opts.autoRefreshHeartbeat)
 	assert.Equal(t, int64(10), opts.podHeartbeatRate)
 }

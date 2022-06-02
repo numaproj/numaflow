@@ -86,6 +86,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 // getSinker takes in the logger from the parent context
 func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger) (Sinker, error) {
 	sink := u.Vertex.Spec.Sink
+	// TODO: add watermark
 	if x := sink.Log; x != nil {
 		return logsink.NewToLog(u.Vertex, reader, logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {

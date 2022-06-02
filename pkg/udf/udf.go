@@ -3,9 +3,11 @@ package udf
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/progress"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -115,7 +117,22 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			opts = append(opts, forward.WithUDFConcurrency(int(*x.UDFWorkers)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(u.Vertex, reader, writers, conditionalForwarder, udfHandler, opts...)
+
+	var wmProgressor progress.Progressor = nil
+	if _, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok {
+		js, err := progress.GetJetStreamConnection(ctx)
+		if err != nil {
+			return err
+		}
+		// TODO: remove this once bucket creation has been moved to controller
+		err = progress.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", progress.GetPublishKeySpace(u.Vertex)), js)
+		if err != nil {
+			return err
+		}
+		wmProgressor = progress.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", u.Vertex.Name, u.Replica), progress.GetFetchKeyspace(u.Vertex), progress.GetPublishKeySpace(u.Vertex), js)
+	}
+
+	forwarder, err := forward.NewInterStepDataForward(u.Vertex, reader, writers, conditionalForwarder, udfHandler, wmProgressor, opts...)
 	if err != nil {
 		return err
 	}

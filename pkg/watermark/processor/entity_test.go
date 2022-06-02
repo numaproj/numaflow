@@ -17,7 +17,7 @@ func TestEntity(t *testing.T) {
 
 func TestEntityDifferentBuckets(t *testing.T) {
 	e := NewProcessorEntity("pod0", "v0", WithSeparateOTBuckets(true))
-	assert.True(t, e.opts.separateOTBucket)
+	assert.True(t, e.IsSharedBucket())
 	assert.Equal(t, "pod0", e.GetID())
 	assert.Equal(t, "v0_OT_pod0", e.GetBucketName())
 }
