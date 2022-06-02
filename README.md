@@ -14,7 +14,7 @@ NumaFlow installs in less than a minute and is easier and cheaper for simple dat
 
 ## Key Features
 
-* Kubernetes-native: If know Kubermetes, you already know 90% of what you need to use NumaFlow.
+* Kubernetes-native: If you know Kubernetes, you already know 90% of what you need to use NumaFlow.
 * Language agnostic: Use your favority programming language.
 * Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted.
 
