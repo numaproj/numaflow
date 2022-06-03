@@ -119,7 +119,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	}
 
 	var wmProgressor progress.Progressor = nil
-	if _, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok {
+	if val, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok && val == "true" {
 		js, err := progress.GetJetStreamConnection(ctx)
 		if err != nil {
 			return err
