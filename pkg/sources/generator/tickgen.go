@@ -161,7 +161,7 @@ func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit 
 	var wmProgressor progress.Progressor = nil
 	var err error
 	// TODO: pass it as option
-	if _, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok {
+	if val, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok && val == "true" {
 		err = gensrc.buildWMProgressor(metadata)
 		if err != nil {
 			return nil, err
