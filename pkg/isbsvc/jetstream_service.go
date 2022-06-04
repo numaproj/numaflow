@@ -66,13 +66,13 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []string, op
 	}
 	for _, b := range buffers {
 		// Create a stream for each buffer
-		streamName := streamName(jss.pipelineName, b)
+		streamName := JetStreamName(jss.pipelineName, b)
 		_, err := js.StreamInfo(streamName)
 		if err != nil {
 			if !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of stream %q during buffer creating, %w", streamName, err)
 			}
-			if _, err = js.AddStream(&nats.StreamConfig{
+			if _, err := js.AddStream(&nats.StreamConfig{
 				Name:       streamName,
 				Subjects:   []string{streamName}, // Use the stream name as the only subject
 				Retention:  nats.RetentionPolicy(v.GetInt("stream.retention")),
@@ -99,6 +99,46 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []string, op
 			}
 			log.Infow("Succeeded to create a consumer for a stream", zap.String("stream", streamName), zap.String("consumer", streamName))
 		}
+		// Create offset-timeline bucket
+		otBucket := JetStreamOTBucket(jss.pipelineName, b)
+		if _, err := js.KeyValue(otBucket); err != nil {
+			if !errors.Is(err, nats.ErrBucketNotFound) {
+				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otBucket, err)
+			}
+			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
+				Bucket:       otBucket,
+				Description:  fmt.Sprintf("Offset timeline bucket of buffer [%s]", b),
+				MaxValueSize: v.GetInt32("otBucket.maxValueSize"),
+				History:      uint8(v.GetUint("otBucket.history")),
+				TTL:          v.GetDuration("otBucket.ttl"),
+				MaxBytes:     v.GetInt64("otBucket.maxBytes"),
+				Storage:      nats.FileStorage,
+				Replicas:     v.GetInt("otBucket.replicas"),
+				Placement:    nil,
+			}); err != nil {
+				return fmt.Errorf("failed to create offset timeline bucket %q, %w", otBucket, err)
+			}
+		}
+		// Create processor bucket
+		procBucket := JetStreamProcessorBucket(jss.pipelineName, b)
+		if _, err := js.KeyValue(procBucket); err != nil {
+			if !errors.Is(err, nats.ErrBucketNotFound) {
+				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procBucket, err)
+			}
+			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
+				Bucket:       procBucket,
+				Description:  fmt.Sprintf("Processor bucket of buffer [%s]", b),
+				MaxValueSize: v.GetInt32("procBucket.maxValueSize"),
+				History:      uint8(v.GetUint("procBucket.history")),
+				TTL:          v.GetDuration("procBucket.ttl"),
+				MaxBytes:     v.GetInt64("procBucket.maxBytes"),
+				Storage:      nats.FileStorage,
+				Replicas:     v.GetInt("procBucket.replicas"),
+				Placement:    nil,
+			}); err != nil {
+				return fmt.Errorf("failed to create processor bucket %q, %w", otBucket, err)
+			}
+		}
 	}
 	return nil
 }
@@ -115,16 +155,27 @@ func (jss *jetStreamSvc) DeleteBuffers(ctx context.Context, buffers []string) er
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
 	for _, b := range buffers {
-		streamName := fmt.Sprintf("%s-%s", jss.pipelineName, b)
+		streamName := JetStreamName(jss.pipelineName, b)
 		if err := js.DeleteStream(streamName); err != nil && !errors.Is(err, nats.ErrStreamNotFound) {
 			return fmt.Errorf("failed to delete stream %q, %w", streamName, err)
 		}
-		log.Infow("succeeded to delete a stream", zap.String("stream", streamName))
+		log.Infow("Succeeded to delete a stream", zap.String("stream", streamName))
+		otBucket := JetStreamOTBucket(jss.pipelineName, b)
+		if err := js.DeleteKeyValue(otBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) {
+			return fmt.Errorf("failed to delete offset timeline bucket %q, %w", otBucket, err)
+		}
+		log.Infow("Succeeded to delete an offset timeline bucket", zap.String("bucket", otBucket))
+		procBucket := JetStreamProcessorBucket(jss.pipelineName, b)
+		if err := js.DeleteKeyValue(procBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) {
+			return fmt.Errorf("failed to delete processor bucket %q, %w", procBucket, err)
+		}
+		log.Infow("Succeeded to delete a processor bucket", zap.String("bucket", procBucket))
 	}
 	return nil
 }
 
 func (jss *jetStreamSvc) ValidateBuffers(ctx context.Context, buffers []string) error {
+	log := logging.FromContext(ctx)
 	nc, err := clients.NewInClusterJetStreamClient().Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
@@ -135,10 +186,21 @@ func (jss *jetStreamSvc) ValidateBuffers(ctx context.Context, buffers []string) 
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
 	for _, b := range buffers {
-		streamName := fmt.Sprintf("%s-%s", jss.pipelineName, b)
-		_, err := js.StreamInfo(streamName)
-		if err != nil {
+		streamName := JetStreamName(jss.pipelineName, b)
+		if _, err := js.StreamInfo(streamName); err != nil {
 			return fmt.Errorf("failed to query information of stream %q, %w", streamName, err)
+		}
+
+		otBucket := JetStreamOTBucket(jss.pipelineName, b)
+		if _, err := js.KeyValue(otBucket); err != nil {
+			// TODO: throw an error
+			log.Warnw("Failed to query bucket", zap.String("bucket", otBucket), zap.Error(err))
+		}
+
+		procBucket := JetStreamProcessorBucket(jss.pipelineName, b)
+		if _, err := js.KeyValue(procBucket); err != nil {
+			// TODO: throw an error
+			log.Warnw("Failed to query bucket", zap.String("bucket", procBucket), zap.Error(err))
 		}
 	}
 	return nil
@@ -159,7 +221,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 			return nil, fmt.Errorf("failed to get a JetStream context from nats connection, %w", err)
 		}
 	}
-	streamName := streamName(jss.pipelineName, buffer)
+	streamName := JetStreamName(jss.pipelineName, buffer)
 	stream, err := js.StreamInfo(streamName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of stream %q", streamName)
@@ -181,6 +243,14 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-func streamName(pipelineName, bufferName string) string {
+func JetStreamName(pipelineName, bufferName string) string {
 	return fmt.Sprintf("%s-%s", pipelineName, bufferName)
+}
+
+func JetStreamOTBucket(pipelineName, bufferName string) string {
+	return fmt.Sprintf("%s-%s_OT", pipelineName, bufferName)
+}
+
+func JetStreamProcessorBucket(pipelineName, bufferName string) string {
+	return fmt.Sprintf("%s-%s_PROCESSORS", pipelineName, bufferName)
 }

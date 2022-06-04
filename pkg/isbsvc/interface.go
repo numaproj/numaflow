@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// ISBService is an interface used to do the operations on ISBS
+// ISBService is an interface used to do the operations on ISBSvc
 type ISBService interface {
 	CreateBuffers(ctx context.Context, buffers []string, opts ...BufferCreateOption) error
 	DeleteBuffers(ctx context.Context, buffers []string) error
