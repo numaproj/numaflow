@@ -66,6 +66,18 @@ data:
           consumer:
             ackWait: 60s
             maxAckPending: 20000
+          otBucket:
+            maxValueSize: 0
+            history: 1
+            ttl: 72h
+            maxBytes: 0
+            replicas: 3
+          procBucket:
+            maxValueSize: 0
+            history: 1
+            ttl: 72h
+            maxBytes: 0
+            replicas: 3
         versions:
         - version: latest
           natsImage: nats:2.8.3
