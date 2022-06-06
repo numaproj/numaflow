@@ -116,7 +116,7 @@ func (bw *BufferWrite) refreshWriteInfo(ctx context.Context) {
 	}
 }
 
-// trim is used to explicity call TRIM on buffer being full
+// trim is used to explicitly call TRIM on buffer being full
 func (bw *BufferWrite) trim(_ context.Context) {
 	ctx := clients.RedisContext
 	bw.log.Infow("Explicit trim on MINID", zap.String("MINID", bw.minId.Load()))

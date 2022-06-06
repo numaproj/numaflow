@@ -447,13 +447,13 @@ message JetStreamBufferService {
   optional string bufferConfig = 18;
 
   // Whether encrypt the data at rest, defaults to false
-  // Enabling encryption might impact the performace, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
+  // Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
   // Toggling the value will impact encypting/decrypting existing messages.
   // +optional
   optional bool encryption = 19;
 
   // Whether enable TLS, defaults to false
-  // Enabling TLS might impact the performace
+  // Enabling TLS might impact the performance
   // +optional
   optional bool tls = 20;
 }

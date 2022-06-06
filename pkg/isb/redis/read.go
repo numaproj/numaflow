@@ -226,7 +226,7 @@ func (br *BufferRead) Read(_ context.Context, count int64) ([]*isb.ReadMessage, 
 			return messages, fmt.Errorf("XReadGroup failed, %w", err)
 		}
 
-		// NOTE: If all messages have been delivered and acknowleged, the XREADGROUP 0-0 call returns an empty
+		// NOTE: If all messages have been delivered and acknowledged, the XREADGROUP 0-0 call returns an empty
 		// list of messages in the stream. At this point we want to read everything from last delivered which would be >
 		if len(xstreams) == 1 && len(xstreams[0].Messages) == 0 {
 			br.log.Infow("We have delivered and acknowledged all PENDING msgs, setting checkBacklog to false")
