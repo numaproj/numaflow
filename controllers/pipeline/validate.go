@@ -49,11 +49,11 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 
 	if len(sources) == 0 {
-		return fmt.Errorf("pipeline has no source, at lease one vertex with 'source' defined is requried")
+		return fmt.Errorf("pipeline has no source, at lease one vertex with 'source' defined is required")
 	}
 
 	if len(sinks) == 0 {
-		return fmt.Errorf("pipeline has no sink, at lease one vertex with 'sink' defined is requried")
+		return fmt.Errorf("pipeline has no sink, at lease one vertex with 'sink' defined is required")
 	}
 
 	for k, u := range udfs {

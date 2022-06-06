@@ -1612,7 +1612,7 @@ fields under “otBucket” include “maxValueSize”, “history”, “ttl”
 <em>(Optional)</em>
 <p>
 Whether encrypt the data at rest, defaults to false Enabling encryption
-might impact the performace, see
+might impact the performance, see
 <a href="https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest">https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest</a>
 for the detail Toggling the value will impact encypting/decrypting
 existing messages.
@@ -1627,7 +1627,7 @@ existing messages.
 <em>(Optional)</em>
 <p>
 Whether enable TLS, defaults to false Enabling TLS might impact the
-performace
+performance
 </p>
 </td>
 </tr>
