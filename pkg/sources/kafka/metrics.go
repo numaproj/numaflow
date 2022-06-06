@@ -12,11 +12,11 @@ var kafkaSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of messages Read",
 }, []string{"vertex", "pipeline"})
 
-// kafkaSourceAckCount is used to indicate the number of messages Acknowleged
+// kafkaSourceAckCount is used to indicate the number of messages Acknowledged
 var kafkaSourceAckCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "kafka_source",
 	Name:      "ack_total",
-	Help:      "Total number of messages Acknowleged",
+	Help:      "Total number of messages Acknowledged",
 }, []string{"vertex", "pipeline"})
 
 // kafkaSourceOffsetAckErrors is used to indicate the number of errors while reading from kafka source with offsets
