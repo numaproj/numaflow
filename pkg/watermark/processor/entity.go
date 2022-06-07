@@ -1,3 +1,6 @@
+/*
+Package processor is the smallest processor entity for which the watermark will strictly monotonically increase.
+*/
 package processor
 
 import (
@@ -52,6 +55,8 @@ type ProcessorEntity struct {
 	publishKeyspace string
 	opts            *entityOptions
 }
+
+var _ ProcessorEntitier = (*ProcessorEntity)(nil)
 
 // _defaultKeySeparator is the key separate when we have shared OT buckets.
 // NOTE: we can only use `_` as the separator, Jetstream will not let any other special character.
