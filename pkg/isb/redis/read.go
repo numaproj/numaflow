@@ -78,7 +78,7 @@ func NewBufferRead(ctx context.Context, client *clients.RedisClient, name string
 func (br *BufferRead) refreshIsEmptyFlag(ctx context.Context) {
 	ticker := time.NewTicker(br.options.infoRefreshInterval)
 	defer ticker.Stop()
-	br.log.Infow("refreshIsEmptyFlag has started")
+	br.log.Debugw("refreshIsEmptyFlag has started")
 	for {
 		select {
 		case <-ctx.Done():
@@ -198,7 +198,7 @@ func (br *BufferRead) setIsEmptyFlag(flag bool) {
 
 // setError is used to set error cases
 func (br *BufferRead) setError(errMsg string, err error) {
-	br.log.Errorw(errMsg, zap.Error(err))
+	br.log.Debugw(errMsg, zap.Error(err))
 	br.BufferReadInfo.refreshEmptyError.Inc()
 	br.setIsEmptyFlag(false)
 }
@@ -222,14 +222,14 @@ func (br *BufferRead) Read(_ context.Context, count int64) ([]*isb.ReadMessage, 
 			isbReadErrors.With(labels).Inc()
 			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
 			messages, errMsg := br.convertXStreamToMessages(xstreams, messages, labels)
-			br.log.Errorw("checkBacklog true, convertXStreamToMessages failed", zap.Error(errMsg))
+			br.log.Debugw("checkBacklog true, convertXStreamToMessages failed", zap.Error(errMsg))
 			return messages, fmt.Errorf("XReadGroup failed, %w", err)
 		}
 
 		// NOTE: If all messages have been delivered and acknowledged, the XREADGROUP 0-0 call returns an empty
 		// list of messages in the stream. At this point we want to read everything from last delivered which would be >
 		if len(xstreams) == 1 && len(xstreams[0].Messages) == 0 {
-			br.log.Infow("We have delivered and acknowledged all PENDING msgs, setting checkBacklog to false")
+			br.log.Debugw("We have delivered and acknowledged all PENDING msgs, setting checkBacklog to false")
 			br.checkBackLog = false
 		}
 	}
@@ -243,7 +243,7 @@ func (br *BufferRead) Read(_ context.Context, count int64) ([]*isb.ReadMessage, 
 			isbReadErrors.With(labels).Inc()
 			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
 			messages, errMsg := br.convertXStreamToMessages(xstreams, messages, labels)
-			br.log.Errorw("checkBacklog false, convertXStreamToMessages failed", zap.Error(errMsg))
+			br.log.Debugw("checkBacklog false, convertXStreamToMessages failed", zap.Error(errMsg))
 			return messages, fmt.Errorf("XReadGroup failed, %w", err)
 		}
 	}

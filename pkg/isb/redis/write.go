@@ -99,7 +99,7 @@ func NewBufferWrite(ctx context.Context, client *clients.RedisClient, name strin
 func (bw *BufferWrite) refreshWriteInfo(ctx context.Context) {
 	ticker := time.NewTicker(bw.options.infoRefreshInterval)
 	defer ticker.Stop()
-	bw.log.Infow("refreshWriteInfo has started")
+	bw.log.Debugw("refreshWriteInfo has started")
 	for {
 		select {
 		case <-ctx.Done():
@@ -123,7 +123,7 @@ func (bw *BufferWrite) trim(_ context.Context) {
 	result := bw.Client.XTrimMinID(ctx, bw.GetStreamName(), bw.minId.Load())
 
 	if result.Err() != nil {
-		bw.log.Errorw("XTRIM failed", zap.Error(result.Err()))
+		bw.log.Debugw("XTRIM failed", zap.Error(result.Err()))
 	}
 }
 
