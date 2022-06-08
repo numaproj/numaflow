@@ -145,6 +145,7 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 				_ = tk.producer.Close()
 				tk.connected = false
 				close(done)
+				kafkaSinkWriteTimeouts.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
 				return
 			default:
 			}
