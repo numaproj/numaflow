@@ -141,6 +141,7 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 				errs[idx] = nil
 				sent++
 			case <-timeout:
+				// Need to close and recreate later because the successes and errors channels might be unclean
 				_ = tk.producer.Close()
 				tk.connected = false
 				close(done)
