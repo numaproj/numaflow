@@ -119,6 +119,7 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 				sent++
 			case <-timeout:
 				close(done)
+				return
 			default:
 			}
 		}
