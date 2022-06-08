@@ -10,6 +10,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -30,13 +31,11 @@ func createAndLaterDeleteBucket(js nats.JetStreamContext, kvConfig *nats.KeyValu
 func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 	var ctx = context.Background()
 
-	// Connect to NATS
-	nc, err := nats.Connect(nats.DefaultURL)
-	assert.Nil(t, err)
-
-	// Create JetStream Context
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
-	assert.Nil(t, err)
+	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
+	conn, err := defaultJetStreamClient.Connect(ctx)
+	assert.NoError(t, err)
+	js, err := conn.JetStream()
+	assert.NoError(t, err)
 
 	var publisherHBKeyspace = "publisherTest_PROCESSORS"
 	deleteFn, err := createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherHBKeyspace})
@@ -49,12 +48,14 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 	assert.NoError(t, err)
 	defer deleteFn()
 
-	kvJetStreamSvc, err := jetstream.NewKVJetStreamSvc(ctx, publisherHBKeyspace, "testPublisher", js)
+	heartbeatKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", publisherHBKeyspace, defaultJetStreamClient)
+	assert.NoError(t, err)
+	otKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", publisherOTKeyspace, defaultJetStreamClient)
 	assert.NoError(t, err)
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1", publisherHBKeyspace)
 
-	p := NewPublish(ctx, publishEntity, kvJetStreamSvc, nil, nil, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1))
+	p := NewPublish(ctx, publishEntity, heartbeatKV, otKV, nil, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1))
 
 	var epoch int64 = 1651161600
 	var location, _ = time.LoadLocation("UTC")
@@ -66,7 +67,7 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 	// publish a stale watermark (offset doesn't matter)
 	p.PublishWatermark(processor.Watermark(time.Unix(epoch-120, 0).In(location)), isb.SimpleOffset(func() string { return strconv.Itoa(0) }))
 
-	keys := p.getAllKeysFromBucket()
+	keys := p.getAllOTKeysFromBucket()
 	assert.Equal(t, []string{"publisherTestPod1_1651161600", "publisherTestPod1_1651161660", "publisherTestPod1_1651161720"}, keys)
 
 	wm := p.loadLatestFromStore()
@@ -80,7 +81,7 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 	_, err = js.KeyValue(publishEntity.GetBucketName())
 	assert.Equal(t, nats.ErrBucketNotFound, err)
 
-	_, err = p.publishStore.GetValue(ctx, publishEntity.GetID())
+	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
 	assert.Equal(t, nats.ErrKeyNotFound, err)
 
 }
@@ -88,13 +89,11 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 func TestPublisherWithSharedOTBucket(t *testing.T) {
 	var ctx = context.Background()
 
-	// Connect to NATS
-	nc, err := nats.Connect(nats.DefaultURL)
-	assert.Nil(t, err)
-
-	// Create JetStream Context
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
-	assert.Nil(t, err)
+	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
+	conn, err := defaultJetStreamClient.Connect(ctx)
+	assert.NoError(t, err)
+	js, err := conn.JetStream()
+	assert.NoError(t, err)
 
 	var keyspace = "publisherTest"
 
@@ -106,10 +105,12 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1", keyspace, processor.WithSeparateOTBuckets(true))
 
-	kvJetStreamSvc, err := jetstream.NewKVJetStreamSvc(ctx, keyspace+"_PROCESSORS", "TestPublisherWithSharedOTBucket", js)
+	heartbeatKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	assert.NoError(t, err)
+	otKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 
-	p := NewPublish(ctx, publishEntity, kvJetStreamSvc, nil, nil, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1))
+	p := NewPublish(ctx, publishEntity, heartbeatKV, otKV, nil, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1))
 
 	var epoch int64 = 1651161600
 	var location, _ = time.LoadLocation("UTC")
@@ -121,7 +122,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	// publish a stale watermark (offset doesn't matter)
 	p.PublishWatermark(processor.Watermark(time.Unix(epoch-120, 0).In(location)), isb.SimpleOffset(func() string { return strconv.Itoa(0) }))
 
-	keys := p.getAllKeysFromBucket()
+	keys := p.getAllOTKeysFromBucket()
 	assert.Equal(t, []string{"1651161600", "1651161660", "1651161720"}, keys)
 
 	wm := p.loadLatestFromStore()
@@ -133,11 +134,11 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	p.StopPublisher()
 
 	// run this test only if we are not sharing the bucket
-	if !publishEntity.IsSharedBucket() {
+	if !publishEntity.IsOTBucketShared() {
 		_, err = js.KeyValue(publishEntity.GetBucketName())
 		assert.Equal(t, nats.ErrBucketNotFound, err)
 	}
 
-	_, err = p.publishStore.GetValue(ctx, publishEntity.GetID())
+	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
 	assert.Equal(t, nats.ErrKeyNotFound, err)
 }

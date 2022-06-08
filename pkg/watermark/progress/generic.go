@@ -56,7 +56,8 @@ func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace
 	if err != nil {
 		log.Fatalw("unable to get the publish heartbeat bucket", zap.String("bucket", publishKeyspace+"_PROCESSORS"), zap.Error(err))
 	}
-	udfPublish := publish.NewPublish(ctx, publishEntity, nil, js, publishHeartbeatBucket)
+
+	udfPublish := publish.NewPublish(ctx, publishEntity, nil, nil, publishHeartbeatBucket)
 
 	// fetch
 	fetchHeartbeatBucket, err := js.KeyValue(fetchKeyspace + "_PROCESSORS")

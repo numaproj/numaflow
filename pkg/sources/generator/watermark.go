@@ -34,7 +34,7 @@ func (mg *memgen) buildWMProgressor(metadata *types.SourceMetadata) error {
 		return err
 	}
 	// use this while reading the data from the source.
-	mg.progressor.sourcePublish = publish.NewPublish(mg.lifecycleCtx, publishEntity, nil, js, heartbeatBucket)
+	mg.progressor.sourcePublish = publish.NewPublish(mg.lifecycleCtx, publishEntity, nil, nil, heartbeatBucket)
 
 	// fall back on the generic progressor and use the source publisher as the input to the generic progressor.
 	// use the source Publisher as the source

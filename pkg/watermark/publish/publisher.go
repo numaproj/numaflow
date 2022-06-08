@@ -31,7 +31,8 @@ type Publish struct {
 	ctx             context.Context
 	entity          processor.ProcessorEntitier
 	keyspace        string
-	publishStore    store.PublisherKVStorer
+	heartbeatStore  store.WatermarkKVStorer
+	otStore         store.WatermarkKVStorer
 	heartbeatBucket nats.KeyValue
 	js              nats.JetStreamContext
 	log             *zap.SugaredLogger
@@ -42,15 +43,13 @@ type Publish struct {
 	// autoRefreshHeartbeat is not required for all processors. e.g. Kafka source doesn't need it
 	autoRefreshHeartbeat bool
 	podHeartbeatRate     int64
-	bucketConfigs        *nats.KeyValueConfig
 }
 
 // NewPublish returns `Publish`.
-// TODO: remove keyspace from signature
 func NewPublish(ctx context.Context,
 	processorEntity processor.ProcessorEntitier,
-	publishStore store.PublisherKVStorer,
-	js nats.JetStreamContext,
+	hbStore store.WatermarkKVStorer,
+	otStore store.WatermarkKVStorer,
 	heartbeatBucket nats.KeyValue,
 	inputOpts ...PublishOption) *Publish {
 
@@ -67,11 +66,11 @@ func NewPublish(ctx context.Context,
 	p := &Publish{
 		ctx:                  ctx,
 		entity:               processorEntity,
-		publishStore:         publishStore,
+		heartbeatStore:       hbStore,
+		otStore:              otStore,
 		log:                  log,
 		otBucket:             nil,
 		autoRefreshHeartbeat: opts.autoRefreshHeartbeat,
-		bucketConfigs:        opts.bucketConfigs,
 		podHeartbeatRate:     opts.podHeartbeatRate,
 	}
 
@@ -109,7 +108,7 @@ func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	binary.LittleEndian.PutUint64(value, uint64(o))
 
 	for {
-		err := p.publishStore.PutKV(p.ctx, key, value)
+		err := p.otStore.PutKV(p.ctx, key, value)
 		if err != nil {
 			p.log.Errorw("unable to publish watermark", zap.String("entity", p.entity.GetBucketName()), zap.String("key", key), zap.Error(err))
 			// TODO: better exponential backoff
@@ -121,7 +120,7 @@ func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 }
 
 func (p *Publish) loadLatestFromStore() processor.Watermark {
-	var watermarks = p.getAllKeysFromBucket()
+	var watermarks = p.getAllOTKeysFromBucket()
 	var latestWatermark int64 = math.MinInt64
 
 	// skip all entries that do not match the prefix if we are sharing bucket
@@ -156,9 +155,9 @@ func (p *Publish) publishHeartbeat() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			err := p.publishStore.PutKV(p.ctx, p.entity.GetID(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err := p.heartbeatStore.PutKV(p.ctx, p.entity.GetID(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			if err != nil {
-				p.log.Errorw("put to bucket failed", zap.String("bucket", p.publishStore.GetStoreName()), zap.Error(err))
+				p.log.Errorw("put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 			}
 		}
 	}
@@ -170,22 +169,22 @@ func (p *Publish) StopPublisher() {
 	//   - delete the Offset-Timeline bucket
 	//   - remove itself from heartbeat bucket
 
-	p.log.Infow("stopping publisher", zap.String("bucket", p.publishStore.GetStoreName()))
-	if !p.entity.IsSharedBucket() {
-		p.log.Errorw("non sharing of bucket is not supported by controller as of today", zap.String("bucket", p.publishStore.GetStoreName()))
+	p.log.Infow("stopping publisher", zap.String("bucket", p.heartbeatStore.GetStoreName()))
+	if !p.entity.IsOTBucketShared() {
+		p.log.Errorw("non sharing of bucket is not supported by controller as of today", zap.String("bucket", p.heartbeatStore.GetStoreName()))
 	}
 
 	// clean up heartbeat bucket
-	err := p.publishStore.DeleteKey(p.ctx, p.entity.GetID())
+	err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetID())
 	if err != nil {
-		p.log.Errorw("failed to delete the key in the heartbeat bucket", zap.String("bucket", p.publishStore.GetStoreName()), zap.String("key", p.entity.GetID()), zap.Error(err))
+		p.log.Errorw("failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetID()), zap.Error(err))
 	}
 }
 
-func (p *Publish) getAllKeysFromBucket() []string {
-	keys, err := p.publishStore.GetAllKeys(p.ctx)
+func (p *Publish) getAllOTKeysFromBucket() []string {
+	keys, err := p.otStore.GetAllKeys(p.ctx)
 	if err != nil && !errors.Is(err, nats.ErrNoKeysFound) {
-		p.log.Fatalw("failed to get the keys", zap.String("bucket", p.publishStore.GetStoreName()), zap.Error(err))
+		p.log.Fatalw("failed to get the keys", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 	}
 	return keys
 }

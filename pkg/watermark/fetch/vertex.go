@@ -155,8 +155,9 @@ func (v *FromVertex) startHeatBeatWatcher() {
 			switch value.Operation() {
 			case nats.KeyValuePut:
 				var entity = processor.NewProcessorEntity(value.Key(), v.keyspace, processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
+				// do we have such a processor
 				p := v.GetProcessor(value.Key())
-				if p == nil {
+				if p == nil { // if no, create a new processor
 					// A fromProcessor need to be added to v.processors
 					watcher := v.buildNewProcessorWatcher(entity.GetBucketName())
 					// The fromProcessor may have been deleted
@@ -169,14 +170,15 @@ func (v *FromVertex) startHeatBeatWatcher() {
 					var fromProcessor = NewProcessor(v.ctx, entity, 10, watcher)
 					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
-				} else {
+				} else { // else just make a note that this processor is still active
 					p.setStatus(_active)
 				}
-				// update to v.heartbeat
+				// value is epoch
 				intValue, convErr := strconv.Atoi(string(value.Value()))
 				if convErr != nil {
 					v.log.Errorw("unable to convert intValue.Value() to int64", zap.Error(convErr))
 				}
+				// insert the last seen timestamp. we use this to figure whether this processor entity is inactive.
 				v.heartbeat.Put(value.Key(), int64(intValue))
 			case nats.KeyValueDelete:
 				p := v.GetProcessor(value.Key())

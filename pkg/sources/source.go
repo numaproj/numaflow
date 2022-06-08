@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/sources/types"
+	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -31,8 +34,10 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	pipelineName := u.Vertex.Spec.PipelineName
 	var writers []isb.BufferWriter
 	toBuffers := u.Vertex.GetToBuffers()
+	var wmStores []wmstore.WMStorer
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		writeOpts := []redisisb.Option{}
@@ -61,13 +66,26 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 			}
 		}
 		for _, b := range toBuffers {
-			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, b)
+			streamName := fmt.Sprintf("%s-%s", pipelineName, b)
 			jetStreamClient := clients.NewInClusterJetStreamClient()
 			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, b, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
 			}
 			writers = append(writers, writer)
+			// FIXME
+			// for each outbound edge, we will have a watermark publisher
+			var publishOpts []jetstream.JSKVStoreOption
+			heartbeatStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, isbsvc.JetStreamOTBucket(pipelineName, b), jetStreamClient, publishOpts...)
+			if err != nil {
+				return err
+			}
+			otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, isbsvc.JetStreamProcessorBucket(pipelineName, b), jetStreamClient, publishOpts...)
+			if err != nil {
+				return err
+			}
+			_ = otStore
+			wmStores = append(wmStores, heartbeatStore)
 		}
 	default:
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)

@@ -97,31 +97,35 @@ func (p *FromProcessor) startTimeLineWatcher() {
 		case <-p.ctx.Done():
 			return
 		case value := <-p.offsetTimelineWatcher.Updates():
-			if value != nil {
-				switch value.Operation() {
-				case nats.KeyValuePut:
-					epoch, skip, err := p.entity.ParseOTWatcherKey(value.Key())
-					if err != nil {
-						p.log.Errorw("unable to convert value.Key() to int64", zap.String("received", value.Key()), zap.Error(err))
-						continue
-					}
-					// if skip is set to true, it means the key update we received is for a different processor (sharing of bucket)
-					if skip {
-						continue
-					}
-					uint64Value := binary.LittleEndian.Uint64(value.Value())
-					p.offsetTimeline.Put(OffsetWatermark{
-						watermark: epoch,
-						offset:    int64(uint64Value),
-					})
-					p.log.Debugf("[%s]timelineWatcher- Updates:  [%s] %s > %d: %d", p.entity.GetBucketName(), value.Operation(), value.Bucket(), epoch, int64(uint64Value))
-					p.log.Debugf("[%s]%s", p.entity.GetBucketName(), p.offsetTimeline.Dump())
-				case nats.KeyValueDelete:
-					// skip
-				case nats.KeyValuePurge:
-					// skip
+			// TODO: why will value will be nil?
+			if value == nil {
+				continue
+			}
+			switch value.Operation() {
+			case nats.KeyValuePut:
+				epoch, skip, err := p.entity.ParseOTWatcherKey(value.Key())
+				if err != nil {
+					p.log.Errorw("unable to convert value.Key() to int64", zap.String("received", value.Key()), zap.Error(err))
+					continue
 				}
+				// if skip is set to true, it means the key update we received is for a different processor (sharing of bucket)
+				if skip {
+					continue
+				}
+				uint64Value := binary.LittleEndian.Uint64(value.Value())
+				p.offsetTimeline.Put(OffsetWatermark{
+					watermark: epoch,
+					offset:    int64(uint64Value),
+				})
+				p.log.Debugf("[%s]timelineWatcher- Updates:  [%s] %s > %d: %d", p.entity.GetBucketName(), value.Operation(), value.Bucket(), epoch, int64(uint64Value))
+				p.log.Debugf("[%s]%s", p.entity.GetBucketName(), p.offsetTimeline.Dump())
+			case nats.KeyValueDelete:
+				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
+				// naturally trim the KV store.
+			case nats.KeyValuePurge:
+				// skip
 			}
 		}
+
 	}
 }

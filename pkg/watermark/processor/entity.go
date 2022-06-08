@@ -44,7 +44,7 @@ type ProcessorEntitier interface {
 	GetBucketName() string
 	BuildOTWatcherKey(Watermark) string
 	ParseOTWatcherKey(string) (int64, bool, error)
-	IsSharedBucket() bool
+	IsOTBucketShared() bool
 	GetPublishKeyspace() string
 }
 
@@ -98,8 +98,8 @@ func (p *ProcessorEntity) GetBucketName() string {
 	}
 }
 
-// IsSharedBucket returns true if the bucket is shared.
-func (p *ProcessorEntity) IsSharedBucket() bool {
+// IsOTBucketShared returns true if the OT bucket is shared.
+func (p *ProcessorEntity) IsOTBucketShared() bool {
 	return p.opts.separateOTBucket
 }
 
