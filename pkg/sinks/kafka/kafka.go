@@ -21,8 +21,10 @@ type ToKafka struct {
 	name         string
 	pipelineName string
 	producer     sarama.AsyncProducer
+	connected    bool
 	topic        string
 	isdf         *forward.InterStepDataForward
+	kafkaSink    *dfv1.KafkaSink
 	log          *zap.SugaredLogger
 }
 
@@ -54,6 +56,7 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option
 	toKafka.name = vertex.Spec.Name
 	toKafka.pipelineName = vertex.Spec.PipelineName
 	toKafka.topic = kafkaSink.Topic
+	toKafka.kafkaSink = kafkaSink
 
 	forwardOpts := []forward.Option{forward.WithLogger(toKafka.log)}
 	if x := vertex.Spec.Limits; x != nil {
@@ -66,6 +69,16 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option
 		return nil, err
 	}
 	toKafka.isdf = f
+	producer, err := connect(kafkaSink)
+	if err != nil {
+		return nil, err
+	}
+	toKafka.producer = producer
+	toKafka.connected = true
+	return toKafka, nil
+}
+
+func connect(kafkaSink *dfv1.KafkaSink) (sarama.AsyncProducer, error) {
 	config, err := util.GetSaramaConfigFromYAMLString(kafkaSink.Config)
 	if err != nil {
 		return nil, err
@@ -84,8 +97,7 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kafka producer. %w", err)
 	}
-	toKafka.producer = producer
-	return toKafka, nil
+	return producer, nil
 }
 
 // GetName returns the name.
@@ -99,8 +111,19 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 	for i := 0; i < len(errs); i++ {
 		errs[i] = fmt.Errorf("unknown error")
 	}
+	if !tk.connected {
+		producer, err := connect(tk.kafkaSink)
+		if err != nil {
+			for i := 0; i < len(errs); i++ {
+				errs[i] = fmt.Errorf("failed to get kafka producer, %w", err)
+			}
+			return nil, errs
+		}
+		tk.producer = producer
+		tk.connected = true
+	}
 	done := make(chan struct{})
-	timeout := time.After(3 * time.Second)
+	timeout := time.After(5 * time.Second)
 	go func() {
 		sent := 0
 		for {
@@ -118,6 +141,8 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 				errs[idx] = nil
 				sent++
 			case <-timeout:
+				_ = tk.producer.Close()
+				tk.connected = false
 				close(done)
 				return
 			default:
