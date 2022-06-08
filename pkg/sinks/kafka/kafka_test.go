@@ -25,11 +25,15 @@ func TestWriteSuccessToKafka(t *testing.T) {
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{
 			Name: "testVertex",
+			Sink: &dfv1.Sink{
+				Kafka: &dfv1.KafkaSink{},
+			},
 		},
 	}}
 
 	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, map[string]isb.BufferWriter{"name": toKafka}, forward.All, applier.Terminal, nil)
 	assert.NoError(t, err)
+	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"
 	toKafka.log = logging.NewLogger()
@@ -40,6 +44,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 	producer.ExpectInputAndSucceed()
 	producer.ExpectInputAndSucceed()
 	toKafka.producer = producer
+	toKafka.connected = true
 	toKafka.Start()
 	msgs := []isb.Message{
 		{
@@ -72,6 +77,9 @@ func TestWriteFailureToKafka(t *testing.T) {
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{
 			Name: "testVertex",
+			Sink: &dfv1.Sink{
+				Kafka: &dfv1.KafkaSink{},
+			},
 		},
 	}}
 
@@ -87,6 +95,7 @@ func TestWriteFailureToKafka(t *testing.T) {
 	producer.ExpectInputAndFail(fmt.Errorf("test"))
 	producer.ExpectInputAndFail(fmt.Errorf("test1"))
 	toKafka.producer = producer
+	toKafka.connected = true
 	toKafka.Start()
 	msgs := []isb.Message{
 		{
