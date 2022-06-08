@@ -483,11 +483,6 @@ message KafkaSink {
 
   // +optional
   optional string config = 4;
-
-  // concurrency used to concurrently send message to kafka producer.
-  // +kubebuilder:default=100
-  // +optional
-  optional uint32 concurrency = 5;
 }
 
 message KafkaSource {

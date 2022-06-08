@@ -24,7 +24,6 @@ type ToKafka struct {
 	topic        string
 	isdf         *forward.InterStepDataForward
 	log          *zap.SugaredLogger
-	concurrency  uint32
 }
 
 type Option func(*ToKafka) error
@@ -40,7 +39,6 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option) (*ToKafka, error) {
 	kafkaSink := vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
-	toKafka.concurrency = kafkaSink.Concurrency
 	//apply options for kafka sink
 	for _, o := range opts {
 		if err := o(toKafka); err != nil {

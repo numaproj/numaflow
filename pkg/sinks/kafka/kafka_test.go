@@ -33,7 +33,6 @@ func TestWriteSuccessToKafka(t *testing.T) {
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"
 	toKafka.log = logging.NewLogger()
-	toKafka.concurrency = 1
 	conf := mock.NewTestConfig()
 	conf.Producer.Return.Successes = true
 	conf.Producer.Return.Errors = true
@@ -80,7 +79,6 @@ func TestWriteFailureToKafka(t *testing.T) {
 	assert.NoError(t, err)
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"
-	toKafka.concurrency = 1
 	toKafka.log = logging.NewLogger()
 	conf := mock.NewTestConfig()
 	conf.Producer.Return.Successes = true

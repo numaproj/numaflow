@@ -9,8 +9,4 @@ type KafkaSink struct {
 	TLS *TLS `json:"tls" protobuf:"bytes,3,opt,name=tls"`
 	// +optional
 	Config string `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
-	// concurrency used to concurrently send message to kafka producer.
-	// +kubebuilder:default=100
-	// +optional
-	Concurrency uint32 `json:"concurrency,omitempty" protobuf:"varint,5,opt,name=concurrency"`
 }
