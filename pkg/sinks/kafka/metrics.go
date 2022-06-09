@@ -18,3 +18,9 @@ var kafkaSinkWriteCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name:      "write_total",
 	Help:      "Total number of errors on NewToKafka",
 }, []string{"vertex", "pipeline"})
+
+var kafkaSinkWriteTimeouts = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "kafka_sink",
+	Name:      "write_timeout_total",
+	Help:      "Total number of write timeouts on NewToKafka",
+}, []string{"vertex", "pipeline"})
