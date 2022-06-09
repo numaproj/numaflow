@@ -6364,12 +6364,6 @@ spec:
                               items:
                                 type: string
                               type: array
-                            concurrency:
-                              default: 100
-                              description: concurrency used to concurrently send message
-                                to kafka producer.
-                              format: int32
-                              type: integer
                             config:
                               type: string
                             tls:
@@ -10221,12 +10215,6 @@ spec:
                         items:
                           type: string
                         type: array
-                      concurrency:
-                        default: 100
-                        description: concurrency used to concurrently send message
-                          to kafka producer.
-                        format: int32
-                        type: integer
                       config:
                         type: string
                       tls:

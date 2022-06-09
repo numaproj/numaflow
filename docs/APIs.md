@@ -1748,17 +1748,6 @@ default for TLS.
 <em>(Optional)</em>
 </td>
 </tr>
-<tr>
-<td>
-<code>concurrency</code></br> <em> uint32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-concurrency used to concurrently send message to kafka producer.
-</p>
-</td>
-</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.KafkaSource">

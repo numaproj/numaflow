@@ -3,7 +3,7 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"sync"
+	"time"
 
 	"github.com/Shopify/sarama"
 	"go.uber.org/zap"
@@ -20,19 +20,15 @@ import (
 type ToKafka struct {
 	name         string
 	pipelineName string
-	producer     sarama.SyncProducer
+	producer     sarama.AsyncProducer
+	connected    bool
 	topic        string
 	isdf         *forward.InterStepDataForward
+	kafkaSink    *dfv1.KafkaSink
 	log          *zap.SugaredLogger
-	concurrency  uint32
 }
 
 type Option func(*ToKafka) error
-
-type sinkMessage struct {
-	index   int
-	message *sarama.ProducerMessage
-}
 
 func WithLogger(log *zap.SugaredLogger) Option {
 	return func(t *ToKafka) error {
@@ -45,7 +41,6 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option) (*ToKafka, error) {
 	kafkaSink := vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
-	toKafka.concurrency = kafkaSink.Concurrency
 	//apply options for kafka sink
 	for _, o := range opts {
 		if err := o(toKafka); err != nil {
@@ -61,6 +56,7 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option
 	toKafka.name = vertex.Spec.Name
 	toKafka.pipelineName = vertex.Spec.PipelineName
 	toKafka.topic = kafkaSink.Topic
+	toKafka.kafkaSink = kafkaSink
 
 	forwardOpts := []forward.Option{forward.WithLogger(toKafka.log)}
 	if x := vertex.Spec.Limits; x != nil {
@@ -73,6 +69,16 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option
 		return nil, err
 	}
 	toKafka.isdf = f
+	producer, err := connect(kafkaSink)
+	if err != nil {
+		return nil, err
+	}
+	toKafka.producer = producer
+	toKafka.connected = true
+	return toKafka, nil
+}
+
+func connect(kafkaSink *dfv1.KafkaSink) (sarama.AsyncProducer, error) {
 	config, err := util.GetSaramaConfigFromYAMLString(kafkaSink.Config)
 	if err != nil {
 		return nil, err
@@ -85,13 +91,13 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option
 			config.Net.TLS.Config = c
 		}
 	}
-	//Todo AsyncProducer will be implemented later, with common interface
-	producer, err := sarama.NewSyncProducer(kafkaSink.Brokers, config)
+	config.Producer.Return.Successes = true
+	config.Producer.Return.Errors = true
+	producer, err := sarama.NewAsyncProducer(kafkaSink.Brokers, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kafka producer. %w", err)
 	}
-	toKafka.producer = producer
-	return toKafka, nil
+	return producer, nil
 }
 
 // GetName returns the name.
@@ -102,37 +108,65 @@ func (tk *ToKafka) GetName() string {
 // Write writes to the kafka topic.
 func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	errs := make([]error, len(messages))
-	wg := new(sync.WaitGroup)
-
-	sinkCh := make(chan *sinkMessage)
-
-	for i := uint32(0); i < tk.concurrency; i++ {
-		wg.Add(1)
-		go func(msgCh chan *sinkMessage) {
-			defer wg.Done()
-			for message := range msgCh {
-				_, _, err := tk.producer.SendMessage(message.message)
-				if err != nil {
-					kafkaSinkWriteErrors.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
-					tk.log.Errorw("SendMessage failed", zap.Error(err), zap.Any("message", message))
-				} else {
-					kafkaSinkWriteCount.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
-				}
-				//keep error in message index
-				errs[message.index] = err
+	for i := 0; i < len(errs); i++ {
+		errs[i] = fmt.Errorf("unknown error")
+	}
+	if !tk.connected {
+		producer, err := connect(tk.kafkaSink)
+		if err != nil {
+			for i := 0; i < len(errs); i++ {
+				errs[i] = fmt.Errorf("failed to get kafka producer, %w", err)
 			}
-		}(sinkCh)
-	}
-	for idx, message := range messages {
-		// producer.Produce can be changed in to producer.produceBatch later once API is ready for production scale
-		message := &sarama.ProducerMessage{
-			Topic: tk.topic,
-			Value: sarama.ByteEncoder(message.Payload),
+			return nil, errs
 		}
-		sinkCh <- &sinkMessage{index: idx, message: message}
+		tk.producer = producer
+		tk.connected = true
 	}
-	close(sinkCh)
-	wg.Wait()
+	done := make(chan struct{})
+	timeout := time.After(5 * time.Second)
+	go func() {
+		sent := 0
+		for {
+			if sent == len(messages) {
+				close(done)
+				return
+			}
+			select {
+			case err := <-tk.producer.Errors():
+				idx := err.Msg.Metadata.(int)
+				errs[idx] = err.Err
+				sent++
+			case m := <-tk.producer.Successes():
+				idx := m.Metadata.(int)
+				errs[idx] = nil
+				sent++
+			case <-timeout:
+				// Need to close and recreate later because the successes and errors channels might be unclean
+				_ = tk.producer.Close()
+				tk.connected = false
+				kafkaSinkWriteTimeouts.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
+				close(done)
+				return
+			default:
+			}
+		}
+	}()
+	for index, msg := range messages {
+		message := &sarama.ProducerMessage{
+			Topic:    tk.topic,
+			Value:    sarama.ByteEncoder(msg.Payload),
+			Metadata: index, // Use metadata to identify if it succeedes or fails in the async return.
+		}
+		tk.producer.Input() <- message
+	}
+	<-done
+	for _, err := range errs {
+		if err != nil {
+			kafkaSinkWriteErrors.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
+		} else {
+			kafkaSinkWriteCount.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
+		}
+	}
 	return nil, errs
 }
 
