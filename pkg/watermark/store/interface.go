@@ -33,6 +33,7 @@ const (
 	KVPut KVWatchOp = iota
 	// KVDelete represents a delete
 	KVDelete
+	KVPurge
 )
 
 // WatermarkKVEntry defines what can be read on the Watch stream.
@@ -48,5 +49,6 @@ type WatermarkKVEntry interface {
 // WatermarkKVWatcher watches the KV bucket for watermark progression.
 type WatermarkKVWatcher interface {
 	Watch(context.Context) <-chan WatermarkKVEntry
+	GetKVName() string
 	Stop(context.Context)
 }

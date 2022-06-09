@@ -4,6 +4,10 @@ package fetch
 
 import (
 	"context"
+	"github.com/nats-io/nats.go"
+	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
+	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
 	"time"
@@ -12,14 +16,45 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 )
 
-func TestBuffer_GetWatermark(t *testing.T) {
+func createAndLaterDeleteBucket(js nats.JetStreamContext, kvConfig *nats.KeyValueConfig) (func(), error) {
+	kv, err := js.CreateKeyValue(kvConfig)
+	if err != nil {
+		return nil, err
+	}
+	return func() {
+		// ignore error as this will be executed only via defer
+		_ = js.DeleteKeyValue(kv.Bucket())
+		return
+	}, nil
+}
 
+func TestBuffer_GetWatermark(t *testing.T) {
+	var ctx = context.Background()
+	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
+	conn, err := defaultJetStreamClient.Connect(ctx)
+	assert.NoError(t, err)
+	js, err := conn.JetStream()
+	assert.NoError(t, err)
+
+	var publisherHBKeyspace = "fetchTest_PROCESSORS"
+	deleteFn, err := createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherHBKeyspace})
+	assert.NoError(t, err)
+	defer deleteFn()
+
+	var publisherOTKeyspace = "fetchTest_OT"
+	deleteFn, err = createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherOTKeyspace})
+	assert.NoError(t, err)
+	defer deleteFn()
+
+	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherHBKeyspace, defaultJetStreamClient)
+
+	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherOTKeyspace, defaultJetStreamClient)
+	testVertex := NewFromVertex(ctx, "testVertex", hbWatcher, otWatcher)
 	var (
-		ctx = context.Background()
 		// TODO: watcher should not be nil
-		testPod0     = NewProcessor(ctx, processor.NewProcessorEntity("testPod1", "test"), 5, nil)
-		testPod1     = NewProcessor(ctx, processor.NewProcessorEntity("testPod2", "test"), 5, nil)
-		testPod2     = NewProcessor(ctx, processor.NewProcessorEntity("testPod3", "test"), 5, nil)
+		testPod0     = NewProcessor(ctx, processor.NewProcessorEntity("testPod1", "test"), 5, otWatcher)
+		testPod1     = NewProcessor(ctx, processor.NewProcessorEntity("testPod2", "test"), 5, otWatcher)
+		testPod2     = NewProcessor(ctx, processor.NewProcessorEntity("testPod3", "test"), 5, otWatcher)
 		pod0Timeline = []OffsetWatermark{
 			{watermark: 11, offset: 9},
 			{watermark: 12, offset: 20},
@@ -39,7 +74,6 @@ func TestBuffer_GetWatermark(t *testing.T) {
 			{watermark: 14, offset: 19},
 			{watermark: 17, offset: 24},
 		}
-		testVertex = NewFromVertex(ctx, "testVertex", nil, nil)
 	)
 
 	for _, watermark := range pod0Timeline {

@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"sync"
 
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"go.uber.org/zap"
-
-	"github.com/nats-io/nats.go"
 )
 
 type status int
@@ -36,27 +35,27 @@ func (s status) String() string {
 
 // FromProcessor is the smallest unit of entity who does inorder processing or contains inorder data.
 type FromProcessor struct {
-	ctx                   context.Context
-	entity                processor.ProcessorEntitier
-	status                status
-	offsetTimeline        *OffsetTimeline
-	offsetTimelineWatcher nats.KeyWatcher
-	lock                  sync.RWMutex
-	log                   *zap.SugaredLogger
+	ctx            context.Context
+	entity         processor.ProcessorEntitier
+	status         status
+	offsetTimeline *OffsetTimeline
+	otWatcher      store.WatermarkKVWatcher
+	lock           sync.RWMutex
+	log            *zap.SugaredLogger
 }
 
 func (p *FromProcessor) String() string {
-	return fmt.Sprintf("status:%v, timeline: %s", p.status, p.offsetTimeline.Dump())
+	return fmt.Sprintf("%s status:%v, timeline: %s", p.entity.GetID(), p.status, p.offsetTimeline.Dump())
 }
 
-func NewProcessor(ctx context.Context, processor processor.ProcessorEntitier, capacity int, watcher nats.KeyWatcher) *FromProcessor {
+func NewProcessor(ctx context.Context, processor processor.ProcessorEntitier, capacity int, watcher store.WatermarkKVWatcher) *FromProcessor {
 	p := &FromProcessor{
-		ctx:                   ctx,
-		entity:                processor,
-		status:                _active,
-		offsetTimeline:        NewOffsetTimeline(ctx, capacity),
-		offsetTimelineWatcher: watcher,
-		log:                   logging.FromContext(ctx),
+		ctx:            ctx,
+		entity:         processor,
+		status:         _active,
+		offsetTimeline: NewOffsetTimeline(ctx, capacity),
+		otWatcher:      watcher,
+		log:            logging.FromContext(ctx),
 	}
 	if watcher != nil {
 		go p.startTimeLineWatcher()
@@ -92,17 +91,18 @@ func (p *FromProcessor) IsDeleted() bool {
 }
 
 func (p *FromProcessor) startTimeLineWatcher() {
+	watchCh := p.otWatcher.Watch(p.ctx)
 	for {
 		select {
 		case <-p.ctx.Done():
 			return
-		case value := <-p.offsetTimelineWatcher.Updates():
+		case value := <-watchCh:
 			// TODO: why will value will be nil?
 			if value == nil {
 				continue
 			}
 			switch value.Operation() {
-			case nats.KeyValuePut:
+			case store.KVPut:
 				epoch, skip, err := p.entity.ParseOTWatcherKey(value.Key())
 				if err != nil {
 					p.log.Errorw("unable to convert value.Key() to int64", zap.String("received", value.Key()), zap.Error(err))
@@ -117,12 +117,12 @@ func (p *FromProcessor) startTimeLineWatcher() {
 					watermark: epoch,
 					offset:    int64(uint64Value),
 				})
-				p.log.Debugf("[%s]timelineWatcher- Updates:  [%s] %s > %d: %d", p.entity.GetBucketName(), value.Operation(), value.Bucket(), epoch, int64(uint64Value))
-				p.log.Debugf("[%s]%s", p.entity.GetBucketName(), p.offsetTimeline.Dump())
-			case nats.KeyValueDelete:
+				p.log.Debugf("[%s]timelineWatcher- Updates:  [%s] > %d: %d", p.entity.GetBucketName(), p.otWatcher.GetKVName(), epoch, int64(uint64Value))
+				p.log.Debugf("[%s]%s", p.entity.GetBucketName(), p)
+			case store.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
 				// naturally trim the KV store.
-			case nats.KeyValuePurge:
+			case store.KVPurge:
 				// skip
 			}
 		}

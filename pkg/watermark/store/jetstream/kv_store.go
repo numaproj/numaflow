@@ -33,7 +33,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 	}
 
 	// do we need to specify any opts? if yes, send it via options.
-	js, err := conn.JetStream()
+	js, err := conn.JetStream(nats.PublishAsyncMaxPending(256))
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to get JetStream context for writer")

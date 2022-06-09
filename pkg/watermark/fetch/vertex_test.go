@@ -6,6 +6,9 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -16,6 +19,7 @@ import (
 )
 
 func TestFetcherWithSameOTBucket(t *testing.T) {
+	os.Setenv("NUMAFLOW_DEBUG", "true")
 	var ctx = context.Background()
 
 	// Connect to NATS
@@ -42,9 +46,6 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	})
 	defer func() { _ = js.DeleteKeyValue(keyspace + "_PROCESSORS") }()
 	assert.Nil(t, err)
-	heartbeatWatcher, err := heartbeatBucket.WatchAll()
-	assert.Nil(t, err)
-
 	var epoch int64 = 1651161600
 	var testOffset int64 = 100
 	ot, _ := js.CreateKeyValue(&nats.KeyValueConfig{
@@ -69,7 +70,21 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	_, err = ot.Put(fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
 	assert.NoError(t, err)
 
-	var testVertex = NewFromVertex(ctx, keyspace, js, heartbeatWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
+	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
+
+	//var publisherHBKeyspace = keyspace + "_PROCESSORS"
+	//deleteFn, err := createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherHBKeyspace})
+	//assert.NoError(t, err)
+	//defer deleteFn()
+	//
+	//var publisherOTKeyspace = keyspace + "_OT"
+	//deleteFn, err = createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherOTKeyspace})
+	//assert.NoError(t, err)
+	//defer deleteFn()
+
+	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	var testVertex = NewFromVertex(ctx, keyspace, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
 	var testBuffer = NewEdgeBuffer(ctx, "testBuffer", testVertex)
 
 	go func() {
@@ -92,7 +107,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
 
 	allProcessors := testBuffer.fromVertex.GetAllProcessors()
@@ -124,6 +139,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
+	fmt.Println(allProcessors["p1"])
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
 	allProcessors = testBuffer.fromVertex.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
@@ -247,8 +263,6 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	})
 	defer func() { _ = js.DeleteKeyValue(keyspace + "_PROCESSORS") }()
 	assert.Nil(t, err)
-	heartbeatWatcher, err := heartbeatBucket.WatchAll()
-	assert.Nil(t, err)
 
 	var epoch int64 = 1651161600
 	var testOffset int64 = 100
@@ -286,7 +300,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	_, err = p2OT.Put(fmt.Sprintf("%d", epoch), b)
 	assert.NoError(t, err)
 
-	var testVertex = NewFromVertex(ctx, keyspace, js, heartbeatWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
+	var testVertex = NewFromVertex(ctx, keyspace, nil, nil, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
 	var testBuffer = NewEdgeBuffer(ctx, "testBuffer", testVertex)
 
 	//var location, _ = time.LoadLocation("UTC")
