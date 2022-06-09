@@ -25,19 +25,26 @@ func TestWriteSuccessToKafka(t *testing.T) {
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{
 			Name: "testVertex",
+			Sink: &dfv1.Sink{
+				Kafka: &dfv1.KafkaSink{},
+			},
 		},
 	}}
 
 	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, map[string]isb.BufferWriter{"name": toKafka}, forward.All, applier.Terminal, nil)
 	assert.NoError(t, err)
+	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"
 	toKafka.log = logging.NewLogger()
-	toKafka.concurrency = 1
-	producer := mock.NewSyncProducer(t, mock.NewTestConfig())
-	producer.ExpectSendMessageAndSucceed()
-	producer.ExpectSendMessageAndSucceed()
+	conf := mock.NewTestConfig()
+	conf.Producer.Return.Successes = true
+	conf.Producer.Return.Errors = true
+	producer := mock.NewAsyncProducer(t, conf)
+	producer.ExpectInputAndSucceed()
+	producer.ExpectInputAndSucceed()
 	toKafka.producer = producer
+	toKafka.connected = true
 	toKafka.Start()
 	msgs := []isb.Message{
 		{
@@ -70,6 +77,9 @@ func TestWriteFailureToKafka(t *testing.T) {
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{
 			Name: "testVertex",
+			Sink: &dfv1.Sink{
+				Kafka: &dfv1.KafkaSink{},
+			},
 		},
 	}}
 
@@ -77,12 +87,15 @@ func TestWriteFailureToKafka(t *testing.T) {
 	assert.NoError(t, err)
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"
-	toKafka.concurrency = 1
 	toKafka.log = logging.NewLogger()
-	producer := mock.NewSyncProducer(t, mock.NewTestConfig())
-	producer.ExpectSendMessageAndFail(fmt.Errorf("test"))
-	producer.ExpectSendMessageAndFail(fmt.Errorf("test1"))
+	conf := mock.NewTestConfig()
+	conf.Producer.Return.Successes = true
+	conf.Producer.Return.Errors = true
+	producer := mock.NewAsyncProducer(t, conf)
+	producer.ExpectInputAndFail(fmt.Errorf("test"))
+	producer.ExpectInputAndFail(fmt.Errorf("test1"))
 	toKafka.producer = producer
+	toKafka.connected = true
 	toKafka.Start()
 	msgs := []isb.Message{
 		{
@@ -101,13 +114,11 @@ func TestWriteFailureToKafka(t *testing.T) {
 		},
 	}
 	_, errs := toKafka.Write(context.Background(), msgs)
-	errCount := 0
 	for _, err := range errs {
-		if err != nil {
-			errCount++
-		}
+		assert.NotNil(t, err)
 	}
-	assert.Equal(t, 2, errCount)
+	assert.Equal(t, "test", errs[0].Error())
+	assert.Equal(t, "test1", errs[1].Error())
 	toKafka.Stop()
 
 }
