@@ -123,7 +123,7 @@ func (bw *BufferWrite) trim(_ context.Context) {
 	result := bw.Client.XTrimMinID(ctx, bw.GetStreamName(), bw.minId.Load())
 
 	if result.Err() != nil {
-		bw.log.Debugw("XTRIM failed", zap.Error(result.Err()))
+		bw.log.Errorw("XTRIM failed", zap.Error(result.Err()))
 	}
 }
 

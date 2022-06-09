@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -19,6 +20,7 @@ import (
 )
 
 func TestRedisQWrite_Write(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	client := clients.NewRedisClient(redisOptions)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
@@ -69,6 +71,7 @@ func TestRedisQWrite_Write(t *testing.T) {
 }
 
 func TestRedisQWrite_WithPipeline(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	client := clients.NewRedisClient(redisOptions)
 	ctx := context.Background()
 	stream := "withPipeline"
@@ -95,6 +98,7 @@ func TestRedisQWrite_WithPipeline(t *testing.T) {
 }
 
 func TestRedisQWrite_WithoutPipeline(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	client := clients.NewRedisClient(redisOptions)
 	ctx := context.Background()
 	stream := "withoutPipeline"
@@ -120,6 +124,7 @@ func TestRedisQWrite_WithoutPipeline(t *testing.T) {
 }
 
 func TestRedisQWrite_WithInfoRefreshInterval(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	client := clients.NewRedisClient(redisOptions)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
@@ -177,6 +182,7 @@ func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) 
 }
 
 func TestLua(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	ctx := context.Background()
 	client := redis.NewUniversalClient(redisOptions)
 	message := isb.Message{Header: isb.Header{ID: "0", PaneInfo: isb.PaneInfo{EventTime: testStartTime}}, Body: isb.Body{Payload: []byte("foo")}}
@@ -203,6 +209,7 @@ func TestLua(t *testing.T) {
 }
 
 func Test_initializeErrorArray(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	count := 10
 	var errs = make([]error, count)
 	var err = fmt.Errorf("test error")
@@ -217,7 +224,7 @@ func Test_initializeErrorArray(t *testing.T) {
 // Test_updateIsFullFlag tests by writing a bunch of messages and once the buffer is full it throws an error saying
 // buffer is full
 func Test_updateIsFullFlag(t *testing.T) {
-
+	log.SetLevel(log.FatalLevel)
 	client := clients.NewRedisClient(redisOptions)
 	ctx := context.Background()
 	stream := "getConsumerLag"
@@ -254,6 +261,7 @@ func Test_updateIsFullFlag(t *testing.T) {
 }
 
 func Test_GetName(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	client := clients.NewRedisClient(redisOptions)
 	stream := "getName"
 	group := "getName-group"
@@ -264,6 +272,7 @@ func Test_GetName(t *testing.T) {
 }
 
 func Test_GetLag(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	client := clients.NewRedisClient(redisOptions)
 	stream := "getLag"
 	group := "getLag-group"
@@ -273,6 +282,7 @@ func Test_GetLag(t *testing.T) {
 }
 
 func Test_GetRefreshFullError(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	client := clients.NewRedisClient(redisOptions)
 	group := "getRefreshFull-group"
 	ctx := context.Background()
@@ -295,6 +305,7 @@ func (f myForwardRedisTest) Apply(ctx context.Context, message *isb.ReadMessage)
 // TestNewInterStepDataForwardRedis is used to read data from one step to another using redis as the Inter-Step Buffer
 // For the purposes of testing we need to write some data to the from step
 func TestNewInterStepDataForwardRedis(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -348,6 +359,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 
 // TestReadTimeout tests that even though we have a blocking read, our Stop function exits cleanly
 func TestReadTimeout(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
 	defer cancel()
 
@@ -391,6 +403,7 @@ func TestReadTimeout(t *testing.T) {
 
 // TestXTrimOnIsFull is used to verify if XTRIM is being called on isFull
 func TestXTrimOnIsFull(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
 	defer cancel()
@@ -456,6 +469,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 
 // TestSetWriteInfo is used to test setWriteInfo
 func TestSetWriteInfo(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
 	defer cancel()

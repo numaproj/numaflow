@@ -33,6 +33,7 @@ var (
 )
 
 func TestRedisQRead_Read(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	ctx := context.Background()
 	client := clients.NewRedisClient(redisOptions)
 	stream := "somestream"
@@ -64,6 +65,7 @@ func TestRedisQRead_Read(t *testing.T) {
 }
 
 func TestRedisCheckBacklog(t *testing.T) {
+	log.SetLevel(log.FatalLevel)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	client := clients.NewRedisClient(redisOptions)
@@ -161,6 +163,7 @@ func (suite *ReadTestSuite) SetupTest() {
 	err := suite.rclient.CreateStreamGroup(suite.ctx, suite.rqr.Stream, suite.rqr.Group, clients.ReadFromEarliest)
 	// better fail early
 	_ = suite.NoError(err) || suite.Failf("CreateStreamGroup failed", "%s", err)
+	log.SetLevel(log.FatalLevel)
 }
 
 // run after before each test
@@ -283,6 +286,7 @@ func (f forwardReadWritePerformance) Apply(ctx context.Context, message *isb.Rea
 }
 
 func (suite *ReadWritePerformance) SetupSuite() {
+	log.SetLevel(log.FatalLevel)
 	client := clients.NewRedisClient(redisOptions)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	fromStream := "ReadWritePerformance-from"
