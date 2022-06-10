@@ -105,7 +105,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 		// Create offset-timeline bucket
 		otBucket := JetStreamOTBucket(jss.pipelineName, buffer.Name)
 		if _, err := js.KeyValue(otBucket); err != nil {
-			if !errors.Is(err, nats.ErrBucketNotFound) {
+			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otBucket, err)
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
@@ -125,7 +125,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 		// Create processor bucket
 		procBucket := JetStreamProcessorBucket(jss.pipelineName, buffer.Name)
 		if _, err := js.KeyValue(procBucket); err != nil {
-			if !errors.Is(err, nats.ErrBucketNotFound) {
+			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procBucket, err)
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
@@ -166,12 +166,12 @@ func (jss *jetStreamSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffe
 			log.Infow("Succeeded to delete a stream", zap.String("stream", streamName))
 		}
 		otBucket := JetStreamOTBucket(jss.pipelineName, buffer.Name)
-		if err := js.DeleteKeyValue(otBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) {
+		if err := js.DeleteKeyValue(otBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 			return fmt.Errorf("failed to delete offset timeline bucket %q, %w", otBucket, err)
 		}
 		log.Infow("Succeeded to delete an offset timeline bucket", zap.String("bucket", otBucket))
 		procBucket := JetStreamProcessorBucket(jss.pipelineName, buffer.Name)
-		if err := js.DeleteKeyValue(procBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) {
+		if err := js.DeleteKeyValue(procBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 			return fmt.Errorf("failed to delete processor bucket %q, %w", procBucket, err)
 		}
 		log.Infow("Succeeded to delete a processor bucket", zap.String("bucket", procBucket))

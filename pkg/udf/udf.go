@@ -73,13 +73,13 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 		}
-		for _, b := range toBuffers {
-			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, b)
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, b.Name, streamName, streamName, writeOpts...)
+		for _, buffer := range toBuffers {
+			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, buffer.Name)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer.Name, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
 			}
-			writers[b.Name] = writer
+			writers[buffer.Name] = writer
 		}
 	default:
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)

@@ -250,8 +250,8 @@ const (
 )
 
 type Buffer struct {
-	Name string
-	Type BufferType
+	Name string     `protobuf:"bytes,1,opt,name=name"`
+	Type BufferType `protobuf:"bytes,2,opt,name=type,casttype=BufferType"`
 }
 
 func (v Vertex) GetFromBuffers() []Buffer {
