@@ -234,25 +234,48 @@ func (v Vertex) getInitContainer(req GetVertexPodSpecReq) corev1.Container {
 		Args:            []string{"isbsvc-buffer-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
 }
+func (vs VertexSpec) WithOutReplicas() VertexSpec {
+	zero := int32(0)
+	x := *vs.DeepCopy()
+	x.Replicas = &zero
+	return x
+}
 
-func (v Vertex) GetFromBuffers() []string {
-	r := []string{}
-	for _, vt := range v.Spec.FromVertices {
-		r = append(r, GenerateBufferName(v.Namespace, v.Spec.PipelineName, vt, v.Spec.Name))
+type BufferType string
+
+const (
+	SourceBuffer BufferType = "so"
+	SinkBuffer   BufferType = "si"
+	EdgeBuffer   BufferType = "ed"
+)
+
+type Buffer struct {
+	Name string
+	Type BufferType
+}
+
+func (v Vertex) GetFromBuffers() []Buffer {
+	r := []Buffer{}
+	if v.IsASource() {
+		r = append(r, Buffer{GenerateSourceBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SourceBuffer})
+	} else {
+		for _, vt := range v.Spec.FromVertices {
+			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, vt, v.Spec.Name), EdgeBuffer})
+		}
 	}
 	return r
 }
 
-func (v Vertex) GetToBuffers() []string {
-	r := []string{}
-	for _, vt := range v.Spec.ToVertices {
-		r = append(r, GenerateBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, vt.Name))
+func (v Vertex) GetToBuffers() []Buffer {
+	r := []Buffer{}
+	if v.IsASink() {
+		r = append(r, Buffer{GenerateSinkBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SinkBuffer})
+	} else {
+		for _, vt := range v.Spec.ToVertices {
+			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, vt.Name), EdgeBuffer})
+		}
 	}
 	return r
-}
-
-func (v Vertex) GetToBufferName(toVertexName string) string {
-	return GenerateBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, toVertexName)
 }
 
 type VertexSpec struct {
@@ -273,13 +296,6 @@ type ToVertex struct {
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
 	// +optional
 	Conditions *ForwardConditions `json:"conditions" protobuf:"bytes,2,opt,name=conditions"`
-}
-
-func (vs VertexSpec) WithOutReplicas() VertexSpec {
-	zero := int32(0)
-	x := *vs.DeepCopy()
-	x.Replicas = &zero
-	return x
 }
 
 func (vs VertexSpec) GetReplicas() int {
@@ -429,7 +445,15 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-// GenerateBufferName generates buffer name
-func GenerateBufferName(namespace, pipelineName, fromVetex, toVertex string) string {
+// GenerateEdgeBufferName generates buffer name
+func GenerateEdgeBufferName(namespace, pipelineName, fromVetex, toVertex string) string {
 	return fmt.Sprintf("%s-%s-%s-%s", namespace, pipelineName, fromVetex, toVertex)
+}
+
+func GenerateSourceBufferName(namespace, pipelineName, vertex string) string {
+	return fmt.Sprintf("%s-%s-%s_SOURCE", namespace, pipelineName, vertex)
+}
+
+func GenerateSinkBufferName(namespace, pipelineName, vertex string) string {
+	return fmt.Sprintf("%s-%s-%s_SINK", namespace, pipelineName, vertex)
 }

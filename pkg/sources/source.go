@@ -46,8 +46,8 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 		}
 		redisClient := clients.NewInClusterRedisClient()
 		for _, b := range toBuffers {
-			group := b + "-group"
-			writer := redisisb.NewBufferWrite(ctx, redisClient, b, group, writeOpts...)
+			group := b.Name + "-group"
+			writer := redisisb.NewBufferWrite(ctx, redisClient, b.Name, group, writeOpts...)
 			writers = append(writers, writer)
 		}
 	case dfv1.ISBSvcTypeJetStream:
@@ -63,7 +63,7 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 		for _, b := range toBuffers {
 			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, b)
 			jetStreamClient := clients.NewInClusterJetStreamClient()
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, b, streamName, streamName, writeOpts...)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, b.Name, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
 			}
@@ -78,7 +78,7 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
 	}
 
-	log.Infow("Start processing source messages", zap.String("isbs", string(u.ISBSvcType)), zap.Strings("to", toBuffers))
+	log.Infow("Start processing source messages", zap.String("isbs", string(u.ISBSvcType)), zap.Any("to", toBuffers))
 	stopped := sourcer.Start()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

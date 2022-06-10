@@ -33,7 +33,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	defer cancel()
 	var reader isb.BufferReader
 	var err error
-	fromBufferName := u.Vertex.GetFromBuffers()[0]
+	fromBufferName := u.Vertex.GetFromBuffers()[0].Name
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		redisClient := clients.NewInClusterRedisClient()

@@ -20,7 +20,7 @@ func NewISBSvcBufferValidateCommand() *cobra.Command {
 
 	var (
 		isbSvcType string
-		buffers    []string
+		buffers    map[string]string
 	)
 
 	command := &cobra.Command{
@@ -52,9 +52,12 @@ func NewISBSvcBufferValidateCommand() *cobra.Command {
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type")
 			}
-
+			bfs := []v1alpha1.Buffer{}
+			for k, v := range buffers {
+				bfs = append(bfs, v1alpha1.Buffer{Name: k, Type: v1alpha1.BufferType(v)})
+			}
 			if err := wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func() (bool, error) {
-				if err := isbsClient.ValidateBuffers(ctx, buffers); err != nil {
+				if err := isbsClient.ValidateBuffers(ctx, bfs); err != nil {
 					logger.Errorw("Buffers validation failed, will retry if the limit is not reached", zap.Error(err))
 					return false, nil
 				}
@@ -68,6 +71,6 @@ func NewISBSvcBufferValidateCommand() *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "jetstream", "ISB Service type, e.g. jetstream")
-	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to validate") // --buffers=xxa,xxb --buffers=xxc
+	command.Flags().StringToStringVar(&buffers, "buffers", map[string]string{}, "Buffers to validate") // --buffers=a=so,c=si,e=ed
 	return command
 }

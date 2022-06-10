@@ -53,8 +53,8 @@ func NewBuiltinUDFCommand() *cobra.Command {
 		},
 	}
 	command.Flags().StringVarP(&name, "name", "n", "", "function name")
-	command.Flags().StringSliceVarP(&cmdArgs, "args", "a", []string{}, "function args") // --args=xxa,xxb --args=xxc
-	command.Flags().StringToStringVarP(&cmdKWArgs, "kwargs", "k", map[string]string{}, "function kwargs")
+	command.Flags().StringSliceVarP(&cmdArgs, "args", "a", []string{}, "function args")                   // --args=xxa,xxb --args=xxc
+	command.Flags().StringToStringVarP(&cmdKWArgs, "kwargs", "k", map[string]string{}, "function kwargs") // --kwargs=a=b,c=d
 
 	return command
 }

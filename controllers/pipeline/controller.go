@@ -173,20 +173,20 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		pl.Status.MarkDeployFailed("ListVerticesFailed", err.Error())
 		return ctrl.Result{}, err
 	}
-	oldBufferNames := make(map[string]string)
-	newBufferNames := make(map[string]string)
+	oldBuffers := make(map[string]dfv1.Buffer)
+	newBuffers := make(map[string]dfv1.Buffer)
 	for _, v := range existingObjs {
 		for _, b := range v.GetFromBuffers() {
-			oldBufferNames[b] = b
+			oldBuffers[b.Name] = b
 		}
 	}
 	newObjs := buildVertices(pl)
 	for vertexName, newObj := range newObjs {
 		for _, b := range newObj.GetFromBuffers() {
-			if _, existing := oldBufferNames[b]; existing {
-				delete(oldBufferNames, b)
+			if _, existing := oldBuffers[b.Name]; existing {
+				delete(oldBuffers, b.Name)
 			} else {
-				newBufferNames[b] = b
+				newBuffers[b.Name] = b
 			}
 		}
 		if oldObj, existing := existingObjs[vertexName]; !existing {
@@ -220,32 +220,32 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	}
 
 	// create batch job
-	if len(newBufferNames) > 0 {
-		names := []string{}
-		for n := range newBufferNames {
-			names = append(names, n)
+	if len(newBuffers) > 0 {
+		bfs := []string{}
+		for _, v := range newBuffers {
+			bfs = append(bfs, fmt.Sprintf("%s=%s", v.Name, v.Type))
 		}
-		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(names, ","))}
+		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ","))}
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-buffer-create", args, "create")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			pl.Status.MarkDeployFailed("CreateBufferCreatingJobFailed", err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to create buffer creating job, err: %w", err)
 		}
-		log.Infow("Created buffer creating job successfully", zap.Any("buffers", names))
+		log.Infow("Created buffer creating job successfully", zap.Any("buffers", bfs))
 	}
 
-	if len(oldBufferNames) > 0 {
-		names := []string{}
-		for n := range oldBufferNames {
-			names = append(names, n)
+	if len(oldBuffers) > 0 {
+		bfs := []string{}
+		for _, v := range oldBuffers {
+			bfs = append(bfs, fmt.Sprintf("%s=%s", v.Name, v.Type))
 		}
-		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(names, ","))}
+		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ","))}
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-buffer-delete", args, "delete")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			pl.Status.MarkDeployFailed("CreateBufferDeletingJobFailed", err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to create buffer deleting job, err: %w", err)
 		}
-		log.Infow("Created buffer deleting job successfully", zap.Any("buffers", names))
+		log.Infow("Created buffer deleting job successfully", zap.Any("buffers", bfs))
 	}
 
 	// Daemon service
@@ -371,9 +371,12 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		}
 
 		args := []string{}
-		for _, n := range allBuffers {
-			args = append(args, fmt.Sprintf("--buffers=%s", n))
+		bfs := []string{}
+		for _, b := range allBuffers {
+			bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
 		}
+		args = append(args, fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")))
+
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-buffer-delete", args, "cleanup")
 		batchJob.OwnerReferences = []metav1.OwnerReference{}
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
