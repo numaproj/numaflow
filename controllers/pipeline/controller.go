@@ -179,16 +179,19 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		for _, b := range v.GetFromBuffers() {
 			oldBuffers[b.Name] = b
 		}
+		for _, b := range v.GetToBuffers() {
+			oldBuffers[b.Name] = b
+		}
+	}
+	for _, b := range pl.GetAllBuffers() {
+		if _, existing := oldBuffers[b.Name]; existing {
+			delete(oldBuffers, b.Name)
+		} else {
+			newBuffers[b.Name] = b
+		}
 	}
 	newObjs := buildVertices(pl)
 	for vertexName, newObj := range newObjs {
-		for _, b := range newObj.GetFromBuffers() {
-			if _, existing := oldBuffers[b.Name]; existing {
-				delete(oldBuffers, b.Name)
-			} else {
-				newBuffers[b.Name] = b
-			}
-		}
 		if oldObj, existing := existingObjs[vertexName]; !existing {
 			if err := r.client.Create(ctx, &newObj); err != nil {
 				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
