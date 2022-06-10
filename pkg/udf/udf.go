@@ -53,9 +53,9 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 		}
-		for _, b := range toBuffers {
-			writer := redisisb.NewBufferWrite(ctx, redisClient, b.Name, b.Name+"-group", writeOpts...)
-			writers[b.Name] = writer
+		for _, buffer := range toBuffers {
+			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer.Name, buffer.Name+"-group", writeOpts...)
+			writers[buffer.Name] = writer
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		fromStreamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, fromBufferName)

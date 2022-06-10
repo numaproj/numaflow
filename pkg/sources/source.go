@@ -60,10 +60,10 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 		}
-		for _, b := range toBuffers {
-			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, b)
+		for _, buffer := range toBuffers {
+			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, buffer.Name)
 			jetStreamClient := clients.NewInClusterJetStreamClient()
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, b.Name, streamName, streamName, writeOpts...)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer.Name, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
 			}
