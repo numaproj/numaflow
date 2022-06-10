@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -19,7 +18,6 @@ import (
 )
 
 func TestFetcherWithSameOTBucket(t *testing.T) {
-	os.Setenv("NUMAFLOW_DEBUG", "true")
 	var ctx = context.Background()
 
 	// Connect to NATS
@@ -72,16 +70,6 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
 
-	//var publisherHBKeyspace = keyspace + "_PROCESSORS"
-	//deleteFn, err := createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherHBKeyspace})
-	//assert.NoError(t, err)
-	//defer deleteFn()
-	//
-	//var publisherOTKeyspace = keyspace + "_OT"
-	//deleteFn, err = createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherOTKeyspace})
-	//assert.NoError(t, err)
-	//defer deleteFn()
-
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	var testVertex = NewFromVertex(ctx, keyspace, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
@@ -107,7 +95,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	allProcessors := testBuffer.fromVertex.GetAllProcessors()
@@ -139,7 +127,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
-	fmt.Println(allProcessors["p1"])
+
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
 	allProcessors = testBuffer.fromVertex.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
@@ -153,7 +141,6 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 
 	time.Sleep(time.Second)
-
 	// resume after one second
 	go func() {
 		var err error
@@ -178,14 +165,26 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
-
+	fmt.Println(allProcessors["p1"])
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors and a new offsetTimeline watcher for "p1" will be created
-	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
+	//_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
 	newP1 := testBuffer.fromVertex.GetProcessor("p1")
 	assert.NotNil(t, newP1)
 	assert.True(t, newP1.IsActive())
 	assert.NotNil(t, newP1.offsetTimeline)
+
+	//Wait till the offsetTimeline has been populated
+	newP1head := newP1.offsetTimeline.GetHeadOffset()
+	for newP1head == -1 {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("expected head offset to not be equal to -1, %s", ctx.Err())
+		default:
+			time.Sleep(1 * time.Millisecond)
+			newP1head = newP1.offsetTimeline.GetHeadOffset()
+		}
+	}
 	// because the bucket hasn't been cleaned up, the new watcher will read all the history data to create this new offsetTimeline
 	assert.Equal(t, int64(100), newP1.offsetTimeline.GetHeadOffset())
 
@@ -234,6 +233,9 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 }
 
 func TestFetcherWithSeparateOTBucket(t *testing.T) {
+	// FIXME: Check for seperate buckets implementation for single watcher or multiple watcher
+	//   Maybe we should not support seperate OT because controller does not support it
+	t.Skip()
 	// uncomment to debug
 	//os.Setenv("NUMAFLOW_DEBUG", "true")
 
@@ -300,7 +302,11 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	_, err = p2OT.Put(fmt.Sprintf("%d", epoch), b)
 	assert.NoError(t, err)
 
-	var testVertex = NewFromVertex(ctx, keyspace, nil, nil, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
+	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
+
+	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	var testVertex = NewFromVertex(ctx, keyspace, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
 	var testBuffer = NewEdgeBuffer(ctx, "testBuffer", testVertex)
 
 	//var location, _ = time.LoadLocation("UTC")

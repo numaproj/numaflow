@@ -47,7 +47,6 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	defer deleteFn()
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherHBKeyspace, defaultJetStreamClient)
-
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherOTKeyspace, defaultJetStreamClient)
 	testVertex := NewFromVertex(ctx, "testVertex", hbWatcher, otWatcher)
 	var (

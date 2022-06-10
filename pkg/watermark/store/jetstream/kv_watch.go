@@ -84,6 +84,7 @@ func (k *KVJetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEn
 	for err != nil {
 		kvWatcher, err = k.kv.WatchAll()
 	}
+
 	var updates = make(chan store.WatermarkKVEntry)
 	go func() {
 		for true {

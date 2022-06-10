@@ -68,6 +68,7 @@ func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace
 	if err != nil {
 		log.Fatalw("unable to create the fetch heartbeat bucket watcher", zap.String("bucket", fetchKeyspace+"_PROCESSORS"), zap.Error(err))
 	}
+	_ = heartbeatWatcher
 	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, nil, nil, fetch.WithSeparateOTBuckets(opts.separateOTBucket))
 	udfFetch := fetch.NewEdgeBuffer(ctx, processorName, udfFromVertex)
 

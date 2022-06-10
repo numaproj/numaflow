@@ -45,7 +45,7 @@ type FromProcessor struct {
 }
 
 func (p *FromProcessor) String() string {
-	return fmt.Sprintf("%s status:%v, timeline: %s", p.entity.GetID(), p.status, p.offsetTimeline.Dump())
+	return fmt.Sprintf("%s status:%v, timeline: %s", p.entity.GetID(), p.getStatus(), p.offsetTimeline.Dump())
 }
 
 func NewProcessor(ctx context.Context, processor processor.ProcessorEntitier, capacity int, watcher store.WatermarkKVWatcher) *FromProcessor {
@@ -67,6 +67,12 @@ func (p *FromProcessor) setStatus(s status) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	p.status = s
+}
+
+func (p *FromProcessor) getStatus() status {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+	return p.status
 }
 
 // IsActive returns whether a processor is active.
