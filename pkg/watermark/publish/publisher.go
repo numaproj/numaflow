@@ -28,16 +28,13 @@ type Publisher interface {
 
 // Publish publishes the watermark for a processor entity.
 type Publish struct {
-	ctx             context.Context
-	entity          processor.ProcessorEntitier
-	keyspace        string
-	heartbeatStore  store.WatermarkKVStorer
-	otStore         store.WatermarkKVStorer
-	heartbeatBucket nats.KeyValue
-	js              nats.JetStreamContext
-	log             *zap.SugaredLogger
-	otBucket        nats.KeyValue
-	headWatermark   processor.Watermark
+	ctx            context.Context
+	entity         processor.ProcessorEntitier
+	heartbeatStore store.WatermarkKVStorer
+	otStore        store.WatermarkKVStorer
+	log            *zap.SugaredLogger
+	otBucket       nats.KeyValue
+	headWatermark  processor.Watermark
 
 	// opts
 	// autoRefreshHeartbeat is not required for all processors. e.g. Kafka source doesn't need it

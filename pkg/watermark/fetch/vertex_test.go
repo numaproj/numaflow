@@ -165,10 +165,9 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
-	fmt.Println(allProcessors["p1"])
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors and a new offsetTimeline watcher for "p1" will be created
-	//_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
+	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
 	newP1 := testBuffer.fromVertex.GetProcessor("p1")
 	assert.NotNil(t, newP1)
 	assert.True(t, newP1.IsActive())

@@ -87,7 +87,7 @@ func (k *KVJetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEn
 
 	var updates = make(chan store.WatermarkKVEntry)
 	go func() {
-		for true {
+		for {
 			select {
 			case <-ctx.Done():
 				fmt.Println("STOPPED")

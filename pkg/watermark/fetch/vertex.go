@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"go.uber.org/zap"
@@ -27,16 +26,14 @@ type FromVertexer interface {
 // timelines.
 type FromVertex struct {
 	ctx context.Context
-	js  nats.JetStreamContext
 	// keyspace is only used if we have a processorHBWatcher
-	keyspace           string
-	processorHBWatcher nats.KeyWatcher
-	hbWatcher          store.WatermarkKVWatcher
-	otWatcher          store.WatermarkKVWatcher
-	heartbeat          *ProcessorHeartbeat
-	processors         map[string]*FromProcessor
-	lock               sync.RWMutex
-	log                *zap.SugaredLogger
+	keyspace   string
+	hbWatcher  store.WatermarkKVWatcher
+	otWatcher  store.WatermarkKVWatcher
+	heartbeat  *ProcessorHeartbeat
+	processors map[string]*FromProcessor
+	lock       sync.RWMutex
+	log        *zap.SugaredLogger
 
 	// opts
 	opts *vertexOptions
