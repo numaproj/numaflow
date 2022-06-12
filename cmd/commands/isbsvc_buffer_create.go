@@ -20,7 +20,7 @@ func NewISBSvcBufferCreateCommand() *cobra.Command {
 
 	var (
 		isbSvcType string
-		buffers    []string
+		buffers    map[string]string
 	)
 
 	command := &cobra.Command{
@@ -66,7 +66,11 @@ func NewISBSvcBufferCreateCommand() *cobra.Command {
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
 
-			if err = isbsClient.CreateBuffers(ctx, buffers, opts...); err != nil {
+			bfs := []v1alpha1.Buffer{}
+			for k, v := range buffers {
+				bfs = append(bfs, v1alpha1.Buffer{Name: k, Type: v1alpha1.BufferType(v)})
+			}
+			if err = isbsClient.CreateBuffers(ctx, bfs, opts...); err != nil {
 				logger.Errorw("Failed buffer creation.", zap.Error(err))
 				return err
 			}
@@ -75,6 +79,6 @@ func NewISBSvcBufferCreateCommand() *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "jetstream", "ISB Service type, e.g. jetstream")
-	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to create") // --buffers=xxa,xxb --buffers=xxc
+	command.Flags().StringToStringVar(&buffers, "buffers", map[string]string{}, "Buffers to create") // --buffers=a=so,c=si,e=ed
 	return command
 }

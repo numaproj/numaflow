@@ -49,9 +49,15 @@ func Test_GetFromEdges(t *testing.T) {
 
 func Test_GetAllBuffers(t *testing.T) {
 	s := testPipeline.GetAllBuffers()
-	assert.Equal(t, 2, len(s))
-	assert.Contains(t, s, testPipeline.Namespace+"-"+testPipeline.Name+"-input-p1")
-	assert.Contains(t, s, testPipeline.Namespace+"-"+testPipeline.Name+"-p1-output")
+	assert.Equal(t, 4, len(s))
+	names := []string{}
+	for _, n := range s {
+		names = append(names, n.Name)
+	}
+	assert.Contains(t, names, testPipeline.Namespace+"-"+testPipeline.Name+"-input-p1")
+	assert.Contains(t, names, testPipeline.Namespace+"-"+testPipeline.Name+"-p1-output")
+	assert.Contains(t, names, testPipeline.Namespace+"-"+testPipeline.Name+"-input_SOURCE")
+	assert.Contains(t, names, testPipeline.Namespace+"-"+testPipeline.Name+"-output_SINK")
 }
 
 func Test_GetVertex(t *testing.T) {
@@ -61,11 +67,11 @@ func Test_GetVertex(t *testing.T) {
 	assert.NotNil(t, v)
 }
 
-func Test_FindVertexWithBuffer(t *testing.T) {
-	vFrom, vTo := testPipeline.FindVerticesWithBuffer("nonono")
+func Test_FindVertexWithEdgeBuffer(t *testing.T) {
+	vFrom, vTo := testPipeline.FindVerticesWithEdgeBuffer("nonono")
 	assert.Nil(t, vFrom)
 	assert.Nil(t, vTo)
-	vFrom, vTo = testPipeline.FindVerticesWithBuffer(testPipeline.Namespace + "-" + testPipeline.Name + "-input-p1")
+	vFrom, vTo = testPipeline.FindVerticesWithEdgeBuffer(testPipeline.Namespace + "-" + testPipeline.Name + "-input-p1")
 	assert.NotNil(t, vFrom)
 	assert.Equal(t, "input", vFrom.Name)
 	assert.NotNil(t, vTo)
