@@ -196,7 +196,7 @@ func Test_cleanupBuffers(t *testing.T) {
 
 	t.Run("test create cleanup buffer job no isbsvc", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		assert.Equal(t, 2, len(testObj.GetAllBuffers()))
+		assert.Equal(t, 4, len(testObj.GetAllBuffers()))
 		err := r.cleanUpBuffers(ctx, testObj, zaptest.NewLogger(t).Sugar())
 		assert.NoError(t, err)
 		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testObj.Name)

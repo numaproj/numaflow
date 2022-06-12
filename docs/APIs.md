@@ -280,6 +280,41 @@ needs to add “Authorization: Bearer <token>” in the header
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Buffer">
+Buffer
+</h3>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>Name</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>Type</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.BufferType"> BufferType </a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.BufferServiceConfig">
 BufferServiceConfig
 </h3>
@@ -321,6 +356,16 @@ JetStreamConfig </a> </em>
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.BufferType">
+BufferType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Buffer">Buffer</a>)
+</p>
+<p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.ConditionType">
 ConditionType (<code>string</code> alias)
 </p>

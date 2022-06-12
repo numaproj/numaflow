@@ -10,6 +10,7 @@ import (
 	goredis "github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/redis"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
@@ -22,7 +23,7 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	}
 	buffer := "isbsRedisSvcBuffer"
 	group := buffer + "-group"
-	buffers := []string{buffer}
+	buffers := []dfv1.Buffer{{Name: buffer, Type: dfv1.EdgeBuffer}}
 	redisClient := clients.NewRedisClient(redisOptions)
 	isbsRedisSvc := NewISBRedisSvc(redisClient)
 	assert.NoError(t, isbsRedisSvc.CreateBuffers(ctx, buffers))

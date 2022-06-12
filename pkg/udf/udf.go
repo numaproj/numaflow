@@ -35,7 +35,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	defer cancel()
 	var reader isb.BufferReader
 	var err error
-	fromBufferName := u.Vertex.GetFromBuffers()[0]
+	fromBufferName := u.Vertex.GetFromBuffers()[0].Name
 	toBuffers := u.Vertex.GetToBuffers()
 	writers := make(map[string]isb.BufferWriter)
 	switch u.ISBSvcType {
@@ -53,9 +53,9 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 		}
-		for _, b := range toBuffers {
-			writer := redisisb.NewBufferWrite(ctx, redisClient, b, b+"-group", writeOpts...)
-			writers[string(b)] = writer
+		for _, buffer := range toBuffers {
+			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer.Name, buffer.Name+"-group", writeOpts...)
+			writers[buffer.Name] = writer
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		fromStreamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, fromBufferName)
@@ -73,13 +73,13 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 		}
-		for _, b := range toBuffers {
-			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, b)
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, b, streamName, streamName, writeOpts...)
+		for _, buffer := range toBuffers {
+			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, buffer.Name)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer.Name, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
 			}
-			writers[string(b)] = writer
+			writers[buffer.Name] = writer
 		}
 	default:
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
@@ -96,7 +96,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			// If returned key is not "ALL" or "DROP", and there's no conditions defined in the edge,
 			// treat it as "ALL"?
 			if to.Conditions == nil || len(to.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(to.Conditions.KeyIn, _key) {
-				result = append(result, u.Vertex.GetToBufferName(to.Name))
+				result = append(result, dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, u.Vertex.Spec.Name, to.Name))
 			}
 		}
 		return result, nil
