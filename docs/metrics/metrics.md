@@ -45,12 +45,55 @@ These metrics can be used to determine the health of your ISB
 * isb_redis_buffer_usage: This metric is a gauge which is used to indicate the usage/utilization of a Redis ISB
 * isb_redis_consumer_lag: This metric is a gauge which is used to indicate the consumer lag of a Redis ISB Buffer
 
-#### NATS JetStream ISB Errors:
+#### NATS JetStream ISB Errors
 * isb_redis_read_error_total: This metric is used to indicate any read errors with Jetstream.
 * isb_redis_write_error_total: This metric is used to indicate any write errors with Jetstream.
 
-## Source Metrics:
-This metrics can be used to determine the health/
+## Source Metrics
+These metrics can be used to determine the health of your processors/vertices that read from different sources.
+
+## Kafka Source
+These metrics are specific to the kafka source processor/vertex
+
+### Inbound Messages
+* kafka_source_read_total: This metric is used to provide the number of messages read by the Kafka Source Vertex/Processor
+* kafka_source_ack_total: This metric is used to provide the number of messages acknowledged by the Kafka Source Vertex/Processor
+
+### Errors
+* kafka_source_offset_ack_errors: This metric is used to indicate the kafka offset acknowledgment errors
+
+## Generator Source
+These metrics are specific to the generator source
+
+### Inbound Messages
+* tickgen_source_read_total: This metric is used to indicate the number of messages read by the generator source processor/vertex
+
+## Http Source
+These metrics are specific to the HTTP Source
+
+### Inbound Messages
+* http_source_read_total: This metric is used to indicate the number of messages read by the http source processor/vertex
+
+## Sink Metrics
+These metrics can be used to determine the health of your processors/vertices that write to different sinks.
+
+## Kafka Sink
+These metrics are specific to the kafka sink processor/vertex
+
+### Outbound Messages
+* kafka_sink_write_total: This metric is used to provide the number of messages written by the Kafka Sink Vertex/Processor
+
+### Errors/Timeouts
+* kafka_sink_write_error_total: This metric is used to provide the number of errors while while writing to the Kafka Sink.
+* kafka_sink_write_timeout_total: This metric is used to provide the write timeouts while writing to the Kafka Sink.
+
+## Log Sink
+These metrics are specific to the log sink processor/vertex
+
+### Outbound Messages
+* log_sink_write_total: This metric is used to provide the number of messages written by the Log Sink Vertex/Processor
+
+
 
 
 
