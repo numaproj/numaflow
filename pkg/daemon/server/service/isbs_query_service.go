@@ -23,19 +23,22 @@ func NewISBSvcQueryService(client isbsvc.ISBService, pipeline *v1alpha1.Pipeline
 	}
 }
 
-// ListBuffers is used to obtain the all the buffers information of a pipeline
+// ListBuffers is used to obtain the all the edge buffers information of a pipeline
 func (is *isbSvcQueryService) ListBuffers(ctx context.Context, req *daemon.ListBuffersRequest) (*daemon.ListBuffersResponse, error) {
 	log := logging.FromContext(ctx)
 	resp := new(daemon.ListBuffersResponse)
 
 	buffers := []*daemon.BufferInfo{}
 	for _, buffer := range is.pipeline.GetAllBuffers() {
+		if buffer.Type != v1alpha1.EdgeBuffer {
+			continue
+		}
 		bufferInfo, err := is.client.GetBufferInfo(ctx, buffer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
 		}
 		log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
-		vFrom, vTo := is.pipeline.FindVerticesWithBuffer(buffer)
+		vFrom, vTo := is.pipeline.FindVerticesWithEdgeBuffer(buffer.Name)
 		if vFrom == nil || vTo == nil {
 			return nil, fmt.Errorf("buffer %q not found from the pipeline", buffer)
 		}
@@ -65,11 +68,11 @@ func (is *isbSvcQueryService) ListBuffers(ctx context.Context, req *daemon.ListB
 
 // GetBuffer is used to obtain one buffer information of a pipeline
 func (is *isbSvcQueryService) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
-	bufferInfo, err := is.client.GetBufferInfo(ctx, *req.Buffer)
+	bufferInfo, err := is.client.GetBufferInfo(ctx, v1alpha1.Buffer{Name: *req.Buffer, Type: v1alpha1.EdgeBuffer})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of buffer %q", *req.Buffer)
 	}
-	vFrom, vTo := is.pipeline.FindVerticesWithBuffer(*req.Buffer)
+	vFrom, vTo := is.pipeline.FindVerticesWithEdgeBuffer(*req.Buffer)
 	if vFrom == nil || vTo == nil {
 		return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", *req.Buffer)
 	}

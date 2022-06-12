@@ -255,19 +255,21 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 	podSpec.Volumes = append(podSpec.Volumes, vols...)
 	podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, volMounts...)
 
+	bfs := []string{}
 	// Only source vertices need to check all the pipeline buffers
 	if vertex.IsASource() {
 		for _, b := range pl.GetAllBuffers() {
-			podSpec.InitContainers[0].Args = append(podSpec.InitContainers[0].Args, "--buffers="+b)
+			bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
 		}
 	} else {
 		for _, b := range vertex.GetFromBuffers() {
-			podSpec.InitContainers[0].Args = append(podSpec.InitContainers[0].Args, "--buffers="+b)
+			bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
 		}
 		for _, b := range vertex.GetToBuffers() {
-			podSpec.InitContainers[0].Args = append(podSpec.InitContainers[0].Args, "--buffers="+b)
+			bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
 		}
 	}
+	podSpec.InitContainers[0].Args = append(podSpec.InitContainers[0].Args, "--buffers="+strings.Join(bfs, ","))
 
 	if vertex.IsASink() {
 		if vertex.Spec.Sink.UDSink != nil {
