@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -76,10 +77,10 @@ func (p Pipeline) GetVertex(vertexName string) *AbstractVertex {
 	return nil
 }
 
-// FindVerticesWithBuffer is used to locate the vertices who write and read from the buffer.
-func (p Pipeline) FindVerticesWithBuffer(buffer string) (from, to *AbstractVertex) {
+// FindVerticesWithEdgeBuffer is used to locate the vertices who write and read from the buffer.
+func (p Pipeline) FindVerticesWithEdgeBuffer(buffer string) (from, to *AbstractVertex) {
 	for _, e := range p.Spec.Edges {
-		if buffer == GenerateBufferName(p.Namespace, p.Name, e.From, e.To) {
+		if buffer == GenerateEdgeBufferName(p.Namespace, p.Name, e.From, e.To) {
 			for _, v := range p.Spec.Vertices {
 				if v.Name == e.From {
 					from = v.DeepCopy()
@@ -115,10 +116,17 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 	return edges
 }
 
-func (p Pipeline) GetAllBuffers() []string {
-	r := []string{}
+func (p Pipeline) GetAllBuffers() []Buffer {
+	r := []Buffer{}
 	for _, e := range p.Spec.Edges {
-		r = append(r, GenerateBufferName(p.Namespace, p.Name, e.From, e.To))
+		r = append(r, Buffer{GenerateEdgeBufferName(p.Namespace, p.Name, e.From, e.To), EdgeBuffer})
+	}
+	for _, v := range p.Spec.Vertices {
+		if v.Source != nil {
+			r = append(r, Buffer{GenerateSourceBufferName(p.Namespace, p.Name, v.Name), SourceBuffer})
+		} else if v.Sink != nil {
+			r = append(r, Buffer{GenerateSinkBufferName(p.Namespace, p.Name, v.Name), SinkBuffer})
+		}
 	}
 	return r
 }
@@ -211,9 +219,11 @@ func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.C
 		Resources:       standardResources,
 		Args:            []string{"isbsvc-buffer-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
+	bfs := []string{}
 	for _, b := range p.GetAllBuffers() {
-		c.Args = append(c.Args, "--buffers="+b)
+		bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
 	}
+	c.Args = append(c.Args, "--buffers="+strings.Join(bfs, ","))
 	return c
 }
 

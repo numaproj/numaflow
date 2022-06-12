@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/redis"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -21,10 +22,14 @@ func NewISBRedisSvc(client *clients.RedisClient) ISBService {
 }
 
 // CreateBuffers is used to create the inter-step redis buffers.
-func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []string, opts ...BufferCreateOption) error {
+func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer, opts ...BufferCreateOption) error {
 	log := logging.FromContext(ctx)
 	failToCreate := false
-	for _, stream := range buffers {
+	for _, s := range buffers {
+		if s.Type != dfv1.EdgeBuffer {
+			continue
+		}
+		stream := s.Name
 		group := fmt.Sprintf("%s-group", stream)
 		err := r.client.CreateStreamGroup(ctx, stream, group, clients.ReadFromEarliest)
 		if err != nil {
@@ -45,10 +50,16 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []string, opts
 }
 
 // DeleteBuffers is used to delete the inter-step redis buffers.
-func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []string) error {
+func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
 	log := logging.FromContext(ctx)
 	failToDelete := false
-	for _, stream := range buffers {
+	streamNames := []string{}
+	for _, s := range buffers {
+		if s.Type != dfv1.EdgeBuffer {
+			continue
+		}
+		stream := s.Name
+		streamNames = append(streamNames, stream)
 		group := fmt.Sprintf("%s-group", stream)
 		if err := r.client.DeleteStreamGroup(ctx, stream, group); err != nil {
 			if clients.NotFoundError(err) {
@@ -65,7 +76,7 @@ func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []string) erro
 		log.Infow("Deleted Redis Streams groups successfully")
 	}
 
-	err := r.client.DeleteKeys(ctx, buffers...)
+	err := r.client.DeleteKeys(ctx, streamNames...)
 	if err != nil {
 		return err
 	}
@@ -78,13 +89,16 @@ func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []string) erro
 }
 
 // ValidateBuffers is used to validate inter-step redis buffers to see if the stream/stream group exist
-func (r *isbsRedisSvc) ValidateBuffers(ctx context.Context, buffers []string) error {
-	for _, streamName := range buffers {
-		if !r.client.IsStreamExists(ctx, streamName) {
-			return fmt.Errorf("stream %s not existing", streamName)
+func (r *isbsRedisSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
+	for _, stream := range buffers {
+		if stream.Type != dfv1.EdgeBuffer {
+			continue
 		}
-		group := fmt.Sprintf("%s-group", streamName)
-		if !r.client.IsStreamGroupExists(ctx, streamName, group) {
+		if !r.client.IsStreamExists(ctx, stream.Name) {
+			return fmt.Errorf("stream %s not existing", stream.Name)
+		}
+		group := fmt.Sprintf("%s-group", stream.Name)
+		if !r.client.IsStreamGroupExists(ctx, stream.Name, group) {
 			return fmt.Errorf("group %s not existing", group)
 		}
 	}
@@ -92,13 +106,16 @@ func (r *isbsRedisSvc) ValidateBuffers(ctx context.Context, buffers []string) er
 }
 
 // GetBufferInfo is used to provide buffer information like pending count, buffer length, has unprocessed data etc.
-func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, stream string) (*BufferInfo, error) {
-	group := fmt.Sprintf("%s-group", stream)
-	rqw := redis.NewBufferWrite(ctx, clients.NewInClusterRedisClient(), stream, group, redis.WithRefreshBufferWriteInfo(false))
+func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*BufferInfo, error) {
+	if buffer.Type != dfv1.EdgeBuffer {
+		return nil, fmt.Errorf("buffer infomation inquiry is not supported for type %q", buffer.Type)
+	}
+	group := fmt.Sprintf("%s-group", buffer.Name)
+	rqw := redis.NewBufferWrite(ctx, clients.NewInClusterRedisClient(), buffer.Name, group, redis.WithRefreshBufferWriteInfo(false))
 	var bufferWrite = rqw.(*redis.BufferWrite)
 
 	bufferInfo := &BufferInfo{
-		Name:            stream,
+		Name:            buffer.Name,
 		PendingCount:    bufferWrite.GetPendingCount(),
 		AckPendingCount: 0,                             // TODO: this should not be 0
 		TotalMessages:   bufferWrite.GetPendingCount(), // TODO: what should this be?
