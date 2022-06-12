@@ -15,8 +15,8 @@ These metrics can be used to determine throughput of your pipeline.
 ### Latency 
 These metrics can be used to determine the latency of your pipeline.
 
-* forwarder_udf_processing_time: This metric is used to provide a histogram distribution of the processing times of User Defined Functions. (UDF's)
-* forwarder_forward_chunk_processing_time: This metric is used to provide a histogram distribution of the processing times of the forwarder function as a whole
+* `forwarder_udf_processing_time`: This metric is used to provide a histogram distribution of the processing times of User Defined Functions. (UDF's)
+* `forwarder_forward_chunk_processing_time`: This metric is used to provide a histogram distribution of the processing times of the forwarder function as a whole
 
 ### Errors
 These metrics can be used to determine if there are any errors in the pipeline
