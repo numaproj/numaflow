@@ -164,6 +164,7 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 			futures[index] = future
 		}
 	}
+	futureCheckDone := make(chan struct{})
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	wg := new(sync.WaitGroup)
@@ -186,7 +187,7 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 			}
 		}(index, f)
 	}
-	futureCheckDone := make(chan struct{})
+
 	go func() {
 		wg.Wait()
 		close(futureCheckDone)
@@ -195,6 +196,8 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 	select {
 	case <-futureCheckDone:
 	case <-timeout:
+		cancel()
+		<-futureCheckDone
 		// TODO: Maybe need to reconnect.
 		isbWriteTimeout.With(labels).Inc()
 	}
