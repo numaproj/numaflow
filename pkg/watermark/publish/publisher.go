@@ -33,7 +33,6 @@ type Publish struct {
 	heartbeatStore store.WatermarkKVStorer
 	otStore        store.WatermarkKVStorer
 	log            *zap.SugaredLogger
-	otBucket       nats.KeyValue
 	headWatermark  processor.Watermark
 
 	// opts
@@ -43,12 +42,7 @@ type Publish struct {
 }
 
 // NewPublish returns `Publish`.
-func NewPublish(ctx context.Context,
-	processorEntity processor.ProcessorEntitier,
-	hbStore store.WatermarkKVStorer,
-	otStore store.WatermarkKVStorer,
-	heartbeatBucket nats.KeyValue,
-	inputOpts ...PublishOption) *Publish {
+func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer, inputOpts ...PublishOption) *Publish {
 
 	log := logging.FromContext(ctx)
 
@@ -66,7 +60,6 @@ func NewPublish(ctx context.Context,
 		heartbeatStore:       hbStore,
 		otStore:              otStore,
 		log:                  log,
-		otBucket:             nil,
 		autoRefreshHeartbeat: opts.autoRefreshHeartbeat,
 		podHeartbeatRate:     opts.podHeartbeatRate,
 	}

@@ -28,13 +28,9 @@ func (mg *memgen) buildWMProgressor(metadata *types.SourceMetadata) error {
 		return err
 	}
 	publishEntity := processor.NewProcessorEntity(fmt.Sprintf("source-%s-%d", metadata.Vertex.Name, metadata.Replica), sourcePublishKeySpace, processor.WithSeparateOTBuckets(false))
-	// for tickgen you need the default heartbeat system because there are no concept of source partitions etc
-	heartbeatBucket, err := progress.GetHeartbeatBucket(js, sourcePublishKeySpace)
-	if err != nil {
-		return err
-	}
+
 	// use this while reading the data from the source.
-	mg.progressor.sourcePublish = publish.NewPublish(mg.lifecycleCtx, publishEntity, nil, nil, heartbeatBucket)
+	mg.progressor.sourcePublish = publish.NewPublish(mg.lifecycleCtx, publishEntity, nil, nil)
 
 	// fall back on the generic progressor and use the source publisher as the input to the generic progressor.
 	// use the source Publisher as the source
@@ -44,7 +40,11 @@ func (mg *memgen) buildWMProgressor(metadata *types.SourceMetadata) error {
 	if err != nil {
 		return err
 	}
-	var wmProgressor = progress.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", metadata.Vertex.Name, metadata.Replica), sourcePublishKeySpace, progress.GetPublishKeySpace(metadata.Vertex), js)
+
+	// FIXME
+	var fetchWM = progress.BuildFetchWM(nil, nil)
+	var publishWM = progress.BuildPublishWM(nil, nil)
+	var wmProgressor = progress.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", metadata.Vertex.Name, metadata.Replica), sourcePublishKeySpace, progress.GetPublishKeySpace(metadata.Vertex), publishWM, fetchWM)
 	mg.progressor.wmProgressor = wmProgressor
 
 	mg.logger.Info("Initialized watermark progressor")
