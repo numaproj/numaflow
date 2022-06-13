@@ -74,13 +74,13 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 	checkStatus := func() {
 		s, err := js.StreamInfo(jw.stream)
 		if err != nil {
-			isbIsFullErrors.With(labels).Inc()
+			isbFullErrors.With(labels).Inc()
 			jw.log.Errorw("Failed to get stream info", zap.Error(err))
 			return
 		}
 		c, err := js.ConsumerInfo(jw.stream, jw.stream)
 		if err != nil {
-			isbIsFullErrors.With(labels).Inc()
+			isbFullErrors.With(labels).Inc()
 			jw.log.Errorw("failed to get consumer info", zap.Error(err))
 			return
 		}
@@ -99,10 +99,10 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 		} else {
 			jw.isFull.Store(false)
 		}
-		isbBufferSoftUsage.With(labels).Set(softUsage)
-		isbBufferSolidUsage.With(labels).Set(solidUsage)
-		isbBufferPending.With(labels).Set(float64(c.NumPending))
-		isbBufferAckPending.With(labels).Set(float64(c.NumAckPending))
+		isbSoftUsage.With(labels).Set(softUsage)
+		isbSolidUsage.With(labels).Set(solidUsage)
+		isbPending.With(labels).Set(float64(c.NumPending))
+		isbAckPending.With(labels).Set(float64(c.NumAckPending))
 
 		jw.log.Infow("Consumption information", zap.Any("totalMsgs", s.State.Msgs), zap.Any("pending", c.NumPending),
 			zap.Any("ackPending", c.NumAckPending), zap.Any("waiting", c.NumWaiting),
@@ -140,7 +140,7 @@ func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]i
 	var writeOffsets = make([]isb.Offset, len(messages))
 	if jw.isFull.Load() {
 		jw.log.Debugw("Is full")
-		isbIsFull.With(map[string]string{"buffer": jw.GetName()}).Inc()
+		isbFull.With(map[string]string{"buffer": jw.GetName()}).Inc()
 		for i := range errs {
 			errs[i] = isb.BufferWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"}
 		}
@@ -148,26 +148,51 @@ func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]i
 		return nil, errs
 	}
 
+	var futures = make([]nats.PubAckFuture, len(messages))
+	for index, message := range messages {
+		m := &nats.Msg{
+			Header:  convert2NatsMsgHeader(message.Header),
+			Subject: jw.subject,
+			Data:    message.Payload,
+		}
+		if future, err := jw.js.PublishMsgAsync(m, nats.MsgId(message.Header.ID)); err != nil { // nats.MsgId() is for exactly-once writing
+			errs[index] = err
+		} else {
+			futures[index] = future
+		}
+	}
+	timeouted := false
 	wg := new(sync.WaitGroup)
-	for index, msg := range messages {
+	for index, f := range futures {
+		if f == nil {
+			continue
+		}
 		wg.Add(1)
-		go func(message isb.Message, idx int) {
+		go func(idx int, fu nats.PubAckFuture) {
 			defer wg.Done()
-			m := &nats.Msg{
-				Header:  convert2NatsMsgHeader(message.Header),
-				Subject: jw.subject,
-				Data:    message.Payload,
-			}
-			if pubAck, err := jw.js.PublishMsg(m, nats.MsgId(message.Header.ID)); err != nil { // nats.MsgId() is for exactly-once writing
-				errs[idx] = err
-				isbWriteErrors.With(labels).Inc()
-			} else {
+			timeout := time.After(5 * time.Second)
+			select {
+			case pubAck := <-fu.Ok():
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
 				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
+			case err := <-fu.Err():
+				errs[idx] = err
+				isbWriteErrors.With(labels).Inc()
+			case <-timeout:
+				timeouted = true
 			}
-		}(msg, index)
+		}(index, f)
 	}
-	wg.Wait()
+	futureCheckDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(futureCheckDone)
+	}()
+	<-futureCheckDone
+	if timeouted {
+		// TODO: Maybe need to reconnect.
+		isbWriteTimeout.With(labels).Inc()
+	}
 	return writeOffsets, errs
 }
 
