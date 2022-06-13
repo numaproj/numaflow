@@ -137,11 +137,14 @@ func (jw *jetStreamWriter) Close() error {
 func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	labels := map[string]string{"buffer": jw.GetName()}
 	var errs = make([]error, len(messages))
+	for i := 0; i < len(errs); i++ {
+		errs[i] = fmt.Errorf("unknown error")
+	}
 	var writeOffsets = make([]isb.Offset, len(messages))
 	if jw.isFull.Load() {
 		jw.log.Debugw("Is full")
 		isbFull.With(map[string]string{"buffer": jw.GetName()}).Inc()
-		for i := range errs {
+		for i := 0; i < len(errs); i++ {
 			errs[i] = isb.BufferWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"}
 		}
 		isbWriteErrors.With(labels).Inc()
@@ -174,6 +177,7 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 			select {
 			case pubAck := <-fu.Ok():
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
+				errs[idx] = nil
 				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
 			case err := <-fu.Err():
 				errs[idx] = err
