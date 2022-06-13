@@ -104,7 +104,7 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 		isbPending.With(labels).Set(float64(c.NumPending))
 		isbAckPending.With(labels).Set(float64(c.NumAckPending))
 
-		jw.log.Infow("Consumption information", zap.Any("totalMsgs", s.State.Msgs), zap.Any("pending", c.NumPending),
+		jw.log.Debugw("Consumption information", zap.Any("totalMsgs", s.State.Msgs), zap.Any("pending", c.NumPending),
 			zap.Any("ackPending", c.NumAckPending), zap.Any("waiting", c.NumWaiting),
 			zap.Any("ackFloorStreamId", c.AckFloor.Stream), zap.Any("deliveredStreamId", c.Delivered.Stream),
 			zap.Float64("solidUsage", solidUsage), zap.Float64("softUsage", softUsage))
