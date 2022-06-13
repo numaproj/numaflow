@@ -134,7 +134,7 @@ func (jw *jetStreamWriter) Close() error {
 	return nil
 }
 
-func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
+func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	labels := map[string]string{"buffer": jw.GetName()}
 	var errs = make([]error, len(messages))
 	for i := 0; i < len(errs); i++ {
@@ -165,7 +165,7 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 		}
 	}
 	futureCheckDone := make(chan struct{})
-	cctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	wg := new(sync.WaitGroup)
 	for index, f := range futures {
@@ -183,7 +183,7 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 			case err := <-fu.Err():
 				errs[idx] = err
 				isbWriteErrors.With(labels).Inc()
-			case <-cctx.Done():
+			case <-ctx.Done():
 			}
 		}(index, f)
 	}
