@@ -134,7 +134,7 @@ func (jw *jetStreamWriter) Close() error {
 	return nil
 }
 
-func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
+func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	labels := map[string]string{"buffer": jw.GetName()}
 	var errs = make([]error, len(messages))
 	var writeOffsets = make([]isb.Offset, len(messages))
@@ -161,7 +161,8 @@ func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]i
 			futures[index] = future
 		}
 	}
-	timeouted := false
+	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	wg := new(sync.WaitGroup)
 	for index, f := range futures {
 		if f == nil {
@@ -170,7 +171,6 @@ func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]i
 		wg.Add(1)
 		go func(idx int, fu nats.PubAckFuture) {
 			defer wg.Done()
-			timeout := time.After(5 * time.Second)
 			select {
 			case pubAck := <-fu.Ok():
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
@@ -178,8 +178,7 @@ func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]i
 			case err := <-fu.Err():
 				errs[idx] = err
 				isbWriteErrors.With(labels).Inc()
-			case <-timeout:
-				timeouted = true
+			case <-cctx.Done():
 			}
 		}(index, f)
 	}
@@ -188,8 +187,10 @@ func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]i
 		wg.Wait()
 		close(futureCheckDone)
 	}()
-	<-futureCheckDone
-	if timeouted {
+	timeout := time.After(5 * time.Second)
+	select {
+	case <-futureCheckDone:
+	case <-timeout:
 		// TODO: Maybe need to reconnect.
 		isbWriteTimeout.With(labels).Inc()
 	}
