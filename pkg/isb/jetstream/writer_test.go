@@ -107,6 +107,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	to1js, err := to1.conn.JetStream()
 	assert.NoError(t, err)
 	streamInfo, err := to1js.StreamInfo(toStreamName)
+	assert.NoError(t, err)
 
 	// Verify if number of messages in toBuffer is 10 (which is maxlength and hence buffer is full).
 	for streamInfo.State.Msgs != 10 {
