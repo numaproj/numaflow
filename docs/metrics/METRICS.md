@@ -9,9 +9,12 @@ These metrics in combination can be used to determine the overall health of your
 These metrics can be used to determine throughput of your pipeline.
 
 #### Data-forward
-* `forwarder_read_total`: This metric provides the total number of messages read by a given Vertex from an Inter-Step Buffer
-* `forwarder_write_total`: This metric provides the total number of messages written to Inter-Step Buffer by a given Vertex
-* `forwarder_ack_total`: This metric provides the total number of messages acknowledged by a given Vertex
+
+| Metric Name             | Metric Type| | Labels        || Description                                                       |
+| -------------           | --------   | | ------------- |---------------------------------------------------------------------
+| `forwarder_read_total`  | Counter    | | `vertex`=&lt;vertex-name&gt; <br>`pipeline`=&lt;pipeline-name&gt; <br>`buffer`=&lt;buffer-name&gt;|Provides the total number of messages read by a given Vertex from an Inter-Step Buffer
+| `forwarder_write_total` | Counter    | | `vertex`=&lt;vertex-name&gt; <br>`pipeline`=&lt;pipeline-name&gt; <br>`buffer`=&lt;buffer-name&gt;|Provides the total number of messages written to Inter-Step Buffer by a given Vertex
+| `forwarder_ack_total`   | Counter    | | `vertex`=&lt;vertex-name&gt; <br>`pipeline`=&lt;pipeline-name&gt; <br>`buffer`=&lt;buffer-name&gt;|provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer
 
 #### Kafka Source
 * `kafka_source_read_total`: This metric is used to provide the number of messages read by the Kafka Source Vertex/Processor
