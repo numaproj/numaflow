@@ -73,22 +73,14 @@ func (v Vertex) GetHeadlessServiceName() string {
 }
 
 func (v Vertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, VertexMetricsPort)}
+	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, VertexMetricsPort, VertexMetricsPortName)}
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort))
+		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
 	}
 	return svcs
 }
 
-func (v Vertex) getServiceObj(name string, headless bool, port int) *corev1.Service {
-	var servicePortName string
-	if port == VertexMetricsPort {
-		servicePortName = "metrics"
-	} else if port == VertexHTTPSPort {
-		servicePortName = "https"
-	} else {
-		servicePortName = "service"
-	}
+func (v Vertex) getServiceObj(name string, headless bool, port int, servicePortName string) *corev1.Service {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       v.Namespace,
