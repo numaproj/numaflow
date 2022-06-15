@@ -100,7 +100,47 @@ These metrics can be used to determine if there are any errors in the pipeline
 | `isb_redis_consumer_lag` | Gauge       | `buffer`=&lt;buffer-name&gt; | Indicates the the consumer lag of a Redis ISB                                                                                                |
 
 
+## Prometheus Operator for Scraping Metrics:
 
+You can follow the [prometheus operator](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md) setup guide if you would like to use prometheus operator configured in your cluster.
 
+### Configure the below service Monitors for scraping your pipeline metrics:
+```apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    name: numaflow-pipeline-metrics
+  name: numaflow-pipeline-metrics
+spec:
+  endpoints:
+    - scheme: https
+      port: metrics
+      targetPort: 2469
+      tlsConfig:
+        insecureSkipVerify: true
+  namespaceSelector:
+    matchNames:
+      - numaflow-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: vertex
+```
 
+### Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:
+
+```apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    name: numaflow-isbsvc-jetstream-metrics
+  name: numaflow-isbsvc-jetstream-metrics
+spec:
+  endpoints:
+    - scheme: http
+      port: metrics
+      targetPort: 7777
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: isbsvc
+```
 
