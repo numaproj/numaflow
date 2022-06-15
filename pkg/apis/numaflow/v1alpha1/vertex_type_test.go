@@ -110,7 +110,7 @@ func TestGetVertexReplicas(t *testing.T) {
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {
-	s := testVertex.getServiceObj(testVertex.GetHeadlessServiceName(), true, VertexMetricsPort)
+	s := testVertex.getServiceObj(testVertex.GetHeadlessServiceName(), true, VertexMetricsPort, VertexMetricsPortName)
 	assert.Equal(t, s.Name, testVertex.GetHeadlessServiceName())
 	assert.Equal(t, s.Namespace, testVertex.Namespace)
 	assert.Equal(t, 1, len(s.Spec.Ports))
