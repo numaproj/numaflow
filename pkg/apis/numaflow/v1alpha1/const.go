@@ -88,10 +88,12 @@ const (
 	// Watermark
 	EnvWatermarkOn = "NUMAFLOW_WATERMARK_ON"
 
-	PathVarRun        = "/var/run/numaflow"
-	VertexMetricsPort = 2469
-	VertexHTTPSPort   = 8443
-	DaemonServicePort = 4327
+	PathVarRun            = "/var/run/numaflow"
+	VertexMetricsPort     = 2469
+	VertexMetricsPortName = "metrics"
+	VertexHTTPSPort       = 8443
+	VertexHTTPSPortName   = "https"
+	DaemonServicePort     = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
 
