@@ -81,6 +81,14 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 }
 
 func (v Vertex) getServiceObj(name string, headless bool, port int) *corev1.Service {
+	var servicePortName string
+	if port == VertexMetricsPort {
+		servicePortName = "metrics"
+	} else if port == VertexHTTPSPort {
+		servicePortName = "https"
+	} else {
+		servicePortName = "service"
+	}
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       v.Namespace,
@@ -96,7 +104,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int) *corev1.Serv
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Port: int32(port), TargetPort: intstr.FromInt(port)},
+				{Port: int32(port), TargetPort: intstr.FromInt(port), Name: servicePortName},
 			},
 			Selector: map[string]string{
 				KeyPartOf:       Project,
