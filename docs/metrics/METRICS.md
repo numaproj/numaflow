@@ -110,7 +110,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
-    name: numaflow-pipeline-metrics
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-pipeline-metrics
 spec:
   endpoints:
@@ -125,8 +125,10 @@ spec:
       app.kubernetes.io/managed-by: vertex-controller
       app.kubernetes.io/part-of: numaflow
     matchExpressions:
-    - {key: numaflow.numaproj.io/pipeline-name, operator: Exists}
-    - {key: numaflow.numaproj.io/vertex-name, operator: Exists}
+    - key: numaflow.numaproj.io/pipeline-name
+      operator: Exists
+    - key: numaflow.numaproj.io/vertex-name
+      operator: Exists
 ```
 
 ### Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:
@@ -136,7 +138,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
-    name: numaflow-isbsvc-jetstream-metrics
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-isbsvc-jetstream-metrics
 spec:
   endpoints:
@@ -150,5 +152,6 @@ spec:
       app.kubernetes.io/part-of: numaflow
       numaflow.numaproj.io/isbsvc-type: jetstream
     matchExpressions:
-    - {key: numaflow.numaproj.io/isbsvc-name, operator: Exists}
+    - key: numaflow.numaproj.io/isbsvc-name
+      operator: Exists
 ```
