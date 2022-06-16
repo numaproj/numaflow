@@ -62,7 +62,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 			return err
 		}
 	default:
-		return fmt.Errorf("unsupported isbs buffer type %q", ds.isbSvcType)
+		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
 	}
 
 	cer, err := sharedtls.GenerateX509KeyPair()

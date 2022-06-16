@@ -174,6 +174,10 @@ func (h *httpSource) GetName() string {
 	return h.name
 }
 
+func (h *httpSource) Pending(_ context.Context) (int64, error) {
+	return isb.PendingNotAvailable, nil
+}
+
 func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := []*isb.ReadMessage{}
 	timeout := time.After(h.readTimeout)

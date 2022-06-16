@@ -252,6 +252,10 @@ func (mg *memgen) Start() <-chan struct{} {
 	return mg.forwarder.Start()
 }
 
+func (mg *memgen) Pending(_ context.Context) (int64, error) {
+	return isb.PendingNotAvailable, nil
+}
+
 // generator fires once per time unit and generates records and writes them to the channel
 func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duration) {
 	go func() {
