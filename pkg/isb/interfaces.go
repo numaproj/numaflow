@@ -12,6 +12,17 @@ import (
 	"strconv"
 )
 
+const (
+	PendingNotAvailable = int64(-1)
+	RateNotAvailable    = float64(-1)
+)
+
+// Ratable is the interface that wraps the Rate method.
+type Ratable interface {
+	// Rate returns the rough rate (messages/second), this is used for auto-scaling calculation
+	Rate(context.Context) (float64, error)
+}
+
 // BufferWriter is the buffer to which we are writing.
 type BufferWriter interface {
 	BufferWriterInformation
@@ -31,6 +42,8 @@ type BufferReader interface {
 	Read(context.Context, int64) ([]*ReadMessage, error)
 	// Ack acknowledges an array of offset.
 	Ack(context.Context, []Offset) []error
+	// Pending returns the pending messages number.
+	Pending(context.Context) (int64, error)
 }
 
 // BufferReaderInformation has information regarding the buffer we are reading from.

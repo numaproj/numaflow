@@ -310,6 +310,16 @@ func (br *BufferRead) convertXStreamToMessages(xstreams []redis.XStream, message
 	return messages, nil
 }
 
+func (br *BufferRead) Pending(_ context.Context) (int64, error) {
+	// TODO: not implemented
+	return isb.PendingNotAvailable, nil
+}
+
+func (br *BufferRead) Rate(_ context.Context) (float64, error) {
+	// TODO: not implemented
+	return isb.RateNotAvailable, nil
+}
+
 func getHeaderAndBody(field string, value interface{}) (msg isb.Message, err error) {
 	err = msg.Header.UnmarshalBinary([]byte(field))
 	if err != nil {

@@ -165,6 +165,11 @@ func (r *KafkaSource) Close() error {
 	return nil
 }
 
+func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
+	// TODO: not implemented
+	return isb.PendingNotAvailable, nil
+}
+
 // NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
 func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*KafkaSource, error) {
 	source := vertex.Spec.Source.Kafka
