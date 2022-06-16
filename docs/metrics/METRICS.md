@@ -104,8 +104,9 @@ These metrics can be used to determine if there are any errors in the pipeline
 
 You can follow the [prometheus operator](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md) setup guide if you would like to use prometheus operator configured in your cluster.
 
-### Configure the below service Monitors for scraping your pipeline metrics:
-```apiVersion: monitoring.coreos.com/v1
+### Configure the below Service Monitors for scraping your pipeline metrics:
+```yaml
+apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
@@ -118,17 +119,20 @@ spec:
       targetPort: 2469
       tlsConfig:
         insecureSkipVerify: true
-  namespaceSelector:
-    matchNames:
-      - numaflow-system
   selector:
     matchLabels:
       app.kubernetes.io/component: vertex
+      app.kubernetes.io/managed-by: vertex-controller
+      app.kubernetes.io/part-of: numaflow
+    matchExpressions:
+    - {key: numaflow.numaproj.io/pipeline-name, operator: Exists}
+    - {key: numaflow.numaproj.io/vertex-name, operator: Exists}
 ```
 
 ### Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:
 
-```apiVersion: monitoring.coreos.com/v1
+```yaml
+apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
@@ -142,5 +146,9 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: isbsvc
+      app.kubernetes.io/managed-by: isbsvc-controller
+      app.kubernetes.io/part-of: numaflow
+      numaflow.numaproj.io/isbsvc-type: jetstream
+    matchExpressions:
+    - {key: numaflow.numaproj.io/isbsvc-name, operator: Exists}
 ```
-
