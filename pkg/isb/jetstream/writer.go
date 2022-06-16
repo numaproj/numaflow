@@ -62,7 +62,7 @@ func NewJetStreamBufferWriter(ctx context.Context, client clients.JetStreamClien
 		log:     logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject),
 	}
 
-	if o.sequenceCheck {
+	if o.useWriteInfoAsRate {
 		result.writtenInfo = sharedqueue.New[timestampedSequence](3600)
 	}
 
@@ -85,7 +85,7 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 			jw.log.Errorw("Failed to get stream info in the writer", zap.Error(err))
 			return
 		}
-		if jw.opts.sequenceCheck {
+		if jw.opts.useWriteInfoAsRate {
 			ts := timestampedSequence{seq: int64(s.State.LastSeq), timestamp: time.Now().Unix()}
 			jw.writtenInfo.Append(ts)
 			jw.log.Debugw("Written information", zap.Int64("lastSeq", ts.seq), zap.Int64("timestamp", ts.timestamp))
@@ -148,17 +148,18 @@ func (jw *jetStreamWriter) Close() error {
 
 // Rate returns the writting rate (tps)
 func (jw *jetStreamWriter) Rate(_ context.Context) (float64, error) {
-	if jw.opts.sequenceCheck {
+	if jw.opts.useWriteInfoAsRate {
 		return isb.RateNotAvailable, nil
 	}
-	timestampedSeqs := jw.writtenInfo.ReversedItems() // ReversedItems makes sure the latest is in the front
+	timestampedSeqs := jw.writtenInfo.Items()
 	if len(timestampedSeqs) < 2 {
 		return isb.RateNotAvailable, nil
 	}
-	endSeqInfo := timestampedSeqs[0]
-	startSeqInfo := timestampedSeqs[1]
-	for i := 2; i < len(timestampedSeqs); i++ {
-		if endSeqInfo.timestamp-startSeqInfo.timestamp > jw.opts.rateLookbackSeconds {
+	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
+	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
+	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
+		if endSeqInfo.timestamp-timestampedSeqs[i].timestamp > jw.opts.rateLookbackSeconds {
+			startSeqInfo = timestampedSeqs[i]
 			break
 		}
 	}

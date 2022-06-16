@@ -14,8 +14,8 @@ type writeOptions struct {
 	bufferUsageLimit float64
 	// refreshInterval is used to provide the default refresh interval
 	refreshInterval time.Duration
-	// rateLookbackSeconds indicates whether to check the sequence for rate calculation
-	sequenceCheck bool
+	// useWriteInfoAsRate indicates whether to check the write sequence for rate calculation
+	useWriteInfoAsRate bool
 	// rateLookbackSeconds is the look back seconds for rate calculation
 	rateLookbackSeconds int64
 }
@@ -25,7 +25,7 @@ func defaultWriteOptions() *writeOptions {
 		maxLength:           dfv1.DefaultBufferLength,
 		bufferUsageLimit:    dfv1.DefaultBufferUsageLimit,
 		refreshInterval:     1 * time.Second,
-		sequenceCheck:       false,
+		useWriteInfoAsRate:  false,
 		rateLookbackSeconds: 180,
 	}
 }
@@ -56,10 +56,10 @@ func WithRefreshInterval(refreshInterval time.Duration) WriteOption {
 	}
 }
 
-// WithSequenceCheck sets whether to check sequence for rate calculation
-func WithSequenceCheck(check bool) WriteOption {
+// WithUsingWriteInfoAsRate sets whether to check sequence for rate calculation
+func WithUsingWriteInfoAsRate(check bool) WriteOption {
 	return func(o *writeOptions) error {
-		o.sequenceCheck = check
+		o.useWriteInfoAsRate = check
 		return nil
 	}
 }
@@ -69,7 +69,7 @@ type readOptions struct {
 	// readTimeOut is the timeout needed for read timeout
 	readTimeOut time.Duration
 	// Whether to run ack information check
-	ackInfoCheck bool
+	useAckInfoAsRate bool
 	// ackCheckInterval is the interval for stream information check such as pending messages
 	ackInfoCheckInterval time.Duration
 	// rateLookbackSeconds is the look back seconds for rate calculation
@@ -86,10 +86,10 @@ func WithReadTimeOut(timeout time.Duration) ReadOption {
 	}
 }
 
-// WithAckInfoCheck is used to set whether to run ack information check in the reader, which is for ack rate calculation
-func WithAckInfoCheck(yes bool) ReadOption {
+// WithUsingAckInfoAsRate is used to set whether to run ack information check in the reader, which is for ack rate calculation
+func WithUsingAckInfoAsRate(yes bool) ReadOption {
 	return func(o *readOptions) error {
-		o.ackInfoCheck = yes
+		o.useAckInfoAsRate = yes
 		return nil
 	}
 }
@@ -112,7 +112,7 @@ func WithRateLookbackSeconds(seconds int64) ReadOption {
 func defaultReadOptions() *readOptions {
 	return &readOptions{
 		readTimeOut:          time.Second,
-		ackInfoCheck:         false,
+		useAckInfoAsRate:     false,
 		ackInfoCheckInterval: 3 * time.Second,
 		rateLookbackSeconds:  180,
 	}

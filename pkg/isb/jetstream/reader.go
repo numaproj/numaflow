@@ -86,7 +86,7 @@ func NewJetStreamBufferReader(ctx context.Context, client clients.JetStreamClien
 		inProgessTickDuration: time.Duration(inProgessTickSeconds * int64(time.Second)),
 		log:                   log,
 	}
-	if o.ackInfoCheck {
+	if o.useAckInfoAsRate {
 		result.ackedInfo = sharedqueue.New[timestampedSequence](1800)
 		go result.runAckInfomationChecker(ctx)
 	}
@@ -149,17 +149,18 @@ func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
 
 // Rate returns the ack rate (tps)
 func (jr *jetStreamReader) Rate(_ context.Context) (float64, error) {
-	if !jr.opts.ackInfoCheck {
+	if !jr.opts.useAckInfoAsRate {
 		return isb.RateNotAvailable, nil
 	}
-	timestampedSeqs := jr.ackedInfo.ReversedItems() // ReversedItems makes sure the latest is in the front
+	timestampedSeqs := jr.ackedInfo.Items()
 	if len(timestampedSeqs) < 2 {
 		return isb.RateNotAvailable, nil
 	}
-	endSeqInfo := timestampedSeqs[0]
-	startSeqInfo := timestampedSeqs[1]
-	for i := 2; i < len(timestampedSeqs); i++ {
-		if endSeqInfo.timestamp-startSeqInfo.timestamp > jr.opts.rateLookbackSeconds {
+	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
+	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-2]
+	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
+		if endSeqInfo.timestamp-timestampedSeqs[i].timestamp > jr.opts.rateLookbackSeconds {
+			startSeqInfo = timestampedSeqs[i]
 			break
 		}
 	}
