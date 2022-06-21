@@ -2,6 +2,7 @@ package apis
 
 import "github.com/gin-gonic/gin"
 
+// Handler provides all the API method interfaces
 type Handler interface {
 	ListPipelines(c *gin.Context)
 	GetPipeline(c *gin.Context)
