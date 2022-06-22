@@ -9,15 +9,26 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"testing"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
+	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
+
+var OutputRegexp = func(rx string) func(t *testing.T, output string, err error) {
+	return func(t *testing.T, output string, err error) {
+		t.Helper()
+		if assert.NoError(t, err, output) {
+			assert.Regexp(t, rx, output)
+		}
+	}
+}
 
 func Exec(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
@@ -214,24 +225,83 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, namespace, pipelin
 	}
 }
 
-func VertexPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, pipelineName, vertexName, containerName, regex string, timeout time.Duration) (bool, error) {
+func VertexPodLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, pipelineName, vertexName, regex string, opts ...PodLogCheckOption) (bool, error) {
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
 	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 	if err != nil {
-		return false, fmt.Errorf("error getting vertex pod name: %w", err)
+		return false, fmt.Errorf("error getting vertex pods: %w", err)
 	}
-	return PodsLogContains(ctx, kubeClient, namespace, regex, podList, containerName, timeout), nil
+	return PodsLogNotContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
 }
 
-func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, regex string, podList *corev1.PodList, containerName string, timeout time.Duration) bool {
-	cctx, cancel := context.WithTimeout(ctx, timeout)
+func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, regex string, podList *corev1.PodList, opts ...PodLogCheckOption) bool {
+	o := defaultPodLogCheckOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+	cctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
 	errChan := make(chan error)
 	resultChan := make(chan bool)
 	for _, p := range podList.Items {
 		go func(podName string) {
 			fmt.Printf("Watching POD: %s\n", podName)
-			contains, err := podLogContains(cctx, kubeClient, namespace, podName, containerName, regex)
+			contains, err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			if contains {
+				resultChan <- true
+			}
+		}(p.Name)
+	}
+	for {
+		select {
+		case <-cctx.Done():
+			return true
+		case result := <-resultChan:
+			if result {
+				return false
+			}
+		case err := <-errChan:
+			fmt.Printf("error: %v", err)
+		}
+	}
+}
+
+func VertexPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, pipelineName, vertexName, regex string, opts ...PodLogCheckOption) (bool, error) {
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		return false, fmt.Errorf("error getting vertex pods: %w", err)
+	}
+	return PodsLogContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
+}
+
+func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, regex string, podList *corev1.PodList, opts ...PodLogCheckOption) bool {
+	o := defaultPodLogCheckOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+	cctx, cancel := context.WithTimeout(ctx, o.timeout)
+	defer cancel()
+	errChan := make(chan error)
+	resultChan := make(chan bool)
+	for _, p := range podList.Items {
+		go func(podName string) {
+			fmt.Printf("Watching POD: %s\n", podName)
+			var contains bool
+			var err error
+			if o.count == -1 {
+				contains, err = podLogContains(cctx, kubeClient, namespace, podName, o.container, regex)
+			} else {
+				contains, err = podLogContainsCount(cctx, kubeClient, namespace, podName, o.container, regex, o.count)
+			}
 			if err != nil {
 				errChan <- err
 				return
@@ -283,5 +353,85 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 				return true, nil
 			}
 		}
+	}
+}
+
+func podLogContainsCount(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, count int) (bool, error) {
+	stream, err := client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = stream.Close() }()
+
+	exp, err := regexp.Compile(regex)
+	if err != nil {
+		return false, err
+	}
+
+	instancesChan := make(chan struct{})
+
+	// scan the log looking for matches
+	go func(ctx context.Context, instancesChan chan<- struct{}) {
+		s := bufio.NewScanner(stream)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if !s.Scan() {
+					return
+				}
+				data := s.Bytes()
+				fmt.Println(string(data))
+				if exp.Match(data) {
+					instancesChan <- struct{}{}
+				}
+			}
+		}
+	}(ctx, instancesChan)
+
+	actualCount := 0
+	for {
+		select {
+		case <-instancesChan:
+			actualCount++
+		case <-ctx.Done():
+			fmt.Printf("time:%v, count:%d,actualCount:%d\n", time.Now().Unix(), count, actualCount)
+			return count == actualCount, nil
+		}
+	}
+}
+
+type podLogCheckOptions struct {
+	container string
+	timeout   time.Duration
+	count     int
+}
+
+func defaultPodLogCheckOptions() *podLogCheckOptions {
+	return &podLogCheckOptions{
+		container: "",
+		timeout:   defaultTimeout,
+		count:     -1,
+	}
+}
+
+type PodLogCheckOption func(*podLogCheckOptions)
+
+func PodLogCheckOptionWithTimeout(t time.Duration) PodLogCheckOption {
+	return func(o *podLogCheckOptions) {
+		o.timeout = t
+	}
+}
+
+func PodLogCheckOptionWithCount(c int) PodLogCheckOption {
+	return func(o *podLogCheckOptions) {
+		o.count = c
+	}
+}
+
+func PodLogCheckOptionWithContainer(c string) PodLogCheckOption {
+	return func(o *podLogCheckOptions) {
+		o.container = c
 	}
 }
