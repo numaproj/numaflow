@@ -5,8 +5,13 @@ m=30
 
 if find dist/pre-push -mmin -$m | grep .; then
   echo "✅  Pre-pushing check looks good."
+  exit 0
 else
-  echo "⚠️ \`make pre-push -B\` needs to be run before pushing changes (it has not been run for over ${m}m)."
-  exit 1
+  echo "⚠️ \`make pre-push -B\` should be run before pushing changes. It has not been run for over ${m}m, do you still wish to continue?" && read ans
+  if [[ ${ans:-N} = y ]]; then
+    exit 0
+  else
+    exit 1
+  fi
 fi
 
