@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+m=30
+
+if find dist/pre-push -mmin -$m | grep .; then
+  echo "✅  Pre-pushing check looks good."
+else
+  echo "⚠️ \`make pre-push -B\` needs to be run before pushing changes (it has not been for over ${m}m)."
+  exit 1
+fi
+
