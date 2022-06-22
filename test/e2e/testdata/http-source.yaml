@@ -1,0 +1,22 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: http-src-pipeline
+spec:
+  vertices:
+    - name: in
+      source:
+        http:
+          service: true
+    - name: p1
+      udf:
+        builtin:
+          name: cat
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: p1
+    - from: p1
+      to: out

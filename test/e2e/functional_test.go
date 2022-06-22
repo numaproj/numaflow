@@ -58,6 +58,20 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Contains("total")
 }
 
+func (s *FunctionalSuite) TestHTTPPipeline() {
+	w := s.Given().Pipeline("@testdata/http-source.yaml").
+		When().
+		CreatePipelineAndWait()
+
+	defer w.DeletePipelineAndWait()
+
+	w.Expect().
+		VertexPodsRunning().
+		VertexPodLogContains("in", "main", LogSourceVertexStarted).
+		VertexPodLogContains("p1", "main", LogUDFVertexStarted).
+		VertexPodLogContains("out", "main", LogSinkVertexStarted).
+}
+
 func TestFunctionalSuite(t *testing.T) {
 	suite.Run(t, new(FunctionalSuite))
 }
