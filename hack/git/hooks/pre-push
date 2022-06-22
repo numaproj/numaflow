@@ -7,8 +7,12 @@ if find dist/pre-push -mmin -$m | grep .; then
   echo "✅  Pre-pushing check looks good."
   exit 0
 else
-  echo "⚠️ \`make pre-push -B\` should be run before pushing changes. It has not been run for over ${m}m, do you still wish to continue?" && read ans
-  if [[ ${ans:-N} = y ]]; then
+  # Allows to read user input below, assigns stdin to keyboard
+  exec < /dev/tty
+  echo "⚠️ \`make pre-push -B\` should be run before pushing changes. It has not been run for over ${m}m."
+  echo
+  echo "Do you still want to continue? (n/Y)" && read ans
+  if [[ ${ans:-n} = Y ]]; then
     exit 0
   else
     exit 1
