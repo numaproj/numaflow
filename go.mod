@@ -9,7 +9,7 @@ require (
 	github.com/antonmedv/expr v1.9.0
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/gavv/httpexpect/v2 v2.3.1
-	github.com/gin-contrib/static v0.0.1
+	github.com/gin-contrib/static v0.0.2-0.20220606235426-ae09b2ea7e39
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-redis/redis/v8 v8.11.4
 	github.com/go-swagger/go-swagger v0.28.0
@@ -27,7 +27,7 @@ require (
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/viper v1.9.0
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.7.2
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.19.1
@@ -177,7 +177,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.63.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.23.0 // indirect
 	k8s.io/component-base v0.23.0 // indirect
 	k8s.io/klog v0.2.0 // indirect
