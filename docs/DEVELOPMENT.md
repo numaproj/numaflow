@@ -26,7 +26,7 @@ k3d kubeconfig get k3s-default
   Binaries are placed in `./dist`.
 
 - `make codegen`
-  Run after making changes to `./pkg/api/` Can we add a Makefile rule to do this automatically?
+  Run after making changes to `./pkg/api/`.
 
 - `make test`
   Run unit tests.

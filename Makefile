@@ -162,11 +162,10 @@ lint: $(GOPATH)/bin/golangci-lint
 	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
 
 .PHONY: start
-start: image
+start: githooks image
 	kubectl apply -f test/manifests/numaflow-ns.yaml
 	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
 	kubectl -n numaflow-system wait --for=condition=Ready --timeout 60s pod --all
-
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
@@ -175,6 +174,20 @@ e2eapi-image: clean dist/e2eapi
 ifeq ($(K3D),true)
 	k3d image import $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
+
+# pre-push checks
+
+.git/hooks/%: hack/git/hooks/%
+	@mkdir -p .git/hooks
+	cp hack/git/hooks/$* .git/hooks/$*
+
+.PHONY: githooks
+githooks: .git/hooks/pre-push .git/hooks/commit-msg
+
+.PHONY: pre-push
+pre-push: codegen lint
+	# marker file, based on it's modification time, we know how long ago this target was run
+	touch dist/pre-push
 
 .PHONY: checksums
 checksums:
