@@ -54,7 +54,7 @@ func TestExpression(t *testing.T) {
 	})
 
 	t.Run("String expression invalid", func(t *testing.T) {
-		args := map[string]string{"expression": "sprig.contains(payload, 'hello')"}
+		args := map[string]string{"expression": "sprig.contains('hello', payload)"}
 
 		handle, err := New(args)
 		assert.NoError(t, err)
@@ -65,14 +65,14 @@ func TestExpression(t *testing.T) {
 	})
 
 	t.Run("base64 expression valid", func(t *testing.T) {
-		args := map[string]string{"expression": "sprig.contains(sprig.b64dec(payload),'numaflow')"}
+		args := map[string]string{"expression": "sprig.contains('numaflow', sprig.b64dec(payload))"}
 
 		handle, err := New(args)
 		assert.NoError(t, err)
 
 		result, err := handle(context.Background(), _key, []byte(base64Msg))
 		assert.NoError(t, err)
-		assert.Equal(t, "", string(result.Items()[0].Value))
+		assert.Equal(t, base64Msg, string(result.Items()[0].Value))
 	})
 
 }
