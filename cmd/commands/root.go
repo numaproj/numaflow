@@ -26,4 +26,5 @@ func init() {
 	rootCmd.AddCommand(NewISBSvcBufferValidateCommand())
 	rootCmd.AddCommand(NewBuiltinUDFCommand())
 	rootCmd.AddCommand(NewDaemonServerCommand())
+	rootCmd.AddCommand(NewServerCommand())
 }
