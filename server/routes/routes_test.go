@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//go:generate export KUBECONFIG=~/.kube/config
+
 func TestRoutes(t *testing.T) {
 	router := gin.Default()
 	Routes(router)
