@@ -9,7 +9,7 @@ func NewControllerCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:   "controller",
-		Short: "Start a numaflow controller",
+		Short: "Start a NumaFlow controller",
 		Run: func(cmd *cobra.Command, args []string) {
 			ctrlcmd.Start()
 		},

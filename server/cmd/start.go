@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"crypto/tls"
@@ -18,7 +18,7 @@ var (
 	}
 )
 
-func main() {
+func Start() {
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.RedirectTrailingSlash = true
