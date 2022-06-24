@@ -95,7 +95,7 @@ func (s *FunctionalSuite) TestFiltering() {
 	w.Expect().VertexPodLogNotContains("out", "expect[0-2]", PodLogCheckOptionWithTimeout(2*time.Second))
 }
 
-func (s *FunctionalSuite) TestConditiionalForwarding() {
+func (s *FunctionalSuite) TestConditionalForwarding() {
 	w := s.Given().Pipeline("@testdata/even-odd.yaml").
 		When().
 		CreatePipelineAndWait()
