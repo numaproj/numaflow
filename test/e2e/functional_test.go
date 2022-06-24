@@ -11,12 +11,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-const (
-	LogSourceVertexStarted = "Start processing source messages"
-	LogSinkVertexStarted   = "Start processing sink messages"
-	LogUDFVertexStarted    = "Start processing udf messages"
-)
-
 type FunctionalSuite struct {
 	E2ESuite
 }

@@ -95,6 +95,7 @@ test-code:
 
 test-e2e:
 test-kafka-e2e:
+test-http-e2e:
 test-%: 
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
