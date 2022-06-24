@@ -1,46 +1,90 @@
-# Getting Started with Create React App
+# NumaFlow UI
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+![Numaflow Image](../docs/images/Numa.svg)
 
-## Available Scripts
+A web-based UI for NumaFlow
 
-In the project directory, you can run:
+The UI has the following features:
+* View running pipelines in your namespace
+* View Vertex and Edge Information of your pipeline
+* View BackPressure and Pending Messages
+* View Container (main/udf) Logs for a given vertex
 
-### `yarn start`
+# Development
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+This doc explains how to set up a development environment so you can get started with UI development
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Prerequisites
 
-### `yarn test`
+Follow the instructions below to set up your development environment.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### Install requirements
 
-### `yarn build`
+These tools are required for development.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+1. [`NumaFlow`](https://github.com/numaproj/numaflow/blob/master/docs/DEVELOPMENT.md): Follow the document to prepare `Dataflow` development environment.
+1. [`node`](https://nodejs.org/en/download/): NodeJS - `brew install node`.
+1. [`yarn`](https://yarnpkg.com/): Package manager - `brew install yarn`
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Create a dev cluster
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+We recommend to use [`k3d`](https://k3d.io/) to create a cluster for development.
 
-### `yarn eject`
+After installing `k3d`, use following command to create a kubernetes cluster with default name `k3s-default`.
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+```shell
+k3d cluster create -i rancher/k3s:v1.21.7-k3s1
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+# kubeconfig
+k3d kubeconfig get k3s-default
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+### Run Pipelines in the cluster
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+Following the [doc](https://github.com/numaproj/numaflow/blob/master/docs/QUICK_START.md) to create Pipelines in the cluster.
 
-## Learn More
+### Build and Run the UX Server
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+#### In the cluster
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Run command below to start the ux server in the cluster.
+
+```sh
+make start
+```
+
+#### On the laptop
+
+It's also possible to start the ux server on your laptop with following command (make sure your terminial is able to access the cluster where runs Dataflow pipelines).
+
+```sh
+make run
+```
+
+The web application is available at https://localhost:8443/.
+
+## Useful Commands
+
+- `make clean`
+  Clean up `./dist` directory.
+
+- `make build`
+  Build binaries into `./dist` directory.
+
+- `make test`
+  Run unit test cases.
+
+- `make lint`
+  Lint the code.
+
+- `make image`
+  Build image, and import it to `k3d` cluster if corresponding `kubeconfig` is sourced.
+
+- `make start`
+  After you have a `k3d` cluster, run this command to build source code, image, and install ux server in `dataflow-system` namespace.
+
+- `make run`
+  Run the ux server on the laptop.
+
+- `make manifests`
+  Rebuild deployment manifests.
