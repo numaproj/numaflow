@@ -29,28 +29,22 @@ func (is *isbSvcQueryService) ListBuffers(ctx context.Context, req *daemon.ListB
 	resp := new(daemon.ListBuffersResponse)
 
 	buffers := []*daemon.BufferInfo{}
-	for _, buffer := range is.pipeline.GetAllBuffers() {
-		if buffer.Type != v1alpha1.EdgeBuffer {
-			continue
-		}
-		bufferInfo, err := is.client.GetBufferInfo(ctx, buffer)
+	for _, edge := range is.pipeline.Spec.Edges {
+		buffer := v1alpha1.GenerateEdgeBufferName(is.pipeline.Namespace, is.pipeline.Name, edge.From, edge.To)
+		bufferInfo, err := is.client.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
 		}
 		log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
-		vFrom, vTo := is.pipeline.FindVerticesWithEdgeBuffer(buffer.Name)
-		if vFrom == nil || vTo == nil {
-			return nil, fmt.Errorf("buffer %q not found from the pipeline", buffer)
-		}
-		bufferLength, bufferUsageLimit := getVertexLimits(is.pipeline, vFrom)
+		bufferLength, bufferUsageLimit := getBufferLimits(is.pipeline, edge)
 		usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
 		if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
 			usage = x
 		}
 		b := &daemon.BufferInfo{
 			Pipeline:         &is.pipeline.Name,
-			FromVertex:       &vFrom.Name,
-			ToVertex:         &vTo.Name,
+			FromVertex:       &edge.From,
+			ToVertex:         &edge.To,
 			BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
 			PendingCount:     &bufferInfo.PendingCount,
 			AckPendingCount:  &bufferInfo.AckPendingCount,
@@ -72,19 +66,19 @@ func (is *isbSvcQueryService) GetBuffer(ctx context.Context, req *daemon.GetBuff
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of buffer %q", *req.Buffer)
 	}
-	vFrom, vTo := is.pipeline.FindVerticesWithEdgeBuffer(*req.Buffer)
-	if vFrom == nil || vTo == nil {
+	edge := is.pipeline.FindEdgeWithBuffer(*req.Buffer)
+	if edge == nil {
 		return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", *req.Buffer)
 	}
-	bufferLength, bufferUsageLimit := getVertexLimits(is.pipeline, vFrom)
+	bufferLength, bufferUsageLimit := getBufferLimits(is.pipeline, *edge)
 	usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
 	if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
 		usage = x
 	}
 	b := &daemon.BufferInfo{
 		Pipeline:         &is.pipeline.Name,
-		FromVertex:       &vFrom.Name,
-		ToVertex:         &vTo.Name,
+		FromVertex:       &edge.From,
+		ToVertex:         &edge.To,
 		BufferName:       req.Buffer,
 		PendingCount:     &bufferInfo.PendingCount,
 		AckPendingCount:  &bufferInfo.AckPendingCount,
@@ -99,7 +93,7 @@ func (is *isbSvcQueryService) GetBuffer(ctx context.Context, req *daemon.GetBuff
 	return resp, nil
 }
 
-func getVertexLimits(pl *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) (bufferLength int64, bufferUsageLimit float64) {
+func getBufferLimits(pl *v1alpha1.Pipeline, edge v1alpha1.Edge) (bufferLength int64, bufferUsageLimit float64) {
 	bufferLength = int64(v1alpha1.DefaultBufferLength)
 	bufferUsageLimit = v1alpha1.DefaultBufferUsageLimit
 	if x := pl.Spec.Limits; x != nil {
@@ -110,7 +104,7 @@ func getVertexLimits(pl *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) (bufferL
 			bufferUsageLimit = float64(*x.BufferUsageLimit) / 100
 		}
 	}
-	if x := v.Limits; x != nil {
+	if x := edge.Limits; x != nil {
 		if x.BufferMaxLength != nil {
 			bufferLength = int64(*x.BufferMaxLength)
 		}

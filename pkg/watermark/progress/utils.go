@@ -33,9 +33,9 @@ func GetHeartbeatBucket(js nats.JetStreamContext, publishKeyspace string) (nats.
 
 // GetFetchKeyspace gets the fetch keyspace name from the vertex.
 func GetFetchKeyspace(v *dfv1.Vertex) string {
-	if len(v.Spec.FromVertices) > 0 {
+	if len(v.Spec.FromEdges) > 0 {
 		// from vertices is 0 because we do not support diamond DAG
-		return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.FromVertices[0])
+		return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.FromEdges[0].From)
 	} else {
 		// sources will not have FromVertices
 		return fmt.Sprintf("%s-%s-%s-source", v.Namespace, v.Spec.PipelineName, v.Name)

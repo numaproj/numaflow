@@ -1,9 +1,5 @@
 Explain what this PR does.
 
-Fixes #TODO
-or
-Closes #TODO
-
 <!--
 
 Before you push your changes:

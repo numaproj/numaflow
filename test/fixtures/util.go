@@ -248,20 +248,16 @@ func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, na
 	for _, p := range podList.Items {
 		go func(podName string) {
 			fmt.Printf("Watching POD: %s\n", podName)
-			contains, err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex)
-			if err != nil {
+			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan, errChan); err != nil {
 				errChan <- err
 				return
-			}
-			if contains {
-				resultChan <- true
 			}
 		}(p.Name)
 	}
 	for {
 		select {
 		case <-cctx.Done():
-			return true
+			return true // Consider timeout as not containing
 		case result := <-resultChan:
 			if result {
 				return false
@@ -295,30 +291,28 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	for _, p := range podList.Items {
 		go func(podName string) {
 			fmt.Printf("Watching POD: %s\n", podName)
-			var contains bool
-			var err error
-			if o.count == -1 {
-				contains, err = podLogContains(cctx, kubeClient, namespace, podName, o.container, regex)
-			} else {
-				contains, err = podLogContainsCount(cctx, kubeClient, namespace, podName, o.container, regex, o.count)
-			}
-			if err != nil {
+			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan, errChan); err != nil {
 				errChan <- err
 				return
-			}
-			if contains {
-				resultChan <- true
 			}
 		}(p.Name)
 	}
 
+	matchTimes := 0
 	for {
 		select {
 		case <-cctx.Done():
-			return false
+			return false // Consider timeout as false
 		case result := <-resultChan:
 			if result {
-				return true
+				if o.count < 0 {
+					return true
+				} else {
+					matchTimes++
+					if matchTimes >= o.count {
+						return true
+					}
+				}
 			}
 		case err := <-errChan:
 			fmt.Printf("error: %v", err)
@@ -326,78 +320,32 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	}
 }
 
-func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string) (bool, error) {
+func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan bool, errs chan error) error {
 	stream, err := client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
 	if err != nil {
-		return false, err
+		return err
 	}
 	defer func() { _ = stream.Close() }()
 
 	exp, err := regexp.Compile(regex)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	s := bufio.NewScanner(stream)
 	for {
 		select {
 		case <-ctx.Done():
-			return false, nil
+			return nil
 		default:
 			if !s.Scan() {
-				return false, s.Err()
+				return s.Err()
 			}
 			data := s.Bytes()
 			fmt.Println(string(data))
 			if exp.Match(data) {
-				return true, nil
+				result <- true
 			}
-		}
-	}
-}
-
-func podLogContainsCount(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, count int) (bool, error) {
-	stream, err := client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = stream.Close() }()
-
-	exp, err := regexp.Compile(regex)
-	if err != nil {
-		return false, err
-	}
-
-	instancesChan := make(chan struct{})
-
-	// scan the log looking for matches
-	go func(ctx context.Context, instancesChan chan<- struct{}) {
-		s := bufio.NewScanner(stream)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				if !s.Scan() {
-					return
-				}
-				data := s.Bytes()
-				fmt.Println(string(data))
-				if exp.Match(data) {
-					instancesChan <- struct{}{}
-				}
-			}
-		}
-	}(ctx, instancesChan)
-
-	actualCount := 0
-	for {
-		select {
-		case <-instancesChan:
-			actualCount++
-		case <-ctx.Done():
-			fmt.Printf("time:%v, count:%d,actualCount:%d\n", time.Now().Unix(), count, actualCount)
-			return count == actualCount, nil
 		}
 	}
 }

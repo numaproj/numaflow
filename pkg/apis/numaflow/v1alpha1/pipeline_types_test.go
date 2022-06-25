@@ -67,15 +67,13 @@ func Test_GetVertex(t *testing.T) {
 	assert.NotNil(t, v)
 }
 
-func Test_FindVertexWithEdgeBuffer(t *testing.T) {
-	vFrom, vTo := testPipeline.FindVerticesWithEdgeBuffer("nonono")
-	assert.Nil(t, vFrom)
-	assert.Nil(t, vTo)
-	vFrom, vTo = testPipeline.FindVerticesWithEdgeBuffer(testPipeline.Namespace + "-" + testPipeline.Name + "-input-p1")
-	assert.NotNil(t, vFrom)
-	assert.Equal(t, "input", vFrom.Name)
-	assert.NotNil(t, vTo)
-	assert.Equal(t, "p1", vTo.Name)
+func Test_FindEdgeWithBuffer(t *testing.T) {
+	e := testPipeline.FindEdgeWithBuffer("nonono")
+	assert.Nil(t, e)
+	e = testPipeline.FindEdgeWithBuffer(testPipeline.Namespace + "-" + testPipeline.Name + "-input-p1")
+	assert.NotNil(t, e)
+	assert.Equal(t, "input", e.From)
+	assert.Equal(t, "p1", e.To)
 }
 
 func TestGetDaemonServiceName(t *testing.T) {
