@@ -411,16 +411,10 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			dfv1.KeyPipelineName: pl.Name,
 			dfv1.KeyVertexName:   v.Name,
 		}
-		fromVertexNames := []string{}
-		toVertices := []dfv1.ToVertex{}
-		for _, e := range pl.GetFromEdges(v.Name) {
-			fromVertexNames = append(fromVertexNames, e.From)
-		}
-		for _, e := range pl.GetToEdges(v.Name) {
-			toVertices = append(toVertices, dfv1.ToVertex{Name: e.To, Conditions: e.Conditions})
-		}
+		fromEdges := copyEdgeLimits(pl, pl.GetFromEdges(v.Name))
+		toEdges := copyEdgeLimits(pl, pl.GetToEdges(v.Name))
 		vCopy := v.DeepCopy()
-		copyLimits(pl, vCopy)
+		copyVertexLimits(pl, vCopy)
 		replicas := int32(1)
 		if pl.Status.Phase == dfv1.PipelinePhasePaused {
 			replicas = int32(0)
@@ -437,8 +431,8 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			AbstractVertex:             *vCopy,
 			PipelineName:               pl.Name,
 			InterStepBufferServiceName: pl.Spec.InterStepBufferServiceName,
-			FromVertices:               fromVertexNames,
-			ToVertices:                 toVertices,
+			FromEdges:                  fromEdges,
+			ToEdges:                    toEdges,
 			Replicas:                   &replicas,
 		}
 		hash := sharedutil.MustHash(spec.WithOutReplicas())
@@ -461,7 +455,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 	return result
 }
 
-func copyLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
+func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
 	if pl.Spec.Limits == nil {
 		return
 	}
@@ -474,12 +468,26 @@ func copyLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
 	if v.UDF != nil && v.Limits.UDFWorkers == nil {
 		v.Limits.UDFWorkers = pl.Spec.Limits.UDFWorkers
 	}
-	if v.Sink == nil && v.Limits.BufferMaxLength == nil {
-		v.Limits.BufferMaxLength = pl.Spec.Limits.BufferMaxLength
+}
+
+func copyEdgeLimits(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.Edge {
+	if pl.Spec.Limits == nil {
+		return edges
 	}
-	if v.Sink == nil && v.Limits.BufferUsageLimit == nil {
-		v.Limits.BufferUsageLimit = pl.Spec.Limits.BufferUsageLimit
+	result := []dfv1.Edge{}
+	for _, e := range edges {
+		if e.Limits == nil {
+			e.Limits = &dfv1.EdgeLimits{}
+		}
+		if e.Limits.BufferMaxLength == nil {
+			e.Limits.BufferMaxLength = pl.Spec.Limits.BufferMaxLength
+		}
+		if e.Limits.BufferUsageLimit == nil {
+			e.Limits.BufferUsageLimit = pl.Spec.Limits.BufferUsageLimit
+		}
+		result = append(result, e)
 	}
+	return result
 }
 
 func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferServiceConfig, subCommand string, args []string, jobType string) *batchv1.Job {

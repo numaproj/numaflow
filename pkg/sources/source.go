@@ -32,38 +32,35 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var writers []isb.BufferWriter
-	toBuffers := u.Vertex.GetToBuffers()
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		writeOpts := []redisisb.Option{}
-		if x := u.Vertex.Spec.Limits; x != nil {
-			if x.BufferMaxLength != nil {
+		for _, e := range u.Vertex.Spec.ToEdges {
+			writeOpts := []redisisb.Option{}
+			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x.BufferUsageLimit != nil {
+			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-		}
-		redisClient := clients.NewInClusterRedisClient()
-		for _, b := range toBuffers {
-			group := b.Name + "-group"
-			writer := redisisb.NewBufferWrite(ctx, redisClient, b.Name, group, writeOpts...)
+			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
+			group := buffer + "-group"
+			redisClient := clients.NewInClusterRedisClient()
+			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
 			writers = append(writers, writer)
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		writeOpts := []jetstreamisb.WriteOption{}
-		if x := u.Vertex.Spec.Limits; x != nil {
-			if x.BufferMaxLength != nil {
+		for _, e := range u.Vertex.Spec.ToEdges {
+			writeOpts := []jetstreamisb.WriteOption{}
+			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x.BufferUsageLimit != nil {
+			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-		}
-		for _, buffer := range toBuffers {
-			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, buffer.Name)
+			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
+			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, buffer)
 			jetStreamClient := clients.NewInClusterJetStreamClient()
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer.Name, streamName, streamName, writeOpts...)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
 			}
@@ -77,8 +74,7 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
 	}
-
-	log.Infow("Start processing source messages", zap.String("isbs", string(u.ISBSvcType)), zap.Any("to", toBuffers))
+	log.Infow("Start processing source messages", zap.String("isbs", string(u.ISBSvcType)), zap.Any("to", u.Vertex.GetToBuffers()))
 	stopped := sourcer.Start()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

@@ -77,23 +77,14 @@ func (p Pipeline) GetVertex(vertexName string) *AbstractVertex {
 	return nil
 }
 
-// FindVerticesWithEdgeBuffer is used to locate the vertices who write and read from the buffer.
-func (p Pipeline) FindVerticesWithEdgeBuffer(buffer string) (from, to *AbstractVertex) {
+// FindEdgeWithBuffer is used to locate the edge of the buffer.
+func (p Pipeline) FindEdgeWithBuffer(buffer string) *Edge {
 	for _, e := range p.Spec.Edges {
 		if buffer == GenerateEdgeBufferName(p.Namespace, p.Name, e.From, e.To) {
-			for _, v := range p.Spec.Vertices {
-				if v.Name == e.From {
-					from = v.DeepCopy()
-				} else if v.Name == e.To {
-					to = v.DeepCopy()
-				}
-				if from != nil && to != nil {
-					return from, to
-				}
-			}
+			return &e
 		}
 	}
-	return from, to
+	return nil
 }
 
 func (p Pipeline) GetToEdges(vertexName string) []Edge {
@@ -319,18 +310,6 @@ type PipelineLimits struct {
 	// +kubebuilder:default=80
 	// +optional
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
-}
-
-type Edge struct {
-	From string `json:"from" protobuf:"bytes,1,opt,name=from"`
-	To   string `json:"to" protobuf:"bytes,2,opt,name=to"`
-	// Conditional forwarding, only allowed when "From" is a Sink or UDF
-	// +optional
-	Conditions *ForwardConditions `json:"conditions" protobuf:"bytes,3,opt,name=conditions"`
-}
-
-type ForwardConditions struct {
-	KeyIn []string `json:"keyIn" protobuf:"bytes,1,rep,name=keyIn"`
 }
 
 type PipelineStatus struct {
