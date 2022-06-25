@@ -19,7 +19,6 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	w := s.Given().Pipeline("@testdata/simple-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
 
 	w.Expect().
@@ -57,7 +56,6 @@ func (s *FunctionalSuite) TestFiltering() {
 	w := s.Given().Pipeline("@testdata/filtering.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
 
 	w.Expect().
@@ -103,7 +101,6 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 		VertexPodLogContains("even-sink", LogSinkVertexStarted).
 		VertexPodLogContains("odd-sink", LogSinkVertexStarted).
 		VertexPodLogContains("number-sink", LogSinkVertexStarted)
-
 	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
 		TerminateAllPodPortForwards()
 
@@ -113,21 +110,46 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("888889")).
 		Expect().
 		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("not an interger")).
+	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("not an integer")).
 		Expect().
 		Status(204)
 
 	w.Expect().VertexPodLogContains("even-sink", "888888")
 	w.Expect().VertexPodLogNotContains("even-sink", "888889", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("even-sink", "not an interger", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().VertexPodLogNotContains("even-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
 
 	w.Expect().VertexPodLogContains("odd-sink", "888889")
 	w.Expect().VertexPodLogNotContains("odd-sink", "888888", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("odd-sink", "not an interger", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().VertexPodLogNotContains("odd-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
 
 	w.Expect().VertexPodLogContains("number-sink", "888888")
 	w.Expect().VertexPodLogContains("number-sink", "888889")
-	w.Expect().VertexPodLogNotContains("number-sink", "not an interger", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().VertexPodLogNotContains("number-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+}
+
+func (s *FunctionalSuite) TestFlatmapUDF() {
+	w := s.Given().Pipeline("@testdata/flatmap.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	w.Expect().
+		VertexPodsRunning().
+		VertexPodLogContains("in", LogSourceVertexStarted).
+		VertexPodLogContains("split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("out", LogSinkVertexStarted)
+
+	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
+		TerminateAllPodPortForwards()
+
+	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("hello,hello")).
+		Expect().
+		Status(204)
+	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("hello")).
+		Expect().
+		Status(204)
+
+	w.Expect().VertexPodLogContains("out", "hello", PodLogCheckOptionWithCount(3))
 }
 
 func TestFunctionalSuite(t *testing.T) {
