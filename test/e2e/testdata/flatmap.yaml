@@ -1,0 +1,21 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: flatmap
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: split
+      udf:
+        container:
+          image: quay.io/numaio/go-flatmap-example
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: split
+    - from: split
+      to: out
