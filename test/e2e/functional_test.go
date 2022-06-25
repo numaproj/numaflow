@@ -110,21 +110,21 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("888889")).
 		Expect().
 		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("not an interger")).
+	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("not an integer")).
 		Expect().
 		Status(204)
 
 	w.Expect().VertexPodLogContains("even-sink", "888888")
 	w.Expect().VertexPodLogNotContains("even-sink", "888889", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("even-sink", "not an interger", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().VertexPodLogNotContains("even-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
 
 	w.Expect().VertexPodLogContains("odd-sink", "888889")
 	w.Expect().VertexPodLogNotContains("odd-sink", "888888", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("odd-sink", "not an interger", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().VertexPodLogNotContains("odd-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
 
 	w.Expect().VertexPodLogContains("number-sink", "888888")
 	w.Expect().VertexPodLogContains("number-sink", "888889")
-	w.Expect().VertexPodLogNotContains("number-sink", "not an interger", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().VertexPodLogNotContains("number-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
 }
 
 func (s *FunctionalSuite) TestFlatmapUDF() {
