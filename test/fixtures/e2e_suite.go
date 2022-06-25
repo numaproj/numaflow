@@ -57,7 +57,9 @@ metadata:
   name: default
 spec:
   jetstream:
-    version: latest`
+    version: latest
+    persistence:
+      volumeSize: 50Mi`
 )
 
 type E2ESuite struct {
