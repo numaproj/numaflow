@@ -72,8 +72,8 @@ var (
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas:     &testReplicas,
-			FromVertices: []string{"input"},
-			ToVertices:   []dfv1.ToVertex{{Name: "output"}},
+			FromEdges:    []dfv1.Edge{{From: "input", To: testVertexSpecName}},
+			ToEdges:      []dfv1.Edge{{From: testVertexSpecName, To: "output"}},
 			PipelineName: testPipelineName,
 			AbstractVertex: dfv1.AbstractVertex{
 				Name: testVertexSpecName,
@@ -88,7 +88,7 @@ var (
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas:     &testReplicas,
-			ToVertices:   []dfv1.ToVertex{{Name: "p1"}},
+			ToEdges:      []dfv1.Edge{{From: "input", To: "p1"}},
 			PipelineName: testPipelineName,
 			AbstractVertex: dfv1.AbstractVertex{
 				Name:   "input",
@@ -204,8 +204,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Name = "test-pl-output"
 		testObj.Spec.Name = "output"
 		testObj.Spec.Sink = &dfv1.Sink{}
-		testObj.Spec.FromVertices = []string{"p1"}
-		testObj.Spec.ToVertices = []dfv1.ToVertex{}
+		testObj.Spec.FromEdges = []dfv1.Edge{{From: "p1", To: "output"}}
+		testObj.Spec.ToEdges = []dfv1.Edge{}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
@@ -248,8 +248,8 @@ func Test_BuildPodSpec(t *testing.T) {
 				},
 			},
 		}
-		testObj.Spec.FromVertices = []string{"p1"}
-		testObj.Spec.ToVertices = []dfv1.ToVertex{}
+		testObj.Spec.FromEdges = []dfv1.Edge{{From: "p1", To: "output"}}
+		testObj.Spec.ToEdges = []dfv1.Edge{}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
