@@ -59,6 +59,26 @@ spec:
                       type: object
                     from:
                       type: string
+                    limits:
+                      description: Limits define the limitations such as buffer read
+                        batch size for the edge, will override pipeline level settings
+                      properties:
+                        bufferMaxLength:
+                          description: BufferMaxLength is used to define the max length
+                            of a buffer. It overrides the settings from pipeline limits.
+                            Only meaningful for UDF and Source vertice as only they
+                            do buffer write.
+                          format: int64
+                          type: integer
+                        bufferUsageLimit:
+                          description: BufferUsageLimit is used to define the pencentage
+                            of the buffer usage limit, a valid value should be less
+                            than 100, for example, 85. It overrides the settings from
+                            pipeline limits. Only meaningful for UDF and Source vertice
+                            as only they do buffer write.
+                          format: int32
+                          type: integer
+                      type: object
                     to:
                       type: string
                   required:
@@ -1369,21 +1389,6 @@ spec:
                         batch size for all the vertices of a pipleine, will override
                         pipeline level settings
                       properties:
-                        bufferMaxLength:
-                          description: BufferMaxLength is used to define the max length
-                            of a buffer. It overrides the settings from pipeline limits.
-                            Only meaningful for UDF and Source vertice as only they
-                            do buffer write.
-                          format: int64
-                          type: integer
-                        bufferUsageLimit:
-                          description: BufferUsageLimit is used to define the pencentage
-                            of the buffer usage limit, a valid value should be less
-                            than 100, for example, 85. It overrides the settings from
-                            pipeline limits. Only meaningful for UDF and Source vertice
-                            as only they do buffer write.
-                          format: int32
-                          type: integer
                         readBatchSize:
                           description: Read batch size
                           format: int64

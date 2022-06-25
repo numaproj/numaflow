@@ -528,7 +528,8 @@ Edge
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
 </p>
 <p>
 </p>
@@ -571,6 +572,70 @@ Conditional forwarding, only allowed when “From” is a Sink or UDF
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>limits</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.EdgeLimits"> EdgeLimits </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Limits define the limitations such as buffer read batch size for the
+edge, will override pipeline level settings
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.EdgeLimits">
+EdgeLimits
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>bufferMaxLength</code></br> <em> uint64 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+BufferMaxLength is used to define the max length of a buffer. It
+overrides the settings from pipeline limits. Only meaningful for UDF and
+Source vertice as only they do buffer write.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>bufferUsageLimit</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+BufferUsageLimit is used to define the pencentage of the buffer usage
+limit, a valid value should be less than 100, for example, 85. It
+overrides the settings from pipeline limits. Only meaningful for UDF and
+Source vertice as only they do buffer write.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.ForwardConditions">
@@ -578,8 +643,7 @@ ForwardConditions
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.ToVertex">ToVertex</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>)
 </p>
 <p>
 </p>
@@ -3133,46 +3197,6 @@ KeySecret refers to the secret that contains the key
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.ToVertex">
-ToVertex
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
-</p>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>
-Field
-</th>
-<th>
-Description
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>name</code></br> <em> string </em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>conditions</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
-ForwardConditions </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-</td>
-</tr>
-</tbody>
-</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.UDF">
 UDF
 </h3>
@@ -3319,7 +3343,8 @@ Refer to the Kubernetes API documentation for the fields of the
 </tr>
 <tr>
 <td>
-<code>fromVertices</code></br> <em> \[\]string </em>
+<code>fromEdges</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -3327,9 +3352,8 @@ Refer to the Kubernetes API documentation for the fields of the
 </tr>
 <tr>
 <td>
-<code>toVertices</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ToVertex"> \[\]ToVertex </a>
-</em>
+<code>toEdges</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -3392,33 +3416,6 @@ Read batch size
 Workers used to concurrently call UDF functions, it’s only meaningful
 for UDF vertex, and will be ignored by source and sink vertices. It
 overrides the setting in pipeline limits.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>bufferMaxLength</code></br> <em> uint64 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-BufferMaxLength is used to define the max length of a buffer. It
-overrides the settings from pipeline limits. Only meaningful for UDF and
-Source vertice as only they do buffer write.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>bufferUsageLimit</code></br> <em> uint32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-BufferUsageLimit is used to define the pencentage of the buffer usage
-limit, a valid value should be less than 100, for example, 85. It
-overrides the settings from pipeline limits. Only meaningful for UDF and
-Source vertice as only they do buffer write.
 </p>
 </td>
 </tr>
@@ -3492,7 +3489,8 @@ Description
 </tr>
 <tr>
 <td>
-<code>fromVertices</code></br> <em> \[\]string </em>
+<code>fromEdges</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -3500,9 +3498,8 @@ Description
 </tr>
 <tr>
 <td>
-<code>toVertices</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ToVertex"> \[\]ToVertex </a>
-</em>
+<code>toEdges</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
 </td>
 <td>
 <em>(Optional)</em>

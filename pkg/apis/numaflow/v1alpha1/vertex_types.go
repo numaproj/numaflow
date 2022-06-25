@@ -259,8 +259,8 @@ func (v Vertex) GetFromBuffers() []Buffer {
 	if v.IsASource() {
 		r = append(r, Buffer{GenerateSourceBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SourceBuffer})
 	} else {
-		for _, vt := range v.Spec.FromVertices {
-			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, vt, v.Spec.Name), EdgeBuffer})
+		for _, vt := range v.Spec.FromEdges {
+			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, vt.From, v.Spec.Name), EdgeBuffer})
 		}
 	}
 	return r
@@ -271,8 +271,8 @@ func (v Vertex) GetToBuffers() []Buffer {
 	if v.IsASink() {
 		r = append(r, Buffer{GenerateSinkBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SinkBuffer})
 	} else {
-		for _, vt := range v.Spec.ToVertices {
-			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, vt.Name), EdgeBuffer})
+		for _, vt := range v.Spec.ToEdges {
+			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, vt.To), EdgeBuffer})
 		}
 	}
 	return r
@@ -287,15 +287,9 @@ type VertexSpec struct {
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,4,opt,name=replicas"`
 	// +optional
-	FromVertices []string `json:"fromVertices,omitempty" protobuf:"bytes,5,rep,name=fromVertices"`
+	FromEdges []Edge `json:"fromEdges,omitempty" protobuf:"bytes,5,rep,name=fromEdges"`
 	// +optional
-	ToVertices []ToVertex `json:"toVertices,omitempty" protobuf:"bytes,6,rep,name=toVertices"`
-}
-
-type ToVertex struct {
-	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
-	// +optional
-	Conditions *ForwardConditions `json:"conditions" protobuf:"bytes,2,opt,name=conditions"`
+	ToEdges []Edge `json:"toEdges,omitempty" protobuf:"bytes,6,rep,name=toEdges"`
 }
 
 func (vs VertexSpec) GetReplicas() int {
@@ -390,16 +384,6 @@ type VertexLimits struct {
 	// It overrides the setting in pipeline limits.
 	// +optional
 	UDFWorkers *uint32 `json:"udfWorkers,omitempty" protobuf:"varint,2,opt,name=udfWorkers"`
-	// BufferMaxLength is used to define the max length of a buffer.
-	// It overrides the settings from pipeline limits.
-	// Only meaningful for UDF and Source vertice as only they do buffer write.
-	// +optional
-	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,3,opt,name=bufferMaxLength"`
-	// BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-	// It overrides the settings from pipeline limits.
-	// Only meaningful for UDF and Source vertice as only they do buffer write.
-	// +optional
-	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
 }
 
 func (v VertexSpec) getType() containerSupplier {
