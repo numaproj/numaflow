@@ -136,8 +136,8 @@ func generateEncodedVertexSpecs() string {
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas:     &replicas,
-			FromVertices: []string{"input"},
-			ToVertices:   []dfv1.ToVertex{{Name: "output"}},
+			FromEdges:    []dfv1.Edge{{From: "input", To: "name"}},
+			ToEdges:      []dfv1.Edge{{From: "name", To: "output"}},
 			PipelineName: "test-pl",
 			AbstractVertex: dfv1.AbstractVertex{
 				Name: "name",

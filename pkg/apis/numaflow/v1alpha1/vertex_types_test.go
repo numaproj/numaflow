@@ -33,7 +33,7 @@ var (
 				Name:   testVertexSpecName,
 				Source: &Source{},
 			},
-			ToVertices: []ToVertex{{Name: "output"}},
+			ToEdges: []Edge{{From: testVertexSpecName, To: "output"}},
 		},
 	}
 
@@ -49,7 +49,7 @@ var (
 				Name: testVertexSpecName,
 				Sink: &Sink{},
 			},
-			FromVertices: []string{"input"},
+			FromEdges: []Edge{{From: "input", To: testVertexSpecName}},
 		},
 	}
 
@@ -64,8 +64,8 @@ var (
 			AbstractVertex: AbstractVertex{
 				Name: testVertexSpecName,
 			},
-			FromVertices: []string{"input"},
-			ToVertices:   []ToVertex{{Name: "output"}},
+			FromEdges: []Edge{{From: "input", To: testVertexSpecName}},
+			ToEdges:   []Edge{{From: testVertexSpecName, To: "output"}},
 		},
 	}
 )
