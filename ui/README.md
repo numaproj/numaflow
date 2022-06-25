@@ -1,6 +1,6 @@
 # NumaFlow UI
 
-![Numaflow Image](../docs/architecture/assets/numa.svg)
+![Numaflow Image](../docs/assets/numa.svg)
 
 A web-based UI for NumaFlow
 
