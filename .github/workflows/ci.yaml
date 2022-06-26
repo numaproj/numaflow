@@ -8,9 +8,10 @@ on:
     branches: [ main ]
 jobs:
   ui:
-    name: UI-Ex
+    name: UI
     runs-on: ubuntu-latest
     timeout-minutes: 6
+    process.env.CI = false
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
