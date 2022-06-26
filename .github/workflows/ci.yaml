@@ -7,6 +7,29 @@ on:
   pull_request:
     branches: [ main ]
 jobs:
+  ui:
+    name: UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      CI: ""
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+      - uses: actions/cache@v3
+        with:
+          path: ui/node_modules
+          key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
+      - run: yarn --cwd ui install
+      - run: yarn --cwd ui build
+      - run: yarn --cwd ui test
+      - run: yarn --cwd ui lint
+      - run: git diff --exit-code
+      # check to see if it'll start (but not if it'll render)
+      - run: yarn --cwd ui start
   codegen:
     name: Codegen
     runs-on: ubuntu-latest
