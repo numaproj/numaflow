@@ -32,7 +32,6 @@ jobs:
             echo "::set-output name=run_job::true"
             break
           else
-            echo "No files are under the directory 'ui'."
             echo "::set-output name=run_job::false"
           fi
         done < files.txt
