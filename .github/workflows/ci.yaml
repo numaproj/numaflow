@@ -28,12 +28,12 @@ jobs:
         while IFS= read -r file
         do
           echo $file
-          if [[ $file != "ui/"* ]]; then
-            echo "This file is not under the directory 'ui'."
-            echo "::set-output name=run_job::false"
+          if [[ $file == "ui/"* ]]; then
+            echo "::set-output name=run_job::true"
             break
           else
-            echo "::set-output name=run_job::true"
+            echo "No files are under the directory 'ui'."
+            echo "::set-output name=run_job::false"
           fi
         done < files.txt
   ui:
