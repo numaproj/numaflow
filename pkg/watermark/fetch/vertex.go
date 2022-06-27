@@ -3,11 +3,12 @@ package fetch
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -18,7 +19,7 @@ import (
 type FromVertexer interface {
 	// GetAllProcessors fetches all the processors from Vn-1 vertex. processors could be pods or when the vertex is a
 	// source vertex, it could be partitions if the source is Kafka.
-	GetAllProcessors() map[string]*FromProcessor
+	GetAllProcessors() map[string]*ProcessorToFetch
 }
 
 // FromVertex is the point of view of Vn-1 from Vn vertex. The code is running on Vn vertex.
@@ -31,7 +32,7 @@ type FromVertex struct {
 	hbWatcher  store.WatermarkKVWatcher
 	otWatcher  store.WatermarkKVWatcher
 	heartbeat  *ProcessorHeartbeat
-	processors map[string]*FromProcessor
+	processors map[string]*ProcessorToFetch
 	lock       sync.RWMutex
 	log        *zap.SugaredLogger
 
@@ -56,7 +57,7 @@ func NewFromVertex(ctx context.Context, keyspace string, hbWatcher store.Waterma
 		hbWatcher:  hbWatcher,
 		otWatcher:  otWatcher,
 		heartbeat:  NewProcessorHeartbeat(),
-		processors: make(map[string]*FromProcessor),
+		processors: make(map[string]*ProcessorToFetch),
 		log:        logging.FromContext(ctx),
 		opts:       opts,
 	}
@@ -69,14 +70,14 @@ func NewFromVertex(ctx context.Context, keyspace string, hbWatcher store.Waterma
 }
 
 // AddProcessor adds a new processor.
-func (v *FromVertex) AddProcessor(processor string, p *FromProcessor) {
+func (v *FromVertex) AddProcessor(processor string, p *ProcessorToFetch) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 	v.processors[processor] = p
 }
 
 // GetProcessor gets a processor.
-func (v *FromVertex) GetProcessor(processor string) *FromProcessor {
+func (v *FromVertex) GetProcessor(processor string) *ProcessorToFetch {
 	v.lock.RLock()
 	defer v.lock.RUnlock()
 	if p, ok := v.processors[processor]; ok {
@@ -94,10 +95,10 @@ func (v *FromVertex) DeleteProcessor(processor string) {
 }
 
 // GetAllProcessors returns all the processors.
-func (v *FromVertex) GetAllProcessors() map[string]*FromProcessor {
+func (v *FromVertex) GetAllProcessors() map[string]*ProcessorToFetch {
 	v.lock.RLock()
 	defer v.lock.RUnlock()
-	var processors = make(map[string]*FromProcessor, len(v.processors))
+	var processors = make(map[string]*ProcessorToFetch, len(v.processors))
 	for k, v := range v.processors {
 		processors[k] = v
 	}
@@ -163,7 +164,7 @@ func (v *FromVertex) startHeatBeatWatcher() {
 					// A fromProcessor need to be added to v.processors
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
-					var fromProcessor = NewProcessor(v.ctx, entity, 10, v.otWatcher)
+					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.otWatcher)
 					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active

@@ -3,6 +3,7 @@ package jetstream
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
@@ -22,7 +23,8 @@ type KVJetStreamWatch struct {
 
 var _ store.WatermarkKVWatcher = (*KVJetStreamWatch)(nil)
 
-func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, bucketName string, client clients.JetStreamClient, opts ...JSKVWatcherOption) (*KVJetStreamWatch, error) {
+// NewKVJetStreamKVWatch returns KVJetStreamWatch specific to Jetsteam which implements the WatermarkKVWatcher interface.
+func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketName string, client clients.JetStreamClient, opts ...JSKVWatcherOption) (*KVJetStreamWatch, error) {
 	var err error
 	conn, err := client.Connect(ctx)
 	if err != nil {
@@ -39,10 +41,10 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, bucketName 
 	j := &KVJetStreamWatch{
 		pipelineName: pipelineName,
 		js:           js,
-		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
+		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("kvBucketName", kvBucketName),
 	}
 
-	j.kv, err = j.js.KeyValue(bucketName)
+	j.kv, err = j.js.KeyValue(kvBucketName)
 	if err != nil {
 		return nil, err
 	}
@@ -61,28 +63,35 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, bucketName 
 // JSKVWatcherOption is to pass in Jetstream options.
 type JSKVWatcherOption func(*KVJetStreamWatch) error
 
+// kvEntry is each key-value entry in the store and the operation associated with the kv pair.
 type kvEntry struct {
 	key   string
 	value []byte
 	op    store.KVWatchOp
 }
 
+// Key returns the key
 func (k kvEntry) Key() string {
 	return k.key
 }
 
+// Value returns the value.
 func (k kvEntry) Value() []byte {
 	return k.value
 }
 
+// Operation returns the operation on that key-value pair.
 func (k kvEntry) Operation() store.KVWatchOp {
 	return k.op
 }
 
+// Watch watches the key-value store (aka bucket).
 func (k *KVJetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 	kvWatcher, err := k.kv.WatchAll()
 	for err != nil {
+		k.log.Errorw("WatchAll failed", zap.String("watcher", k.GetKVName()), zap.Error(err))
 		kvWatcher, err = k.kv.WatchAll()
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	var updates = make(chan store.WatermarkKVEntry)
@@ -90,7 +99,8 @@ func (k *KVJetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEn
 		for {
 			select {
 			case <-ctx.Done():
-				fmt.Println("STOPPED")
+				k.log.Errorw("stopping WatchAll", zap.String("watcher", k.GetKVName()))
+				// call jetstream watch stop
 				_ = kvWatcher.Stop()
 				return
 			case value := <-kvWatcher.Updates():
@@ -121,11 +131,13 @@ func (k *KVJetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEn
 	return updates
 }
 
+// GetKVName returns the KV store (bucket) name.
 func (k *KVJetStreamWatch) GetKVName() string {
 	return k.kv.Bucket()
 }
 
-func (k *KVJetStreamWatch) Stop(_ context.Context) {
+// Close closes the connection.
+func (k *KVJetStreamWatch) Close() {
 	if !k.conn.IsClosed() {
 		k.conn.Close()
 	}

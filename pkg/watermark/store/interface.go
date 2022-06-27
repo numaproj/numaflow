@@ -7,6 +7,7 @@ import (
 // WMStorer is the watermark store implementation.
 type WMStorer interface {
 	WatermarkKVStorer
+	WatermarkKVWatcher
 }
 
 // WatermarkKVStorer is defines the storage for publishing the watermark.
@@ -29,12 +30,26 @@ type WatermarkKVStorer interface {
 type KVWatchOp int64
 
 const (
-	// KVPut indicates an element has been put/added into the KV store
+	// KVPut indicates an element has been put/added into the KV store.
 	KVPut KVWatchOp = iota
-	// KVDelete represents a delete
+	// KVDelete represents a delete.
 	KVDelete
+	// KVPurge is when the kv bucket is purged.
 	KVPurge
 )
+
+func (kvOp KVWatchOp) String() string {
+	switch kvOp {
+	case KVPut:
+		return "KVPut"
+	case KVDelete:
+		return "KVDelete"
+	case KVPurge:
+		return "KVPurge"
+	default:
+		return "UnknownOP"
+	}
+}
 
 // WatermarkKVEntry defines what can be read on the Watch stream.
 type WatermarkKVEntry interface {
@@ -50,5 +65,5 @@ type WatermarkKVEntry interface {
 type WatermarkKVWatcher interface {
 	Watch(context.Context) <-chan WatermarkKVEntry
 	GetKVName() string
-	Stop(context.Context)
+	Close()
 }

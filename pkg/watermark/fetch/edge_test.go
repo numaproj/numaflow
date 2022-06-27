@@ -4,13 +4,14 @@ package fetch
 
 import (
 	"context"
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/nats-io/nats.go"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"github.com/stretchr/testify/assert"
-	"strconv"
-	"testing"
-	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -51,9 +52,9 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	testVertex := NewFromVertex(ctx, "testVertex", hbWatcher, otWatcher)
 	var (
 		// TODO: watcher should not be nil
-		testPod0     = NewProcessor(ctx, processor.NewProcessorEntity("testPod1", "test"), 5, otWatcher)
-		testPod1     = NewProcessor(ctx, processor.NewProcessorEntity("testPod2", "test"), 5, otWatcher)
-		testPod2     = NewProcessor(ctx, processor.NewProcessorEntity("testPod3", "test"), 5, otWatcher)
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1", "test"), 5, otWatcher)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2", "test"), 5, otWatcher)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3", "test"), 5, otWatcher)
 		pod0Timeline = []OffsetWatermark{
 			{watermark: 11, offset: 9},
 			{watermark: 12, offset: 20},

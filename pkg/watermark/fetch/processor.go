@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"sync"
+
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 
@@ -33,8 +34,8 @@ func (s status) String() string {
 	return "unknown"
 }
 
-// FromProcessor is the smallest unit of entity who does inorder processing or contains inorder data.
-type FromProcessor struct {
+// ProcessorToFetch is the smallest unit of entity (from we which we fetch data) that does inorder processing or contains inorder data.
+type ProcessorToFetch struct {
 	ctx            context.Context
 	entity         processor.ProcessorEntitier
 	status         status
@@ -44,12 +45,13 @@ type FromProcessor struct {
 	log            *zap.SugaredLogger
 }
 
-func (p *FromProcessor) String() string {
+func (p *ProcessorToFetch) String() string {
 	return fmt.Sprintf("%s status:%v, timeline: %s", p.entity.GetID(), p.getStatus(), p.offsetTimeline.Dump())
 }
 
-func NewProcessor(ctx context.Context, processor processor.ProcessorEntitier, capacity int, watcher store.WatermarkKVWatcher) *FromProcessor {
-	p := &FromProcessor{
+// NewProcessorToFetch creates ProcessorToFetch.
+func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntitier, capacity int, watcher store.WatermarkKVWatcher) *ProcessorToFetch {
+	p := &ProcessorToFetch{
 		ctx:            ctx,
 		entity:         processor,
 		status:         _active,
@@ -63,40 +65,40 @@ func NewProcessor(ctx context.Context, processor processor.ProcessorEntitier, ca
 	return p
 }
 
-func (p *FromProcessor) setStatus(s status) {
+func (p *ProcessorToFetch) setStatus(s status) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	p.status = s
 }
 
-func (p *FromProcessor) getStatus() status {
+func (p *ProcessorToFetch) getStatus() status {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	return p.status
 }
 
 // IsActive returns whether a processor is active.
-func (p *FromProcessor) IsActive() bool {
+func (p *ProcessorToFetch) IsActive() bool {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	return p.status == _active
 }
 
 // IsInactive returns whether a processor is inactive (no heartbeats or any sort).
-func (p *FromProcessor) IsInactive() bool {
+func (p *ProcessorToFetch) IsInactive() bool {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	return p.status == _inactive
 }
 
 // IsDeleted returns whether a processor has been deleted.
-func (p *FromProcessor) IsDeleted() bool {
+func (p *ProcessorToFetch) IsDeleted() bool {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	return p.status == _deleted
 }
 
-func (p *FromProcessor) startTimeLineWatcher() {
+func (p *ProcessorToFetch) startTimeLineWatcher() {
 	watchCh := p.otWatcher.Watch(p.ctx)
 	for {
 		select {
