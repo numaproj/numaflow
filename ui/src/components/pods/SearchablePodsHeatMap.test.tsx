@@ -1,3 +1,4 @@
+import {Dispatch, SetStateAction} from "react";
 import { SearchablePodsHeatMap } from "./SearchablePodsHeatMap";
 import { render, screen } from "@testing-library/react";
 import { Pod, PodContainerSpec, PodDetail } from "../../utils/models/pods";
