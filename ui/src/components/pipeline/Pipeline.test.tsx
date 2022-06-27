@@ -117,7 +117,8 @@ describe("Pipeline", () => {
                 "totalMessages": 8233,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0.8233,
-                "isFull": true
+                "isFull": true,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "preproc",
                 "toVertex": "infer",
@@ -126,7 +127,8 @@ describe("Pipeline", () => {
                 "totalMessages": 8146,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0.8146,
-                "isFull": true
+                "isFull": true,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "infer",
                 "toVertex": "train",
@@ -135,7 +137,8 @@ describe("Pipeline", () => {
                 "totalMessages": 0,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0,
-                "isFull": false
+                "isFull": false,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "infer",
                 "toVertex": "postproc",
@@ -144,7 +147,8 @@ describe("Pipeline", () => {
                 "totalMessages": 8198,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0.8101,
-                "isFull": true
+                "isFull": true,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "postproc",
                 "toVertex": "log-output",
@@ -153,7 +157,8 @@ describe("Pipeline", () => {
                 "totalMessages": 13641,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 1.3641,
-                "isFull": true
+                "isFull": true,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "postproc",
                 "toVertex": "publisher",
@@ -162,7 +167,8 @@ describe("Pipeline", () => {
                 "totalMessages": 0,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0,
-                "isFull": false
+                "isFull": false,
+                "bufferLength": 10000
             }], error: false, loading: false
         })
         render(<Pipeline/>)
@@ -267,7 +273,8 @@ describe("Pipeline", () => {
                 "totalMessages": 8233,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0.8233,
-                "isFull": true
+                "isFull": true,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "preproc",
                 "toVertex": "infer",
@@ -276,7 +283,8 @@ describe("Pipeline", () => {
                 "totalMessages": 8146,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0.8146,
-                "isFull": true
+                "isFull": true,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "infer",
                 "toVertex": "train",
@@ -285,7 +293,8 @@ describe("Pipeline", () => {
                 "totalMessages": 0,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0,
-                "isFull": false
+                "isFull": false,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "infer",
                 "toVertex": "postproc",
@@ -294,7 +303,8 @@ describe("Pipeline", () => {
                 "totalMessages": 8198,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0.8101,
-                "isFull": true
+                "isFull": true,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "postproc",
                 "toVertex": "log-output",
@@ -303,7 +313,8 @@ describe("Pipeline", () => {
                 "totalMessages": 13641,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 1.3641,
-                "isFull": true
+                "isFull": true,
+                "bufferLength": 10000
             }, {
                 "fromVertex": "postproc",
                 "toVertex": "publisher",
@@ -312,7 +323,8 @@ describe("Pipeline", () => {
                 "totalMessages": 0,
                 "bufferUsageLimit": 0.8,
                 "bufferUsage": 0,
-                "isFull": false
+                "isFull": false,
+                "bufferLength": 10000
             }], error: false, loading: false
         })
         render(<Pipeline/>)

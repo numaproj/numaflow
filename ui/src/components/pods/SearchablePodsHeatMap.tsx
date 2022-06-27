@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, ChangeEvent } from "react";
+import {useState, useEffect, useCallback, ChangeEvent, Dispatch, SetStateAction} from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import InputBase from "@mui/material/InputBase";
@@ -15,7 +15,7 @@ interface PodsHeatMapProps {
   podsDetailMap: Map<string, PodDetail>;
   onPodClick: (e: Element | EventType, pod: Pod) => void;
   selectedPod: Pod | undefined;
-  setSelectedPod: any;
+  setSelectedPod: Dispatch<SetStateAction<Pod>>;
 }
 
 export const SearchablePodsHeatMap = ({
