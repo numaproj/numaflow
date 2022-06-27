@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="46" failures="0" errors="0" time="19.011">
+  <testsuite name="index" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="3.495" tests="4">
+    <testcase classname="index isDev" name="index isDev" time="0.002">
+    </testcase>
+    <testcase classname="index findSuffix" name="index findSuffix" time="0.002">
+    </testcase>
+    <testcase classname="index quantityToScalar" name="index quantityToScalar" time="0.001">
+    </testcase>
+    <testcase classname="index getPodContainerUsePercentages" name="index getPodContainerUsePercentages" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="edgeInfoFetch test" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="3.832" tests="3">
+    <testcase classname="edgeInfoFetch test edgesInfo return" name="edgeInfoFetch test edgesInfo return" time="0.056">
+    </testcase>
+    <testcase classname="edgeInfoFetch test edgesInfo loading" name="edgeInfoFetch test edgesInfo loading" time="0.003">
+    </testcase>
+    <testcase classname="edgeInfoFetch test edgesInfo error" name="edgeInfoFetch test edgesInfo error" time="0.004">
+    </testcase>
+  </testsuite>
+  <testsuite name="namespace test" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="3.971" tests="3">
+    <testcase classname="namespace test namespace return" name="namespace test namespace return" time="0.068">
+    </testcase>
+    <testcase classname="namespace test namespace loading" name="namespace test namespace loading" time="0.005">
+    </testcase>
+    <testcase classname="namespace test namespace error" name="namespace test namespace error" time="0.012">
+    </testcase>
+  </testsuite>
+  <testsuite name="pipeline test" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="4.097" tests="3">
+    <testcase classname="pipeline test pipeline value" name="pipeline test pipeline value" time="0.08">
+    </testcase>
+    <testcase classname="pipeline test pipeline loading" name="pipeline test pipeline loading" time="0.039">
+    </testcase>
+    <testcase classname="pipeline test pipeline error" name="pipeline test pipeline error" time="0.006">
+    </testcase>
+  </testsuite>
+  <testsuite name="podsDetail test" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="4.464" tests="3">
+    <testcase classname="podsDetail test podsDetail return" name="podsDetail test podsDetail return" time="0.043">
+    </testcase>
+    <testcase classname="podsDetail test podsDetail loading" name="podsDetail test podsDetail loading" time="0.006">
+    </testcase>
+    <testcase classname="podsDetail test podsDetail error" name="podsDetail test podsDetail error" time="0.014">
+    </testcase>
+  </testsuite>
+  <testsuite name="podsFetch test" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="4.63" tests="3">
+    <testcase classname="podsFetch test pods return" name="podsFetch test pods return" time="0.058">
+    </testcase>
+    <testcase classname="podsFetch test pods loading" name="podsFetch test pods loading" time="0.012">
+    </testcase>
+    <testcase classname="podsFetch test pods error" name="podsFetch test pods error" time="0.015">
+    </testcase>
+  </testsuite>
+  <testsuite name="PodInfo screen" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="5.791" tests="1">
+    <testcase classname="PodInfo screen loads screen" name="PodInfo screen loads screen" time="0.438">
+    </testcase>
+  </testsuite>
+  <testsuite name="HexagonHeatMap" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="6.489" tests="2">
+    <testcase classname="HexagonHeatMap loads screen" name="HexagonHeatMap loads screen" time="0.341">
+    </testcase>
+    <testcase classname="HexagonHeatMap loads tooltip on hexagon click" name="HexagonHeatMap loads tooltip on hexagon click" time="0.167">
+    </testcase>
+  </testsuite>
+  <testsuite name="NamespaceRowContent screen" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:23" time="3.473" tests="1">
+    <testcase classname="NamespaceRowContent screen Load pipeline screen" name="NamespaceRowContent screen Load pipeline screen" time="0.227">
+    </testcase>
+  </testsuite>
+  <testsuite name="PodDetail screen" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="7.514" tests="1">
+    <testcase classname="PodDetail screen loads screen" name="PodDetail screen loads screen" time="0.764">
+    </testcase>
+  </testsuite>
+  <testsuite name="Breadcrumbs" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:24" time="2.918" tests="1">
+    <testcase classname="Breadcrumbs loads pipeline screen" name="Breadcrumbs loads pipeline screen" time="0.232">
+    </testcase>
+  </testsuite>
+  <testsuite name="Namespaces screen" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:24" time="3.754" tests="1">
+    <testcase classname="Namespaces screen Load namesapces screen" name="Namespaces screen Load namesapces screen" time="0.468">
+    </testcase>
+  </testsuite>
+  <testsuite name="Spec" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="8.372" tests="1">
+    <testcase classname="Spec loads" name="Spec loads" time="0.774">
+    </testcase>
+  </testsuite>
+  <testsuite name="PodLogs" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:27" time="2.084" tests="1">
+    <testcase classname="PodLogs Load PodLogs screen" name="PodLogs Load PodLogs screen" time="0.423">
+    </testcase>
+  </testsuite>
+  <testsuite name="NamespaceRow" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:26" time="2.625" tests="2">
+    <testcase classname="NamespaceRow loads" name="NamespaceRow loads" time="0.22">
+    </testcase>
+    <testcase classname="NamespaceRow open onClick" name="NamespaceRow open onClick" time="0.235">
+    </testcase>
+  </testsuite>
+  <testsuite name="EdgeInfo" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:24" time="5.445" tests="1">
+    <testcase classname="EdgeInfo loads" name="EdgeInfo loads" time="0.592">
+    </testcase>
+  </testsuite>
+  <testsuite name="gradients" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:24" time="7.807" tests="3">
+    <testcase classname="gradients rgba2rgb" name="gradients rgba2rgb" time="0.004">
+    </testcase>
+    <testcase classname="gradients getColorCode" name="gradients getColorCode" time="0.001">
+    </testcase>
+    <testcase classname="gradients fill" name="gradients fill" time="0.007">
+    </testcase>
+  </testsuite>
+  <testsuite name="PodsHeatMap" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="12.742" tests="1">
+    <testcase classname="PodsHeatMap loads screen" name="PodsHeatMap loads screen" time="0.203">
+    </testcase>
+  </testsuite>
+  <testsuite name="PodsHeatMap" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="13.515" tests="1">
+    <testcase classname="PodsHeatMap loads screen" name="PodsHeatMap loads screen" time="0.199">
+    </testcase>
+  </testsuite>
+  <testsuite name="Pods" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="14.321" tests="4">
+    <testcase classname="Pods loads screen" name="Pods loads screen" time="0.348">
+    </testcase>
+    <testcase classname="Pods pods loading screen" name="Pods pods loading screen" time="0.015">
+    </testcase>
+    <testcase classname="Pods pods error screen" name="Pods pods error screen" time="0.004">
+    </testcase>
+    <testcase classname="Pods pods detail error screen" name="Pods pods detail error screen" time="0.004">
+    </testcase>
+  </testsuite>
+  <testsuite name="NodeInfo" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:23" time="11.217" tests="2">
+    <testcase classname="NodeInfo loads" name="NodeInfo loads" time="0.229">
+    </testcase>
+    <testcase classname="NodeInfo namespace empty" name="NodeInfo namespace empty" time="0.002">
+    </testcase>
+  </testsuite>
+  <testsuite name="Pipeline" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="15.194" tests="2">
+    <testcase classname="Pipeline Load Graph screen" name="Pipeline Load Graph screen" time="0.082">
+    </testcase>
+    <testcase classname="Pipeline Get Pipeline error" name="Pipeline Get Pipeline error" time="0.016">
+    </testcase>
+  </testsuite>
+  <testsuite name="Graph screen" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:19" time="15.274" tests="1">
+    <testcase classname="Graph screen Load Graph screen" name="Graph screen Load Graph screen" time="0.354">
+    </testcase>
+  </testsuite>
+  <testsuite name="Breadcrumbs" errors="0" failures="0" skipped="0" timestamp="2022-06-23T23:31:25" time="9.912" tests="1">
+    <testcase classname="Breadcrumbs loads pipeline screen" name="Breadcrumbs loads pipeline screen" time="0.172">
+    </testcase>
+  </testsuite>
+</testsuites>

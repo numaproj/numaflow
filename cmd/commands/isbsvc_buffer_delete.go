@@ -17,7 +17,7 @@ import (
 func NewISBSvcBufferDeleteCommand() *cobra.Command {
 	var (
 		isbSvcType string
-		buffers    []string
+		buffers    map[string]string
 	)
 
 	command := &cobra.Command{
@@ -49,7 +49,11 @@ func NewISBSvcBufferDeleteCommand() *cobra.Command {
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
-			if err = isbsClient.DeleteBuffers(ctx, buffers); err != nil {
+			bfs := []v1alpha1.Buffer{}
+			for k, v := range buffers {
+				bfs = append(bfs, v1alpha1.Buffer{Name: k, Type: v1alpha1.BufferType(v)})
+			}
+			if err = isbsClient.DeleteBuffers(ctx, bfs); err != nil {
 				logger.Errorw("Failed buffer deletion.", zap.Error(err))
 				return err
 			}
@@ -58,6 +62,6 @@ func NewISBSvcBufferDeleteCommand() *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "jetstream", "ISB Service type, e.g. jetstream")
-	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to delete") // --buffers=xxa,xxb --buffers=xxc
+	command.Flags().StringToStringVar(&buffers, "buffers", map[string]string{}, "Buffers to delete") // --buffers=a=so,c=si,e=ed
 	return command
 }

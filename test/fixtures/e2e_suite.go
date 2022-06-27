@@ -33,6 +33,10 @@ const (
 	LabelValue     = "true"
 	ISBSvcName     = "numaflow-e2e"
 	defaultTimeout = 60 * time.Second
+
+	LogSourceVertexStarted = "Start processing source messages"
+	LogSinkVertexStarted   = "Start processing sink messages"
+	LogUDFVertexStarted    = "Start processing udf messages"
 )
 
 var (
@@ -53,7 +57,9 @@ metadata:
   name: default
 spec:
   jetstream:
-    version: latest`
+    version: latest
+    persistence:
+      volumeSize: 50Mi`
 )
 
 type E2ESuite struct {

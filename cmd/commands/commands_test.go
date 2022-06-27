@@ -31,12 +31,12 @@ func Test_Commands(t *testing.T) {
 		cmd := NewISBSvcBufferCreateCommand()
 		assert.True(t, cmd.HasLocalFlags())
 		assert.Equal(t, "isbsvc-buffer-create", cmd.Use)
-		assert.Equal(t, "stringSlice", cmd.Flag("buffers").Value.Type())
+		assert.Equal(t, "stringToString", cmd.Flag("buffers").Value.Type())
 		assert.Equal(t, "string", cmd.Flag("isbsvc-type").Value.Type())
 		err := cmd.Execute()
 		assert.Error(t, err)
 		assert.Equal(t, "buffer list should not be empty", err.Error())
-		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1"})
+		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1=bb"})
 		err = cmd.Execute()
 		assert.Error(t, err)
 		assert.Equal(t, "required environment variable '"+dfv1.EnvPipelineName+"' not defined", err.Error())
@@ -50,12 +50,12 @@ func Test_Commands(t *testing.T) {
 		cmd := NewISBSvcBufferDeleteCommand()
 		assert.True(t, cmd.HasLocalFlags())
 		assert.Equal(t, "isbsvc-buffer-delete", cmd.Use)
-		assert.Equal(t, "stringSlice", cmd.Flag("buffers").Value.Type())
+		assert.Equal(t, "stringToString", cmd.Flag("buffers").Value.Type())
 		assert.Equal(t, "string", cmd.Flag("isbsvc-type").Value.Type())
 		err := cmd.Execute()
 		assert.Error(t, err)
 		assert.Equal(t, "buffer not supplied", err.Error())
-		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1"})
+		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1=bb"})
 		err = cmd.Execute()
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported isb service type")
@@ -65,12 +65,12 @@ func Test_Commands(t *testing.T) {
 		cmd := NewISBSvcBufferValidateCommand()
 		assert.True(t, cmd.HasLocalFlags())
 		assert.Equal(t, "isbsvc-buffer-validate", cmd.Use)
-		assert.Equal(t, "stringSlice", cmd.Flag("buffers").Value.Type())
+		assert.Equal(t, "stringToString", cmd.Flag("buffers").Value.Type())
 		assert.Equal(t, "string", cmd.Flag("isbsvc-type").Value.Type())
 		err := cmd.Execute()
 		assert.Error(t, err)
 		assert.Equal(t, "buffer not supplied", err.Error())
-		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1"})
+		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1=bb"})
 		err = cmd.Execute()
 		assert.Error(t, err)
 		assert.Equal(t, "unsupported isb service type", err.Error())
@@ -136,8 +136,8 @@ func generateEncodedVertexSpecs() string {
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas:     &replicas,
-			FromVertices: []string{"input"},
-			ToVertices:   []dfv1.ToVertex{{Name: "output"}},
+			FromEdges:    []dfv1.Edge{{From: "input", To: "name"}},
+			ToEdges:      []dfv1.Edge{{From: "name", To: "output"}},
 			PipelineName: "test-pl",
 			AbstractVertex: dfv1.AbstractVertex{
 				Name: "name",

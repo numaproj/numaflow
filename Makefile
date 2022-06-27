@@ -95,6 +95,7 @@ test-code:
 
 test-e2e:
 test-kafka-e2e:
+test-http-e2e:
 test-%: 
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
@@ -113,6 +114,15 @@ cleanup-e2e:
 	kubectl -n numaflow-system delete cm -lnumaflow-e2e=true --ignore-not-found=true
 	kubectl -n numaflow-system delete secret -lnumaflow-e2e=true --ignore-not-found=true
 	kubectl -n numaflow-system delete po -lnumaflow-e2e=true --ignore-not-found=true
+
+# To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
+Test%:
+	$(MAKE) image e2eapi-image
+	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
+	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
+	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
+	-go test -v -timeout 10m -count 1 --tags test -p 1 ./test/e2e  -run='.*/$*'
+	$(MAKE) cleanup-e2e
 
 .PHONY: image
 image: clean dist/$(BINARY_NAME)-linux-amd64
@@ -162,11 +172,10 @@ lint: $(GOPATH)/bin/golangci-lint
 	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
 
 .PHONY: start
-start: image
+start: githooks image
 	kubectl apply -f test/manifests/numaflow-ns.yaml
 	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
 	kubectl -n numaflow-system wait --for=condition=Ready --timeout 60s pod --all
-
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
@@ -175,6 +184,20 @@ e2eapi-image: clean dist/e2eapi
 ifeq ($(K3D),true)
 	k3d image import $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
+
+# pre-push checks
+
+.git/hooks/%: hack/git/hooks/%
+	@mkdir -p .git/hooks
+	cp hack/git/hooks/$* .git/hooks/$*
+
+.PHONY: githooks
+githooks: .git/hooks/pre-push .git/hooks/commit-msg
+
+.PHONY: pre-push
+pre-push: codegen lint
+	# marker file, based on it's modification time, we know how long ago this target was run
+	touch dist/pre-push
 
 .PHONY: checksums
 checksums:

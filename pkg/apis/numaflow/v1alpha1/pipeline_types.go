@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -76,23 +77,14 @@ func (p Pipeline) GetVertex(vertexName string) *AbstractVertex {
 	return nil
 }
 
-// FindVerticesWithBuffer is used to locate the vertices who write and read from the buffer.
-func (p Pipeline) FindVerticesWithBuffer(buffer string) (from, to *AbstractVertex) {
+// FindEdgeWithBuffer is used to locate the edge of the buffer.
+func (p Pipeline) FindEdgeWithBuffer(buffer string) *Edge {
 	for _, e := range p.Spec.Edges {
-		if buffer == GenerateBufferName(p.Namespace, p.Name, e.From, e.To) {
-			for _, v := range p.Spec.Vertices {
-				if v.Name == e.From {
-					from = v.DeepCopy()
-				} else if v.Name == e.To {
-					to = v.DeepCopy()
-				}
-				if from != nil && to != nil {
-					return from, to
-				}
-			}
+		if buffer == GenerateEdgeBufferName(p.Namespace, p.Name, e.From, e.To) {
+			return &e
 		}
 	}
-	return from, to
+	return nil
 }
 
 func (p Pipeline) GetToEdges(vertexName string) []Edge {
@@ -115,10 +107,17 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 	return edges
 }
 
-func (p Pipeline) GetAllBuffers() []string {
-	r := []string{}
+func (p Pipeline) GetAllBuffers() []Buffer {
+	r := []Buffer{}
 	for _, e := range p.Spec.Edges {
-		r = append(r, GenerateBufferName(p.Namespace, p.Name, e.From, e.To))
+		r = append(r, Buffer{GenerateEdgeBufferName(p.Namespace, p.Name, e.From, e.To), EdgeBuffer})
+	}
+	for _, v := range p.Spec.Vertices {
+		if v.Source != nil {
+			r = append(r, Buffer{GenerateSourceBufferName(p.Namespace, p.Name, v.Name), SourceBuffer})
+		} else if v.Sink != nil {
+			r = append(r, Buffer{GenerateSinkBufferName(p.Namespace, p.Name, v.Name), SinkBuffer})
+		}
 	}
 	return r
 }
@@ -211,9 +210,11 @@ func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.C
 		Resources:       standardResources,
 		Args:            []string{"isbsvc-buffer-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
+	bfs := []string{}
 	for _, b := range p.GetAllBuffers() {
-		c.Args = append(c.Args, "--buffers="+b)
+		bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
 	}
+	c.Args = append(c.Args, "--buffers="+strings.Join(bfs, ","))
 	return c
 }
 
@@ -309,18 +310,6 @@ type PipelineLimits struct {
 	// +kubebuilder:default=80
 	// +optional
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
-}
-
-type Edge struct {
-	From string `json:"from" protobuf:"bytes,1,opt,name=from"`
-	To   string `json:"to" protobuf:"bytes,2,opt,name=to"`
-	// Conditional forwarding, only allowed when "From" is a Sink or UDF
-	// +optional
-	Conditions *ForwardConditions `json:"conditions" protobuf:"bytes,3,opt,name=conditions"`
-}
-
-type ForwardConditions struct {
-	KeyIn []string `json:"keyIn" protobuf:"bytes,1,rep,name=keyIn"`
 }
 
 type PipelineStatus struct {

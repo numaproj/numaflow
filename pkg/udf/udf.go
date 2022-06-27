@@ -35,7 +35,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	defer cancel()
 	var reader isb.BufferReader
 	var err error
-	fromBufferName := u.Vertex.GetFromBuffers()[0]
+	fromBufferName := u.Vertex.GetFromBuffers()[0].Name
 	toBuffers := u.Vertex.GetToBuffers()
 	writers := make(map[string]isb.BufferWriter)
 	switch u.ISBSvcType {
@@ -44,42 +44,39 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		fromGroup := fromBufferName + "-group"
 		consumer := fmt.Sprintf("%s-%v", u.Vertex.Name, u.Replica)
 		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer)
-		writeOpts := []redisisb.Option{}
-		if x := u.Vertex.Spec.Limits; x != nil {
-			if x.BufferMaxLength != nil {
+		for _, e := range u.Vertex.Spec.ToEdges {
+			writeOpts := []redisisb.Option{}
+			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x.BufferUsageLimit != nil {
+			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-		}
-		for _, b := range toBuffers {
-			writer := redisisb.NewBufferWrite(ctx, redisClient, b, b+"-group", writeOpts...)
-			writers[string(b)] = writer
+			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
+			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
+			writers[buffer] = writer
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		fromStreamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, fromBufferName)
-		jetStreamClient := clients.NewInClusterJetStreamClient()
-		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, fromStreamName, fromStreamName)
+		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, clients.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName)
 		if err != nil {
 			return err
 		}
-		writeOpts := []jetstreamisb.WriteOption{}
-		if x := u.Vertex.Spec.Limits; x != nil {
-			if x.BufferMaxLength != nil {
+		for _, e := range u.Vertex.Spec.ToEdges {
+			writeOpts := []jetstreamisb.WriteOption{}
+			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x.BufferUsageLimit != nil {
+			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-		}
-		for _, b := range toBuffers {
-			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, b)
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, b, streamName, streamName, writeOpts...)
+			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
+			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, buffer)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, clients.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
 			}
-			writers[string(b)] = writer
+			writers[buffer] = writer
 		}
 	default:
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
@@ -92,11 +89,11 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			result = append(result, _key)
 			return result, nil
 		}
-		for _, to := range u.Vertex.Spec.ToVertices {
+		for _, to := range u.Vertex.Spec.ToEdges {
 			// If returned key is not "ALL" or "DROP", and there's no conditions defined in the edge,
 			// treat it as "ALL"?
 			if to.Conditions == nil || len(to.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(to.Conditions.KeyIn, _key) {
-				result = append(result, u.Vertex.GetToBufferName(to.Name))
+				result = append(result, dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, to.From, to.To))
 			}
 		}
 		return result, nil

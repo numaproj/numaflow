@@ -73,14 +73,14 @@ func (v Vertex) GetHeadlessServiceName() string {
 }
 
 func (v Vertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, VertexMetricsPort)}
+	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, VertexMetricsPort, VertexMetricsPortName)}
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort))
+		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
 	}
 	return svcs
 }
 
-func (v Vertex) getServiceObj(name string, headless bool, port int) *corev1.Service {
+func (v Vertex) getServiceObj(name string, headless bool, port int, servicePortName string) *corev1.Service {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       v.Namespace,
@@ -96,7 +96,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int) *corev1.Serv
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Port: int32(port), TargetPort: intstr.FromInt(port)},
+				{Port: int32(port), TargetPort: intstr.FromInt(port), Name: servicePortName},
 			},
 			Selector: map[string]string{
 				KeyPartOf:       Project,
@@ -234,25 +234,48 @@ func (v Vertex) getInitContainer(req GetVertexPodSpecReq) corev1.Container {
 		Args:            []string{"isbsvc-buffer-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
 }
+func (vs VertexSpec) WithOutReplicas() VertexSpec {
+	zero := int32(0)
+	x := *vs.DeepCopy()
+	x.Replicas = &zero
+	return x
+}
 
-func (v Vertex) GetFromBuffers() []string {
-	r := []string{}
-	for _, vt := range v.Spec.FromVertices {
-		r = append(r, GenerateBufferName(v.Namespace, v.Spec.PipelineName, vt, v.Spec.Name))
+type BufferType string
+
+const (
+	SourceBuffer BufferType = "so"
+	SinkBuffer   BufferType = "si"
+	EdgeBuffer   BufferType = "ed"
+)
+
+type Buffer struct {
+	Name string     `protobuf:"bytes,1,opt,name=name"`
+	Type BufferType `protobuf:"bytes,2,opt,name=type,casttype=BufferType"`
+}
+
+func (v Vertex) GetFromBuffers() []Buffer {
+	r := []Buffer{}
+	if v.IsASource() {
+		r = append(r, Buffer{GenerateSourceBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SourceBuffer})
+	} else {
+		for _, vt := range v.Spec.FromEdges {
+			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, vt.From, v.Spec.Name), EdgeBuffer})
+		}
 	}
 	return r
 }
 
-func (v Vertex) GetToBuffers() []string {
-	r := []string{}
-	for _, vt := range v.Spec.ToVertices {
-		r = append(r, GenerateBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, vt.Name))
+func (v Vertex) GetToBuffers() []Buffer {
+	r := []Buffer{}
+	if v.IsASink() {
+		r = append(r, Buffer{GenerateSinkBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SinkBuffer})
+	} else {
+		for _, vt := range v.Spec.ToEdges {
+			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, vt.To), EdgeBuffer})
+		}
 	}
 	return r
-}
-
-func (v Vertex) GetToBufferName(toVertexName string) string {
-	return GenerateBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, toVertexName)
 }
 
 type VertexSpec struct {
@@ -264,22 +287,9 @@ type VertexSpec struct {
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,4,opt,name=replicas"`
 	// +optional
-	FromVertices []string `json:"fromVertices,omitempty" protobuf:"bytes,5,rep,name=fromVertices"`
+	FromEdges []Edge `json:"fromEdges,omitempty" protobuf:"bytes,5,rep,name=fromEdges"`
 	// +optional
-	ToVertices []ToVertex `json:"toVertices,omitempty" protobuf:"bytes,6,rep,name=toVertices"`
-}
-
-type ToVertex struct {
-	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
-	// +optional
-	Conditions *ForwardConditions `json:"conditions" protobuf:"bytes,2,opt,name=conditions"`
-}
-
-func (vs VertexSpec) WithOutReplicas() VertexSpec {
-	zero := int32(0)
-	x := *vs.DeepCopy()
-	x.Replicas = &zero
-	return x
+	ToEdges []Edge `json:"toEdges,omitempty" protobuf:"bytes,6,rep,name=toEdges"`
 }
 
 func (vs VertexSpec) GetReplicas() int {
@@ -374,16 +384,6 @@ type VertexLimits struct {
 	// It overrides the setting in pipeline limits.
 	// +optional
 	UDFWorkers *uint32 `json:"udfWorkers,omitempty" protobuf:"varint,2,opt,name=udfWorkers"`
-	// BufferMaxLength is used to define the max length of a buffer.
-	// It overrides the settings from pipeline limits.
-	// Only meaningful for UDF and Source vertice as only they do buffer write.
-	// +optional
-	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,3,opt,name=bufferMaxLength"`
-	// BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-	// It overrides the settings from pipeline limits.
-	// Only meaningful for UDF and Source vertice as only they do buffer write.
-	// +optional
-	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
 }
 
 func (v VertexSpec) getType() containerSupplier {
@@ -429,7 +429,15 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-// GenerateBufferName generates buffer name
-func GenerateBufferName(namespace, pipelineName, fromVetex, toVertex string) string {
+// GenerateEdgeBufferName generates buffer name
+func GenerateEdgeBufferName(namespace, pipelineName, fromVetex, toVertex string) string {
 	return fmt.Sprintf("%s-%s-%s-%s", namespace, pipelineName, fromVetex, toVertex)
+}
+
+func GenerateSourceBufferName(namespace, pipelineName, vertex string) string {
+	return fmt.Sprintf("%s-%s-%s_SOURCE", namespace, pipelineName, vertex)
+}
+
+func GenerateSinkBufferName(namespace, pipelineName, vertex string) string {
+	return fmt.Sprintf("%s-%s-%s_SINK", namespace, pipelineName, vertex)
 }

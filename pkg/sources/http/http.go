@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -16,16 +18,16 @@ import (
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
-	"go.uber.org/zap"
 )
 
 type httpSource struct {
-	name        string
-	ready       bool
-	readTimeout time.Duration
-	bufferSize  int
-	messages    chan *isb.ReadMessage
-	logger      *zap.SugaredLogger
+	name         string
+	pipelineName string
+	ready        bool
+	readTimeout  time.Duration
+	bufferSize   int
+	messages     chan *isb.ReadMessage
+	logger       *zap.SugaredLogger
 
 	forwarder *forward.InterStepDataForward
 	shutdown  func(context.Context) error
@@ -58,10 +60,11 @@ func WithBufferSize(s int) Option {
 
 func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*httpSource, error) {
 	h := &httpSource{
-		name:        vertex.Spec.Name,
-		ready:       false,
-		bufferSize:  1000,            // default size
-		readTimeout: 1 * time.Second, // default timeout
+		name:         vertex.Spec.Name,
+		pipelineName: vertex.Spec.PipelineName,
+		ready:        false,
+		bufferSize:   1000,            // default size
+		readTimeout:  1 * time.Second, // default timeout
 	}
 	for _, o := range opts {
 		operr := o(h)
@@ -171,6 +174,10 @@ func (h *httpSource) GetName() string {
 	return h.name
 }
 
+func (h *httpSource) Pending(_ context.Context) (int64, error) {
+	return isb.PendingNotAvailable, nil
+}
+
 func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := []*isb.ReadMessage{}
 	timeout := time.After(h.readTimeout)
@@ -183,6 +190,7 @@ func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage,
 			return msgs, nil
 		}
 	}
+	httpSourceReadCount.With(map[string]string{"vertex": h.name, "pipeline": h.pipelineName}).Inc()
 	h.logger.Debugf("Read %d messages.", len(msgs))
 	return msgs, nil
 }

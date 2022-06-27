@@ -13,6 +13,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
 type jetStreamWriter struct {
@@ -25,6 +26,8 @@ type jetStreamWriter struct {
 	log     *zap.SugaredLogger
 
 	isFull *atomic.Bool
+	// writtenInfo stores a list of written seq/timestamp(seconds) information
+	writtenInfo *sharedqueue.OverflowQueue[timestampedSequence]
 }
 
 // NewJetStreamBufferWriter is used to provide a new instance of JetStreamBufferWriter
@@ -59,6 +62,10 @@ func NewJetStreamBufferWriter(ctx context.Context, client clients.JetStreamClien
 		log:     logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject),
 	}
 
+	if o.useWriteInfoAsRate {
+		result.writtenInfo = sharedqueue.New[timestampedSequence](3600)
+	}
+
 	go result.runStatusChecker(ctx)
 	return result, nil
 }
@@ -74,14 +81,19 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 	checkStatus := func() {
 		s, err := js.StreamInfo(jw.stream)
 		if err != nil {
-			isbIsFullErrors.With(labels).Inc()
-			jw.log.Errorw("Failed to get stream info", zap.Error(err))
+			isbFullErrors.With(labels).Inc()
+			jw.log.Errorw("Failed to get stream info in the writer", zap.Error(err))
 			return
+		}
+		if jw.opts.useWriteInfoAsRate {
+			ts := timestampedSequence{seq: int64(s.State.LastSeq), timestamp: time.Now().Unix()}
+			jw.writtenInfo.Append(ts)
+			jw.log.Debugw("Written information", zap.Int64("lastSeq", ts.seq), zap.Int64("timestamp", ts.timestamp))
 		}
 		c, err := js.ConsumerInfo(jw.stream, jw.stream)
 		if err != nil {
-			isbIsFullErrors.With(labels).Inc()
-			jw.log.Errorw("failed to get consumer info", zap.Error(err))
+			isbFullErrors.With(labels).Inc()
+			jw.log.Errorw("failed to get consumer info in the writer", zap.Error(err))
 			return
 		}
 		var solidUsage, softUsage float64
@@ -99,12 +111,12 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 		} else {
 			jw.isFull.Store(false)
 		}
-		isbBufferSoftUsage.With(labels).Set(softUsage)
-		isbBufferSolidUsage.With(labels).Set(solidUsage)
-		isbBufferPending.With(labels).Set(float64(c.NumPending))
-		isbBufferAckPending.With(labels).Set(float64(c.NumAckPending))
+		isbSoftUsage.With(labels).Set(softUsage)
+		isbSolidUsage.With(labels).Set(solidUsage)
+		isbPending.With(labels).Set(float64(c.NumPending))
+		isbAckPending.With(labels).Set(float64(c.NumAckPending))
 
-		jw.log.Infow("Consumption information", zap.Any("totalMsgs", s.State.Msgs), zap.Any("pending", c.NumPending),
+		jw.log.Debugw("Consumption information", zap.Any("totalMsgs", s.State.Msgs), zap.Any("pending", c.NumPending),
 			zap.Any("ackPending", c.NumAckPending), zap.Any("waiting", c.NumWaiting),
 			zap.Any("ackFloorStreamId", c.AckFloor.Stream), zap.Any("deliveredStreamId", c.Delivered.Stream),
 			zap.Float64("solidUsage", solidUsage), zap.Float64("softUsage", softUsage))
@@ -134,40 +146,97 @@ func (jw *jetStreamWriter) Close() error {
 	return nil
 }
 
+// Rate returns the writting rate (tps)
+func (jw *jetStreamWriter) Rate(_ context.Context) (float64, error) {
+	if jw.opts.useWriteInfoAsRate {
+		return isb.RateNotAvailable, nil
+	}
+	timestampedSeqs := jw.writtenInfo.Items()
+	if len(timestampedSeqs) < 2 {
+		return isb.RateNotAvailable, nil
+	}
+	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
+	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
+	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
+		if endSeqInfo.timestamp-timestampedSeqs[i].timestamp > jw.opts.rateLookbackSeconds {
+			startSeqInfo = timestampedSeqs[i]
+			break
+		}
+	}
+	// Check if it is too stale (use lookbackSeconds + 4 * interval to determine)
+	if endSeqInfo.timestamp-startSeqInfo.timestamp > jw.opts.rateLookbackSeconds+4*int64(jw.opts.refreshInterval.Seconds()) {
+		return isb.RateNotAvailable, nil
+	}
+	return float64(endSeqInfo.seq-startSeqInfo.seq) / float64(endSeqInfo.timestamp-startSeqInfo.timestamp), nil
+}
+
 func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	labels := map[string]string{"buffer": jw.GetName()}
 	var errs = make([]error, len(messages))
+	for i := 0; i < len(errs); i++ {
+		errs[i] = fmt.Errorf("unknown error")
+	}
 	var writeOffsets = make([]isb.Offset, len(messages))
 	if jw.isFull.Load() {
 		jw.log.Debugw("Is full")
-		isbIsFull.With(map[string]string{"buffer": jw.GetName()}).Inc()
-		for i := range errs {
+		isbFull.With(map[string]string{"buffer": jw.GetName()}).Inc()
+		for i := 0; i < len(errs); i++ {
 			errs[i] = isb.BufferWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"}
 		}
 		isbWriteErrors.With(labels).Inc()
 		return nil, errs
 	}
 
+	var futures = make([]nats.PubAckFuture, len(messages))
+	for index, message := range messages {
+		m := &nats.Msg{
+			Header:  convert2NatsMsgHeader(message.Header),
+			Subject: jw.subject,
+			Data:    message.Payload,
+		}
+		if future, err := jw.js.PublishMsgAsync(m, nats.MsgId(message.Header.ID)); err != nil { // nats.MsgId() is for exactly-once writing
+			errs[index] = err
+		} else {
+			futures[index] = future
+		}
+	}
+	futureCheckDone := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	wg := new(sync.WaitGroup)
-	for index, msg := range messages {
+	for index, f := range futures {
+		if f == nil {
+			continue
+		}
 		wg.Add(1)
-		go func(message isb.Message, idx int) {
+		go func(idx int, fu nats.PubAckFuture) {
 			defer wg.Done()
-			m := &nats.Msg{
-				Header:  convert2NatsMsgHeader(message.Header),
-				Subject: jw.subject,
-				Data:    message.Payload,
-			}
-			if pubAck, err := jw.js.PublishMsg(m, nats.MsgId(message.Header.ID)); err != nil { // nats.MsgId() is for exactly-once writing
+			select {
+			case pubAck := <-fu.Ok():
+				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
+				errs[idx] = nil
+				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
+			case err := <-fu.Err():
 				errs[idx] = err
 				isbWriteErrors.With(labels).Inc()
-			} else {
-				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
-				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
+			case <-ctx.Done():
 			}
-		}(msg, index)
+		}(index, f)
 	}
-	wg.Wait()
+
+	go func() {
+		wg.Wait()
+		close(futureCheckDone)
+	}()
+	timeout := time.After(5 * time.Second)
+	select {
+	case <-futureCheckDone:
+	case <-timeout:
+		cancel()
+		<-futureCheckDone
+		// TODO: Maybe need to reconnect.
+		isbWriteTimeout.With(labels).Inc()
+	}
 	return writeOffsets, errs
 }
 

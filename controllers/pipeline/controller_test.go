@@ -132,28 +132,56 @@ func Test_buildVertices(t *testing.T) {
 	assert.True(t, existing)
 }
 
-func Test_copyLimits(t *testing.T) {
+func Test_copyVertexLimits(t *testing.T) {
 	pl := testPipeline.DeepCopy()
 	v := pl.Spec.Vertices[0].DeepCopy()
-	copyLimits(pl, v)
+	copyVertexLimits(pl, v)
 	assert.Nil(t, v.Limits)
 	one := uint64(1)
 	int32One := uint32(1)
 	pl.Spec.Limits = &dfv1.PipelineLimits{ReadBatchSize: &one, UDFWorkers: &int32One}
-	copyLimits(pl, v)
+	copyVertexLimits(pl, v)
 	assert.NotNil(t, v.Limits)
 	assert.Equal(t, one, *v.Limits.ReadBatchSize)
 	assert.Nil(t, v.Limits.UDFWorkers)
 	two := uint64(2)
 	v.Limits.ReadBatchSize = &two
-	copyLimits(pl, v)
+	copyVertexLimits(pl, v)
 	assert.Equal(t, two, *v.Limits.ReadBatchSize)
 	assert.Nil(t, v.Limits.UDFWorkers)
 
 	v1 := pl.Spec.Vertices[1].DeepCopy()
-	copyLimits(pl, v1)
+	copyVertexLimits(pl, v1)
 	assert.Equal(t, int32One, *v1.Limits.UDFWorkers)
+}
 
+func Test_copyEdgeLimits(t *testing.T) {
+	pl := testPipeline.DeepCopy()
+	edges := []dfv1.Edge{{From: "in", To: "out"}}
+	result := copyEdgeLimits(pl, edges)
+	for _, e := range result {
+		assert.Nil(t, e.Limits)
+	}
+	onethouand := uint64(1000)
+	eighty := uint32(80)
+	pl.Spec.Limits = &dfv1.PipelineLimits{BufferMaxLength: &onethouand, BufferUsageLimit: &eighty}
+	result = copyEdgeLimits(pl, edges)
+	for _, e := range result {
+		assert.NotNil(t, e.Limits)
+		assert.NotNil(t, e.Limits.BufferMaxLength)
+		assert.NotNil(t, e.Limits.BufferUsageLimit)
+	}
+
+	twothouand := uint64(2000)
+	edges = []dfv1.Edge{{From: "in", To: "out", Limits: &dfv1.EdgeLimits{BufferMaxLength: &twothouand}}}
+	result = copyEdgeLimits(pl, edges)
+	for _, e := range result {
+		assert.NotNil(t, e.Limits)
+		assert.NotNil(t, e.Limits.BufferMaxLength)
+		assert.Equal(t, twothouand, *e.Limits.BufferMaxLength)
+		assert.NotNil(t, e.Limits.BufferUsageLimit)
+		assert.Equal(t, eighty, *e.Limits.BufferUsageLimit)
+	}
 }
 
 func Test_buildISBBatchJob(t *testing.T) {
@@ -196,7 +224,7 @@ func Test_cleanupBuffers(t *testing.T) {
 
 	t.Run("test create cleanup buffer job no isbsvc", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		assert.Equal(t, 2, len(testObj.GetAllBuffers()))
+		assert.Equal(t, 4, len(testObj.GetAllBuffers()))
 		err := r.cleanUpBuffers(ctx, testObj, zaptest.NewLogger(t).Sugar())
 		assert.NoError(t, err)
 		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testObj.Name)

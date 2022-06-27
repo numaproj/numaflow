@@ -2,6 +2,7 @@ package vertex
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -71,11 +72,27 @@ var (
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas:     &testReplicas,
-			FromVertices: []string{"input"},
-			ToVertices:   []dfv1.ToVertex{{Name: "output"}},
+			FromEdges:    []dfv1.Edge{{From: "input", To: testVertexSpecName}},
+			ToEdges:      []dfv1.Edge{{From: testVertexSpecName, To: "output"}},
 			PipelineName: testPipelineName,
 			AbstractVertex: dfv1.AbstractVertex{
 				Name: testVertexSpecName,
+			},
+		},
+	}
+
+	testSrcVertex = &dfv1.Vertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: testNamespace,
+			Name:      "test-pl-p1",
+		},
+		Spec: dfv1.VertexSpec{
+			Replicas:     &testReplicas,
+			ToEdges:      []dfv1.Edge{{From: "input", To: "p1"}},
+			PipelineName: testPipelineName,
+			AbstractVertex: dfv1.AbstractVertex{
+				Name:   "input",
+				Source: &dfv1.Source{},
 			},
 		},
 	}
@@ -152,8 +169,7 @@ func Test_BuildPodSpec(t *testing.T) {
 			image:  testFlowImage,
 			logger: zaptest.NewLogger(t).Sugar(),
 		}
-		testObj := testVertex.DeepCopy()
-		testObj.Spec.Source = &dfv1.Source{}
+		testObj := testSrcVertex.DeepCopy()
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
@@ -168,8 +184,10 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+		argStr := strings.Join(spec.InitContainers[0].Args, " ")
+		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetToBuffers() {
-			assert.Contains(t, spec.InitContainers[0].Args, "--buffers="+b)
+			assert.Contains(t, argStr, fmt.Sprintf("%s=%s", b.Name, b.Type))
 		}
 	})
 
@@ -186,8 +204,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Name = "test-pl-output"
 		testObj.Spec.Name = "output"
 		testObj.Spec.Sink = &dfv1.Sink{}
-		testObj.Spec.FromVertices = []string{"p1"}
-		testObj.Spec.ToVertices = []dfv1.ToVertex{}
+		testObj.Spec.FromEdges = []dfv1.Edge{{From: "p1", To: "output"}}
+		testObj.Spec.ToEdges = []dfv1.Edge{}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
@@ -202,8 +220,10 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+		argStr := strings.Join(spec.InitContainers[0].Args, " ")
+		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetFromBuffers() {
-			assert.Contains(t, spec.InitContainers[0].Args, "--buffers="+b)
+			assert.Contains(t, argStr, fmt.Sprintf("%s=%s", b.Name, b.Type))
 		}
 	})
 
@@ -228,8 +248,8 @@ func Test_BuildPodSpec(t *testing.T) {
 				},
 			},
 		}
-		testObj.Spec.FromVertices = []string{"p1"}
-		testObj.Spec.ToVertices = []dfv1.ToVertex{}
+		testObj.Spec.FromEdges = []dfv1.Edge{{From: "p1", To: "output"}}
+		testObj.Spec.ToEdges = []dfv1.Edge{}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
@@ -283,11 +303,13 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		assert.Contains(t, udfEnvNames, dfv1.EnvUDFContentType)
 		assert.Contains(t, udfEnvValues, "application/msgpack")
+		argStr := strings.Join(spec.InitContainers[0].Args, " ")
+		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetFromBuffers() {
-			assert.Contains(t, spec.InitContainers[0].Args, "--buffers="+b)
+			assert.Contains(t, argStr, fmt.Sprintf("%s=%s", b.Name, b.Type))
 		}
 		for _, b := range testObj.GetToBuffers() {
-			assert.Contains(t, spec.InitContainers[0].Args, "--buffers="+b)
+			assert.Contains(t, argStr, fmt.Sprintf("%s=%s", b.Name, b.Type))
 		}
 	})
 }

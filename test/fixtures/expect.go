@@ -75,15 +75,28 @@ func (t *Expect) VertexPodsRunning() *Expect {
 	return t
 }
 
-func (t *Expect) VertexPodLogContains(vertexName, containerName, regex string) *Expect {
+func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	contains, err := VertexPodLogContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, vertexName, containerName, regex, defaultTimeout)
+	contains, err := VertexPodLogContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, vertexName, regex, opts...)
 	if err != nil {
 		t.t.Fatalf("expected vertex pod logs: %v", err)
 	}
 	if !contains {
 		t.t.Fatalf("expected vertex pod log contains %q", regex)
+	}
+	return t
+}
+
+func (t *Expect) VertexPodLogNotContains(vertexName, regex string, opts ...PodLogCheckOption) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	yes, err := VertexPodLogNotContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, vertexName, regex, opts...)
+	if err != nil {
+		t.t.Fatalf("not expected vertex pod logs: %v", err)
+	}
+	if !yes {
+		t.t.Fatalf("not expected vertex pod log contains %q", regex)
 	}
 	return t
 }

@@ -6,11 +6,12 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
-	"go.uber.org/zap"
 )
 
 // ToLog prints the output to a log sinks.
@@ -76,7 +77,7 @@ func (s *ToLog) IsFull() bool {
 func (s *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	prefix := "(" + s.GetName() + ")"
 	for _, message := range messages {
-		logSinkReadCount.With(map[string]string{"vertex": s.name, "pipeline": s.pipelineName}).Inc()
+		logSinkWriteCount.With(map[string]string{"vertex": s.name, "pipeline": s.pipelineName}).Inc()
 		log.Println(prefix, string(message.Payload))
 	}
 	return nil, make([]error, len(messages))

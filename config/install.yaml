@@ -1252,7 +1252,7 @@ spec:
                     type: object
                   encryption:
                     description: Whether encrypt the data at rest, defaults to false
-                      Enabling encryption might impact the performace, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest
+                      Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest
                       for the detail Toggling the value will impact encypting/decrypting
                       existing messages.
                     type: boolean
@@ -2180,7 +2180,7 @@ spec:
                     type: array
                   tls:
                     description: Whether enable TLS, defaults to false Enabling TLS
-                      might impact the performace
+                      might impact the performance
                     type: boolean
                   tolerations:
                     description: If specified, the pod's tolerations.
@@ -4785,6 +4785,26 @@ spec:
                       type: object
                     from:
                       type: string
+                    limits:
+                      description: Limits define the limitations such as buffer read
+                        batch size for the edge, will override pipeline level settings
+                      properties:
+                        bufferMaxLength:
+                          description: BufferMaxLength is used to define the max length
+                            of a buffer. It overrides the settings from pipeline limits.
+                            Only meaningful for UDF and Source vertice as only they
+                            do buffer write.
+                          format: int64
+                          type: integer
+                        bufferUsageLimit:
+                          description: BufferUsageLimit is used to define the pencentage
+                            of the buffer usage limit, a valid value should be less
+                            than 100, for example, 85. It overrides the settings from
+                            pipeline limits. Only meaningful for UDF and Source vertice
+                            as only they do buffer write.
+                          format: int32
+                          type: integer
+                      type: object
                     to:
                       type: string
                   required:
@@ -6095,21 +6115,6 @@ spec:
                         batch size for all the vertices of a pipleine, will override
                         pipeline level settings
                       properties:
-                        bufferMaxLength:
-                          description: BufferMaxLength is used to define the max length
-                            of a buffer. It overrides the settings from pipeline limits.
-                            Only meaningful for UDF and Source vertice as only they
-                            do buffer write.
-                          format: int64
-                          type: integer
-                        bufferUsageLimit:
-                          description: BufferUsageLimit is used to define the pencentage
-                            of the buffer usage limit, a valid value should be less
-                            than 100, for example, 85. It overrides the settings from
-                            pipeline limits. Only meaningful for UDF and Source vertice
-                            as only they do buffer write.
-                          format: int32
-                          type: integer
                         readBatchSize:
                           description: Read batch size
                           format: int64
@@ -6364,12 +6369,6 @@ spec:
                               items:
                                 type: string
                               type: array
-                            concurrency:
-                              default: 100
-                              description: concurrency used to concurrently send message
-                                to kafka producer.
-                              format: int32
-                              type: integer
                             config:
                               type: string
                             tls:
@@ -9933,9 +9932,48 @@ spec:
                         type: object
                     type: object
                 type: object
-              fromVertices:
+              fromEdges:
                 items:
-                  type: string
+                  properties:
+                    conditions:
+                      description: Conditional forwarding, only allowed when "From"
+                        is a Sink or UDF
+                      properties:
+                        keyIn:
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - keyIn
+                      type: object
+                    from:
+                      type: string
+                    limits:
+                      description: Limits define the limitations such as buffer read
+                        batch size for the edge, will override pipeline level settings
+                      properties:
+                        bufferMaxLength:
+                          description: BufferMaxLength is used to define the max length
+                            of a buffer. It overrides the settings from pipeline limits.
+                            Only meaningful for UDF and Source vertice as only they
+                            do buffer write.
+                          format: int64
+                          type: integer
+                        bufferUsageLimit:
+                          description: BufferUsageLimit is used to define the pencentage
+                            of the buffer usage limit, a valid value should be less
+                            than 100, for example, 85. It overrides the settings from
+                            pipeline limits. Only meaningful for UDF and Source vertice
+                            as only they do buffer write.
+                          format: int32
+                          type: integer
+                      type: object
+                    to:
+                      type: string
+                  required:
+                  - from
+                  - to
+                  type: object
                 type: array
               imagePullSecrets:
                 description: 'ImagePullSecrets is an optional list of references to
@@ -9961,21 +9999,6 @@ spec:
                   size for all the vertices of a pipleine, will override pipeline
                   level settings
                 properties:
-                  bufferMaxLength:
-                    description: BufferMaxLength is used to define the max length
-                      of a buffer. It overrides the settings from pipeline limits.
-                      Only meaningful for UDF and Source vertice as only they do buffer
-                      write.
-                    format: int64
-                    type: integer
-                  bufferUsageLimit:
-                    description: BufferUsageLimit is used to define the pencentage
-                      of the buffer usage limit, a valid value should be less than
-                      100, for example, 85. It overrides the settings from pipeline
-                      limits. Only meaningful for UDF and Source vertice as only they
-                      do buffer write.
-                    format: int32
-                    type: integer
                   readBatchSize:
                     description: Read batch size
                     format: int64
@@ -10221,12 +10244,6 @@ spec:
                         items:
                           type: string
                         type: array
-                      concurrency:
-                        default: 100
-                        description: concurrency used to concurrently send message
-                          to kafka producer.
-                        format: int32
-                        type: integer
                       config:
                         type: string
                       tls:
@@ -10637,10 +10654,12 @@ spec:
                     - topic
                     type: object
                 type: object
-              toVertices:
+              toEdges:
                 items:
                   properties:
                     conditions:
+                      description: Conditional forwarding, only allowed when "From"
+                        is a Sink or UDF
                       properties:
                         keyIn:
                           items:
@@ -10649,10 +10668,33 @@ spec:
                       required:
                       - keyIn
                       type: object
-                    name:
+                    from:
+                      type: string
+                    limits:
+                      description: Limits define the limitations such as buffer read
+                        batch size for the edge, will override pipeline level settings
+                      properties:
+                        bufferMaxLength:
+                          description: BufferMaxLength is used to define the max length
+                            of a buffer. It overrides the settings from pipeline limits.
+                            Only meaningful for UDF and Source vertice as only they
+                            do buffer write.
+                          format: int64
+                          type: integer
+                        bufferUsageLimit:
+                          description: BufferUsageLimit is used to define the pencentage
+                            of the buffer usage limit, a valid value should be less
+                            than 100, for example, 85. It overrides the settings from
+                            pipeline limits. Only meaningful for UDF and Source vertice
+                            as only they do buffer write.
+                          format: int32
+                          type: integer
+                      type: object
+                    to:
                       type: string
                   required:
-                  - name
+                  - from
+                  - to
                   type: object
                 type: array
               tolerations:

@@ -20,8 +20,40 @@ const (
 )
 
 var (
-	testReplicas = int32(1)
-	testVertex   = &Vertex{
+	testReplicas  = int32(1)
+	testSrcVertex = &Vertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: testNamespace,
+			Name:      testVertexName,
+		},
+		Spec: VertexSpec{
+			Replicas:     &testReplicas,
+			PipelineName: testPipelineName,
+			AbstractVertex: AbstractVertex{
+				Name:   testVertexSpecName,
+				Source: &Source{},
+			},
+			ToEdges: []Edge{{From: testVertexSpecName, To: "output"}},
+		},
+	}
+
+	testSinkVertex = &Vertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: testNamespace,
+			Name:      testVertexName,
+		},
+		Spec: VertexSpec{
+			Replicas:     &testReplicas,
+			PipelineName: testPipelineName,
+			AbstractVertex: AbstractVertex{
+				Name: testVertexSpecName,
+				Sink: &Sink{},
+			},
+			FromEdges: []Edge{{From: "input", To: testVertexSpecName}},
+		},
+	}
+
+	testVertex = &Vertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testNamespace,
 			Name:      testVertexName,
@@ -32,25 +64,33 @@ var (
 			AbstractVertex: AbstractVertex{
 				Name: testVertexSpecName,
 			},
-			FromVertices: []string{"input"},
-			ToVertices:   []ToVertex{{Name: "output"}},
+			FromEdges: []Edge{{From: "input", To: testVertexSpecName}},
+			ToEdges:   []Edge{{From: testVertexSpecName, To: "output"}},
 		},
 	}
 )
 
 func TestGetFromBuffers(t *testing.T) {
 	f := testVertex.GetFromBuffers()
-	assert.Contains(t, f, fmt.Sprintf("%s-%s-%s-%s", testVertex.Namespace, testVertex.Spec.PipelineName, "input", testVertex.Spec.Name))
+	assert.Equal(t, 1, len(f))
+	assert.Equal(t, f[0].Name, fmt.Sprintf("%s-%s-%s-%s", testVertex.Namespace, testVertex.Spec.PipelineName, "input", testVertex.Spec.Name))
+}
+
+func TestGetFromBuffersSource(t *testing.T) {
+	f := testSrcVertex.GetFromBuffers()
+	assert.Equal(t, 1, len(f))
+	assert.Equal(t, f[0].Name, fmt.Sprintf("%s-%s-%s_SOURCE", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name))
 }
 
 func TestGetToBuffers(t *testing.T) {
 	f := testVertex.GetToBuffers()
-	assert.Contains(t, f, fmt.Sprintf("%s-%s-%s-%s", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name, "output"))
+	assert.Equal(t, 1, len(f))
+	assert.Contains(t, f[0].Name, fmt.Sprintf("%s-%s-%s-%s", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name, "output"))
 }
 
-func TestGetToBufferName(t *testing.T) {
-	n := testVertex.GetToBufferName("abc")
-	assert.Equal(t, fmt.Sprintf("%s-%s-%s-%s", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name, "abc"), n)
+func TestGetToBuffersSink(t *testing.T) {
+	f := testSinkVertex.GetToBuffers()
+	assert.Equal(t, f[0].Name, fmt.Sprintf("%s-%s-%s_SINK", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name))
 }
 
 func TestWithoutReplicas(t *testing.T) {
@@ -70,7 +110,7 @@ func TestGetVertexReplicas(t *testing.T) {
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {
-	s := testVertex.getServiceObj(testVertex.GetHeadlessServiceName(), true, VertexMetricsPort)
+	s := testVertex.getServiceObj(testVertex.GetHeadlessServiceName(), true, VertexMetricsPort, VertexMetricsPortName)
 	assert.Equal(t, s.Name, testVertex.GetHeadlessServiceName())
 	assert.Equal(t, s.Namespace, testVertex.Namespace)
 	assert.Equal(t, 1, len(s.Spec.Ports))
@@ -308,6 +348,6 @@ func Test_VertexGetInitContainer(t *testing.T) {
 	}
 }
 
-func TestGenerateBufferName(t *testing.T) {
-	assert.Equal(t, "a-b-c-d", GenerateBufferName("a", "b", "c", "d"))
+func TestGenerateEdgeBufferName(t *testing.T) {
+	assert.Equal(t, "a-b-c-d", GenerateEdgeBufferName("a", "b", "c", "d"))
 }

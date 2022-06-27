@@ -226,7 +226,7 @@ func (br *BufferRead) Read(_ context.Context, count int64) ([]*isb.ReadMessage, 
 			return messages, fmt.Errorf("XReadGroup failed, %w", err)
 		}
 
-		// NOTE: If all messages have been delivered and acknowleged, the XREADGROUP 0-0 call returns an empty
+		// NOTE: If all messages have been delivered and acknowledged, the XREADGROUP 0-0 call returns an empty
 		// list of messages in the stream. At this point we want to read everything from last delivered which would be >
 		if len(xstreams) == 1 && len(xstreams[0].Messages) == 0 {
 			br.log.Infow("We have delivered and acknowledged all PENDING msgs, setting checkBacklog to false")
@@ -308,6 +308,16 @@ func (br *BufferRead) convertXStreamToMessages(xstreams []redis.XStream, message
 	}
 
 	return messages, nil
+}
+
+func (br *BufferRead) Pending(_ context.Context) (int64, error) {
+	// TODO: not implemented
+	return isb.PendingNotAvailable, nil
+}
+
+func (br *BufferRead) Rate(_ context.Context) (float64, error) {
+	// TODO: not implemented
+	return isb.RateNotAvailable, nil
 }
 
 func getHeaderAndBody(field string, value interface{}) (msg isb.Message, err error) {

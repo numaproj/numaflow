@@ -1,0 +1,19 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: http-auth-source
+spec:
+  vertices:
+    - name: in
+      source:
+        http:
+          auth:
+            token:
+              name: http-source-fake-token
+              key: fake-token
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out

@@ -119,6 +119,12 @@ message Authorization {
   optional k8s.io.api.core.v1.SecretKeySelector token = 1;
 }
 
+message Buffer {
+  optional string name = 1;
+
+  optional string type = 2;
+}
+
 message BufferServiceConfig {
   optional RedisConfig redis = 1;
 
@@ -164,6 +170,24 @@ message Edge {
   // Conditional forwarding, only allowed when "From" is a Sink or UDF
   // +optional
   optional ForwardConditions conditions = 3;
+
+  // Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings
+  // +optional
+  optional EdgeLimits limits = 4;
+}
+
+message EdgeLimits {
+  // BufferMaxLength is used to define the max length of a buffer.
+  // It overrides the settings from pipeline limits.
+  // Only meaningful for UDF and Source vertice as only they do buffer write.
+  // +optional
+  optional uint64 bufferMaxLength = 1;
+
+  // BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+  // It overrides the settings from pipeline limits.
+  // Only meaningful for UDF and Source vertice as only they do buffer write.
+  // +optional
+  optional uint32 bufferUsageLimit = 2;
 }
 
 message ForwardConditions {
@@ -447,13 +471,13 @@ message JetStreamBufferService {
   optional string bufferConfig = 18;
 
   // Whether encrypt the data at rest, defaults to false
-  // Enabling encryption might impact the performace, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
+  // Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
   // Toggling the value will impact encypting/decrypting existing messages.
   // +optional
   optional bool encryption = 19;
 
   // Whether enable TLS, defaults to false
-  // Enabling TLS might impact the performace
+  // Enabling TLS might impact the performance
   // +optional
   optional bool tls = 20;
 }
@@ -483,11 +507,6 @@ message KafkaSink {
 
   // +optional
   optional string config = 4;
-
-  // concurrency used to concurrently send message to kafka producer.
-  // +kubebuilder:default=100
-  // +optional
-  optional uint32 concurrency = 5;
 }
 
 message KafkaSource {
@@ -838,13 +857,6 @@ message TLS {
   optional k8s.io.api.core.v1.SecretKeySelector keySecret = 4;
 }
 
-message ToVertex {
-  optional string name = 1;
-
-  // +optional
-  optional ForwardConditions conditions = 2;
-}
-
 message UDF {
   // +optional
   optional Container container = 1;
@@ -887,18 +899,6 @@ message VertexLimits {
   // It overrides the setting in pipeline limits.
   // +optional
   optional uint32 udfWorkers = 2;
-
-  // BufferMaxLength is used to define the max length of a buffer.
-  // It overrides the settings from pipeline limits.
-  // Only meaningful for UDF and Source vertice as only they do buffer write.
-  // +optional
-  optional uint64 bufferMaxLength = 3;
-
-  // BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-  // It overrides the settings from pipeline limits.
-  // Only meaningful for UDF and Source vertice as only they do buffer write.
-  // +optional
-  optional uint32 bufferUsageLimit = 4;
 }
 
 // +kubebuilder:object:root=true
@@ -922,10 +922,10 @@ message VertexSpec {
   optional int32 replicas = 4;
 
   // +optional
-  repeated string fromVertices = 5;
+  repeated Edge fromEdges = 5;
 
   // +optional
-  repeated ToVertex toVertices = 6;
+  repeated Edge toEdges = 6;
 }
 
 message VertexStatus {

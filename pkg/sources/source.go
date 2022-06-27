@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/sources/types"
-	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -34,59 +31,40 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	pipelineName := u.Vertex.Spec.PipelineName
 	var writers []isb.BufferWriter
-	toBuffers := u.Vertex.GetToBuffers()
-	var wmStores []wmstore.WMStorer
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		writeOpts := []redisisb.Option{}
-		if x := u.Vertex.Spec.Limits; x != nil {
-			if x.BufferMaxLength != nil {
+		for _, e := range u.Vertex.Spec.ToEdges {
+			writeOpts := []redisisb.Option{}
+			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x.BufferUsageLimit != nil {
+			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-		}
-		redisClient := clients.NewInClusterRedisClient()
-		for _, b := range toBuffers {
-			group := b + "-group"
-			writer := redisisb.NewBufferWrite(ctx, redisClient, b, group, writeOpts...)
+			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
+			group := buffer + "-group"
+			redisClient := clients.NewInClusterRedisClient()
+			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
 			writers = append(writers, writer)
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		writeOpts := []jetstreamisb.WriteOption{}
-		if x := u.Vertex.Spec.Limits; x != nil {
-			if x.BufferMaxLength != nil {
+		for _, e := range u.Vertex.Spec.ToEdges {
+			writeOpts := []jetstreamisb.WriteOption{}
+			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x.BufferUsageLimit != nil {
+			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-		}
-		for _, b := range toBuffers {
-			streamName := fmt.Sprintf("%s-%s", pipelineName, b)
+			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
+			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, buffer)
 			jetStreamClient := clients.NewInClusterJetStreamClient()
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, b, streamName, streamName, writeOpts...)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
 			}
 			writers = append(writers, writer)
-			// FIXME
-			// for each outbound edge, we will have a watermark publisher
-			var publishOpts []jetstream.JSKVStoreOption
-			heartbeatStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, isbsvc.JetStreamOTBucket(pipelineName, b), jetStreamClient, publishOpts...)
-			if err != nil {
-				return err
-			}
-			otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, isbsvc.JetStreamProcessorBucket(pipelineName, b), jetStreamClient, publishOpts...)
-			if err != nil {
-				return err
-			}
-			_ = otStore
-			wmStores = append(wmStores, heartbeatStore)
-			_ = wmStores
 		}
 	default:
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
@@ -96,8 +74,7 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
 	}
-
-	log.Infow("Start processing source messages", zap.String("isbs", string(u.ISBSvcType)), zap.Strings("to", toBuffers))
+	log.Infow("Start processing source messages", zap.String("isbs", string(u.ISBSvcType)), zap.Any("to", u.Vertex.GetToBuffers()))
 	stopped := sourcer.Start()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

@@ -27,7 +27,7 @@ These function can be accessed directly in expression.
 
 E.g:
 
-- `sprig.contains(json(payload).name, "James")`
+- `sprig.contains('James', json(payload).name)` # `James` is contained in the value of `name`.
 - `int(json(sprig.b64dec(payload)).id) < 100`
 
 ### Filter Spec
