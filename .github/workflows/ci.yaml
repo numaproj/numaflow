@@ -7,38 +7,8 @@ on:
   pull_request:
     branches: [ main ]
 jobs:
-  check:
-    name: Check changed files
-    outputs:
-      run_job: ${{ steps.check_files.outputs.run_job }}
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 2
-    - name: check files
-      id: check_files
-      run: |
-        echo "=============== list changed files ==============="
-        git diff --name-only HEAD^ HEAD
-        
-        echo "========== check paths of changed files =========="
-        git diff --name-only HEAD^ HEAD > files.txt
-        while IFS= read -r file
-        do
-          echo $file
-          if [[ $file == "ui/"* ]]; then
-            echo "::set-output name=run_job::true"
-            break
-          else
-            echo "::set-output name=run_job::false"
-          fi
-        done < files.txt
   ui:
     name: UI
-    needs: check
-    if: needs.check.outputs.run_job == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 6
     env:

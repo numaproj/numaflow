@@ -11,9 +11,10 @@ import {
 import { SyntheticEvent, useState } from "react";
 import TabPanel from "../tab-panel/TabPanel";
 import { a11yProps } from "../../../utils";
+import {Pipeline} from "../../../utils/models/pipeline";
 
 interface SpecProps {
-  pipeline: any;
+  pipeline: Pipeline;
 }
 
 export default function Spec(props: SpecProps) {
