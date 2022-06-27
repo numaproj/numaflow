@@ -29,7 +29,6 @@
     "react-flow-renderer": "^10.0.7",
     "react-json-view": "^1.21.3",
     "react-router-dom": "6",
-    "react-scripts": "5.0.1",
     "typescript": "^4.4.2",
     "web-vitals": "^2.1.0",
     "@visx/responsive": "^2.8.0",
@@ -60,6 +59,7 @@
     ]
   },
   "devDependencies": {
+    "react-scripts": "5.0.1",
     "@typescript-eslint/eslint-plugin": "^5.20.0",
     "@typescript-eslint/parser": "^5.20.0",
     "eslint-config-prettier": "7.2.0",
@@ -67,6 +67,9 @@
     "eslint": "^7.19.0",
     "prettier": "2.5.1",
     "jest-junit": "^12.0.0"
+  },
+  "resolutions": {
+    "nth-check": "^2.0.1"
   },
   "jest": {
     "transformIgnorePatterns": [
