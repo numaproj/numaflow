@@ -164,7 +164,6 @@ export default function Graph(props: GraphProps) {
           onEdgeClick={handleEdgeClick}
           onNodeClick={handleNodeClick}
           onPaneClick={handlePaneClick}
-          onNodeMouse
           fitView
           zoomOnScroll={false}
           panOnDrag={false}

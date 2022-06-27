@@ -15,7 +15,7 @@ export interface EdgeInfo {
 export interface GraphData {
   vertices: Node[];
   edges: Edge[];
-  pipeline?: any;
+  pipeline?: Pipeline;
 }
 
 export interface Conditions {
