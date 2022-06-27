@@ -28,16 +28,12 @@ type Publisher interface {
 
 // Publish publishes the watermark for a processor entity.
 type Publish struct {
-	ctx             context.Context
-	entity          processor.ProcessorEntitier
-	keyspace        string
-	heartbeatStore  store.WatermarkKVStorer
-	otStore         store.WatermarkKVStorer
-	heartbeatBucket nats.KeyValue
-	js              nats.JetStreamContext
-	log             *zap.SugaredLogger
-	otBucket        nats.KeyValue
-	headWatermark   processor.Watermark
+	ctx            context.Context
+	entity         processor.ProcessorEntitier
+	heartbeatStore store.WatermarkKVStorer
+	otStore        store.WatermarkKVStorer
+	log            *zap.SugaredLogger
+	headWatermark  processor.Watermark
 
 	// opts
 	// autoRefreshHeartbeat is not required for all processors. e.g. Kafka source doesn't need it
@@ -46,12 +42,7 @@ type Publish struct {
 }
 
 // NewPublish returns `Publish`.
-func NewPublish(ctx context.Context,
-	processorEntity processor.ProcessorEntitier,
-	hbStore store.WatermarkKVStorer,
-	otStore store.WatermarkKVStorer,
-	heartbeatBucket nats.KeyValue,
-	inputOpts ...PublishOption) *Publish {
+func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer, inputOpts ...PublishOption) *Publish {
 
 	log := logging.FromContext(ctx)
 
@@ -69,7 +60,6 @@ func NewPublish(ctx context.Context,
 		heartbeatStore:       hbStore,
 		otStore:              otStore,
 		log:                  log,
-		otBucket:             nil,
 		autoRefreshHeartbeat: opts.autoRefreshHeartbeat,
 		podHeartbeatRate:     opts.podHeartbeatRate,
 	}

@@ -86,6 +86,7 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 			}
 			_ = otStore
 			wmStores = append(wmStores, heartbeatStore)
+			_ = wmStores
 		}
 	default:
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)

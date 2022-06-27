@@ -3,12 +3,12 @@ package fetch
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"go.uber.org/zap"
@@ -26,21 +26,21 @@ type FromVertexer interface {
 // timelines.
 type FromVertex struct {
 	ctx context.Context
-	js  nats.JetStreamContext
 	// keyspace is only used if we have a processorHBWatcher
-	keyspace           string
-	processorHBWatcher nats.KeyWatcher
-	heartbeat          *ProcessorHeartbeat
-	processors         map[string]*FromProcessor
-	lock               sync.RWMutex
-	log                *zap.SugaredLogger
+	keyspace   string
+	hbWatcher  store.WatermarkKVWatcher
+	otWatcher  store.WatermarkKVWatcher
+	heartbeat  *ProcessorHeartbeat
+	processors map[string]*FromProcessor
+	lock       sync.RWMutex
+	log        *zap.SugaredLogger
 
 	// opts
 	opts *vertexOptions
 }
 
 // NewFromVertex returns `FromVertex`
-func NewFromVertex(ctx context.Context, keyspace string, js nats.JetStreamContext, heartbeatWatcher nats.KeyWatcher, inputOpts ...VertexOption) *FromVertex {
+func NewFromVertex(ctx context.Context, keyspace string, hbWatcher store.WatermarkKVWatcher, otWatcher store.WatermarkKVWatcher, inputOpts ...VertexOption) *FromVertex {
 	opts := &vertexOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
@@ -49,19 +49,20 @@ func NewFromVertex(ctx context.Context, keyspace string, js nats.JetStreamContex
 	for _, opt := range inputOpts {
 		opt(opts)
 	}
+
 	v := &FromVertex{
-		ctx:                ctx,
-		js:                 js,
-		keyspace:           keyspace,
-		processorHBWatcher: heartbeatWatcher,
-		heartbeat:          NewProcessorHeartbeat(),
-		processors:         make(map[string]*FromProcessor),
-		log:                logging.FromContext(ctx),
-		opts:               opts,
+		ctx:        ctx,
+		keyspace:   keyspace,
+		hbWatcher:  hbWatcher,
+		otWatcher:  otWatcher,
+		heartbeat:  NewProcessorHeartbeat(),
+		processors: make(map[string]*FromProcessor),
+		log:        logging.FromContext(ctx),
+		opts:       opts,
 	}
 	go v.startRefreshingProcessors()
 	// we do not care about heartbeat watcher if this is a source vertex
-	if v.processorHBWatcher != nil {
+	if v.hbWatcher != nil {
 		go v.startHeatBeatWatcher()
 	}
 	return v
@@ -144,30 +145,25 @@ func (v *FromVertex) refreshingProcessors() {
 // startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
 func (v *FromVertex) startHeatBeatWatcher() {
+	watchCh := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {
 		case <-v.ctx.Done():
 			return
-		case value := <-v.processorHBWatcher.Updates():
+		case value := <-watchCh:
 			if value == nil {
 				continue
 			}
 			switch value.Operation() {
-			case nats.KeyValuePut:
+			case store.KVPut:
 				var entity = processor.NewProcessorEntity(value.Key(), v.keyspace, processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
 				if p == nil { // if no, create a new processor
 					// A fromProcessor need to be added to v.processors
-					watcher := v.buildNewProcessorWatcher(entity.GetBucketName())
 					// The fromProcessor may have been deleted
-					// TODO: how to implement a reconciler where the timeline bucket is there but we can't create the watcher
-					if watcher == nil {
-						v.log.Errorw("unable to create the watcher for fromProcessor", zap.String("fromProcessor", value.Key()))
-						continue
-					}
 					// TODO: make capacity configurable
-					var fromProcessor = NewProcessor(v.ctx, entity, 10, watcher)
+					var fromProcessor = NewProcessor(v.ctx, entity, 10, v.otWatcher)
 					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active
@@ -180,7 +176,7 @@ func (v *FromVertex) startHeatBeatWatcher() {
 				}
 				// insert the last seen timestamp. we use this to figure whether this processor entity is inactive.
 				v.heartbeat.Put(value.Key(), int64(intValue))
-			case nats.KeyValueDelete:
+			case store.KVDelete:
 				p := v.GetProcessor(value.Key())
 				if p == nil {
 					v.log.Errorw("nil pointer for the processor, perhaps already deleted", zap.String("key", value.Key()))
@@ -191,15 +187,11 @@ func (v *FromVertex) startHeatBeatWatcher() {
 					p.setStatus(_deleted)
 					v.heartbeat.Delete(value.Key())
 				}
-			case nats.KeyValuePurge:
-				v.log.Errorw("received nats.KeyValuePurge", zap.String("bucket", value.Bucket()))
+			case store.KVPurge:
+				v.log.Errorw("received nats.KeyValuePurge", zap.String("bucket", v.hbWatcher.GetKVName()))
 			}
-			v.log.Debugf("[%s] podHeartbeatWatcher - Updates: [%s] %s > %s: %s", v.keyspace, value.Operation(), value.Bucket(), value.Key(), value.Value())
+			v.log.Debugf("[%s] processorHeartbeatWatcher - Updates: [%s] %s > %s: %s", v.keyspace, value.Operation(), v.hbWatcher.GetKVName(), value.Key(), value.Value())
 		}
 
 	}
-}
-
-func (v *FromVertex) buildNewProcessorWatcher(bucketName string) nats.KeyWatcher {
-	return RetryUntilSuccessfulWatcherCreation(v.js, bucketName, false, v.log)
 }

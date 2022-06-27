@@ -55,7 +55,7 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1", publisherHBKeyspace)
 
-	p := NewPublish(ctx, publishEntity, heartbeatKV, otKV, nil, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1))
+	p := NewPublish(ctx, publishEntity, heartbeatKV, otKV, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1))
 
 	var epoch int64 = 1651161600
 	var location, _ = time.LoadLocation("UTC")
@@ -110,7 +110,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	otKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 
-	p := NewPublish(ctx, publishEntity, heartbeatKV, otKV, nil, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1))
+	p := NewPublish(ctx, publishEntity, heartbeatKV, otKV, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1))
 
 	var epoch int64 = 1651161600
 	var location, _ = time.LoadLocation("UTC")

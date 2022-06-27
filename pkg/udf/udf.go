@@ -129,7 +129,9 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		wmProgressor = progress.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", u.Vertex.Name, u.Replica), progress.GetFetchKeyspace(u.Vertex), progress.GetPublishKeySpace(u.Vertex), js)
+		var fetchWM = progress.BuildFetchWM(nil, nil)
+		var publishWM = progress.BuildPublishWM(nil, nil)
+		wmProgressor = progress.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", u.Vertex.Name, u.Replica), progress.GetFetchKeyspace(u.Vertex), progress.GetPublishKeySpace(u.Vertex), publishWM, fetchWM)
 	}
 
 	forwarder, err := forward.NewInterStepDataForward(u.Vertex, reader, writers, conditionalForwarder, udfHandler, wmProgressor, opts...)

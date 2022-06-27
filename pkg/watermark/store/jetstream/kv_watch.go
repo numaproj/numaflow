@@ -16,7 +16,6 @@ type KVJetStreamWatch struct {
 	pipelineName string
 	conn         *nats.Conn
 	kv           nats.KeyValue
-	kvWatcher    nats.KeyWatcher
 	js           nats.JetStreamContext
 	log          *zap.SugaredLogger
 }
@@ -31,7 +30,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, bucketName 
 	}
 
 	// do we need to specify any opts? if yes, send it via options.
-	js, err := conn.JetStream()
+	js, err := conn.JetStream(nats.PublishAsyncMaxPending(256))
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
@@ -48,10 +47,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, bucketName 
 		return nil, err
 	}
 
-	j.kvWatcher, err = j.kv.WatchAll()
-	if err != nil {
-		return nil, err
-	}
+	// At this point, kvWatcher of type nats.KeyWatcher is nil
 
 	// options if any
 	for _, o := range opts {
@@ -84,17 +80,25 @@ func (k kvEntry) Operation() store.KVWatchOp {
 }
 
 func (k *KVJetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
+	kvWatcher, err := k.kv.WatchAll()
+	for err != nil {
+		kvWatcher, err = k.kv.WatchAll()
+	}
+
 	var updates = make(chan store.WatermarkKVEntry)
 	go func() {
-		for true {
+		for {
 			select {
 			case <-ctx.Done():
+				fmt.Println("STOPPED")
+				_ = kvWatcher.Stop()
 				return
-			case value := <-k.kvWatcher.Updates():
+			case value := <-kvWatcher.Updates():
 				// if channel is closed, nil could come in
 				if value == nil {
 					continue
 				}
+				k.log.Info(value.Key(), value.Value(), value.Operation())
 				switch value.Operation() {
 				case nats.KeyValuePut:
 					updates <- kvEntry{
@@ -117,9 +121,12 @@ func (k *KVJetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEn
 	return updates
 }
 
+func (k *KVJetStreamWatch) GetKVName() string {
+	return k.kv.Bucket()
+}
+
 func (k *KVJetStreamWatch) Stop(_ context.Context) {
 	if !k.conn.IsClosed() {
-		_ = k.kvWatcher.Stop()
 		k.conn.Close()
 	}
 }

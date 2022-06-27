@@ -2,12 +2,10 @@ package progress
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 
-	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"go.uber.org/zap"
-
-	"github.com/nats-io/nats.go"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -26,6 +24,32 @@ type GenericProgress struct {
 
 var _ Progressor = (*GenericProgress)(nil)
 
+type FetchWM struct {
+	hbWatch store.WatermarkKVWatcher
+	otWatch store.WatermarkKVWatcher
+}
+
+// BuildFetchWM builds the FetchWM
+func BuildFetchWM(hbWatch store.WatermarkKVWatcher, otWatch store.WatermarkKVWatcher) FetchWM {
+	return FetchWM{
+		hbWatch: hbWatch,
+		otWatch: otWatch,
+	}
+}
+
+type PublishWM struct {
+	hbStore store.WatermarkKVStorer
+	otStore store.WatermarkKVStorer
+}
+
+// BuildPublishWM builds the PublishWM
+func BuildPublishWM(hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer) PublishWM {
+	return PublishWM{
+		hbStore: hbStore,
+		otStore: otStore,
+	}
+}
+
 // GenericProgressOption sets options for GenericProgress.
 type GenericProgressOption func(options *genericProgressOptions)
 
@@ -37,9 +61,8 @@ func WithSeparateOTBuckets(separate bool) GenericProgressOption {
 }
 
 // NewGenericProgress will move the watermark for all the vertices once consumed from the source.
-func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace string, publishKeyspace string, js nats.JetStreamContext, inputOpts ...GenericProgressOption) *GenericProgress {
+func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace string, publishKeyspace string, publishWM PublishWM, fetchWM FetchWM, inputOpts ...GenericProgressOption) *GenericProgress {
 	var log = logging.FromContext(ctx)
-
 	opts := &genericProgressOptions{
 		separateOTBucket: false,
 	}
@@ -48,27 +71,13 @@ func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace
 		opt(opts)
 	}
 
+	_ = log
 	// to progress watermark for a UDF, it has to start the Fetcher and the Publisher
 
-	// publish
 	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace, processor.WithSeparateOTBuckets(opts.separateOTBucket))
-	publishHeartbeatBucket, err := GetHeartbeatBucket(js, publishKeyspace)
-	if err != nil {
-		log.Fatalw("unable to get the publish heartbeat bucket", zap.String("bucket", publishKeyspace+"_PROCESSORS"), zap.Error(err))
-	}
+	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.hbStore, publishWM.otStore)
 
-	udfPublish := publish.NewPublish(ctx, publishEntity, nil, nil, publishHeartbeatBucket)
-
-	// fetch
-	fetchHeartbeatBucket, err := js.KeyValue(fetchKeyspace + "_PROCESSORS")
-	if err != nil {
-		log.Fatalw("unable to get the fetch heartbeat bucket", zap.String("bucket", fetchKeyspace+"_PROCESSORS"), zap.Error(err))
-	}
-	heartbeatWatcher, err := fetchHeartbeatBucket.WatchAll()
-	if err != nil {
-		log.Fatalw("unable to create the fetch heartbeat bucket watcher", zap.String("bucket", fetchKeyspace+"_PROCESSORS"), zap.Error(err))
-	}
-	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, js, heartbeatWatcher, fetch.WithSeparateOTBuckets(opts.separateOTBucket))
+	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.hbWatch, fetchWM.otWatch, fetch.WithSeparateOTBuckets(opts.separateOTBucket))
 	udfFetch := fetch.NewEdgeBuffer(ctx, processorName, udfFromVertex)
 
 	u := &GenericProgress{
