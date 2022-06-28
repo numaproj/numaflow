@@ -1,0 +1,44 @@
+package generic
+
+import (
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+)
+
+// PublishWM stores the store information for publishing the watermark.
+type PublishWM struct {
+	hbStore store.WatermarkKVStorer
+	otStore store.WatermarkKVStorer
+}
+
+// BuildPublishWM builds the PublishWM
+func BuildPublishWM(hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer) PublishWM {
+	return PublishWM{
+		hbStore: hbStore,
+		otStore: otStore,
+	}
+}
+
+// GenericPublish is a generic publisher which will work for most cases.
+type GenericPublish struct {
+	toEdge *publish.Publish
+}
+
+var _ publish.Publisher = (*GenericPublish)(nil)
+
+// PublishWatermark publishes for the generic publisher.
+func (g *GenericPublish) PublishWatermark(watermark processor.Watermark, offset isb.Offset) {
+	g.toEdge.PublishWatermark(watermark, offset)
+}
+
+// GetLatestWatermark gets the latest watermakr for the generic publisher.
+func (g *GenericPublish) GetLatestWatermark() processor.Watermark {
+	return g.toEdge.GetLatestWatermark()
+}
+
+// StopPublisher stops the generic publisher.
+func (g *GenericPublish) StopPublisher() {
+	g.toEdge.StopPublisher()
+}

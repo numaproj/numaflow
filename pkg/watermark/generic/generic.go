@@ -1,8 +1,7 @@
-package progress
+package generic
 
 import (
 	"context"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -15,40 +14,14 @@ type genericProgressOptions struct {
 	separateOTBucket bool
 }
 
-// GenericProgress implements `Progressor` to progress the watermark for UDFs and Sinks.
+// GenericProgress implements `Progressor` to generic the watermark for UDFs and Sinks.
 type GenericProgress struct {
 	progressPublish *publish.Publish
-	progressFetch   *fetch.EdgeBuffer
+	progressFetch   *fetch.Edge
 	opts            *genericProgressOptions
 }
 
 var _ Progressor = (*GenericProgress)(nil)
-
-type FetchWM struct {
-	hbWatch store.WatermarkKVWatcher
-	otWatch store.WatermarkKVWatcher
-}
-
-// BuildFetchWM builds the FetchWM
-func BuildFetchWM(hbWatch store.WatermarkKVWatcher, otWatch store.WatermarkKVWatcher) FetchWM {
-	return FetchWM{
-		hbWatch: hbWatch,
-		otWatch: otWatch,
-	}
-}
-
-type PublishWM struct {
-	hbStore store.WatermarkKVStorer
-	otStore store.WatermarkKVStorer
-}
-
-// BuildPublishWM builds the PublishWM
-func BuildPublishWM(hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer) PublishWM {
-	return PublishWM{
-		hbStore: hbStore,
-		otStore: otStore,
-	}
-}
 
 // GenericProgressOption sets options for GenericProgress.
 type GenericProgressOption func(options *genericProgressOptions)
@@ -60,9 +33,8 @@ func WithSeparateOTBuckets(separate bool) GenericProgressOption {
 	}
 }
 
-// NewGenericProgress will move the watermark for all the vertices once consumed from the source.
+// NewGenericProgress will move the watermark for all the vertices once consumed fromEdge the source.
 func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace string, publishKeyspace string, publishWM PublishWM, fetchWM FetchWM, inputOpts ...GenericProgressOption) *GenericProgress {
-	var log = logging.FromContext(ctx)
 	opts := &genericProgressOptions{
 		separateOTBucket: false,
 	}
@@ -71,13 +43,14 @@ func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace
 		opt(opts)
 	}
 
+	var log = logging.FromContext(ctx)
 	_ = log
-	// to progress watermark for a UDF, it has to start the Fetcher and the Publisher
+	// to generic watermark for a UDF, it has to start the Fetcher and the Publisher
 
-	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace, processor.WithSeparateOTBuckets(opts.separateOTBucket))
+	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace)
 	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.hbStore, publishWM.otStore)
 
-	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.hbWatch, fetchWM.otWatch, fetch.WithSeparateOTBuckets(opts.separateOTBucket))
+	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.hbWatch, fetchWM.otWatch)
 	udfFetch := fetch.NewEdgeBuffer(ctx, processorName, udfFromVertex)
 
 	u := &GenericProgress{

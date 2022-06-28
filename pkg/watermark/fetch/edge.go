@@ -19,18 +19,18 @@ type Fetcher interface {
 	GetWatermark(offset isb.Offset) processor.Watermark
 }
 
-// EdgeBuffer is the edge relation between two vertices.
-type EdgeBuffer struct {
+// Edge is the edge relation between two vertices.
+type Edge struct {
 	ctx        context.Context
 	name       string
 	fromVertex *FromVertex
 	log        *zap.SugaredLogger
 }
 
-// NewEdgeBuffer returns a new EdgeBuffer.
+// NewEdgeBuffer returns a new Edge.
 // TODO: change the signature to take FromVertex as interface.
-func NewEdgeBuffer(ctx context.Context, name string, fromV *FromVertex) *EdgeBuffer {
-	return &EdgeBuffer{
+func NewEdgeBuffer(ctx context.Context, name string, fromV *FromVertex) *Edge {
+	return &Edge{
 		ctx:        ctx,
 		name:       name,
 		fromVertex: fromV,
@@ -39,7 +39,7 @@ func NewEdgeBuffer(ctx context.Context, name string, fromV *FromVertex) *EdgeBuf
 }
 
 // GetWatermark gets the smallest timestamp for the given offset
-func (e *EdgeBuffer) GetWatermark(inputOffset isb.Offset) processor.Watermark {
+func (e *Edge) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("unable to get offset from isb.Offset.Sequence()", zap.Error(err))

@@ -5,8 +5,8 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/sources/types"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/progress"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
@@ -15,15 +15,15 @@ import (
 func (mg *memgen) buildWMProgressor(metadata *types.SourceMetadata) error {
 	ctx := mg.lifecycleCtx
 
-	js, err := progress.GetJetStreamConnection(mg.lifecycleCtx)
+	js, err := generic.GetJetStreamConnection(mg.lifecycleCtx)
 	if err != nil {
 		return err
 	}
 
 	// publish source watermark and this is very much dependent on the source
-	sourcePublishKeySpace := fmt.Sprintf("source-%s", progress.GetPublishKeySpace(metadata.Vertex))
+	sourcePublishKeySpace := fmt.Sprintf("source-%s", generic.GetPublishKeySpace(metadata.Vertex))
 	// TODO: remove this once bucket creation has been moved to controller
-	err = progress.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", sourcePublishKeySpace), js)
+	err = generic.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", sourcePublishKeySpace), js)
 	if err != nil {
 		return err
 	}
@@ -36,15 +36,15 @@ func (mg *memgen) buildWMProgressor(metadata *types.SourceMetadata) error {
 	// use the source Publisher as the source
 
 	// TODO: remove this once bucket creation has been moved to controller
-	err = progress.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", progress.GetPublishKeySpace(metadata.Vertex)), js)
+	err = generic.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", generic.GetPublishKeySpace(metadata.Vertex)), js)
 	if err != nil {
 		return err
 	}
 
 	// FIXME
-	var fetchWM = progress.BuildFetchWM(nil, nil)
-	var publishWM = progress.BuildPublishWM(nil, nil)
-	var wmProgressor = progress.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", metadata.Vertex.Name, metadata.Replica), sourcePublishKeySpace, progress.GetPublishKeySpace(metadata.Vertex), publishWM, fetchWM)
+	var fetchWM = generic.BuildFetchWM(nil, nil)
+	var publishWM = generic.BuildPublishWM(nil, nil)
+	var wmProgressor = generic.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", metadata.Vertex.Name, metadata.Replica), sourcePublishKeySpace, generic.GetPublishKeySpace(metadata.Vertex), publishWM, fetchWM)
 	mg.progressor.wmProgressor = wmProgressor
 
 	mg.logger.Info("Initialized watermark progressor")

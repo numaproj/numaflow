@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/progress"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -115,20 +115,20 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	var wmProgressor progress.Progressor = nil
+	var wmProgressor generic.Progressor = nil
 	if val, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok && val == "true" {
-		js, err := progress.GetJetStreamConnection(ctx)
+		js, err := generic.GetJetStreamConnection(ctx)
 		if err != nil {
 			return err
 		}
 		// TODO: remove this once bucket creation has been moved to controller
-		err = progress.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", progress.GetPublishKeySpace(u.Vertex)), js)
+		err = generic.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", generic.GetPublishKeySpace(u.Vertex)), js)
 		if err != nil {
 			return err
 		}
-		var fetchWM = progress.BuildFetchWM(nil, nil)
-		var publishWM = progress.BuildPublishWM(nil, nil)
-		wmProgressor = progress.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", u.Vertex.Name, u.Replica), progress.GetFetchKeyspace(u.Vertex), progress.GetPublishKeySpace(u.Vertex), publishWM, fetchWM)
+		var fetchWM = generic.BuildFetchWM(nil, nil)
+		var publishWM = generic.BuildPublishWM(nil, nil)
+		wmProgressor = generic.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", u.Vertex.Name, u.Replica), generic.GetFetchKeyspace(u.Vertex), generic.GetPublishKeySpace(u.Vertex), publishWM, fetchWM)
 	}
 
 	forwarder, err := forward.NewInterStepDataForward(u.Vertex, reader, writers, conditionalForwarder, udfHandler, wmProgressor, opts...)
