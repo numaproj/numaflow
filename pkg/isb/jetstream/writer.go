@@ -148,7 +148,7 @@ func (jw *jetStreamWriter) Close() error {
 
 // Rate returns the writting rate (tps)
 func (jw *jetStreamWriter) Rate(_ context.Context) (float64, error) {
-	if jw.opts.useWriteInfoAsRate {
+	if !jw.opts.useWriteInfoAsRate {
 		return isb.RateNotAvailable, nil
 	}
 	timestampedSeqs := jw.writtenInfo.Items()
@@ -156,10 +156,10 @@ func (jw *jetStreamWriter) Rate(_ context.Context) (float64, error) {
 		return isb.RateNotAvailable, nil
 	}
 	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
-	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
+	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-2]
 	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
+		startSeqInfo = timestampedSeqs[i]
 		if endSeqInfo.timestamp-timestampedSeqs[i].timestamp > jw.opts.rateLookbackSeconds {
-			startSeqInfo = timestampedSeqs[i]
 			break
 		}
 	}
