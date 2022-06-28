@@ -363,12 +363,12 @@ func (pls *PipelineStatus) MarkPhasePaused() {
 
 // MarkPhasePausing set the Pipeline is pausing.
 func (pls *PipelineStatus) MarkPhasePausing() {
-	pls.SetPhase(PipelinePhasePausing, "Pausing in progess")
+	pls.SetPhase(PipelinePhasePausing, "Pausing in progress")
 }
 
 // MarkPhaseDeleting set the Pipeline is deleting.
 func (pls *PipelineStatus) MarkPhaseDeleting() {
-	pls.SetPhase(PipelinePhaseDeleting, "Deleting in generic")
+	pls.SetPhase(PipelinePhaseDeleting, "Deleting in progress")
 }
 
 // +kubebuilder:object:root=true
