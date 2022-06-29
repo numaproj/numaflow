@@ -1,3 +1,6 @@
+/*
+Package processor is the smallest processor entity for which the watermark will strictly monotonically increase.
+*/
 package processor
 
 import (
@@ -41,7 +44,7 @@ type ProcessorEntitier interface {
 	GetBucketName() string
 	BuildOTWatcherKey(Watermark) string
 	ParseOTWatcherKey(string) (int64, bool, error)
-	IsSharedBucket() bool
+	IsOTBucketShared() bool
 	GetPublishKeyspace() string
 }
 
@@ -53,12 +56,15 @@ type ProcessorEntity struct {
 	opts            *entityOptions
 }
 
+var _ ProcessorEntitier = (*ProcessorEntity)(nil)
+
 // _defaultKeySeparator is the key separate when we have shared OT buckets.
 // NOTE: we can only use `_` as the separator, Jetstream will not let any other special character.
 //       Perhaps we can encode the key using base64, but it will have a performance hit.
 const _defaultKeySeparator = "_"
 
-// NewProcessorEntity returns a new `ProcessorEntity`
+// NewProcessorEntity returns a new `ProcessorEntity`.
+// TODO: remove publishKeyspace
 func NewProcessorEntity(name string, publishKeyspace string, inputOpts ...EntityOption) *ProcessorEntity {
 	opts := &entityOptions{
 		separateOTBucket: false,
@@ -93,8 +99,8 @@ func (p *ProcessorEntity) GetBucketName() string {
 	}
 }
 
-// IsSharedBucket returns true if the bucket is shared.
-func (p *ProcessorEntity) IsSharedBucket() bool {
+// IsOTBucketShared returns true if the OT bucket is shared.
+func (p *ProcessorEntity) IsOTBucketShared() bool {
 	return p.opts.separateOTBucket
 }
 
