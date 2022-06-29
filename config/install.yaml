@@ -12932,4 +12932,4 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737
-      serviceAccountName: numaflow-server-sa
+      serviceAccountName: numaflow-sa

@@ -7,5 +7,5 @@ resources:
   - numaflow-aggregate-to-view.yaml
   - numaflow-cluster-role.yaml
   - numaflow-binding.yaml
-  - numaflow-server-binding.yaml
-  - numaflow-server-cluster-role.yaml
+#  - numaflow-server-binding.yaml
+#  - numaflow-server-cluster-role.yaml
