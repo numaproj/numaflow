@@ -12635,6 +12635,64 @@ rules:
   - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: numaflow-server-role
+rules:
+- apiGroups:
+  - numaflow.numaproj.io
+  resources:
+  - interstepbufferservices
+  - interstepbufferservices/finalizers
+  - interstepbufferservices/status
+  - pipelines
+  - pipelines/finalizers
+  - pipelines/status
+  - vertices
+  - vertices/finalizers
+  - vertices/status
+  - vertices/scale
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - pods/exec
+  - pods/log
+  - configmaps
+  - secrets
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metrics.k8s.io
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: numaflow-binding
@@ -12645,6 +12703,19 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: numaflow-sa
+  namespace: numaflow-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: numaflow-server-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: numaflow-server-role
+subjects:
+- kind: ServiceAccount
+  name: numaflow-server-sa
   namespace: numaflow-system
 ---
 apiVersion: v1
@@ -12820,44 +12891,45 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: numaflow-server
+  namespace: numaflow-system
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/part-of: numaflow
       app.kubernetes.io/component: numaflow-ux
+      app.kubernetes.io/part-of: numaflow
   template:
     metadata:
       labels:
-        app.kubernetes.io/part-of: numaflow
         app.kubernetes.io/component: numaflow-ux
+        app.kubernetes.io/part-of: numaflow
     spec:
-      serviceAccountName: numaflow-server-sa
+      containers:
+      - args:
+        - server
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        name: numaflow-server
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1024Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737
-      containers:
-        - name: main
-          image: quay.io/numaproj/numaflow:latest
-          args: [ "server" ]
-          imagePullPolicy: Always
-          env:
-            - name: NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-          resources:
-            limits:
-              cpu: 500m
-              memory: 1024Mi
-            requests:
-              cpu: 100m
-              memory: 200Mi
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 8443
-              scheme: HTTPS
-            initialDelaySeconds: 3
-            periodSeconds: 3
-
+      serviceAccountName: numaflow-server-sa
