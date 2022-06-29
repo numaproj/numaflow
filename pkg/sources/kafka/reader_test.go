@@ -31,7 +31,7 @@ func TestNewKafkasource(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, ks)
 
-	assert.Equal(t, "default", ks.groupname)
+	assert.Equal(t, "default", ks.groupName)
 
 	// config is all set and initialized correctly
 	assert.NotNil(t, ks.config)
@@ -56,7 +56,7 @@ func TestGroupNameOverride(t *testing.T) {
 	}}
 	ks, _ := NewKafkaSource(vertex, dest, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
-	assert.Equal(t, "default", ks.groupname)
+	assert.Equal(t, "default", ks.groupName)
 
 }
 
