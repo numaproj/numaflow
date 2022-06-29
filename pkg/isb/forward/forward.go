@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/progress"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -31,7 +31,7 @@ type InterStepDataForward struct {
 	toBuffers    map[string]isb.BufferWriter
 	FSD          ToWhichStepDecider
 	UDF          udfapplier.Applier
-	wmProgressor progress.Progressor
+	wmProgressor generic.Progressor
 	opts         options
 	vertexName   string
 	pipelineName string
@@ -43,7 +43,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
 	toSteps map[string]isb.BufferWriter,
 	fsd ToWhichStepDecider, applyUDF udfapplier.Applier,
-	wmProgressor progress.Progressor,
+	wmProgressor generic.Progressor,
 	opts ...Option) (*InterStepDataForward, error) {
 
 	options := &options{
