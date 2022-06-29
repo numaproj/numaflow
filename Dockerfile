@@ -31,7 +31,8 @@ ARG ARCH
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow
-COPY --from=numaflow-ui /app/ui/build /ui/build
+# Disable it as it is too slow
+#COPY --from=numaflow-ui /app/ui/build /ui/build
 ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################
