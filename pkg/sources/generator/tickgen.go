@@ -16,8 +16,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/progress"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 )
@@ -86,7 +86,7 @@ type memgen struct {
 
 type watermark struct {
 	sourcePublish *publish.Publish
-	wmProgressor  progress.Progressor
+	wmProgressor  generic.Progressor
 }
 
 type Option func(*memgen) error
@@ -157,7 +157,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance, rpu int, msgSize int32, time
 		}
 	}
 
-	var wmProgressor progress.Progressor = nil
+	var wmProgressor generic.Progressor = nil
 	var err error
 	// TODO: pass it as option
 	if val, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok && val == "true" {

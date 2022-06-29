@@ -1,4 +1,4 @@
-package progress
+package generic
 
 import (
 	"context"
@@ -31,10 +31,10 @@ func GetHeartbeatBucket(js nats.JetStreamContext, publishKeyspace string) (nats.
 	return js.KeyValue(publishKeyspace + "_PROCESSORS")
 }
 
-// GetFetchKeyspace gets the fetch keyspace name from the vertex.
+// GetFetchKeyspace gets the fetch keyspace name fromEdge the vertex.
 func GetFetchKeyspace(v *dfv1.Vertex) string {
 	if len(v.Spec.FromEdges) > 0 {
-		// from vertices is 0 because we do not support diamond DAG
+		// fromEdge vertices is 0 because we do not support diamond DAG
 		return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.FromEdges[0].From)
 	} else {
 		// sources will not have FromVertices
@@ -42,7 +42,7 @@ func GetFetchKeyspace(v *dfv1.Vertex) string {
 	}
 }
 
-// GetPublishKeySpace gets the publish keyspace name from the vertex
+// GetPublishKeySpace gets the publish keyspace name fromEdge the vertex
 func GetPublishKeySpace(v *dfv1.Vertex) string {
 	return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.Name)
 }
