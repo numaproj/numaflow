@@ -15,7 +15,8 @@ import (
 
 func Test_StartMetricsServer(t *testing.T) {
 	t.SkipNow() // flaky
-	s, err := StartMetricsServer(context.TODO())
+	ms := NewMetricsServer(&dfv1.Vertex{})
+	s, err := ms.Start(context.TODO())
 	assert.NoError(t, err)
 	assert.NotNil(t, s)
 	e := httpexpect.WithConfig(httpexpect.Config{

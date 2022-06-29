@@ -6170,8 +6170,14 @@ spec:
                       type: string
                     scale:
                       properties:
+                        lookbackSeconds:
+                          default: 180
+                          description: Lookback seconds to calculate the average pending
+                            messages and processing rate
+                          format: int32
+                          type: integer
                         max:
-                          default: 1
+                          default: 100
                           description: Maximum replicas
                           format: int32
                           type: integer
@@ -10057,8 +10063,14 @@ spec:
                 type: integer
               scale:
                 properties:
+                  lookbackSeconds:
+                    default: 180
+                    description: Lookback seconds to calculate the average pending
+                      messages and processing rate
+                    format: int32
+                    type: integer
                   max:
-                    default: 1
+                    default: 100
                     description: Maximum replicas
                     format: int32
                     type: integer

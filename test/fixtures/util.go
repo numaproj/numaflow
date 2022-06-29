@@ -200,7 +200,7 @@ func WaitForPipelineRunning(ctx context.Context, pipelineClient flowpkg.Pipeline
 	}
 }
 
-func WaitForVertexPodRunning(kubeClient kubernetes.Interface, namespace, pipelineName, vertexName string, timeout time.Duration) error {
+func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowpkg.VertexInterface, namespace, pipelineName, vertexName string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
@@ -210,11 +210,16 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, namespace, pipelin
 			return fmt.Errorf("timeout after %v waiting for vertex pod running", timeout)
 		default:
 		}
+		vertexList, err := vertexClient.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			return fmt.Errorf("error getting vertex list: %w", err)
+		}
+		ok := len(vertexList.Items) == 1
 		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 		if err != nil {
 			return fmt.Errorf("error getting vertex pod name: %w", err)
 		}
-		ok := len(podList.Items) > 0
+		ok = ok && len(podList.Items) > 0 && len(podList.Items) == int(*vertexList.Items[0].Spec.Replicas) // pod number should equal to desired replicas
 		for _, p := range podList.Items {
 			ok = ok && p.Status.Phase == corev1.PodRunning
 		}

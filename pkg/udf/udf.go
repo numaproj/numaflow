@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/progress"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -23,10 +23,8 @@ import (
 )
 
 type UDFProcessor struct {
-	ISBSvcType dfv1.ISBSvcType
-	Vertex     *dfv1.Vertex
-	Hostname   string
-	Replica    int
+	ISBSvcType     dfv1.ISBSvcType
+	VertexInstance *dfv1.VertexInstance
 }
 
 func (u *UDFProcessor) Start(ctx context.Context) error {
@@ -35,16 +33,16 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	defer cancel()
 	var reader isb.BufferReader
 	var err error
-	fromBufferName := u.Vertex.GetFromBuffers()[0].Name
-	toBuffers := u.Vertex.GetToBuffers()
+	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
+	toBuffers := u.VertexInstance.Vertex.GetToBuffers()
 	writers := make(map[string]isb.BufferWriter)
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		redisClient := clients.NewInClusterRedisClient()
 		fromGroup := fromBufferName + "-group"
-		consumer := fmt.Sprintf("%s-%v", u.Vertex.Name, u.Replica)
+		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer)
-		for _, e := range u.Vertex.Spec.ToEdges {
+		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []redisisb.Option{}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
@@ -52,17 +50,23 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
+			buffer := dfv1.GenerateEdgeBufferName(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
 			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
 			writers[buffer] = writer
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		fromStreamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, fromBufferName)
-		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, clients.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName)
+		fromStreamName := fmt.Sprintf("%s-%s", u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
+		readOptions := []jetstreamisb.ReadOption{
+			jetstreamisb.WithUsingAckInfoAsRate(true),
+		}
+		if x := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; x != nil {
+			readOptions = append(readOptions, jetstreamisb.WithAckRateLookbackSeconds(int64(*x)))
+		}
+		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, clients.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName, readOptions...)
 		if err != nil {
 			return err
 		}
-		for _, e := range u.Vertex.Spec.ToEdges {
+		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
@@ -70,8 +74,8 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
-			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, buffer)
+			buffer := dfv1.GenerateEdgeBufferName(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
+			streamName := fmt.Sprintf("%s-%s", u.VertexInstance.Vertex.Spec.PipelineName, buffer)
 			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, clients.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
@@ -89,11 +93,11 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			result = append(result, _key)
 			return result, nil
 		}
-		for _, to := range u.Vertex.Spec.ToEdges {
+		for _, to := range u.VertexInstance.Vertex.Spec.ToEdges {
 			// If returned key is not "ALL" or "DROP", and there's no conditions defined in the edge,
 			// treat it as "ALL"?
 			if to.Conditions == nil || len(to.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(to.Conditions.KeyIn, _key) {
-				result = append(result, dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, to.From, to.To))
+				result = append(result, dfv1.GenerateEdgeBufferName(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, to.From, to.To))
 			}
 		}
 		return result, nil
@@ -106,7 +110,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	}
 	log.Infow("Start processing udf messages", zap.String("isbs", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
 	opts := []forward.Option{forward.WithLogger(log)}
-	if x := u.Vertex.Spec.Limits; x != nil {
+	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
@@ -115,21 +119,23 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	var wmProgressor progress.Progressor = nil
+	var wmProgressor generic.Progressor = nil
 	if val, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok && val == "true" {
-		js, err := progress.GetJetStreamConnection(ctx)
+		js, err := generic.GetJetStreamConnection(ctx)
 		if err != nil {
 			return err
 		}
 		// TODO: remove this once bucket creation has been moved to controller
-		err = progress.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", progress.GetPublishKeySpace(u.Vertex)), js)
+		err = generic.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", generic.GetPublishKeySpace(u.VertexInstance.Vertex)), js)
 		if err != nil {
 			return err
 		}
-		wmProgressor = progress.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", u.Vertex.Name, u.Replica), progress.GetFetchKeyspace(u.Vertex), progress.GetPublishKeySpace(u.Vertex), js)
+		var fetchWM = generic.BuildFetchWM(nil, nil)
+		var publishWM = generic.BuildPublishWM(nil, nil)
+		wmProgressor = generic.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica), generic.GetFetchKeyspace(u.VertexInstance.Vertex), generic.GetPublishKeySpace(u.VertexInstance.Vertex), publishWM, fetchWM)
 	}
 
-	forwarder, err := forward.NewInterStepDataForward(u.Vertex, reader, writers, conditionalForwarder, udfHandler, wmProgressor, opts...)
+	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, wmProgressor, opts...)
 	if err != nil {
 		return err
 	}
@@ -146,7 +152,18 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	if shutdown, err := metrics.StartMetricsServer(ctx); err != nil {
+	metricsOpts := []metrics.Option{}
+	if x, ok := reader.(isb.LagReader); ok {
+		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
+		if s := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; s != nil {
+			metricsOpts = append(metricsOpts, metrics.WithPendingLookbackSeconds(int64(*s)))
+		}
+	}
+	if x, ok := reader.(isb.Ratable); ok {
+		metricsOpts = append(metricsOpts, metrics.WithRater(x))
+	}
+	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
+	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
 	} else {
 		defer func() { _ = shutdown(context.Background()) }()

@@ -159,8 +159,8 @@ func (jr *jetStreamReader) Rate(_ context.Context) (float64, error) {
 	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
 	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-2]
 	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
+		startSeqInfo = timestampedSeqs[i]
 		if endSeqInfo.timestamp-timestampedSeqs[i].timestamp > jr.opts.rateLookbackSeconds {
-			startSeqInfo = timestampedSeqs[i]
 			break
 		}
 	}
@@ -269,9 +269,9 @@ func (o *offset) workInProgess(ctx context.Context, msg *nats.Msg, tickDuration 
 	for {
 		select {
 		case <-ticker.C:
-			log.Debugw("Mark message processing in progress", zap.Any("seq", o.seq))
+			log.Debugw("Mark message processing in generic", zap.Any("seq", o.seq))
 			if err := msg.InProgress(); err != nil && !errors.Is(err, nats.ErrMsgAlreadyAckd) && !errors.Is(err, nats.ErrMsgNotFound) {
-				log.Errorw("Failed to set JetStream msg in progress", zap.Error(err))
+				log.Errorw("Failed to set JetStream msg in generic", zap.Error(err))
 			}
 		case <-ctx.Done():
 			return
