@@ -52,30 +52,29 @@ func NewProcessorCommand() *cobra.Command {
 				return fmt.Errorf("invalid replica %q", replicaStr)
 			}
 			log = log.With("vertex", vertex.Name)
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:   vertex,
+				Hostname: hostname,
+				Replica:  int32(replica),
+			}
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), log)
 			switch processorType {
 			case "source":
 				p := &sources.SourceProcessor{
-					ISBSvcType: dfv1.ISBSvcType(isbSvcType),
-					Vertex:     vertex,
-					Hostname:   hostname,
-					Replica:    replica,
+					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
+					VertexInstance: vertexInstance,
 				}
 				return p.Start(ctx)
 			case "sink":
 				p := &sinks.SinkProcessor{
-					ISBSvcType: dfv1.ISBSvcType(isbSvcType),
-					Vertex:     vertex,
-					Hostname:   hostname,
-					Replica:    replica,
+					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
+					VertexInstance: vertexInstance,
 				}
 				return p.Start(ctx)
 			case "udf":
 				p := &udf.UDFProcessor{
-					ISBSvcType: dfv1.ISBSvcType(isbSvcType),
-					Vertex:     vertex,
-					Hostname:   hostname,
-					Replica:    replica,
+					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
+					VertexInstance: vertexInstance,
 				}
 				return p.Start(ctx)
 			default:

@@ -2983,6 +2983,18 @@ Maximum replicas
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>lookbackSeconds</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Lookback seconds to calculate the average pending messages and
+processing rate
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Sink">
@@ -3273,6 +3285,10 @@ Description
 Vertex
 </h3>
 <p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexInstance">VertexInstance</a>)
+</p>
+<p>
 </p>
 <table>
 <thead>
@@ -3370,6 +3386,52 @@ Refer to the Kubernetes API documentation for the fields of the
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.VertexInstance">
+VertexInstance
+</h3>
+<p>
+<p>
+VertexInstance is a wrapper of a vertex instance, which contains the
+vertex spec and the instance information such as hostname and replica
+index.
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>vertex</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Vertex"> Vertex </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>hostname</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>replica</code></br> <em> int32 </em>
+</td>
+<td>
 </td>
 </tr>
 </tbody>
