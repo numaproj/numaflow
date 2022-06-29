@@ -15,6 +15,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 )
@@ -140,17 +141,6 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 }
 
 func (r *KafkaSource) Start() <-chan struct{} {
-	adminClient, err := sarama.NewClusterAdmin(r.brokers, r.config)
-	if err != nil {
-		r.logger.Panicw("Problem initializing sarama admin client", zap.Error(err))
-	}
-	r.adminClient = adminClient
-	client, err := sarama.NewClient(r.brokers, r.config)
-	if err != nil {
-		r.logger.Panicw("Problem initializing sarama client", zap.Error(err))
-	}
-	r.saramaClient = client
-
 	go r.startConsumer()
 	// wait for the consumer to setup.
 	<-r.handler.ready
@@ -191,6 +181,9 @@ func (r *KafkaSource) Close() error {
 }
 
 func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
+	if r.adminClient == nil || r.saramaClient == nil {
+		return isb.PendingNotAvailable, nil
+	}
 	partitions, err := r.saramaClient.Partitions(r.topic)
 	if err != nil {
 		return isb.PendingNotAvailable, fmt.Errorf("failed to get partitions, %w", err)
@@ -219,8 +212,9 @@ func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Opt
 		pipelineName:  vertex.Spec.PipelineName,
 		topic:         source.Topic,
 		brokers:       source.Brokers,
-		readTimeout:   1 * time.Second, // default timeout
-		handlerbuffer: 100,             // default buffer size for kafka reads
+		readTimeout:   1 * time.Second,     // default timeout
+		handlerbuffer: 100,                 // default buffer size for kafka reads
+		logger:        logging.NewLogger(), // default logger
 	}
 
 	for _, o := range opts {
@@ -243,8 +237,20 @@ func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Opt
 			config.Net.TLS.Config = c
 		}
 	}
-
 	kafkasource.config = config
+	// Best effort to initialize the clients for pending messages calculation
+	adminClient, err := sarama.NewClusterAdmin(kafkasource.brokers, config)
+	if err != nil {
+		kafkasource.logger.Warnw("Problem initializing sarama admin client", zap.Error(err))
+	} else {
+		kafkasource.adminClient = adminClient
+	}
+	client, err := sarama.NewClient(kafkasource.brokers, config)
+	if err != nil {
+		kafkasource.logger.Warnw("Problem initializing sarama client", zap.Error(err))
+	} else {
+		kafkasource.saramaClient = client
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	kafkasource.cancelfn = cancel
