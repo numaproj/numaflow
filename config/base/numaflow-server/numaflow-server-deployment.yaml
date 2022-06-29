@@ -14,14 +14,15 @@ spec:
         app.kubernetes.io/part-of: numaflow
         app.kubernetes.io/component: numaflow-ux
     spec:
-      serviceAccountName: numaflow-sa
+      serviceAccountName: numaflow-server-sa
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737
       containers:
-        - name: numaflow-server
+        - name: main
           image: quay.io/numaproj/numaflow:latest
-          args: [ "server" ]
+          args:
+          - "server"
           imagePullPolicy: Always
           env:
             - name: NAMESPACE

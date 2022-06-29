@@ -30,7 +30,6 @@ rules:
     resources:
       - pods
       - pods/exec
-      - pods/log
       - configmaps
       - secrets
       - services
@@ -43,14 +42,6 @@ rules:
       - update
       - patch
       - delete
-  - apiGroups:
-    - metrics.k8s.io
-    resources:
-      - pods
-    verbs:
-      - get
-      - list
-      - watch
   - apiGroups:
       - apps
     resources:
