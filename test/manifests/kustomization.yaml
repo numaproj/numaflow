@@ -21,6 +21,13 @@ patches:
     target:
       kind: Deployment
       name: controller-manager
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: numaflow-server
 namespace: numaflow-system
 
 commonLabels:

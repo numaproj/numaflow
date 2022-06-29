@@ -1,5 +1,17 @@
 ARG ARCH=$TARGETARCH
 ####################################################################################################
+FROM docker.io/node:18 as numaflow-ui
+
+WORKDIR /app
+
+COPY ui/package.json ui/yarn.lock ui/
+
+RUN JOBS=max yarn --cwd ui install --network-timeout 1000000
+
+COPY ui ui
+RUN NODE_OPTIONS="--max-old-space-size=2048" JOBS=max yarn --cwd ui build
+
+####################################################################################################
 # base
 ####################################################################################################
 FROM alpine:3.12.3 as base
@@ -19,6 +31,7 @@ ARG ARCH
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow
+COPY --from=numaflow-ui /app/ui/build /ui/build
 ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################
