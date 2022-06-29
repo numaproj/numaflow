@@ -283,7 +283,7 @@ describe("podsFetch test", () => {
             }],
             "initContainers": [{
                 "name": "init",
-                "image": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow:latest",
+                "image": "testImage",
                 "args": ["isbs-buffer-validate", "--isbs-type=jetstream", "--buffers=dataflow-system-simple-pipeline-input-preproc", "--buffers=dataflow-system-simple-pipeline-preproc-infer", "--buffers=dataflow-system-simple-pipeline-infer-train", "--buffers=dataflow-system-simple-pipeline-train-train-1", "--buffers=dataflow-system-simple-pipeline-train-1-train-output", "--buffers=dataflow-system-simple-pipeline-infer-postproc", "--buffers=dataflow-system-simple-pipeline-postproc-log-output", "--buffers=dataflow-system-simple-pipeline-postproc-publisher"],
                 "env": [{
                     "name": "DATAFLOW_PIPELINE_NAME",
@@ -321,7 +321,7 @@ describe("podsFetch test", () => {
             }],
             "containers": [{
                 "name": "main",
-                "image": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow:latest",
+                "image": "testImage",
                 "args": ["processor", "--type=source", "--isbs-type=jetstream"],
                 "env": [{
                     "name": "DATAFLOW_NAMESPACE",
@@ -458,8 +458,8 @@ describe("podsFetch test", () => {
                 "lastState": {},
                 "ready": true,
                 "restartCount": 0,
-                "image": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow:latest",
-                "imageID": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow@sha256:cd23616d04fe4c1366b015a8f1e0e05b7875d3541b8fcf93ee20ad3febe56f64",
+                "image": "testImage",
+                "imageID": "testImage123",
                 "containerID": "containerd://d1b71a730feebce224b2f83920f0792148e377a6d86091552e3897c6f45e9c6c"
             }],
             "containerStatuses": [{
@@ -468,8 +468,8 @@ describe("podsFetch test", () => {
                 "lastState": {},
                 "ready": true,
                 "restartCount": 0,
-                "image": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow:latest",
-                "imageID": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow@sha256:cd23616d04fe4c1366b015a8f1e0e05b7875d3541b8fcf93ee20ad3febe56f64",
+                "image": "testImage",
+                "imageID": "testImage123",
                 "containerID": "containerd://fd7143440df96dcd78e45a59143a63c2fa4b425b29f0e5ae9e27de06197b504a",
                 "started": true
             }],

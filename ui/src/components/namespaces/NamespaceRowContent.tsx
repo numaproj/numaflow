@@ -10,7 +10,7 @@ interface NamespaceRowContentProps {
 
 export function NamespaceRowContent(props: NamespaceRowContentProps) {
   const { namespaceId } = props;
-  const { pipelines, loading, error } = useNamespaceFetch(namespaceId);
+  const { pipelines } = useNamespaceFetch(namespaceId);
   return (
     <div className={"NamespaceRowContent"} data-testid="namespace-row-content">
       <Box

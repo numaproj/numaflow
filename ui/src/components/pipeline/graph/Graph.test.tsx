@@ -4,7 +4,7 @@ import {Position} from "react-flow-renderer";
 
 global.ResizeObserver = require('resize-observer-polyfill')
 
-describe("Graph screen", () => {
+describe("Graph screen test", () => {
 
     const data = {
         "vertices": [{

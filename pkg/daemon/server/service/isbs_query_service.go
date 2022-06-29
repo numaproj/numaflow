@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/utils/pointer"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"k8s.io/utils/pointer"
 )
 
 type isbSvcQueryService struct {
@@ -43,8 +44,8 @@ func (is *isbSvcQueryService) ListBuffers(ctx context.Context, req *daemon.ListB
 		}
 		b := &daemon.BufferInfo{
 			Pipeline:         &is.pipeline.Name,
-			FromVertex:       &edge.From,
-			ToVertex:         &edge.To,
+			FromVertex:       pointer.String(fmt.Sprintf("%v", edge.From)),
+			ToVertex:         pointer.String(fmt.Sprintf("%v", edge.To)),
 			BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
 			PendingCount:     &bufferInfo.PendingCount,
 			AckPendingCount:  &bufferInfo.AckPendingCount,

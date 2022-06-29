@@ -1,5 +1,5 @@
 import {PodLogs} from "./PodLogs"
-import {render, screen, waitFor} from "@testing-library/react"
+import {render} from "@testing-library/react"
 
 describe("PodLogs", () => {
     it("Load PodLogs screen", async () => {

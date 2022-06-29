@@ -17,7 +17,6 @@ export function Pipeline() {
   const {
     pipeline,
     error: pipelineError,
-    loading: pipelineLoading,
   } = usePipelineFetch(namespaceId, pipelineId, pipelineRequestKey);
 
   const [edgesInfoRequestKey, setEdgesInfoRequestKey] = useState(
@@ -27,7 +26,6 @@ export function Pipeline() {
   const {
     edgesInfo,
     error: edgesInfoError,
-    loading: edgesInfoLoading,
   } = useEdgesInfoFetch(namespaceId, pipelineId, edgesInfoRequestKey);
 
   useEffect(() => {
