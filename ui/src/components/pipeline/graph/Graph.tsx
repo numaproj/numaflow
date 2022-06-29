@@ -165,9 +165,8 @@ export default function Graph(props: GraphProps) {
           onNodeClick={handleNodeClick}
           onPaneClick={handlePaneClick}
           fitView
-          zoomOnScroll={false}
-          panOnDrag={false}
-          elevateEdgesOnSelect={true}
+          zoomOnScroll={true}
+          panOnDrag={true}
         />
       </div>
 
