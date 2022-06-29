@@ -57,9 +57,16 @@ func WithRefreshInterval(refreshInterval time.Duration) WriteOption {
 }
 
 // WithUsingWriteInfoAsRate sets whether to check sequence for rate calculation
-func WithUsingWriteInfoAsRate(check bool) WriteOption {
+func WithUsingWriteInfoAsRate(yes bool) WriteOption {
 	return func(o *writeOptions) error {
-		o.useWriteInfoAsRate = check
+		o.useWriteInfoAsRate = yes
+		return nil
+	}
+}
+
+func WithWriteRateLookbackSeconds(seconds int64) WriteOption {
+	return func(o *writeOptions) error {
+		o.rateLookbackSeconds = seconds
 		return nil
 	}
 }
@@ -102,7 +109,7 @@ func WithAckInfoCheckInterval(t time.Duration) ReadOption {
 	}
 }
 
-func WithRateLookbackSeconds(seconds int64) ReadOption {
+func WithAckRateLookbackSeconds(seconds int64) ReadOption {
 	return func(o *readOptions) error {
 		o.rateLookbackSeconds = seconds
 		return nil

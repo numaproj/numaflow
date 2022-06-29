@@ -6,7 +6,6 @@ import (
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/sources/types"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -20,7 +19,7 @@ func TestRead(t *testing.T) {
 	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
 		Name: "memgen",
 	}}
-	m := &types.SourceMetadata{
+	m := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "TestRead",
 		Replica:  0,
@@ -48,7 +47,7 @@ func TestStop(t *testing.T) {
 	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
 		Name: "memgen",
 	}}
-	m := &types.SourceMetadata{
+	m := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "TestRead",
 		Replica:  0,
