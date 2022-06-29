@@ -3,12 +3,8 @@ package udf
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
-
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -20,6 +16,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"go.uber.org/zap"
 )
 
 type UDFProcessor struct {
@@ -36,6 +36,11 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
 	toBuffers := u.VertexInstance.Vertex.GetToBuffers()
 	writers := make(map[string]isb.BufferWriter)
+
+	// watermark variables
+	var fetchWatermark fetch.Fetcher = nil
+	var publishWatermark map[string]publish.Publisher = nil
+
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		redisClient := clients.NewInClusterRedisClient()
@@ -81,6 +86,23 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 				return err
 			}
 			writers[buffer] = writer
+
+			// FIXME(sidhant)
+			if sharedutil.IsWatermarkEnabled() {
+				js, err := generic.GetJetStreamConnection(ctx)
+				if err != nil {
+					return err
+				}
+				// TODO: remove this once bucket creation has been moved to controller
+				err = generic.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", generic.GetPublishKeySpace(u.VertexInstance.Vertex)), js)
+				if err != nil {
+					return err
+				}
+				var fetchWM = generic.BuildFetchWM(nil, nil)
+				var publishWM = generic.BuildPublishWM(nil, nil)
+				var wmProgressor = generic.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica), generic.GetFetchKeyspace(u.VertexInstance.Vertex), generic.GetPublishKeySpace(u.VertexInstance.Vertex), publishWM, fetchWM)
+				_ = wmProgressor
+			}
 		}
 	default:
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
@@ -119,23 +141,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	var wmProgressor generic.Progressor = nil
-	if val, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok && val == "true" {
-		js, err := generic.GetJetStreamConnection(ctx)
-		if err != nil {
-			return err
-		}
-		// TODO: remove this once bucket creation has been moved to controller
-		err = generic.CreateProcessorBucketIfMissing(fmt.Sprintf("%s_PROCESSORS", generic.GetPublishKeySpace(u.VertexInstance.Vertex)), js)
-		if err != nil {
-			return err
-		}
-		var fetchWM = generic.BuildFetchWM(nil, nil)
-		var publishWM = generic.BuildPublishWM(nil, nil)
-		wmProgressor = generic.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica), generic.GetFetchKeyspace(u.VertexInstance.Vertex), generic.GetPublishKeySpace(u.VertexInstance.Vertex), publishWM, fetchWM)
-	}
-
-	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, wmProgressor, opts...)
+	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, opts...)
 	if err != nil {
 		return err
 	}

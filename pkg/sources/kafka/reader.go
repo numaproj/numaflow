@@ -225,7 +225,7 @@ func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Opt
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertex, kafkasource, destinations, forward.All, applier.Terminal, nil, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertex, kafkasource, destinations, forward.All, applier.Terminal, nil, nil, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
