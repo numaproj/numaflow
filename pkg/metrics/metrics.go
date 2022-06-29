@@ -76,6 +76,7 @@ func WithPendingLookbackSeconds(seconds int64) Option {
 	}
 }
 
+// NewMetricsServer returns a Prometheus metrics server instance, which can be used to start an HTTPS service to expose Prometheus metrics.
 func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 	m := new(metricsServer)
 	m.vertex = vertex
@@ -142,6 +143,7 @@ func (ms *metricsServer) rateAndPending(ctx context.Context) {
 	}
 }
 
+// Start function starts the HTTPS service to expose metrics, it returns a shutdown function and an error if any
 func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) error, error) {
 	log := logging.FromContext(ctx)
 	log.Info("Generating self-signed certificate")
