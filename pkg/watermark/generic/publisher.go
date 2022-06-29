@@ -1,6 +1,8 @@
 package generic
 
 import (
+	"context"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -27,6 +29,16 @@ type GenericPublish struct {
 }
 
 var _ publish.Publisher = (*GenericPublish)(nil)
+
+// NewGenericPublish returns GenericPublish.
+func NewGenericPublish(ctx context.Context, processorName string, publishKeyspace string, publishWM PublishWM) *GenericPublish {
+	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace)
+	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.hbStore, publishWM.otStore)
+	gp := &GenericPublish{
+		toEdge: udfPublish,
+	}
+	return gp
+}
 
 // PublishWatermark publishes for the generic publisher.
 func (g *GenericPublish) PublishWatermark(watermark processor.Watermark, offset isb.Offset) {

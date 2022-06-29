@@ -63,7 +63,8 @@ var _ ProcessorEntitier = (*ProcessorEntity)(nil)
 //       Perhaps we can encode the key using base64, but it will have a performance hit.
 const _defaultKeySeparator = "_"
 
-// NewProcessorEntity returns a new `ProcessorEntity`
+// NewProcessorEntity returns a new `ProcessorEntity`.
+// TODO: remove publishKeyspace
 func NewProcessorEntity(name string, publishKeyspace string, inputOpts ...EntityOption) *ProcessorEntity {
 	opts := &entityOptions{
 		separateOTBucket: false,

@@ -140,7 +140,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &Edge{
 				ctx:        ctx,
-				name:       "testBuffer",
+				edgeName:   "testBuffer",
 				fromVertex: tt.fromVertex,
 			}
 			if got := b.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.Unix(tt.want, 0).In(location) {

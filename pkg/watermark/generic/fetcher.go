@@ -30,8 +30,8 @@ func BuildFetchWM(hbWatch store.WatermarkKVWatcher, otWatch store.WatermarkKVWat
 }
 
 // NewGenericFetcher returns GenericFetch.
-func NewGenericFetcher(ctx context.Context, vertexName string, fetchKeyspace string, wm FetchWM) *GenericFetch {
-	fromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, wm.hbWatch, wm.otWatch)
+func NewGenericFetcher(ctx context.Context, vertexName string, fetchKeyspace string, fetchWM FetchWM) *GenericFetch {
+	fromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.hbWatch, fetchWM.otWatch)
 	fromEdge := fetch.NewEdgeBuffer(ctx, vertexName, fromVertex)
 
 	gf := &GenericFetch{

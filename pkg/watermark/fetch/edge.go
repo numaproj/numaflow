@@ -22,19 +22,19 @@ type Fetcher interface {
 // Edge is the edge relation between two vertices.
 type Edge struct {
 	ctx        context.Context
-	name       string
+	edgeName   string
 	fromVertex *FromVertex
 	log        *zap.SugaredLogger
 }
 
-// NewEdgeBuffer returns a new Edge.
-// TODO: change the signature to take FromVertex as interface.
-func NewEdgeBuffer(ctx context.Context, name string, fromV *FromVertex) *Edge {
+// NewEdgeBuffer returns a new Edge. FromVertex has the details about the processors responsible for writing to this
+// edge.
+func NewEdgeBuffer(ctx context.Context, edgeName string, fromV *FromVertex) *Edge {
 	return &Edge{
 		ctx:        ctx,
-		name:       name,
+		edgeName:   edgeName,
 		fromVertex: fromV,
-		log:        logging.FromContext(ctx),
+		log:        logging.FromContext(ctx).With("edgeName", edgeName),
 	}
 }
 
@@ -66,7 +66,7 @@ func (e *Edge) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 		epoch = -1
 	}
 	// TODO: use log instead of fmt.Printf
-	fmt.Printf("\n%s[%s] get watermark for offset %d: %+v\n", debugString.String(), e.name, offset, epoch)
+	fmt.Printf("\n%s[%s] get watermark for offset %d: %+v\n", debugString.String(), e.edgeName, offset, epoch)
 	if epoch == -1 {
 		return processor.Watermark(time.Time{})
 	}
