@@ -25,7 +25,7 @@ type KafkaSource struct {
 	// name of the pipeline
 	pipelineName string
 	// group name for the source vertex
-	groupname string
+	groupName string
 	// topic to consume messages from
 	topic string
 	// kafka brokers
@@ -48,6 +48,10 @@ type KafkaSource struct {
 	handlerbuffer int
 	// read timeout for the from buffer
 	readTimeout time.Duration
+	// client used to get pending messages
+	adminClient sarama.ClusterAdmin
+	//
+	saramaClient sarama.Client
 }
 
 type Option func(*KafkaSource) error
@@ -79,7 +83,7 @@ func WithReadTimeOut(t time.Duration) Option {
 // WithGroupName is used to set the group name
 func WithGroupName(gn string) Option {
 	return func(o *KafkaSource) error {
-		o.groupname = gn
+		o.groupName = gn
 		return nil
 	}
 }
@@ -160,14 +164,40 @@ func (r *KafkaSource) Close() error {
 	r.logger.Info("Closing kafka reader...")
 	// finally, shut down the client
 	r.cancelfn()
+	if r.adminClient != nil {
+		if err := r.adminClient.Close(); err != nil {
+			r.logger.Errorw("Error in closing kafka admin client", zap.Error(err))
+		}
+	}
+	if r.saramaClient != nil {
+		if err := r.saramaClient.Close(); err != nil {
+			r.logger.Errorw("Error in closing kafka sarama client", zap.Error(err))
+		}
+	}
 	<-r.stopch
 	r.logger.Info("Kafka reader closed")
 	return nil
 }
 
 func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
-	// TODO: not implemented
-	return isb.PendingNotAvailable, nil
+	partitions, err := r.saramaClient.Partitions(r.topic)
+	if err != nil {
+		return isb.PendingNotAvailable, fmt.Errorf("failed to get partitions, %w", err)
+	}
+	totalPending := int64(0)
+	rep, err := r.adminClient.ListConsumerGroupOffsets(r.groupName, map[string][]int32{r.topic: partitions})
+	if err != nil {
+		return isb.PendingNotAvailable, fmt.Errorf("failed to list consumer group offsets, %w", err)
+	}
+	for _, partition := range partitions {
+		partitionOffset, err := r.saramaClient.GetOffset(r.topic, partition, sarama.OffsetNewest)
+		if err != nil {
+			return isb.PendingNotAvailable, fmt.Errorf("failed to get offset of topic %q, partition %v, %w", r.topic, partition, err)
+		}
+		block := rep.GetBlock(r.topic, partition)
+		totalPending += partitionOffset - block.Offset
+	}
+	return totalPending, nil
 }
 
 // NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
@@ -205,6 +235,18 @@ func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Opt
 
 	kafkasource.config = config
 
+	adminClient, err := sarama.NewClusterAdmin(source.Brokers, config)
+	if err != nil {
+		return nil, err
+	}
+	kafkasource.adminClient = adminClient
+
+	client, err := sarama.NewClient(source.Brokers, config)
+	if err != nil {
+		return nil, err
+	}
+	kafkasource.saramaClient = client
+
 	ctx, cancel := context.WithCancel(context.Background())
 	kafkasource.cancelfn = cancel
 	kafkasource.lifecyclectx = ctx
@@ -231,24 +273,21 @@ func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Opt
 		return nil, err
 	}
 	kafkasource.forwarder = forwarder
-
 	return kafkasource, nil
 }
 
 func configFromOpts(yamlconfig string) (*sarama.Config, error) {
-
 	config, err := util.GetSaramaConfigFromYAMLString(yamlconfig)
 	if err != nil {
 		return nil, err
 	}
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
-
 	return config, nil
 }
 
 func (r *KafkaSource) startConsumer() {
-	client, err := sarama.NewConsumerGroup(r.brokers, r.groupname, r.config)
-	r.logger.Infow("creating NewConsumerGroup", zap.String("topic", r.topic), zap.String("consumerGroupName", r.groupname), zap.Strings("brokers", r.brokers))
+	client, err := sarama.NewConsumerGroup(r.brokers, r.groupName, r.config)
+	r.logger.Infow("creating NewConsumerGroup", zap.String("topic", r.topic), zap.String("consumerGroupName", r.groupName), zap.Strings("brokers", r.brokers))
 	if err != nil {
 		r.logger.Panicw("Problem initializing sarama client", zap.Error(err))
 	}
@@ -275,7 +314,6 @@ func (r *KafkaSource) startConsumer() {
 }
 
 func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
-
 	offset := toOffset(m.Topic, m.Partition, m.Offset)
 	msg := isb.Message{
 		Header: isb.Header{
