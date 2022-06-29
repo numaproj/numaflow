@@ -10,7 +10,6 @@ RUN JOBS=max yarn --cwd ui install --network-timeout 1000000
 
 COPY ui ui
 RUN NODE_OPTIONS="--max-old-space-size=2048" JOBS=max yarn --cwd ui build
-RUN yarn --cwd ui build
 
 ####################################################################################################
 # base

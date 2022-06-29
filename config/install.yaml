@@ -12596,6 +12596,7 @@ rules:
   resources:
   - pods
   - pods/exec
+  - pods/log
   - configmaps
   - secrets
   - services
@@ -12608,6 +12609,14 @@ rules:
   - update
   - patch
   - delete
+- apiGroups:
+  - metrics.k8s.io
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - apps
   resources:
@@ -12635,64 +12644,6 @@ rules:
   - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: numaflow-server-role
-rules:
-- apiGroups:
-  - numaflow.numaproj.io
-  resources:
-  - interstepbufferservices
-  - interstepbufferservices/finalizers
-  - interstepbufferservices/status
-  - pipelines
-  - pipelines/finalizers
-  - pipelines/status
-  - vertices
-  - vertices/finalizers
-  - vertices/status
-  - vertices/scale
-  verbs:
-  - create
-  - delete
-  - deletecollection
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - pods/exec
-  - pods/log
-  - configmaps
-  - secrets
-  - services
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - statefulsets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - metrics.k8s.io
-  resources:
-  - pods
-  verbs:
-  - get
-  - list
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: numaflow-binding
@@ -12703,19 +12654,6 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: numaflow-sa
-  namespace: numaflow-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: numaflow-server-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: numaflow-server-role
-subjects:
-- kind: ServiceAccount
-  name: numaflow-server-sa
   namespace: numaflow-system
 ---
 apiVersion: v1
