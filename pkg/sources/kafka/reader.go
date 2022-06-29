@@ -48,9 +48,9 @@ type KafkaSource struct {
 	handlerbuffer int
 	// read timeout for the from buffer
 	readTimeout time.Duration
-	// client used to get pending messages
+	// client used to calculate pending messages
 	adminClient sarama.ClusterAdmin
-	//
+	// sarama client
 	saramaClient sarama.Client
 }
 
@@ -140,6 +140,17 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 }
 
 func (r *KafkaSource) Start() <-chan struct{} {
+	adminClient, err := sarama.NewClusterAdmin(r.brokers, r.config)
+	if err != nil {
+		r.logger.Panicw("Problem initializing sarama admin client", zap.Error(err))
+	}
+	r.adminClient = adminClient
+	client, err := sarama.NewClient(r.brokers, r.config)
+	if err != nil {
+		r.logger.Panicw("Problem initializing sarama client", zap.Error(err))
+	}
+	r.saramaClient = client
+
 	go r.startConsumer()
 	// wait for the consumer to setup.
 	<-r.handler.ready
@@ -234,18 +245,6 @@ func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Opt
 	}
 
 	kafkasource.config = config
-
-	adminClient, err := sarama.NewClusterAdmin(source.Brokers, config)
-	if err != nil {
-		return nil, err
-	}
-	kafkasource.adminClient = adminClient
-
-	client, err := sarama.NewClient(source.Brokers, config)
-	if err != nil {
-		return nil, err
-	}
-	kafkasource.saramaClient = client
 
 	ctx, cancel := context.WithCancel(context.Background())
 	kafkasource.cancelfn = cancel
