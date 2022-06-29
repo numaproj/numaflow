@@ -807,9 +807,14 @@ message Scale {
   optional int32 min = 1;
 
   // Maximum replicas
-  // +kubebuilder:default=1
+  // +kubebuilder:default=100
   // +optional
   optional int32 max = 2;
+
+  // Lookback seconds to calculate the average pending messages and processing rate
+  // +kubebuilder:default=180
+  // +optional
+  optional int32 lookbackSeconds = 3;
 }
 
 message Sink {
@@ -888,6 +893,15 @@ message Vertex {
 
   // +optional
   optional VertexStatus status = 3;
+}
+
+// VertexInstance is a wrapper of a vertex instance, which contains the vertex spec and the instance information such as hostname and replica index.
+message VertexInstance {
+  optional Vertex vertex = 1;
+
+  optional string hostname = 2;
+
+  optional int32 replica = 3;
 }
 
 message VertexLimits {

@@ -15,7 +15,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/types"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -115,13 +114,13 @@ func WithReadTimeOut(timeout time.Duration) Option {
 // msgSize - size of each generated message
 // timeunit - unit of time per tick. could be any golang time.Duration.
 // writers - destinations to write to
-func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit time.Duration, writers []isb.BufferWriter, opts ...Option) (*memgen, error) {
+func NewMemGen(vertexInstance *dfv1.VertexInstance, rpu int, msgSize int32, timeunit time.Duration, writers []isb.BufferWriter, opts ...Option) (*memgen, error) {
 	gensrc := &memgen{
 		rpu:          rpu,
 		msgSize:      msgSize,
 		timeunit:     timeunit,
-		name:         metadata.Vertex.Spec.Name,
-		pipelineName: metadata.Vertex.Spec.PipelineName,
+		name:         vertexInstance.Vertex.Spec.Name,
+		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
 		genfn:        recordGenerator,
 		progressor: &watermark{
 			sourcePublish: nil,
@@ -152,7 +151,7 @@ func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit 
 	}
 
 	forwardOpts := []forward.Option{forward.WithLogger(gensrc.logger)}
-	if x := metadata.Vertex.Spec.Limits; x != nil {
+	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
@@ -162,7 +161,7 @@ func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit 
 	var err error
 	// TODO: pass it as option
 	if val, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok && val == "true" {
-		err = gensrc.buildWMProgressor(metadata)
+		err = gensrc.buildWMProgressor(vertexInstance)
 		if err != nil {
 			return nil, err
 		}
@@ -170,7 +169,7 @@ func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit 
 	}
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(metadata.Vertex, gensrc, destinations, forward.All, applier.Terminal, wmProgressor, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, forward.All, applier.Terminal, wmProgressor, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -250,10 +249,6 @@ func (mg *memgen) ForceStop() {
 func (mg *memgen) Start() <-chan struct{} {
 	mg.generator(mg.lifecycleCtx, mg.rpu, mg.timeunit)
 	return mg.forwarder.Start()
-}
-
-func (mg *memgen) Pending(_ context.Context) (int64, error) {
-	return isb.PendingNotAvailable, nil
 }
 
 // generator fires once per time unit and generates records and writes them to the channel

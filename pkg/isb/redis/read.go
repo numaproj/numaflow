@@ -303,7 +303,6 @@ func (br *BufferRead) convertXStreamToMessages(xstreams []redis.XStream, message
 				}
 				messages = append(messages, &readMessage)
 			}
-
 		}
 	}
 

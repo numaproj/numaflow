@@ -159,8 +159,8 @@ func (jr *jetStreamReader) Rate(_ context.Context) (float64, error) {
 	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
 	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-2]
 	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
+		startSeqInfo = timestampedSeqs[i]
 		if endSeqInfo.timestamp-timestampedSeqs[i].timestamp > jr.opts.rateLookbackSeconds {
-			startSeqInfo = timestampedSeqs[i]
 			break
 		}
 	}

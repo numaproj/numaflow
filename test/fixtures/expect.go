@@ -68,7 +68,7 @@ func (t *Expect) VertexPodsRunning() *Expect {
 	// check pods running
 	timeout := 2 * time.Minute
 	for _, v := range t.pipeline.Spec.Vertices {
-		if err := WaitForVertexPodRunning(t.kubeClient, Namespace, t.pipeline.Name, v.Name, timeout); err != nil {
+		if err := WaitForVertexPodRunning(t.kubeClient, t.vertexClient, Namespace, t.pipeline.Name, v.Name, timeout); err != nil {
 			t.t.Fatalf("expected vertex %q pod running: %v", v.Name, err)
 		}
 	}
