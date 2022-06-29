@@ -8,4 +8,5 @@ spec:
   - targetPort: 8443
     port: 8443
   selector:
+    app.kubernetes.io/part-of: numaflow
     app.kubernetes.io/component: numaflow-ux

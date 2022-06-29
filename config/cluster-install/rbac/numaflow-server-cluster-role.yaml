@@ -6,13 +6,8 @@ rules:
   - apiGroups:
       - numaflow.numaproj.io
     verbs:
-      - create
-      - delete
-      - deletecollection
       - get
       - list
-      - patch
-      - update
       - watch
     resources:
       - interstepbufferservices
