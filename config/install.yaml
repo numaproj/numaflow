@@ -12479,6 +12479,12 @@ metadata:
   name: numaflow-sa
   namespace: numaflow-system
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: numaflow-server-sa
+  namespace: numaflow-system
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -12635,40 +12641,12 @@ rules:
   - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: numaflow-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: numaflow-role
-subjects:
-- kind: ServiceAccount
-  name: numaflow-sa
-  namespace: numaflow-system
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: numaflow-server-sa
-  namespace: numaflow-system
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: numaflow-server-role
 rules:
 - apiGroups:
   - numaflow.numaproj.io
-  verbs:
-  - create
-  - delete
-  - deletecollection
-  - get
-  - list
-  - patch
-  - update
-  - watch
   resources:
   - interstepbufferservices
   - interstepbufferservices/finalizers
@@ -12680,8 +12658,17 @@ rules:
   - vertices/finalizers
   - vertices/status
   - vertices/scale
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
-    - ""
+  - ""
   resources:
   - pods
   - pods/exec
@@ -12714,15 +12701,28 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  name: numaflow-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: numaflow-role
+subjects:
+- kind: ServiceAccount
+  name: numaflow-sa
+  namespace: numaflow-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
   name: numaflow-server-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: numaflow-server-role
 subjects:
-  - kind: ServiceAccount
-    name: numaflow-server-sa
-    namespace: numaflow-system
+- kind: ServiceAccount
+  name: numaflow-server-sa
+  namespace: numaflow-system
 ---
 apiVersion: v1
 data:
@@ -12832,6 +12832,19 @@ metadata:
   name: numaflow-controller-config
   namespace: numaflow-system
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: numaflow-server-svc
+  namespace: numaflow-system
+spec:
+  ports:
+  - port: 8443
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/component: numaflow-ux
+  type: ClusterIP
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12939,15 +12952,3 @@ spec:
         runAsNonRoot: true
         runAsUser: 9737
       serviceAccountName: numaflow-server-sa
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: numaflow-server-svc
-spec:
-  type: ClusterIP
-  ports:
-    - targetPort: 8443
-      port: 8443
-  selector:
-    app.kubernetes.io/component: numaflow-ux

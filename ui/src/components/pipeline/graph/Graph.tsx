@@ -131,7 +131,7 @@ export default function Graph(props: GraphProps) {
     setEdgeOpen(false);
   };
 
-  const handlePaneClick = (event: MouseEvent) => {
+  const handlePaneClick = () => {
     setShowSpec(true);
     setEdgeOpen(false);
     setNodeOpen(false);
