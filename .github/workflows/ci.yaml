@@ -23,7 +23,7 @@ jobs:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
       - run: yarn --cwd ui install
-      - run: yarn --cwd ui build
+      - run: NODE_OPTIONS="--max-old-space-size=2048" JOBS=max yarn --cwd ui build
       - run: yarn --cwd ui test
       - run: yarn --cwd ui lint
       - run: git diff --exit-code
@@ -141,7 +141,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      NODE_OPTIONS: --max-old-space-size=4096
       CI: ""
     strategy:
       fail-fast: false
