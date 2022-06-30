@@ -43,9 +43,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		readOptions := []jetstreamisb.ReadOption{
 			jetstreamisb.WithUsingAckInfoAsRate(true),
 		}
-		if x := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; x != nil {
-			readOptions = append(readOptions, jetstreamisb.WithAckRateLookbackSeconds(int64(*x)))
-		}
 		jetStreamClient := clients.NewInClusterJetStreamClient()
 		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)
 		if err != nil {
@@ -74,11 +71,11 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	}()
 
 	metricsOpts := []metrics.Option{}
+	if s := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; s != nil {
+		metricsOpts = append(metricsOpts, metrics.WithLookbackSeconds(int64(*s)))
+	}
 	if x, ok := reader.(isb.LagReader); ok {
 		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
-		if s := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; s != nil {
-			metricsOpts = append(metricsOpts, metrics.WithPendingLookbackSeconds(int64(*s)))
-		}
 	}
 	if x, ok := reader.(isb.Ratable); ok {
 		metricsOpts = append(metricsOpts, metrics.WithRater(x))
