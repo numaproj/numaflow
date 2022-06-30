@@ -91,7 +91,7 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 		},
 	}}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, nil)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, nil, nil)
 	assert.NoError(t, err)
 
 	stopped := f.Start()

@@ -168,8 +168,9 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance, rpu int, msgSize int32, time
 		wmProgressor = gensrc.progressor.wmProgressor
 	}
 
+	_ = wmProgressor
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, forward.All, applier.Terminal, wmProgressor, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, forward.All, applier.Terminal, nil, nil, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

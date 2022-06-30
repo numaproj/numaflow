@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -26,15 +27,16 @@ type InterStepDataForward struct {
 	ctx context.Context
 	// cancelFn cancels our new context, our cancellation is little more complex and needs to be well orchestrated, hence
 	// we need something more than a cancel().
-	cancelFn     context.CancelFunc
-	fromBuffer   isb.BufferReader
-	toBuffers    map[string]isb.BufferWriter
-	FSD          ToWhichStepDecider
-	UDF          udfapplier.Applier
-	wmProgressor generic.Progressor
-	opts         options
-	vertexName   string
-	pipelineName string
+	cancelFn         context.CancelFunc
+	fromBuffer       isb.BufferReader
+	toBuffers        map[string]isb.BufferWriter
+	FSD              ToWhichStepDecider
+	UDF              udfapplier.Applier
+	fetchWatermark   fetch.Fetcher
+	publishWatermark map[string]publish.Publisher
+	opts             options
+	vertexName       string
+	pipelineName     string
 	Shutdown
 }
 
@@ -42,8 +44,10 @@ type InterStepDataForward struct {
 func NewInterStepDataForward(vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
 	toSteps map[string]isb.BufferWriter,
-	fsd ToWhichStepDecider, applyUDF udfapplier.Applier,
-	wmProgressor generic.Progressor,
+	fsd ToWhichStepDecider,
+	applyUDF udfapplier.Applier,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*InterStepDataForward, error) {
 
 	options := &options{
@@ -61,13 +65,14 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	ctx, cancel := context.WithCancel(context.Background())
 
 	isdf := InterStepDataForward{
-		ctx:          ctx,
-		cancelFn:     cancel,
-		fromBuffer:   fromStep,
-		toBuffers:    toSteps,
-		FSD:          fsd,
-		UDF:          applyUDF,
-		wmProgressor: wmProgressor,
+		ctx:              ctx,
+		cancelFn:         cancel,
+		fromBuffer:       fromStep,
+		toBuffers:        toSteps,
+		FSD:              fsd,
+		UDF:              applyUDF,
+		fetchWatermark:   fetchWatermark,
+		publishWatermark: publishWatermark,
 		// should we do a check here for the values not being null?
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
@@ -131,8 +136,10 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 		}
 
 		// stop watermark publisher if watermarking is enabled
-		if isdf.wmProgressor != nil {
-			isdf.wmProgressor.StopPublisher()
+		if isdf.publishWatermark != nil {
+			for _, publisher := range isdf.publishWatermark {
+				publisher.StopPublisher()
+			}
 		}
 		close(stopped)
 	}()
@@ -172,9 +179,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
 	var processorWM processor.Watermark
-	if isdf.wmProgressor != nil {
+	if isdf.fetchWatermark != nil {
 		// let's track only the last element's watermark
-		processorWM = isdf.wmProgressor.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
+		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
 	}
 
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
@@ -241,11 +248,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	// forward the highest watermark to all the edges to avoid idle edge problem
-	if isdf.wmProgressor != nil {
+	if isdf.publishWatermark != nil {
 		// TODO: sort and get the highest value
-		for _, offsets := range writeOffsets {
+		for edgeName, offsets := range writeOffsets {
 			if len(offsets) > 0 {
-				isdf.wmProgressor.PublishWatermark(processorWM, offsets[len(offsets)-1])
+				isdf.publishWatermark[edgeName].PublishWatermark(processorWM, offsets[len(offsets)-1])
 			}
 		}
 	}
