@@ -52,3 +52,9 @@ ensure_protobuf() {
   fi
 }
 
+ensure_yarn(){
+  if [ "`command -v yarn`" = "" ]; then
+      warning "Please install yarn with - brew install yarn"
+      exit 1
+    fi
+}

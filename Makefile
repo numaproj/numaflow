@@ -126,8 +126,7 @@ Test%:
 
 .PHONY: ui
 ui:
-	yarn --cwd ui install
-	yarn --cwd ui build
+	./hack/build-ui.sh
 
 .PHONY: image
 image: clean ui dist/$(BINARY_NAME)-linux-amd64
