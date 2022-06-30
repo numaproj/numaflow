@@ -50,9 +50,6 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 			writeOpts := []jetstreamisb.WriteOption{
 				jetstreamisb.WithUsingWriteInfoAsRate(true),
 			}
-			if x := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; x != nil {
-				writeOpts = append(writeOpts, jetstreamisb.WithWriteRateLookbackSeconds(int64(*x)))
-			}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
@@ -90,11 +87,11 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 	}()
 
 	metricsOpts := []metrics.Option{}
+	if s := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; s != nil {
+		metricsOpts = append(metricsOpts, metrics.WithLookbackSeconds(int64(*s)))
+	}
 	if x, ok := sourcer.(isb.LagReader); ok {
 		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
-		if s := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; s != nil {
-			metricsOpts = append(metricsOpts, metrics.WithPendingLookbackSeconds(int64(*s)))
-		}
 	}
 	if x, ok := writers[0].(isb.Ratable); ok { // Only need to use the rate of one of the writer
 		metricsOpts = append(metricsOpts, metrics.WithRater(x))

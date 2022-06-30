@@ -20,8 +20,8 @@ const (
 
 // Ratable is the interface that wraps the Rate method.
 type Ratable interface {
-	// Rate returns the rough rate (messages/second), this is used for auto-scaling calculation
-	Rate(context.Context) (float64, error)
+	// Rate returns the rough rate (messages/second) in the past seconds, this can be used for auto-scaling calculation
+	Rate(ctx context.Context, seconds int64) (float64, error)
 }
 
 // LagReader is the interface that wraps the Pending method.
