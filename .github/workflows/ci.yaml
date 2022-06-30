@@ -11,22 +11,26 @@ jobs:
     name: UI
     runs-on: ubuntu-latest
     timeout-minutes: 6
-    env:
-      CI: ""
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
         with:
           node-version: "16"
+      - name: Setup Node-Cache
       - uses: actions/cache@v3
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
-      - run: yarn --cwd ui install
-      - run: NODE_OPTIONS="--max-old-space-size=2048" JOBS=max yarn --cwd ui build
-      - run: yarn --cwd ui test
-      - run: yarn --cwd ui lint
-      - run: git diff --exit-code
+      - name: Set CI false for Yarn Build
+        run: CI=false
+      - name: Yarn Build
+        run: make ui-build
+      - name: Yarn Test
+        run: make ui-test
+      - name: Ensure nothing changed
+        run: git diff --exit-code
       # check to see if it'll start (but not if it'll render)
       - run: yarn --cwd ui start &
       - run: until curl http://localhost:3000 > /dev/null ; do sleep 10s ; done
@@ -140,8 +144,6 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      CI: ""
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -181,6 +183,8 @@ jobs:
           k3d cluster create e2e --registry-use k3d-e2e-registry:5111
           k3d kubeconfig get e2e > ~/.kube/numaflow-e2e-config
           echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
+      - name: Set CI false for Yarn Build
+        run: CI=false
       - name: Install NumaFlow
         env:
           GOPATH: /home/runner/go

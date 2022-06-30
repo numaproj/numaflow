@@ -7,6 +7,7 @@ set -o pipefail
 source $(dirname $0)/library.sh
 header "Build UI"
 
+ensure_node
 ensure_yarn
 
 build_ui() {

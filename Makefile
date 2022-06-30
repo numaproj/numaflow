@@ -124,12 +124,16 @@ Test%:
 	-go test -v -timeout 10m -count 1 --tags test -p 1 ./test/e2e  -run='.*/$*'
 	$(MAKE) cleanup-e2e
 
-.PHONY: ui
-ui:
+.PHONY: ui-build
+ui-build:
 	./hack/build-ui.sh
 
+.PHONY: ui-test
+ui-test:
+	./hack/test-ui.sh
+
 .PHONY: image
-image: clean ui dist/$(BINARY_NAME)-linux-amd64
+image: clean ui-build dist/$(BINARY_NAME)-linux-amd64
 	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=amd64" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifeq ($(K3D),true)
@@ -140,7 +144,7 @@ image-linux-%: dist/$(BINARY_NAME)-linux-$*
 	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=$*" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$* --platform "linux/$*" --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$*; fi
 
-image-multi: ui set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
+image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
 	docker buildx build --tag $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file ./Dockerfile ${PUSH_OPTION} .
 
 set-qemu:
