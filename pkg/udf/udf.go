@@ -3,8 +3,6 @@ package udf
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"sync"
 	"time"
 
@@ -71,7 +69,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			return err
 		}
 		if sharedutil.IsWatermarkEnabled() {
-			fetchWatermark, publishWatermark = u.buildJetStreamWatermarkProgressors(ctx)
+			fetchWatermark, publishWatermark = generic.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
 		}
 		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{}
@@ -166,53 +164,4 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	wg.Wait()
 	log.Info("Exited...")
 	return nil
-}
-
-// buildJetStreamWatermarkProgressors is used to populate fetchWatermark, and a map of publishWatermark with edge name as the key.
-// These are used as watermark progressors in the pipeline, and is attached to each edge of the vertex.
-// Fetcher has one-to-one relationship , whereas we have multiple publishers as the vertex can read only from one edge,
-// and it can write to many.
-// The function is used only when watermarking is enabled on the pipeline.
-func (u *UDFProcessor) buildJetStreamWatermarkProgressors(ctx context.Context) (fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher) {
-	log := logging.FromContext(ctx)
-	publishWatermark = make(map[string]publish.Publisher)
-	// Fetcher creation
-	pipelineName := u.VertexInstance.Vertex.Spec.PipelineName
-	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
-	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, fromBufferName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
-	if err != nil {
-		log.Fatalw("JetStreamKVWatch failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
-	}
-
-	otBucket := isbsvc.JetStreamOTBucket(pipelineName, fromBufferName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucket, clients.NewInClusterJetStreamClient())
-	if err != nil {
-		log.Fatalw("JetStreamKVWatch failed", zap.String("OTBucket", otBucket), zap.Error(err))
-	}
-
-	var fetchWmWatchers = generic.BuildFetchWM(hbWatch, otWatch)
-	fetchWatermark = generic.NewGenericFetch(ctx, u.VertexInstance.Vertex.Name, generic.GetFetchKeyspace(u.VertexInstance.Vertex), fetchWmWatchers)
-
-	// Publisher map creation
-	// We do not separate Heartbeat bucket for each edge, can be reused
-	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, u.VertexInstance.Vertex.Spec.PipelineName, hbBucket, clients.NewInClusterJetStreamClient())
-	if err != nil {
-		log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
-	}
-
-	for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
-		var processorName = fmt.Sprintf("%s-%d", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
-		buffer := dfv1.GenerateEdgeBufferName(u.VertexInstance.Vertex.Namespace, pipelineName, e.From, e.To)
-		streamName := fmt.Sprintf("%s-%s", pipelineName, buffer)
-		otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, streamName)
-		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, u.VertexInstance.Vertex.Spec.PipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
-		if err != nil {
-			log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
-		}
-		var publishStores = generic.BuildPublishWM(hbStore, otStore)
-		publishWatermark[streamName] = generic.NewGenericPublish(ctx, processorName, generic.GetPublishKeySpace(u.VertexInstance.Vertex), publishStores)
-	}
-
-	return fetchWatermark, publishWatermark
 }
