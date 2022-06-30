@@ -16,17 +16,14 @@ type writeOptions struct {
 	refreshInterval time.Duration
 	// useWriteInfoAsRate indicates whether to check the write sequence for rate calculation
 	useWriteInfoAsRate bool
-	// rateLookbackSeconds is the look back seconds for rate calculation
-	rateLookbackSeconds int64
 }
 
 func defaultWriteOptions() *writeOptions {
 	return &writeOptions{
-		maxLength:           dfv1.DefaultBufferLength,
-		bufferUsageLimit:    dfv1.DefaultBufferUsageLimit,
-		refreshInterval:     1 * time.Second,
-		useWriteInfoAsRate:  false,
-		rateLookbackSeconds: 180,
+		maxLength:          dfv1.DefaultBufferLength,
+		bufferUsageLimit:   dfv1.DefaultBufferUsageLimit,
+		refreshInterval:    1 * time.Second,
+		useWriteInfoAsRate: false,
 	}
 }
 
@@ -64,13 +61,6 @@ func WithUsingWriteInfoAsRate(yes bool) WriteOption {
 	}
 }
 
-func WithWriteRateLookbackSeconds(seconds int64) WriteOption {
-	return func(o *writeOptions) error {
-		o.rateLookbackSeconds = seconds
-		return nil
-	}
-}
-
 // options for reading from JetStream
 type readOptions struct {
 	// readTimeOut is the timeout needed for read timeout
@@ -79,8 +69,6 @@ type readOptions struct {
 	useAckInfoAsRate bool
 	// ackCheckInterval is the interval for stream information check such as pending messages
 	ackInfoCheckInterval time.Duration
-	// rateLookbackSeconds is the look back seconds for rate calculation
-	rateLookbackSeconds int64
 }
 
 type ReadOption func(*readOptions) error
@@ -109,18 +97,10 @@ func WithAckInfoCheckInterval(t time.Duration) ReadOption {
 	}
 }
 
-func WithAckRateLookbackSeconds(seconds int64) ReadOption {
-	return func(o *readOptions) error {
-		o.rateLookbackSeconds = seconds
-		return nil
-	}
-}
-
 func defaultReadOptions() *readOptions {
 	return &readOptions{
 		readTimeOut:          time.Second,
 		useAckInfoAsRate:     false,
 		ackInfoCheckInterval: 3 * time.Second,
-		rateLookbackSeconds:  180,
 	}
 }
