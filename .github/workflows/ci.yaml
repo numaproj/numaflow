@@ -141,6 +141,9 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      CI: ""
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -163,6 +166,19 @@ jobs:
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
           echo /usr/local/bin >> $GITHUB_PATH
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+      - name: Setup Node-Cache
+        uses: actions/cache@v3
+        with:
+          path: ui/node_modules
+          key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
+#      - name: Run yarn commands
+#      - run: |
+#           yarn --cwd ui install
+#           yarn --cwd ui build
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
       - name: Create a registry and a cluster

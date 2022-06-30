@@ -124,9 +124,14 @@ Test%:
 	-go test -v -timeout 10m -count 1 --tags test -p 1 ./test/e2e  -run='.*/$*'
 	$(MAKE) cleanup-e2e
 
+.PHONY: ux
+ux:
+	yarn --cwd ui install
+	yarn --cwd ui build
+
 .PHONY: image
-image: clean dist/$(BINARY_NAME)-linux-amd64
-	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=amd64" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)  --target $(BINARY_NAME) -f $(DOCKERFILE) .
+image: clean ux dist/$(BINARY_NAME)-linux-amd64
+	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=amd64" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifeq ($(K3D),true)
 	k3d image import $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
