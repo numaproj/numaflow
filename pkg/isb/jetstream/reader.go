@@ -158,15 +158,16 @@ func (jr *jetStreamReader) Rate(_ context.Context, seconds int64) (float64, erro
 	}
 	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
 	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-2]
+	now := time.Now().Unix()
+	if now-startSeqInfo.timestamp > seconds {
+		return isb.RateNotAvailable, nil
+	}
 	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
-		startSeqInfo = timestampedSeqs[i]
-		if endSeqInfo.timestamp-timestampedSeqs[i].timestamp > seconds {
+		if now-timestampedSeqs[i].timestamp <= seconds {
+			startSeqInfo = timestampedSeqs[i]
+		} else {
 			break
 		}
-	}
-	// Check if it is too stale (use lookbackSeconds + 2 * interval to determine)
-	if endSeqInfo.timestamp-startSeqInfo.timestamp > seconds+2*int64(jr.opts.ackInfoCheckInterval.Seconds()) {
-		return isb.RateNotAvailable, nil
 	}
 	return float64(endSeqInfo.seq-startSeqInfo.seq) / float64(endSeqInfo.timestamp-startSeqInfo.timestamp), nil
 }
