@@ -195,7 +195,7 @@ func (u *UDFProcessor) buildJetStreamWatermarkProgressors(ctx context.Context) (
 	}
 
 	var fetchWmWatchers = generic.BuildFetchWM(hbWatch, otWatch)
-	fetchWatermark = generic.NewGenericFetcher(ctx, u.VertexInstance.Vertex.Name, generic.GetFetchKeyspace(u.VertexInstance.Vertex), fetchWmWatchers)
+	fetchWatermark = generic.NewGenericFetch(ctx, u.VertexInstance.Vertex.Name, generic.GetFetchKeyspace(u.VertexInstance.Vertex), fetchWmWatchers)
 
 	// Publisher map creation
 	// We do not separate Heartbeat bucket for each edge, can be reused
