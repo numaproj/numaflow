@@ -215,7 +215,7 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 		Handler:   mux,
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12},
 	}
-	// Build up pending information
+	// Buildup pending information
 	go ms.buildupPendingInfo(ctx)
 	// Expose pending and rate metrics
 	go ms.exposePendingAndRate(ctx)
