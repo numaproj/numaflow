@@ -114,7 +114,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 
 	f, err := forward.NewInterStepDataForward(vertex, rqr, map[string]isb.BufferWriter{
 		"to1": rqw,
-	}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, forward.WithReadBatchSize(10))
+	}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, nil, forward.WithReadBatchSize(10))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -305,7 +305,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 		},
 	}}
 
-	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil)
+	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, nil)
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -392,7 +392,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 
 	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, map[string]isb.BufferWriter{
 		"to1": suite.rqw,
-	}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil)
+	}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, nil)
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)

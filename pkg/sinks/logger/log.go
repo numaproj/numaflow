@@ -53,7 +53,7 @@ func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option) 
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{name: toLog}, forward.All, applier.Terminal, nil, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{name: toLog}, forward.All, applier.Terminal, nil, nil, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
