@@ -24,7 +24,7 @@ var (
 	processingRate = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "vertex_processing_rate",
 		Help: "Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.",
-	}, []string{"vertex", "pipeline", "period"})
+	}, []string{"pipeline", "vertex", "period"})
 
 	pending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "vertex_pending_messages",
