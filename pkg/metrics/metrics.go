@@ -32,7 +32,7 @@ var (
 	}, []string{"pipeline", "vertex", "period"})
 
 	// Always expose metrics of following lookback seconds (1m, 5m, 15m)
-	fixedLookbackSeconds = []int64{60, 300, 900}
+	fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
 )
 
 // timestampedPending is a helper struct to wrap a pending number and timestamp pair
@@ -130,8 +130,8 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 	}
 	log := logging.FromContext(ctx)
 	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds}
-	for _, i := range fixedLookbackSeconds {
-		lookbackSecondsMap[fmt.Sprint(i)] = i
+	for k, v := range fixedLookbackSeconds {
+		lookbackSecondsMap[k] = v
 	}
 	ticker := time.NewTicker(ms.refreshInterval)
 	defer ticker.Stop()
