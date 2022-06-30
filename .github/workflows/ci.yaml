@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: "16"
       - name: Setup Node-Cache
-      - uses: actions/cache@v3
+        uses: actions/cache@v3
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
