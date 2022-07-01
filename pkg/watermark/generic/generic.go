@@ -9,6 +9,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -93,6 +94,17 @@ func (g *GenericProgress) StopPublisher() {
 // and it can write to many.
 // The function is used only when watermarking is enabled on the pipeline.
 func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher) {
+	// if watermark is not enabled, use no-op.
+	if !sharedutil.IsWatermarkEnabled() {
+		fetchWatermark = NewNoOpWMProgressor()
+		publishWatermark = make(map[string]publish.Publisher)
+		for _, buffer := range vertexInstance.Vertex.GetToBuffers() {
+			streamName := isbsvc.JetStreamName(vertexInstance.Vertex.Spec.PipelineName, buffer.Name)
+			publishWatermark[streamName] = NewNoOpWMProgressor()
+		}
+
+		return fetchWatermark, publishWatermark
+	}
 
 	log := logging.FromContext(ctx)
 	publishWatermark = make(map[string]publish.Publisher)
