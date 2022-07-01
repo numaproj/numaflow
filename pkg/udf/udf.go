@@ -68,9 +68,10 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if sharedutil.IsWatermarkEnabled() {
-			fetchWatermark, publishWatermark = generic.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
-		}
+
+		// build watermark progressors
+		fetchWatermark, publishWatermark = generic.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+
 		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
