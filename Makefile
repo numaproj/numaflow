@@ -129,7 +129,7 @@ ui-build:
 	./hack/build-ui.sh
 
 .PHONY: ui-test
-ui-test:
+ui-test: ui-build
 	./hack/test-ui.sh
 
 .PHONY: image
