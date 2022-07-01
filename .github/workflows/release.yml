@@ -48,6 +48,15 @@ jobs:
         target: [ numaflow ]
     steps:
       - uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+      - name: Setup Node-Cache
+        uses: actions/cache@v3
+        with:
+          path: ui/node_modules
+          key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2

@@ -11,27 +11,22 @@ jobs:
     name: UI
     runs-on: ubuntu-latest
     timeout-minutes: 6
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
-      CI: ""
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
         with:
           node-version: "16"
-      - uses: actions/cache@v3
+      - name: Setup Node-Cache
+        uses: actions/cache@v3
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
-      - run: yarn --cwd ui install
-      - run: yarn --cwd ui build
-      - run: yarn --cwd ui test
-      - run: yarn --cwd ui lint
-      - run: git diff --exit-code
-      # check to see if it'll start (but not if it'll render)
-      - run: yarn --cwd ui start &
-      - run: until curl http://localhost:3000 > /dev/null ; do sleep 10s ; done
-        timeout-minutes: 1
+      - name: Yarn Build/Test
+        run: make ui-test
+      - name: Ensure nothing changed
+        run: git diff --exit-code
   codegen:
     name: Codegen
     runs-on: ubuntu-latest
@@ -163,6 +158,15 @@ jobs:
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
           echo /usr/local/bin >> $GITHUB_PATH
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+      - name: Setup Node-Cache
+        uses: actions/cache@v3
+        with:
+          path: ui/node_modules
+          key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
       - name: Create a registry and a cluster
