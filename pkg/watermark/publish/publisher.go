@@ -66,6 +66,7 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 
 	p.initialSetup()
 
+	// TODO: i do not think we need this autoRefreshHeartbeat flag anymore. Remove it?
 	if p.autoRefreshHeartbeat {
 		go p.publishHeartbeat()
 	}

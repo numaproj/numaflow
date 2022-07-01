@@ -128,22 +128,57 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 
 	// Publisher map creation
 	// We do not separate Heartbeat bucket for each edge, can be reused
-	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, vertexInstance.Vertex.Spec.PipelineName, hbBucket, clients.NewInClusterJetStreamClient())
+	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
 	if err != nil {
 		log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
 	}
 
 	for _, buffer := range vertexInstance.Vertex.GetToBuffers() {
-		var processorName = fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 		streamName := isbsvc.JetStreamName(pipelineName, buffer.Name)
 		otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, streamName)
-		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, vertexInstance.Vertex.Spec.PipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
+		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
 		if err != nil {
 			log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
 		}
+
 		var publishStores = BuildPublishWM(hbStore, otStore)
+		var processorName = fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 		publishWatermark[streamName] = NewGenericPublish(ctx, processorName, GetPublishKeySpace(vertexInstance.Vertex), publishStores)
 	}
 
 	return fetchWatermark, publishWatermark
+}
+
+// BuildJetStreamWatermarkProgressorsForSource is an extension of BuildJetStreamWatermarkProgressors to also return the publish stores. This is
+// for letting source implement as many publishers that it requires to progress the watermark monotonically for each individual processing entity.
+// Eg, watermark progresses independently and monotonically for each partition in a Kafka topic.
+func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, publishWM PublishWM) {
+	fetchWatermark, publishWatermark = BuildJetStreamWatermarkProgressors(ctx, vertexInstance)
+
+	if !sharedutil.IsWatermarkEnabled() {
+
+	}
+
+	log := logging.FromContext(ctx)
+	pipelineName := vertexInstance.Vertex.Spec.PipelineName
+
+	// hearbeat
+	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, vertexInstance.Vertex.GetFromBuffers()[0].Name)
+	hbKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
+	if err != nil {
+		log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
+	}
+
+	// OT
+	streamName := isbsvc.JetStreamName(pipelineName, vertexInstance.Vertex.GetFromBuffers()[0].Name)
+	otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, streamName)
+	otKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
+	if err != nil {
+		log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
+	}
+
+	// interface for publisher store (HB and OT)
+	publishWM = BuildPublishWM(hbKVStore, otKVStore)
+
+	return
 }
