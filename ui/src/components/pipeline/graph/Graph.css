@@ -1,17 +1,18 @@
 .Graph {
-    flex-grow: 1;
-    position: relative;
-    height: 100%;
+  flex-grow: 1;
+  position: relative;
+  height: 100%;
+  cursor: move;
 }
 
 .Graph .controls {
-    position: absolute;
-    right: 10px;
-    top: 10px;
-    z-index: 10;
-    font-size: 12px;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 10;
+  font-size: 12px;
 }
 
 .Graph .controls button:first-child {
-    margin-right: 10px;
+  margin-right: 10px;
 }
