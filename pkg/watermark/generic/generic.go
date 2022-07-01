@@ -94,7 +94,7 @@ func (g *GenericProgress) StopPublisher() {
 // and it can write to many.
 // The function is used only when watermarking is enabled on the pipeline.
 func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher) {
-	// if watermark is not enabled, use no-op.π
+	// if watermark is not enabled, use no-op.
 	if !sharedutil.IsWatermarkEnabled() {
 		fetchWatermark = NewNoOpWMProgressor()
 		publishWatermark = make(map[string]publish.Publisher)

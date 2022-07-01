@@ -27,7 +27,6 @@ func (n NoOpWMProgressor) GetWatermark(_ isb.Offset) processor.Watermark {
 
 // PublishWatermark does a no-op publish.
 func (n NoOpWMProgressor) PublishWatermark(_ processor.Watermark, _ isb.Offset) {
-	return
 }
 
 // GetLatestWatermark returns the default watermark as the latest watermark.
@@ -37,5 +36,4 @@ func (n NoOpWMProgressor) GetLatestWatermark() processor.Watermark {
 
 // StopPublisher stops the no-op publisher.
 func (n NoOpWMProgressor) StopPublisher() {
-	return
 }
