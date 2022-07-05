@@ -28,10 +28,10 @@ export default function NodeInfo(props: NodeInfoProps) {
   const label = node?.id + " Vertex";
 
   return (
-    <div>
+    <>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs>
-          <Tab data-testid={node?.id} label={label} {...a11yProps(0)} />
+        <Tabs value={value}>
+          <Tab  data-testid={node?.id} label={label} {...a11yProps(0)} />
         </Tabs>
       </Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -109,6 +109,6 @@ export default function NodeInfo(props: NodeInfoProps) {
           </TabPanel>
         </>
       )}
-    </div>
+    </>
   );
 }

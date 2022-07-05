@@ -93,10 +93,10 @@ export function Pods(props: PodsProps) {
         >
           Containers
         </Box>
-        <Stack direction="row" spacing={1}>
+        <Stack  direction="row" spacing={1}>
           {selectedPod.containers?.map((c: string) => {
             return (
-              <Chip
+              <Chip key={c}
                 label={c}
                 variant={selectedContainer === c ? undefined : "outlined"}
                 onClick={() => handContainerClick(c)}
@@ -144,6 +144,7 @@ export function Pods(props: PodsProps) {
     if (podsError) {
       errors.push(
         <Box
+            key={podsError}
           data-testid={"pods-error"}
         >{`Pods listing error: ${podsError}`}</Box>
       );
@@ -151,11 +152,12 @@ export function Pods(props: PodsProps) {
     if (podsDetailError) {
       errors.push(
         <Box
+            key = {podsDetailError}
           data-testid={"pods-detail-error"}
         >{`Pods metric error: ${podsDetailError}`}</Box>
       );
     } else if (!podsDetailMap) {
-      errors.push(<Box>{`Pods metric map undefined`}</Box>);
+      errors.push(<Box  key = {podsDetailError}>{`Pods metric map undefined`}</Box>);
     }
     return <Box>{errors}</Box>;
   }

@@ -20,27 +20,27 @@ export function Breadcrumbs() {
     switch (pathParts.length) {
       case 5: // pipeline view
         return [
-          <Link to="/" className="Breadcrumbs-link">
+          <Link key={"pipeline-view"} to="/" className="Breadcrumbs-link">
             Namespaces
           </Link>,
-          <Typography data-testid="pipeline-breadcrumb">{`${pathParts[2]} (${pathParts[4]})`}</Typography>,
+          <Typography key={"pipeline-typ"} data-testid="pipeline-breadcrumb">{`${pathParts[2]} (${pathParts[4]})`}</Typography>,
         ];
       case 7: // pods view
         return [
-          <Link to="/" className="Breadcrumbs-link">
+          <Link key={"pods-view"} to="/" className="Breadcrumbs-link">
             Namespaces
           </Link>,
-          <Link
+          <Link key={"namespaces-view"}
             to={`/namespaces/${pathParts[2]}/pipelines/${pathParts[4]}`}
             className="Breadcrumbs-link"
           >
             {`${pathParts[2]} (${pathParts[4]})`}
           </Link>,
-          <Typography>{pathParts[6]}</Typography>,
+          <Typography key={"pods-typo"}>{pathParts[6]}</Typography>,
         ];
       default:
         // Unsupported path
-        return <Typography>Unknown</Typography>;
+        return <Typography key={"default"}>Unknown</Typography>;
     }
   }, [location]);
 
