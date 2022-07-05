@@ -1,4 +1,4 @@
-# Releasses
+# Releases
 
 You can find the most recent version under [Github release](https://github.com/numaproj/numaflow/releases).
 

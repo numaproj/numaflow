@@ -8,42 +8,37 @@ Data processing in the UDF is supposed to be idempotent.
 
 ## Builtin UDF
 
-There are some [builtin UDFs](./builtin-functions/) can be used directly.
+There are some `Builtin Functions` can be used directly.
 
-**Cat**
+## Build Your Own UDF
 
-A `cat` builtin UDF does nothing but return the same messages it receives.
+You can build your own UDF in multiple languages. A User Defined Function could be as simple as below in Golang.
 
-```yaml
-spec:
-  vertices:
-    - name: cat-vertex
-      udf:
-        builtin:
-          name: cat
+```golang
+package main
+
+import (
+	"context"
+
+	funcsdk "github.com/numaproj/numaflow-go/function"
+)
+
+// Simply return the same msg
+func handle(ctx context.Context, key, msg []byte) (funcsdk.Messages, error) {
+	return funcsdk.MessagesBuilder().Append(funcsdk.MessageToAll(msg)), nil
+}
+
+func main() {
+	funcsdk.Start(context.Background(), handle)
+}
 ```
 
-**Filter**
+Check the links below to see the UDF examples for different languages.
 
-A `filter` builtin UDF does filter the message based on expression. `payload` keyword represents message object.
-see documentation for expression [here](FILTER_EXPRESSION.md)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/function)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/function)
 
-```yaml
-spec:
-  vertices:
-    - name: filter-vertex
-      udf:
-        builtin:
-          name: filter
-          kwargs:
-            expression: int(object(payload).id) > 100
-```
-
-## Build Your UDF
-
-You can build your own UDF in different languages [[Python](../sdks/python) | [Golang](../sdks/golang/)].
-
-Following yaml shows how to specify a customized UDF.
+After building a docker image for the written UDF, specify the image as below in the vertex spec.
 
 ```yaml
 spec:
@@ -54,9 +49,9 @@ spec:
           image: my-python-udf-example:latest
 ```
 
-## Available Environment Variables
+### Available Environment Variables
 
-Some environment variables are available in the user defined function Pods:
+Some environment variables are available in the user defined function Pods, they might be useful in you own UDF implementation.
 
 - `NUMAFLOW_NAMESPACE` - Namespace.
 - `NUMAFLOW_POD` - Pod name.
