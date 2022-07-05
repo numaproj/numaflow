@@ -16,6 +16,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -114,7 +115,13 @@ func WithReadTimeOut(timeout time.Duration) Option {
 // msgSize - size of each generated message
 // timeunit - unit of time per tick. could be any golang time.Duration.
 // writers - destinations to write to
-func NewMemGen(vertexInstance *dfv1.VertexInstance, rpu int, msgSize int32, timeunit time.Duration, writers []isb.BufferWriter, opts ...Option) (*memgen, error) {
+func NewMemGen(vertexInstance *dfv1.VertexInstance,
+	rpu int,
+	msgSize int32,
+	timeunit time.Duration,
+	writers []isb.BufferWriter,
+	fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores *generic.PublishWMStores, // watermarks
+	opts ...Option) (*memgen, error) {
 	gensrc := &memgen{
 		rpu:          rpu,
 		msgSize:      msgSize,

@@ -14,6 +14,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/zap"
 )
 
@@ -41,7 +42,7 @@ func WithSeparateOTBuckets(separate bool) GenericProgressOption {
 }
 
 // NewGenericProgress will move the watermark for all the vertices once consumed fromEdge the source.
-func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace string, publishKeyspace string, publishWM PublishWM, fetchWM FetchWM, inputOpts ...GenericProgressOption) *GenericProgress {
+func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace string, publishKeyspace string, publishWM PublishWMStores, fetchWM FetchWMWatchers, inputOpts ...GenericProgressOption) *GenericProgress {
 	opts := &genericProgressOptions{
 		separateOTBucket: false,
 	}
@@ -123,7 +124,7 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 		log.Fatalw("JetStreamKVWatch failed", zap.String("OTBucket", otBucket), zap.Error(err))
 	}
 
-	var fetchWmWatchers = BuildFetchWM(hbWatch, otWatch)
+	var fetchWmWatchers = BuildFetchWMWatchers(hbWatch, otWatch)
 	fetchWatermark = NewGenericFetch(ctx, vertexInstance.Vertex.Name, GetFetchKeyspace(vertexInstance.Vertex), fetchWmWatchers)
 
 	// Publisher map creation
@@ -141,7 +142,7 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 			log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
 		}
 
-		var publishStores = BuildPublishWM(hbStore, otStore)
+		var publishStores = BuildPublishWMStores(hbStore, otStore)
 		var processorName = fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 		publishWatermark[streamName] = NewGenericPublish(ctx, processorName, GetPublishKeySpace(vertexInstance.Vertex), publishStores)
 	}
@@ -152,11 +153,13 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 // BuildJetStreamWatermarkProgressorsForSource is an extension of BuildJetStreamWatermarkProgressors to also return the publish stores. This is
 // for letting source implement as many publishers that it requires to progress the watermark monotonically for each individual processing entity.
 // Eg, watermark progresses independently and monotonically for each partition in a Kafka topic.
-func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, publishWM PublishWM) {
+func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, publishWM PublishWMStores) {
 	fetchWatermark, publishWatermark = BuildJetStreamWatermarkProgressors(ctx, vertexInstance)
 
+	// return no-ops if not enabled!
 	if !sharedutil.IsWatermarkEnabled() {
-
+		publishWM = BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+		return fetchWatermark, publishWatermark, publishWM
 	}
 
 	log := logging.FromContext(ctx)
@@ -178,7 +181,7 @@ func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInst
 	}
 
 	// interface for publisher store (HB and OT)
-	publishWM = BuildPublishWM(hbKVStore, otKVStore)
+	publishWM = BuildPublishWMStores(hbKVStore, otKVStore)
 
-	return
+	return fetchWatermark, publishWatermark, publishWM
 }

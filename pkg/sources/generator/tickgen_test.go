@@ -24,7 +24,7 @@ func TestRead(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest})
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, nil)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -52,7 +52,7 @@ func TestStop(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest})
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, nil)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

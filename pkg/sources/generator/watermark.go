@@ -43,8 +43,8 @@ func (mg *memgen) buildWMProgressor(vertexInstance *dfv1.VertexInstance) error {
 	if err != nil {
 		return err
 	}
-	var fetchWM = generic.BuildFetchWM(nil, nil)
-	var publishWM = generic.BuildPublishWM(nil, nil)
+	var fetchWM = generic.BuildFetchWMWatchers(nil, nil)
+	var publishWM = generic.BuildPublishWMStores(nil, nil)
 	var wmProgressor = generic.NewGenericProgress(ctx, fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica), sourcePublishKeySpace, generic.GetPublishKeySpace(vertexInstance.Vertex), publishWM, fetchWM)
 	mg.progressor.wmProgressor = wmProgressor
 

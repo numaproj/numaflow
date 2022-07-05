@@ -31,7 +31,7 @@ func TestWatermark(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	mgen, err := NewMemGen(m, 1, 8, time.Millisecond, []isb.BufferWriter{dest})
+	mgen, err := NewMemGen(m, 1, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, nil)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
