@@ -6,3 +6,8 @@
 .react-flow__attribution {
   display: none !important;
 }
+
+.logo {
+  margin-left: -30px;
+  margin-top: -10px;
+}

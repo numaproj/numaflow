@@ -13,7 +13,7 @@ import ListItemText from "@mui/material/ListItemText";
 import { Breadcrumbs } from "./components/breadcrumbs/Breadcrumbs";
 import { Namespaces } from "./components/namespaces/Namespaces";
 import { Pipeline } from "./components/pipeline/Pipeline";
-
+import logo from "./images/icon.png";
 import "./App.css";
 
 const drawerWidth = 240;
@@ -40,6 +40,7 @@ function App() {
             }}
           >
             <Toolbar>
+                <img src={logo} alt="logo" className={'logo'}/>
               <Typography
                 sx={{
                   fontSize: "1.25rem",
