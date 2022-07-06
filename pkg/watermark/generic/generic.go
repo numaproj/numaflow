@@ -56,9 +56,9 @@ func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace
 	// to generic watermark for a UDF, it has to start the Fetcher and the Publisher
 
 	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace)
-	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.hbStore, publishWM.otStore)
+	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.HBStore, publishWM.OTStore)
 
-	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.hbWatch, fetchWM.otWatch)
+	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.HBWatch, fetchWM.OTWatch)
 	udfFetch := fetch.NewEdgeBuffer(ctx, processorName, udfFromVertex)
 
 	u := &GenericProgress{

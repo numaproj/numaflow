@@ -18,15 +18,15 @@ var _ fetch.Fetcher = (*GenericFetch)(nil)
 
 // FetchWMWatchers has the watcher information required for fetching watermarks.
 type FetchWMWatchers struct {
-	hbWatch store.WatermarkKVWatcher
-	otWatch store.WatermarkKVWatcher
+	HBWatch store.WatermarkKVWatcher
+	OTWatch store.WatermarkKVWatcher
 }
 
 // BuildFetchWMWatchers builds the FetchWMWatchers
 func BuildFetchWMWatchers(hbWatch store.WatermarkKVWatcher, otWatch store.WatermarkKVWatcher) FetchWMWatchers {
 	return FetchWMWatchers{
-		hbWatch: hbWatch,
-		otWatch: otWatch,
+		HBWatch: hbWatch,
+		OTWatch: otWatch,
 	}
 }
 
@@ -34,7 +34,7 @@ func BuildFetchWMWatchers(hbWatch store.WatermarkKVWatcher, otWatch store.Waterm
 // fetchKeyspace is obsolete, and will be removed in subsequent iterations. fetchWM is a struct for retrieving both the heartbeat
 // and the offset watermark timeline (Vn-1 vertex).
 func NewGenericFetch(ctx context.Context, vertexName string, fetchKeyspace string, fetchWM FetchWMWatchers) *GenericFetch {
-	fromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.hbWatch, fetchWM.otWatch)
+	fromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.HBWatch, fetchWM.OTWatch)
 	fromEdge := fetch.NewEdgeBuffer(ctx, vertexName, fromVertex)
 
 	gf := &GenericFetch{

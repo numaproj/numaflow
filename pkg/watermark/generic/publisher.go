@@ -11,15 +11,15 @@ import (
 
 // PublishWMStores stores the store information for publishing the watermark.
 type PublishWMStores struct {
-	hbStore store.WatermarkKVStorer
-	otStore store.WatermarkKVStorer
+	HBStore store.WatermarkKVStorer
+	OTStore store.WatermarkKVStorer
 }
 
 // BuildPublishWMStores builds the PublishWMStores.
 func BuildPublishWMStores(hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer) PublishWMStores {
 	return PublishWMStores{
-		hbStore: hbStore,
-		otStore: otStore,
+		HBStore: hbStore,
+		OTStore: otStore,
 	}
 }
 
@@ -35,7 +35,7 @@ var _ publish.Publisher = (*GenericPublish)(nil)
 // and the offset watermark timeline stores for the Vn vertex.
 func NewGenericPublish(ctx context.Context, processorName string, publishKeyspace string, publishWM PublishWMStores) *GenericPublish {
 	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace)
-	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.hbStore, publishWM.otStore)
+	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.HBStore, publishWM.OTStore)
 	gp := &GenericPublish{
 		toEdge: udfPublish,
 	}

@@ -110,6 +110,8 @@ func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	}
 }
 
+// loadLatestFromStore loads the latest watermark stored in the watermark store.
+// TODO: how to repopulate if the processing unit is down for a really long time?
 func (p *Publish) loadLatestFromStore() processor.Watermark {
 	var watermarks = p.getAllOTKeysFromBucket()
 	var latestWatermark int64 = math.MinInt64
