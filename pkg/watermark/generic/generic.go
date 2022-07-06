@@ -100,8 +100,7 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 		fetchWatermark = NewNoOpWMProgressor()
 		publishWatermark = make(map[string]publish.Publisher)
 		for _, buffer := range vertexInstance.Vertex.GetToBuffers() {
-			streamName := isbsvc.JetStreamName(vertexInstance.Vertex.Spec.PipelineName, buffer.Name)
-			publishWatermark[streamName] = NewNoOpWMProgressor()
+			publishWatermark[buffer.Name] = NewNoOpWMProgressor()
 		}
 
 		return fetchWatermark, publishWatermark
@@ -135,8 +134,7 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 	}
 
 	for _, buffer := range vertexInstance.Vertex.GetToBuffers() {
-		streamName := isbsvc.JetStreamName(pipelineName, buffer.Name)
-		otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, streamName)
+		otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, buffer.Name)
 		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
 		if err != nil {
 			log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
@@ -144,7 +142,7 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 
 		var publishStores = BuildPublishWMStores(hbStore, otStore)
 		var processorName = fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
-		publishWatermark[streamName] = NewGenericPublish(ctx, processorName, GetPublishKeySpace(vertexInstance.Vertex), publishStores)
+		publishWatermark[buffer.Name] = NewGenericPublish(ctx, processorName, GetPublishKeySpace(vertexInstance.Vertex), publishStores)
 	}
 
 	return fetchWatermark, publishWatermark
@@ -165,16 +163,16 @@ func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInst
 	log := logging.FromContext(ctx)
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 
+	sourceBufferName := vertexInstance.Vertex.GetFromBuffers()[0].Name
 	// hearbeat
-	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, vertexInstance.Vertex.GetFromBuffers()[0].Name)
+	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, sourceBufferName)
 	hbKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
 	if err != nil {
 		log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
 	}
 
 	// OT
-	streamName := isbsvc.JetStreamName(pipelineName, vertexInstance.Vertex.GetFromBuffers()[0].Name)
-	otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, streamName)
+	otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, sourceBufferName)
 	otKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
 	if err != nil {
 		log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
