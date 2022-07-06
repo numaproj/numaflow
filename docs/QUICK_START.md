@@ -42,6 +42,13 @@ Watch the `output` vertex pod log, you will see messages keep coming.
 2021/12/17 22:14:35 (simple-pipeline-output) {"Data":"6FmrNo6qwRY=","Createdts":1639779267118848488}
 ```
 
+To access the NumaFlow UI, use the following:
+
+```shell
+kubectl port-forward svc/numaflow-server-svc 8443
+```
+You should be able to access it at: https://localhost:8443
+
 You can delete the pipeline using
 
 ```shell
