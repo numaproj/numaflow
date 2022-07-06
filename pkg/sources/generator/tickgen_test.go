@@ -2,6 +2,8 @@ package generator
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"testing"
 	"time"
 
@@ -24,7 +26,8 @@ func TestRead(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, nil)
+	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, &publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -52,7 +55,8 @@ func TestStop(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, nil)
+	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, &publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
