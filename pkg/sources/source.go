@@ -37,7 +37,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// watermark variables no-op initialization
 	var fetchWatermark fetch.Fetcher = generic.NewNoOpWMProgressor()
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
-	var publishWatermark map[string]publish.Publisher
+	publishWatermark := make(map[string]publish.Publisher)
 	for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 		buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
 		publishWatermark[buffer] = generic.NewNoOpWMProgressor()
