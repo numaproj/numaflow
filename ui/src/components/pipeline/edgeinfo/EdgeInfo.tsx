@@ -13,6 +13,7 @@ import {
 import TabPanel from "../tab-panel/TabPanel";
 import { SyntheticEvent, useState } from "react";
 import { Edge } from "react-flow-renderer";
+import TableBody from "@mui/material/TableBody";
 
 interface EdgeInfoProps {
   edge: Edge;
@@ -43,9 +44,9 @@ export default function EdgeInfo(props: EdgeInfoProps) {
   const label = `${edge?.id} Buffer`;
 
   return (
-    <div>
+    <Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs>
+        <Tabs value={value}>
           <Tab label={label} {...a11yProps(0)} />
         </Tabs>
       </Box>
@@ -83,6 +84,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
             sx={{ borderBottom: 1, borderColor: "divider", width: 300 }}
           >
             <Table aria-label="edge-info">
+              <TableBody>
               <TableRow data-testid="isFull">
                 <TableCell>isFull</TableCell>
                 <TableCell>{isFull}</TableCell>
@@ -103,6 +105,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
                 <TableCell>Buffer Usage</TableCell>
                 <TableCell>{bufferUsage}%</TableCell>
               </TableRow>
+              </TableBody>
             </Table>
           </TableContainer>
         </TabPanel>
@@ -123,6 +126,6 @@ export default function EdgeInfo(props: EdgeInfoProps) {
           />
         </TabPanel>
       )}
-    </div>
+    </Box>
   );
 }

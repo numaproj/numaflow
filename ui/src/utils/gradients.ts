@@ -7,14 +7,14 @@ const YELLOW = "yellow";
 const GREY = "grey";
 const GREEN = "green";
 
-export const rgba2rgb = (background: any, color: any, alpha: any) => {
+export const rgba2rgb = (background: number[], color: number[], alpha: number) => {
   const r = Math.floor((1 - alpha) * background[0] + alpha * color[0]);
   const g = Math.floor((1 - alpha) * background[1] + alpha * color[1]);
   const b = Math.floor((1 - alpha) * background[2] + alpha * color[2]);
   return "#" + ((r << 16) | (g << 8) | b).toString(16);
 };
 
-export const getColorCode = (type: any, value: number) => {
+export const getColorCode = (type: FillType, value: number) => {
   if (value > 100) {
     return INFINITE;
   }
@@ -37,9 +37,18 @@ export const getColorCode = (type: any, value: number) => {
 
   return GREEN;
 };
+// type of fill
+interface FillType {
+    infinite: number[];
+    red: number[];
+    orange: number[];
+    yellow: number[];
+    green: number[];
+}
+
 
 export const fill = (
-  type: any,
+  type: FillType,
   value: number,
   opacity: number,
   limit = 100
