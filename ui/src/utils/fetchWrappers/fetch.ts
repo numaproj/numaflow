@@ -7,10 +7,10 @@ export interface Options {
 
 export const useFetch = (
   url: string,
-  fetchOptions?: any,
+  fetchOptions?: RequestInit,
   options?: Options
 ) => {
-  const [data, setData] = useState<any>(undefined);
+  const [data, setData] = useState<any>();
   const [error, setError] = useState<any>(undefined);
   const [loading, setLoading] = useState<boolean>(
     (options && !options.skip) || true

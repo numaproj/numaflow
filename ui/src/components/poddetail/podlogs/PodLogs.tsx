@@ -211,6 +211,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
       >
         {filteredLogs.map((l: string) => (
           <Box
+              key={l}
             component="span"
             sx={{
               whiteSpace: "nowrap",
