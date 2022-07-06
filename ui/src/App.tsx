@@ -13,7 +13,7 @@ import ListItemText from "@mui/material/ListItemText";
 import { Breadcrumbs } from "./components/breadcrumbs/Breadcrumbs";
 import { Namespaces } from "./components/namespaces/Namespaces";
 import { Pipeline } from "./components/pipeline/Pipeline";
-import logo from "./images/icon.png";
+import logo from "./images/icon-on-blue-bg.png";
 import "./App.css";
 
 const drawerWidth = 240;
@@ -45,6 +45,7 @@ function App() {
                 sx={{
                   fontSize: "1.25rem",
                   fontWeight: 500,
+                    marginLeft: "20px"
                 }}
                 variant="h6"
                 noWrap

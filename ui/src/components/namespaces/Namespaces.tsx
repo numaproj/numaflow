@@ -6,14 +6,14 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import { useFetch } from "../../utils/fetchWrappers/fetch";
-
-import "./Namespaces.css";
-import {useState} from "react";
+import { useState } from "react";
+import { NamespaceRowContent } from "./NamespaceRowContent";
 import IconButton from "@mui/material/IconButton";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import Collapse from "@mui/material/Collapse";
-import {NamespaceRowContent} from "./NamespaceRowContent";
+import "./Namespaces.css";
+
 
 export function Namespaces() {
   const { data } = useFetch("/api/v1/namespaces");
