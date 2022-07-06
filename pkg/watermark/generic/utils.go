@@ -26,11 +26,6 @@ func GetJetStreamConnection(ctx context.Context) (nats.JetStreamContext, error) 
 	return js, nil
 }
 
-// GetHeartbeatBucket returns the heartbeat bucket.
-func GetHeartbeatBucket(js nats.JetStreamContext, publishKeyspace string) (nats.KeyValue, error) {
-	return js.KeyValue(publishKeyspace + "_PROCESSORS")
-}
-
 // GetFetchKeyspace gets the fetch keyspace name fromEdge the vertex.
 func GetFetchKeyspace(v *dfv1.Vertex) string {
 	if len(v.Spec.FromEdges) > 0 {
@@ -44,7 +39,11 @@ func GetFetchKeyspace(v *dfv1.Vertex) string {
 
 // GetPublishKeySpace gets the publish keyspace name fromEdge the vertex
 func GetPublishKeySpace(v *dfv1.Vertex) string {
-	return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.Name)
+	if v.IsASource() {
+		return dfv1.GenerateSourceBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name)
+	} else {
+		return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.Name)
+	}
 }
 
 // CreateProcessorBucketIfMissing creates the KV bucket if missing

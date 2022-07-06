@@ -9,17 +9,17 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// PublishWM stores the store information for publishing the watermark.
-type PublishWM struct {
-	hbStore store.WatermarkKVStorer
-	otStore store.WatermarkKVStorer
+// PublishWMStores stores the store information for publishing the watermark.
+type PublishWMStores struct {
+	HBStore store.WatermarkKVStorer
+	OTStore store.WatermarkKVStorer
 }
 
-// BuildPublishWM builds the PublishWM
-func BuildPublishWM(hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer) PublishWM {
-	return PublishWM{
-		hbStore: hbStore,
-		otStore: otStore,
+// BuildPublishWMStores builds the PublishWMStores.
+func BuildPublishWMStores(hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer) PublishWMStores {
+	return PublishWMStores{
+		HBStore: hbStore,
+		OTStore: otStore,
 	}
 }
 
@@ -33,9 +33,9 @@ var _ publish.Publisher = (*GenericPublish)(nil)
 // NewGenericPublish returns GenericPublish. processorName is the unique processor (pod) that is running on this vertex.
 // publishKeyspace is obsolete, and will be removed in subsequent iterations. publishWM is a struct for storing both the heartbeat
 // and the offset watermark timeline stores for the Vn vertex.
-func NewGenericPublish(ctx context.Context, processorName string, publishKeyspace string, publishWM PublishWM) *GenericPublish {
+func NewGenericPublish(ctx context.Context, processorName string, publishKeyspace string, publishWM PublishWMStores) *GenericPublish {
 	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace)
-	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.hbStore, publishWM.otStore)
+	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.HBStore, publishWM.OTStore)
 	gp := &GenericPublish{
 		toEdge: udfPublish,
 	}
