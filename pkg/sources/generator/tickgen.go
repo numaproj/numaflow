@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"os"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -78,7 +78,11 @@ type memgen struct {
 	// read timeout for the reader
 	readTimeout time.Duration
 
-	// watermark progressor
+	// vertex instance
+	vertexInstance *dfv1.VertexInstance
+	// source watermark publisher
+	sourcePublishWM publish.Publisher
+	// TODO: delete this watermark progressor
 	progressor *watermark
 
 	logger *zap.SugaredLogger
@@ -114,14 +118,21 @@ func WithReadTimeOut(timeout time.Duration) Option {
 // msgSize - size of each generated message
 // timeunit - unit of time per tick. could be any golang time.Duration.
 // writers - destinations to write to
-func NewMemGen(vertexInstance *dfv1.VertexInstance, rpu int, msgSize int32, timeunit time.Duration, writers []isb.BufferWriter, opts ...Option) (*memgen, error) {
+func NewMemGen(vertexInstance *dfv1.VertexInstance,
+	rpu int,
+	msgSize int32,
+	timeunit time.Duration,
+	writers []isb.BufferWriter,
+	fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores *generic.PublishWMStores, // watermarks
+	opts ...Option) (*memgen, error) {
 	gensrc := &memgen{
-		rpu:          rpu,
-		msgSize:      msgSize,
-		timeunit:     timeunit,
-		name:         vertexInstance.Vertex.Spec.Name,
-		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
-		genfn:        recordGenerator,
+		rpu:            rpu,
+		msgSize:        msgSize,
+		timeunit:       timeunit,
+		name:           vertexInstance.Vertex.Spec.Name,
+		pipelineName:   vertexInstance.Vertex.Spec.PipelineName,
+		genfn:          recordGenerator,
+		vertexInstance: vertexInstance,
 		progressor: &watermark{
 			sourcePublish: nil,
 			wmProgressor:  nil,
@@ -157,20 +168,11 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance, rpu int, msgSize int32, time
 		}
 	}
 
-	var wmProgressor generic.Progressor = nil
-	var err error
-	// TODO: pass it as option
-	if val, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok && val == "true" {
-		err = gensrc.buildWMProgressor(vertexInstance)
-		if err != nil {
-			return nil, err
-		}
-		wmProgressor = gensrc.progressor.wmProgressor
-	}
+	// attach a source publisher so the source can assign the watermarks.
+	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
-	_ = wmProgressor
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, forward.All, applier.Terminal, nil, nil, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -209,12 +211,11 @@ func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, er
 			// publish the last message's offset with watermark, this is an optimization to avoid too many insert calls
 			// into the offset timeline store.
 			// Please note that we are inserting the watermark before the data has been persisted into ISB by the forwarder.
-			if mg.progressor.sourcePublish != nil {
-				o := msgs[len(msgs)-1].ReadOffset
-				nanos, _ := o.Sequence()
-				// remove the nanosecond precision
-				mg.progressor.sourcePublish.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
-			}
+			o := msgs[len(msgs)-1].ReadOffset
+			nanos, _ := o.Sequence()
+			// remove the nanosecond precision
+			mg.sourcePublishWM.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
+
 		case <-timeout:
 			mg.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
 			return msgs, nil
