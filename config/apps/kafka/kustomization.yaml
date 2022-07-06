@@ -1,6 +1,0 @@
-resources:
-  - kafka-minimal.yaml
-
-commonLabels:
-  "numaflow-e2e": "true"
-
