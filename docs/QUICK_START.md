@@ -1,6 +1,6 @@
 # Quick Start
 
-To see how NumaFlow works, you can install it, and run a simple pipeline, which contains a source to generate messsages, and a function vertex that echos the messages, and a log sink printing the messages.
+To see how NumaFlow works, you can install it, and run a simple pipeline, which contains a source vertex to generate messages, and a function vertex that echos the messages, and a log sink printing the messages.
 
 ## Prerequisites
 
