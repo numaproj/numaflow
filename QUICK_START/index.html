@@ -420,7 +420,7 @@
       
         <li class="md-nav__item">
   <a href="#numaflow-installation" class="md-nav__link">
-    NumaFlow Installation
+    Numaflow Installation
   </a>
   
 </li>
@@ -1097,7 +1097,7 @@
       
         <li class="md-nav__item">
   <a href="#numaflow-installation" class="md-nav__link">
-    NumaFlow Installation
+    Numaflow Installation
   </a>
   
 </li>
@@ -1135,9 +1135,9 @@
 
 
 <h1 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h1>
-<p>To see how NumaFlow works, you can install it, and run a simple pipeline, which contains a source vertex to generate messages, and a function vertex that echos the messages, and a log sink printing the messages.</p>
+<p>To see how Numaflow works, you can install it, and run a simple pipeline, which contains a source vertex to generate messages, and a function vertex that echos the messages, and a log sink printing the messages.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
-<p>A Kubernetes cluster is needed to try out NumaFlow. If needed, you can create a cluster locally using
+<p>A Kubernetes cluster is needed to try out Numaflow. If needed, you can create a cluster locally using
 <a href="https://k3d.io/"><code>k3d</code></a> as below. You also need to get <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/"><code>kubectl</code></a> installed.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Create a cluster with default name k3s-default</span>
 k3d cluster create -i rancher/k3s:v1.21.7-k3s1
@@ -1145,7 +1145,7 @@ k3d cluster create -i rancher/k3s:v1.21.7-k3s1
 <span class="c1"># Get kubeconfig for the cluster</span>
 k3d kubeconfig get k3s-default
 </code></pre></div>
-<h2 id="numaflow-installation">NumaFlow Installation<a class="headerlink" href="#numaflow-installation" title="Permanent link">&para;</a></h2>
+<h2 id="numaflow-installation">Numaflow Installation<a class="headerlink" href="#numaflow-installation" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>kubectl create ns numaflow-system
 kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
 </code></pre></div>
@@ -1153,7 +1153,7 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
 <div class="highlight"><pre><span></span><code>kubectl -n numaflow-system port-forward deployment/numaflow-server <span class="m">8443</span>:8443
 </code></pre></div>
 <h2 id="a-simple-pipeline">A Simple Pipeline<a class="headerlink" href="#a-simple-pipeline" title="Permanent link">&para;</a></h2>
-<p><a href="../INTER_STEP_BUFFER/">Inter-Step Buffers</a> are essential to run NumaFlow pipelines, to get Inter-Step Buffers in place, an <a href="../INTER_STEP_BUFFER_SERVICE/">Inter-Step Buffer Service</a> is required. We use <a href="https://docs.nats.io/nats-concepts/jetstream">Nats JetStream</a> as an <code>Inter-Step Buffer Service</code> provider in this example.</p>
+<p><a href="../INTER_STEP_BUFFER/">Inter-Step Buffers</a> are essential to run Numaflow pipelines, to get Inter-Step Buffers in place, an <a href="../INTER_STEP_BUFFER_SERVICE/">Inter-Step Buffer Service</a> is required. We use <a href="https://docs.nats.io/nats-concepts/jetstream">Nats JetStream</a> as an <code>Inter-Step Buffer Service</code> provider in this example.</p>
 <div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
 <p>After all the isbsvc pods are up, create a simple pipeline, and you can see the pipeline topology in the UI.</p>
@@ -1177,7 +1177,7 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
 <div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 </code></pre></div>
 <h2 id="whats-next">What's Next<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h2>
-<p>After exploring how a NumaFlow pipeline runs, you can check what data <a href="../sources/GENERATOR/">Sources</a> and <a href="../sinks/KAFKA/">Sinks</a> NumaFlow supports out of the box, or learn how to write <a href="../USER_DEFINED_FUNCTIONS/">User Defined Functions</a>.</p>
+<p>After exploring how a Numaflow pipeline runs, you can check what data <a href="../sources/GENERATOR/">Sources</a> and <a href="../sinks/KAFKA/">Sinks</a> Numaflow supports out of the box, or learn how to write <a href="../USER_DEFINED_FUNCTIONS/">User Defined Functions</a>.</p>
 
               
             </article>

@@ -816,7 +816,7 @@
         
           <li class="md-nav__item">
   <a href="#numaflow-autoscaling" class="md-nav__link">
-    NumaFlow Autoscaling
+    Numaflow Autoscaling
   </a>
   
 </li>
@@ -1111,7 +1111,7 @@
         
           <li class="md-nav__item">
   <a href="#numaflow-autoscaling" class="md-nav__link">
-    NumaFlow Autoscaling
+    Numaflow Autoscaling
   </a>
   
 </li>
@@ -1161,19 +1161,19 @@
 
 
 <h1 id="auto-scaling">Auto Scaling<a class="headerlink" href="#auto-scaling" title="Permanent link">&para;</a></h1>
-<p>NumaFlow is able to run with both <code>Horizontal Pod Autoscaling</code> and <code>Vertical Pod Autoscaling</code>.</p>
+<p>Numaflow is able to run with both <code>Horizontal Pod Autoscaling</code> and <code>Vertical Pod Autoscaling</code>.</p>
 <h2 id="horizontal-pod-autoscaling">Horizontal Pod Autoscaling<a class="headerlink" href="#horizontal-pod-autoscaling" title="Permanent link">&para;</a></h2>
-<p><code>Horizontal Pod Autoscaling</code> approaches supported in NumaFlow include:</p>
+<p><code>Horizontal Pod Autoscaling</code> approaches supported in Numaflow include:</p>
 <ul>
-<li>NumaFlow Autoscaling</li>
+<li>Numaflow Autoscaling</li>
 <li><a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Kubernetes HPA</a></li>
 <li>Third Party Autoscaling (such as <a href="https://keda.sh/">KEDA</a>)</li>
 </ul>
-<h3 id="numaflow-autoscaling">NumaFlow Autoscaling<a class="headerlink" href="#numaflow-autoscaling" title="Permanent link">&para;</a></h3>
-<p>NumaFlow provides autoscaling capability out of the box.</p>
+<h3 id="numaflow-autoscaling">Numaflow Autoscaling<a class="headerlink" href="#numaflow-autoscaling" title="Permanent link">&para;</a></h3>
+<p>Numaflow provides autoscaling capability out of the box.</p>
 <p>More detail is coming soon.</p>
 <h3 id="kubernetes-hpa">Kubernetes HPA<a class="headerlink" href="#kubernetes-hpa" title="Permanent link">&para;</a></h3>
-<p><a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Kubernetes HPA</a> is supported in NumaFlow for any type of Vertex. To use HPA, remember to point the <code>scaleTargetRef</code> to the vertex as below.</p>
+<p><a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Kubernetes HPA</a> is supported in Numaflow for any type of Vertex. To use HPA, remember to point the <code>scaleTargetRef</code> to the vertex as below.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">autoscaling/v2beta1</span><span class="w"></span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HorizontalPodAutoscaler</span><span class="w"></span>
 <span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
@@ -1194,7 +1194,7 @@
 <p>With the configuration above, Kubernetes HPA controller will keep the target utilization of the pods of the Vertex at 50%.</p>
 <p>Kubernetes HPA autoscaling is usful for those Source vertice not able to count pending messages, such as <a href="../sources/HTTP/">HTTP</a>.</p>
 <h3 id="third-party-autoscaling">Third Party Autoscaling<a class="headerlink" href="#third-party-autoscaling" title="Permanent link">&para;</a></h3>
-<p>Third party autoscaling tools like <a href="https://keda.sh/">KEDA</a> are also supported in NumaFlow, which can be used to auto scale any type of vertex with the scalers it supports.</p>
+<p>Third party autoscaling tools like <a href="https://keda.sh/">KEDA</a> are also supported in Numaflow, which can be used to auto scale any type of vertex with the scalers it supports.</p>
 <p>To use KEDA for vertex auto scaling, same as Kubernetes HPA, point the <code>scaleTargetRef</code> to your vertex.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keda.sh/v1alpha1</span><span class="w"></span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ScaledObject</span><span class="w"></span>
