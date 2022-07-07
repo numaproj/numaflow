@@ -180,7 +180,7 @@ lint: $(GOPATH)/bin/golangci-lint
 	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
 
 .PHONY: start
-start: githooks image
+start: image
 	kubectl apply -f test/manifests/numaflow-ns.yaml
 	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
 	kubectl -n numaflow-system wait --for=condition=Ready --timeout 60s pod --all

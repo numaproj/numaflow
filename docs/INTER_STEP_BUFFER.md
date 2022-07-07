@@ -1,6 +1,6 @@
 # Inter-Step Buffer
 
-A pipeline contains multiple vertices to ingest data from sources, processing data, and forward processed data to sinks. Vertices are not connected directly, but through Inter-Step Buffers.
+A `Pipeline` contains multiple vertices to ingest data from sources, processing data, and forward processed data to sinks. Vertices are not connected directly, but through Inter-Step Buffers.
 
 Inter-Step Buffer can be implemented by a variety of data buffering technologies, those technologies should support:
 
