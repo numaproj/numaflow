@@ -200,7 +200,7 @@ endif
 	cp hack/git/hooks/$* .git/hooks/$*
 
 .PHONY: githooks
-githooks: .git/hooks/pre-push .git/hooks/commit-msg
+githooks: .git/hooks/commit-msg
 
 .PHONY: pre-push
 pre-push: codegen lint
