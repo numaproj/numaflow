@@ -18,7 +18,7 @@ spec:
 **Filter**
 
 A `filter` builtin UDF does filter the message based on expression. `payload` keyword represents message object.
-see documentation for expression [here](FILTER.md#Expression)
+see documentation for expression [here](FILTER.md#expression)
 
 ```yaml
 spec:
