@@ -31,16 +31,16 @@ kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 
 ## A Simple Pipeline
 
-[Inter-Step Buffers](./INTER_STEP_BUFFER.md) are esstienal to run NumaFlow pipelines, to get Inter-Step Buffers in place, an [Inter-Step Buffer Service](./INTER_STEP_BUFFER_SERVICE.md) is required. We use [Nats JetStream](https://docs.nats.io/nats-concepts/jetstream) as a `Inter-Step Buffer Service` provider in this example.
+[Inter-Step Buffers](./INTER_STEP_BUFFER.md) are essential to run NumaFlow pipelines, to get Inter-Step Buffers in place, an [Inter-Step Buffer Service](./INTER_STEP_BUFFER_SERVICE.md) is required. We use [Nats JetStream](https://docs.nats.io/nats-concepts/jetstream) as an `Inter-Step Buffer Service` provider in this example.
 
 ```shell
-kubectl apply -f ./examples/0-isbsvc-jetstream.yaml
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 ```
 
 After all the isbsvc pods are up, create a simple pipeline, and you can see the pipeline topoligy in the UI.
 
 ```shell
-kubectl apply -f ./examples/1-simple-pipeline.yaml
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
 
 Watch the `output` vertex pod log, you will see messages keep coming.
@@ -60,13 +60,13 @@ Watch the `output` vertex pod log, you will see messages keep coming.
 You can delete the pipeline by using
 
 ```shell
-kubectl delete -f ./examples/1-simple-pipeline.yaml
+kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
 
 The `Inter-Step Buffer Service` can be deleted by
 
 ```shell
-kubectl delete -f ./examples/0-isbsvc-jetstream.yaml
+kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
 
 ## What's Next
