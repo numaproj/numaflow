@@ -49,7 +49,7 @@ function App() {
                 noWrap
                 component="div"
               >
-                NumaFlow
+                Numaflow
               </Typography>
             </Toolbar>
           </AppBar>

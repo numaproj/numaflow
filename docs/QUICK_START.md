@@ -15,7 +15,9 @@ k3d cluster create -i rancher/k3s:v1.21.7-k3s1
 k3d kubeconfig get k3s-default
 ```
 
-## Numaflow Installation
+## Installation
+
+Run following command lines to install Numaflow.
 
 ```sh
 kubectl create ns numaflow-system

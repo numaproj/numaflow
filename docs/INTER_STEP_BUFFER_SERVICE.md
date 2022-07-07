@@ -186,7 +186,7 @@ maxmemory 512mb
 maxmemory-policy allkeys-lru
 ```
 
-A sample Sentile configuration:
+A sample Sentinel configuration:
 
 ```
 sentinel down-after-milliseconds mymaster 10000

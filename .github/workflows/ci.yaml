@@ -5,7 +5,7 @@ on:
       - "main"
       - "release-*"
   pull_request:
-    branches: [ main ]
+    branches: [main]
 jobs:
   ui:
     name: UI
@@ -107,7 +107,7 @@ jobs:
       - name: Insall Redis
         uses: shogo82148/actions-setup-redis@v1
         with:
-          redis-version: '6.2'
+          redis-version: "6.2"
       - run: redis-cli ping
       - name: Test
         run: make test-code
@@ -175,7 +175,7 @@ jobs:
           k3d cluster create e2e --registry-use k3d-e2e-registry:5111
           k3d kubeconfig get e2e > ~/.kube/numaflow-e2e-config
           echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
-      - name: Install NumaFlow
+      - name: Install Numaflow
         env:
           GOPATH: /home/runner/go
         run: |
@@ -184,4 +184,3 @@ jobs:
         env:
           GOPATH: /home/runner/go
         run: KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
-

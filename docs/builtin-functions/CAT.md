@@ -1,6 +1,6 @@
 # Cat
 
-A `cat` builtin function does nothing but return the same messages it receives.
+A `cat` builtin function does nothing but return the same messages it receives, it is very useful for debugging and testing.
 
 ```yaml
 spec:

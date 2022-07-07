@@ -1,5 +1,6 @@
-site_name: NumaFlow - Data/streaming processing platform on Kubernetes
+site_name: Numaflow - Data/streaming processing platform on Kubernetes
 repo_url: https://github.com/numaproj/numaflow
+edit_uri: edit/main/docs/
 strict: true
 theme:
   name: material
@@ -38,6 +39,8 @@ nav:
       - QUICK_START.md
   - User Guide:
       - Core Concepts:
+          - PIPELINE.md
+          - VERTEX.md
           - INTER_STEP_BUFFER.md
           - INTER_STEP_BUFFER_SERVICE.md
       - Sources:
@@ -47,23 +50,23 @@ nav:
       - Sinks:
           - sinks/KAFKA.md
           - sinks/LOG.md
-          - User Defined Sinks: 'USER_DEFINED_SINKS.md'
+          - User Defined Sinks: "USER_DEFINED_SINKS.md"
       - Functions:
           - Builtin Functions:
-              - Overview: 'builtin-functions/README.md'
-              - Cat: 'builtin-functions/CAT.md'
-              - Filter: 'builtin-functions/FILTER.md'
-          - User Defined Functions: 'USER_DEFINED_FUNCTIONS.md'
+              - Overview: "builtin-functions/README.md"
+              - Cat: "builtin-functions/CAT.md"
+              - Filter: "builtin-functions/FILTER.md"
+          - User Defined Functions: "USER_DEFINED_FUNCTIONS.md"
       - CONDITIONAL_FORWARDING.md
       - AUTOSCALING.md
       - APIs.md
   - Operator Manual:
-      - Releases ⧉: 'RELEASES.md'
+      - Releases ⧉: "RELEASES.md"
       - Configuration:
           - metrics/METRICS.md
   - Developer Guide:
       - DEVELOPMENT.md
-      - Architecture: 'architecture/ARCHITECTURE.md'
+      - Architecture: "architecture/ARCHITECTURE.md"
       - DEBUGGING.md
       - STATIC_CODE_ANALYSIS.md
       - RELEASING.md
