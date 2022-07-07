@@ -14,6 +14,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/zap"
 )
 
@@ -41,7 +42,7 @@ func WithSeparateOTBuckets(separate bool) GenericProgressOption {
 }
 
 // NewGenericProgress will move the watermark for all the vertices once consumed fromEdge the source.
-func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace string, publishKeyspace string, publishWM PublishWM, fetchWM FetchWM, inputOpts ...GenericProgressOption) *GenericProgress {
+func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace string, publishKeyspace string, publishWM PublishWMStores, fetchWM FetchWMWatchers, inputOpts ...GenericProgressOption) *GenericProgress {
 	opts := &genericProgressOptions{
 		separateOTBucket: false,
 	}
@@ -55,9 +56,9 @@ func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace
 	// to generic watermark for a UDF, it has to start the Fetcher and the Publisher
 
 	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace)
-	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.hbStore, publishWM.otStore)
+	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.HBStore, publishWM.OTStore)
 
-	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.hbWatch, fetchWM.otWatch)
+	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.HBWatch, fetchWM.OTWatch)
 	udfFetch := fetch.NewEdgeBuffer(ctx, processorName, udfFromVertex)
 
 	u := &GenericProgress{
@@ -99,8 +100,7 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 		fetchWatermark = NewNoOpWMProgressor()
 		publishWatermark = make(map[string]publish.Publisher)
 		for _, buffer := range vertexInstance.Vertex.GetToBuffers() {
-			streamName := isbsvc.JetStreamName(vertexInstance.Vertex.Spec.PipelineName, buffer.Name)
-			publishWatermark[streamName] = NewNoOpWMProgressor()
+			publishWatermark[buffer.Name] = NewNoOpWMProgressor()
 		}
 
 		return fetchWatermark, publishWatermark
@@ -123,27 +123,63 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 		log.Fatalw("JetStreamKVWatch failed", zap.String("OTBucket", otBucket), zap.Error(err))
 	}
 
-	var fetchWmWatchers = BuildFetchWM(hbWatch, otWatch)
+	var fetchWmWatchers = BuildFetchWMWatchers(hbWatch, otWatch)
 	fetchWatermark = NewGenericFetch(ctx, vertexInstance.Vertex.Name, GetFetchKeyspace(vertexInstance.Vertex), fetchWmWatchers)
 
 	// Publisher map creation
 	// We do not separate Heartbeat bucket for each edge, can be reused
-	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, vertexInstance.Vertex.Spec.PipelineName, hbBucket, clients.NewInClusterJetStreamClient())
+	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
 	if err != nil {
 		log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
 	}
 
 	for _, buffer := range vertexInstance.Vertex.GetToBuffers() {
-		var processorName = fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
-		streamName := isbsvc.JetStreamName(pipelineName, buffer.Name)
-		otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, streamName)
-		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, vertexInstance.Vertex.Spec.PipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
+		otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, buffer.Name)
+		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
 		if err != nil {
 			log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
 		}
-		var publishStores = BuildPublishWM(hbStore, otStore)
-		publishWatermark[streamName] = NewGenericPublish(ctx, processorName, GetPublishKeySpace(vertexInstance.Vertex), publishStores)
+
+		var publishStores = BuildPublishWMStores(hbStore, otStore)
+		var processorName = fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
+		publishWatermark[buffer.Name] = NewGenericPublish(ctx, processorName, GetPublishKeySpace(vertexInstance.Vertex), publishStores)
 	}
 
 	return fetchWatermark, publishWatermark
+}
+
+// BuildJetStreamWatermarkProgressorsForSource is an extension of BuildJetStreamWatermarkProgressors to also return the publish stores. This is
+// for letting source implement as many publishers that it requires to progress the watermark monotonically for each individual processing entity.
+// Eg, watermark progresses independently and monotonically for each partition in a Kafka topic.
+func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, publishWM PublishWMStores) {
+	fetchWatermark, publishWatermark = BuildJetStreamWatermarkProgressors(ctx, vertexInstance)
+
+	// return no-ops if not enabled!
+	if !sharedutil.IsWatermarkEnabled() {
+		publishWM = BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+		return fetchWatermark, publishWatermark, publishWM
+	}
+
+	log := logging.FromContext(ctx)
+	pipelineName := vertexInstance.Vertex.Spec.PipelineName
+
+	sourceBufferName := vertexInstance.Vertex.GetFromBuffers()[0].Name
+	// hearbeat
+	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, sourceBufferName)
+	hbKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
+	if err != nil {
+		log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
+	}
+
+	// OT
+	otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, sourceBufferName)
+	otKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
+	if err != nil {
+		log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
+	}
+
+	// interface for publisher store (HB and OT)
+	publishWM = BuildPublishWMStores(hbKVStore, otKVStore)
+
+	return fetchWatermark, publishWatermark, publishWM
 }

@@ -8,12 +8,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// KVNoOpStore does a no-op store.
+// KVNoOpStore is a no-op store which does not do any operation but can be safely invoked.
 type KVNoOpStore struct {
 }
 
 var _ store.WatermarkKVStorer = (*KVNoOpStore)(nil)
 
+// NewKVNoOpStore returns KVNoOpStore.
 func NewKVNoOpStore() *KVNoOpStore {
 	return &KVNoOpStore{}
 }

@@ -25,6 +25,7 @@ type KVJetStreamStore struct {
 
 var _ store.WatermarkKVStorer = (*KVJetStreamStore)(nil)
 
+// NewKVJetStreamKVStore returns KVJetStreamStore.
 func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client clients.JetStreamClient, opts ...JSKVStoreOption) (*KVJetStreamStore, error) {
 	var err error
 	conn, err := client.Connect(ctx)
