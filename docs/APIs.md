@@ -2525,19 +2525,6 @@ by the vertex’s limit settings
 </tr>
 <tr>
 <td>
-<code>udfWorkers</code></br> <em> uint32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-Workers used to concurrently call UDF functions, it’s only meaningful
-for UDF vertex, and will be ignored by source and sink vertices. It can
-be overridden by the vertex’s limit settings
-</p>
-</td>
-</tr>
-<tr>
-<td>
 <code>bufferMaxLength</code></br> <em> uint64 </em>
 </td>
 <td>
@@ -3465,19 +3452,6 @@ Description
 <em>(Optional)</em>
 <p>
 Read batch size
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>udfWorkers</code></br> <em> uint32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-Workers used to concurrently call UDF functions, it’s only meaningful
-for UDF vertex, and will be ignored by source and sink vertices. It
-overrides the setting in pipeline limits.
 </p>
 </td>
 </tr>

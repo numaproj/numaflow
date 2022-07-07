@@ -384,10 +384,6 @@ type VertexLimits struct {
 	// Read batch size
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
-	// Workers used to concurrently call UDF functions, it's only meaningful for UDF vertex, and will be ignored by source and sink vertices.
-	// It overrides the setting in pipeline limits.
-	// +optional
-	UDFWorkers *uint32 `json:"udfWorkers,omitempty" protobuf:"varint,2,opt,name=udfWorkers"`
 }
 
 func (v VertexSpec) getType() containerSupplier {

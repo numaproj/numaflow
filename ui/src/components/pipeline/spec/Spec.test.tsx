@@ -40,8 +40,7 @@ describe("Spec", () => {
                             ".": {},
                             "f:bufferMaxLength": {},
                             "f:bufferUsageLimit": {},
-                            "f:readBatchSize": {},
-                            "f:udfWorkers": {}
+                            "f:readBatchSize": {}
                         },
                         "f:vertices": {}
                     }
@@ -177,7 +176,6 @@ describe("Spec", () => {
             },
             "limits": {
                 "readBatchSize": 100,
-                "udfWorkers": 100,
                 "bufferMaxLength": 10000,
                 "bufferUsageLimit": 80
             }

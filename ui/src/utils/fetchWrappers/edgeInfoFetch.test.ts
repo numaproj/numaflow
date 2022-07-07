@@ -11,7 +11,7 @@ describe("edgeInfoFetch test", () => {
         "pipeline": "simple-pipeline",
         "fromVertex": "input",
         "toVertex": "preproc",
-        "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+        "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
         "pendingCount": 0,
         "ackPendingCount": 0,
         "totalMessages": 88,
@@ -22,11 +22,11 @@ describe("edgeInfoFetch test", () => {
     }
     it("edgesInfo return", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: false})
-        const {result} = renderHook(() => useEdgesInfoFetch("dataflow-system", "simple-pipeline", ""))
+        const {result} = renderHook(() => useEdgesInfoFetch("numaflow-system", "simple-pipeline", ""))
         expect(result.current.edgesInfo).toEqual({
             "ackPendingCount": 0,
             "bufferLength": 10000,
-            "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+            "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
             "bufferUsage": 0,
             "bufferUsageLimit": 0.8,
             "fromVertex": "input",
@@ -40,13 +40,13 @@ describe("edgeInfoFetch test", () => {
 
     it("edgesInfo loading", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: true});
-        const {result} = renderHook(() => useEdgesInfoFetch("dataflow-system", "simple-pipeline", ""))
+        const {result} = renderHook(() => useEdgesInfoFetch("numaflow-system", "simple-pipeline", ""))
         expect(result.current.loading).toBeTruthy()
     })
 
     it("edgesInfo error", () => {
         mockedUseFetch.mockReturnValue({data: data, error: true, loading: false})
-        const {result} = renderHook(() => useEdgesInfoFetch("dataflow-system", "simple-pipeline", ""))
+        const {result} = renderHook(() => useEdgesInfoFetch("numaflow-system", "simple-pipeline", ""))
         expect(result.current.error).toBeTruthy()
     })
 })

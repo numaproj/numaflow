@@ -4,6 +4,7 @@ edit_uri: edit/main/docs/
 strict: true
 theme:
   name: material
+  favicon: assets/numa.svg
   font:
     text: Roboto
     code: Roboto Mono
@@ -57,12 +58,14 @@ nav:
               - Cat: "builtin-functions/CAT.md"
               - Filter: "builtin-functions/FILTER.md"
           - User Defined Functions: "USER_DEFINED_FUNCTIONS.md"
+      - PIPELINE_TUNING.md
       - CONDITIONAL_FORWARDING.md
       - AUTOSCALING.md
       - APIs.md
   - Operator Manual:
       - Releases ⧉: "RELEASES.md"
       - Configuration:
+          - Controller Configuration: "CONTROLLER_CONFIGMAP.md"
           - metrics/METRICS.md
   - Developer Guide:
       - DEVELOPMENT.md

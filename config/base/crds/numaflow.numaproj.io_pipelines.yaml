@@ -116,16 +116,15 @@ spec:
                 type: object
               limits:
                 default:
-                  bufferMaxLength: 10000
+                  bufferMaxLength: 30000
                   bufferUsageLimit: 80
-                  readBatchSize: 100
-                  udfWorkers: 100
+                  readBatchSize: 500
                 description: Limits define the limitations such as buffer read batch
                   size for all the vertices of a pipleine, they could be overridden
                   by each vertex's settings
                 properties:
                   bufferMaxLength:
-                    default: 10000
+                    default: 30000
                     description: BufferMaxLength is used to define the max length
                       of a buffer Only applies to UDF and Source vertice as only they
                       do buffer write. It can be overridden by the settings in vertex
@@ -142,18 +141,10 @@ spec:
                     format: int32
                     type: integer
                   readBatchSize:
-                    default: 100
+                    default: 500
                     description: Read batch size for all the vertices in the pipeline,
                       can be overridden by the vertex's limit settings
                     format: int64
-                    type: integer
-                  udfWorkers:
-                    default: 100
-                    description: Workers used to concurrently call UDF functions,
-                      it's only meaningful for UDF vertex, and will be ignored by
-                      source and sink vertices. It can be overridden by the vertex's
-                      limit settings
-                    format: int32
                     type: integer
                 type: object
               vertices:
@@ -1392,13 +1383,6 @@ spec:
                         readBatchSize:
                           description: Read batch size
                           format: int64
-                          type: integer
-                        udfWorkers:
-                          description: Workers used to concurrently call UDF functions,
-                            it's only meaningful for UDF vertex, and will be ignored
-                            by source and sink vertices. It overrides the setting
-                            in pipeline limits.
-                          format: int32
                           type: integer
                       type: object
                     metadata:

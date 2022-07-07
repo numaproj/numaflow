@@ -138,21 +138,14 @@ func Test_copyVertexLimits(t *testing.T) {
 	copyVertexLimits(pl, v)
 	assert.Nil(t, v.Limits)
 	one := uint64(1)
-	int32One := uint32(1)
-	pl.Spec.Limits = &dfv1.PipelineLimits{ReadBatchSize: &one, UDFWorkers: &int32One}
+	pl.Spec.Limits = &dfv1.PipelineLimits{ReadBatchSize: &one}
 	copyVertexLimits(pl, v)
 	assert.NotNil(t, v.Limits)
 	assert.Equal(t, one, *v.Limits.ReadBatchSize)
-	assert.Nil(t, v.Limits.UDFWorkers)
 	two := uint64(2)
 	v.Limits.ReadBatchSize = &two
 	copyVertexLimits(pl, v)
 	assert.Equal(t, two, *v.Limits.ReadBatchSize)
-	assert.Nil(t, v.Limits.UDFWorkers)
-
-	v1 := pl.Spec.Vertices[1].DeepCopy()
-	copyVertexLimits(pl, v1)
-	assert.Equal(t, int32One, *v1.Limits.UDFWorkers)
 }
 
 func Test_copyEdgeLimits(t *testing.T) {
