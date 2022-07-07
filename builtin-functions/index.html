@@ -1053,7 +1053,7 @@
 <h1 id="builtin-functions">Builtin Functions<a class="headerlink" href="#builtin-functions" title="Permanent link">&para;</a></h1>
 <p>NumaFlow provides some builtin functions that can be used directly.</p>
 <p><strong>Cat</strong></p>
-<p>A <code>cat</code> builtin UDF does nothing but return the same messages it receives.</p>
+<p>A <code>cat</code> builtin UDF does nothing but return the same messages it receives, it is very useful for debugging and testing.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat-vertex</span><span class="w"></span>
@@ -1063,7 +1063,7 @@
 </code></pre></div>
 <p><strong>Filter</strong></p>
 <p>A <code>filter</code> builtin UDF does filter the message based on expression. <code>payload</code> keyword represents message object.
-see documentation for expression <a href="FILTER/#Expression">here</a></p>
+see documentation for expression <a href="FILTER/#expression">here</a></p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filter-vertex</span><span class="w"></span>

@@ -1135,7 +1135,7 @@
 
 
 <h1 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h1>
-<p>To see how NumaFlow works, you can install it, and run a simple pipeline, which contains a source to generate messsages, and a function vertex that echos the messages, and a log sink printing the messages.</p>
+<p>To see how NumaFlow works, you can install it, and run a simple pipeline, which contains a source vertex to generate messages, and a function vertex that echos the messages, and a log sink printing the messages.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <p>A Kubernetes cluster is needed to try out NumaFlow. If needed, you can create a cluster locally using
 <a href="https://k3d.io/"><code>k3d</code></a> as below. You also need to get <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/"><code>kubectl</code></a> installed.</p>
@@ -1153,11 +1153,11 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
 <div class="highlight"><pre><span></span><code>kubectl -n numaflow-system port-forward deployment/numaflow-server <span class="m">8443</span>:8443
 </code></pre></div>
 <h2 id="a-simple-pipeline">A Simple Pipeline<a class="headerlink" href="#a-simple-pipeline" title="Permanent link">&para;</a></h2>
-<p><a href="../INTER_STEP_BUFFER/">Inter-Step Buffers</a> are esstienal to run NumaFlow pipelines, to get Inter-Step Buffers in place, an <a href="../INTER_STEP_BUFFER_SERVICE/">Inter-Step Buffer Service</a> is required. We use <a href="https://docs.nats.io/nats-concepts/jetstream">Nats JetStream</a> as a <code>Inter-Step Buffer Service</code> provider in this example.</p>
-<div class="highlight"><pre><span></span><code>kubectl apply -f ./examples/0-isbsvc-jetstream.yaml
+<p><a href="../INTER_STEP_BUFFER/">Inter-Step Buffers</a> are essential to run NumaFlow pipelines, to get Inter-Step Buffers in place, an <a href="../INTER_STEP_BUFFER_SERVICE/">Inter-Step Buffer Service</a> is required. We use <a href="https://docs.nats.io/nats-concepts/jetstream">Nats JetStream</a> as an <code>Inter-Step Buffer Service</code> provider in this example.</p>
+<div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
-<p>After all the isbsvc pods are up, create a simple pipeline, and you can see the pipeline topoligy in the UI.</p>
-<div class="highlight"><pre><span></span><code>kubectl apply -f ./examples/1-simple-pipeline.yaml
+<p>After all the isbsvc pods are up, create a simple pipeline, and you can see the pipeline topology in the UI.</p>
+<div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 </code></pre></div>
 <p>Watch the <code>output</code> vertex pod log, you will see messages keep coming.</p>
 <div class="highlight"><pre><span></span><code>2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;5dkN+42qwRY=&quot;,&quot;Createdts&quot;:1639779266118670821}
@@ -1170,14 +1170,14 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
 2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;eVarNo6qwRY=&quot;,&quot;Createdts&quot;:1639779267118847609}
 2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;6FmrNo6qwRY=&quot;,&quot;Createdts&quot;:1639779267118848488}
 </code></pre></div>
-<p>You can delete the pipeline by using</p>
-<div class="highlight"><pre><span></span><code>kubectl delete -f ./examples/1-simple-pipeline.yaml
+<p>You can delete the pipeline by</p>
+<div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 </code></pre></div>
 <p>The <code>Inter-Step Buffer Service</code> can be deleted by</p>
-<div class="highlight"><pre><span></span><code>kubectl delete -f ./examples/0-isbsvc-jetstream.yaml
+<div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 </code></pre></div>
 <h2 id="whats-next">What's Next<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h2>
-<p>After exploring how a NumaFlow pipeline runs, you can check what data <a href="./sources/">Sources</a> and <a href="./sinks/">Sinks</a> that NumaFlow support, or learn how to write <a href="../USER_DEFINED_FUNCTIONS/">User Deined Functions</a>.</p>
+<p>After exploring how a NumaFlow pipeline runs, you can check what data <a href="../sources/GENERATOR/">Sources</a> and <a href="../sinks/KAFKA/">Sinks</a> NumaFlow supports out of the box, or learn how to write <a href="../USER_DEFINED_FUNCTIONS/">User Defined Functions</a>.</p>
 
               
             </article>

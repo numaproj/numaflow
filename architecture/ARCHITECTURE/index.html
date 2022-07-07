@@ -1249,15 +1249,15 @@
 <ul>
 <li>
 <p>Numaflow allows developers with basic knowledge of Kubernetes but
-without any special knowledge of data/stream processing to easily
- create massively parallel data/stream processing jobs using a
- programming language of their choice.</p>
+  without any special knowledge of data/stream processing to easily
+  create massively parallel data/stream processing jobs using a
+  programming language of their choice.</p>
 </li>
 <li>
 <p>Reliable data processing is highly desirable and exactly-once
-semantics is often required by many data processing applications.
-This document describes the use cases, requirements, and design
-for providing exactly-once semantics with Numaflow.</p>
+  semantics is often required by many data processing applications.
+  This document describes the use cases, requirements, and design
+  for providing exactly-once semantics with Numaflow.</p>
 </li>
 </ul>
 <p>Use Cases</p>
@@ -1274,7 +1274,7 @@ for providing exactly-once semantics with Numaflow.</p>
 <p>A pipeline contains multiple processors, which include source
 processors, data processors, and sink processors. These processors are
 not connected directly, but through <strong>inter-step buffers</strong>.</p>
-<p><img alt="Logical Numaflow DAG" src="../assets/dag.png" /></p>
+<p><img alt="Logical Numaflow DAG" src="../../assets/dag.png" /></p>
 <p><strong>Source</strong></p>
 <p>The actual source for the data (not a step in the Numaflow).</p>
 <p><strong>Sink</strong></p>
@@ -1333,17 +1333,17 @@ single sink.</p>
 <li>UDFs implements a unified interface to process data.</li>
 <li>UDFs are typically implemented by end-users, but there will be some
   built-in functions that can be used without writing any code.</li>
-<li>UDFs can be implemented in different languages, a pseudo-interface 
+<li>UDFs can be implemented in different languages, a pseudo-interface
   might look like the below, where the function signatures include
   step context and input payload and returns a result. The Result
   contains the processed data as well as optional labels that will
   be exposed to the DSL to do complex conditional forwarding.
   <code>Process(key, message, context) (result, err)</code></li>
 <li>UDFs should only focus on user logic, buffer message reading and
-writing should not be handled by this function.</li>
+  writing should not be handled by this function.</li>
 <li>UDFs should be idempotent.</li>
 </ul>
-<p><strong>Matrix of Operations</strong> </p>
+<p><strong>Matrix of Operations</strong></p>
 <table>
 <thead>
 <tr>
@@ -1379,41 +1379,35 @@ writing should not be handled by this function.</li>
 <li>Exactly once semantics from the source processor to the sink processor.</li>
 <li>Be able to support a variety of data buffering technologies.</li>
 <li>Numaflow is restartable if aborted or steps fail while preserving
-exactly-once semantics. </li>
+  exactly-once semantics.</li>
 <li>Do not generate more output than can be used by the next stage in a
   reasonable amount of time, i.e. the size of buffers between steps
   should be limited, (aka backpressure).</li>
 <li>User code should be isolated from offset management, restart, exactly once, backpressure, etc.</li>
-<li>Streaming process systems inherently require a concept of time, this 
+<li>Streaming process systems inherently require a concept of time, this
   time will be either derived from the Source (LOG_APPEND_TIME in
   Kafka, etc.) or will be inserted at ingestion time if the source
   doesn't provide it.</li>
 <li>Every processor is connected by an inter-step buffer.</li>
-<li>Source processors add a "header" to each "item" received from the 
-  source in order to:<ul>
+<li>Source processors add a "header" to each "item" received from the
+  source in order to:</li>
 <li>Uniquely identify the item for implementing exactly-once</li>
 <li>Uniquely identify the source of the message.</li>
-</ul>
-</li>
 <li>Sink processors should avoid writing output for the same input when possible.</li>
-<li>Numaflow should support the following types of flows:<ul>
-<li>Line
-<img alt="Line Dag" src="../assets/line_dag.png" /></li>
-<li>Tree
-<img alt="Tree Dag" src="../assets/tree_dag.png" /></li>
-<li>Diamond (In Future)
-<img alt="Diamond Dag" src="../assets/diamond_dag.png" /></li>
-<li>Multiple Sources with same schema (In Future)
-<img alt="Multi Source Dag" src="../assets/multi_source_dag.png" /></li>
-</ul>
-</li>
+<li>Numaflow should support the following types of flows:
+  _ Line
+  <img alt="Line Dag" src="../../assets/line_dag.png" />
+  _ Tree
+  <img alt="Tree Dag" src="../../assets/tree_dag.png" />
+  _ Diamond (In Future)
+  <img alt="Diamond Dag" src="../../assets/diamond_dag.png" />
+  _ Multiple Sources with same schema (In Future)
+  <img alt="Multi Source Dag" src="../../assets/multi_source_dag.png" /></li>
 </ul>
 <h2 id="non-requirements">Non-Requirements<a class="headerlink" href="#non-requirements" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Support for non-idempotent data processors (UDFs?)<ul>
+<li>Support for non-idempotent data processors (UDFs?)</li>
 <li>Distributed transactions/checkpoints are not needed</li>
-</ul>
-</li>
 </ul>
 <h2 id="open-issues">Open Issues<a class="headerlink" href="#open-issues" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1422,29 +1416,29 @@ exactly-once semantics. </li>
 <h2 id="closed-issues">Closed Issues<a class="headerlink" href="#closed-issues" title="Permanent link">&para;</a></h2>
 <ul>
 <li>In order to be able to support various buffering technologies, we
-    will persist and manage stream "offsets" rather than relying on
-    the buffering technology (e.g. Kafka)</li>
+  will persist and manage stream "offsets" rather than relying on
+  the buffering technology (e.g. Kafka)</li>
 <li>Each processor may persist state associated with their processing
-     no distributed transactions are needed for checkpointing</li>
+  no distributed transactions are needed for checkpointing</li>
 <li>If we have a tree DAG, how will we manage acknowledgments? We
-    will use back-pressure and exactly-once schematics on the buffer
-    to solve it.</li>
+  will use back-pressure and exactly-once schematics on the buffer
+  to solve it.</li>
 <li>How/where will offsets be persisted? Buffer will have a "lookup -
-    insert - update" as a txn</li>
+  insert - update" as a txn</li>
 <li>What will be used to implement the inter-step buffers between
-    processors? The interface is abstracted out, but internally we
-    will use Redis Streams (supports streams, hash, txn)</li>
+  processors? The interface is abstracted out, but internally we
+  will use Redis Streams (supports streams, hash, txn)</li>
 </ul>
 <h2 id="design-details">Design Details<a class="headerlink" href="#design-details" title="Permanent link">&para;</a></h2>
 <h3 id="duplicates">Duplicates<a class="headerlink" href="#duplicates" title="Permanent link">&para;</a></h3>
-<p>Numaflow (like any other stream processing engine) at its core has 
+<p>Numaflow (like any other stream processing engine) at its core has</p>
 <div class="highlight"><pre><span></span><code>Read -&gt; Process -&gt; Forward -&gt; Acknowledge
 </code></pre></div>
-loop for every message it has to
+<p>loop for every message it has to
 process. Given that the user-defined process is idempotent, there are
 two failure mode scenarios where there could be duplicates.</p>
 <ul>
-<li>The message has been forwarded but the information failed to reach 
+<li>The message has been forwarded but the information failed to reach
   back (we do not know whether we really have successfully forwarded
   the message). A retry on forwarding again could lead to
   duplication.</li>
@@ -1460,23 +1454,21 @@ two failure mode scenarios where there could be duplicates.</p>
    buffer will be used as the key of the data in the downstream buffer</li>
 <li>
 <p>Best effort of the transactional commit.</p>
-<ol>
+</li>
 <li>
-<p>Data processors make transactional commits for data forwarding 
-    to the next buffer, and upstream buffer acknowledgment.</p>
+<p>Data processors make transactional commits for data forwarding
+      to the next buffer, and upstream buffer acknowledgment.</p>
 </li>
 <li>
 <p>Source processors have no way to do similar transactional
-    operations for data source message acknowledgment and message
-    forwarding, but #1 will make sure there's no duplicate after
-    retrying in case of failure.</p>
+      operations for data source message acknowledgment and message
+      forwarding, but #1 will make sure there's no duplicate after
+      retrying in case of failure.</p>
 </li>
 <li>Sink processors can not do transactional operations unless
-    there's a contract between Numaflow and the sink, which is out
-    of the scope of this doc. We will rely on the sink to
-    implement this (eg, "enable.idempotent" in Kafka producer).</li>
-</ol>
-</li>
+      there's a contract between Numaflow and the sink, which is out
+      of the scope of this doc. We will rely on the sink to
+      implement this (eg, "enable.idempotent" in Kafka producer).</li>
 </ol>
 <h3 id="unique-identifier-for-message">Unique Identifier for Message<a class="headerlink" href="#unique-identifier-for-message" title="Permanent link">&para;</a></h3>
 <p>To detect duplicates, we first need to uniquely identify each message.
@@ -1496,7 +1488,7 @@ the original offset is because there will be operations in future which
 will require, say aggregations, where multiple messages will be grouped
 together and we will not be able to choose an offset from the original
 messages because the single output is based on multiple messages.</p>
-<p><img alt="Numaflow Processor Exactly Once Flowchart" src="../assets/eos-flowchart.png" /></p>
+<p><img alt="Numaflow Processor Exactly Once Flowchart" src="../../assets/eos-flowchart.png" /></p>
 <h3 id="restarting-after-a-failure">Restarting After a Failure<a class="headerlink" href="#restarting-after-a-failure" title="Permanent link">&para;</a></h3>
 <p>Numaflow needs to be able to recover from the failure of any step (pods)
 or even the complete failure of the Numaflow while preserving
@@ -1513,11 +1505,13 @@ flowchart above, which makes sure they will only be processed once.</p>
 have a bounded buffer. Backpressure handling in Numaflow utilizes the
 buffer.</p>
 <p>At any time t, the durable buffer should contain messages in the
-following states:
-* Acked messages - processed messages to be deleted
-* Inflight messages - messages being handled by downstream processor
-* Pending messages - messages to be read by the downstream processor</p>
-<p><img alt="Buffer State" src="../assets/buffer_state.png" /></p>
+following states:</p>
+<ul>
+<li>Acked messages - processed messages to be deleted</li>
+<li>Inflight messages - messages being handled by downstream processor</li>
+<li>Pending messages - messages to be read by the downstream processor</li>
+</ul>
+<p><img alt="Buffer State" src="../../assets/buffer_state.png" /></p>
 <p>The buffer acts like a sliding window, new messages will always be
 written to the right, and there's some automation to clean up the
 acknowledged messages on the left. If the processor is too slow, the
