@@ -37,7 +37,7 @@ kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 ```
 
-After all the isbsvc pods are up, create a simple pipeline, and you can see the pipeline topoligy in the UI.
+After all the isbsvc pods are up, create a simple pipeline, and you can see the pipeline topology in the UI.
 
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
