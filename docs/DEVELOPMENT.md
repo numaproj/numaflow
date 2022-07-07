@@ -32,7 +32,7 @@ k3d kubeconfig get k3s-default
   Run unit tests.
 
 - `make image`
-  Build conatiner image, and import it to `k3d` cluster if corresponding `kubeconfig` is sourced.
+  Build container image, and import it to `k3d` cluster if corresponding `kubeconfig` is sourced.
 
 - `make start`
   Build the source code, image, and install the Numa controller in the `numaflow-system` namespace.
