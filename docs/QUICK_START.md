@@ -23,7 +23,7 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
 
 ```
 
-Open a port-forward so you can access the UI on [https://localhost8443](https://localhost8443).
+Open a port-forward so you can access the UI on [https://localhost:8443](https://localhost:8443).
 
 ```sh
 kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
