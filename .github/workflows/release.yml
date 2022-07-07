@@ -87,7 +87,7 @@ jobs:
         run: |
           IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true make image-multi
 
-  bom:
+  Bom:
     runs-on: ubuntu-latest
     if: github.repository == 'numaproj/numaflow'
     needs: [ build-push-linux-multi ]
@@ -115,7 +115,7 @@ jobs:
           name: sbom.tar.gz
           path: sbom.tar.gz
 
-  release:
+  Release:
     runs-on: ubuntu-latest
     if: github.repository == 'numaproj/numaflow'
     needs: [ build-push-linux-multi, bom ]
