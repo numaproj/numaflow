@@ -1149,7 +1149,7 @@ k3d kubeconfig get k3s-default
 <div class="highlight"><pre><span></span><code>kubectl create ns numaflow-system
 kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
 </code></pre></div>
-<p>Open a port-forward so you can access the UI on <a href="https://localhost8443">https://localhost8443</a>.</p>
+<p>Open a port-forward so you can access the UI on <a href="https://localhost:8443">https://localhost:8443</a>.</p>
 <div class="highlight"><pre><span></span><code>kubectl -n numaflow-system port-forward deployment/numaflow-server <span class="m">8443</span>:8443
 </code></pre></div>
 <h2 id="a-simple-pipeline">A Simple Pipeline<a class="headerlink" href="#a-simple-pipeline" title="Permanent link">&para;</a></h2>
