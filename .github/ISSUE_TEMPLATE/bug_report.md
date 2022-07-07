@@ -21,7 +21,7 @@ If applicable, add screenshots to help explain your problem.
 
 **Environment (please complete the following information):**
  - Kubernetes: [e.g. v1.18.6]
- - NumaFlow: [e.g. v0.5.1]
+ - Numaflow: [e.g. v0.5.1]
 
 **Additional context**
 Add any other context about the problem here.

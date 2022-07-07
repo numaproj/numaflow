@@ -1,6 +1,6 @@
 # Builtin Functions
 
-NumaFlow provides some builtin functions that can be used directly.
+Numaflow provides some builtin functions that can be used directly.
 
 **Cat**
 
