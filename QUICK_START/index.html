@@ -13,7 +13,7 @@
     
     
       
-        <title>Quick Start - NumaFlow - Data/streaming processing platform on Kubernetes</title>
+        <title>Quick Start - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -90,7 +90,7 @@
 
 <header class="md-header md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href=".." title="NumaFlow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="NumaFlow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href=".." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
   <img src="../assets/logo.png" alt="logo">
 
@@ -102,7 +102,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            NumaFlow - Data/streaming processing platform on Kubernetes
+            Numaflow - Data/streaming processing platform on Kubernetes
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -237,7 +237,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../INTER_STEP_BUFFER/" class="md-tabs__link">
+      <a href="../PIPELINE/" class="md-tabs__link">
         User Guide
       </a>
     </li>
@@ -305,12 +305,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href=".." title="NumaFlow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="NumaFlow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href=".." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
   <img src="../assets/logo.png" alt="logo">
 
     </a>
-    NumaFlow - Data/streaming processing platform on Kubernetes
+    Numaflow - Data/streaming processing platform on Kubernetes
   </label>
   
     <div class="md-nav__source">
@@ -419,8 +419,8 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#numaflow-installation" class="md-nav__link">
-    Numaflow Installation
+  <a href="#installation" class="md-nav__link">
+    Installation
   </a>
   
 </li>
@@ -507,6 +507,34 @@
           Core Concepts
         </label>
         <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PIPELINE/" class="md-nav__link">
+        Pipeline
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VERTEX/" class="md-nav__link">
+        Vertex
+      </a>
+    </li>
+  
+
+            
           
             
               
@@ -1096,8 +1124,8 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#numaflow-installation" class="md-nav__link">
-    Numaflow Installation
+  <a href="#installation" class="md-nav__link">
+    Installation
   </a>
   
 </li>
@@ -1128,7 +1156,7 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/master/docs/QUICK_START.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/QUICK_START.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
@@ -1145,7 +1173,8 @@ k3d cluster create -i rancher/k3s:v1.21.7-k3s1
 <span class="c1"># Get kubeconfig for the cluster</span>
 k3d kubeconfig get k3s-default
 </code></pre></div>
-<h2 id="numaflow-installation">Numaflow Installation<a class="headerlink" href="#numaflow-installation" title="Permanent link">&para;</a></h2>
+<h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
+<p>Run following command lines to install Numaflow.</p>
 <div class="highlight"><pre><span></span><code>kubectl create ns numaflow-system
 kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
 </code></pre></div>
@@ -1214,13 +1243,13 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
       
       
         
-        <a href="../INTER_STEP_BUFFER/" class="md-footer__link md-footer__link--next" aria-label="Next: Inter-Step Buffer" rel="next">
+        <a href="../PIPELINE/" class="md-footer__link md-footer__link--next" aria-label="Next: Pipeline" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Inter-Step Buffer
+              Pipeline
             </div>
           </div>
           <div class="md-footer__button md-icon">
