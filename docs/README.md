@@ -10,4 +10,4 @@ NumaFlow is a Kubernetes-native platform for running massive parallel data proce
 
 ## Getting Started
 
-For set-up information and running your first NumaFlow pipeline, please see our [getting started guide](https://github.com/numaproj/numaflow/blob/main/docs/QUICK_START.md).
+For set-up information and running your first NumaFlow pipeline, please see our [getting started guide](QUICK_START.md).
