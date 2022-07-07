@@ -1,3 +1,5 @@
+// Package generic implements some shareable watermarking progressors (fetcher and publisher) and methods.
+
 package generic
 
 import (
@@ -5,88 +7,36 @@ import (
 	"fmt"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/zap"
 )
 
-type genericProgressOptions struct {
-	separateOTBucket bool
-}
-
-// GenericProgress implements `Progressor` to generic the watermark for UDFs and Sinks.
-type GenericProgress struct {
-	progressPublish *publish.Publish
-	progressFetch   *fetch.Edge
-	opts            *genericProgressOptions
-}
-
-var _ Progressor = (*GenericProgress)(nil)
-
-// GenericProgressOption sets options for GenericProgress.
-type GenericProgressOption func(options *genericProgressOptions)
-
-// WithSeparateOTBuckets creates a different bucket for maintaining each processor offset-timeline.
-func WithSeparateOTBuckets(separate bool) GenericProgressOption {
-	return func(opts *genericProgressOptions) {
-		opts.separateOTBucket = separate
+// GetFetchKeyspace gets the fetch keyspace name fromEdge the vertex.
+func GetFetchKeyspace(v *dfv1.Vertex) string {
+	if len(v.Spec.FromEdges) > 0 {
+		// fromEdge vertices is 0 because we do not support diamond DAG
+		return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.FromEdges[0].From)
+	} else {
+		// sources will not have FromVertices
+		return fmt.Sprintf("%s-%s-%s-source", v.Namespace, v.Spec.PipelineName, v.Name)
 	}
 }
 
-// NewGenericProgress will move the watermark for all the vertices once consumed fromEdge the source.
-func NewGenericProgress(ctx context.Context, processorName string, fetchKeyspace string, publishKeyspace string, publishWM PublishWMStores, fetchWM FetchWMWatchers, inputOpts ...GenericProgressOption) *GenericProgress {
-	opts := &genericProgressOptions{
-		separateOTBucket: false,
+// GetPublishKeySpace gets the publish keyspace name fromEdge the vertex
+func GetPublishKeySpace(v *dfv1.Vertex) string {
+	if v.IsASource() {
+		return dfv1.GenerateSourceBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name)
+	} else {
+		return fmt.Sprintf("%s-%s-%s", v.Namespace, v.Spec.PipelineName, v.Spec.Name)
 	}
-
-	for _, opt := range inputOpts {
-		opt(opts)
-	}
-
-	var log = logging.FromContext(ctx)
-	_ = log
-	// to generic watermark for a UDF, it has to start the Fetcher and the Publisher
-
-	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace)
-	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.HBStore, publishWM.OTStore)
-
-	udfFromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.HBWatch, fetchWM.OTWatch)
-	udfFetch := fetch.NewEdgeBuffer(ctx, processorName, udfFromVertex)
-
-	u := &GenericProgress{
-		progressPublish: udfPublish,
-		progressFetch:   udfFetch,
-		opts:            opts,
-	}
-
-	return u
-}
-
-// GetWatermark gets the watermark.
-func (u *GenericProgress) GetWatermark(offset isb.Offset) processor.Watermark {
-	return u.progressFetch.GetWatermark(offset)
-}
-
-// PublishWatermark publishes the watermark.
-func (u *GenericProgress) PublishWatermark(watermark processor.Watermark, offset isb.Offset) {
-	u.progressPublish.PublishWatermark(watermark, offset)
-}
-
-// GetLatestWatermark returns the latest head watermark.
-func (u *GenericProgress) GetLatestWatermark() processor.Watermark {
-	return u.progressPublish.GetLatestWatermark()
-}
-
-func (g *GenericProgress) StopPublisher() {
-	g.progressPublish.StopPublisher()
 }
 
 // BuildJetStreamWatermarkProgressors is used to populate fetchWatermark, and a map of publishWatermark with edge name as the key.
@@ -126,14 +76,17 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 	var fetchWmWatchers = BuildFetchWMWatchers(hbWatch, otWatch)
 	fetchWatermark = NewGenericFetch(ctx, vertexInstance.Vertex.Name, GetFetchKeyspace(vertexInstance.Vertex), fetchWmWatchers)
 
-	// Publisher map creation
-	// We do not separate Heartbeat bucket for each edge, can be reused
-	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
-	if err != nil {
-		log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
-	}
+	// Publisher map creation, we need a publisher per edge.
 
 	for _, buffer := range vertexInstance.Vertex.GetToBuffers() {
+		hbPublisherBucket := isbsvc.JetStreamProcessorBucket(pipelineName, buffer.Name)
+		// We create a separate Heartbeat bucket for each edge though it can be reused. We can reuse because heartbeat is at
+		// vertex level. We are creating a new one for the time being because controller creates a pair of buckets per edge.
+		hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherBucket, clients.NewInClusterJetStreamClient())
+		if err != nil {
+			log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatPublisherBucket", hbPublisherBucket), zap.Error(err))
+		}
+
 		otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, buffer.Name)
 		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
 		if err != nil {
