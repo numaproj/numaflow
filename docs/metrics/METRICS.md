@@ -1,6 +1,6 @@
 # Metrics
 
-NumaFlow provides the following prometheus metrics which we can use to monitor our pipeline and setup any alerts if needed.
+Numaflow provides the following prometheus metrics which we can use to monitor our pipeline and setup any alerts if needed.
 
 ## Golden Signals
 These metrics in combination can be used to determine the overall health of your pipeline
