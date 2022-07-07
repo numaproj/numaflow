@@ -8,7 +8,7 @@ import (
 func NewServerCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "server",
-		Short: "Start a NumaFlow server",
+		Short: "Start a Numaflow server",
 		Run: func(cmd *cobra.Command, args []string) {
 			svrcmd.Start()
 		},

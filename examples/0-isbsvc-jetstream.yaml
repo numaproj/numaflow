@@ -1,7 +1,11 @@
+#
+# This manifest is intended for demonstration purpose, it's not suitable for production.
+# Check https://numaproj.github.io/numaflow/INTER_STEP_BUFFER_SERVICE/ to figure out reliable configuration for production.
+#
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: InterStepBufferService
 metadata:
   name: default
 spec:
   jetstream:
-    version: 2.8.1
+    version: 2.8.3
