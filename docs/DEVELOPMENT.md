@@ -1,6 +1,6 @@
 # Development
 
-This doc explains how to set up a development environment for NumaFlow.
+This doc explains how to set up a development environment for Numaflow.
 
 ### Install required tools
 
