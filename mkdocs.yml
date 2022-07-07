@@ -1,0 +1,69 @@
+site_name: NumaFlow - Data/streaming processing platform on Kubernetes
+repo_url: https://github.com/numaproj/numaflow
+strict: true
+theme:
+  name: material
+  font:
+    text: Roboto
+    code: Roboto Mono
+  logo: assets/logo.png
+  palette:
+    - scheme: default
+      primary: blue
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+extra:
+  analytics:
+    provider: google
+    property: G-M7DD40E8RV
+markdown_extensions:
+  - codehilite
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.details
+  - toc:
+      permalink: true
+nav:
+  - Home: README.md
+  - Getting Started:
+      - QUICK_START.md
+  - User Guide:
+      - Core Concepts:
+          - INTER_STEP_BUFFER.md
+          - INTER_STEP_BUFFER_SERVICE.md
+      - Sources:
+          - sources/GENERATOR.md
+          - sources/HTTP.md
+          - sources/KAFKA.md
+      - Sinks:
+          - sinks/KAFKA.md
+          - sinks/LOG.md
+          - User Defined Sinks: 'USER_DEFINED_SINKS.md'
+      - Functions:
+          - Builtin Functions:
+              - Overview: 'builtin-functions/README.md'
+              - Cat: 'builtin-functions/CAT.md'
+              - Filter: 'builtin-functions/FILTER.md'
+          - User Defined Functions: 'USER_DEFINED_FUNCTIONS.md'
+      - CONDITIONAL_FORWARDING.md
+      - AUTOSCALING.md
+      - APIs.md
+  - Operator Manual:
+      - Releases ⧉: 'RELEASES.md'
+      - Configuration:
+          - metrics/METRICS.md
+  - Developer Guide:
+      - DEVELOPMENT.md
+      - Architecture: 'architecture/ARCHITECTURE.md'
+      - DEBUGGING.md
+      - STATIC_CODE_ANALYSIS.md
+      - RELEASING.md

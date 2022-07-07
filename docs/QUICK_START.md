@@ -1,9 +1,13 @@
 # Quick Start
 
-A Kubernetes cluster is needed to try out NumaFlow. If needed, you can create a cluster locally using 
-[`k3d`](https://k3d.io/). If you do not have [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/), please install it.
+To see how NumaFlow works, you can install it, and run a simple pipeline, which contains a source vertex to generate messages, and a function vertex that echos the messages, and a log sink printing the messages.
 
-```shell 
+## Prerequisites
+
+A Kubernetes cluster is needed to try out NumaFlow. If needed, you can create a cluster locally using
+[`k3d`](https://k3d.io/) as below. You also need to get [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/) installed.
+
+```shell
 # Create a cluster with default name k3s-default
 k3d cluster create -i rancher/k3s:v1.21.7-k3s1
 
@@ -11,21 +15,32 @@ k3d cluster create -i rancher/k3s:v1.21.7-k3s1
 k3d kubeconfig get k3s-default
 ```
 
-Deploy into `numaflow-system` namespace:
-```shell
+## NumaFlow Installation
+
+```sh
 kubectl create ns numaflow-system
+kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
 
-kubectl apply -f ./config/install.yaml
 ```
 
-Create an `ISBSvc (Inter-Step Buffer Service)` object.
-```shell
-kubectl apply -f ./examples/0-isbsvc-jetstream.yaml
+Open a port-forward so you can access the UI on [https://localhost8443](https://localhost8443).
+
+```sh
+kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 ```
 
-After all the isbsvc pods are up, create a simple pipeline.
+## A Simple Pipeline
+
+[Inter-Step Buffers](./INTER_STEP_BUFFER.md) are essential to run NumaFlow pipelines, to get Inter-Step Buffers in place, an [Inter-Step Buffer Service](./INTER_STEP_BUFFER_SERVICE.md) is required. We use [Nats JetStream](https://docs.nats.io/nats-concepts/jetstream) as an `Inter-Step Buffer Service` provider in this example.
+
 ```shell
-kubectl apply -f ./examples/1-simple-pipeline.yaml
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
+```
+
+After all the isbsvc pods are up, create a simple pipeline, and you can see the pipeline topology in the UI.
+
+```shell
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
 
 Watch the `output` vertex pod log, you will see messages keep coming.
@@ -42,20 +57,18 @@ Watch the `output` vertex pod log, you will see messages keep coming.
 2021/12/17 22:14:35 (simple-pipeline-output) {"Data":"6FmrNo6qwRY=","Createdts":1639779267118848488}
 ```
 
-To access the NumaFlow UI, use the following:
+You can delete the pipeline by
 
 ```shell
-kubectl port-forward svc/numaflow-server-svc 8443
+kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
-You should be able to access it at: https://localhost:8443
 
-You can delete the pipeline using
+The `Inter-Step Buffer Service` can be deleted by
 
 ```shell
-kubectl delete -f ./examples/1-simple-pipeline.yaml
+kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
 
-The interstep buffer can be deleted by 
-```shell
-kubectl delete -f ./examples/0-isbsvc-jetstream.yaml
-```
+## What's Next
+
+After exploring how a NumaFlow pipeline runs, you can check what data [Sources](./sources/GENERATOR.md) and [Sinks](./sinks/KAFKA.md) NumaFlow supports out of the box, or learn how to write [User Defined Functions](./USER_DEFINED_FUNCTIONS.md).

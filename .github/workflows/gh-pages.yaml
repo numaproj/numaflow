@@ -1,0 +1,30 @@
+name: gh-pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  docs:
+    if: github.repository == 'numaproj/numaflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.18'
+      - name: build
+        run: |
+          pip install mkdocs==1.3.0 mkdocs_material==8.3.9
+          mkdocs build
+      - name: deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
