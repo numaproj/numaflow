@@ -1,6 +1,6 @@
 # Releases
 
-You can find the most recent version under [Github releases](https://github.com/numaproj/numaflow/releases).
+You can find the most recent version under [Github Releases](https://github.com/numaproj/numaflow/releases).
 
 ## Versioning
 

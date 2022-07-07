@@ -4,7 +4,7 @@ NumaFlow provides some builtin functions that can be used directly.
 
 **Cat**
 
-A `cat` builtin UDF does nothing but return the same messages it receives.
+A `cat` builtin UDF does nothing but return the same messages it receives, it is very useful for debugging and testing.
 
 ```yaml
 spec:

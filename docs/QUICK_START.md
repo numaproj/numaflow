@@ -57,7 +57,7 @@ Watch the `output` vertex pod log, you will see messages keep coming.
 2021/12/17 22:14:35 (simple-pipeline-output) {"Data":"6FmrNo6qwRY=","Createdts":1639779267118848488}
 ```
 
-You can delete the pipeline by using
+You can delete the pipeline by
 
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
@@ -71,4 +71,4 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exa
 
 ## What's Next
 
-After exploring how a NumaFlow pipeline runs, you can check what data [Sources](./sources/GENERATOR.md) and [Sinks](./sinks/KAFKA.md) that NumaFlow supports, or learn how to write [User Defined Functions](./USER_DEFINED_FUNCTIONS.md).
+After exploring how a NumaFlow pipeline runs, you can check what data [Sources](./sources/GENERATOR.md) and [Sinks](./sinks/KAFKA.md) that NumaFlow supports out of the box, or learn how to write [User Defined Functions](./USER_DEFINED_FUNCTIONS.md).

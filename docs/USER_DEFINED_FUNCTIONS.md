@@ -8,7 +8,7 @@ Data processing in the UDF is supposed to be idempotent.
 
 ## Builtin UDF
 
-There are some `Builtin Functions` can be used directly.
+There are some `Builtin Functions` that can be used directly.
 
 ## Build Your Own UDF
 
