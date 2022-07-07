@@ -1,24 +1,24 @@
 # Auto Scaling
 
-NumaFlow is able to run with both `Horizontal Pod Autoscaling` and `Vertical Pod Autoscaling`.
+Numaflow is able to run with both `Horizontal Pod Autoscaling` and `Vertical Pod Autoscaling`.
 
 ## Horizontal Pod Autoscaling
 
-`Horizontal Pod Autoscaling` approaches supported in NumaFlow include:
+`Horizontal Pod Autoscaling` approaches supported in Numaflow include:
 
-- NumaFlow Autoscaling
+- Numaflow Autoscaling
 - [Kubernetes HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/)
 - Third Party Autoscaling (such as [KEDA](https://keda.sh/))
 
-### NumaFlow Autoscaling
+### Numaflow Autoscaling
 
-NumaFlow provides autoscaling capability out of the box.
+Numaflow provides autoscaling capability out of the box.
 
 More detail is coming soon.
 
 ### Kubernetes HPA
 
-[Kubernetes HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) is supported in NumaFlow for any type of Vertex. To use HPA, remember to point the `scaleTargetRef` to the vertex as below.
+[Kubernetes HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) is supported in Numaflow for any type of Vertex. To use HPA, remember to point the `scaleTargetRef` to the vertex as below.
 
 ```yaml
 apiVersion: autoscaling/v2beta1
@@ -45,7 +45,7 @@ Kubernetes HPA autoscaling is usful for those Source vertice not able to count p
 
 ### Third Party Autoscaling
 
-Third party autoscaling tools like [KEDA](https://keda.sh/) are also supported in NumaFlow, which can be used to auto scale any type of vertex with the scalers it supports.
+Third party autoscaling tools like [KEDA](https://keda.sh/) are also supported in Numaflow, which can be used to auto scale any type of vertex with the scalers it supports.
 
 To use KEDA for vertex auto scaling, same as Kubernetes HPA, point the `scaleTargetRef` to your vertex.
 

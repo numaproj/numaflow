@@ -1,13 +1,15 @@
 # Development
 
-This doc explains how to set up a development environment for NumaFlow.
+This doc explains how to set up a development environment for Numaflow.
 
 ### Install required tools
 
-1. [`go`](https://golang.org/doc/install): 1.18+.
-1. [`git`](https://help.github.com/articles/set-up-git/): For source control.
-1. [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/): For managing development environments.
-1. [`protoc`](https://github.com/protocolbuffers/protobuf): For compiling protocol buffers.
+1. [`go`](https://golang.org/doc/install) 1.18+
+1. [`git`](https://help.github.com/articles/set-up-git/)
+1. [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+1. [`protoc`](https://github.com/protocolbuffers/protobuf) for compiling protocol buffers.
+1. [`Node.js®`](https://nodejs.org/en/) for running the UI
+1. [`yarn`](https://classic.yarnpkg.com/en/)
 1. [`k3d`](https://k3d.io/) for local development, if needed
 
 ### Create a k8s cluster with k3d if needed
