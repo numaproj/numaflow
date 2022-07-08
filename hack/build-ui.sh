@@ -12,7 +12,7 @@ ensure_yarn
 
 build_ui() {
     yarn --cwd ui install
-    NODE_OPTIONS="--max-old-space-size=2048" JOBS=max CI=false yarn --cwd ui build
+    NODE_OPTIONS="--max-old-space-size=2048" JOBS=max yarn --cwd ui build
 }
 
 build_ui
