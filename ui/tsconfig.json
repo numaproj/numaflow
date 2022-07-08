@@ -24,8 +24,5 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.js"
-  ],
-  "files": [
-    "./src/components/poddetail/podlogs/TextDecoderStream"
   ]
 }
