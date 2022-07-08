@@ -31,10 +31,10 @@ func BuildFetchWMWatchers(hbWatch store.WatermarkKVWatcher, otWatch store.Waterm
 }
 
 // NewGenericFetch returns GenericFetch. vertexName is the vertex currently processing.
-// fetchKeyspace is obsolete, and will be removed in subsequent iterations. fetchWM is a struct for retrieving both the heartbeat
+// fetchWM is a struct for retrieving both the heartbeat
 // and the offset watermark timeline (Vn-1 vertex).
-func NewGenericFetch(ctx context.Context, vertexName string, fetchKeyspace string, fetchWM FetchWMWatchers) *GenericFetch {
-	fromVertex := fetch.NewFromVertex(ctx, fetchKeyspace, fetchWM.HBWatch, fetchWM.OTWatch)
+func NewGenericFetch(ctx context.Context, vertexName string, fetchWM FetchWMWatchers) *GenericFetch {
+	fromVertex := fetch.NewFromVertex(ctx, fetchWM.HBWatch, fetchWM.OTWatch)
 	fromEdge := fetch.NewEdgeBuffer(ctx, vertexName, fromVertex)
 
 	gf := &GenericFetch{
