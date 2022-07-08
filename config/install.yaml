@@ -12833,7 +12833,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: controller-manager
+  name: numaflow-controller
   namespace: numaflow-system
 spec:
   replicas: 1
