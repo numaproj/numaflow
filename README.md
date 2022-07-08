@@ -27,7 +27,7 @@ Numaflow installs in less than a minute and is easier and cheaper for simple dat
 
 ## Resources
 
-- [QUICK_START](docs/QUICK_START.md)
+- [QUICK_START](docs/quick-start.md)
 - [EXAMPLES](examples)
-- [DEVELOPMENT](docs/DEVELOPMENT.md)
+- [DEVELOPMENT](docs/development.md)
 - [CONTRIBUTING](https://github.com/numaproj/numaproj/blob/main/CONTRIBUTING.md)
