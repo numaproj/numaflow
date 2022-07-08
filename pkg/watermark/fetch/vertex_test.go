@@ -72,7 +72,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	var testVertex = NewFromVertex(ctx, keyspace, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
+	var testVertex = NewFromVertex(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
 	var testBuffer = NewEdgeBuffer(ctx, "testBuffer", testVertex)
 
 	go func() {
@@ -305,7 +305,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	var testVertex = NewFromVertex(ctx, keyspace, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
+	var testVertex = NewFromVertex(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
 	var testBuffer = NewEdgeBuffer(ctx, "testBuffer", testVertex)
 
 	//var location, _ = time.LoadLocation("UTC")
