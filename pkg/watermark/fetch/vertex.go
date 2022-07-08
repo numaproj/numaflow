@@ -157,7 +157,7 @@ func (v *FromVertex) startHeatBeatWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
-				var entity = processor.NewProcessorEntity(value.Key(), v.keyspace, processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
+				var entity = processor.NewProcessorEntity(value.Key(), processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
 				if p == nil { // if no, create a new processor

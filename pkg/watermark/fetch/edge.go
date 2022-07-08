@@ -49,7 +49,7 @@ func (e *Edge) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var epoch int64 = math.MaxInt64
 	var podMap = e.fromVertex.GetAllProcessors()
 	for _, p := range podMap {
-		debugString.WriteString(fmt.Sprintf("[%s] %s\n", p.entity.GetBucketName(), p))
+		debugString.WriteString(fmt.Sprintf("[HB:%s OT:%s] %s\n", e.fromVertex.hbWatcher.GetKVName(), e.fromVertex.otWatcher.GetKVName(), p))
 		var t = p.offsetTimeline.GetEventTime(inputOffset)
 		if t != -1 && t < epoch {
 			epoch = t

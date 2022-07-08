@@ -101,7 +101,7 @@ func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	for {
 		err := p.otStore.PutKV(p.ctx, key, value)
 		if err != nil {
-			p.log.Errorw("unable to publish watermark", zap.String("entity", p.entity.GetBucketName()), zap.String("key", key), zap.Error(err))
+			p.log.Errorw("unable to publish watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
