@@ -61,6 +61,7 @@ nav:
       - pipeline-tuning.md
       - conditional-forwarding.md
       - autoscaling.md
+      - container-resources.md
       - APIs.md
   - Operator Manual:
       - Releases ⧉: "releases.md"
