@@ -270,7 +270,7 @@ type PipelineSpec struct {
 	// +optional
 	Lifecycle Lifecycle `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`
 	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, they could be overridden by each vertex's settings
-	// +kubebuilder:default={"readBatchSize": 100, "udfWorkers": 100, "bufferMaxLength": 10000, "bufferUsageLimit": 80}
+	// +kubebuilder:default={"readBatchSize": 500, "bufferMaxLength": 30000, "bufferUsageLimit": 80}
 	// +optional
 	Limits *PipelineLimits `json:"limits,omitempty" protobuf:"bytes,5,opt,name=limits"`
 	// Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been
@@ -290,26 +290,21 @@ type Watermark struct {
 
 type PipelineLimits struct {
 	// Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings
-	// +kubebuilder:default=100
+	// +kubebuilder:default=500
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
-	// Workers used to concurrently call UDF functions, it's only meaningful for UDF vertex, and will be ignored by source and sink vertices.
-	// It can be overridden by the vertex's limit settings
-	// +kubebuilder:default=100
-	// +optional
-	UDFWorkers *uint32 `json:"udfWorkers,omitempty" protobuf:"varint,2,opt,name=udfWorkers"`
 	// BufferMaxLength is used to define the max length of a buffer
 	// Only applies to UDF and Source vertice as only they do buffer write.
 	// It can be overridden by the settings in vertex limits.
-	// +kubebuilder:default=10000
+	// +kubebuilder:default=30000
 	// +optional
-	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,3,opt,name=bufferMaxLength"`
+	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,2,opt,name=bufferMaxLength"`
 	// BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
 	// Only applies to UDF and Source vertice as only they do buffer write.
 	// It will be overridden by the settings in vertex limits.
 	// +kubebuilder:default=80
 	// +optional
-	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
+	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,3,opt,name=bufferUsageLimit"`
 }
 
 type PipelineStatus struct {

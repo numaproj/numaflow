@@ -16,7 +16,7 @@ const pod = {
 }
 const podDetail = {"name": "simple-pipeline-infer-0-xah5w", "containerMap": containerSpecMap}
 const containerName = "main"
-const namespaceId = "dataflow-system"
+const namespaceId = "numaflow-system"
 
 describe("PodDetail screen", () => {
     it("loads screen", () => {

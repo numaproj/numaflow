@@ -1052,11 +1052,6 @@ func (in *PipelineLimits) DeepCopyInto(out *PipelineLimits) {
 		*out = new(uint64)
 		**out = **in
 	}
-	if in.UDFWorkers != nil {
-		in, out := &in.UDFWorkers, &out.UDFWorkers
-		*out = new(uint32)
-		**out = **in
-	}
 	if in.BufferMaxLength != nil {
 		in, out := &in.BufferMaxLength, &out.BufferMaxLength
 		*out = new(uint64)
@@ -1481,11 +1476,6 @@ func (in *VertexLimits) DeepCopyInto(out *VertexLimits) {
 	if in.ReadBatchSize != nil {
 		in, out := &in.ReadBatchSize, &out.ReadBatchSize
 		*out = new(uint64)
-		**out = **in
-	}
-	if in.UDFWorkers != nil {
-		in, out := &in.UDFWorkers, &out.UDFWorkers
-		*out = new(uint32)
 		**out = **in
 	}
 	return

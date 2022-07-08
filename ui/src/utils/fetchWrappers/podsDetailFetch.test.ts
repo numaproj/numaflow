@@ -10,8 +10,8 @@ describe("podsDetail test", () => {
     const data = [{
         "metadata": {
             "name": "isbs-default-js-2",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/isbs-default-js-2",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/isbs-default-js-2",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:21Z",
@@ -23,8 +23,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "isbs-default-js-0",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/isbs-default-js-0",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/isbs-default-js-0",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:26Z",
@@ -36,8 +36,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-daemon-5d85574c9c-cg6r8",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-daemon-5d85574c9c-cg6r8",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-daemon-5d85574c9c-cg6r8",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:29Z",
@@ -46,8 +46,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "isbs-default-js-1",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/isbs-default-js-1",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/isbs-default-js-1",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:26Z",
@@ -59,8 +59,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-infer-0-xah5w",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-infer-0-xah5w",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-infer-0-xah5w",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:22Z",
@@ -72,8 +72,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-log-output-0-dqmpx",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-log-output-0-dqmpx",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-log-output-0-dqmpx",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:35Z",
@@ -82,8 +82,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-train-output-0-pkbve",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-train-output-0-pkbve",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-train-output-0-pkbve",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:33Z",
@@ -92,8 +92,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-preproc-0-zhnul",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-preproc-0-zhnul",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-preproc-0-zhnul",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:27Z",
@@ -105,8 +105,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-train-1-0-oogcf",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-train-1-0-oogcf",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-train-1-0-oogcf",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:21Z",
@@ -118,8 +118,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-input-0-rwodz",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-input-0-rwodz",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-input-0-rwodz",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:38Z",
@@ -128,8 +128,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-publisher-0-dopqc",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-publisher-0-dopqc",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-publisher-0-dopqc",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:38Z",
@@ -138,8 +138,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-train-0-36p8b",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-train-0-36p8b",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-train-0-36p8b",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:24Z",
@@ -150,9 +150,9 @@ describe("podsDetail test", () => {
         }]
     }, {
         "metadata": {
-            "name": "dataflow-ux-server-578bc6cff5-thn8t",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/dataflow-ux-server-578bc6cff5-thn8t",
+            "name": "numaflow-ux-server-578bc6cff5-thn8t",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/numaflow-ux-server-578bc6cff5-thn8t",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:26Z",
@@ -161,8 +161,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "controller-manager-64dd6f4474-tpg5w",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/controller-manager-64dd6f4474-tpg5w",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/controller-manager-64dd6f4474-tpg5w",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:34Z",
@@ -171,8 +171,8 @@ describe("podsDetail test", () => {
     }, {
         "metadata": {
             "name": "simple-pipeline-postproc-0-eq0sy",
-            "namespace": "dataflow-system",
-            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/dataflow-system/pods/simple-pipeline-postproc-0-eq0sy",
+            "namespace": "numaflow-system",
+            "selfLink": "/apis/metrics.k8s.io/v1beta1/namespaces/numaflow-system/pods/simple-pipeline-postproc-0-eq0sy",
             "creationTimestamp": "2022-05-12T06:40:42Z"
         },
         "timestamp": "2022-05-12T06:40:28Z",
@@ -184,18 +184,18 @@ describe("podsDetail test", () => {
     }]
     it("podsDetail return", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: false})
-        const {result} = renderHook(() => usePodsDetailFetch("dataflow-system", "simple-pipeline"))
+        const {result} = renderHook(() => usePodsDetailFetch("numaflow-system", "simple-pipeline"))
     })
 
     it("podsDetail loading", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: true});
-        const {result} = renderHook(() => usePodsDetailFetch("dataflow-system", "simple-pipeline"))
+        const {result} = renderHook(() => usePodsDetailFetch("numaflow-system", "simple-pipeline"))
         expect(result.current.loading).toBeTruthy()
     })
 
     it("podsDetail error", () => {
         mockedUseFetch.mockReturnValue({data: data, error: true, loading: false})
-        const {result} = renderHook(() => usePodsDetailFetch("dataflow-system", "simple-pipeline"))
+        const {result} = renderHook(() => usePodsDetailFetch("numaflow-system", "simple-pipeline"))
         expect(result.current.error).toBeTruthy()
     })
 })
