@@ -26,9 +26,7 @@ type FromVertexer interface {
 // It has the mapping of all the processors which in turn has all the information about each processor
 // timelines.
 type FromVertex struct {
-	ctx context.Context
-	// keyspace is only used if we have a processorHBWatcher
-	keyspace   string
+	ctx        context.Context
 	hbWatcher  store.WatermarkKVWatcher
 	otWatcher  store.WatermarkKVWatcher
 	heartbeat  *ProcessorHeartbeat
@@ -41,7 +39,7 @@ type FromVertex struct {
 }
 
 // NewFromVertex returns `FromVertex`
-func NewFromVertex(ctx context.Context, keyspace string, hbWatcher store.WatermarkKVWatcher, otWatcher store.WatermarkKVWatcher, inputOpts ...VertexOption) *FromVertex {
+func NewFromVertex(ctx context.Context, hbWatcher store.WatermarkKVWatcher, otWatcher store.WatermarkKVWatcher, inputOpts ...VertexOption) *FromVertex {
 	opts := &vertexOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
@@ -53,7 +51,6 @@ func NewFromVertex(ctx context.Context, keyspace string, hbWatcher store.Waterma
 
 	v := &FromVertex{
 		ctx:        ctx,
-		keyspace:   keyspace,
 		hbWatcher:  hbWatcher,
 		otWatcher:  otWatcher,
 		heartbeat:  NewProcessorHeartbeat(),
@@ -140,7 +137,7 @@ func (v *FromVertex) refreshingProcessors() {
 			debugStr.WriteString(fmt.Sprintf("[%s] ", pName))
 		}
 	}
-	v.log.Debugf("[%s] active processors %+v", v.keyspace, debugStr.String())
+	v.log.Debugw("active processors", zap.String("HB", v.hbWatcher.GetKVName()), zap.String("OT", v.otWatcher.GetKVName()), zap.String("DebugStr", debugStr.String()))
 }
 
 // startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
@@ -191,7 +188,8 @@ func (v *FromVertex) startHeatBeatWatcher() {
 			case store.KVPurge:
 				v.log.Errorw("received nats.KeyValuePurge", zap.String("bucket", v.hbWatcher.GetKVName()))
 			}
-			v.log.Debugf("[%s] processorHeartbeatWatcher - Updates: [%s] %s > %s: %s", v.keyspace, value.Operation(), v.hbWatcher.GetKVName(), value.Key(), value.Value())
+			v.log.Debugw("processorHeartbeatWatcher - Updates:", zap.String("Operation", value.Operation().String()),
+				zap.String("HB", v.hbWatcher.GetKVName()), zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 		}
 
 	}

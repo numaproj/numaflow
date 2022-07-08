@@ -49,7 +49,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherHBBucketName, defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherOTBucketName, defaultJetStreamClient)
-	testVertex := NewFromVertex(ctx, "testVertex", hbWatcher, otWatcher)
+	testVertex := NewFromVertex(ctx, hbWatcher, otWatcher)
 	var (
 		// TODO: watcher should not be nil
 		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, otWatcher)
