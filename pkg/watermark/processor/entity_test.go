@@ -9,17 +9,15 @@ import (
 )
 
 func TestEntity(t *testing.T) {
-	e := NewProcessorEntity("pod0", "v0")
+	e := NewProcessorEntity("pod0")
 	assert.False(t, e.opts.separateOTBucket)
 	assert.Equal(t, "pod0", e.GetID())
-	assert.Equal(t, "v0_OT", e.GetBucketName())
 }
 
 func TestEntityDifferentBuckets(t *testing.T) {
-	e := NewProcessorEntity("pod0", "v0", WithSeparateOTBuckets(true))
+	e := NewProcessorEntity("pod0", WithSeparateOTBuckets(true))
 	assert.True(t, e.IsOTBucketShared())
 	assert.Equal(t, "pod0", e.GetID())
-	assert.Equal(t, "v0_OT_pod0", e.GetBucketName())
 }
 
 func ExampleWatermark_String() {
@@ -41,7 +39,7 @@ func TestProcessorEntity_ParseOTWatcherKey(t *testing.T) {
 	}{
 		{
 			name:      "good_with_split",
-			p:         NewProcessorEntity("test1", "keyspace1", WithSeparateOTBuckets(true)),
+			p:         NewProcessorEntity("test1", WithSeparateOTBuckets(true)),
 			arg:       "1234",
 			wantEpoch: 1234,
 			wantSkip:  false,
@@ -49,7 +47,7 @@ func TestProcessorEntity_ParseOTWatcherKey(t *testing.T) {
 		},
 		{
 			name:      "bad_with_split",
-			p:         NewProcessorEntity("test1", "keyspace1", WithSeparateOTBuckets(true)),
+			p:         NewProcessorEntity("test1", WithSeparateOTBuckets(true)),
 			arg:       _defaultKeySeparator + "1234",
 			wantEpoch: 0,
 			wantSkip:  false,
@@ -57,7 +55,7 @@ func TestProcessorEntity_ParseOTWatcherKey(t *testing.T) {
 		},
 		{
 			name:      "bad_without_split_butSkip",
-			p:         NewProcessorEntity("test1", "keyspace1", WithSeparateOTBuckets(false)),
+			p:         NewProcessorEntity("test1", WithSeparateOTBuckets(false)),
 			arg:       _defaultKeySeparator + "1234", // name is missing
 			wantEpoch: 1234,
 			wantSkip:  true,
@@ -65,7 +63,7 @@ func TestProcessorEntity_ParseOTWatcherKey(t *testing.T) {
 		},
 		{
 			name:      "bad_without_split_missing_separator",
-			p:         NewProcessorEntity("test1", "keyspace1", WithSeparateOTBuckets(false)),
+			p:         NewProcessorEntity("test1", WithSeparateOTBuckets(false)),
 			arg:       "1234",
 			wantEpoch: 0,
 			wantSkip:  false,
@@ -73,7 +71,7 @@ func TestProcessorEntity_ParseOTWatcherKey(t *testing.T) {
 		},
 		{
 			name:      "good_without_split",
-			p:         NewProcessorEntity("test1", "keyspace1", WithSeparateOTBuckets(false)),
+			p:         NewProcessorEntity("test1", WithSeparateOTBuckets(false)),
 			arg:       "test1" + _defaultKeySeparator + "1234",
 			wantEpoch: 1234,
 			wantSkip:  false,
@@ -81,7 +79,7 @@ func TestProcessorEntity_ParseOTWatcherKey(t *testing.T) {
 		},
 		{
 			name:      "good_without_split_skip",
-			p:         NewProcessorEntity("test1", "keyspace1", WithSeparateOTBuckets(false)),
+			p:         NewProcessorEntity("test1", WithSeparateOTBuckets(false)),
 			arg:       "test-not-this" + _defaultKeySeparator + "1234",
 			wantEpoch: 1234,
 			wantSkip:  true,
@@ -112,7 +110,7 @@ func TestProcessorEntity_splitKey(t *testing.T) {
 	}{
 		{
 			name:    "good_separate_bucket",
-			p:       NewProcessorEntity("test1", "keyspace1", WithSeparateOTBuckets(true)),
+			p:       NewProcessorEntity("test1", WithSeparateOTBuckets(true)),
 			arg:     "1234",
 			want:    "",
 			want1:   "1234",
@@ -120,7 +118,7 @@ func TestProcessorEntity_splitKey(t *testing.T) {
 		},
 		{
 			name:    "bad_expected_name",
-			p:       NewProcessorEntity("test1", "keyspace1", WithSeparateOTBuckets(false)),
+			p:       NewProcessorEntity("test1", WithSeparateOTBuckets(false)),
 			arg:     "1234",
 			want:    "",
 			want1:   "",
@@ -128,7 +126,7 @@ func TestProcessorEntity_splitKey(t *testing.T) {
 		},
 		{
 			name:    "good_same_bucket",
-			p:       NewProcessorEntity("test1", "keyspace1", WithSeparateOTBuckets(false)),
+			p:       NewProcessorEntity("test1", WithSeparateOTBuckets(false)),
 			arg:     "p1" + _defaultKeySeparator + "1234",
 			want:    "p1",
 			want1:   "1234",

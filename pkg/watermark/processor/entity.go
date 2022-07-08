@@ -41,19 +41,16 @@ func WithSeparateOTBuckets(separate bool) EntityOption {
 // monotonically increase.
 type ProcessorEntitier interface {
 	GetID() string
-	GetBucketName() string
 	BuildOTWatcherKey(Watermark) string
 	ParseOTWatcherKey(string) (int64, bool, error)
 	IsOTBucketShared() bool
-	GetPublishKeyspace() string
 }
 
 // ProcessorEntity implements ProcessorEntitier.
 type ProcessorEntity struct {
 	// name is the name of the entity
-	name            string
-	publishKeyspace string
-	opts            *entityOptions
+	name string
+	opts *entityOptions
 }
 
 var _ ProcessorEntitier = (*ProcessorEntity)(nil)
@@ -64,8 +61,7 @@ var _ ProcessorEntitier = (*ProcessorEntity)(nil)
 const _defaultKeySeparator = "_"
 
 // NewProcessorEntity returns a new `ProcessorEntity`.
-// TODO: remove publishKeyspace
-func NewProcessorEntity(name string, publishKeyspace string, inputOpts ...EntityOption) *ProcessorEntity {
+func NewProcessorEntity(name string, inputOpts ...EntityOption) *ProcessorEntity {
 	opts := &entityOptions{
 		separateOTBucket: false,
 		keySeparator:     _defaultKeySeparator,
@@ -74,29 +70,14 @@ func NewProcessorEntity(name string, publishKeyspace string, inputOpts ...Entity
 		opt(opts)
 	}
 	return &ProcessorEntity{
-		name:            name,
-		publishKeyspace: publishKeyspace,
-		opts:            opts,
+		name: name,
+		opts: opts,
 	}
 }
 
 // GetID returns the ID of the processor.
 func (p *ProcessorEntity) GetID() string {
 	return p.name
-}
-
-// GetPublishKeyspace returns the publishKeyspace of the entity
-func (p *ProcessorEntity) GetPublishKeyspace() string {
-	return p.publishKeyspace
-}
-
-// GetBucketName returns the offset-timeline for the entity.
-func (p *ProcessorEntity) GetBucketName() string {
-	if p.opts.separateOTBucket {
-		return p.publishKeyspace + "_OT_" + p.name
-	} else {
-		return p.publishKeyspace + "_OT"
-	}
 }
 
 // IsOTBucketShared returns true if the OT bucket is shared.
