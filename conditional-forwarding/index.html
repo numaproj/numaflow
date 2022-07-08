@@ -13,7 +13,7 @@
     
     
       
-        <title>Overview - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Conditional Forwarding - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#builtin-functions" class="md-skip">
+        <a href="#conditional-forwarding" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Overview
+              Conditional Forwarding
             
           </span>
         </div>
@@ -663,14 +663,12 @@
               
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_4" type="checkbox" id="__nav_3_4" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_4" type="checkbox" id="__nav_3_4" >
       
       
       
@@ -691,14 +689,12 @@
               
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_4_1" type="checkbox" id="__nav_3_4_1" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_4_1" type="checkbox" id="__nav_3_4_1" >
       
       
       
@@ -719,21 +715,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../builtin-functions/" class="md-nav__link">
         Overview
       </a>
-      
     </li>
   
 
@@ -745,7 +731,7 @@
   
   
     <li class="md-nav__item">
-      <a href="cat/" class="md-nav__link">
+      <a href="../builtin-functions/cat/" class="md-nav__link">
         Cat
       </a>
     </li>
@@ -759,7 +745,7 @@
   
   
     <li class="md-nav__item">
-      <a href="filter/" class="md-nav__link">
+      <a href="../builtin-functions/filter/" class="md-nav__link">
         Filter
       </a>
     </li>
@@ -813,11 +799,59 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../conditional-forwarding/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Conditional Forwarding
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Conditional Forwarding
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#u005c__all__" class="md-nav__link">
+    U+005C__ALL__
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#u005c__drop__" class="md-nav__link">
+    U+005C__DROP__
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1132,6 +1166,28 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#u005c__all__" class="md-nav__link">
+    U+005C__ALL__
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#u005c__drop__" class="md-nav__link">
+    U+005C__DROP__
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1142,35 +1198,31 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/builtin-functions/README.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/conditional-forwarding.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="builtin-functions">Builtin Functions<a class="headerlink" href="#builtin-functions" title="Permanent link">&para;</a></h1>
-<p>Numaflow provides some builtin functions that can be used directly.</p>
-<p><strong>Cat</strong></p>
-<p>A <code>cat</code> builtin UDF does nothing but return the same messages it receives, it is very useful for debugging and testing.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat-vertex</span><span class="w"></span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">builtin</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span><span class="w"></span>
+<h1 id="conditional-forwarding">Conditional Forwarding<a class="headerlink" href="#conditional-forwarding" title="Permanent link">&para;</a></h1>
+<p>After processing the data, conditional forwarding is doable based on the <code>Key</code> returned in the result.</p>
+<p>For example, there's a UDF used to process numbers, and forward the result to different vertices based on the number is even or odd. In this case, you can set the <code>key</code> to <code>even</code> or <code>odd</code> in each of the returned messages, and define the edges as below:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">edges</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
+<span class="w">    </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">even-vertex</span><span class="w"></span>
+<span class="w">    </span><span class="nt">conditions</span><span class="p">:</span><span class="w"></span>
+<span class="w">      </span><span class="nt">keyIn</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">even</span><span class="w"></span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
+<span class="w">    </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">odd-vertex</span><span class="w"></span>
+<span class="w">    </span><span class="nt">conditions</span><span class="p">:</span><span class="w"></span>
+<span class="w">      </span><span class="nt">keyIn</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">odd</span><span class="w"></span>
 </code></pre></div>
-<p><strong>Filter</strong></p>
-<p>A <code>filter</code> builtin UDF does filter the message based on expression. <code>payload</code> keyword represents message object.
-see documentation for expression <a href="filter/#expression">here</a></p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filter-vertex</span><span class="w"></span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">builtin</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filter</span><span class="w"></span>
-<span class="w">          </span><span class="nt">kwargs</span><span class="p">:</span><span class="w"></span>
-<span class="w">            </span><span class="nt">expression</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int(object(payload).id) &gt; 100</span><span class="w"></span>
-</code></pre></div>
+<h3 id="u005c__all__"><code>U+005C__ALL__</code><a class="headerlink" href="#u005c__all__" title="Permanent link">&para;</a></h3>
+<p>If the returned <code>key</code> is <code>U+005C__ALL__</code>, the data will be forwarded to all the connected vertices no matter what kind of conditions is defined in the spec.</p>
+<h3 id="u005c__drop__"><code>U+005C__DROP__</code><a class="headerlink" href="#u005c__drop__" title="Permanent link">&para;</a></h3>
+<p>If the returned <code>key</code> is <code>U+005C__DROP__</code>, the data will <strong>NOT</strong> be forwarded to any of the connected vertices no matter what kind of conditions is defined in the spec.</p>
 
               
             </article>
@@ -1191,7 +1243,7 @@ see documentation for expression <a href="filter/#expression">here</a></p>
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../sinks/user-defined-sinks/" class="md-footer__link md-footer__link--prev" aria-label="Previous: User Defined Sinks" rel="prev">
+        <a href="../pipeline-tuning/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Pipeline Tuning" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -1200,20 +1252,20 @@ see documentation for expression <a href="filter/#expression">here</a></p>
               <span class="md-footer__direction">
                 Previous
               </span>
-              User Defined Sinks
+              Pipeline Tuning
             </div>
           </div>
         </a>
       
       
         
-        <a href="cat/" class="md-footer__link md-footer__link--next" aria-label="Next: Cat" rel="next">
+        <a href="../autoscaling/" class="md-footer__link md-footer__link--next" aria-label="Next: Auto Scaling" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Cat
+              Auto Scaling
             </div>
           </div>
           <div class="md-footer__button md-icon">
