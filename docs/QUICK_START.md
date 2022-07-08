@@ -1,10 +1,10 @@
 # Quick Start
 
-To see how NumaFlow works, you can install it, and run a simple pipeline, which contains a source vertex to generate messages, and a function vertex that echos the messages, and a log sink printing the messages.
+To see how Numaflow works, you can install it, and run a simple pipeline, which contains a source vertex to generate messages, and a function vertex that echos the messages, and a log sink printing the messages.
 
 ## Prerequisites
 
-A Kubernetes cluster is needed to try out NumaFlow. If needed, you can create a cluster locally using
+A Kubernetes cluster is needed to try out Numaflow. If needed, you can create a cluster locally using
 [`k3d`](https://k3d.io/) as below. You also need to get [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/) installed.
 
 ```shell
@@ -15,7 +15,9 @@ k3d cluster create -i rancher/k3s:v1.21.7-k3s1
 k3d kubeconfig get k3s-default
 ```
 
-## NumaFlow Installation
+## Installation
+
+Run following command lines to install Numaflow.
 
 ```sh
 kubectl create ns numaflow-system
@@ -23,7 +25,7 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
 
 ```
 
-Open a port-forward so you can access the UI on [https://localhost8443](https://localhost8443).
+Open a port-forward so you can access the UI on [https://localhost:8443](https://localhost:8443).
 
 ```sh
 kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
@@ -31,7 +33,7 @@ kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 
 ## A Simple Pipeline
 
-[Inter-Step Buffers](./INTER_STEP_BUFFER.md) are essential to run NumaFlow pipelines, to get Inter-Step Buffers in place, an [Inter-Step Buffer Service](./INTER_STEP_BUFFER_SERVICE.md) is required. We use [Nats JetStream](https://docs.nats.io/nats-concepts/jetstream) as an `Inter-Step Buffer Service` provider in this example.
+[Inter-Step Buffers](./INTER_STEP_BUFFER.md) are essential to run Numaflow pipelines, to get Inter-Step Buffers in place, an [Inter-Step Buffer Service](./INTER_STEP_BUFFER_SERVICE.md) is required. We use [Nats JetStream](https://docs.nats.io/nats-concepts/jetstream) as an `Inter-Step Buffer Service` provider in this example.
 
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
@@ -71,4 +73,4 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exa
 
 ## What's Next
 
-After exploring how a NumaFlow pipeline runs, you can check what data [Sources](./sources/GENERATOR.md) and [Sinks](./sinks/KAFKA.md) NumaFlow supports out of the box, or learn how to write [User Defined Functions](./USER_DEFINED_FUNCTIONS.md).
+After exploring how a Numaflow pipeline runs, you can check what data [Sources](./sources/GENERATOR.md) and [Sinks](./sinks/KAFKA.md) Numaflow supports out of the box, or learn how to write [User Defined Functions](./USER_DEFINED_FUNCTIONS.md).
