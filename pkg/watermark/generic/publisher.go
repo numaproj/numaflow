@@ -33,8 +33,8 @@ var _ publish.Publisher = (*GenericPublish)(nil)
 // NewGenericPublish returns GenericPublish. processorName is the unique processor (pod) that is running on this vertex.
 // publishKeyspace is obsolete, and will be removed in subsequent iterations. publishWM is a struct for storing both the heartbeat
 // and the offset watermark timeline stores for the Vn vertex.
-func NewGenericPublish(ctx context.Context, processorName string, publishKeyspace string, publishWM PublishWMStores) *GenericPublish {
-	publishEntity := processor.NewProcessorEntity(processorName, publishKeyspace)
+func NewGenericPublish(ctx context.Context, processorName string, publishWM PublishWMStores) *GenericPublish {
+	publishEntity := processor.NewProcessorEntity(processorName)
 	udfPublish := publish.NewPublish(ctx, publishEntity, publishWM.HBStore, publishWM.OTStore)
 	gp := &GenericPublish{
 		toEdge: udfPublish,

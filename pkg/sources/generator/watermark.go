@@ -11,6 +11,6 @@ import (
 func (mg *memgen) buildSourceWatermarkPublisher(publishWMStores *generic.PublishWMStores) publish.Publisher {
 	// for tickgen, it can be the name of the replica
 	entityName := fmt.Sprintf("%s-%d", mg.vertexInstance.Vertex.Name, mg.vertexInstance.Replica)
-	processorEntity := processor.NewProcessorEntity(entityName, mg.vertexInstance.Vertex.Name+"_SOURCE")
+	processorEntity := processor.NewProcessorEntity(entityName)
 	return publish.NewPublish(mg.lifecycleCtx, processorEntity, publishWMStores.HBStore, publishWMStores.OTStore)
 }

@@ -95,7 +95,7 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 
 		var publishStores = BuildPublishWMStores(hbStore, otStore)
 		var processorName = fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
-		publishWatermark[buffer.Name] = NewGenericPublish(ctx, processorName, GetPublishKeySpace(vertexInstance.Vertex), publishStores)
+		publishWatermark[buffer.Name] = NewGenericPublish(ctx, processorName, publishStores)
 	}
 
 	return fetchWatermark, publishWatermark
