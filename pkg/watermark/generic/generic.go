@@ -74,7 +74,7 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 	}
 
 	var fetchWmWatchers = BuildFetchWMWatchers(hbWatch, otWatch)
-	fetchWatermark = NewGenericFetch(ctx, vertexInstance.Vertex.Name, GetFetchKeyspace(vertexInstance.Vertex), fetchWmWatchers)
+	fetchWatermark = NewGenericFetch(ctx, vertexInstance.Vertex.Name, fetchWmWatchers)
 
 	// Publisher map creation, we need a publisher per edge.
 
