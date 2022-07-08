@@ -1262,13 +1262,6 @@ spec:
                     description: Read batch size
                     format: int64
                     type: integer
-                  udfWorkers:
-                    description: Workers used to concurrently call UDF functions,
-                      it's only meaningful for UDF vertex, and will be ignored by
-                      source and sink vertices. It overrides the setting in pipeline
-                      limits.
-                    format: int32
-                    type: integer
                 type: object
               metadata:
                 description: Metadata sets the pods's metadata, i.e. annotations and

@@ -8,7 +8,7 @@ global.ResizeObserver = require('resize-observer-polyfill')
 jest.mock("react-router-dom", () => ({
     ...jest.requireActual("react-router-dom"),
     useParams: () => ({
-        namespaceId: "dataflow-system",
+        namespaceId: "numaflow-system",
         pipelineId: "simple-pipeline"
     })
 }));
@@ -25,17 +25,17 @@ describe("Pipeline", () => {
             pipeline: {
                 "metadata": {
                     "name": "simple-pipeline",
-                    "namespace": "dataflow-system",
+                    "namespace": "numaflow-system",
                     "uid": "06297dc6-ffad-4853-92fb-5b851a5a4d20",
                     "resourceVersion": "192298",
                     "generation": 1,
                     "creationTimestamp": "2022-05-08T05:21:13Z",
-                    "annotations": {"kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"dataflow.ossanalytics.io/v1alpha1\",\"kind\":\"Pipeline\",\"metadata\":{\"annotations\":{},\"name\":\"simple-pipeline\",\"namespace\":\"dataflow-system\"},\"spec\":{\"edges\":[{\"from\":\"input\",\"to\":\"preproc\"},{\"from\":\"preproc\",\"to\":\"infer\"},{\"conditions\":{\"keyIn\":[\"train\"]},\"from\":\"infer\",\"to\":\"train\"},{\"conditions\":{\"keyIn\":[\"postproc\"]},\"from\":\"infer\",\"to\":\"postproc\"},{\"from\":\"postproc\",\"to\":\"log-output\"},{\"from\":\"postproc\",\"to\":\"publisher\"}],\"vertices\":[{\"name\":\"input\",\"source\":{\"generator\":{\"duration\":\"1s\",\"rpu\":250}}},{\"name\":\"preproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train\",\"sink\":{\"log\":{}}},{\"name\":\"infer\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"postproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"log-output\",\"sink\":{\"log\":{}}},{\"name\":\"publisher\",\"sink\":{\"log\":{}}}]}}\n"},
+                    "annotations": {"kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"numaflow.numaproj.io/v1alpha1\",\"kind\":\"Pipeline\",\"metadata\":{\"annotations\":{},\"name\":\"simple-pipeline\",\"namespace\":\"numaflow-system\"},\"spec\":{\"edges\":[{\"from\":\"input\",\"to\":\"preproc\"},{\"from\":\"preproc\",\"to\":\"infer\"},{\"conditions\":{\"keyIn\":[\"train\"]},\"from\":\"infer\",\"to\":\"train\"},{\"conditions\":{\"keyIn\":[\"postproc\"]},\"from\":\"infer\",\"to\":\"postproc\"},{\"from\":\"postproc\",\"to\":\"log-output\"},{\"from\":\"postproc\",\"to\":\"publisher\"}],\"vertices\":[{\"name\":\"input\",\"source\":{\"generator\":{\"duration\":\"1s\",\"rpu\":250}}},{\"name\":\"preproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train\",\"sink\":{\"log\":{}}},{\"name\":\"infer\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"postproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"log-output\",\"sink\":{\"log\":{}}},{\"name\":\"publisher\",\"sink\":{\"log\":{}}}]}}\n"},
                     "finalizers": ["pipeline-controller"],
                     "managedFields": [{
-                        "manager": "dataflow",
+                        "manager": "numaflow",
                         "operation": "Update",
-                        "apiVersion": "dataflow.ossanalytics.io/v1alpha1",
+                        "apiVersion": "numaflow.numaproj.io/v1alpha1",
                         "time": "2022-05-08T05:21:13Z",
                         "fieldsType": "FieldsV1",
                         "fieldsV1": {
@@ -45,7 +45,7 @@ describe("Pipeline", () => {
                     }, {
                         "manager": "kubectl-client-side-apply",
                         "operation": "Update",
-                        "apiVersion": "dataflow.ossanalytics.io/v1alpha1",
+                        "apiVersion": "numaflow.numaproj.io/v1alpha1",
                         "time": "2022-05-08T05:21:13Z",
                         "fieldsType": "FieldsV1",
                         "fieldsV1": {
@@ -63,8 +63,7 @@ describe("Pipeline", () => {
                                     ".": {},
                                     "f:bufferMaxLength": {},
                                     "f:bufferUsageLimit": {},
-                                    "f:readBatchSize": {},
-                                    "f:udfWorkers": {}
+                                    "f:readBatchSize": {}
                                 },
                                 "f:vertices": {}
                             }
@@ -181,17 +180,17 @@ describe("Pipeline", () => {
             pipeline: {
                 "metadata": {
                     "name": "simple-pipeline",
-                    "namespace": "dataflow-system",
+                    "namespace": "numaflow-system",
                     "uid": "06297dc6-ffad-4853-92fb-5b851a5a4d20",
                     "resourceVersion": "192298",
                     "generation": 1,
                     "creationTimestamp": "2022-05-08T05:21:13Z",
-                    "annotations": {"kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"dataflow.ossanalytics.io/v1alpha1\",\"kind\":\"Pipeline\",\"metadata\":{\"annotations\":{},\"name\":\"simple-pipeline\",\"namespace\":\"dataflow-system\"},\"spec\":{\"edges\":[{\"from\":\"input\",\"to\":\"preproc\"},{\"from\":\"preproc\",\"to\":\"infer\"},{\"conditions\":{\"keyIn\":[\"train\"]},\"from\":\"infer\",\"to\":\"train\"},{\"conditions\":{\"keyIn\":[\"postproc\"]},\"from\":\"infer\",\"to\":\"postproc\"},{\"from\":\"postproc\",\"to\":\"log-output\"},{\"from\":\"postproc\",\"to\":\"publisher\"}],\"vertices\":[{\"name\":\"input\",\"source\":{\"generator\":{\"duration\":\"1s\",\"rpu\":250}}},{\"name\":\"preproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train\",\"sink\":{\"log\":{}}},{\"name\":\"infer\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"postproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"log-output\",\"sink\":{\"log\":{}}},{\"name\":\"publisher\",\"sink\":{\"log\":{}}}]}}\n"},
+                    "annotations": {"kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"numaflow.numaproj.io/v1alpha1\",\"kind\":\"Pipeline\",\"metadata\":{\"annotations\":{},\"name\":\"simple-pipeline\",\"namespace\":\"numaflow-system\"},\"spec\":{\"edges\":[{\"from\":\"input\",\"to\":\"preproc\"},{\"from\":\"preproc\",\"to\":\"infer\"},{\"conditions\":{\"keyIn\":[\"train\"]},\"from\":\"infer\",\"to\":\"train\"},{\"conditions\":{\"keyIn\":[\"postproc\"]},\"from\":\"infer\",\"to\":\"postproc\"},{\"from\":\"postproc\",\"to\":\"log-output\"},{\"from\":\"postproc\",\"to\":\"publisher\"}],\"vertices\":[{\"name\":\"input\",\"source\":{\"generator\":{\"duration\":\"1s\",\"rpu\":250}}},{\"name\":\"preproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train\",\"sink\":{\"log\":{}}},{\"name\":\"infer\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"postproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"log-output\",\"sink\":{\"log\":{}}},{\"name\":\"publisher\",\"sink\":{\"log\":{}}}]}}\n"},
                     "finalizers": ["pipeline-controller"],
                     "managedFields": [{
-                        "manager": "dataflow",
+                        "manager": "numaflow",
                         "operation": "Update",
-                        "apiVersion": "dataflow.ossanalytics.io/v1alpha1",
+                        "apiVersion": "numaflow.numaproj.io/v1alpha1",
                         "time": "2022-05-08T05:21:13Z",
                         "fieldsType": "FieldsV1",
                         "fieldsV1": {
@@ -201,7 +200,7 @@ describe("Pipeline", () => {
                     }, {
                         "manager": "kubectl-client-side-apply",
                         "operation": "Update",
-                        "apiVersion": "dataflow.ossanalytics.io/v1alpha1",
+                        "apiVersion": "numaflow.numaproj.io/v1alpha1",
                         "time": "2022-05-08T05:21:13Z",
                         "fieldsType": "FieldsV1",
                         "fieldsV1": {
@@ -219,8 +218,7 @@ describe("Pipeline", () => {
                                     ".": {},
                                     "f:bufferMaxLength": {},
                                     "f:bufferUsageLimit": {},
-                                    "f:readBatchSize": {},
-                                    "f:udfWorkers": {}
+                                    "f:readBatchSize": {}
                                 },
                                 "f:vertices": {}
                             }

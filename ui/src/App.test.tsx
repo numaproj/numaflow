@@ -5,7 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 jest.mock("react-router-dom", () => ({
     ...jest.requireActual("react-router-dom"),
     useLocation: () => ({
-        pathname: "/namespaces/dataflow-system/pipelines/simple-pipeline"
+        pathname: "/namespaces/numaflow-system/pipelines/simple-pipeline"
     })
 }));
 

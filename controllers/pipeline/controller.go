@@ -465,9 +465,6 @@ func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
 	if v.Limits.ReadBatchSize == nil {
 		v.Limits.ReadBatchSize = pl.Spec.Limits.ReadBatchSize
 	}
-	if v.UDF != nil && v.Limits.UDFWorkers == nil {
-		v.Limits.UDFWorkers = pl.Spec.Limits.UDFWorkers
-	}
 }
 
 func copyEdgeLimits(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.Edge {

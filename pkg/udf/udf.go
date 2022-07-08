@@ -119,9 +119,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-		if x.UDFWorkers != nil {
-			opts = append(opts, forward.WithUDFConcurrency(int(*x.UDFWorkers)))
+			opts = append(opts, forward.WithUDFConcurrency(int(*x.ReadBatchSize)))
 		}
 	}
 
