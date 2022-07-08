@@ -79,7 +79,7 @@ describe("Graph screen test", () => {
                 "pipeline": "simple-pipeline",
                 "fromVertex": "input",
                 "toVertex": "preproc",
-                "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+                "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
                 "pendingCount": 0,
                 "ackPendingCount": 0,
                 "totalMessages": 0,
@@ -101,7 +101,7 @@ describe("Graph screen test", () => {
                 "pipeline": "simple-pipeline",
                 "fromVertex": "preproc",
                 "toVertex": "infer",
-                "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+                "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
                 "pendingCount": 0,
                 "ackPendingCount": 0,
                 "totalMessages": 0,
@@ -123,7 +123,7 @@ describe("Graph screen test", () => {
                 "pipeline": "simple-pipeline",
                 "fromVertex": "infer",
                 "toVertex": "train",
-                "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+                "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
                 "pendingCount": 0,
                 "ackPendingCount": 0,
                 "totalMessages": 18,
@@ -145,7 +145,7 @@ describe("Graph screen test", () => {
                 "pipeline": "simple-pipeline",
                 "fromVertex": "train",
                 "toVertex": "train-1",
-                "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+                "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
                 "pendingCount": 19,
                 "ackPendingCount": 30,
                 "totalMessages": 49,
@@ -167,7 +167,7 @@ describe("Graph screen test", () => {
                 "pipeline": "simple-pipeline",
                 "fromVertex": "train-1",
                 "toVertex": "train-output",
-                "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+                "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
                 "pendingCount": 0,
                 "ackPendingCount": 0,
                 "totalMessages": 30,
@@ -189,7 +189,7 @@ describe("Graph screen test", () => {
                 "pipeline": "simple-pipeline",
                 "fromVertex": "infer",
                 "toVertex": "postproc",
-                "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+                "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
                 "pendingCount": 0,
                 "ackPendingCount": 53,
                 "totalMessages": 53,
@@ -211,7 +211,7 @@ describe("Graph screen test", () => {
                 "pipeline": "simple-pipeline",
                 "fromVertex": "postproc",
                 "toVertex": "log-output",
-                "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+                "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
                 "pendingCount": 0,
                 "ackPendingCount": 0,
                 "totalMessages": 0,
@@ -233,7 +233,7 @@ describe("Graph screen test", () => {
                 "pipeline": "simple-pipeline",
                 "fromVertex": "postproc",
                 "toVertex": "publisher",
-                "bufferName": "dataflow-system-simple-pipeline-postproc-publisher",
+                "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
                 "pendingCount": 0,
                 "ackPendingCount": 0,
                 "totalMessages": 49,
@@ -268,7 +268,7 @@ describe("Graph screen test", () => {
     }
 
     it("Load Graph screen", async () => {
-        render(<Graph data={data} pipelineId={'simple-pipeline'} namespaceId={'dataflow-system'}/>)
+        render(<Graph data={data} pipelineId={'simple-pipeline'} namespaceId={'numaflow-system'}/>)
         await waitFor(() => expect(screen.getByTestId("graph")).toBeInTheDocument());
         await waitFor(() => expect(screen.getByTestId("graph")).toBeVisible());
         await waitFor(() => expect(screen.getByTestId("card")).toBeVisible());
