@@ -33,7 +33,7 @@ kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 
 ## A Simple Pipeline
 
-[Inter-Step Buffers](./INTER_STEP_BUFFER.md) are essential to run Numaflow pipelines, to get Inter-Step Buffers in place, an [Inter-Step Buffer Service](./INTER_STEP_BUFFER_SERVICE.md) is required. We use [Nats JetStream](https://docs.nats.io/nats-concepts/jetstream) as an `Inter-Step Buffer Service` provider in this example.
+[Inter-Step Buffers](./inter-step-buffer.md) are essential to run Numaflow pipelines, to get Inter-Step Buffers in place, an [Inter-Step Buffer Service](./inter-step-buffer-service.md) is required. We use [Nats JetStream](https://docs.nats.io/nats-concepts/jetstream) as an `Inter-Step Buffer Service` provider in this example.
 
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
@@ -73,4 +73,4 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exa
 
 ## What's Next
 
-After exploring how a Numaflow pipeline runs, you can check what data [Sources](./sources/GENERATOR.md) and [Sinks](./sinks/KAFKA.md) Numaflow supports out of the box, or learn how to write [User Defined Functions](./USER_DEFINED_FUNCTIONS.md).
+After exploring how a Numaflow pipeline runs, you can check what data [Sources](./sources/generator.md) and [Sinks](./sinks/kafka.md) Numaflow supports out of the box, or learn how to write [User Defined Functions](./user-defined-functions.md).

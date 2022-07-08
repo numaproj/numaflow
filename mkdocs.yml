@@ -37,39 +37,39 @@ markdown_extensions:
 nav:
   - Home: README.md
   - Getting Started:
-      - QUICK_START.md
+      - quick-start.md
   - User Guide:
       - Core Concepts:
-          - PIPELINE.md
-          - VERTEX.md
-          - INTER_STEP_BUFFER.md
-          - INTER_STEP_BUFFER_SERVICE.md
+          - pipeline.md
+          - vertex.md
+          - inter-step-buffer.md
+          - inter-step-buffer-service.md
       - Sources:
-          - sources/GENERATOR.md
-          - sources/HTTP.md
-          - sources/KAFKA.md
+          - sources/generator.md
+          - sources/http.md
+          - sources/kafka.md
       - Sinks:
-          - sinks/KAFKA.md
-          - sinks/LOG.md
-          - User Defined Sinks: "USER_DEFINED_SINKS.md"
+          - sinks/kafka.md
+          - sinks/log.md
+          - User Defined Sinks: "user-defined-sinks.md"
       - Functions:
           - Builtin Functions:
               - Overview: "builtin-functions/README.md"
-              - Cat: "builtin-functions/CAT.md"
-              - Filter: "builtin-functions/FILTER.md"
-          - User Defined Functions: "USER_DEFINED_FUNCTIONS.md"
-      - PIPELINE_TUNING.md
-      - CONDITIONAL_FORWARDING.md
-      - AUTOSCALING.md
+              - Cat: "builtin-functions/cat.md"
+              - Filter: "builtin-functions/filter.md"
+          - User Defined Functions: "user-defined-functions.md"
+      - pipeline-tuning.md
+      - conditional-forwarding.md
+      - autoscaling.md
       - APIs.md
   - Operator Manual:
-      - Releases ⧉: "RELEASES.md"
+      - Releases ⧉: "releases.md"
       - Configuration:
-          - Controller Configuration: "CONTROLLER_CONFIGMAP.md"
-          - metrics/METRICS.md
+          - Controller Configuration: "controller-configmap.md"
+          - metrics/metrics.md
   - Developer Guide:
-      - DEVELOPMENT.md
-      - Architecture: "architecture/ARCHITECTURE.md"
-      - DEBUGGING.md
-      - STATIC_CODE_ANALYSIS.md
-      - RELEASING.md
+      - development.md
+      - Architecture: "architecture/architecture.md"
+      - debugging.md
+      - static-code-analysis.md
+      - releasing.md
