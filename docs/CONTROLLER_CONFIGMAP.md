@@ -1,6 +1,6 @@
 # Controller ConfigMap
 
-The controller ConfigMap is used for cluster-wide settings.
+The controller ConfigMap is used for controller-wide settings.
 
 For a detailed example, please see [`numaflow-controller-config.yaml`](./numaflow-controller-config.yaml).
 
