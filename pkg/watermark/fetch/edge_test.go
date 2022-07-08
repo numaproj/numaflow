@@ -37,24 +37,24 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	var publisherHBKeyspace = "fetchTest_PROCESSORS"
-	deleteFn, err := createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherHBKeyspace})
+	var publisherHBBucketName = "fetchTest_PROCESSORS"
+	deleteFn, err := createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherHBBucketName})
 	assert.NoError(t, err)
 	defer deleteFn()
 
-	var publisherOTKeyspace = "fetchTest_OT"
-	deleteFn, err = createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherOTKeyspace})
+	var publisherOTBucketName = "fetchTest_OT"
+	deleteFn, err = createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherOTBucketName})
 	assert.NoError(t, err)
 	defer deleteFn()
 
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherHBKeyspace, defaultJetStreamClient)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherOTKeyspace, defaultJetStreamClient)
+	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherHBBucketName, defaultJetStreamClient)
+	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherOTBucketName, defaultJetStreamClient)
 	testVertex := NewFromVertex(ctx, "testVertex", hbWatcher, otWatcher)
 	var (
 		// TODO: watcher should not be nil
-		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1", "test"), 5, otWatcher)
-		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2", "test"), 5, otWatcher)
-		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3", "test"), 5, otWatcher)
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, otWatcher)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, otWatcher)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, otWatcher)
 		pod0Timeline = []OffsetWatermark{
 			{watermark: 11, offset: 9},
 			{watermark: 12, offset: 20},

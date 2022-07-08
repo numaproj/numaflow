@@ -53,7 +53,7 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 	otKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", publisherOTKeyspace, defaultJetStreamClient)
 	assert.NoError(t, err)
 
-	publishEntity := processor.NewProcessorEntity("publisherTestPod1", publisherHBKeyspace)
+	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
 
 	p := NewPublish(ctx, publishEntity, heartbeatKV, otKV, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1))
 
@@ -78,9 +78,6 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 
 	p.StopPublisher()
 
-	_, err = js.KeyValue(publishEntity.GetBucketName())
-	assert.Equal(t, nats.ErrBucketNotFound, err)
-
 	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
 	assert.Equal(t, nats.ErrKeyNotFound, err)
 
@@ -103,7 +100,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	deleteFn, err = createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: keyspace + "_OT"})
 	defer deleteFn()
 
-	publishEntity := processor.NewProcessorEntity("publisherTestPod1", keyspace, processor.WithSeparateOTBuckets(true))
+	publishEntity := processor.NewProcessorEntity("publisherTestPod1", processor.WithSeparateOTBuckets(true))
 
 	heartbeatKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
@@ -132,12 +129,6 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	assert.Equal(t, processor.Watermark(time.Unix(epoch-60, 0).In(location)).String(), head.String())
 
 	p.StopPublisher()
-
-	// run this test only if we are not sharing the bucket
-	if !publishEntity.IsOTBucketShared() {
-		_, err = js.KeyValue(publishEntity.GetBucketName())
-		assert.Equal(t, nats.ErrBucketNotFound, err)
-	}
 
 	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
 	assert.Equal(t, nats.ErrKeyNotFound, err)

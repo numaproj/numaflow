@@ -125,8 +125,7 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 					watermark: epoch,
 					offset:    int64(uint64Value),
 				})
-				p.log.Debugf("[%s]timelineWatcher- Updates:  [%s] > %d: %d", p.entity.GetBucketName(), p.otWatcher.GetKVName(), epoch, int64(uint64Value))
-				p.log.Debugf("[%s]%s", p.entity.GetBucketName(), p)
+				p.log.Debugw("timelineWatcher- Updates", zap.String("bucket", p.otWatcher.GetKVName()), zap.Int64("epoch", epoch), zap.Uint64("value", uint64Value))
 			case store.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
 				// naturally trim the KV store.
