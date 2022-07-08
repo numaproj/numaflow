@@ -61,7 +61,6 @@ var _ ProcessorEntitier = (*ProcessorEntity)(nil)
 const _defaultKeySeparator = "_"
 
 // NewProcessorEntity returns a new `ProcessorEntity`.
-// TODO: remove publishKeyspace
 func NewProcessorEntity(name string, inputOpts ...EntityOption) *ProcessorEntity {
 	opts := &entityOptions{
 		separateOTBucket: false,
