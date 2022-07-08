@@ -9,7 +9,7 @@ metadata:
   name: simple-pipeline
 spec:
   vertices:
-    - name: inp
+    - name: in
       source:
         generator:
           rpu: 100
