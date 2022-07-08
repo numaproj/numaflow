@@ -1,2 +1,7 @@
-.Pipeline {
+.react-flow__edge-textwrapper {
+    cursor: pointer;
+}
+
+.react-flow__edge-textbg {
+    fill: #fafafa;
 }

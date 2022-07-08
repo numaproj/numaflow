@@ -10,7 +10,7 @@ export const useFetch = (
   fetchOptions?: RequestInit,
   options?: Options
 ) => {
-  const [data, setData] = useState<any>();
+  const [data, setData] = useState<any>(undefined);
   const [error, setError] = useState<any>(undefined);
   const [loading, setLoading] = useState<boolean>(
     (options && !options.skip) || true

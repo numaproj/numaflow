@@ -17,10 +17,12 @@ const theme = createTheme({
   },
   palette: {
     primary: {
-      main: "#1976d2",
+      main: "#0077C5",
     },
   },
+
 });
+
 
 root.render(
   <React.StrictMode>
