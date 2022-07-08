@@ -372,7 +372,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 	}
 }
 
-// applyUDF applies the UDF and will block if there is any InternalErr. On the other hand, if this is an UserError
+// applyUDF applies the UDF and will block if there is any InternalErr. On the other hand, if this is a UserError
 // the skip flag is set. ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the ApplyUDF.
 func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
