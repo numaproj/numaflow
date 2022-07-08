@@ -9,7 +9,7 @@ metadata:
   name: simple-pipeline
 spec:
   vertices:
-    - name: input
+    - name: inp
       source:
         generator:
           rpu: 100
@@ -22,14 +22,14 @@ spec:
         env:
           - name: NUMAFLOW_DEBUG
             value: "true" # DO NOT forget the double quotes!!!
-    - name: output
+    - name: out
       sink:
         log: {}
   edges:
-    - from: input
+    - from: in
       to: p1
     - from: p1
-      to: output
+      to: out
 ```
 
 ## Profiling

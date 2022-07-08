@@ -51,7 +51,7 @@ nav:
       - Sinks:
           - sinks/kafka.md
           - sinks/log.md
-          - User Defined Sinks: "user-defined-sinks.md"
+          - User Defined Sinks: "sinks/user-defined-sinks.md"
       - Functions:
           - Builtin Functions:
               - Overview: "builtin-functions/README.md"
@@ -62,6 +62,8 @@ nav:
       - conditional-forwarding.md
       - autoscaling.md
       - container-resources.md
+      - volumes.md
+      - environment-variables.md
       - APIs.md
   - Operator Manual:
       - Releases ⧉: "releases.md"
