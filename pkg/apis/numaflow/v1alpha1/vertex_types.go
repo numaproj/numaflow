@@ -384,6 +384,10 @@ type VertexLimits struct {
 	// It overrides the setting in pipeline limits.
 	// +optional
 	UDFWorkers *uint32 `json:"udfWorkers,omitempty" protobuf:"varint,2,opt,name=udfWorkers"`
+	// Read timeout second for all the vertices in the pipeline, can be overridden by the vertex's limit settings
+	// +kubebuilder:default=1
+	// +optional
+	ReadTimeoutSeconds *uint32 `json:"readTimeoutSeconds,omitempty" protobuf:"varint,3,opt,name=readTimeoutSeconds"`
 }
 
 func (v VertexSpec) getType() containerSupplier {

@@ -1262,6 +1262,12 @@ spec:
                     description: Read batch size
                     format: int64
                     type: integer
+                  readTimeoutSeconds:
+                    default: 1
+                    description: Read timeout second for all the vertices in the pipeline,
+                      can be overridden by the vertex's limit settings
+                    format: int32
+                    type: integer
                   udfWorkers:
                     description: Workers used to concurrently call UDF functions,
                       it's only meaningful for UDF vertex, and will be ignored by

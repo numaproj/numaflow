@@ -2563,6 +2563,18 @@ be overridden by the settings in vertex limits.
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>readTimeoutSeconds</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Read timeout second for all the vertices in the pipeline, can be
+overridden by the vertex’s limit settings
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.PipelinePhase">
@@ -3416,6 +3428,18 @@ Read batch size
 Workers used to concurrently call UDF functions, it’s only meaningful
 for UDF vertex, and will be ignored by source and sink vertices. It
 overrides the setting in pipeline limits.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>readTimeoutSeconds</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Read timeout second for all the vertices in the pipeline, can be
+overridden by the vertex’s limit settings
 </p>
 </td>
 </tr>
