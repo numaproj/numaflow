@@ -2,6 +2,8 @@ package generator
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"os"
 	"testing"
 	"time"
@@ -9,7 +11,6 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/simplebuffer"
-	"github.com/numaproj/numaflow/pkg/sources/types"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -27,12 +28,13 @@ func TestWatermark(t *testing.T) {
 	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
 		Name: "memgen",
 	}}
-	m := &types.SourceMetadata{
+	m := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	mgen, err := NewMemGen(m, 1, 8, time.Millisecond, []isb.BufferWriter{dest})
+	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	mgen, err := NewMemGen(m, 1, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, &publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

@@ -1,3 +1,6 @@
+/*
+Package processor is the smallest processor entity for which the watermark will strictly monotonically increase.
+*/
 package processor
 
 import (
@@ -38,28 +41,27 @@ func WithSeparateOTBuckets(separate bool) EntityOption {
 // monotonically increase.
 type ProcessorEntitier interface {
 	GetID() string
-	GetBucketName() string
 	BuildOTWatcherKey(Watermark) string
 	ParseOTWatcherKey(string) (int64, bool, error)
-	IsSharedBucket() bool
-	GetPublishKeyspace() string
+	IsOTBucketShared() bool
 }
 
 // ProcessorEntity implements ProcessorEntitier.
 type ProcessorEntity struct {
 	// name is the name of the entity
-	name            string
-	publishKeyspace string
-	opts            *entityOptions
+	name string
+	opts *entityOptions
 }
+
+var _ ProcessorEntitier = (*ProcessorEntity)(nil)
 
 // _defaultKeySeparator is the key separate when we have shared OT buckets.
 // NOTE: we can only use `_` as the separator, Jetstream will not let any other special character.
 //       Perhaps we can encode the key using base64, but it will have a performance hit.
 const _defaultKeySeparator = "_"
 
-// NewProcessorEntity returns a new `ProcessorEntity`
-func NewProcessorEntity(name string, publishKeyspace string, inputOpts ...EntityOption) *ProcessorEntity {
+// NewProcessorEntity returns a new `ProcessorEntity`.
+func NewProcessorEntity(name string, inputOpts ...EntityOption) *ProcessorEntity {
 	opts := &entityOptions{
 		separateOTBucket: false,
 		keySeparator:     _defaultKeySeparator,
@@ -68,9 +70,8 @@ func NewProcessorEntity(name string, publishKeyspace string, inputOpts ...Entity
 		opt(opts)
 	}
 	return &ProcessorEntity{
-		name:            name,
-		publishKeyspace: publishKeyspace,
-		opts:            opts,
+		name: name,
+		opts: opts,
 	}
 }
 
@@ -79,22 +80,8 @@ func (p *ProcessorEntity) GetID() string {
 	return p.name
 }
 
-// GetPublishKeyspace returns the publishKeyspace of the entity
-func (p *ProcessorEntity) GetPublishKeyspace() string {
-	return p.publishKeyspace
-}
-
-// GetBucketName returns the offset-timeline for the entity.
-func (p *ProcessorEntity) GetBucketName() string {
-	if p.opts.separateOTBucket {
-		return p.publishKeyspace + "_OT_" + p.name
-	} else {
-		return p.publishKeyspace + "_OT"
-	}
-}
-
-// IsSharedBucket returns true if the bucket is shared.
-func (p *ProcessorEntity) IsSharedBucket() bool {
+// IsOTBucketShared returns true if the OT bucket is shared.
+func (p *ProcessorEntity) IsOTBucketShared() bool {
 	return p.opts.separateOTBucket
 }
 

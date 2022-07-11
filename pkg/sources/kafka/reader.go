@@ -15,6 +15,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 )
@@ -25,7 +26,7 @@ type KafkaSource struct {
 	// name of the pipeline
 	pipelineName string
 	// group name for the source vertex
-	groupname string
+	groupName string
 	// topic to consume messages from
 	topic string
 	// kafka brokers
@@ -48,6 +49,10 @@ type KafkaSource struct {
 	handlerbuffer int
 	// read timeout for the from buffer
 	readTimeout time.Duration
+	// client used to calculate pending messages
+	adminClient sarama.ClusterAdmin
+	// sarama client
+	saramaClient sarama.Client
 }
 
 type Option func(*KafkaSource) error
@@ -79,7 +84,7 @@ func WithReadTimeOut(t time.Duration) Option {
 // WithGroupName is used to set the group name
 func WithGroupName(gn string) Option {
 	return func(o *KafkaSource) error {
-		o.groupname = gn
+		o.groupName = gn
 		return nil
 	}
 }
@@ -160,14 +165,43 @@ func (r *KafkaSource) Close() error {
 	r.logger.Info("Closing kafka reader...")
 	// finally, shut down the client
 	r.cancelfn()
+	if r.adminClient != nil {
+		if err := r.adminClient.Close(); err != nil {
+			r.logger.Errorw("Error in closing kafka admin client", zap.Error(err))
+		}
+	}
+	if r.saramaClient != nil {
+		if err := r.saramaClient.Close(); err != nil {
+			r.logger.Errorw("Error in closing kafka sarama client", zap.Error(err))
+		}
+	}
 	<-r.stopch
 	r.logger.Info("Kafka reader closed")
 	return nil
 }
 
 func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
-	// TODO: not implemented
-	return isb.PendingNotAvailable, nil
+	if r.adminClient == nil || r.saramaClient == nil {
+		return isb.PendingNotAvailable, nil
+	}
+	partitions, err := r.saramaClient.Partitions(r.topic)
+	if err != nil {
+		return isb.PendingNotAvailable, fmt.Errorf("failed to get partitions, %w", err)
+	}
+	totalPending := int64(0)
+	rep, err := r.adminClient.ListConsumerGroupOffsets(r.groupName, map[string][]int32{r.topic: partitions})
+	if err != nil {
+		return isb.PendingNotAvailable, fmt.Errorf("failed to list consumer group offsets, %w", err)
+	}
+	for _, partition := range partitions {
+		partitionOffset, err := r.saramaClient.GetOffset(r.topic, partition, sarama.OffsetNewest)
+		if err != nil {
+			return isb.PendingNotAvailable, fmt.Errorf("failed to get offset of topic %q, partition %v, %w", r.topic, partition, err)
+		}
+		block := rep.GetBlock(r.topic, partition)
+		totalPending += partitionOffset - block.Offset
+	}
+	return totalPending, nil
 }
 
 // NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
@@ -178,8 +212,9 @@ func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Opt
 		pipelineName:  vertex.Spec.PipelineName,
 		topic:         source.Topic,
 		brokers:       source.Brokers,
-		readTimeout:   1 * time.Second, // default timeout
-		handlerbuffer: 100,             // default buffer size for kafka reads
+		readTimeout:   1 * time.Second,     // default timeout
+		handlerbuffer: 100,                 // default buffer size for kafka reads
+		logger:        logging.NewLogger(), // default logger
 	}
 
 	for _, o := range opts {
@@ -202,8 +237,20 @@ func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Opt
 			config.Net.TLS.Config = c
 		}
 	}
-
 	kafkasource.config = config
+	// Best effort to initialize the clients for pending messages calculation
+	adminClient, err := sarama.NewClusterAdmin(kafkasource.brokers, config)
+	if err != nil {
+		kafkasource.logger.Warnw("Problem initializing sarama admin client", zap.Error(err))
+	} else {
+		kafkasource.adminClient = adminClient
+	}
+	client, err := sarama.NewClient(kafkasource.brokers, config)
+	if err != nil {
+		kafkasource.logger.Warnw("Problem initializing sarama client", zap.Error(err))
+	} else {
+		kafkasource.saramaClient = client
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	kafkasource.cancelfn = cancel
@@ -225,30 +272,27 @@ func NewKafkaSource(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Opt
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertex, kafkasource, destinations, forward.All, applier.Terminal, nil, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertex, kafkasource, destinations, forward.All, applier.Terminal, nil, nil, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
 	kafkasource.forwarder = forwarder
-
 	return kafkasource, nil
 }
 
 func configFromOpts(yamlconfig string) (*sarama.Config, error) {
-
 	config, err := util.GetSaramaConfigFromYAMLString(yamlconfig)
 	if err != nil {
 		return nil, err
 	}
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
-
 	return config, nil
 }
 
 func (r *KafkaSource) startConsumer() {
-	client, err := sarama.NewConsumerGroup(r.brokers, r.groupname, r.config)
-	r.logger.Infow("creating NewConsumerGroup", zap.String("topic", r.topic), zap.String("consumerGroupName", r.groupname), zap.Strings("brokers", r.brokers))
+	client, err := sarama.NewConsumerGroup(r.brokers, r.groupName, r.config)
+	r.logger.Infow("creating NewConsumerGroup", zap.String("topic", r.topic), zap.String("consumerGroupName", r.groupName), zap.Strings("brokers", r.brokers))
 	if err != nil {
 		r.logger.Panicw("Problem initializing sarama client", zap.Error(err))
 	}
@@ -275,7 +319,6 @@ func (r *KafkaSource) startConsumer() {
 }
 
 func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
-
 	offset := toOffset(m.Topic, m.Partition, m.Offset)
 	msg := isb.Message{
 		Header: isb.Header{

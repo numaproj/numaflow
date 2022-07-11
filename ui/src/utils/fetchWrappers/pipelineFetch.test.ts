@@ -9,17 +9,17 @@ describe("pipeline test", () => {
     const data = {
         "metadata": {
             "name": "simple-pipeline",
-            "namespace": "dataflow-system",
+            "namespace": "numaflow-system",
             "uid": "9ae5ac46-4778-4f71-a52c-ff49c324675d",
             "resourceVersion": "212699",
             "generation": 1,
             "creationTimestamp": "2022-05-08T23:05:55Z",
-            "annotations": {"kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"dataflow.ossanalytics.io/v1alpha1\",\"kind\":\"Pipeline\",\"metadata\":{\"annotations\":{},\"name\":\"simple-pipeline\",\"namespace\":\"dataflow-system\"},\"spec\":{\"edges\":[{\"from\":\"input\",\"to\":\"preproc\"},{\"from\":\"preproc\",\"to\":\"infer\"},{\"conditions\":{\"keyIn\":[\"train\"]},\"from\":\"infer\",\"to\":\"train\"},{\"from\":\"train\",\"to\":\"train-1\"},{\"from\":\"train-1\",\"to\":\"train-output\"},{\"conditions\":{\"keyIn\":[\"postproc\"]},\"from\":\"infer\",\"to\":\"postproc\"},{\"from\":\"postproc\",\"to\":\"log-output\"},{\"from\":\"postproc\",\"to\":\"publisher\"}],\"vertices\":[{\"name\":\"input\",\"source\":{\"generator\":{\"duration\":\"1s\",\"rpu\":250}}},{\"name\":\"preproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train-1\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"infer\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"postproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"log-output\",\"sink\":{\"log\":{}}},{\"name\":\"train-output\",\"sink\":{\"log\":{}}},{\"name\":\"publisher\",\"sink\":{\"log\":{}}}]}}\n"},
+            "annotations": {"kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"numaflow.numaproj.io/v1alpha1\",\"kind\":\"Pipeline\",\"metadata\":{\"annotations\":{},\"name\":\"simple-pipeline\",\"namespace\":\"numaflow-system\"},\"spec\":{\"edges\":[{\"from\":\"input\",\"to\":\"preproc\"},{\"from\":\"preproc\",\"to\":\"infer\"},{\"conditions\":{\"keyIn\":[\"train\"]},\"from\":\"infer\",\"to\":\"train\"},{\"from\":\"train\",\"to\":\"train-1\"},{\"from\":\"train-1\",\"to\":\"train-output\"},{\"conditions\":{\"keyIn\":[\"postproc\"]},\"from\":\"infer\",\"to\":\"postproc\"},{\"from\":\"postproc\",\"to\":\"log-output\"},{\"from\":\"postproc\",\"to\":\"publisher\"}],\"vertices\":[{\"name\":\"input\",\"source\":{\"generator\":{\"duration\":\"1s\",\"rpu\":250}}},{\"name\":\"preproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train-1\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"infer\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"postproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"log-output\",\"sink\":{\"log\":{}}},{\"name\":\"train-output\",\"sink\":{\"log\":{}}},{\"name\":\"publisher\",\"sink\":{\"log\":{}}}]}}\n"},
             "finalizers": ["pipeline-controller"],
             "managedFields": [{
                 "manager": "kubectl-client-side-apply",
                 "operation": "Update",
-                "apiVersion": "dataflow.ossanalytics.io/v1alpha1",
+                "apiVersion": "numaflow.numaproj.io/v1alpha1",
                 "time": "2022-05-08T23:05:55Z",
                 "fieldsType": "FieldsV1",
                 "fieldsV1": {
@@ -37,16 +37,15 @@ describe("pipeline test", () => {
                             ".": {},
                             "f:bufferMaxLength": {},
                             "f:bufferUsageLimit": {},
-                            "f:readBatchSize": {},
-                            "f:udfWorkers": {}
+                            "f:readBatchSize": {}
                         },
                         "f:vertices": {}
                     }
                 }
             }, {
-                "manager": "dataflow",
+                "manager": "numaflow",
                 "operation": "Update",
-                "apiVersion": "dataflow.ossanalytics.io/v1alpha1",
+                "apiVersion": "numaflow.numaproj.io/v1alpha1",
                 "time": "2022-05-08T23:05:56Z",
                 "fieldsType": "FieldsV1",
                 "fieldsV1": {
@@ -87,7 +86,7 @@ describe("pipeline test", () => {
                 "conditions": null
             }],
             "lifecycle": {"deleteGracePeriodSeconds": 30, "desiredPhase": "Running"},
-            "limits": {"readBatchSize": 100, "udfWorkers": 100, "bufferMaxLength": 10000, "bufferUsageLimit": 80}
+            "limits": {"readBatchSize": 100, "bufferMaxLength": 10000, "bufferUsageLimit": 80}
         },
         "status": {
             "conditions": [{
@@ -107,11 +106,11 @@ describe("pipeline test", () => {
     }
     it("pipeline value", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: false})
-        const {result} = renderHook(() => usePipelineFetch("dataflow-system", "simple-pipeline", ""))
+        const {result} = renderHook(() => usePipelineFetch("numaflow-system", "simple-pipeline", ""))
         const expected = {
             "metadata": {
                 "annotations": {
-                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"dataflow.ossanalytics.io/v1alpha1\",\"kind\":\"Pipeline\",\"metadata\":{\"annotations\":{},\"name\":\"simple-pipeline\",\"namespace\":\"dataflow-system\"},\"spec\":{\"edges\":[{\"from\":\"input\",\"to\":\"preproc\"},{\"from\":\"preproc\",\"to\":\"infer\"},{\"conditions\":{\"keyIn\":[\"train\"]},\"from\":\"infer\",\"to\":\"train\"},{\"from\":\"train\",\"to\":\"train-1\"},{\"from\":\"train-1\",\"to\":\"train-output\"},{\"conditions\":{\"keyIn\":[\"postproc\"]},\"from\":\"infer\",\"to\":\"postproc\"},{\"from\":\"postproc\",\"to\":\"log-output\"},{\"from\":\"postproc\",\"to\":\"publisher\"}],\"vertices\":[{\"name\":\"input\",\"source\":{\"generator\":{\"duration\":\"1s\",\"rpu\":250}}},{\"name\":\"preproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train-1\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"infer\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"postproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"log-output\",\"sink\":{\"log\":{}}},{\"name\":\"train-output\",\"sink\":{\"log\":{}}},{\"name\":\"publisher\",\"sink\":{\"log\":{}}}]}}\n"
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"numaflow.numaproj.io/v1alpha1\",\"kind\":\"Pipeline\",\"metadata\":{\"annotations\":{},\"name\":\"simple-pipeline\",\"namespace\":\"numaflow-system\"},\"spec\":{\"edges\":[{\"from\":\"input\",\"to\":\"preproc\"},{\"from\":\"preproc\",\"to\":\"infer\"},{\"conditions\":{\"keyIn\":[\"train\"]},\"from\":\"infer\",\"to\":\"train\"},{\"from\":\"train\",\"to\":\"train-1\"},{\"from\":\"train-1\",\"to\":\"train-output\"},{\"conditions\":{\"keyIn\":[\"postproc\"]},\"from\":\"infer\",\"to\":\"postproc\"},{\"from\":\"postproc\",\"to\":\"log-output\"},{\"from\":\"postproc\",\"to\":\"publisher\"}],\"vertices\":[{\"name\":\"input\",\"source\":{\"generator\":{\"duration\":\"1s\",\"rpu\":250}}},{\"name\":\"preproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"train-1\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"infer\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"postproc\",\"udf\":{\"builtin\":{\"name\":\"cat\"}}},{\"name\":\"log-output\",\"sink\":{\"log\":{}}},{\"name\":\"train-output\",\"sink\":{\"log\":{}}},{\"name\":\"publisher\",\"sink\":{\"log\":{}}}]}}\n"
                 },
                 "creationTimestamp": "2022-05-08T23:05:55Z",
                 "finalizers": [
@@ -120,7 +119,7 @@ describe("pipeline test", () => {
                 "generation": 1,
                 "managedFields": [
                     {
-                        "apiVersion": "dataflow.ossanalytics.io/v1alpha1",
+                        "apiVersion": "numaflow.numaproj.io/v1alpha1",
                         "fieldsType": "FieldsV1",
                         "fieldsV1": {
                             "f:metadata": {
@@ -141,8 +140,7 @@ describe("pipeline test", () => {
                                     ".": {},
                                     "f:bufferMaxLength": {},
                                     "f:bufferUsageLimit": {},
-                                    "f:readBatchSize": {},
-                                    "f:udfWorkers": {}
+                                    "f:readBatchSize": {}
                                 },
                                 "f:vertices": {}
                             }
@@ -152,7 +150,7 @@ describe("pipeline test", () => {
                         "time": "2022-05-08T23:05:55Z"
                     },
                     {
-                        "apiVersion": "dataflow.ossanalytics.io/v1alpha1",
+                        "apiVersion": "numaflow.numaproj.io/v1alpha1",
                         "fieldsType": "FieldsV1",
                         "fieldsV1": {
                             "f:metadata": {
@@ -168,13 +166,13 @@ describe("pipeline test", () => {
                                 "f:phase": {}
                             }
                         },
-                        "manager": "dataflow",
+                        "manager": "numaflow",
                         "operation": "Update",
                         "time": "2022-05-08T23:05:56Z"
                     }
                 ],
                 "name": "simple-pipeline",
-                "namespace": "dataflow-system",
+                "namespace": "numaflow-system",
                 "resourceVersion": "212699",
                 "uid": "9ae5ac46-4778-4f71-a52c-ff49c324675d"
             },
@@ -236,8 +234,7 @@ describe("pipeline test", () => {
                 "limits": {
                     "bufferMaxLength": 10000,
                     "bufferUsageLimit": 80,
-                    "readBatchSize": 100,
-                    "udfWorkers": 100
+                    "readBatchSize": 100
                 },
                 "vertices": [
                     {
@@ -341,13 +338,13 @@ describe("pipeline test", () => {
 
     it("pipeline loading", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: true})
-        const {result} = renderHook(() => usePipelineFetch("dataflow-system", "simple-pipeline", ""))
+        const {result} = renderHook(() => usePipelineFetch("numaflow-system", "simple-pipeline", ""))
         expect(result.current.loading).toBeTruthy()
     })
 
     it("pipeline error", () => {
         mockedUseFetch.mockReturnValue({data: data, error: true, loading: false})
-        const {result} = renderHook(() => usePipelineFetch("dataflow-system", "simple-pipeline", ""))
+        const {result} = renderHook(() => usePipelineFetch("numaflow-system", "simple-pipeline", ""))
         expect(result.current.error).toBeTruthy()
     })
 })

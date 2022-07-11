@@ -147,8 +147,8 @@ func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
 	return int64(c.NumPending), nil
 }
 
-// Rate returns the ack rate (tps)
-func (jr *jetStreamReader) Rate(_ context.Context) (float64, error) {
+// Rate returns the ack rate (tps) in the past seconds
+func (jr *jetStreamReader) Rate(_ context.Context, seconds int64) (float64, error) {
 	if !jr.opts.useAckInfoAsRate {
 		return isb.RateNotAvailable, nil
 	}
@@ -158,15 +158,16 @@ func (jr *jetStreamReader) Rate(_ context.Context) (float64, error) {
 	}
 	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
 	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-2]
+	now := time.Now().Unix()
+	if now-startSeqInfo.timestamp > seconds {
+		return isb.RateNotAvailable, nil
+	}
 	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
-		if endSeqInfo.timestamp-timestampedSeqs[i].timestamp > jr.opts.rateLookbackSeconds {
+		if now-timestampedSeqs[i].timestamp <= seconds {
 			startSeqInfo = timestampedSeqs[i]
+		} else {
 			break
 		}
-	}
-	// Check if it is too stale (use lookbackSeconds + 2 * interval to determine)
-	if endSeqInfo.timestamp-startSeqInfo.timestamp > jr.opts.rateLookbackSeconds+2*int64(jr.opts.ackInfoCheckInterval.Seconds()) {
-		return isb.RateNotAvailable, nil
 	}
 	return float64(endSeqInfo.seq-startSeqInfo.seq) / float64(endSeqInfo.timestamp-startSeqInfo.timestamp), nil
 }
@@ -269,9 +270,9 @@ func (o *offset) workInProgess(ctx context.Context, msg *nats.Msg, tickDuration 
 	for {
 		select {
 		case <-ticker.C:
-			log.Debugw("Mark message processing in progress", zap.Any("seq", o.seq))
+			log.Debugw("Mark message processing in generic", zap.Any("seq", o.seq))
 			if err := msg.InProgress(); err != nil && !errors.Is(err, nats.ErrMsgAlreadyAckd) && !errors.Is(err, nats.ErrMsgNotFound) {
-				log.Errorw("Failed to set JetStream msg in progress", zap.Error(err))
+				log.Errorw("Failed to set JetStream msg in generic", zap.Error(err))
 			}
 		case <-ctx.Done():
 			return

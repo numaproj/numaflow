@@ -674,34 +674,28 @@ message Pipeline {
 
 message PipelineLimits {
   // Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings
-  // +kubebuilder:default=100
+  // +kubebuilder:default=500
   // +optional
   optional uint64 readBatchSize = 1;
-
-  // Workers used to concurrently call UDF functions, it's only meaningful for UDF vertex, and will be ignored by source and sink vertices.
-  // It can be overridden by the vertex's limit settings
-  // +kubebuilder:default=100
-  // +optional
-  optional uint32 udfWorkers = 2;
 
   // BufferMaxLength is used to define the max length of a buffer
   // Only applies to UDF and Source vertice as only they do buffer write.
   // It can be overridden by the settings in vertex limits.
-  // +kubebuilder:default=10000
+  // +kubebuilder:default=30000
   // +optional
-  optional uint64 bufferMaxLength = 3;
+  optional uint64 bufferMaxLength = 2;
 
   // BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
   // Only applies to UDF and Source vertice as only they do buffer write.
   // It will be overridden by the settings in vertex limits.
   // +kubebuilder:default=80
   // +optional
-  optional uint32 bufferUsageLimit = 4;
+  optional uint32 bufferUsageLimit = 3;
 
   // Read timeout second for all the vertices in the pipeline, can be overridden by the vertex's limit settings
   // +kubebuilder:default=1
   // +optional
-  optional uint32 readTimeoutSeconds = 5;
+  optional uint32 readTimeoutSeconds = 4;
 }
 
 // +kubebuilder:object:root=true
@@ -731,7 +725,7 @@ message PipelineSpec {
   optional Lifecycle lifecycle = 4;
 
   // Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, they could be overridden by each vertex's settings
-  // +kubebuilder:default={"readBatchSize": 100, "udfWorkers": 100, "bufferMaxLength": 10000, "bufferUsageLimit": 80}
+  // +kubebuilder:default={"readBatchSize": 500, "bufferMaxLength": 30000, "bufferUsageLimit": 80}
   // +optional
   optional PipelineLimits limits = 5;
 
@@ -812,9 +806,14 @@ message Scale {
   optional int32 min = 1;
 
   // Maximum replicas
-  // +kubebuilder:default=1
+  // +kubebuilder:default=100
   // +optional
   optional int32 max = 2;
+
+  // Lookback seconds to calculate the average pending messages and processing rate
+  // +kubebuilder:default=180
+  // +optional
+  optional int32 lookbackSeconds = 3;
 }
 
 message Sink {
@@ -893,6 +892,15 @@ message Vertex {
 
   // +optional
   optional VertexStatus status = 3;
+}
+
+// VertexInstance is a wrapper of a vertex instance, which contains the vertex spec and the instance information such as hostname and replica index.
+message VertexInstance {
+  optional Vertex vertex = 1;
+
+  optional string hostname = 2;
+
+  optional int32 replica = 3;
 }
 
 message VertexLimits {

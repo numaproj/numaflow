@@ -1,3 +1,10 @@
+html,
+body,
+#root,
+.MuiScopedCssBaseline-root {
+  height: 100%;
+}
+
 .App-side-nav-link {
   text-decoration: none;
   color: inherit;
@@ -5,4 +12,9 @@
 
 .react-flow__attribution {
   display: none !important;
+}
+
+.logo {
+  margin-left: -15px;
+  margin-top: 5px;
 }

@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"os"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -15,10 +14,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/types"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/progress"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 )
@@ -79,7 +78,11 @@ type memgen struct {
 	// read timeout for the reader
 	readTimeout time.Duration
 
-	// watermark progressor
+	// vertex instance
+	vertexInstance *dfv1.VertexInstance
+	// source watermark publisher
+	sourcePublishWM publish.Publisher
+	// TODO: delete this watermark progressor
 	progressor *watermark
 
 	logger *zap.SugaredLogger
@@ -87,7 +90,7 @@ type memgen struct {
 
 type watermark struct {
 	sourcePublish *publish.Publish
-	wmProgressor  progress.Progressor
+	wmProgressor  generic.Progressor
 }
 
 type Option func(*memgen) error
@@ -115,14 +118,21 @@ func WithReadTimeOut(timeout time.Duration) Option {
 // msgSize - size of each generated message
 // timeunit - unit of time per tick. could be any golang time.Duration.
 // writers - destinations to write to
-func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit time.Duration, writers []isb.BufferWriter, opts ...Option) (*memgen, error) {
+func NewMemGen(vertexInstance *dfv1.VertexInstance,
+	rpu int,
+	msgSize int32,
+	timeunit time.Duration,
+	writers []isb.BufferWriter,
+	fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores *generic.PublishWMStores, // watermarks
+	opts ...Option) (*memgen, error) {
 	gensrc := &memgen{
-		rpu:          rpu,
-		msgSize:      msgSize,
-		timeunit:     timeunit,
-		name:         metadata.Vertex.Spec.Name,
-		pipelineName: metadata.Vertex.Spec.PipelineName,
-		genfn:        recordGenerator,
+		rpu:            rpu,
+		msgSize:        msgSize,
+		timeunit:       timeunit,
+		name:           vertexInstance.Vertex.Spec.Name,
+		pipelineName:   vertexInstance.Vertex.Spec.PipelineName,
+		genfn:          recordGenerator,
+		vertexInstance: vertexInstance,
 		progressor: &watermark{
 			sourcePublish: nil,
 			wmProgressor:  nil,
@@ -152,25 +162,17 @@ func NewMemGen(metadata *types.SourceMetadata, rpu int, msgSize int32, timeunit 
 	}
 
 	forwardOpts := []forward.Option{forward.WithLogger(gensrc.logger)}
-	if x := metadata.Vertex.Spec.Limits; x != nil {
+	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
-	var wmProgressor progress.Progressor = nil
-	var err error
-	// TODO: pass it as option
-	if val, ok := os.LookupEnv(dfv1.EnvWatermarkOn); ok && val == "true" {
-		err = gensrc.buildWMProgressor(metadata)
-		if err != nil {
-			return nil, err
-		}
-		wmProgressor = gensrc.progressor.wmProgressor
-	}
+	// attach a source publisher so the source can assign the watermarks.
+	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(metadata.Vertex, gensrc, destinations, forward.All, applier.Terminal, wmProgressor, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -209,12 +211,11 @@ func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, er
 			// publish the last message's offset with watermark, this is an optimization to avoid too many insert calls
 			// into the offset timeline store.
 			// Please note that we are inserting the watermark before the data has been persisted into ISB by the forwarder.
-			if mg.progressor.sourcePublish != nil {
-				o := msgs[len(msgs)-1].ReadOffset
-				nanos, _ := o.Sequence()
-				// remove the nanosecond precision
-				mg.progressor.sourcePublish.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
-			}
+			o := msgs[len(msgs)-1].ReadOffset
+			nanos, _ := o.Sequence()
+			// remove the nanosecond precision
+			mg.sourcePublishWM.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
+
 		case <-timeout:
 			mg.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
 			return msgs, nil
@@ -250,10 +251,6 @@ func (mg *memgen) ForceStop() {
 func (mg *memgen) Start() <-chan struct{} {
 	mg.generator(mg.lifecycleCtx, mg.rpu, mg.timeunit)
 	return mg.forwarder.Start()
-}
-
-func (mg *memgen) Pending(_ context.Context) (int64, error) {
-	return isb.PendingNotAvailable, nil
 }
 
 // generator fires once per time unit and generates records and writes them to the channel

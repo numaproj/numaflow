@@ -1,0 +1,78 @@
+site_name: Numaflow - Data/streaming processing platform on Kubernetes
+repo_url: https://github.com/numaproj/numaflow
+edit_uri: edit/main/docs/
+strict: true
+theme:
+  name: material
+  favicon: assets/numa.svg
+  font:
+    text: Roboto
+    code: Roboto Mono
+  logo: assets/logo.png
+  palette:
+    - scheme: default
+      primary: blue
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+extra:
+  analytics:
+    provider: google
+    property: G-M7DD40E8RV
+markdown_extensions:
+  - codehilite
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.details
+  - toc:
+      permalink: true
+nav:
+  - Home: README.md
+  - Getting Started:
+      - quick-start.md
+  - User Guide:
+      - Core Concepts:
+          - pipeline.md
+          - vertex.md
+          - inter-step-buffer.md
+          - inter-step-buffer-service.md
+      - Sources:
+          - sources/generator.md
+          - sources/http.md
+          - sources/kafka.md
+      - Sinks:
+          - sinks/kafka.md
+          - sinks/log.md
+          - User Defined Sinks: "sinks/user-defined-sinks.md"
+      - Functions:
+          - Builtin Functions:
+              - Overview: "builtin-functions/README.md"
+              - Cat: "builtin-functions/cat.md"
+              - Filter: "builtin-functions/filter.md"
+          - User Defined Functions: "user-defined-functions.md"
+      - pipeline-tuning.md
+      - conditional-forwarding.md
+      - autoscaling.md
+      - container-resources.md
+      - volumes.md
+      - environment-variables.md
+      - APIs.md
+  - Operator Manual:
+      - Releases ⧉: "releases.md"
+      - Configuration:
+          - Controller Configuration: "controller-configmap.md"
+          - metrics/metrics.md
+  - Developer Guide:
+      - development.md
+      - Architecture: "architecture/architecture.md"
+      - debugging.md
+      - static-code-analysis.md
+      - releasing.md

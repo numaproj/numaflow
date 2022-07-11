@@ -17,7 +17,6 @@ export function Pipeline() {
   const {
     pipeline,
     error: pipelineError,
-    loading: pipelineLoading,
   } = usePipelineFetch(namespaceId, pipelineId, pipelineRequestKey);
 
   const [edgesInfoRequestKey, setEdgesInfoRequestKey] = useState(
@@ -27,7 +26,6 @@ export function Pipeline() {
   const {
     edgesInfo,
     error: edgesInfoError,
-    loading: edgesInfoLoading,
   } = useEdgesInfoFetch(namespaceId, pipelineId, edgesInfoRequestKey);
 
   useEffect(() => {
@@ -95,7 +93,7 @@ export function Pipeline() {
             color: "#333",
             border: "1px solid #b8cee2",
           };
-          newNode.data.source = vertex.source;
+          newNode.data.source = vertex;
         } else if (vertex.sink) {
           newNode.type = "output";
           newNode.style = {
@@ -103,9 +101,9 @@ export function Pipeline() {
             color: "#333",
             border: "1px solid #a9a3a0",
           };
-          newNode.data.sink = vertex.sink;
+          newNode.data.sink = vertex;
         } else {
-          newNode.data.udf = vertex.udf;
+          newNode.data.udf = vertex;
           newNode.style = {
             background: "#efdbce",
             color: "#333",

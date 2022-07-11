@@ -28,10 +28,10 @@ export default function NodeInfo(props: NodeInfoProps) {
   const label = node?.id + " Vertex";
 
   return (
-    <div>
+    <>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs>
-          <Tab data-testid={node?.id} label={label} {...a11yProps(0)} />
+        <Tabs value={value}>
+          <Tab  data-testid={node?.id} label={label} {...a11yProps(0)} />
         </Tabs>
       </Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -69,7 +69,7 @@ export default function NodeInfo(props: NodeInfoProps) {
           <TabPanel value={value} index={1}>
             {node?.data?.source && (
               <ReactJson
-                name="source"
+                name="spec"
                 enableClipboard={handleCopy}
                 theme="apathy:inverted"
                 src={node.data.source}
@@ -82,7 +82,7 @@ export default function NodeInfo(props: NodeInfoProps) {
             )}
             {node?.data?.udf && (
               <ReactJson
-                name="udf"
+                name="spec"
                 enableClipboard={handleCopy}
                 theme="apathy:inverted"
                 src={node.data.udf}
@@ -95,7 +95,7 @@ export default function NodeInfo(props: NodeInfoProps) {
             )}
             {node?.data?.sink && (
               <ReactJson
-                name="sink"
+                name="spec"
                 enableClipboard={handleCopy}
                 theme="apathy:inverted"
                 src={node.data.sink}
@@ -109,6 +109,6 @@ export default function NodeInfo(props: NodeInfoProps) {
           </TabPanel>
         </>
       )}
-    </div>
+    </>
   );
 }

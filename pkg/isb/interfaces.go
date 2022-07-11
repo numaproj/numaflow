@@ -9,18 +9,25 @@ package isb
 import (
 	"context"
 	"io"
+	"math"
 	"strconv"
 )
 
 const (
-	PendingNotAvailable = int64(-1)
-	RateNotAvailable    = float64(-1)
+	PendingNotAvailable = int64(math.MinInt64)
+	RateNotAvailable    = float64(math.MinInt)
 )
 
 // Ratable is the interface that wraps the Rate method.
 type Ratable interface {
-	// Rate returns the rough rate (messages/second), this is used for auto-scaling calculation
-	Rate(context.Context) (float64, error)
+	// Rate returns the rough rate (messages/second) in the past seconds, this can be used for auto-scaling calculation
+	Rate(ctx context.Context, seconds int64) (float64, error)
+}
+
+// LagReader is the interface that wraps the Pending method.
+type LagReader interface {
+	// Pending returns the pending messages number.
+	Pending(context.Context) (int64, error)
 }
 
 // BufferWriter is the buffer to which we are writing.
@@ -42,8 +49,6 @@ type BufferReader interface {
 	Read(context.Context, int64) ([]*ReadMessage, error)
 	// Ack acknowledges an array of offset.
 	Ack(context.Context, []Offset) []error
-	// Pending returns the pending messages number.
-	Pending(context.Context) (int64, error)
 }
 
 // BufferReaderInformation has information regarding the buffer we are reading from.

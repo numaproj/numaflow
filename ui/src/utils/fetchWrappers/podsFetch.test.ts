@@ -9,23 +9,23 @@ describe("podsFetch test", () => {
     const data = [{
         "metadata": {
             "name": "simple-pipeline-input-0-rwodz",
-            "namespace": "dataflow-system",
+            "namespace": "numaflow-system",
             "uid": "c94e36e7-8f2e-4360-8632-aa2d687b55bf",
             "resourceVersion": "212930",
             "creationTimestamp": "2022-05-08T23:05:55Z",
             "labels": {
                 "app.kubernetes.io/component": "vertex",
                 "app.kubernetes.io/managed-by": "vertex-controller",
-                "app.kubernetes.io/part-of": "dataflow",
-                "dataflow.ossanalytics.io/pipeline-name": "simple-pipeline",
-                "dataflow.ossanalytics.io/vertex-name": "input"
+                "app.kubernetes.io/part-of": "numaflow",
+                "numaflow.numaproj.io/pipeline-name": "simple-pipeline",
+                "numaflow.numaproj.io/vertex-name": "input"
             },
             "annotations": {
-                "dataflow.ossanalytics.io/hash": "d74587edee2e4e4213b34de9a4ccaf7ab2c9c4fd43da04b9b143db2b993e3977",
-                "dataflow.ossanalytics.io/replica": "0"
+                "numaflow.numaproj.io/hash": "d74587edee2e4e4213b34de9a4ccaf7ab2c9c4fd43da04b9b143db2b993e3977",
+                "numaflow.numaproj.io/replica": "0"
             },
             "ownerReferences": [{
-                "apiVersion": "dataflow.ossanalytics.io/v1alpha1",
+                "apiVersion": "numaflow.numaproj.io/v1alpha1",
                 "kind": "Vertex",
                 "name": "simple-pipeline-input",
                 "uid": "1e784c78-4249-4bba-ad04-001bec246ca2",
@@ -33,7 +33,7 @@ describe("podsFetch test", () => {
                 "blockOwnerDeletion": true
             }],
             "managedFields": [{
-                "manager": "dataflow",
+                "manager": "numaflow",
                 "operation": "Update",
                 "apiVersion": "v1",
                 "time": "2022-05-08T23:05:55Z",
@@ -42,16 +42,16 @@ describe("podsFetch test", () => {
                     "f:metadata": {
                         "f:annotations": {
                             ".": {},
-                            "f:dataflow.ossanalytics.io/hash": {},
-                            "f:dataflow.ossanalytics.io/replica": {}
+                            "f:numaflow.numaproj.io/hash": {},
+                            "f:numaflow.numaproj.io/replica": {}
                         },
                         "f:labels": {
                             ".": {},
                             "f:app.kubernetes.io/component": {},
                             "f:app.kubernetes.io/managed-by": {},
                             "f:app.kubernetes.io/part-of": {},
-                            "f:dataflow.ossanalytics.io/pipeline-name": {},
-                            "f:dataflow.ossanalytics.io/vertex-name": {}
+                            "f:numaflow.numaproj.io/pipeline-name": {},
+                            "f:numaflow.numaproj.io/vertex-name": {}
                         },
                         "f:ownerReferences": {
                             ".": {},
@@ -72,28 +72,28 @@ describe("podsFetch test", () => {
                                 "f:args": {},
                                 "f:env": {
                                     ".": {},
-                                    "k:{\"name\":\"DATAFLOW_ISBS_CONFIG\"}": {".": {}, "f:name": {}, "f:value": {}},
-                                    "k:{\"name\":\"DATAFLOW_ISBS_JETSTREAM_PASSWORD\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_CONFIG\"}": {".": {}, "f:name": {}, "f:value": {}},
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_JETSTREAM_PASSWORD\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:valueFrom": {".": {}, "f:secretKeyRef": {".": {}, "f:key": {}, "f:name": {}}}
                                     },
-                                    "k:{\"name\":\"DATAFLOW_ISBS_JETSTREAM_TLS_ENABLED\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_JETSTREAM_TLS_ENABLED\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:value": {}
                                     },
-                                    "k:{\"name\":\"DATAFLOW_ISBS_JETSTREAM_URL\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_JETSTREAM_URL\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:value": {}
                                     },
-                                    "k:{\"name\":\"DATAFLOW_ISBS_JETSTREAM_USER\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_JETSTREAM_USER\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:valueFrom": {".": {}, "f:secretKeyRef": {".": {}, "f:key": {}, "f:name": {}}}
                                     },
-                                    "k:{\"name\":\"DATAFLOW_NAMESPACE\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_NAMESPACE\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:valueFrom": {
@@ -101,8 +101,8 @@ describe("podsFetch test", () => {
                                             "f:fieldRef": {".": {}, "f:apiVersion": {}, "f:fieldPath": {}}
                                         }
                                     },
-                                    "k:{\"name\":\"DATAFLOW_PIPELINE_NAME\"}": {".": {}, "f:name": {}, "f:value": {}},
-                                    "k:{\"name\":\"DATAFLOW_POD\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_PIPELINE_NAME\"}": {".": {}, "f:name": {}, "f:value": {}},
+                                    "k:{\"name\":\"NUMAFLOW_POD\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:valueFrom": {
@@ -110,7 +110,7 @@ describe("podsFetch test", () => {
                                             "f:fieldRef": {".": {}, "f:apiVersion": {}, "f:fieldPath": {}}
                                         }
                                     },
-                                    "k:{\"name\":\"DATAFLOW_REPLICA\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_REPLICA\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:valueFrom": {
@@ -118,8 +118,8 @@ describe("podsFetch test", () => {
                                             "f:fieldRef": {".": {}, "f:apiVersion": {}, "f:fieldPath": {}}
                                         }
                                     },
-                                    "k:{\"name\":\"DATAFLOW_VERTEX_NAME\"}": {".": {}, "f:name": {}, "f:value": {}},
-                                    "k:{\"name\":\"DATAFLOW_VERTEX_OBJECT\"}": {".": {}, "f:name": {}, "f:value": {}},
+                                    "k:{\"name\":\"NUMAFLOW_VERTEX_NAME\"}": {".": {}, "f:name": {}, "f:value": {}},
+                                    "k:{\"name\":\"NUMAFLOW_VERTEX_OBJECT\"}": {".": {}, "f:name": {}, "f:value": {}},
                                     "k:{\"name\":\"GODEBUG\"}": {".": {}, "f:name": {}}
                                 },
                                 "f:image": {},
@@ -148,7 +148,7 @@ describe("podsFetch test", () => {
                                 "f:terminationMessagePolicy": {},
                                 "f:volumeMounts": {
                                     ".": {},
-                                    "k:{\"mountPath\":\"/var/run/dataflow\"}": {
+                                    "k:{\"mountPath\":\"/var/run/numaflow\"}": {
                                         ".": {},
                                         "f:mountPath": {},
                                         "f:name": {}
@@ -166,28 +166,28 @@ describe("podsFetch test", () => {
                                 "f:args": {},
                                 "f:env": {
                                     ".": {},
-                                    "k:{\"name\":\"DATAFLOW_ISBS_CONFIG\"}": {".": {}, "f:name": {}, "f:value": {}},
-                                    "k:{\"name\":\"DATAFLOW_ISBS_JETSTREAM_PASSWORD\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_CONFIG\"}": {".": {}, "f:name": {}, "f:value": {}},
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_JETSTREAM_PASSWORD\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:valueFrom": {".": {}, "f:secretKeyRef": {".": {}, "f:key": {}, "f:name": {}}}
                                     },
-                                    "k:{\"name\":\"DATAFLOW_ISBS_JETSTREAM_TLS_ENABLED\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_JETSTREAM_TLS_ENABLED\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:value": {}
                                     },
-                                    "k:{\"name\":\"DATAFLOW_ISBS_JETSTREAM_URL\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_JETSTREAM_URL\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:value": {}
                                     },
-                                    "k:{\"name\":\"DATAFLOW_ISBS_JETSTREAM_USER\"}": {
+                                    "k:{\"name\":\"NUMAFLOW_ISBS_JETSTREAM_USER\"}": {
                                         ".": {},
                                         "f:name": {},
                                         "f:valueFrom": {".": {}, "f:secretKeyRef": {".": {}, "f:key": {}, "f:name": {}}}
                                     },
-                                    "k:{\"name\":\"DATAFLOW_PIPELINE_NAME\"}": {".": {}, "f:name": {}, "f:value": {}},
+                                    "k:{\"name\":\"NUMAFLOW_PIPELINE_NAME\"}": {".": {}, "f:name": {}, "f:value": {}},
                                     "k:{\"name\":\"GODEBUG\"}": {".": {}, "f:name": {}}
                                 },
                                 "f:image": {},
@@ -205,7 +205,7 @@ describe("podsFetch test", () => {
                         "f:terminationGracePeriodSeconds": {},
                         "f:volumes": {
                             ".": {},
-                            "k:{\"name\":\"var-run-dataflow\"}": {
+                            "k:{\"name\":\"var-run-numaflow\"}": {
                                 ".": {},
                                 "f:emptyDir": {".": {}, "f:medium": {}},
                                 "f:name": {}
@@ -256,7 +256,7 @@ describe("podsFetch test", () => {
             }]
         }, "spec": {
             "volumes": [{
-                "name": "var-run-dataflow",
+                "name": "var-run-numaflow",
                 "emptyDir": {"medium": "Memory"}
             }, {
                 "name": "kube-api-access-4l2lp",
@@ -283,25 +283,25 @@ describe("podsFetch test", () => {
             }],
             "initContainers": [{
                 "name": "init",
-                "image": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow:latest",
-                "args": ["isbs-buffer-validate", "--isbs-type=jetstream", "--buffers=dataflow-system-simple-pipeline-input-preproc", "--buffers=dataflow-system-simple-pipeline-preproc-infer", "--buffers=dataflow-system-simple-pipeline-infer-train", "--buffers=dataflow-system-simple-pipeline-train-train-1", "--buffers=dataflow-system-simple-pipeline-train-1-train-output", "--buffers=dataflow-system-simple-pipeline-infer-postproc", "--buffers=dataflow-system-simple-pipeline-postproc-log-output", "--buffers=dataflow-system-simple-pipeline-postproc-publisher"],
+                "image": "testImage",
+                "args": ["isbs-buffer-validate", "--isbs-type=jetstream", "--buffers=numaflow-system-simple-pipeline-input-preproc", "--buffers=numaflow-system-simple-pipeline-preproc-infer", "--buffers=numaflow-system-simple-pipeline-infer-train", "--buffers=numaflow-system-simple-pipeline-train-train-1", "--buffers=numaflow-system-simple-pipeline-train-1-train-output", "--buffers=numaflow-system-simple-pipeline-infer-postproc", "--buffers=numaflow-system-simple-pipeline-postproc-log-output", "--buffers=numaflow-system-simple-pipeline-postproc-publisher"],
                 "env": [{
-                    "name": "DATAFLOW_PIPELINE_NAME",
+                    "name": "NUMAFLOW_PIPELINE_NAME",
                     "value": "simple-pipeline"
                 }, {"name": "GODEBUG"}, {
-                    "name": "DATAFLOW_ISBS_CONFIG",
+                    "name": "NUMAFLOW_ISBS_CONFIG",
                     "value": "eyJqZXRzdHJlYW0iOnsidXJsIjoibmF0czovL2lzYnMtZGVmYXVsdC1qcy1zdmMuZGF0YWZsb3ctc3lzdGVtLnN2Yy5jbHVzdGVyLmxvY2FsOjQyMjIiLCJhdXRoIjp7InVzZXIiOnsibmFtZSI6ImlzYnMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXVzZXIifSwicGFzc3dvcmQiOnsibmFtZSI6ImlzYnMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19LCJidWZmZXJDb25maWciOiJjb25zdW1lcjpcbiAgYWNrd2FpdDogNjBzXG4gIG1heGFja3BlbmRpbmc6IDIwMDAwXG5zdHJlYW06XG4gIGR1cGxpY2F0ZXM6IDYwc1xuICBtYXhhZ2U6IDE2OGhcbiAgbWF4Ynl0ZXM6IC0xXG4gIG1heG1zZ3M6IDUwMDAwXG4gIHJlcGxpY2FzOiAzXG4gIHJldGVudGlvbjogMVxuIn19"
                 }, {
-                    "name": "DATAFLOW_ISBS_JETSTREAM_URL",
-                    "value": "nats://isbs-default-js-svc.dataflow-system.svc.cluster.local:4222"
+                    "name": "NUMAFLOW_ISBS_JETSTREAM_URL",
+                    "value": "nats://isbs-default-js-svc.numaflow-system.svc.cluster.local:4222"
                 }, {
-                    "name": "DATAFLOW_ISBS_JETSTREAM_TLS_ENABLED",
+                    "name": "NUMAFLOW_ISBS_JETSTREAM_TLS_ENABLED",
                     "value": "false"
                 }, {
-                    "name": "DATAFLOW_ISBS_JETSTREAM_USER",
+                    "name": "NUMAFLOW_ISBS_JETSTREAM_USER",
                     "valueFrom": {"secretKeyRef": {"name": "isbs-default-js-client-auth", "key": "client-auth-user"}}
                 }, {
-                    "name": "DATAFLOW_ISBS_JETSTREAM_PASSWORD",
+                    "name": "NUMAFLOW_ISBS_JETSTREAM_PASSWORD",
                     "valueFrom": {
                         "secretKeyRef": {
                             "name": "isbs-default-js-client-auth",
@@ -321,42 +321,42 @@ describe("podsFetch test", () => {
             }],
             "containers": [{
                 "name": "main",
-                "image": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow:latest",
+                "image": "testImage",
                 "args": ["processor", "--type=source", "--isbs-type=jetstream"],
                 "env": [{
-                    "name": "DATAFLOW_NAMESPACE",
+                    "name": "NUMAFLOW_NAMESPACE",
                     "valueFrom": {"fieldRef": {"apiVersion": "v1", "fieldPath": "metadata.namespace"}}
                 }, {
-                    "name": "DATAFLOW_POD",
+                    "name": "NUMAFLOW_POD",
                     "valueFrom": {"fieldRef": {"apiVersion": "v1", "fieldPath": "metadata.name"}}
                 }, {
-                    "name": "DATAFLOW_REPLICA",
+                    "name": "NUMAFLOW_REPLICA",
                     "valueFrom": {
                         "fieldRef": {
                             "apiVersion": "v1",
-                            "fieldPath": "metadata.annotations['dataflow.ossanalytics.io/replica']"
+                            "fieldPath": "metadata.annotations['numaflow.numaproj.io/replica']"
                         }
                     }
-                }, {"name": "DATAFLOW_PIPELINE_NAME", "value": "simple-pipeline"}, {
-                    "name": "DATAFLOW_VERTEX_NAME",
+                }, {"name": "NUMAFLOW_PIPELINE_NAME", "value": "simple-pipeline"}, {
+                    "name": "NUMAFLOW_VERTEX_NAME",
                     "value": "input"
                 }, {
-                    "name": "DATAFLOW_VERTEX_OBJECT",
+                    "name": "NUMAFLOW_VERTEX_OBJECT",
                     "value": "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLWlucHV0IiwibmFtZXNwYWNlIjoiZGF0YWZsb3ctc3lzdGVtIiwiY3JlYXRpb25UaW1lc3RhbXAiOm51bGx9LCJzcGVjIjp7Im5hbWUiOiJpbnB1dCIsInNvdXJjZSI6eyJnZW5lcmF0b3IiOnsicnB1IjoyNTAsImR1cmF0aW9uIjoiMXMiLCJtc2dTaXplIjo4fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjoxMDAsImJ1ZmZlck1heExlbmd0aCI6MTAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwicGlwZWxpbmVOYW1lIjoic2ltcGxlLXBpcGVsaW5lIiwiaW50ZXJTdGVwQnVmZmVyU2VydmljZU5hbWUiOiIiLCJyZXBsaWNhcyI6MCwidG9WZXJ0aWNlcyI6W3sibmFtZSI6InByZXByb2MiLCJjb25kaXRpb25zIjpudWxsfV19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwibGFzdFNjYWxlZEF0IjpudWxsfX0="
                 }, {"name": "GODEBUG"}, {
-                    "name": "DATAFLOW_ISBS_CONFIG",
+                    "name": "NUMAFLOW_ISBS_CONFIG",
                     "value": "eyJqZXRzdHJlYW0iOnsidXJsIjoibmF0czovL2lzYnMtZGVmYXVsdC1qcy1zdmMuZGF0YWZsb3ctc3lzdGVtLnN2Yy5jbHVzdGVyLmxvY2FsOjQyMjIiLCJhdXRoIjp7InVzZXIiOnsibmFtZSI6ImlzYnMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXVzZXIifSwicGFzc3dvcmQiOnsibmFtZSI6ImlzYnMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19LCJidWZmZXJDb25maWciOiJjb25zdW1lcjpcbiAgYWNrd2FpdDogNjBzXG4gIG1heGFja3BlbmRpbmc6IDIwMDAwXG5zdHJlYW06XG4gIGR1cGxpY2F0ZXM6IDYwc1xuICBtYXhhZ2U6IDE2OGhcbiAgbWF4Ynl0ZXM6IC0xXG4gIG1heG1zZ3M6IDUwMDAwXG4gIHJlcGxpY2FzOiAzXG4gIHJldGVudGlvbjogMVxuIn19"
                 }, {
-                    "name": "DATAFLOW_ISBS_JETSTREAM_URL",
-                    "value": "nats://isbs-default-js-svc.dataflow-system.svc.cluster.local:4222"
+                    "name": "NUMAFLOW_ISBS_JETSTREAM_URL",
+                    "value": "nats://isbs-default-js-svc.numaflow-system.svc.cluster.local:4222"
                 }, {
-                    "name": "DATAFLOW_ISBS_JETSTREAM_TLS_ENABLED",
+                    "name": "NUMAFLOW_ISBS_JETSTREAM_TLS_ENABLED",
                     "value": "false"
                 }, {
-                    "name": "DATAFLOW_ISBS_JETSTREAM_USER",
+                    "name": "NUMAFLOW_ISBS_JETSTREAM_USER",
                     "valueFrom": {"secretKeyRef": {"name": "isbs-default-js-client-auth", "key": "client-auth-user"}}
                 }, {
-                    "name": "DATAFLOW_ISBS_JETSTREAM_PASSWORD",
+                    "name": "NUMAFLOW_ISBS_JETSTREAM_PASSWORD",
                     "valueFrom": {
                         "secretKeyRef": {
                             "name": "isbs-default-js-client-auth",
@@ -366,8 +366,8 @@ describe("podsFetch test", () => {
                 }],
                 "resources": {"requests": {"cpu": "100m", "memory": "128Mi"}},
                 "volumeMounts": [{
-                    "name": "var-run-dataflow",
-                    "mountPath": "/var/run/dataflow"
+                    "name": "var-run-numaflow",
+                    "mountPath": "/var/run/numaflow"
                 }, {
                     "name": "kube-api-access-4l2lp",
                     "readOnly": true,
@@ -458,8 +458,8 @@ describe("podsFetch test", () => {
                 "lastState": {},
                 "ready": true,
                 "restartCount": 0,
-                "image": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow:latest",
-                "imageID": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow@sha256:cd23616d04fe4c1366b015a8f1e0e05b7875d3541b8fcf93ee20ad3febe56f64",
+                "image": "testImage",
+                "imageID": "testImage123",
                 "containerID": "containerd://d1b71a730feebce224b2f83920f0792148e377a6d86091552e3897c6f45e9c6c"
             }],
             "containerStatuses": [{
@@ -468,8 +468,8 @@ describe("podsFetch test", () => {
                 "lastState": {},
                 "ready": true,
                 "restartCount": 0,
-                "image": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow:latest",
-                "imageID": "docker.artifactory.a.intuit.com/oss-analytics/dataflow/service/dataflow@sha256:cd23616d04fe4c1366b015a8f1e0e05b7875d3541b8fcf93ee20ad3febe56f64",
+                "image": "testImage",
+                "imageID": "testImage123",
                 "containerID": "containerd://fd7143440df96dcd78e45a59143a63c2fa4b425b29f0e5ae9e27de06197b504a",
                 "started": true
             }],
@@ -478,18 +478,18 @@ describe("podsFetch test", () => {
     }]
     it("pods return", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: false})
-        const {result} = renderHook(() => usePodsFetch("dataflow-system", "simple-pipeline", "input"))
+        const {result} = renderHook(() => usePodsFetch("numaflow-system", "simple-pipeline", "input"))
     })
 
     it("pods loading", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: true});
-        const {result} = renderHook(() => usePodsFetch("dataflow-system", "simple-pipeline", "input"))
+        const {result} = renderHook(() => usePodsFetch("numaflow-system", "simple-pipeline", "input"))
         expect(result.current.loading).toBeTruthy()
     })
 
     it("pods error", () => {
         mockedUseFetch.mockReturnValue({data: data, error: true, loading: false})
-        const {result} = renderHook(() => usePodsFetch("dataflow-system", "simple-pipeline", "input"))
+        const {result} = renderHook(() => usePodsFetch("numaflow-system", "simple-pipeline", "input"))
         expect(result.current.error).toBeTruthy()
     })
 })

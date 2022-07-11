@@ -2,11 +2,12 @@ package generator
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"testing"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/sources/types"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -20,12 +21,13 @@ func TestRead(t *testing.T) {
 	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
 		Name: "memgen",
 	}}
-	m := &types.SourceMetadata{
+	m := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest})
+	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, &publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -48,12 +50,13 @@ func TestStop(t *testing.T) {
 	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
 		Name: "memgen",
 	}}
-	m := &types.SourceMetadata{
+	m := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest})
+	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, &publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

@@ -21,10 +21,8 @@ import (
 )
 
 type SinkProcessor struct {
-	ISBSvcType dfv1.ISBSvcType
-	Vertex     *dfv1.Vertex
-	Hostname   string
-	Replica    int
+	ISBSvcType     dfv1.ISBSvcType
+	VertexInstance *dfv1.VertexInstance
 }
 
 func (u *SinkProcessor) Start(ctx context.Context) error {
@@ -33,17 +31,20 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	defer cancel()
 	var reader isb.BufferReader
 	var err error
-	fromBufferName := u.Vertex.GetFromBuffers()[0].Name
+	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		redisClient := clients.NewInClusterRedisClient()
 		fromGroup := fromBufferName + "-group"
-		consumer := fmt.Sprintf("%s-%v", u.Vertex.Name, u.Replica)
+		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer)
 	case dfv1.ISBSvcTypeJetStream:
-		streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, fromBufferName)
+		streamName := fmt.Sprintf("%s-%s", u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
+		readOptions := []jetstreamisb.ReadOption{
+			jetstreamisb.WithUsingAckInfoAsRate(true),
+		}
 		jetStreamClient := clients.NewInClusterJetStreamClient()
-		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName)
+		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)
 		if err != nil {
 			return err
 		}
@@ -69,7 +70,18 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	if shutdown, err := metrics.StartMetricsServer(ctx); err != nil {
+	metricsOpts := []metrics.Option{}
+	if s := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; s != nil {
+		metricsOpts = append(metricsOpts, metrics.WithLookbackSeconds(int64(*s)))
+	}
+	if x, ok := reader.(isb.LagReader); ok {
+		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
+	}
+	if x, ok := reader.(isb.Ratable); ok {
+		metricsOpts = append(metricsOpts, metrics.WithRater(x))
+	}
+	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
+	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
 	} else {
 		defer func() { _ = shutdown(context.Background()) }()
@@ -85,14 +97,14 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 // getSinker takes in the logger from the parent context
 func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger) (Sinker, error) {
-	sink := u.Vertex.Spec.Sink
+	sink := u.VertexInstance.Vertex.Spec.Sink
 	// TODO: add watermark
 	if x := sink.Log; x != nil {
-		return logsink.NewToLog(u.Vertex, reader, logsink.WithLogger(logger))
+		return logsink.NewToLog(u.VertexInstance.Vertex, reader, logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {
-		return kafkasink.NewToKafka(u.Vertex, reader, kafkasink.WithLogger(logger))
+		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, kafkasink.WithLogger(logger))
 	} else if x := sink.UDSink; x != nil {
-		return udsink.NewUserDefinedSink(u.Vertex, reader, udsink.WithLogger(logger))
+		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, udsink.WithLogger(logger))
 	}
 	return nil, fmt.Errorf("invalid sink spec")
 }

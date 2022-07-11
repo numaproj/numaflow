@@ -5,8 +5,28 @@ on:
       - "main"
       - "release-*"
   pull_request:
-    branches: [ main ]
+    branches: [main]
 jobs:
+  ui:
+    name: UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+      - name: Setup Node-Cache
+        uses: actions/cache@v3
+        with:
+          path: ui/node_modules
+          key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
+      - name: Yarn Build/Test
+        run: make ui-test
+      - name: Ensure nothing changed
+        run: git diff --exit-code
   codegen:
     name: Codegen
     runs-on: ubuntu-latest
@@ -87,13 +107,13 @@ jobs:
       - name: Insall Redis
         uses: shogo82148/actions-setup-redis@v1
         with:
-          redis-version: '6.2'
+          redis-version: "6.2"
       - run: redis-cli ping
       - name: Test
         run: make test-code
 
   lint:
-    name: lint
+    name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -138,6 +158,15 @@ jobs:
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
           echo /usr/local/bin >> $GITHUB_PATH
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+      - name: Setup Node-Cache
+        uses: actions/cache@v3
+        with:
+          path: ui/node_modules
+          key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
       - name: Create a registry and a cluster
@@ -146,7 +175,7 @@ jobs:
           k3d cluster create e2e --registry-use k3d-e2e-registry:5111
           k3d kubeconfig get e2e > ~/.kube/numaflow-e2e-config
           echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
-      - name: Install NumaFlow
+      - name: Install Numaflow
         env:
           GOPATH: /home/runner/go
         run: |
@@ -155,4 +184,3 @@ jobs:
         env:
           GOPATH: /home/runner/go
         run: KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
-

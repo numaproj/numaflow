@@ -124,9 +124,17 @@ Test%:
 	-go test -v -timeout 10m -count 1 --tags test -p 1 ./test/e2e  -run='.*/$*'
 	$(MAKE) cleanup-e2e
 
+.PHONY: ui-build
+ui-build:
+	./hack/build-ui.sh
+
+.PHONY: ui-test
+ui-test: ui-build
+	./hack/test-ui.sh
+
 .PHONY: image
-image: clean dist/$(BINARY_NAME)-linux-amd64
-	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=amd64" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)  --target $(BINARY_NAME) -f $(DOCKERFILE) .
+image: clean ui-build dist/$(BINARY_NAME)-linux-amd64
+	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=amd64" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifeq ($(K3D),true)
 	k3d image import $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
@@ -136,7 +144,7 @@ image-linux-%: dist/$(BINARY_NAME)-linux-$*
 	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=$*" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$* --platform "linux/$*" --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$*; fi
 
-image-multi: set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
+image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
 	docker buildx build --tag $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file ./Dockerfile ${PUSH_OPTION} .
 
 set-qemu:
@@ -172,7 +180,7 @@ lint: $(GOPATH)/bin/golangci-lint
 	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
 
 .PHONY: start
-start: githooks image
+start: image
 	kubectl apply -f test/manifests/numaflow-ns.yaml
 	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
 	kubectl -n numaflow-system wait --for=condition=Ready --timeout 60s pod --all
@@ -192,7 +200,7 @@ endif
 	cp hack/git/hooks/$* .git/hooks/$*
 
 .PHONY: githooks
-githooks: .git/hooks/pre-push .git/hooks/commit-msg
+githooks: .git/hooks/commit-msg
 
 .PHONY: pre-push
 pre-push: codegen lint

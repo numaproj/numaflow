@@ -1,4 +1,4 @@
-# NumaFlow
+# Numaflow
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/numaproj/numaflow)](https://goreportcard.com/report/github.com/numaproj/numaflow)
 [![GoDoc](https://godoc.org/github.com/numaproj/numaflow?status.svg)](https://godoc.org/github.com/numaproj/numaflow/pkg/apis)
@@ -8,15 +8,15 @@
 
 ## Summary
 
-NumaFlow is a Kubernetes-native platform for running massive parallel data processing and streaming jobs.
+Numaflow is a Kubernetes-native platform for running massive parallel data processing and streaming jobs.
 
-A NumaFlow Pipeline is implemented as a Kubernetes custom resource, and consists of one or more source, data processing, and sink vertices.
+A Numaflow Pipeline is implemented as a Kubernetes custom resource, and consists of one or more source, data processing, and sink vertices.
 
-NumaFlow installs in less than a minute and is easier and cheaper for simple data processing applications than full-featured stream processing platforms.
+Numaflow installs in less than a minute and is easier and cheaper for simple data processing applications than full-featured stream processing platforms.
 
 ## Key Features
 
-- Kubernetes-native: If you know Kubernetes, you already know 90% of what you need to use NumaFlow.
+- Kubernetes-native: If you know Kubernetes, you already know 90% of what you need to use Numaflow.
 - Language agnostic: Use your favorite programming language.
 - Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted.
 
@@ -27,7 +27,7 @@ NumaFlow installs in less than a minute and is easier and cheaper for simple dat
 
 ## Resources
 
-- [QUICK_START](docs/QUICK_START.md)
+- [QUICK_START](docs/quick-start.md)
 - [EXAMPLES](examples)
-- [DEVELOPMENT](docs/DEVELOPMENT.md)
+- [DEVELOPMENT](docs/development.md)
 - [CONTRIBUTING](https://github.com/numaproj/numaproj/blob/main/CONTRIBUTING.md)

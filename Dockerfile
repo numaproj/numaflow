@@ -9,6 +9,7 @@ RUN apk update && apk upgrade && \
     apk --no-cache add tzdata
 
 COPY dist/numaflow-linux-${ARCH} /bin/numaflow
+
 RUN chmod +x /bin/numaflow
 
 ####################################################################################################
@@ -19,6 +20,7 @@ ARG ARCH
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow
+COPY ui/build /ui/build
 ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################

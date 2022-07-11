@@ -131,7 +131,7 @@ export default function Graph(props: GraphProps) {
     setEdgeOpen(false);
   };
 
-  const handlePaneClick = (event: MouseEvent) => {
+  const handlePaneClick = () => {
     setShowSpec(true);
     setEdgeOpen(false);
     setNodeOpen(false);
@@ -164,11 +164,9 @@ export default function Graph(props: GraphProps) {
           onEdgeClick={handleEdgeClick}
           onNodeClick={handleNodeClick}
           onPaneClick={handlePaneClick}
-          onNodeMouse
           fitView
-          zoomOnScroll={false}
-          panOnDrag={false}
-          elevateEdgesOnSelect={true}
+          zoomOnScroll={true}
+          panOnDrag={true}
         />
       </div>
 

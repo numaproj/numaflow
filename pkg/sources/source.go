@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/sources/types"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -21,20 +24,28 @@ import (
 )
 
 type SourceProcessor struct {
-	ISBSvcType dfv1.ISBSvcType
-	Vertex     *dfv1.Vertex
-	Hostname   string
-	Replica    int
+	ISBSvcType     dfv1.ISBSvcType
+	VertexInstance *dfv1.VertexInstance
 }
 
-func (u *SourceProcessor) Start(ctx context.Context) error {
+func (sp *SourceProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var writers []isb.BufferWriter
-	switch u.ISBSvcType {
+
+	// watermark variables no-op initialization
+	var fetchWatermark fetch.Fetcher = generic.NewNoOpWMProgressor()
+	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
+	publishWatermark := make(map[string]publish.Publisher)
+	for _, buffer := range sp.VertexInstance.Vertex.GetToBuffers() {
+		publishWatermark[buffer.Name] = generic.NewNoOpWMProgressor()
+	}
+	var publishWMStore = generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+
+	switch sp.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		for _, e := range u.Vertex.Spec.ToEdges {
+		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []redisisb.Option{}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
@@ -42,23 +53,29 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
+			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
 			group := buffer + "-group"
 			redisClient := clients.NewInClusterRedisClient()
 			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
 			writers = append(writers, writer)
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		for _, e := range u.Vertex.Spec.ToEdges {
-			writeOpts := []jetstreamisb.WriteOption{}
+		// build the right watermark progessor if watermark is enabled
+		// build watermark progressors
+		fetchWatermark, publishWatermark, publishWMStore = generic.BuildJetStreamWatermarkProgressorsForSource(ctx, sp.VertexInstance)
+
+		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
+			writeOpts := []jetstreamisb.WriteOption{
+				jetstreamisb.WithUsingWriteInfoAsRate(true),
+			}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(u.Vertex.Namespace, u.Vertex.Spec.PipelineName, e.From, e.To)
-			streamName := fmt.Sprintf("%s-%s", u.Vertex.Spec.PipelineName, buffer)
+			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
+			streamName := fmt.Sprintf("%s-%s", sp.VertexInstance.Vertex.Spec.PipelineName, buffer)
 			jetStreamClient := clients.NewInClusterJetStreamClient()
 			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
 			if err != nil {
@@ -67,14 +84,14 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 			writers = append(writers, writer)
 		}
 	default:
-		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
+		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
 
-	sourcer, err := u.getSourcer(writers, log)
+	sourcer, err := sp.getSourcer(writers, fetchWatermark, publishWatermark, &publishWMStore, log)
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
 	}
-	log.Infow("Start processing source messages", zap.String("isbs", string(u.ISBSvcType)), zap.Any("to", u.Vertex.GetToBuffers()))
+	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToBuffers()))
 	stopped := sourcer.Start()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -87,7 +104,18 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	if shutdown, err := metrics.StartMetricsServer(ctx); err != nil {
+	metricsOpts := []metrics.Option{}
+	if s := sp.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; s != nil {
+		metricsOpts = append(metricsOpts, metrics.WithLookbackSeconds(int64(*s)))
+	}
+	if x, ok := sourcer.(isb.LagReader); ok {
+		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
+	}
+	if x, ok := writers[0].(isb.Ratable); ok { // Only need to use the rate of one of the writer
+		metricsOpts = append(metricsOpts, metrics.WithRater(x))
+	}
+	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
+	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
 	} else {
 		defer func() { _ = shutdown(context.Background()) }()
@@ -102,19 +130,14 @@ func (u *SourceProcessor) Start(ctx context.Context) error {
 }
 
 // getSourcer is used to send the sourcer information
-func (u *SourceProcessor) getSourcer(writers []isb.BufferWriter, logger *zap.SugaredLogger) (Sourcer, error) {
-	src := u.Vertex.Spec.Source
-	m := &types.SourceMetadata{
-		Vertex:   u.Vertex,
-		Hostname: u.Hostname,
-		Replica:  u.Replica,
-	}
+func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores *generic.PublishWMStores, logger *zap.SugaredLogger) (Sourcer, error) {
+	src := sp.VertexInstance.Vertex.Spec.Source
 	if x := src.Generator; x != nil {
-		return generator.NewMemGen(m, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, generator.WithLogger(logger))
+		return generator.NewMemGen(sp.VertexInstance, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, fetchWM, publishWM, publishWMStores, generator.WithLogger(logger))
 	} else if x := src.Kafka; x != nil {
-		return kafka.NewKafkaSource(u.Vertex, writers, kafka.WithGroupName(x.ConsumerGroupName), kafka.WithLogger(logger))
+		return kafka.NewKafkaSource(sp.VertexInstance.Vertex, writers, kafka.WithGroupName(x.ConsumerGroupName), kafka.WithLogger(logger))
 	} else if x := src.HTTP; x != nil {
-		return http.New(u.Vertex, writers, http.WithLogger(logger))
+		return http.New(sp.VertexInstance.Vertex, writers, http.WithLogger(logger))
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }

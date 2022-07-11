@@ -146,9 +146,9 @@ func (jw *jetStreamWriter) Close() error {
 	return nil
 }
 
-// Rate returns the writting rate (tps)
-func (jw *jetStreamWriter) Rate(_ context.Context) (float64, error) {
-	if jw.opts.useWriteInfoAsRate {
+// Rate returns the writting rate (tps) in the past seconds
+func (jw *jetStreamWriter) Rate(_ context.Context, seconds int64) (float64, error) {
+	if !jw.opts.useWriteInfoAsRate {
 		return isb.RateNotAvailable, nil
 	}
 	timestampedSeqs := jw.writtenInfo.Items()
@@ -156,16 +156,17 @@ func (jw *jetStreamWriter) Rate(_ context.Context) (float64, error) {
 		return isb.RateNotAvailable, nil
 	}
 	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
-	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
+	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-2]
+	now := time.Now().Unix()
+	if now-startSeqInfo.timestamp > seconds {
+		return isb.RateNotAvailable, nil
+	}
 	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
-		if endSeqInfo.timestamp-timestampedSeqs[i].timestamp > jw.opts.rateLookbackSeconds {
+		if now-timestampedSeqs[i].timestamp <= seconds {
 			startSeqInfo = timestampedSeqs[i]
+		} else {
 			break
 		}
-	}
-	// Check if it is too stale (use lookbackSeconds + 4 * interval to determine)
-	if endSeqInfo.timestamp-startSeqInfo.timestamp > jw.opts.rateLookbackSeconds+4*int64(jw.opts.refreshInterval.Seconds()) {
-		return isb.RateNotAvailable, nil
 	}
 	return float64(endSeqInfo.seq-startSeqInfo.seq) / float64(endSeqInfo.timestamp-startSeqInfo.timestamp), nil
 }

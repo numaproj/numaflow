@@ -3,6 +3,7 @@ import {
   Paper,
   Tab,
   Table,
+  TableBody,
   TableCell,
   TableContainer,
   TableRow,
@@ -11,9 +12,10 @@ import {
 import { SyntheticEvent, useState } from "react";
 import TabPanel from "../tab-panel/TabPanel";
 import { a11yProps } from "../../../utils";
+import {Pipeline} from "../../../utils/models/pipeline";
 
 interface SpecProps {
-  pipeline: any;
+  pipeline: Pipeline;
 }
 
 export default function Spec(props: SpecProps) {
@@ -44,6 +46,7 @@ export default function Spec(props: SpecProps) {
           />
         </Tabs>
       </Box>
+      <Box>
       <TabPanel value={value} index={0}>
         <TableContainer
           component={Paper}
@@ -53,6 +56,7 @@ export default function Spec(props: SpecProps) {
             sx={{ borderBottom: 1, borderColor: "divider" }}
             aria-label="pipeline-spec"
           >
+            <TableBody>
             <TableRow data-testid="phase">
               <TableCell>Phase</TableCell>
               <TableCell align="left">{pipeline?.status?.phase}</TableCell>
@@ -75,9 +79,11 @@ export default function Spec(props: SpecProps) {
                 {pipeline?.status?.lastUpdated}
               </TableCell>
             </TableRow>
+            </TableBody>
           </Table>
         </TableContainer>
       </TabPanel>
+      </Box>
     </div>
   );
 }

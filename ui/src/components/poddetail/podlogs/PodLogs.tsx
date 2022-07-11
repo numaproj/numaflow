@@ -96,7 +96,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
             .pipeThrough(new TextDecoderStream())
             .getReader();
           setReader(r);
-          r.read().then(function process({ done, value }): any {
+          r.read().then(function process({ done, value }):  Promise<ReadableStreamDefaultReadResult<string>> {
             if (done) {
               return;
             }
@@ -211,6 +211,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
       >
         {filteredLogs.map((l: string) => (
           <Box
+              key={l}
             component="span"
             sx={{
               whiteSpace: "nowrap",

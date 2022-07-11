@@ -27,7 +27,7 @@ const podDetailMap = new Map<string, PodDetail>([
 jest.mock("react-router-dom", () => ({
     ...jest.requireActual("react-router-dom"),
     useParams: () => ({
-        namespaceId: "dataflow-system",
+        namespaceId: "numaflow-system",
         pipelineId: "simple-pipeline",
         vertexId: "infer"
     })
@@ -43,7 +43,7 @@ describe("Pods", () => {
     it("loads screen", async () => {
         mockedUsePodsFetch.mockReturnValue({pods: pods, error: false, loading: false})
         mockedUsePodDetailFetch.mockReturnValue({podsDetailMap: podDetailMap, error: false, loading: false})
-        render(<Pods namespaceId={"dataflow-system"} pipelineId={"simple-pipeline"} vertexId={"infer"} />)
+        render(<Pods namespaceId={"numaflow-system"} pipelineId={"simple-pipeline"} vertexId={"infer"} />)
         await waitFor(() => expect(screen.getByTestId("pod-detail")).toBeInTheDocument());
         await waitFor(() => expect(screen.getByTestId("searchable-pods")).toBeInTheDocument());
 
@@ -52,7 +52,7 @@ describe("Pods", () => {
     it("pods loading screen", async () => {
         mockedUsePodsFetch.mockReturnValue({pods: pods, error: false, loading: true})
         mockedUsePodDetailFetch.mockReturnValue({podsDetailMap: podDetailMap, error: false, loading: false})
-        render(<Pods namespaceId={"dataflow-system"} pipelineId={"simple-pipeline"} vertexId={"infer"} />)
+        render(<Pods namespaceId={"numaflow-system"} pipelineId={"simple-pipeline"} vertexId={"infer"} />)
         await waitFor(() => expect(screen.getByTestId("progress")).toBeInTheDocument());
 
     })
@@ -60,7 +60,7 @@ describe("Pods", () => {
     it("pods error screen", async () => {
         mockedUsePodsFetch.mockReturnValue({pods: pods, error: true, loading: false})
         mockedUsePodDetailFetch.mockReturnValue({podsDetailMap: podDetailMap, error: false, loading: false})
-        render(<Pods namespaceId={"dataflow-system"} pipelineId={"simple-pipeline"} vertexId={"infer"} />)
+        render(<Pods namespaceId={"numaflow-system"} pipelineId={"simple-pipeline"} vertexId={"infer"} />)
         await waitFor(() => expect(screen.getByTestId("pods-error")).toBeInTheDocument());
 
     })
@@ -68,7 +68,7 @@ describe("Pods", () => {
     it("pods detail error screen", async () => {
         mockedUsePodsFetch.mockReturnValue({pods: pods, error: false, loading: false})
         mockedUsePodDetailFetch.mockReturnValue({podsDetailMap: podDetailMap, error: true, loading: false})
-        render(<Pods namespaceId={"dataflow-system"} pipelineId={"simple-pipeline"} vertexId={"infer"} />)
+        render(<Pods namespaceId={"numaflow-system"} pipelineId={"simple-pipeline"} vertexId={"infer"} />)
         await waitFor(() => expect(screen.getByTestId("pods-detail-error")).toBeInTheDocument());
 
     })

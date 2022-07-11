@@ -12,6 +12,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"go.uber.org/zap"
 )
 
@@ -27,43 +28,27 @@ type Publisher interface {
 
 // Publish publishes the watermark for a processor entity.
 type Publish struct {
-	ctx             context.Context
-	entity          processor.ProcessorEntitier
-	keyspace        string
-	heartbeatBucket nats.KeyValue
-	js              nats.JetStreamContext
-	log             *zap.SugaredLogger
-	otBucket        nats.KeyValue
-	headWatermark   processor.Watermark
+	ctx            context.Context
+	entity         processor.ProcessorEntitier
+	heartbeatStore store.WatermarkKVStorer
+	otStore        store.WatermarkKVStorer
+	log            *zap.SugaredLogger
+	headWatermark  processor.Watermark
 
 	// opts
 	// autoRefreshHeartbeat is not required for all processors. e.g. Kafka source doesn't need it
 	autoRefreshHeartbeat bool
 	podHeartbeatRate     int64
-	bucketConfigs        *nats.KeyValueConfig
 }
 
 // NewPublish returns `Publish`.
-// TODO: remove keyspace from signature
-func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, keyspace string, js nats.JetStreamContext, heartbeatBucket nats.KeyValue, inputOpts ...PublishOption) *Publish {
+func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer, inputOpts ...PublishOption) *Publish {
+
 	log := logging.FromContext(ctx)
 
 	opts := &publishOptions{
 		autoRefreshHeartbeat: true,
 		podHeartbeatRate:     5,
-		// TODO: use config to build default values
-		// TODO: move it to control plane. One OT bucket for all the processors in a vertex.
-		bucketConfigs: &nats.KeyValueConfig{
-			Bucket:       processorEntity.GetBucketName(),
-			Description:  fmt.Sprintf("[%s][%s] offset timeline bucket", processorEntity.GetPublishKeyspace(), processorEntity.GetBucketName()),
-			MaxValueSize: 0,
-			History:      1,
-			TTL:          0,
-			MaxBytes:     0,
-			Storage:      0,
-			Replicas:     0,
-			Placement:    nil,
-		},
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
@@ -72,18 +57,16 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 	p := &Publish{
 		ctx:                  ctx,
 		entity:               processorEntity,
-		keyspace:             keyspace,
-		heartbeatBucket:      heartbeatBucket,
-		js:                   js,
+		heartbeatStore:       hbStore,
+		otStore:              otStore,
 		log:                  log,
-		otBucket:             nil,
 		autoRefreshHeartbeat: opts.autoRefreshHeartbeat,
-		bucketConfigs:        opts.bucketConfigs,
 		podHeartbeatRate:     opts.podHeartbeatRate,
 	}
 
 	p.initialSetup()
 
+	// TODO: i do not think we need this autoRefreshHeartbeat flag anymore. Remove it?
 	if p.autoRefreshHeartbeat {
 		go p.publishHeartbeat()
 	}
@@ -91,14 +74,9 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 	return p
 }
 
-// initialSetup creates the Offset-Timeline bucket and also inserts the default value
-// as the ProcessorEntity starts emitting watermarks.
+// initialSetup inserts the default values as the ProcessorEntity starts emitting watermarks.
 func (p *Publish) initialSetup() {
-	// is this frowned upon?
-	p.otBucket = p.createOTBucket(p.bucketConfigs)
 	p.headWatermark = p.loadLatestFromStore()
-
-	// TODO: put in the more initial values?
 }
 
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
@@ -121,9 +99,9 @@ func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	binary.LittleEndian.PutUint64(value, uint64(o))
 
 	for {
-		_, err := p.otBucket.Put(key, value)
+		err := p.otStore.PutKV(p.ctx, key, value)
 		if err != nil {
-			p.log.Errorw("unable to publish watermark", zap.String("entity", p.entity.GetBucketName()), zap.String("key", key), zap.Error(err))
+			p.log.Errorw("unable to publish watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
@@ -132,9 +110,10 @@ func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	}
 }
 
+// loadLatestFromStore loads the latest watermark stored in the watermark store.
+// TODO: how to repopulate if the processing unit is down for a really long time?
 func (p *Publish) loadLatestFromStore() processor.Watermark {
-	var otBucketName = p.entity.GetBucketName()
-	var watermarks = p.getAllKeysFromBucket(otBucketName)
+	var watermarks = p.getAllOTKeysFromBucket()
 	var latestWatermark int64 = math.MinInt64
 
 	// skip all entries that do not match the prefix if we are sharing bucket
@@ -169,9 +148,9 @@ func (p *Publish) publishHeartbeat() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			_, err := p.heartbeatBucket.Put(p.entity.GetID(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err := p.heartbeatStore.PutKV(p.ctx, p.entity.GetID(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			if err != nil {
-				p.log.Errorw("put to bucket failed", zap.String("bucket", p.heartbeatBucket.Bucket()), zap.Error(err))
+				p.log.Errorw("put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 			}
 		}
 	}
@@ -183,42 +162,22 @@ func (p *Publish) StopPublisher() {
 	//   - delete the Offset-Timeline bucket
 	//   - remove itself from heartbeat bucket
 
-	// TODO: move this to control plane and as of today control plane supports only shared OT buckets
-	if !p.entity.IsSharedBucket() {
-		// clean up offsetTimeline bucket
-		bucketName := p.entity.GetBucketName()
-		err := p.js.DeleteKeyValue(bucketName)
-		if err != nil {
-			p.log.Errorw("failed to delete bucket (nats.KeyValue)", zap.String("bucket", bucketName), zap.Error(err))
-		}
+	p.log.Infow("stopping publisher", zap.String("bucket", p.heartbeatStore.GetStoreName()))
+	if !p.entity.IsOTBucketShared() {
+		p.log.Errorw("non sharing of bucket is not supported by controller as of today", zap.String("bucket", p.heartbeatStore.GetStoreName()))
 	}
 
 	// clean up heartbeat bucket
-	err := p.heartbeatBucket.Delete(p.entity.GetID())
+	err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetID())
 	if err != nil {
-		p.log.Errorw("failed to delete the key in the heartbeat bucket", zap.String("bucket", p.keyspace), zap.String("key", p.entity.GetID()), zap.Error(err))
+		p.log.Errorw("failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetID()), zap.Error(err))
 	}
 }
 
-func (p *Publish) createOTBucket(configs *nats.KeyValueConfig) nats.KeyValue {
-	bucketName := p.entity.GetBucketName()
-	// TODO: we don't delete any bucket
-	kv, err := p.js.CreateKeyValue(configs)
-	if err != nil {
-		p.log.Fatalw("failed to create the bucket", zap.String("bucket", bucketName), zap.Error(err))
-	}
-
-	return kv
-}
-
-func (p *Publish) getAllKeysFromBucket(bucketName string) []string {
-	kv, err := p.js.KeyValue(bucketName)
-	if err != nil {
-		p.log.Fatalw("failed to create the bucket", zap.String("bucket", bucketName), zap.Error(err))
-	}
-	keys, err := kv.Keys()
+func (p *Publish) getAllOTKeysFromBucket() []string {
+	keys, err := p.otStore.GetAllKeys(p.ctx)
 	if err != nil && !errors.Is(err, nats.ErrNoKeysFound) {
-		p.log.Fatalw("failed to get the keys", zap.String("bucket", bucketName), zap.Error(err))
+		p.log.Fatalw("failed to get the keys", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 	}
 	return keys
 }

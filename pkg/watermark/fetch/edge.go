@@ -19,27 +19,27 @@ type Fetcher interface {
 	GetWatermark(offset isb.Offset) processor.Watermark
 }
 
-// EdgeBuffer is the edge relation between two vertices.
-type EdgeBuffer struct {
+// Edge is the edge relation between two vertices.
+type Edge struct {
 	ctx        context.Context
-	name       string
+	edgeName   string
 	fromVertex *FromVertex
 	log        *zap.SugaredLogger
 }
 
-// NewEdgeBuffer returns a new EdgeBuffer.
-// TODO: change the signature to take FromVertex as interface.
-func NewEdgeBuffer(ctx context.Context, name string, fromV *FromVertex) *EdgeBuffer {
-	return &EdgeBuffer{
+// NewEdgeBuffer returns a new Edge. FromVertex has the details about the processors responsible for writing to this
+// edge.
+func NewEdgeBuffer(ctx context.Context, edgeName string, fromV *FromVertex) *Edge {
+	return &Edge{
 		ctx:        ctx,
-		name:       name,
+		edgeName:   edgeName,
 		fromVertex: fromV,
-		log:        logging.FromContext(ctx),
+		log:        logging.FromContext(ctx).With("edgeName", edgeName),
 	}
 }
 
 // GetWatermark gets the smallest timestamp for the given offset
-func (e *EdgeBuffer) GetWatermark(inputOffset isb.Offset) processor.Watermark {
+func (e *Edge) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("unable to get offset from isb.Offset.Sequence()", zap.Error(err))
@@ -49,7 +49,7 @@ func (e *EdgeBuffer) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var epoch int64 = math.MaxInt64
 	var podMap = e.fromVertex.GetAllProcessors()
 	for _, p := range podMap {
-		debugString.WriteString(fmt.Sprintf("[%s] %s\n", p.entity.GetBucketName(), p.offsetTimeline.Dump()))
+		debugString.WriteString(fmt.Sprintf("[HB:%s OT:%s] %s\n", e.fromVertex.hbWatcher.GetKVName(), e.fromVertex.otWatcher.GetKVName(), p))
 		var t = p.offsetTimeline.GetEventTime(inputOffset)
 		if t != -1 && t < epoch {
 			epoch = t
@@ -66,7 +66,7 @@ func (e *EdgeBuffer) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 		epoch = -1
 	}
 	// TODO: use log instead of fmt.Printf
-	fmt.Printf("\n%s[%s] get watermark for offset %d: %+v\n", debugString.String(), e.name, offset, epoch)
+	fmt.Printf("\n%s[%s] get watermark for offset %d: %+v\n", debugString.String(), e.edgeName, offset, epoch)
 	if epoch == -1 {
 		return processor.Watermark(time.Time{})
 	}

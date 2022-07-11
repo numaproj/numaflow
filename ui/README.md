@@ -1,8 +1,8 @@
-# NumaFlow UI
+# Numaflow UI
 
 ![Numaflow Image](../docs/assets/numa.svg)
 
-A web-based UI for NumaFlow
+A web-based UI for Numaflow
 
 The UI has the following features:
 * View running pipelines in your namespace
@@ -22,6 +22,6 @@ Follow the instructions below to set up your development environment.
 
 These tools are required for development.
 
-1. [`NumaFlow`](https://github.com/numaproj/numaflow/blob/master/docs/DEVELOPMENT.md): Follow the document to prepare `NumaFlow` development environment.
+1. [`Numaflow`](https://github.com/numaproj/numaflow/blob/master/docs/DEVELOPMENT.md): Follow the document to prepare `Numaflow` development environment.
 1. [`node`](https://nodejs.org/en/download/): NodeJS - `brew install node`.
 1. [`yarn`](https://yarnpkg.com/): Package manager - `brew install yarn`

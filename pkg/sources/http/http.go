@@ -161,7 +161,7 @@ func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*http
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertex, h, destinations, forward.All, applier.Terminal, nil, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertex, h, destinations, forward.All, applier.Terminal, nil, nil, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -172,10 +172,6 @@ func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*http
 
 func (h *httpSource) GetName() string {
 	return h.name
-}
-
-func (h *httpSource) Pending(_ context.Context) (int64, error) {
-	return isb.PendingNotAvailable, nil
 }
 
 func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {

@@ -371,9 +371,13 @@ type Scale struct {
 	// +optional
 	Min *int32 `json:"min,omitempty" protobuf:"varint,1,opt,name=min"`
 	// Maximum replicas
-	// +kubebuilder:default=1
+	// +kubebuilder:default=100
 	// +optional
 	Max *int32 `json:"max,omitempty" protobuf:"varint,2,opt,name=max"`
+	// Lookback seconds to calculate the average pending messages and processing rate
+	// +kubebuilder:default=180
+	// +optional
+	LookbackSeconds *int32 `json:"lookbackSeconds,omitempty" protobuf:"varint,3,opt,name=lookbackSeconds"`
 }
 
 type VertexLimits struct {
