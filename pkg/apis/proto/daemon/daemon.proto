@@ -23,6 +23,14 @@ message BufferInfo {
   required bool isFull = 11;
 }
 
+
+message VertexInfo {
+  required string pipeline = 1;
+  required string vertex = 2;
+  required int64 rate = 3;
+
+}
+
 message ListBuffersRequest {
     required string pipeline = 1;
 }
@@ -40,6 +48,15 @@ message GetBufferResponse {
     required BufferInfo buffer = 1;
 }
 
+message GetVertexRequest {
+  required string pipeline = 1;
+  required string vertex = 2;
+}
+
+message GetVertexResponse {
+  required VertexInfo vertex = 1;
+}
+
 // DaemonService is a grpc service that is used to provide APIs for giving any pipeline information.
 service DaemonService {
 
@@ -49,5 +66,9 @@ service DaemonService {
 
   rpc GetBuffer (GetBufferRequest) returns (GetBufferResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/buffers/{buffer}";
+  };
+
+  rpc GetVertex (GetVertexRequest) returns (GetVertexResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertex/{vertex}";
   };
 }

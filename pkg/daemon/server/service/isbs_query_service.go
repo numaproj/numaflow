@@ -94,6 +94,28 @@ func (is *isbSvcQueryService) GetBuffer(ctx context.Context, req *daemon.GetBuff
 	return resp, nil
 }
 
+// GetVertex is used to obtain one vertex information of a pipeline
+func (is *isbSvcQueryService) GetVertex(ctx context.Context, req *daemon.GetVertexRequest) (*daemon.GetVertexResponse, error) {
+	resp := new(daemon.GetVertexResponse)
+
+	//_, err := http.Get("https://simple-pipeline-in-headless.numaflow-system.svc.cluster.local:2469/metrics")
+	//
+	//if err != nil {
+	//	fmt.Println(err)
+	//	log.Errorf("error: %s", err)
+	//	//return nil, err
+	//}
+
+	var rate int64 = 10
+	v := &daemon.VertexInfo{
+		Pipeline: &is.pipeline.Name,
+		Vertex:   &is.pipeline.Name,
+		Rate:     &rate,
+	}
+	resp.Vertex = v
+	return resp, nil
+}
+
 func getBufferLimits(pl *v1alpha1.Pipeline, edge v1alpha1.Edge) (bufferLength int64, bufferUsageLimit float64) {
 	bufferLength = int64(v1alpha1.DefaultBufferLength)
 	bufferUsageLimit = v1alpha1.DefaultBufferUsageLimit

@@ -61,3 +61,14 @@ func (dc *DaemonClient) GetPipelineBuffer(ctx context.Context, pipeline, buffer 
 		return rspn.Buffer, nil
 	}
 }
+
+func (dc *DaemonClient) GetVertex(ctx context.Context, pipeline, vertex string) (*daemon.VertexInfo, error) {
+	if rspn, err := dc.client.GetVertex(ctx, &daemon.GetVertexRequest{
+		Pipeline: &pipeline,
+		Vertex:   &vertex,
+	}); err != nil {
+		return nil, err
+	} else {
+		return rspn.Vertex, nil
+	}
+}

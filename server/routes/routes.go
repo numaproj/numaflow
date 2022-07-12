@@ -25,7 +25,7 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/isbsvcs", handler.ListInterStepBufferServices)
 	r.GET("/namespaces/:namespace/isbsvcs/:isbsvc", handler.GetInterStepBufferService)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline", handler.GetPipeline)
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices", handler.ListVerices)
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices", handler.ListVertices)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex", handler.GetVertex)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.ListVertexPods)
 	r.GET("/namespaces/:namespace/pods/:pod/log", handler.PodLogs)
@@ -33,4 +33,5 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/metrics/namespaces/:namespace/pods/:pod", handler.GetPodMetrics)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/edges", handler.ListPipelineEdges)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/edges/:edge", handler.GetPipelineEdge)
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertex/:vertex", handler.GetVertexInfo)
 }

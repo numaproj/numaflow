@@ -119,7 +119,7 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, isbsvc)
 }
 
-func (h *handler) ListVerices(c *gin.Context) {
+func (h *handler) ListVertices(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
 	vertices, err := h.numaflowClient.Vertices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyPipelineName, c.Param("pipeline")),
@@ -219,6 +219,22 @@ func (h *handler) ListPipelineEdges(c *gin.Context) {
 		return
 	}
 	l, err := client.ListPipelineBuffers(context.Background(), pipeline)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, l)
+}
+
+func (h *handler) GetVertexInfo(c *gin.Context) {
+	ns := c.Param("namespace")
+	pipeline := c.Param("pipeline")
+	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	l, err := client.GetVertex(context.Background(), pipeline, "in")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
