@@ -148,8 +148,8 @@ spec:
                     type: integer
                   readTimeoutSeconds:
                     default: 1
-                    description: Read timeout second for all the vertices in the pipeline,
-                      can be overridden by the vertex's limit settings
+                    description: Read timeout seconds for all the vertices in the
+                      pipeline, can be overridden by the vertex's limit settings
                     format: int32
                     type: integer
                 type: object
@@ -1392,16 +1392,7 @@ spec:
                           type: integer
                         readTimeoutSeconds:
                           default: 1
-                          description: Read timeout second for all the vertices in
-                            the pipeline, can be overridden by the vertex's limit
-                            settings
-                          format: int32
-                          type: integer
-                        udfWorkers:
-                          description: Workers used to concurrently call UDF functions,
-                            it's only meaningful for UDF vertex, and will be ignored
-                            by source and sink vertices. It overrides the setting
-                            in pipeline limits.
+                          description: Read timeout seconds
                           format: int32
                           type: integer
                       type: object

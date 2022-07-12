@@ -1483,11 +1483,6 @@ func (in *VertexLimits) DeepCopyInto(out *VertexLimits) {
 		*out = new(uint64)
 		**out = **in
 	}
-	if in.UDFWorkers != nil {
-		in, out := &in.UDFWorkers, &out.UDFWorkers
-		*out = new(uint32)
-		**out = **in
-	}
 	if in.ReadTimeoutSeconds != nil {
 		in, out := &in.ReadTimeoutSeconds, &out.ReadTimeoutSeconds
 		*out = new(uint32)

@@ -692,7 +692,7 @@ message PipelineLimits {
   // +optional
   optional uint32 bufferUsageLimit = 3;
 
-  // Read timeout second for all the vertices in the pipeline, can be overridden by the vertex's limit settings
+  // Read timeout seconds for all the vertices in the pipeline, can be overridden by the vertex's limit settings
   // +kubebuilder:default=1
   // +optional
   optional uint32 readTimeoutSeconds = 4;
@@ -908,12 +908,7 @@ message VertexLimits {
   // +optional
   optional uint64 readBatchSize = 1;
 
-  // Workers used to concurrently call UDF functions, it's only meaningful for UDF vertex, and will be ignored by source and sink vertices.
-  // It overrides the setting in pipeline limits.
-  // +optional
-  optional uint32 udfWorkers = 2;
-
-  // Read timeout second for all the vertices in the pipeline, can be overridden by the vertex's limit settings
+  // Read timeout seconds
   // +kubebuilder:default=1
   // +optional
   optional uint32 readTimeoutSeconds = 3;

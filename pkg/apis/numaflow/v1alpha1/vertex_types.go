@@ -384,11 +384,7 @@ type VertexLimits struct {
 	// Read batch size
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
-	// Workers used to concurrently call UDF functions, it's only meaningful for UDF vertex, and will be ignored by source and sink vertices.
-	// It overrides the setting in pipeline limits.
-	// +optional
-	UDFWorkers *uint32 `json:"udfWorkers,omitempty" protobuf:"varint,2,opt,name=udfWorkers"`
-	// Read timeout second for all the vertices in the pipeline, can be overridden by the vertex's limit settings
+	// Read timeout seconds
 	// +kubebuilder:default=1
 	// +optional
 	ReadTimeoutSeconds *uint32 `json:"readTimeoutSeconds,omitempty" protobuf:"varint,3,opt,name=readTimeoutSeconds"`
