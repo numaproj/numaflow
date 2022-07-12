@@ -71,6 +71,6 @@ The `Inter-Step Buffer Service` can be deleted by
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
 
-## What's Next
+## Coming UP
 
-After exploring how a Numaflow pipeline runs, you can check what data [Sources](./sources/generator.md) and [Sinks](./sinks/kafka.md) Numaflow supports out of the box, or learn how to write [User Defined Functions](./user-defined-functions.md).
+Next, let's take a peek at [an advance pipeline](./advanced-start.md), to learn some powerful features of Numaflow.
