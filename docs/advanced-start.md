@@ -4,7 +4,7 @@ After [Quick Start](./quick-start.md), It's time to look at an advanced pipeline
 
 In this example, there are 5 vertices in a pipeline. An [HTTP](./sources/http.md) Source vertex which serves an HTTP service to receive numbers as source data, a [UDF](./user-defined-functions.md) vertex to tag the ingested numbers with the key `even` or `odd`, and there are 3 [Log](./sinks/log.md) Sinks, one to print the `even` numbers, one to print the `odd` numbers, and the other one to print both the even and odd numbers.
 
-![Pipeline Diagram](../assets/even-odd.png)
+![Pipeline Diagram](assets/even-odd.png)
 
 Create an [Inter-Step Buffer Service](./inter-step-buffer-service.md) if it's not there.
 
