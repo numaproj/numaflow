@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -132,10 +133,32 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 // getSourcer is used to send the sourcer information
 func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores *generic.PublishWMStores, logger *zap.SugaredLogger) (Sourcer, error) {
 	src := sp.VertexInstance.Vertex.Spec.Source
+
 	if x := src.Generator; x != nil {
-		return generator.NewMemGen(sp.VertexInstance, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, fetchWM, publishWM, publishWMStores, generator.WithLogger(logger))
+		readOptions := []generator.Option{
+			generator.WithLogger(logger),
+		}
+		if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != "" {
+			timeoutDuration, err := time.ParseDuration(sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout)
+			if err != nil {
+				return nil, err
+			}
+			readOptions = append(readOptions, generator.WithReadTimeOut(timeoutDuration))
+		}
+		return generator.NewMemGen(sp.VertexInstance, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.Kafka; x != nil {
-		return kafka.NewKafkaSource(sp.VertexInstance.Vertex, writers, kafka.WithGroupName(x.ConsumerGroupName), kafka.WithLogger(logger))
+		readOptions := []kafka.Option{
+			kafka.WithGroupName(x.ConsumerGroupName),
+			kafka.WithLogger(logger),
+		}
+		if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != "" {
+			timeoutDuration, err := time.ParseDuration(sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout)
+			if err != nil {
+				return nil, err
+			}
+			readOptions = append(readOptions, kafka.WithReadTimeOut(timeoutDuration))
+		}
+		return kafka.NewKafkaSource(sp.VertexInstance.Vertex, writers, readOptions...)
 	} else if x := src.HTTP; x != nil {
 		return http.New(sp.VertexInstance.Vertex, writers, http.WithLogger(logger))
 	}

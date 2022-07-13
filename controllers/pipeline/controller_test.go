@@ -138,19 +138,17 @@ func Test_copyVertexLimits(t *testing.T) {
 	copyVertexLimits(pl, v)
 	assert.Nil(t, v.Limits)
 	one := uint64(1)
-	timeoutOne := uint32(30)
-	pl.Spec.Limits = &dfv1.PipelineLimits{ReadBatchSize: &one, ReadTimeoutSeconds: &timeoutOne}
+	pl.Spec.Limits = &dfv1.PipelineLimits{ReadBatchSize: &one, ReadTimeout: "2s"}
 	copyVertexLimits(pl, v)
 	assert.NotNil(t, v.Limits)
 	assert.Equal(t, one, *v.Limits.ReadBatchSize)
-	assert.Equal(t, timeoutOne, *v.Limits.ReadTimeoutSeconds)
-	timeoutTwo := uint32(60)
+	assert.Equal(t, "2s", v.Limits.ReadTimeout)
 	two := uint64(2)
 	v.Limits.ReadBatchSize = &two
-	v.Limits.ReadTimeoutSeconds = &timeoutTwo
+	v.Limits.ReadTimeout = "3s"
 	copyVertexLimits(pl, v)
 	assert.Equal(t, two, *v.Limits.ReadBatchSize)
-	assert.Equal(t, timeoutTwo, *v.Limits.ReadTimeoutSeconds)
+	assert.Equal(t, "3s", v.Limits.ReadTimeout)
 
 }
 

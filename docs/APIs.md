@@ -2552,7 +2552,7 @@ be overridden by the settings in vertex limits.
 </tr>
 <tr>
 <td>
-<code>readTimeoutSeconds</code></br> <em> uint32 </em>
+<code>readTimeout</code></br> <em> string </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -3469,12 +3469,12 @@ Read batch size
 </tr>
 <tr>
 <td>
-<code>readTimeoutSeconds</code></br> <em> uint32 </em>
+<code>readTimeout</code></br> <em> string </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-Read timeout seconds
+Read timeout duration
 </p>
 </td>
 </tr>

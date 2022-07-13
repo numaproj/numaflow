@@ -306,9 +306,9 @@ type PipelineLimits struct {
 	// +optional
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,3,opt,name=bufferUsageLimit"`
 	// Read timeout seconds for all the vertices in the pipeline, can be overridden by the vertex's limit settings
-	// +kubebuilder:default=1
+	// +kubebuilder:default= "1s"
 	// +optional
-	ReadTimeoutSeconds *uint32 `json:"readTimeoutSeconds,omitempty" protobuf:"varint,4,opt,name=readTimeoutSeconds"`
+	ReadTimeout string `json:"readTimeout,omitempty" protobuf:"bytes,4,opt,name=readTimeout"`
 }
 
 type PipelineStatus struct {

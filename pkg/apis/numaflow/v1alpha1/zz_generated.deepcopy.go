@@ -1062,11 +1062,6 @@ func (in *PipelineLimits) DeepCopyInto(out *PipelineLimits) {
 		*out = new(uint32)
 		**out = **in
 	}
-	if in.ReadTimeoutSeconds != nil {
-		in, out := &in.ReadTimeoutSeconds, &out.ReadTimeoutSeconds
-		*out = new(uint32)
-		**out = **in
-	}
 	return
 }
 
@@ -1481,11 +1476,6 @@ func (in *VertexLimits) DeepCopyInto(out *VertexLimits) {
 	if in.ReadBatchSize != nil {
 		in, out := &in.ReadBatchSize, &out.ReadBatchSize
 		*out = new(uint64)
-		**out = **in
-	}
-	if in.ReadTimeoutSeconds != nil {
-		in, out := &in.ReadTimeoutSeconds, &out.ReadTimeoutSeconds
-		*out = new(uint32)
 		**out = **in
 	}
 	return

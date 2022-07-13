@@ -67,6 +67,18 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "duplicate vertex name")
 	})
 
+	t.Run("test readtimeout pipeline", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Limits = &dfv1.PipelineLimits{ReadTimeout: "2s"}
+		err := ValidatePipeline(testObj)
+		assert.NoError(t, err)
+	})
+	t.Run("test invalid readtimeout pipeline", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Limits = &dfv1.PipelineLimits{ReadTimeout: "2"}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+	})
 	t.Run("source and sink spedified", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[0].Sink = &dfv1.Sink{}

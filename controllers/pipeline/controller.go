@@ -465,8 +465,8 @@ func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
 	if v.Limits.ReadBatchSize == nil {
 		v.Limits.ReadBatchSize = pl.Spec.Limits.ReadBatchSize
 	}
-	if v.Limits.ReadTimeoutSeconds == nil {
-		v.Limits.ReadTimeoutSeconds = pl.Spec.Limits.ReadTimeoutSeconds
+	if v.Limits.ReadTimeout == "" {
+		v.Limits.ReadTimeout = pl.Spec.Limits.ReadTimeout
 	}
 }
 

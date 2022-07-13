@@ -693,9 +693,9 @@ message PipelineLimits {
   optional uint32 bufferUsageLimit = 3;
 
   // Read timeout seconds for all the vertices in the pipeline, can be overridden by the vertex's limit settings
-  // +kubebuilder:default=1
+  // +kubebuilder:default= "1s"
   // +optional
-  optional uint32 readTimeoutSeconds = 4;
+  optional string readTimeout = 4;
 }
 
 // +kubebuilder:object:root=true
@@ -908,10 +908,9 @@ message VertexLimits {
   // +optional
   optional uint64 readBatchSize = 1;
 
-  // Read timeout seconds
-  // +kubebuilder:default=1
+  // Read timeout duration
   // +optional
-  optional uint32 readTimeoutSeconds = 3;
+  optional string readTimeout = 2;
 }
 
 // +kubebuilder:object:root=true

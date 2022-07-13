@@ -46,8 +46,12 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		redisClient := clients.NewInClusterRedisClient()
 		fromGroup := fromBufferName + "-group"
 		readerOpts := []redisisb.Option{}
-		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeoutSeconds != nil {
-			readerOpts = append(readerOpts, redisisb.WithReadTimeOut(time.Duration(*x.ReadTimeoutSeconds)*time.Second))
+		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != "" {
+			timeoutDuration, err := time.ParseDuration(x.ReadTimeout)
+			if err != nil {
+				return err
+			}
+			readerOpts = append(readerOpts, redisisb.WithReadTimeOut(timeoutDuration))
 		}
 		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readerOpts...)
@@ -70,8 +74,12 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		readOptions := []jetstreamisb.ReadOption{
 			jetstreamisb.WithUsingAckInfoAsRate(true),
 		}
-		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeoutSeconds != nil {
-			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(time.Duration(*x.ReadTimeoutSeconds)*time.Second))
+		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != "" {
+			timeoutDuration, err := time.ParseDuration(x.ReadTimeout)
+			if err != nil {
+				return err
+			}
+			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(timeoutDuration))
 		}
 		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, clients.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName, readOptions...)
 		if err != nil {

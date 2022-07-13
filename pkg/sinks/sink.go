@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -37,11 +38,26 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		redisClient := clients.NewInClusterRedisClient()
 		fromGroup := fromBufferName + "-group"
 		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
-		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer)
+		readOptions := []redisisb.Option{}
+		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != "" {
+			timeoutDuration, err := time.ParseDuration(x.ReadTimeout)
+			if err != nil {
+				return err
+			}
+			readOptions = append(readOptions, redisisb.WithReadTimeOut(timeoutDuration))
+		}
+		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readOptions...)
 	case dfv1.ISBSvcTypeJetStream:
 		streamName := fmt.Sprintf("%s-%s", u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
 		readOptions := []jetstreamisb.ReadOption{
 			jetstreamisb.WithUsingAckInfoAsRate(true),
+		}
+		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != "" {
+			timeoutDuration, err := time.ParseDuration(x.ReadTimeout)
+			if err != nil {
+				return err
+			}
+			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(timeoutDuration))
 		}
 		jetStreamClient := clients.NewInClusterJetStreamClient()
 		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)
