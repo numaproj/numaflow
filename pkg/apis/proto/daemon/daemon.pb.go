@@ -160,8 +160,6 @@ func (m *BufferInfo) GetIsFull() bool {
 	return false
 }
 
-// BufferInfo is used to provide information about the buffer including
-// pending messages count, if it has unprocessed data etc which helps in pipeline/buffer deletion etc
 type VertexInfo struct {
 	Pipeline             *string  `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
 	Vertex               *string  `protobuf:"bytes,2,req,name=vertex" json:"vertex,omitempty"`
