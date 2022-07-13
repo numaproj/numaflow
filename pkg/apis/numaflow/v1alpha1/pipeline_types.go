@@ -308,7 +308,7 @@ type PipelineLimits struct {
 	// Read timeout seconds for all the vertices in the pipeline, can be overridden by the vertex's limit settings
 	// +kubebuilder:default= "1s"
 	// +optional
-	ReadTimeout string `json:"readTimeout,omitempty" protobuf:"bytes,4,opt,name=readTimeout"`
+	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,4,opt,name=readTimeout"`
 }
 
 type PipelineStatus struct {

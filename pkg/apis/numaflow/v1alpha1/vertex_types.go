@@ -386,7 +386,7 @@ type VertexLimits struct {
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
 	// Read timeout duration
 	// +optional
-	ReadTimeout string `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
+	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
 }
 
 func (v VertexSpec) getType() containerSupplier {

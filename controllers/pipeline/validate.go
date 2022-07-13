@@ -2,8 +2,6 @@ package pipeline
 
 import (
 	"fmt"
-	"time"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
@@ -21,9 +19,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	sources := make(map[string]dfv1.AbstractVertex)
 	sinks := make(map[string]dfv1.AbstractVertex)
 	udfs := make(map[string]dfv1.AbstractVertex)
-	if pl.Spec.Limits != nil && pl.Spec.Limits.ReadTimeout != "" {
-		return validateDurationString(pl.Spec.Limits.ReadTimeout)
-	}
 	for _, v := range pl.Spec.Vertices {
 		if names[v.Name] {
 			return fmt.Errorf("duplicate vertex name %q", v.Name)
@@ -131,9 +126,6 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if v.Scale.Max != nil {
 		max = *v.Scale.Max
 	}
-	if v.Limits != nil && v.Limits.ReadTimeout != "" {
-		return validateDurationString(v.Limits.ReadTimeout)
-	}
 	if min < 1 {
 		return fmt.Errorf("vertex %q: min number of replicas should be greater than 0", v.Name) // Do not support scale to 0 now.
 	}
@@ -141,9 +133,4 @@ func validateVertex(v dfv1.AbstractVertex) error {
 		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
 	}
 	return nil
-}
-
-func validateDurationString(duration string) error {
-	_, err := time.ParseDuration(duration)
-	return err
 }

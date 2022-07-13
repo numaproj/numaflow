@@ -3,14 +3,12 @@ package sources
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
-
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/zap"
+	"sync"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -138,12 +136,8 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		readOptions := []generator.Option{
 			generator.WithLogger(logger),
 		}
-		if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != "" {
-			timeoutDuration, err := time.ParseDuration(sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout)
-			if err != nil {
-				return nil, err
-			}
-			readOptions = append(readOptions, generator.WithReadTimeOut(timeoutDuration))
+		if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != nil {
+			readOptions = append(readOptions, generator.WithReadTimeOut(sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout.Duration))
 		}
 		return generator.NewMemGen(sp.VertexInstance, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.Kafka; x != nil {
@@ -151,12 +145,8 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 			kafka.WithGroupName(x.ConsumerGroupName),
 			kafka.WithLogger(logger),
 		}
-		if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != "" {
-			timeoutDuration, err := time.ParseDuration(sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout)
-			if err != nil {
-				return nil, err
-			}
-			readOptions = append(readOptions, kafka.WithReadTimeOut(timeoutDuration))
+		if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != nil {
+			readOptions = append(readOptions, kafka.WithReadTimeOut(sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout.Duration))
 		}
 		return kafka.NewKafkaSource(sp.VertexInstance.Vertex, writers, readOptions...)
 	} else if x := src.HTTP; x != nil {

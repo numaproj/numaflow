@@ -2,8 +2,7 @@ package pipeline
 
 import (
 	"context"
-	"testing"
-
+	"github.com/goccy/go-json"
 	"github.com/numaproj/numaflow/controllers"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
@@ -17,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"testing"
 )
 
 const (
@@ -138,17 +138,26 @@ func Test_copyVertexLimits(t *testing.T) {
 	copyVertexLimits(pl, v)
 	assert.Nil(t, v.Limits)
 	one := uint64(1)
-	pl.Spec.Limits = &dfv1.PipelineLimits{ReadBatchSize: &one, ReadTimeout: "2s"}
+	limitJson := `{"readTimeout": "2s"}`
+	var pipelineLimit dfv1.PipelineLimits
+	err := json.Unmarshal([]byte(limitJson), &pipelineLimit)
+	assert.NoError(t, err)
+	pipelineLimit.ReadBatchSize = &one
+	pl.Spec.Limits = &pipelineLimit
 	copyVertexLimits(pl, v)
 	assert.NotNil(t, v.Limits)
 	assert.Equal(t, one, *v.Limits.ReadBatchSize)
-	assert.Equal(t, "2s", v.Limits.ReadTimeout)
+	assert.Equal(t, "2s", v.Limits.ReadTimeout.Duration.String())
 	two := uint64(2)
+	vertexLimitJson := `{"readTimeout": "3s"}`
+	var vertexLimit dfv1.VertexLimits
+	err = json.Unmarshal([]byte(vertexLimitJson), &vertexLimit)
+	assert.NoError(t, err)
+	v.Limits = &vertexLimit
 	v.Limits.ReadBatchSize = &two
-	v.Limits.ReadTimeout = "3s"
 	copyVertexLimits(pl, v)
 	assert.Equal(t, two, *v.Limits.ReadBatchSize)
-	assert.Equal(t, "3s", v.Limits.ReadTimeout)
+	assert.Equal(t, "3s", v.Limits.ReadTimeout.Duration.String())
 
 }
 

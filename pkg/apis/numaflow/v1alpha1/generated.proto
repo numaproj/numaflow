@@ -695,7 +695,7 @@ message PipelineLimits {
   // Read timeout seconds for all the vertices in the pipeline, can be overridden by the vertex's limit settings
   // +kubebuilder:default= "1s"
   // +optional
-  optional string readTimeout = 4;
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 4;
 }
 
 // +kubebuilder:object:root=true
@@ -910,7 +910,7 @@ message VertexLimits {
 
   // Read timeout duration
   // +optional
-  optional string readTimeout = 2;
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
 }
 
 // +kubebuilder:object:root=true

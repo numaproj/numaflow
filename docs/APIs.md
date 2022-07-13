@@ -2552,7 +2552,9 @@ be overridden by the settings in vertex limits.
 </tr>
 <tr>
 <td>
-<code>readTimeout</code></br> <em> string </em>
+<code>readTimeout</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -3469,7 +3471,9 @@ Read batch size
 </tr>
 <tr>
 <td>
-<code>readTimeout</code></br> <em> string </em>
+<code>readTimeout</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
