@@ -12819,7 +12819,7 @@ metadata:
 apiVersion: v1
 kind: Service
 metadata:
-  name: numaflow-server-svc
+  name: numaflow-server
   namespace: numaflow-system
 spec:
   ports:
