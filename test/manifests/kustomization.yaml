@@ -11,7 +11,7 @@ patches:
         value: IfNotPresent
     target:
       kind: Deployment
-      name: controller-manager
+      name: numaflow-controller
   - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/env/-
@@ -20,7 +20,7 @@ patches:
           value: IfNotPresent
     target:
       kind: Deployment
-      name: controller-manager
+      name: numaflow-controller
   - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
