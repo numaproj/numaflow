@@ -32,8 +32,8 @@ var (
 		Help: "Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.",
 	}, []string{dfv1.MetricPipelineLabel, dfv1.MetricVertexLabel, dfv1.MetricPeriodLabel})
 
-	// fixedLookBackSeconds Always expose metrics of following lookback seconds (1m, 5m, 15m)
-	fixedLookBackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
+	// fixedLookbackSeconds Always expose metrics of following lookback seconds (1m, 5m, 15m)
+	fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
 )
 
 // timestampedPending is a helper struct to wrap a pending number and timestamp pair
@@ -131,7 +131,7 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 	}
 	log := logging.FromContext(ctx)
 	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds}
-	for k, v := range fixedLookBackSeconds {
+	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}
 	ticker := time.NewTicker(ms.refreshInterval)
