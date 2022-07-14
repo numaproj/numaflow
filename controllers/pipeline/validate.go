@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"fmt"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
@@ -25,6 +24,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			return fmt.Errorf("duplicate vertex name %q", v.Name)
 		}
 		names[v.Name] = true
+
 		if v.Source == nil && v.Sink == nil && v.UDF == nil {
 			return fmt.Errorf("invalid vertex %q, it could only be either a source, or a sink, or a UDF", v.Name)
 		}
