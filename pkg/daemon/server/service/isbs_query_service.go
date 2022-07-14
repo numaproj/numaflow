@@ -108,10 +108,10 @@ func (is *isbSvcQueryService) GetBuffer(ctx context.Context, req *daemon.GetBuff
 	return resp, nil
 }
 
-// GetVertex is used to query the metrics service and is used to obtain the processing rate of a given vertex for 1m, 5m and 15m.
+// GetVertexInfo is used to query the metrics service and is used to obtain the processing rate of a given vertex for 1m, 5m and 15m.
 // In the future maybe latency will also be added here?
 // Should this method live here or maybe another file?
-func (is *isbSvcQueryService) GetVertex(ctx context.Context, req *daemon.GetVertexRequest) (*daemon.GetVertexResponse, error) {
+func (is *isbSvcQueryService) GetVertexInfo(ctx context.Context, req *daemon.GetVertexRequest) (*daemon.GetVertexResponse, error) {
 	log := logging.FromContext(ctx)
 	resp := new(daemon.GetVertexResponse)
 

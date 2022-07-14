@@ -27,7 +27,7 @@ func (m *MockClient) Get(url string) (*http.Response, error) {
 
 }
 
-func TestGetVertex(t *testing.T) {
+func TestGetVertexInfo(t *testing.T) {
 	pipelineName := "simple-pipeline"
 	pipeline := &v1alpha1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
@@ -58,7 +58,7 @@ vertex_processing_rate{period="default",pipeline="simple-pipeline",vertex="cat"}
 
 	req := &daemon.GetVertexRequest{Vertex: &vertex, Namespace: &namespace}
 
-	resp, err := isbsQueryService.GetVertex(context.Background(), req)
+	resp, err := isbsQueryService.GetVertexInfo(context.Background(), req)
 	assert.NoError(t, err)
 
 	processingRates := make([]*daemon.ProcessingRate, 0)

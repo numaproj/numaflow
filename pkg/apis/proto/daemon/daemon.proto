@@ -75,7 +75,7 @@ service DaemonService {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/buffers/{buffer}";
   };
 
-  rpc GetVertex (GetVertexRequest) returns (GetVertexResponse) {
+  rpc GetVertexInfo (GetVertexRequest) returns (GetVertexResponse) {
     option (google.api.http).get = "/api/v1/namespace/{namespace}/pipelines/{pipeline}/vertex/{vertex}";
   };
 }
