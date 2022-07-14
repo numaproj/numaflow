@@ -229,12 +229,13 @@ func (h *handler) ListPipelineEdges(c *gin.Context) {
 func (h *handler) GetVertexInfo(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
+	vertex := c.Param("vertex")
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	l, err := client.GetVertex(context.Background(), pipeline, "in")
+	l, err := client.GetVertex(context.Background(), ns, pipeline, vertex)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return

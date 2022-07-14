@@ -23,12 +23,17 @@ message BufferInfo {
   required bool isFull = 11;
 }
 
+// ProcessingRate is used to store the lookback duration and also the corresponding rate.
+message ProcessingRate {
+  required string lookback = 1;
+  required float rate = 2;
+}
 
+// VertexInfo is used to provide information about the vertex including processing rate.
 message VertexInfo {
   required string pipeline = 1;
   required string vertex = 2;
-  required int64 rate = 3;
-
+  repeated ProcessingRate processingRate = 3;
 }
 
 message ListBuffersRequest {
@@ -49,8 +54,10 @@ message GetBufferResponse {
 }
 
 message GetVertexRequest {
-  required string pipeline = 1;
-  required string vertex = 2;
+  required string namespace = 1;
+  required string pipeline = 2;
+  required string vertex = 3;
+
 }
 
 message GetVertexResponse {
@@ -69,6 +76,6 @@ service DaemonService {
   };
 
   rpc GetVertex (GetVertexRequest) returns (GetVertexResponse) {
-    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertex/{vertex}";
+    option (google.api.http).get = "/api/v1/namespace/{namespace}/pipelines/{pipeline}/vertex/{vertex}";
   };
 }

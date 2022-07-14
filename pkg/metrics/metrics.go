@@ -9,30 +9,31 @@ import (
 	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/zap"
 )
 
 var (
 	processingRate = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "vertex_processing_rate",
+		Name: dfv1.VertexProcessingRate,
 		Help: "Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.",
-	}, []string{"pipeline", "vertex", "period"})
+	}, []string{dfv1.MetricPipelineLabel, dfv1.MetricVertexLabel, dfv1.MetricPeriodLabel})
 
 	pending = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "vertex_pending_messages",
+		Name: dfv1.VertexPendingMessages,
 		Help: "Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.",
-	}, []string{"pipeline", "vertex", "period"})
+	}, []string{dfv1.MetricPipelineLabel, dfv1.MetricVertexLabel, dfv1.MetricPeriodLabel})
 
-	// Always expose metrics of following lookback seconds (1m, 5m, 15m)
-	fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
+	// fixedLookBackSeconds Always expose metrics of following lookback seconds (1m, 5m, 15m)
+	fixedLookBackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
 )
 
 // timestampedPending is a helper struct to wrap a pending number and timestamp pair
@@ -130,7 +131,7 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 	}
 	log := logging.FromContext(ctx)
 	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds}
-	for k, v := range fixedLookbackSeconds {
+	for k, v := range fixedLookBackSeconds {
 		lookbackSecondsMap[k] = v
 	}
 	ticker := time.NewTicker(ms.refreshInterval)

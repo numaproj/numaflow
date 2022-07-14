@@ -2,8 +2,12 @@ package service
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
+	"strconv"
 
+	"github.com/prometheus/common/expfmt"
 	"k8s.io/utils/pointer"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -12,15 +16,24 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
+// HTTPClient interface for the GET call to metrics endpoint
+type HTTPClient interface {
+	Get(url string) (*http.Response, error)
+}
+
 type isbSvcQueryService struct {
-	client   isbsvc.ISBService
-	pipeline *v1alpha1.Pipeline
+	client     isbsvc.ISBService
+	pipeline   *v1alpha1.Pipeline
+	httpClient HTTPClient
 }
 
 func NewISBSvcQueryService(client isbsvc.ISBService, pipeline *v1alpha1.Pipeline) *isbSvcQueryService {
 	return &isbSvcQueryService{
 		client:   client,
 		pipeline: pipeline,
+		httpClient: &http.Client{Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}},
 	}
 }
 
@@ -94,16 +107,57 @@ func (is *isbSvcQueryService) GetBuffer(ctx context.Context, req *daemon.GetBuff
 	return resp, nil
 }
 
-// GetVertex is used to obtain one vertex information of a pipeline
+// GetVertex is used to query the metrics service and is used to obtain the processing rate of a given vertex for 1m, 5m and 15m.
+// In the future maybe latency will also be added here?
+// Should this method live here or maybe another file?
 func (is *isbSvcQueryService) GetVertex(ctx context.Context, req *daemon.GetVertexRequest) (*daemon.GetVertexResponse, error) {
-	_ = logging.FromContext(ctx)
+	log := logging.FromContext(ctx)
 	resp := new(daemon.GetVertexResponse)
 
-	var rate int64 = 10
+	metricsPort := strconv.Itoa(v1alpha1.VertexMetricsPort)
+	pipelineVertex := fmt.Sprintf("%s-%s", is.pipeline.Name, *req.Vertex)
+	// We can query the metrics endpoint of the 0th pod to obtain this value. We can
+	url := fmt.Sprintf("https://%s-0.%s-headless.%s.svc.cluster.local:%s/metrics", pipelineVertex, pipelineVertex, *req.Namespace, metricsPort)
+
+	res, err := is.httpClient.Get(url)
+
+	if err != nil {
+		log.Errorf("Error reading the metrics endpoint: %s", err.Error())
+		return nil, err
+	}
+
+	// expfmt Parser from prometheus to parse the metrics
+	textParser := expfmt.TextParser{}
+	result, err := textParser.TextToMetricFamilies(res.Body)
+	if err != nil {
+		log.Errorf("Error in parsing to prometheus metric families: %s", err.Error())
+		return nil, err
+	}
+
+	processingRates := make([]*daemon.ProcessingRate, 0)
+	// Check if the resultant metrics list contains the processingRate, if it does look for the period label
+	if value, ok := result[v1alpha1.VertexProcessingRate]; ok {
+		metrics := value.GetMetric()
+		for _, metric := range metrics {
+			labels := metric.GetLabel()
+			for _, label := range labels {
+				if label.GetName() == v1alpha1.MetricPeriodLabel {
+					lookback := label.GetValue()
+					rate := float32(metric.Gauge.GetValue())
+					processingRate := &daemon.ProcessingRate{
+						Lookback: &lookback,
+						Rate:     &rate,
+					}
+
+					processingRates = append(processingRates, processingRate)
+				}
+			}
+		}
+	}
 	v := &daemon.VertexInfo{
-		Pipeline: &is.pipeline.Name,
-		Vertex:   req.Vertex,
-		Rate:     &rate,
+		Pipeline:       &is.pipeline.Name,
+		Vertex:         req.Vertex,
+		ProcessingRate: processingRates,
 	}
 	resp.Vertex = v
 	return resp, nil
