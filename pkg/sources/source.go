@@ -136,7 +136,7 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		readOptions := []generator.Option{
 			generator.WithLogger(logger),
 		}
-		if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != nil {
+		if sp.VertexInstance.Vertex.Spec.Limits != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != nil {
 			readOptions = append(readOptions, generator.WithReadTimeOut(sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout.Duration))
 		}
 		return generator.NewMemGen(sp.VertexInstance, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, fetchWM, publishWM, publishWMStores, readOptions...)
@@ -145,7 +145,7 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 			kafka.WithGroupName(x.ConsumerGroupName),
 			kafka.WithLogger(logger),
 		}
-		if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != nil {
+		if sp.VertexInstance.Vertex.Spec.Limits != nil && sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout != nil {
 			readOptions = append(readOptions, kafka.WithReadTimeOut(sp.VertexInstance.Vertex.Spec.Limits.ReadTimeout.Duration))
 		}
 		return kafka.NewKafkaSource(sp.VertexInstance.Vertex, writers, readOptions...)
