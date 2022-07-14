@@ -160,7 +160,7 @@ func (m *BufferInfo) GetIsFull() bool {
 	return false
 }
 
-//
+// ProcessingRate is used to store the lookback duration and also the corresponding rate.
 type ProcessingRate struct {
 	Lookback             *string  `protobuf:"bytes,1,req,name=lookback" json:"lookback,omitempty"`
 	Rate                 *float32 `protobuf:"fixed32,2,req,name=rate" json:"rate,omitempty"`
