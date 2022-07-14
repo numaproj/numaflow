@@ -37,8 +37,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		fromGroup := fromBufferName + "-group"
 		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 		readOptions := []redisisb.Option{}
-		if u.VertexInstance.Vertex.Spec.Limits != nil && u.VertexInstance.Vertex.Spec.Limits.ReadTimeout != nil {
-			readOptions = append(readOptions, redisisb.WithReadTimeOut(u.VertexInstance.Vertex.Spec.Limits.ReadTimeout.Duration))
+		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
+			readOptions = append(readOptions, redisisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readOptions...)
 	case dfv1.ISBSvcTypeJetStream:
@@ -46,8 +46,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		readOptions := []jetstreamisb.ReadOption{
 			jetstreamisb.WithUsingAckInfoAsRate(true),
 		}
-		if u.VertexInstance.Vertex.Spec.Limits != nil && u.VertexInstance.Vertex.Spec.Limits.ReadTimeout != nil {
-			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(u.VertexInstance.Vertex.Spec.Limits.ReadTimeout.Duration))
+		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
+			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		jetStreamClient := clients.NewInClusterJetStreamClient()
 		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)
