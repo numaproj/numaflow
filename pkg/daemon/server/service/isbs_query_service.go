@@ -117,7 +117,8 @@ func (is *isbSvcQueryService) GetVertexInfo(ctx context.Context, req *daemon.Get
 
 	metricsPort := strconv.Itoa(v1alpha1.VertexMetricsPort)
 	pipelineVertex := fmt.Sprintf("%s-%s", is.pipeline.Name, *req.Vertex)
-	// We can query the metrics endpoint of the 0th pod to obtain this value. We can
+	// We can query the metrics endpoint of the 0th pod to obtain this value.
+	// example: https://simple-pipeline-in-0.simple-pipeline-headless.svc.cluster.local:2469/metrics
 	url := fmt.Sprintf("https://%s-0.%s-headless.%s.svc.cluster.local:%s/metrics", pipelineVertex, pipelineVertex, *req.Namespace, metricsPort)
 
 	res, err := is.httpClient.Get(url)
