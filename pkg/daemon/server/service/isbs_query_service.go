@@ -16,7 +16,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// HTTPClient interface for the GET call to metrics endpoint
+// HTTPClient interface for the GET call to metrics endpoint. Had to add this an interface for testing
 type HTTPClient interface {
 	Get(url string) (*http.Response, error)
 }
@@ -27,6 +27,7 @@ type isbSvcQueryService struct {
 	httpClient HTTPClient
 }
 
+// NewISBSvcQueryService returns a new instance of isbSvcQueryService
 func NewISBSvcQueryService(client isbsvc.ISBService, pipeline *v1alpha1.Pipeline) *isbSvcQueryService {
 	return &isbSvcQueryService{
 		client:   client,
