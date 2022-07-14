@@ -149,7 +149,6 @@ func (is *isbSvcQueryService) GetVertexInfo(ctx context.Context, req *daemon.Get
 						Lookback: &lookback,
 						Rate:     &rate,
 					}
-
 					processingRates = append(processingRates, processingRate)
 				}
 			}
