@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"strconv"
+	"time"
 
 	"github.com/prometheus/common/expfmt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +35,8 @@ func NewPipelineMetricsQueryService(isbSvcClient isbsvc.ISBService, pipeline *v1
 		isbsvcClient: isbSvcClient,
 		pipeline:     pipeline,
 		httpClient: &http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSHandshakeTimeout: time.Second * 3,
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 		}},
 	}
 }
@@ -117,7 +118,6 @@ func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req
 	log := logging.FromContext(ctx)
 	resp := new(daemon.GetVertexMetricsResponse)
 
-	metricsPort := strconv.Itoa(v1alpha1.VertexMetricsPort)
 	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
 	vertex := &v1alpha1.Vertex{
 		ObjectMeta: metav1.ObjectMeta{
@@ -128,7 +128,7 @@ func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req
 	headlessServiceName := vertex.GetHeadlessServiceName()
 	// We can query the metrics endpoint of the 0th pod to obtain this value.
 	// example: https://simple-pipeline-in-0.simple-pipeline-in-headless.svc.cluster.local:2469/metrics
-	url := fmt.Sprintf("https://%s-0.%s.%s.svc.cluster.local:%s/metrics", vertexName, headlessServiceName, req.GetNamespace(), metricsPort)
+	url := fmt.Sprintf("https://%s-0.%s.%s.svc.cluster.local:%v/metrics", vertexName, headlessServiceName, req.GetNamespace(), v1alpha1.VertexMetricsPort)
 
 	res, err := ps.httpClient.Get(url)
 

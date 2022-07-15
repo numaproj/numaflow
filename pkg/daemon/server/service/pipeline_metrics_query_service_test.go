@@ -15,21 +15,21 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 )
 
-type MockGetType func(url string) (*http.Response, error)
+type mockGetType func(url string) (*http.Response, error)
 
-type MockHttpClient struct {
-	MockGet MockGetType
+type mockHttpClient struct {
+	MockGet mockGetType
 }
 
-func (m *MockHttpClient) Get(url string) (*http.Response, error) {
+func (m *mockHttpClient) Get(url string) (*http.Response, error) {
 	return m.MockGet(url)
 
 }
 
-type MockIsbSvcClient struct {
+type mockIsbSvcClient struct {
 }
 
-func (ms *MockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer v1alpha1.Buffer) (*isbsvc.BufferInfo, error) {
+func (ms *mockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer v1alpha1.Buffer) (*isbsvc.BufferInfo, error) {
 	return &isbsvc.BufferInfo{
 		Name:            buffer.Name,
 		PendingCount:    10,
@@ -38,15 +38,15 @@ func (ms *MockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer v1alpha1.B
 	}, nil
 }
 
-func (ms *MockIsbSvcClient) CreateBuffers(ctx context.Context, buffers []v1alpha1.Buffer, opts ...isbsvc.BufferCreateOption) error {
+func (ms *mockIsbSvcClient) CreateBuffers(ctx context.Context, buffers []v1alpha1.Buffer, opts ...isbsvc.BufferCreateOption) error {
 	return nil
 }
 
-func (ms *MockIsbSvcClient) DeleteBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
+func (ms *mockIsbSvcClient) DeleteBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
 	return nil
 }
 
-func (ms *MockIsbSvcClient) ValidateBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
+func (ms *mockIsbSvcClient) ValidateBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
 	return nil
 }
 
@@ -67,7 +67,7 @@ vertex_processing_rate{period="default",pipeline="simple-pipeline",vertex="cat"}
 `
 	ioReader := ioutil.NopCloser(bytes.NewReader([]byte(metricsResponse)))
 
-	pipelineMetricsQueryService.httpClient = &MockHttpClient{
+	pipelineMetricsQueryService.httpClient = &mockHttpClient{
 		MockGet: func(url string) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: 200,
@@ -111,7 +111,7 @@ func TestGetBuffer(t *testing.T) {
 		Spec: v1alpha1.PipelineSpec{Edges: edges},
 	}
 
-	ms := &MockIsbSvcClient{}
+	ms := &mockIsbSvcClient{}
 	pipelineMetricsQueryService := NewPipelineMetricsQueryService(ms, pipeline)
 
 	bufferName := "numaflow-system-simple-pipeline-in-cat"
@@ -146,7 +146,7 @@ func TestListBuffers(t *testing.T) {
 		Spec: v1alpha1.PipelineSpec{Edges: edges},
 	}
 
-	ms := &MockIsbSvcClient{}
+	ms := &mockIsbSvcClient{}
 	pipelineMetricsQueryService := NewPipelineMetricsQueryService(ms, pipeline)
 
 	req := &daemon.ListBuffersRequest{Pipeline: &pipelineName}
