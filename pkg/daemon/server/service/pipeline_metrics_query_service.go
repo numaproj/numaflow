@@ -81,7 +81,7 @@ func (ps *pipelineMetricsQueryService) ListBuffers(ctx context.Context, req *dae
 func (ps *pipelineMetricsQueryService) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
 	bufferInfo, err := ps.isbsvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: *req.Buffer, Type: v1alpha1.EdgeBuffer})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get information of buffer %q", *req.Buffer)
+		return nil, fmt.Errorf("failed to get information of buffer %q:%v", *req.Buffer, err)
 	}
 	edge := ps.pipeline.FindEdgeWithBuffer(*req.Buffer)
 	if edge == nil {
