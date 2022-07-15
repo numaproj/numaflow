@@ -163,8 +163,8 @@ func local_request_DaemonService_GetBuffer_0(ctx context.Context, marshaler runt
 
 }
 
-func request_DaemonService_GetVertexInfo_0(ctx context.Context, marshaler runtime.Marshaler, client DaemonServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetVertexRequest
+func request_DaemonService_GetVertexMetrics_0(ctx context.Context, marshaler runtime.Marshaler, client DaemonServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetVertexMetricsRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -207,13 +207,13 @@ func request_DaemonService_GetVertexInfo_0(ctx context.Context, marshaler runtim
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "vertex", err)
 	}
 
-	msg, err := client.GetVertexInfo(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.GetVertexMetrics(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_DaemonService_GetVertexInfo_0(ctx context.Context, marshaler runtime.Marshaler, server DaemonServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetVertexRequest
+func local_request_DaemonService_GetVertexMetrics_0(ctx context.Context, marshaler runtime.Marshaler, server DaemonServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetVertexMetricsRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -256,7 +256,7 @@ func local_request_DaemonService_GetVertexInfo_0(ctx context.Context, marshaler 
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "vertex", err)
 	}
 
-	msg, err := server.GetVertexInfo(ctx, &protoReq)
+	msg, err := server.GetVertexMetrics(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -313,7 +313,7 @@ func RegisterDaemonServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 
 	})
 
-	mux.Handle("GET", pattern_DaemonService_GetVertexInfo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_DaemonService_GetVertexMetrics_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
@@ -324,7 +324,7 @@ func RegisterDaemonServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_DaemonService_GetVertexInfo_0(rctx, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_DaemonService_GetVertexMetrics_0(rctx, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
@@ -332,7 +332,7 @@ func RegisterDaemonServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 			return
 		}
 
-		forward_DaemonService_GetVertexInfo_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_DaemonService_GetVertexMetrics_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -417,7 +417,7 @@ func RegisterDaemonServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 
 	})
 
-	mux.Handle("GET", pattern_DaemonService_GetVertexInfo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_DaemonService_GetVertexMetrics_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
@@ -426,14 +426,14 @@ func RegisterDaemonServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_DaemonService_GetVertexInfo_0(rctx, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_DaemonService_GetVertexMetrics_0(rctx, inboundMarshaler, client, req, pathParams)
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_DaemonService_GetVertexInfo_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_DaemonService_GetVertexMetrics_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -445,7 +445,7 @@ var (
 
 	pattern_DaemonService_GetBuffer_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"api", "v1", "pipelines", "pipeline", "buffers", "buffer"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_DaemonService_GetVertexInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5, 1, 0, 4, 1, 5, 5}, []string{"api", "v1", "namespace", "pipelines", "pipeline", "vertex"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_DaemonService_GetVertexMetrics_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5, 1, 0, 4, 1, 5, 5}, []string{"api", "v1", "namespace", "pipelines", "pipeline", "vertex"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
@@ -453,5 +453,5 @@ var (
 
 	forward_DaemonService_GetBuffer_0 = runtime.ForwardResponseMessage
 
-	forward_DaemonService_GetVertexInfo_0 = runtime.ForwardResponseMessage
+	forward_DaemonService_GetVertexMetrics_0 = runtime.ForwardResponseMessage
 )

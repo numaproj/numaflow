@@ -160,27 +160,28 @@ func (m *BufferInfo) GetIsFull() bool {
 	return false
 }
 
-// ProcessingRate is used to store the lookback duration and also the corresponding rate.
-type ProcessingRate struct {
-	Lookback             *string  `protobuf:"bytes,1,req,name=lookback" json:"lookback,omitempty"`
-	Rate                 *float32 `protobuf:"fixed32,2,req,name=rate" json:"rate,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+// VertexMetrics is used to provide information about the vertex including processing rate.
+type VertexMetrics struct {
+	Pipeline             *string            `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
+	Vertex               *string            `protobuf:"bytes,2,req,name=vertex" json:"vertex,omitempty"`
+	ProcessingRates      map[string]float32 `protobuf:"bytes,3,rep,name=processingRates" json:"processingRates,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
+	XXX_unrecognized     []byte             `json:"-"`
+	XXX_sizecache        int32              `json:"-"`
 }
 
-func (m *ProcessingRate) Reset()         { *m = ProcessingRate{} }
-func (m *ProcessingRate) String() string { return proto.CompactTextString(m) }
-func (*ProcessingRate) ProtoMessage()    {}
-func (*ProcessingRate) Descriptor() ([]byte, []int) {
+func (m *VertexMetrics) Reset()         { *m = VertexMetrics{} }
+func (m *VertexMetrics) String() string { return proto.CompactTextString(m) }
+func (*VertexMetrics) ProtoMessage()    {}
+func (*VertexMetrics) Descriptor() ([]byte, []int) {
 	return fileDescriptor_93e327fd0d673221, []int{1}
 }
-func (m *ProcessingRate) XXX_Unmarshal(b []byte) error {
+func (m *VertexMetrics) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *ProcessingRate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *VertexMetrics) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_ProcessingRate.Marshal(b, m, deterministic)
+		return xxx_messageInfo_VertexMetrics.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -190,92 +191,35 @@ func (m *ProcessingRate) XXX_Marshal(b []byte, deterministic bool) ([]byte, erro
 		return b[:n], nil
 	}
 }
-func (m *ProcessingRate) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ProcessingRate.Merge(m, src)
+func (m *VertexMetrics) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_VertexMetrics.Merge(m, src)
 }
-func (m *ProcessingRate) XXX_Size() int {
+func (m *VertexMetrics) XXX_Size() int {
 	return m.Size()
 }
-func (m *ProcessingRate) XXX_DiscardUnknown() {
-	xxx_messageInfo_ProcessingRate.DiscardUnknown(m)
+func (m *VertexMetrics) XXX_DiscardUnknown() {
+	xxx_messageInfo_VertexMetrics.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_ProcessingRate proto.InternalMessageInfo
+var xxx_messageInfo_VertexMetrics proto.InternalMessageInfo
 
-func (m *ProcessingRate) GetLookback() string {
-	if m != nil && m.Lookback != nil {
-		return *m.Lookback
-	}
-	return ""
-}
-
-func (m *ProcessingRate) GetRate() float32 {
-	if m != nil && m.Rate != nil {
-		return *m.Rate
-	}
-	return 0
-}
-
-// VertexInfo is used to provide information about the vertex including processing rate.
-type VertexInfo struct {
-	Pipeline             *string           `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
-	Vertex               *string           `protobuf:"bytes,2,req,name=vertex" json:"vertex,omitempty"`
-	ProcessingRate       []*ProcessingRate `protobuf:"bytes,3,rep,name=processingRate" json:"processingRate,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
-}
-
-func (m *VertexInfo) Reset()         { *m = VertexInfo{} }
-func (m *VertexInfo) String() string { return proto.CompactTextString(m) }
-func (*VertexInfo) ProtoMessage()    {}
-func (*VertexInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{2}
-}
-func (m *VertexInfo) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *VertexInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_VertexInfo.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *VertexInfo) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_VertexInfo.Merge(m, src)
-}
-func (m *VertexInfo) XXX_Size() int {
-	return m.Size()
-}
-func (m *VertexInfo) XXX_DiscardUnknown() {
-	xxx_messageInfo_VertexInfo.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_VertexInfo proto.InternalMessageInfo
-
-func (m *VertexInfo) GetPipeline() string {
+func (m *VertexMetrics) GetPipeline() string {
 	if m != nil && m.Pipeline != nil {
 		return *m.Pipeline
 	}
 	return ""
 }
 
-func (m *VertexInfo) GetVertex() string {
+func (m *VertexMetrics) GetVertex() string {
 	if m != nil && m.Vertex != nil {
 		return *m.Vertex
 	}
 	return ""
 }
 
-func (m *VertexInfo) GetProcessingRate() []*ProcessingRate {
+func (m *VertexMetrics) GetProcessingRates() map[string]float32 {
 	if m != nil {
-		return m.ProcessingRate
+		return m.ProcessingRates
 	}
 	return nil
 }
@@ -291,7 +235,7 @@ func (m *ListBuffersRequest) Reset()         { *m = ListBuffersRequest{} }
 func (m *ListBuffersRequest) String() string { return proto.CompactTextString(m) }
 func (*ListBuffersRequest) ProtoMessage()    {}
 func (*ListBuffersRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{3}
+	return fileDescriptor_93e327fd0d673221, []int{2}
 }
 func (m *ListBuffersRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -338,7 +282,7 @@ func (m *ListBuffersResponse) Reset()         { *m = ListBuffersResponse{} }
 func (m *ListBuffersResponse) String() string { return proto.CompactTextString(m) }
 func (*ListBuffersResponse) ProtoMessage()    {}
 func (*ListBuffersResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{4}
+	return fileDescriptor_93e327fd0d673221, []int{3}
 }
 func (m *ListBuffersResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -386,7 +330,7 @@ func (m *GetBufferRequest) Reset()         { *m = GetBufferRequest{} }
 func (m *GetBufferRequest) String() string { return proto.CompactTextString(m) }
 func (*GetBufferRequest) ProtoMessage()    {}
 func (*GetBufferRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{5}
+	return fileDescriptor_93e327fd0d673221, []int{4}
 }
 func (m *GetBufferRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -440,7 +384,7 @@ func (m *GetBufferResponse) Reset()         { *m = GetBufferResponse{} }
 func (m *GetBufferResponse) String() string { return proto.CompactTextString(m) }
 func (*GetBufferResponse) ProtoMessage()    {}
 func (*GetBufferResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{6}
+	return fileDescriptor_93e327fd0d673221, []int{5}
 }
 func (m *GetBufferResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -476,7 +420,7 @@ func (m *GetBufferResponse) GetBuffer() *BufferInfo {
 	return nil
 }
 
-type GetVertexRequest struct {
+type GetVertexMetricsRequest struct {
 	Namespace            *string  `protobuf:"bytes,1,req,name=namespace" json:"namespace,omitempty"`
 	Pipeline             *string  `protobuf:"bytes,2,req,name=pipeline" json:"pipeline,omitempty"`
 	Vertex               *string  `protobuf:"bytes,3,req,name=vertex" json:"vertex,omitempty"`
@@ -485,18 +429,18 @@ type GetVertexRequest struct {
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *GetVertexRequest) Reset()         { *m = GetVertexRequest{} }
-func (m *GetVertexRequest) String() string { return proto.CompactTextString(m) }
-func (*GetVertexRequest) ProtoMessage()    {}
-func (*GetVertexRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{7}
+func (m *GetVertexMetricsRequest) Reset()         { *m = GetVertexMetricsRequest{} }
+func (m *GetVertexMetricsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetVertexMetricsRequest) ProtoMessage()    {}
+func (*GetVertexMetricsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_93e327fd0d673221, []int{6}
 }
-func (m *GetVertexRequest) XXX_Unmarshal(b []byte) error {
+func (m *GetVertexMetricsRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *GetVertexRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *GetVertexMetricsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_GetVertexRequest.Marshal(b, m, deterministic)
+		return xxx_messageInfo_GetVertexMetricsRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -506,58 +450,58 @@ func (m *GetVertexRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return b[:n], nil
 	}
 }
-func (m *GetVertexRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetVertexRequest.Merge(m, src)
+func (m *GetVertexMetricsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetVertexMetricsRequest.Merge(m, src)
 }
-func (m *GetVertexRequest) XXX_Size() int {
+func (m *GetVertexMetricsRequest) XXX_Size() int {
 	return m.Size()
 }
-func (m *GetVertexRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetVertexRequest.DiscardUnknown(m)
+func (m *GetVertexMetricsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetVertexMetricsRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_GetVertexRequest proto.InternalMessageInfo
+var xxx_messageInfo_GetVertexMetricsRequest proto.InternalMessageInfo
 
-func (m *GetVertexRequest) GetNamespace() string {
+func (m *GetVertexMetricsRequest) GetNamespace() string {
 	if m != nil && m.Namespace != nil {
 		return *m.Namespace
 	}
 	return ""
 }
 
-func (m *GetVertexRequest) GetPipeline() string {
+func (m *GetVertexMetricsRequest) GetPipeline() string {
 	if m != nil && m.Pipeline != nil {
 		return *m.Pipeline
 	}
 	return ""
 }
 
-func (m *GetVertexRequest) GetVertex() string {
+func (m *GetVertexMetricsRequest) GetVertex() string {
 	if m != nil && m.Vertex != nil {
 		return *m.Vertex
 	}
 	return ""
 }
 
-type GetVertexResponse struct {
-	Vertex               *VertexInfo `protobuf:"bytes,1,req,name=vertex" json:"vertex,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+type GetVertexMetricsResponse struct {
+	Vertex               *VertexMetrics `protobuf:"bytes,1,req,name=vertex" json:"vertex,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
+	XXX_unrecognized     []byte         `json:"-"`
+	XXX_sizecache        int32          `json:"-"`
 }
 
-func (m *GetVertexResponse) Reset()         { *m = GetVertexResponse{} }
-func (m *GetVertexResponse) String() string { return proto.CompactTextString(m) }
-func (*GetVertexResponse) ProtoMessage()    {}
-func (*GetVertexResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{8}
+func (m *GetVertexMetricsResponse) Reset()         { *m = GetVertexMetricsResponse{} }
+func (m *GetVertexMetricsResponse) String() string { return proto.CompactTextString(m) }
+func (*GetVertexMetricsResponse) ProtoMessage()    {}
+func (*GetVertexMetricsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_93e327fd0d673221, []int{7}
 }
-func (m *GetVertexResponse) XXX_Unmarshal(b []byte) error {
+func (m *GetVertexMetricsResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *GetVertexResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *GetVertexMetricsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_GetVertexResponse.Marshal(b, m, deterministic)
+		return xxx_messageInfo_GetVertexMetricsResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -567,19 +511,19 @@ func (m *GetVertexResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, e
 		return b[:n], nil
 	}
 }
-func (m *GetVertexResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetVertexResponse.Merge(m, src)
+func (m *GetVertexMetricsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetVertexMetricsResponse.Merge(m, src)
 }
-func (m *GetVertexResponse) XXX_Size() int {
+func (m *GetVertexMetricsResponse) XXX_Size() int {
 	return m.Size()
 }
-func (m *GetVertexResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetVertexResponse.DiscardUnknown(m)
+func (m *GetVertexMetricsResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetVertexMetricsResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_GetVertexResponse proto.InternalMessageInfo
+var xxx_messageInfo_GetVertexMetricsResponse proto.InternalMessageInfo
 
-func (m *GetVertexResponse) GetVertex() *VertexInfo {
+func (m *GetVertexMetricsResponse) GetVertex() *VertexMetrics {
 	if m != nil {
 		return m.Vertex
 	}
@@ -588,14 +532,14 @@ func (m *GetVertexResponse) GetVertex() *VertexInfo {
 
 func init() {
 	proto.RegisterType((*BufferInfo)(nil), "daemon.BufferInfo")
-	proto.RegisterType((*ProcessingRate)(nil), "daemon.ProcessingRate")
-	proto.RegisterType((*VertexInfo)(nil), "daemon.VertexInfo")
+	proto.RegisterType((*VertexMetrics)(nil), "daemon.VertexMetrics")
+	proto.RegisterMapType((map[string]float32)(nil), "daemon.VertexMetrics.ProcessingRatesEntry")
 	proto.RegisterType((*ListBuffersRequest)(nil), "daemon.ListBuffersRequest")
 	proto.RegisterType((*ListBuffersResponse)(nil), "daemon.ListBuffersResponse")
 	proto.RegisterType((*GetBufferRequest)(nil), "daemon.GetBufferRequest")
 	proto.RegisterType((*GetBufferResponse)(nil), "daemon.GetBufferResponse")
-	proto.RegisterType((*GetVertexRequest)(nil), "daemon.GetVertexRequest")
-	proto.RegisterType((*GetVertexResponse)(nil), "daemon.GetVertexResponse")
+	proto.RegisterType((*GetVertexMetricsRequest)(nil), "daemon.GetVertexMetricsRequest")
+	proto.RegisterType((*GetVertexMetricsResponse)(nil), "daemon.GetVertexMetricsResponse")
 }
 
 func init() {
@@ -603,49 +547,51 @@ func init() {
 }
 
 var fileDescriptor_93e327fd0d673221 = []byte{
-	// 666 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x55, 0xdf, 0x6a, 0xd4, 0x4e,
-	0x14, 0x26, 0x49, 0x7f, 0xdb, 0xee, 0xd9, 0x5f, 0x6b, 0x1d, 0xa1, 0xc4, 0x6d, 0x59, 0x96, 0x50,
-	0x64, 0x29, 0xb5, 0xa3, 0x05, 0x6f, 0xb5, 0xb4, 0xa5, 0xa2, 0x54, 0x29, 0x11, 0xbd, 0xf0, 0x6e,
-	0x76, 0x3b, 0x9b, 0xc6, 0x4d, 0x66, 0x62, 0x66, 0xd2, 0x2a, 0xcb, 0x82, 0xf4, 0x09, 0x14, 0x5f,
-	0xca, 0x4b, 0xc1, 0x17, 0x90, 0xe2, 0x83, 0x48, 0x66, 0x32, 0xd9, 0x64, 0xbb, 0x6a, 0xaf, 0x32,
-	0xe7, 0x3b, 0x7f, 0xbe, 0x6f, 0xce, 0x37, 0xed, 0x82, 0x97, 0x8c, 0x02, 0x4c, 0x92, 0x50, 0xe0,
-	0x24, 0xe5, 0x92, 0xe3, 0x53, 0x42, 0x63, 0xce, 0x8a, 0xcf, 0x8e, 0xc2, 0x50, 0x43, 0x47, 0xed,
-	0x8d, 0x80, 0xf3, 0x20, 0xa2, 0x79, 0x39, 0x26, 0x8c, 0x71, 0x49, 0x64, 0xc8, 0x99, 0xd0, 0x55,
-	0xed, 0xf5, 0x22, 0xab, 0xa2, 0x7e, 0x36, 0xc4, 0x34, 0x4e, 0xe4, 0x47, 0x9d, 0xf4, 0x2e, 0x1d,
-	0x80, 0xfd, 0x6c, 0x38, 0xa4, 0xe9, 0x33, 0x36, 0xe4, 0xa8, 0x0d, 0x4b, 0x49, 0x98, 0xd0, 0x28,
-	0x64, 0xd4, 0xb5, 0xba, 0x76, 0xaf, 0xe9, 0x97, 0x31, 0xea, 0x00, 0x0c, 0x53, 0x1e, 0xbf, 0xa1,
-	0xa9, 0xa4, 0x1f, 0x5c, 0x5b, 0x65, 0x2b, 0x48, 0xde, 0x2b, 0x79, 0x91, 0x75, 0x74, 0xaf, 0x89,
-	0xf3, 0xde, 0xbe, 0x62, 0x79, 0x49, 0x62, 0xea, 0x2e, 0xe8, 0xde, 0x29, 0x82, 0x3c, 0xf8, 0x3f,
-	0xa1, 0xec, 0x34, 0x64, 0xc1, 0x01, 0xcf, 0x98, 0x74, 0xff, 0xeb, 0xda, 0x3d, 0xc7, 0xaf, 0x61,
-	0xa8, 0x07, 0xb7, 0xc8, 0x60, 0x74, 0x52, 0x2d, 0x6b, 0xa8, 0xb2, 0x59, 0x18, 0x6d, 0xc2, 0xb2,
-	0xe4, 0x92, 0x44, 0x2f, 0xa8, 0x10, 0x24, 0xa0, 0xc2, 0x5d, 0x54, 0x75, 0x75, 0x30, 0xe7, 0xd4,
-	0x0a, 0x8e, 0x29, 0x0b, 0xe4, 0x99, 0xbb, 0xa4, 0x39, 0xab, 0x18, 0xda, 0x82, 0x55, 0x1d, 0xbf,
-	0xce, 0x7b, 0x8e, 0xc3, 0x38, 0x94, 0x6e, 0xb3, 0x6b, 0xf7, 0x2c, 0xff, 0x1a, 0x8e, 0xba, 0xd0,
-	0xaa, 0x60, 0x2e, 0xa8, 0xb2, 0x2a, 0x84, 0xd6, 0xa0, 0x11, 0x8a, 0xa3, 0x2c, 0x8a, 0xdc, 0x56,
-	0xd7, 0xee, 0x2d, 0xf9, 0x45, 0xe4, 0xed, 0xc1, 0xca, 0x49, 0xca, 0x07, 0x54, 0x88, 0x90, 0x05,
-	0x3e, 0x91, 0x34, 0xdf, 0x65, 0xc4, 0xf9, 0xa8, 0x4f, 0x06, 0x23, 0xe3, 0x83, 0x89, 0x11, 0x82,
-	0x85, 0x94, 0x48, 0xaa, 0x1c, 0xb0, 0x7d, 0x75, 0xf6, 0x3e, 0x59, 0x00, 0x7a, 0xd5, 0xff, 0xb4,
-	0x71, 0x0d, 0x1a, 0xe7, 0x55, 0x0b, 0x8b, 0x08, 0x3d, 0x86, 0x95, 0xa4, 0x26, 0xc2, 0x75, 0xba,
-	0x4e, 0xaf, 0xb5, 0xbb, 0xb6, 0x53, 0xbc, 0xb9, 0xba, 0x44, 0x7f, 0xa6, 0xda, 0x7b, 0x00, 0xe8,
-	0x38, 0x14, 0x52, 0x3f, 0x26, 0xe1, 0xd3, 0xf7, 0x19, 0x15, 0xf2, 0x6f, 0x4a, 0xbc, 0x03, 0xb8,
-	0x53, 0xeb, 0x10, 0x09, 0x67, 0x82, 0xa2, 0x6d, 0x58, 0xd4, 0x4b, 0x13, 0xae, 0xa5, 0x14, 0x20,
-	0xa3, 0x60, 0xfa, 0x50, 0x7d, 0x53, 0xe2, 0x1d, 0xc1, 0xea, 0x53, 0x5a, 0xcc, 0xb8, 0x01, 0x69,
-	0x7e, 0x7d, 0xdd, 0x6a, 0xae, 0xaf, 0x23, 0xef, 0x09, 0xdc, 0xae, 0xcc, 0x29, 0xa4, 0x6c, 0x95,
-	0xc5, 0xf9, 0x98, 0xf9, 0x4a, 0xcc, 0x80, 0x53, 0x25, 0x44, 0x9b, 0x60, 0x84, 0x6c, 0x40, 0x93,
-	0x91, 0x98, 0x8a, 0x84, 0x0c, 0x8c, 0x92, 0x29, 0x50, 0x93, 0x69, 0xff, 0xd1, 0x25, 0xa7, 0xea,
-	0x52, 0x21, 0xd3, 0xb0, 0x4c, 0x65, 0x16, 0xc5, 0x33, 0x32, 0xa7, 0x4f, 0xc2, 0x0c, 0xd8, 0xfd,
-	0xe2, 0xc0, 0xf2, 0xa1, 0xca, 0xbe, 0xa2, 0xe9, 0x79, 0x38, 0xa0, 0x48, 0x42, 0xab, 0x62, 0x03,
-	0x6a, 0x9b, 0xe6, 0xeb, 0x6e, 0xb6, 0xd7, 0xe7, 0xe6, 0xb4, 0x0a, 0x6f, 0xfb, 0xf2, 0xc7, 0xaf,
-	0xaf, 0xf6, 0x3d, 0xb4, 0xa9, 0xfe, 0x0f, 0x9d, 0x3f, 0xc4, 0xe6, 0x32, 0x02, 0x8f, 0xcd, 0x71,
-	0x82, 0x0b, 0xdf, 0xd0, 0x05, 0x34, 0xcb, 0x7d, 0x23, 0xd7, 0xcc, 0x9d, 0xb5, 0xb2, 0x7d, 0x77,
-	0x4e, 0xa6, 0xe0, 0x7b, 0xa4, 0xf8, 0x30, 0xba, 0x7f, 0x13, 0x3e, 0x3c, 0xd6, 0x87, 0x09, 0xfa,
-	0x6c, 0xc1, 0x72, 0xb9, 0x42, 0xf5, 0xd7, 0x52, 0x65, 0xaf, 0xf9, 0x57, 0x63, 0xaf, 0xef, 0xdc,
-	0x7b, 0xae, 0xd8, 0x0f, 0xd1, 0xbe, 0x61, 0x2f, 0x7d, 0xc5, 0xe3, 0xf2, 0x38, 0x99, 0xaf, 0x49,
-	0x5b, 0x81, 0xc7, 0xfa, 0x3b, 0xd9, 0xdf, 0xfb, 0x76, 0xd5, 0xb1, 0xbe, 0x5f, 0x75, 0xac, 0x9f,
-	0x57, 0x1d, 0xeb, 0xed, 0x6e, 0x10, 0xca, 0xb3, 0xac, 0xbf, 0x33, 0xe0, 0x31, 0x66, 0x59, 0x4c,
-	0x92, 0x94, 0xbf, 0x53, 0x87, 0x61, 0xc4, 0x2f, 0xf0, 0xdc, 0x9f, 0x85, 0xdf, 0x01, 0x00, 0x00,
-	0xff, 0xff, 0x9d, 0x82, 0xd9, 0xa0, 0x2e, 0x06, 0x00, 0x00,
+	// 699 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x55, 0xdf, 0x4e, 0xd4, 0x4e,
+	0x14, 0x4e, 0xdb, 0x1f, 0x0b, 0x7b, 0xf6, 0x47, 0xc0, 0x11, 0x71, 0x2c, 0x64, 0x6d, 0x1a, 0x62,
+	0x1a, 0x02, 0x5b, 0x25, 0x31, 0x31, 0xde, 0x68, 0x16, 0x84, 0x60, 0xc0, 0x90, 0xfa, 0xe7, 0xc2,
+	0xbb, 0xb2, 0xcc, 0x96, 0xba, 0xed, 0x4c, 0xed, 0x4c, 0x17, 0xc9, 0x66, 0x6f, 0x78, 0x05, 0x9f,
+	0x40, 0x9f, 0xc6, 0x4b, 0x13, 0xaf, 0x4d, 0x0c, 0xf1, 0x41, 0x4c, 0x3b, 0xed, 0xd2, 0x42, 0x21,
+	0x5c, 0x75, 0xce, 0x77, 0xbe, 0x73, 0xce, 0x37, 0xf3, 0x1d, 0x58, 0x30, 0xa3, 0x81, 0x67, 0xbb,
+	0x91, 0xcf, 0xed, 0x28, 0x66, 0x82, 0xd9, 0x47, 0x2e, 0x09, 0x19, 0xcd, 0x3f, 0x9d, 0x0c, 0x43,
+	0x0d, 0x19, 0xe9, 0xcb, 0x1e, 0x63, 0x5e, 0x40, 0x52, 0xba, 0xed, 0x52, 0xca, 0x84, 0x2b, 0x7c,
+	0x46, 0xb9, 0x64, 0xe9, 0x4b, 0x79, 0x36, 0x8b, 0x0e, 0x93, 0xbe, 0x4d, 0xc2, 0x48, 0x9c, 0xca,
+	0xa4, 0x79, 0xa6, 0x01, 0x74, 0x93, 0x7e, 0x9f, 0xc4, 0xbb, 0xb4, 0xcf, 0x90, 0x0e, 0x33, 0x91,
+	0x1f, 0x91, 0xc0, 0xa7, 0x04, 0x2b, 0x86, 0x6a, 0x35, 0x9d, 0x49, 0x8c, 0xda, 0x00, 0xfd, 0x98,
+	0x85, 0x1f, 0x48, 0x2c, 0xc8, 0x17, 0xac, 0x66, 0xd9, 0x12, 0x92, 0xd6, 0x0a, 0x96, 0x67, 0x35,
+	0x59, 0x5b, 0xc4, 0x69, 0xed, 0x61, 0x36, 0xe5, 0x8d, 0x1b, 0x12, 0xfc, 0x9f, 0xac, 0xbd, 0x40,
+	0x90, 0x09, 0xff, 0x47, 0x84, 0x1e, 0xf9, 0xd4, 0xdb, 0x64, 0x09, 0x15, 0x78, 0xca, 0x50, 0x2d,
+	0xcd, 0xa9, 0x60, 0xc8, 0x82, 0x39, 0xb7, 0x37, 0x38, 0x28, 0xd3, 0x1a, 0x19, 0xed, 0x32, 0x8c,
+	0x56, 0x60, 0x56, 0x30, 0xe1, 0x06, 0xfb, 0x84, 0x73, 0xd7, 0x23, 0x1c, 0x4f, 0x67, 0xbc, 0x2a,
+	0x98, 0xce, 0x94, 0x0a, 0xf6, 0x08, 0xf5, 0xc4, 0x31, 0x9e, 0x91, 0x33, 0xcb, 0x18, 0x5a, 0x85,
+	0x79, 0x19, 0xbf, 0x4f, 0x6b, 0xf6, 0xfc, 0xd0, 0x17, 0xb8, 0x69, 0xa8, 0x96, 0xe2, 0x5c, 0xc1,
+	0x91, 0x01, 0xad, 0x12, 0x86, 0x21, 0xa3, 0x95, 0x21, 0xb4, 0x08, 0x0d, 0x9f, 0x6f, 0x27, 0x41,
+	0x80, 0x5b, 0x86, 0x6a, 0xcd, 0x38, 0x79, 0x64, 0xfe, 0x56, 0x60, 0x56, 0x3e, 0xd4, 0x3e, 0x11,
+	0xb1, 0xdf, 0xe3, 0x37, 0xfa, 0xb0, 0x08, 0x8d, 0x61, 0xd9, 0x83, 0x3c, 0x42, 0xef, 0x60, 0x2e,
+	0x8a, 0x59, 0x8f, 0x70, 0xee, 0x53, 0xcf, 0x71, 0x05, 0xe1, 0x58, 0x33, 0x34, 0xab, 0xb5, 0xb1,
+	0xda, 0xc9, 0xb7, 0xa6, 0x32, 0xa3, 0x73, 0x50, 0x25, 0xbf, 0xa2, 0x22, 0x3e, 0x75, 0x2e, 0xb7,
+	0xd0, 0xbb, 0xb0, 0x50, 0x47, 0x44, 0xf3, 0xa0, 0x0d, 0xc8, 0x29, 0x56, 0x0c, 0xc5, 0x6a, 0x3a,
+	0xe9, 0x11, 0x2d, 0xc0, 0xd4, 0xd0, 0x0d, 0x12, 0x82, 0x55, 0x43, 0xb1, 0x54, 0x47, 0x06, 0xcf,
+	0xd5, 0x67, 0x8a, 0xf9, 0x18, 0xd0, 0x9e, 0xcf, 0x85, 0xdc, 0x33, 0xee, 0x90, 0xcf, 0x09, 0xe1,
+	0xe2, 0xa6, 0x3b, 0x9a, 0x9b, 0x70, 0xb7, 0x52, 0xc1, 0x23, 0x46, 0x39, 0x41, 0x6b, 0x30, 0x2d,
+	0xdf, 0x93, 0x63, 0x25, 0xbb, 0x1a, 0x2a, 0xae, 0x76, 0xb1, 0xc3, 0x4e, 0x41, 0x31, 0xb7, 0x61,
+	0x7e, 0x87, 0xe4, 0x3d, 0x6e, 0x31, 0x34, 0x7d, 0x58, 0x59, 0x5a, 0x3c, 0xac, 0x8c, 0xcc, 0x17,
+	0x70, 0xa7, 0xd4, 0x27, 0x97, 0xb2, 0x3a, 0x21, 0xa7, 0x6d, 0xea, 0x95, 0x14, 0x0d, 0x06, 0x70,
+	0x7f, 0x87, 0x88, 0xca, 0xeb, 0x17, 0x7a, 0x96, 0xa1, 0x49, 0xdd, 0x90, 0xf0, 0xc8, 0xed, 0x15,
+	0x82, 0x2e, 0x80, 0x8a, 0x5a, 0xf5, 0xda, 0x35, 0xd0, 0xca, 0x6b, 0x60, 0xee, 0x02, 0xbe, 0x3a,
+	0x2c, 0x17, 0xbd, 0x3e, 0xa9, 0x91, 0xa2, 0xef, 0xd5, 0x6e, 0x46, 0xd1, 0x6a, 0xe3, 0xbb, 0x06,
+	0xb3, 0x5b, 0x19, 0xe1, 0x2d, 0x89, 0x87, 0x7e, 0x8f, 0x20, 0x01, 0xad, 0x92, 0x2f, 0x48, 0x2f,
+	0xea, 0xaf, 0xda, 0xab, 0x2f, 0xd5, 0xe6, 0xa4, 0x10, 0x73, 0xed, 0xec, 0xd7, 0xdf, 0xaf, 0xea,
+	0x23, 0xb4, 0x92, 0xfd, 0xcf, 0x1a, 0x3e, 0xb1, 0x8b, 0x6b, 0x71, 0x7b, 0x54, 0x1c, 0xc7, 0x76,
+	0x6e, 0x24, 0x3a, 0x81, 0xe6, 0xc4, 0x00, 0x84, 0x8b, 0xbe, 0x97, 0xbd, 0xd5, 0x1f, 0xd4, 0x64,
+	0xf2, 0x79, 0x4f, 0xb3, 0x79, 0x36, 0x5a, 0xbf, 0xcd, 0x3c, 0x7b, 0x24, 0x0f, 0x63, 0xf4, 0x4d,
+	0xc9, 0x56, 0xa8, 0xfa, 0xb7, 0xf9, 0xb0, 0x34, 0xa6, 0xce, 0x53, 0xdd, 0xb8, 0x9e, 0x90, 0xcb,
+	0x79, 0x9d, 0xc9, 0xd9, 0x42, 0xdd, 0x42, 0xce, 0xc4, 0x72, 0x7b, 0x34, 0x39, 0x8e, 0xeb, 0x45,
+	0x4a, 0x6f, 0xec, 0x91, 0xfc, 0x8e, 0xbb, 0x2f, 0x7f, 0x9c, 0xb7, 0x95, 0x9f, 0xe7, 0x6d, 0xe5,
+	0xcf, 0x79, 0x5b, 0xf9, 0xb8, 0xe1, 0xf9, 0xe2, 0x38, 0x39, 0xec, 0xf4, 0x58, 0x68, 0xd3, 0x24,
+	0x74, 0xa3, 0x98, 0x7d, 0xca, 0x0e, 0xfd, 0x80, 0x9d, 0xd8, 0xb5, 0xbf, 0x29, 0xff, 0x02, 0x00,
+	0x00, 0xff, 0xff, 0x47, 0x70, 0x7d, 0x96, 0x6b, 0x06, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -662,7 +608,7 @@ const _ = grpc.SupportPackageIsVersion4
 type DaemonServiceClient interface {
 	ListBuffers(ctx context.Context, in *ListBuffersRequest, opts ...grpc.CallOption) (*ListBuffersResponse, error)
 	GetBuffer(ctx context.Context, in *GetBufferRequest, opts ...grpc.CallOption) (*GetBufferResponse, error)
-	GetVertexInfo(ctx context.Context, in *GetVertexRequest, opts ...grpc.CallOption) (*GetVertexResponse, error)
+	GetVertexMetrics(ctx context.Context, in *GetVertexMetricsRequest, opts ...grpc.CallOption) (*GetVertexMetricsResponse, error)
 }
 
 type daemonServiceClient struct {
@@ -691,9 +637,9 @@ func (c *daemonServiceClient) GetBuffer(ctx context.Context, in *GetBufferReques
 	return out, nil
 }
 
-func (c *daemonServiceClient) GetVertexInfo(ctx context.Context, in *GetVertexRequest, opts ...grpc.CallOption) (*GetVertexResponse, error) {
-	out := new(GetVertexResponse)
-	err := c.cc.Invoke(ctx, "/daemon.DaemonService/GetVertexInfo", in, out, opts...)
+func (c *daemonServiceClient) GetVertexMetrics(ctx context.Context, in *GetVertexMetricsRequest, opts ...grpc.CallOption) (*GetVertexMetricsResponse, error) {
+	out := new(GetVertexMetricsResponse)
+	err := c.cc.Invoke(ctx, "/daemon.DaemonService/GetVertexMetrics", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -704,7 +650,7 @@ func (c *daemonServiceClient) GetVertexInfo(ctx context.Context, in *GetVertexRe
 type DaemonServiceServer interface {
 	ListBuffers(context.Context, *ListBuffersRequest) (*ListBuffersResponse, error)
 	GetBuffer(context.Context, *GetBufferRequest) (*GetBufferResponse, error)
-	GetVertexInfo(context.Context, *GetVertexRequest) (*GetVertexResponse, error)
+	GetVertexMetrics(context.Context, *GetVertexMetricsRequest) (*GetVertexMetricsResponse, error)
 }
 
 // UnimplementedDaemonServiceServer can be embedded to have forward compatible implementations.
@@ -717,8 +663,8 @@ func (*UnimplementedDaemonServiceServer) ListBuffers(ctx context.Context, req *L
 func (*UnimplementedDaemonServiceServer) GetBuffer(ctx context.Context, req *GetBufferRequest) (*GetBufferResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBuffer not implemented")
 }
-func (*UnimplementedDaemonServiceServer) GetVertexInfo(ctx context.Context, req *GetVertexRequest) (*GetVertexResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetVertexInfo not implemented")
+func (*UnimplementedDaemonServiceServer) GetVertexMetrics(ctx context.Context, req *GetVertexMetricsRequest) (*GetVertexMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVertexMetrics not implemented")
 }
 
 func RegisterDaemonServiceServer(s *grpc.Server, srv DaemonServiceServer) {
@@ -761,20 +707,20 @@ func _DaemonService_GetBuffer_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DaemonService_GetVertexInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetVertexRequest)
+func _DaemonService_GetVertexMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVertexMetricsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DaemonServiceServer).GetVertexInfo(ctx, in)
+		return srv.(DaemonServiceServer).GetVertexMetrics(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/daemon.DaemonService/GetVertexInfo",
+		FullMethod: "/daemon.DaemonService/GetVertexMetrics",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DaemonServiceServer).GetVertexInfo(ctx, req.(*GetVertexRequest))
+		return srv.(DaemonServiceServer).GetVertexMetrics(ctx, req.(*GetVertexMetricsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -792,8 +738,8 @@ var _DaemonService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _DaemonService_GetBuffer_Handler,
 		},
 		{
-			MethodName: "GetVertexInfo",
-			Handler:    _DaemonService_GetVertexInfo_Handler,
+			MethodName: "GetVertexMetrics",
+			Handler:    _DaemonService_GetVertexMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -919,7 +865,7 @@ func (m *BufferInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *ProcessingRate) Marshal() (dAtA []byte, err error) {
+func (m *VertexMetrics) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -929,12 +875,12 @@ func (m *ProcessingRate) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ProcessingRate) MarshalTo(dAtA []byte) (int, error) {
+func (m *VertexMetrics) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *ProcessingRate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *VertexMetrics) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -943,60 +889,20 @@ func (m *ProcessingRate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Rate == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("rate")
-	} else {
-		i -= 4
-		encoding_binary.LittleEndian.PutUint32(dAtA[i:], uint32(math.Float32bits(float32(*m.Rate))))
-		i--
-		dAtA[i] = 0x15
-	}
-	if m.Lookback == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("lookback")
-	} else {
-		i -= len(*m.Lookback)
-		copy(dAtA[i:], *m.Lookback)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Lookback)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
-}
-
-func (m *VertexInfo) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *VertexInfo) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *VertexInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	if len(m.ProcessingRate) > 0 {
-		for iNdEx := len(m.ProcessingRate) - 1; iNdEx >= 0; iNdEx-- {
-			{
-				size, err := m.ProcessingRate[iNdEx].MarshalToSizedBuffer(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarintDaemon(dAtA, i, uint64(size))
-			}
+	if len(m.ProcessingRates) > 0 {
+		for k := range m.ProcessingRates {
+			v := m.ProcessingRates[k]
+			baseI := i
+			i -= 4
+			encoding_binary.LittleEndian.PutUint32(dAtA[i:], uint32(math.Float32bits(float32(v))))
+			i--
+			dAtA[i] = 0x15
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintDaemon(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintDaemon(dAtA, i, uint64(baseI-i))
 			i--
 			dAtA[i] = 0x1a
 		}
@@ -1185,7 +1091,7 @@ func (m *GetBufferResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *GetVertexRequest) Marshal() (dAtA []byte, err error) {
+func (m *GetVertexMetricsRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -1195,12 +1101,12 @@ func (m *GetVertexRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *GetVertexRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *GetVertexMetricsRequest) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *GetVertexRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *GetVertexMetricsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -1239,7 +1145,7 @@ func (m *GetVertexRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *GetVertexResponse) Marshal() (dAtA []byte, err error) {
+func (m *GetVertexMetricsResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -1249,12 +1155,12 @@ func (m *GetVertexResponse) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *GetVertexResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *GetVertexMetricsResponse) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *GetVertexResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *GetVertexMetricsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -1340,26 +1246,7 @@ func (m *BufferInfo) Size() (n int) {
 	return n
 }
 
-func (m *ProcessingRate) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	if m.Lookback != nil {
-		l = len(*m.Lookback)
-		n += 1 + l + sovDaemon(uint64(l))
-	}
-	if m.Rate != nil {
-		n += 5
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
-	return n
-}
-
-func (m *VertexInfo) Size() (n int) {
+func (m *VertexMetrics) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1373,10 +1260,12 @@ func (m *VertexInfo) Size() (n int) {
 		l = len(*m.Vertex)
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if len(m.ProcessingRate) > 0 {
-		for _, e := range m.ProcessingRate {
-			l = e.Size()
-			n += 1 + l + sovDaemon(uint64(l))
+	if len(m.ProcessingRates) > 0 {
+		for k, v := range m.ProcessingRates {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + sovDaemon(uint64(len(k))) + 1 + 4
+			n += mapEntrySize + 1 + sovDaemon(uint64(mapEntrySize))
 		}
 	}
 	if m.XXX_unrecognized != nil {
@@ -1455,7 +1344,7 @@ func (m *GetBufferResponse) Size() (n int) {
 	return n
 }
 
-func (m *GetVertexRequest) Size() (n int) {
+func (m *GetVertexMetricsRequest) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1479,7 +1368,7 @@ func (m *GetVertexRequest) Size() (n int) {
 	return n
 }
 
-func (m *GetVertexResponse) Size() (n int) {
+func (m *GetVertexMetricsResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1854,7 +1743,7 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ProcessingRate) Unmarshal(dAtA []byte) error {
+func (m *VertexMetrics) Unmarshal(dAtA []byte) error {
 	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
@@ -1878,115 +1767,10 @@ func (m *ProcessingRate) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ProcessingRate: wiretype end group for non-group")
+			return fmt.Errorf("proto: VertexMetrics: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ProcessingRate: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Lookback", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDaemon
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Lookback = &s
-			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
-		case 2:
-			if wireType != 5 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Rate", wireType)
-			}
-			var v uint32
-			if (iNdEx + 4) > l {
-				return io.ErrUnexpectedEOF
-			}
-			v = uint32(encoding_binary.LittleEndian.Uint32(dAtA[iNdEx:]))
-			iNdEx += 4
-			v2 := float32(math.Float32frombits(v))
-			m.Rate = &v2
-			hasFields[0] |= uint64(0x00000002)
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDaemon(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
-			iNdEx += skippy
-		}
-	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("lookback")
-	}
-	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("rate")
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *VertexInfo) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDaemon
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: VertexInfo: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: VertexInfo: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: VertexMetrics: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -2059,7 +1843,7 @@ func (m *VertexInfo) Unmarshal(dAtA []byte) error {
 			hasFields[0] |= uint64(0x00000002)
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ProcessingRate", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ProcessingRates", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -2086,10 +1870,82 @@ func (m *VertexInfo) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.ProcessingRate = append(m.ProcessingRate, &ProcessingRate{})
-			if err := m.ProcessingRate[len(m.ProcessingRate)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
+			if m.ProcessingRates == nil {
+				m.ProcessingRates = make(map[string]float32)
 			}
+			var mapkey string
+			var mapvalue float32
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowDaemon
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowDaemon
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthDaemon
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthDaemon
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapvaluetemp uint32
+					if (iNdEx + 4) > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvaluetemp = uint32(encoding_binary.LittleEndian.Uint32(dAtA[iNdEx:]))
+					iNdEx += 4
+					mapvalue = math.Float32frombits(mapvaluetemp)
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipDaemon(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
+						return ErrInvalidLengthDaemon
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.ProcessingRates[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -2511,7 +2367,7 @@ func (m *GetBufferResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *GetVertexRequest) Unmarshal(dAtA []byte) error {
+func (m *GetVertexMetricsRequest) Unmarshal(dAtA []byte) error {
 	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
@@ -2535,10 +2391,10 @@ func (m *GetVertexRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: GetVertexRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetVertexMetricsRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetVertexRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetVertexMetricsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -2674,7 +2530,7 @@ func (m *GetVertexRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *GetVertexResponse) Unmarshal(dAtA []byte) error {
+func (m *GetVertexMetricsResponse) Unmarshal(dAtA []byte) error {
 	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
@@ -2698,10 +2554,10 @@ func (m *GetVertexResponse) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: GetVertexResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetVertexMetricsResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetVertexResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetVertexMetricsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -2734,7 +2590,7 @@ func (m *GetVertexResponse) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Vertex == nil {
-				m.Vertex = &VertexInfo{}
+				m.Vertex = &VertexMetrics{}
 			}
 			if err := m.Vertex.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err

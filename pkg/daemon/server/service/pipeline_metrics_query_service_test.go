@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -27,13 +26,13 @@ func (m *MockClient) Get(url string) (*http.Response, error) {
 
 }
 
-func TestGetVertexInfo(t *testing.T) {
+func TestGetVertexMetrics(t *testing.T) {
 	pipelineName := "simple-pipeline"
 	pipeline := &v1alpha1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName)
-	isbsQueryService := NewISBSvcQueryService(client, pipeline)
+	isbsQueryService := NewPipelineMetricsQueryService(client, pipeline)
 
 	metricsResponse := `# HELP vertex_processing_rate Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.
 # TYPE vertex_processing_rate gauge
@@ -56,29 +55,16 @@ vertex_processing_rate{period="default",pipeline="simple-pipeline",vertex="cat"}
 	vertex := "cat"
 	namespace := "numaflow-system"
 
-	req := &daemon.GetVertexRequest{Vertex: &vertex, Namespace: &namespace}
+	req := &daemon.GetVertexMetricsRequest{Vertex: &vertex, Namespace: &namespace}
 
-	resp, err := isbsQueryService.GetVertexInfo(context.Background(), req)
+	resp, err := isbsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)
 
-	processingRates := make([]*daemon.ProcessingRate, 0)
-	processingRate1 := &daemon.ProcessingRate{
-		Lookback: pointer.String("15m"),
-		Rate:     pointer.Float32(4.894737),
-	}
-	processingRate2 := &daemon.ProcessingRate{
-		Lookback: pointer.String("1m"),
-		Rate:     pointer.Float32(5.084746),
-	}
-	processingRate3 := &daemon.ProcessingRate{
-		Lookback: pointer.String("5m"),
-		Rate:     pointer.Float32(4.894737),
-	}
-	processingRate4 := &daemon.ProcessingRate{
-		Lookback: pointer.String("default"),
-		Rate:     pointer.Float32(4.894737),
-	}
+	processingRates := make(map[string]float32)
 
-	processingRates = append(processingRates, processingRate1, processingRate2, processingRate3, processingRate4)
-	assert.Equal(t, resp.Vertex.GetProcessingRate(), processingRates)
+	processingRates["15m"] = 4.894737
+	processingRates["1m"] = 5.084746
+	processingRates["5m"] = 4.894737
+	processingRates["default"] = 4.894737
+	assert.Equal(t, resp.Vertex.GetProcessingRates(), processingRates)
 }

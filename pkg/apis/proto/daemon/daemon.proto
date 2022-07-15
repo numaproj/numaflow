@@ -23,17 +23,11 @@ message BufferInfo {
   required bool isFull = 11;
 }
 
-// ProcessingRate is used to store the lookback duration and also the corresponding rate.
-message ProcessingRate {
-  required string lookback = 1;
-  required float rate = 2;
-}
-
-// VertexInfo is used to provide information about the vertex including processing rate.
-message VertexInfo {
+// VertexMetrics is used to provide information about the vertex including processing rate.
+message VertexMetrics {
   required string pipeline = 1;
   required string vertex = 2;
-  repeated ProcessingRate processingRate = 3;
+  map<string, float> processingRates = 3;
 }
 
 message ListBuffersRequest {
@@ -53,15 +47,15 @@ message GetBufferResponse {
     required BufferInfo buffer = 1;
 }
 
-message GetVertexRequest {
+message GetVertexMetricsRequest {
   required string namespace = 1;
   required string pipeline = 2;
   required string vertex = 3;
 
 }
 
-message GetVertexResponse {
-  required VertexInfo vertex = 1;
+message GetVertexMetricsResponse {
+  required VertexMetrics vertex = 1;
 }
 
 // DaemonService is a grpc service that is used to provide APIs for giving any pipeline information.
@@ -75,7 +69,7 @@ service DaemonService {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/buffers/{buffer}";
   };
 
-  rpc GetVertexInfo (GetVertexRequest) returns (GetVertexResponse) {
+  rpc GetVertexMetrics (GetVertexMetricsRequest) returns (GetVertexMetricsResponse) {
     option (google.api.http).get = "/api/v1/namespace/{namespace}/pipelines/{pipeline}/vertex/{vertex}";
   };
 }

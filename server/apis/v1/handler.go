@@ -257,8 +257,8 @@ func (h *handler) GetPipelineEdge(c *gin.Context) {
 	c.JSON(http.StatusOK, i)
 }
 
-// GetVertexInfo is used to provide information about the vertex including processing Rate
-func (h *handler) GetVertexInfo(c *gin.Context) {
+// GetVertexMetrics is used to provide information about the vertex including processing Rate
+func (h *handler) GetVertexMetrics(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
 	vertex := c.Param("vertex")
@@ -267,7 +267,7 @@ func (h *handler) GetVertexInfo(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	l, err := client.GetVertexInfo(context.Background(), ns, pipeline, vertex)
+	l, err := client.GetVertexMetrics(context.Background(), ns, pipeline, vertex)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return

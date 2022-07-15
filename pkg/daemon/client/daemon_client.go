@@ -62,8 +62,8 @@ func (dc *DaemonClient) GetPipelineBuffer(ctx context.Context, pipeline, buffer 
 	}
 }
 
-func (dc *DaemonClient) GetVertexInfo(ctx context.Context, namespace, pipeline, vertex string) (*daemon.VertexInfo, error) {
-	if rspn, err := dc.client.GetVertexInfo(ctx, &daemon.GetVertexRequest{
+func (dc *DaemonClient) GetVertexMetrics(ctx context.Context, namespace, pipeline, vertex string) (*daemon.VertexMetrics, error) {
+	if rspn, err := dc.client.GetVertexMetrics(ctx, &daemon.GetVertexMetricsRequest{
 		Namespace: &namespace,
 		Pipeline:  &pipeline,
 		Vertex:    &vertex,
