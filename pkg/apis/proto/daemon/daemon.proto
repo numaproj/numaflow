@@ -23,6 +23,13 @@ message BufferInfo {
   required bool isFull = 11;
 }
 
+// VertexMetrics is used to provide information about the vertex including processing rate.
+message VertexMetrics {
+  required string pipeline = 1;
+  required string vertex = 2;
+  map<string, float> processingRates = 3;
+}
+
 message ListBuffersRequest {
     required string pipeline = 1;
 }
@@ -40,6 +47,17 @@ message GetBufferResponse {
     required BufferInfo buffer = 1;
 }
 
+message GetVertexMetricsRequest {
+  required string namespace = 1;
+  required string pipeline = 2;
+  required string vertex = 3;
+
+}
+
+message GetVertexMetricsResponse {
+  required VertexMetrics vertex = 1;
+}
+
 // DaemonService is a grpc service that is used to provide APIs for giving any pipeline information.
 service DaemonService {
 
@@ -49,5 +67,9 @@ service DaemonService {
 
   rpc GetBuffer (GetBufferRequest) returns (GetBufferResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/buffers/{buffer}";
+  };
+
+  rpc GetVertexMetrics (GetVertexMetricsRequest) returns (GetVertexMetricsResponse) {
+    option (google.api.http).get = "/api/v1/namespace/{namespace}/pipelines/{pipeline}/vertices/{vertex}/metrics";
   };
 }

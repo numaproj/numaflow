@@ -101,6 +101,13 @@ const (
 	DefaultBufferUsageLimit = 0.8
 
 	UDFApplierMessageKey = "x-numa-message-key" // The key in the UDF applier HTTP header used to pass the map-reduce key
+
+	// processing rate and pending prometheus metrics and labels
+	MetricPipelineLabel   = "pipeline"
+	MetricVertexLabel     = "vertex"
+	MetricPeriodLabel     = "period"
+	VertexProcessingRate  = "vertex_processing_rate"
+	VertexPendingMessages = "vertex_pending_messages"
 )
 
 type ContentType string

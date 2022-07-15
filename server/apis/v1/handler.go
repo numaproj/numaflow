@@ -30,6 +30,7 @@ type handler struct {
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
 }
 
+// NewHandler is used to provide a new instance of the handler type
 func NewHandler() (*handler, error) {
 	var restConfig *rest.Config
 	var err error
@@ -62,6 +63,7 @@ func NewHandler() (*handler, error) {
 	}, nil
 }
 
+// ListPipelines is used to provide all the numaflow pipelines in a given namespace
 func (h *handler) ListPipelines(c *gin.Context) {
 	plList, err := h.numaflowClient.Pipelines(c.Param("namespace")).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
@@ -71,6 +73,7 @@ func (h *handler) ListPipelines(c *gin.Context) {
 	c.JSON(http.StatusOK, plList.Items)
 }
 
+// GetPipeline is used to provide the spec of a given numaflow pipeline
 func (h *handler) GetPipeline(c *gin.Context) {
 	pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
 	if err != nil {
@@ -80,6 +83,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	c.JSON(http.StatusOK, pl)
 }
 
+// ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
 	l, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
@@ -97,6 +101,7 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 	c.JSON(http.StatusOK, namespaces)
 }
 
+// ListInterStepBufferServices is used to provide all the interstepbuffer services in a namespace
 func (h *handler) ListInterStepBufferServices(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
 	isbSvcs, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
@@ -110,6 +115,7 @@ func (h *handler) ListInterStepBufferServices(c *gin.Context) {
 	c.JSON(http.StatusOK, isbSvcs.Items)
 }
 
+// GetInterStepBufferService is used to provide the spec of the interstep buffer service
 func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	isbsvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isbsvc"), metav1.GetOptions{})
 	if err != nil {
@@ -119,7 +125,8 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, isbsvc)
 }
 
-func (h *handler) ListVerices(c *gin.Context) {
+// ListVertices is used to provide all the vertices of a pipeline
+func (h *handler) ListVertices(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
 	vertices, err := h.numaflowClient.Vertices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyPipelineName, c.Param("pipeline")),
@@ -133,6 +140,7 @@ func (h *handler) ListVerices(c *gin.Context) {
 	c.JSON(http.StatusOK, vertices.Items)
 }
 
+// GetVertex is used to provide the vertex spec
 func (h *handler) GetVertex(c *gin.Context) {
 	vertices, err := h.numaflowClient.Vertices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, c.Param("pipeline"), dfv1.KeyVertexName, c.Param("vertex")),
@@ -148,6 +156,7 @@ func (h *handler) GetVertex(c *gin.Context) {
 	c.JSON(http.StatusOK, vertices.Items[0])
 }
 
+// ListVertexPods is used to provide all the pods of a vertex
 func (h *handler) ListVertexPods(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
 	pods, err := h.kubeClient.CoreV1().Pods(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
@@ -162,6 +171,7 @@ func (h *handler) ListVertexPods(c *gin.Context) {
 	c.JSON(http.StatusOK, pods.Items)
 }
 
+// ListPodsMetrics is used to provide a list of all metrics in all the pods
 func (h *handler) ListPodsMetrics(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
 	l, err := h.metricsClient.MetricsV1beta1().PodMetricses(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
@@ -175,6 +185,7 @@ func (h *handler) ListPodsMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, l.Items)
 }
 
+// GetPodMetrics is used to provide the metrics like CPU/Memory utilization for a pod
 func (h *handler) GetPodMetrics(c *gin.Context) {
 	m, err := h.metricsClient.MetricsV1beta1().PodMetricses(c.Param("namespace")).Get(context.Background(), c.Param("pod"), metav1.GetOptions{})
 	if err != nil {
@@ -184,6 +195,7 @@ func (h *handler) GetPodMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, m)
 }
 
+// PodLogs is used to provide the logs of a given container in pod
 func (h *handler) PodLogs(c *gin.Context) {
 	var tailLines *int64
 	if v := c.Query("tailLines"); v != "" {
@@ -210,6 +222,7 @@ func (h *handler) PodLogs(c *gin.Context) {
 	}
 }
 
+// ListPipelineEdges is used to provide information about all the pipeline edges
 func (h *handler) ListPipelineEdges(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
@@ -226,6 +239,7 @@ func (h *handler) ListPipelineEdges(c *gin.Context) {
 	c.JSON(http.StatusOK, l)
 }
 
+// GetPipelineEdge is used to provide information about a single pipeline edge
 func (h *handler) GetPipelineEdge(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
@@ -241,6 +255,24 @@ func (h *handler) GetPipelineEdge(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, i)
+}
+
+// GetVertexMetrics is used to provide information about the vertex including processing Rate
+func (h *handler) GetVertexMetrics(c *gin.Context) {
+	ns := c.Param("namespace")
+	pipeline := c.Param("pipeline")
+	vertex := c.Param("vertex")
+	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	l, err := client.GetVertexMetrics(context.Background(), ns, pipeline, vertex)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, l)
 }
 
 func daemonSvcAddress(ns, pipeline string) string {
