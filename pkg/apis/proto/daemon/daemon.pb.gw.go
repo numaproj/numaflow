@@ -445,7 +445,7 @@ var (
 
 	pattern_DaemonService_GetBuffer_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"api", "v1", "pipelines", "pipeline", "buffers", "buffer"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_DaemonService_GetVertexMetrics_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5, 1, 0, 4, 1, 5, 5}, []string{"api", "v1", "namespace", "pipelines", "pipeline", "vertex"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_DaemonService_GetVertexMetrics_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5, 1, 0, 4, 1, 5, 6, 2, 7}, []string{"api", "v1", "namespace", "pipelines", "pipeline", "vertices", "vertex", "metrics"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
