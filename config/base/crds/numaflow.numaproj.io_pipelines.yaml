@@ -146,6 +146,11 @@ spec:
                       can be overridden by the vertex's limit settings
                     format: int64
                     type: integer
+                  readTimeout:
+                    default: 1s
+                    description: Read timeout seconds for all the vertices in the
+                      pipeline, can be overridden by the vertex's limit settings
+                    type: string
                 type: object
               vertices:
                 items:
@@ -1384,6 +1389,9 @@ spec:
                           description: Read batch size
                           format: int64
                           type: integer
+                        readTimeout:
+                          description: Read timeout duration
+                          type: string
                       type: object
                     metadata:
                       description: Metadata sets the pods's metadata, i.e. annotations

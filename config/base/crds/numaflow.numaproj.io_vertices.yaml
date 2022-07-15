@@ -1262,6 +1262,9 @@ spec:
                     description: Read batch size
                     format: int64
                     type: integer
+                  readTimeout:
+                    description: Read timeout duration
+                    type: string
                 type: object
               metadata:
                 description: Metadata sets the pods's metadata, i.e. annotations and

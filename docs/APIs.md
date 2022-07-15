@@ -2550,6 +2550,20 @@ be overridden by the settings in vertex limits.
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>readTimeout</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Read timeout seconds for all the vertices in the pipeline, can be
+overridden by the vertex’s limit settings
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.PipelinePhase">
@@ -3452,6 +3466,19 @@ Description
 <em>(Optional)</em>
 <p>
 Read batch size
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>readTimeout</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Read timeout duration
 </p>
 </td>
 </tr>
