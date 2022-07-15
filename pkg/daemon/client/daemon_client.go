@@ -61,3 +61,15 @@ func (dc *DaemonClient) GetPipelineBuffer(ctx context.Context, pipeline, buffer 
 		return rspn.Buffer, nil
 	}
 }
+
+func (dc *DaemonClient) GetVertexMetrics(ctx context.Context, namespace, pipeline, vertex string) (*daemon.VertexMetrics, error) {
+	if rspn, err := dc.client.GetVertexMetrics(ctx, &daemon.GetVertexMetricsRequest{
+		Namespace: &namespace,
+		Pipeline:  &pipeline,
+		Vertex:    &vertex,
+	}); err != nil {
+		return nil, err
+	} else {
+		return rspn.Vertex, nil
+	}
+}
