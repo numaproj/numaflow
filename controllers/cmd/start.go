@@ -178,19 +178,6 @@ func Start() {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 
-	// ISB Svc watchdog
-	// watchdog, err := controller.New(dfv1.ControllerWatchdog, mgr, controller.Options{
-	// 	Reconciler: watchdogctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, logger),
-	// })
-	// if err != nil {
-	// 	logger.Fatalw("Unable to set up Watchdog", zap.Error(err))
-	// }
-
-	// // Watch Pods
-	// if err := watchdog.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{OwnerType: &appv1.StatefulSet{}, IsController: true}); err != nil {
-	// 	logger.Fatalw("Unable to watch pods", zap.Error(err))
-	// }
-
 	logger.Infow("Starting controller manager", "version", numaflow.GetVersion())
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
 		logger.Fatalw("Unable to run controller manager", zap.Error(err))
