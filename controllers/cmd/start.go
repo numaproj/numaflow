@@ -40,7 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-func Start() {
+func Start(namespaced bool, managedNamespace string) {
 	logger := logging.NewLogger().Named("controller-manager")
 	config, err := controllers.LoadConfig(func(err error) {
 		logger.Errorf("Failed to reload global configuration file", zap.Error(err))
@@ -57,6 +57,9 @@ func Start() {
 	opts := ctrl.Options{
 		MetricsBindAddress:     ":9090",
 		HealthProbeBindAddress: ":8081",
+	}
+	if namespaced {
+		opts.Namespace = managedNamespace
 	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)
 	if err != nil {
