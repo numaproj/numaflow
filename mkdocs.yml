@@ -68,6 +68,7 @@ nav:
       - APIs.md
   - Operator Manual:
       - Releases ⧉: "releases.md"
+      - installation.md
       - Configuration:
           - Controller Configuration: "controller-configmap.md"
           - metrics/metrics.md

@@ -617,8 +617,7 @@ Description
 <em>(Optional)</em>
 <p>
 BufferMaxLength is used to define the max length of a buffer. It
-overrides the settings from pipeline limits. Only meaningful for UDF and
-Source vertice as only they do buffer write.
+overrides the settings from pipeline limits.
 </p>
 </td>
 </tr>
@@ -631,8 +630,7 @@ Source vertice as only they do buffer write.
 <p>
 BufferUsageLimit is used to define the pencentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. It
-overrides the settings from pipeline limits. Only meaningful for UDF and
-Source vertice as only they do buffer write.
+overrides the settings from pipeline limits.
 </p>
 </td>
 </tr>
@@ -2559,8 +2557,8 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-Read timeout seconds for all the vertices in the pipeline, can be
-overridden by the vertex’s limit settings
+Read timeout for all the vertices in the pipeline, can be overridden by
+the vertex’s limit settings
 </p>
 </td>
 </tr>
@@ -3465,7 +3463,8 @@ Description
 <td>
 <em>(Optional)</em>
 <p>
-Read batch size
+Read batch size from the source or buffer. It overrides the settings
+from pipeline limits.
 </p>
 </td>
 </tr>
@@ -3478,7 +3477,8 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-Read timeout duration
+Read timeout duration from the source or buffer It overrides the
+settings from pipeline limits.
 </p>
 </td>
 </tr>
