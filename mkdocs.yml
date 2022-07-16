@@ -38,6 +38,7 @@ nav:
   - Home: README.md
   - Getting Started:
       - quick-start.md
+      - An Advanced Example: "advanced-start.md"
   - User Guide:
       - Core Concepts:
           - pipeline.md

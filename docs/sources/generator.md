@@ -12,10 +12,10 @@ spec:
     - name: input
       source:
         generator:
-          # How many messages to generate in the duration
+          # How many messages to generate in the duration.
           rpu: 100
           duration: 1s
-          # Optional, size of each generated message
+          # Optional, size of each generated message, defaults to 10.
           msgSize: 1024
     - name: p1
       udf:
