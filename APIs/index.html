@@ -949,22 +949,36 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        Installation
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
     
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_2" type="checkbox" id="__nav_4_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_3" type="checkbox" id="__nav_4_3" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_4_2">
+        <label class="md-nav__link" for="__nav_4_3">
           Configuration
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Configuration" data-md-level="2">
-        <label class="md-nav__title" for="__nav_4_2">
+        <label class="md-nav__title" for="__nav_4_3">
           <span class="md-nav__icon md-icon"></span>
           Configuration
         </label>
@@ -1770,8 +1784,7 @@ Description
 <em>(Optional)</em>
 <p>
 BufferMaxLength is used to define the max length of a buffer. It
-overrides the settings from pipeline limits. Only meaningful for UDF and
-Source vertice as only they do buffer write.
+overrides the settings from pipeline limits.
 </p>
 </td>
 </tr>
@@ -1784,8 +1797,7 @@ Source vertice as only they do buffer write.
 <p>
 BufferUsageLimit is used to define the pencentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. It
-overrides the settings from pipeline limits. Only meaningful for UDF and
-Source vertice as only they do buffer write.
+overrides the settings from pipeline limits.
 </p>
 </td>
 </tr>
@@ -3712,8 +3724,8 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-Read timeout seconds for all the vertices in the pipeline, can be
-overridden by the vertex’s limit settings
+Read timeout for all the vertices in the pipeline, can be overridden by
+the vertex’s limit settings
 </p>
 </td>
 </tr>
@@ -4618,7 +4630,8 @@ Description
 <td>
 <em>(Optional)</em>
 <p>
-Read batch size
+Read batch size from the source or buffer. It overrides the settings
+from pipeline limits.
 </p>
 </td>
 </tr>
@@ -4631,7 +4644,8 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-Read timeout duration
+Read timeout duration from the source or buffer It overrides the
+settings from pipeline limits.
 </p>
 </td>
 </tr>
