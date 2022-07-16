@@ -179,13 +179,11 @@ message Edge {
 message EdgeLimits {
   // BufferMaxLength is used to define the max length of a buffer.
   // It overrides the settings from pipeline limits.
-  // Only meaningful for UDF and Source vertice as only they do buffer write.
   // +optional
   optional uint64 bufferMaxLength = 1;
 
   // BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
   // It overrides the settings from pipeline limits.
-  // Only meaningful for UDF and Source vertice as only they do buffer write.
   // +optional
   optional uint32 bufferUsageLimit = 2;
 }
@@ -692,7 +690,7 @@ message PipelineLimits {
   // +optional
   optional uint32 bufferUsageLimit = 3;
 
-  // Read timeout seconds for all the vertices in the pipeline, can be overridden by the vertex's limit settings
+  // Read timeout for all the vertices in the pipeline, can be overridden by the vertex's limit settings
   // +kubebuilder:default= "1s"
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 4;
@@ -904,11 +902,13 @@ message VertexInstance {
 }
 
 message VertexLimits {
-  // Read batch size
+  // Read batch size from the source or buffer.
+  // It overrides the settings from pipeline limits.
   // +optional
   optional uint64 readBatchSize = 1;
 
-  // Read timeout duration
+  // Read timeout duration from the source or buffer
+  // It overrides the settings from pipeline limits.
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
 }

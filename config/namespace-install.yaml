@@ -12481,94 +12481,10 @@ metadata:
   namespace: numaflow-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    rbac.authorization.k8s.io/aggregate-to-admin: "true"
-  name: numaflow-aggregate-to-admin
-rules:
-- apiGroups:
-  - numaflow.numaproj.io
-  resources:
-  - interstepbufferservices
-  - interstepbufferservices/finalizer
-  - interstepbufferservices/status
-  - pipelines
-  - pipelines/finalizers
-  - pipelines/status
-  - vertices
-  - vertices/finalizers
-  - vertices/status
-  - vertices/scale
-  verbs:
-  - create
-  - delete
-  - deletecollection
-  - get
-  - list
-  - patch
-  - update
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    rbac.authorization.k8s.io/aggregate-to-edit: "true"
-  name: numaflow-aggregate-to-edit
-rules:
-- apiGroups:
-  - numaflow.numaproj.io
-  resources:
-  - interstepbufferservices
-  - interstepbufferservices/finalizers
-  - interstepbufferservices/status
-  - pipelines
-  - pipelines/finalizers
-  - pipelines/status
-  - vertices
-  - vertices/finalizers
-  - vertices/status
-  - vertices/scale
-  verbs:
-  - create
-  - delete
-  - deletecollection
-  - get
-  - list
-  - patch
-  - update
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    rbac.authorization.k8s.io/aggregate-to-view: "true"
-  name: numaflow-aggregate-to-view
-rules:
-- apiGroups:
-  - numaflow.numaproj.io
-  resources:
-  - interstepbufferservices
-  - interstepbufferservices/finalizers
-  - interstepbufferservices/status
-  - pipelines
-  - pipelines/finalizers
-  - pipelines/status
-  - vertices
-  - vertices/finalizers
-  - vertices/status
-  - vertices/scale
-  verbs:
-  - get
-  - list
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: numaflow-role
+  namespace: numaflow-system
 rules:
 - apiGroups:
   - numaflow.numaproj.io
@@ -12636,9 +12552,10 @@ rules:
   - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: numaflow-server-role
+  namespace: numaflow-system
 rules:
 - apiGroups:
   - numaflow.numaproj.io
@@ -12689,12 +12606,13 @@ rules:
   - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: numaflow-binding
+  name: numaflow-role-binding
+  namespace: numaflow-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: Role
   name: numaflow-role
 subjects:
 - kind: ServiceAccount
@@ -12702,12 +12620,13 @@ subjects:
   namespace: numaflow-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
   name: numaflow-server-binding
+  namespace: numaflow-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: Role
   name: numaflow-server-role
 subjects:
 - kind: ServiceAccount
@@ -12856,14 +12775,15 @@ spec:
       containers:
       - args:
         - controller
+        - --namespaced
         env:
         - name: NUMAFLOW_IMAGE
-          value: quay.io/numaproj/numaflow:v0.5.3
+          value: quay.io/numaproj/numaflow:latest
         - name: NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: quay.io/numaproj/numaflow:v0.5.3
+        image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -12922,7 +12842,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: quay.io/numaproj/numaflow:v0.5.3
+        image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
           httpGet:

@@ -66,16 +66,13 @@ spec:
                         bufferMaxLength:
                           description: BufferMaxLength is used to define the max length
                             of a buffer. It overrides the settings from pipeline limits.
-                            Only meaningful for UDF and Source vertice as only they
-                            do buffer write.
                           format: int64
                           type: integer
                         bufferUsageLimit:
                           description: BufferUsageLimit is used to define the pencentage
                             of the buffer usage limit, a valid value should be less
                             than 100, for example, 85. It overrides the settings from
-                            pipeline limits. Only meaningful for UDF and Source vertice
-                            as only they do buffer write.
+                            pipeline limits.
                           format: int32
                           type: integer
                       type: object
@@ -148,8 +145,8 @@ spec:
                     type: integer
                   readTimeout:
                     default: 1s
-                    description: Read timeout seconds for all the vertices in the
-                      pipeline, can be overridden by the vertex's limit settings
+                    description: Read timeout for all the vertices in the pipeline,
+                      can be overridden by the vertex's limit settings
                     type: string
                 type: object
               vertices:
@@ -1386,11 +1383,13 @@ spec:
                         pipeline level settings
                       properties:
                         readBatchSize:
-                          description: Read batch size
+                          description: Read batch size from the source or buffer.
+                            It overrides the settings from pipeline limits.
                           format: int64
                           type: integer
                         readTimeout:
-                          description: Read timeout duration
+                          description: Read timeout duration from the source or buffer
+                            It overrides the settings from pipeline limits.
                           type: string
                       type: object
                     metadata:
