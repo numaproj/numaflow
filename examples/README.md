@@ -2,7 +2,7 @@
 
 Welcome to the Numaflow Community! This document provides an example-by-example guide to using Numaflow.
 
-If you haven't already, install Numaflow by following the [QUICK START](../docs/QUICK_START.md) instructions.
+If you haven't already, install Numaflow by following the [QUICK START](../docs/quick-start.md) instructions.
 
 The top-level abstraction in Numaflow is the `Pipeline`. A `Pipeline` consists of a set of `vertices` connected by `edges`. A vertex can be a `source`, `sink`, or `processing` vertex. In the example below, we have a source vertex named _in_ that generates messages at a specified rate, a sink vertex named _out_ that logs messages, and a processing vertex named _cat_ that produces any input message as output. Lastly, there are two edges, one connecting the _in_ to the _cat_ vertex and another connecting the _cat_ to the _out_ vertex. The resulting pipeline simply copies internally generated messages to the log.
 
@@ -26,8 +26,7 @@ spec:
           name: cat # cats the message
     - name: out
       sink:
-        # Output message to the log
-	# xxx which log? k8s events?
+        # Output message to the stdout log
         log: {}
 
   # in -> cat -> out
