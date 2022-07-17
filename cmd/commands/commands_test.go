@@ -79,7 +79,9 @@ func Test_Commands(t *testing.T) {
 	t.Run("Controller", func(t *testing.T) {
 		cmd := NewControllerCommand()
 		assert.Equal(t, "controller", cmd.Use)
-		assert.False(t, cmd.HasLocalFlags())
+		assert.True(t, cmd.HasLocalFlags())
+		assert.Equal(t, "string", cmd.Flag("managed-namespace").Value.Type())
+		assert.Equal(t, "bool", cmd.Flag("namespaced").Value.Type())
 	})
 
 	t.Run("BuiltinUDF", func(t *testing.T) {

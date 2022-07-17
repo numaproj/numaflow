@@ -381,10 +381,12 @@ type Scale struct {
 }
 
 type VertexLimits struct {
-	// Read batch size
+	// Read batch size from the source or buffer.
+	// It overrides the settings from pipeline limits.
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
-	// Read timeout duration
+	// Read timeout duration from the source or buffer
+	// It overrides the settings from pipeline limits.
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
 }
