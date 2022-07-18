@@ -14,6 +14,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -147,12 +148,12 @@ func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req
 
 	processingRates := make(map[string]float64, 0)
 	// Check if the resultant metrics list contains the processingRate, if it does look for the period label
-	if value, ok := result[v1alpha1.VertexProcessingRate]; ok {
+	if value, ok := result[metricspkg.VertexProcessingRate]; ok {
 		metrics := value.GetMetric()
 		for _, metric := range metrics {
 			labels := metric.GetLabel()
 			for _, label := range labels {
-				if label.GetName() == v1alpha1.MetricPeriodLabel {
+				if label.GetName() == metricspkg.LabelPeriod {
 					lookback := label.GetValue()
 					processingRates[lookback] = metric.Gauge.GetValue()
 				}

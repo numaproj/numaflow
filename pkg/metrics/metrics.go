@@ -21,16 +21,25 @@ import (
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
 
+const (
+	LabelPipeline = "pipeline"
+	LabelVertex   = "vertex"
+	LabelPeriod   = "period"
+
+	VertexProcessingRate  = "vertex_processing_rate"
+	VertexPendingMessages = "vertex_pending_messages"
+)
+
 var (
 	processingRate = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: dfv1.VertexProcessingRate,
+		Name: VertexProcessingRate,
 		Help: "Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.",
-	}, []string{dfv1.MetricPipelineLabel, dfv1.MetricVertexLabel, dfv1.MetricPeriodLabel})
+	}, []string{LabelPipeline, LabelVertex, LabelPeriod})
 
 	pending = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: dfv1.VertexPendingMessages,
+		Name: VertexPendingMessages,
 		Help: "Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.",
-	}, []string{dfv1.MetricPipelineLabel, dfv1.MetricVertexLabel, dfv1.MetricPeriodLabel})
+	}, []string{LabelPipeline, LabelVertex, LabelPeriod})
 
 	// fixedLookbackSeconds Always expose metrics of following lookback seconds (1m, 5m, 15m)
 	fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}

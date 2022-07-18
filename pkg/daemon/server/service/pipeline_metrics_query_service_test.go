@@ -84,7 +84,7 @@ vertex_processing_rate{period="default",pipeline="simple-pipeline",vertex="cat"}
 	resp, err := pipelineMetricsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)
 
-	processingRates := make(map[string]float32)
+	processingRates := make(map[string]float64)
 
 	processingRates["15m"] = 4.894737
 	processingRates["1m"] = 5.084746
