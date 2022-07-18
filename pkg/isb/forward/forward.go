@@ -289,7 +289,7 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 				err := fmt.Errorf("ackFromBuffer, Stop called while stuck on an internal error, %v", summarizedErr)
 				return err
 			}
-			// TOTO: only retry failed ones.
+			// TODO: only retry failed ones.
 		} else {
 			break
 		}
