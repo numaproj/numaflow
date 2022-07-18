@@ -108,6 +108,11 @@ const (
 	MetricPeriodLabel     = "period"
 	VertexProcessingRate  = "vertex_processing_rate"
 	VertexPendingMessages = "vertex_pending_messages"
+
+	// Auto scaling
+	DefaultLookbackSeconds         = 180
+	DefaultCooldownSeconds         = 60
+	DefaultZeorReplicaSleepSeconds = 180
 )
 
 type ContentType string

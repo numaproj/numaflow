@@ -809,9 +809,16 @@ message Scale {
   optional int32 max = 2;
 
   // Lookback seconds to calculate the average pending messages and processing rate
-  // +kubebuilder:default=180
   // +optional
   optional int32 lookbackSeconds = 3;
+
+  // Cooldown seconds after a scaling operation before another one
+  // +optional
+  optional int32 cooldownSeconds = 4;
+
+  // After scaling down to 0, sleep how many seconds before scaling up to peek
+  // +optional
+  optional int32 zeroReplicaSleepSeconds = 5;
 }
 
 message Sink {

@@ -6161,8 +6161,12 @@ spec:
                       type: string
                     scale:
                       properties:
+                        cooldownSeconds:
+                          description: Cooldown seconds after a scaling operation
+                            before another one
+                          format: int32
+                          type: integer
                         lookbackSeconds:
-                          default: 180
                           description: Lookback seconds to calculate the average pending
                             messages and processing rate
                           format: int32
@@ -6175,6 +6179,11 @@ spec:
                         min:
                           default: 1
                           description: Minimal replicas
+                          format: int32
+                          type: integer
+                        zeroReplicaSleepSeconds:
+                          description: After scaling down to 0, sleep how many seconds
+                            before scaling up to peek
                           format: int32
                           type: integer
                       type: object
@@ -10049,8 +10058,12 @@ spec:
                 type: integer
               scale:
                 properties:
+                  cooldownSeconds:
+                    description: Cooldown seconds after a scaling operation before
+                      another one
+                    format: int32
+                    type: integer
                   lookbackSeconds:
-                    default: 180
                     description: Lookback seconds to calculate the average pending
                       messages and processing rate
                     format: int32
@@ -10063,6 +10076,11 @@ spec:
                   min:
                     default: 1
                     description: Minimal replicas
+                    format: int32
+                    type: integer
+                  zeroReplicaSleepSeconds:
+                    description: After scaling down to 0, sleep how many seconds before
+                      scaling up to peek
                     format: int32
                     type: integer
                 type: object

@@ -375,9 +375,35 @@ type Scale struct {
 	// +optional
 	Max *int32 `json:"max,omitempty" protobuf:"varint,2,opt,name=max"`
 	// Lookback seconds to calculate the average pending messages and processing rate
-	// +kubebuilder:default=180
 	// +optional
 	LookbackSeconds *int32 `json:"lookbackSeconds,omitempty" protobuf:"varint,3,opt,name=lookbackSeconds"`
+	// Cooldown seconds after a scaling operation before another one
+	// +optional
+	CooldownSeconds *int32 `json:"cooldownSeconds,omitempty" protobuf:"varint,4,opt,name=cooldownSeconds"`
+	// After scaling down to 0, sleep how many seconds before scaling up to peek
+	// +optional
+	ZeroReplicaSleepSeconds *int32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,5,opt,name=zeroReplicaSleepSeconds"`
+}
+
+func (s Scale) GetLookbackSeconds() int {
+	if s.LookbackSeconds != nil {
+		return int(*s.LookbackSeconds)
+	}
+	return DefaultLookbackSeconds
+}
+
+func (s Scale) GetCooldownSeconds() int {
+	if s.CooldownSeconds != nil {
+		return int(*s.CooldownSeconds)
+	}
+	return DefaultCooldownSeconds
+}
+
+func (s Scale) GetZeroReplicaSleepSeconds() int {
+	if s.ZeroReplicaSleepSeconds != nil {
+		return int(*s.ZeroReplicaSleepSeconds)
+	}
+	return DefaultZeorReplicaSleepSeconds
 }
 
 type VertexLimits struct {

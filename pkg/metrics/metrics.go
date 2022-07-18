@@ -85,9 +85,9 @@ func WithLookbackSeconds(seconds int64) Option {
 func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 	m := new(metricsServer)
 	m.vertex = vertex
-	m.refreshInterval = 5 * time.Second     // Default refersh interval
-	m.lagCheckingInterval = 3 * time.Second // Default lag checking interval
-	m.lookbackSeconds = 180                 // Default
+	m.refreshInterval = 5 * time.Second             // Default refersh interval
+	m.lagCheckingInterval = 3 * time.Second         // Default lag checking interval
+	m.lookbackSeconds = dfv1.DefaultLookbackSeconds // Default
 	for _, opt := range opts {
 		if opt != nil {
 			opt(m)
@@ -130,7 +130,7 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 		return
 	}
 	log := logging.FromContext(ctx)
-	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds}
+	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds} // Metrics for auto-scaling use key "default"
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}

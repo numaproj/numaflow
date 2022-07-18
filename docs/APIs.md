@@ -2994,6 +2994,29 @@ processing rate
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>cooldownSeconds</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Cooldown seconds after a scaling operation before another one
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>zeroReplicaSleepSeconds</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+After scaling down to 0, sleep how many seconds before scaling up to
+peek
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Sink">

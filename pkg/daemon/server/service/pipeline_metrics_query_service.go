@@ -145,7 +145,7 @@ func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req
 		return nil, err
 	}
 
-	processingRates := make(map[string]float32, 0)
+	processingRates := make(map[string]float64, 0)
 	// Check if the resultant metrics list contains the processingRate, if it does look for the period label
 	if value, ok := result[v1alpha1.VertexProcessingRate]; ok {
 		metrics := value.GetMetric()
@@ -154,8 +154,7 @@ func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req
 			for _, label := range labels {
 				if label.GetName() == v1alpha1.MetricPeriodLabel {
 					lookback := label.GetValue()
-					rate := float32(metric.Gauge.GetValue())
-					processingRates[lookback] = rate
+					processingRates[lookback] = metric.Gauge.GetValue()
 				}
 			}
 		}

@@ -1254,6 +1254,16 @@ func (in *Scale) DeepCopyInto(out *Scale) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.CooldownSeconds != nil {
+		in, out := &in.CooldownSeconds, &out.CooldownSeconds
+		*out = new(int32)
+		**out = **in
+	}
+	if in.ZeroReplicaSleepSeconds != nil {
+		in, out := &in.ZeroReplicaSleepSeconds, &out.ZeroReplicaSleepSeconds
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 

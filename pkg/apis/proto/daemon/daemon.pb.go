@@ -164,7 +164,7 @@ func (m *BufferInfo) GetIsFull() bool {
 type VertexMetrics struct {
 	Pipeline             *string            `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
 	Vertex               *string            `protobuf:"bytes,2,req,name=vertex" json:"vertex,omitempty"`
-	ProcessingRates      map[string]float32 `protobuf:"bytes,3,rep,name=processingRates" json:"processingRates,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	ProcessingRates      map[string]float64 `protobuf:"bytes,3,rep,name=processingRates" json:"processingRates,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -217,7 +217,7 @@ func (m *VertexMetrics) GetVertex() string {
 	return ""
 }
 
-func (m *VertexMetrics) GetProcessingRates() map[string]float32 {
+func (m *VertexMetrics) GetProcessingRates() map[string]float64 {
 	if m != nil {
 		return m.ProcessingRates
 	}
@@ -533,7 +533,7 @@ func (m *GetVertexMetricsResponse) GetVertex() *VertexMetrics {
 func init() {
 	proto.RegisterType((*BufferInfo)(nil), "daemon.BufferInfo")
 	proto.RegisterType((*VertexMetrics)(nil), "daemon.VertexMetrics")
-	proto.RegisterMapType((map[string]float32)(nil), "daemon.VertexMetrics.ProcessingRatesEntry")
+	proto.RegisterMapType((map[string]float64)(nil), "daemon.VertexMetrics.ProcessingRatesEntry")
 	proto.RegisterType((*ListBuffersRequest)(nil), "daemon.ListBuffersRequest")
 	proto.RegisterType((*ListBuffersResponse)(nil), "daemon.ListBuffersResponse")
 	proto.RegisterType((*GetBufferRequest)(nil), "daemon.GetBufferRequest")
@@ -572,7 +572,7 @@ var fileDescriptor_93e327fd0d673221 = []byte{
 	0x2e, 0x4e, 0x58, 0x8f, 0x70, 0x1e, 0xd2, 0xc0, 0xf3, 0x05, 0xe1, 0xd8, 0xb0, 0x0c, 0xa7, 0xb5,
 	0xb1, 0xda, 0xc9, 0xb7, 0xa6, 0x32, 0xa3, 0x73, 0x50, 0x25, 0xbf, 0xa6, 0x22, 0x39, 0xf3, 0xae,
 	0xb7, 0x30, 0x37, 0x61, 0xa1, 0x8e, 0x88, 0xe6, 0xc1, 0x18, 0x90, 0x33, 0xac, 0x59, 0x9a, 0xd3,
-	0xf4, 0xb2, 0x23, 0x5a, 0x80, 0xa9, 0x91, 0x3f, 0x4c, 0x09, 0xd6, 0x2d, 0xcd, 0xd1, 0x3d, 0x15,
+	0xf4, 0xb2, 0x23, 0x5a, 0x80, 0xa9, 0x91, 0x3f, 0x4c, 0x09, 0xd6, 0x2d, 0xcd, 0xd1, 0x3c, 0x15,
 	0x3c, 0xd7, 0x9f, 0x69, 0xf6, 0x63, 0x40, 0xdd, 0x90, 0x0b, 0xb5, 0x67, 0xdc, 0x23, 0x1f, 0x53,
 	0xc2, 0xc5, 0x5d, 0x77, 0xb4, 0xb7, 0xe0, 0xdf, 0x4a, 0x05, 0x8f, 0x19, 0xe5, 0x04, 0xad, 0xc1,
 	0xb4, 0x7a, 0x4f, 0x8e, 0x35, 0x79, 0x35, 0x54, 0x5c, 0xed, 0x6a, 0x87, 0xbd, 0x82, 0x62, 0x6f,
@@ -591,7 +591,7 @@ var fileDescriptor_93e327fd0d673221 = []byte{
 	0x45, 0x66, 0xde, 0x84, 0xbd, 0x0c, 0x53, 0x2e, 0x8d, 0xdd, 0x48, 0x75, 0xdf, 0x7c, 0xf9, 0xed,
 	0xb2, 0xad, 0x7d, 0xbf, 0x6c, 0x6b, 0xbf, 0x2e, 0xdb, 0xda, 0xfb, 0x8d, 0x20, 0x14, 0x27, 0xe9,
 	0x51, 0xa7, 0xc7, 0x22, 0x97, 0xa6, 0x91, 0x1f, 0x27, 0xec, 0x83, 0x3c, 0xf4, 0x87, 0xec, 0xd4,
-	0xad, 0xfd, 0x77, 0xf9, 0x13, 0x00, 0x00, 0xff, 0xff, 0x82, 0xa0, 0x01, 0xc4, 0x75, 0x06, 0x00,
+	0xad, 0xfd, 0x77, 0xf9, 0x13, 0x00, 0x00, 0xff, 0xff, 0x46, 0x2d, 0x6f, 0x8a, 0x75, 0x06, 0x00,
 	0x00,
 }
 
@@ -894,10 +894,10 @@ func (m *VertexMetrics) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		for k := range m.ProcessingRates {
 			v := m.ProcessingRates[k]
 			baseI := i
-			i -= 4
-			encoding_binary.LittleEndian.PutUint32(dAtA[i:], uint32(math.Float32bits(float32(v))))
+			i -= 8
+			encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(v))))
 			i--
-			dAtA[i] = 0x15
+			dAtA[i] = 0x11
 			i -= len(k)
 			copy(dAtA[i:], k)
 			i = encodeVarintDaemon(dAtA, i, uint64(len(k)))
@@ -1265,7 +1265,7 @@ func (m *VertexMetrics) Size() (n int) {
 		for k, v := range m.ProcessingRates {
 			_ = k
 			_ = v
-			mapEntrySize := 1 + len(k) + sovDaemon(uint64(len(k))) + 1 + 4
+			mapEntrySize := 1 + len(k) + sovDaemon(uint64(len(k))) + 1 + 8
 			n += mapEntrySize + 1 + sovDaemon(uint64(mapEntrySize))
 		}
 	}
@@ -1872,10 +1872,10 @@ func (m *VertexMetrics) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.ProcessingRates == nil {
-				m.ProcessingRates = make(map[string]float32)
+				m.ProcessingRates = make(map[string]float64)
 			}
 			var mapkey string
-			var mapvalue float32
+			var mapvalue float64
 			for iNdEx < postIndex {
 				entryPreIndex := iNdEx
 				var wire uint64
@@ -1924,13 +1924,13 @@ func (m *VertexMetrics) Unmarshal(dAtA []byte) error {
 					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
 					iNdEx = postStringIndexmapkey
 				} else if fieldNum == 2 {
-					var mapvaluetemp uint32
-					if (iNdEx + 4) > l {
+					var mapvaluetemp uint64
+					if (iNdEx + 8) > l {
 						return io.ErrUnexpectedEOF
 					}
-					mapvaluetemp = uint32(encoding_binary.LittleEndian.Uint32(dAtA[iNdEx:]))
-					iNdEx += 4
-					mapvalue = math.Float32frombits(mapvaluetemp)
+					mapvaluetemp = uint64(encoding_binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+					iNdEx += 8
+					mapvalue = math.Float64frombits(mapvaluetemp)
 				} else {
 					iNdEx = entryPreIndex
 					skippy, err := skipDaemon(dAtA[iNdEx:])

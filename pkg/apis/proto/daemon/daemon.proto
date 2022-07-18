@@ -27,7 +27,7 @@ message BufferInfo {
 message VertexMetrics {
   required string pipeline = 1;
   required string vertex = 2;
-  map<string, float> processingRates = 3;
+  map<string, double> processingRates = 3;
 }
 
 message ListBuffersRequest {
