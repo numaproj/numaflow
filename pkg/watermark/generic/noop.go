@@ -34,6 +34,11 @@ func (n NoOpWMProgressor) GetLatestWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
+// GetHeadWatermark returns the default head watermark.
+func (n NoOpWMProgressor) GetHeadWatermark() processor.Watermark {
+	return processor.Watermark{}
+}
+
 // StopPublisher stops the no-op publisher.
 func (n NoOpWMProgressor) StopPublisher() {
 }
