@@ -17,6 +17,8 @@ import (
 type Fetcher interface {
 	// GetWatermark returns the inorder monotonically increasing watermark of the edge connected to Vn-1.
 	GetWatermark(offset isb.Offset) processor.Watermark
+	// GetHeadWatermark returns the latest watermark based on the head offset
+	GetHeadWatermark() processor.Watermark
 }
 
 // Edge is the edge relation between two vertices.
