@@ -119,6 +119,10 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string) error {
 		log.Debugw("Vertex being deleted", zap.String("vertex", key))
 		return nil
 	}
+	if vertex.Spec.Scale.Disabled { // Auto scaling disabled
+		s.StopWatching(key) // Remove it in case it's watched
+		return nil
+	}
 	if time.Since(vertex.Status.LastScaledAt.Time).Seconds() < float64(vertex.Spec.Scale.GetCooldownSeconds()) {
 		log.Debugw("Cooldown period, skip scaling.")
 		return nil

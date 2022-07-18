@@ -361,28 +361,33 @@ type AbstractVertex struct {
 	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings
 	// +optional
 	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,17,opt,name=limits"`
+	// Settings for auto scaling
 	// +optional
 	Scale Scale `json:"scale,omitempty" protobuf:"bytes,18,opt,name=scale"`
 }
 
 type Scale struct {
+	// Whether to disable auto scaling
+	// Set to "true" when using Kubernetes HPA or any other 3rd party auto scaling strategies
+	// +optional
+	Disabled bool `json:"disabled,omitempty" protobuf:"bytes,1,opt,name=disabled"`
 	// Minimal replicas
 	// +kubebuilder:default=1
 	// +optional
-	Min *int32 `json:"min,omitempty" protobuf:"varint,1,opt,name=min"`
+	Min *int32 `json:"min,omitempty" protobuf:"varint,2,opt,name=min"`
 	// Maximum replicas
 	// +kubebuilder:default=100
 	// +optional
-	Max *int32 `json:"max,omitempty" protobuf:"varint,2,opt,name=max"`
+	Max *int32 `json:"max,omitempty" protobuf:"varint,3,opt,name=max"`
 	// Lookback seconds to calculate the average pending messages and processing rate
 	// +optional
-	LookbackSeconds *int32 `json:"lookbackSeconds,omitempty" protobuf:"varint,3,opt,name=lookbackSeconds"`
+	LookbackSeconds *int32 `json:"lookbackSeconds,omitempty" protobuf:"varint,4,opt,name=lookbackSeconds"`
 	// Cooldown seconds after a scaling operation before another one
 	// +optional
-	CooldownSeconds *int32 `json:"cooldownSeconds,omitempty" protobuf:"varint,4,opt,name=cooldownSeconds"`
+	CooldownSeconds *int32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`
 	// After scaling down to 0, sleep how many seconds before scaling up to peek
 	// +optional
-	ZeroReplicaSleepSeconds *int32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,5,opt,name=zeroReplicaSleepSeconds"`
+	ZeroReplicaSleepSeconds *int32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,6,opt,name=zeroReplicaSleepSeconds"`
 }
 
 func (s Scale) GetLookbackSeconds() int {

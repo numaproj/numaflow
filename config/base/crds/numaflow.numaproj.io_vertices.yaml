@@ -1310,12 +1310,17 @@ spec:
                 format: int32
                 type: integer
               scale:
+                description: Settings for auto scaling
                 properties:
                   cooldownSeconds:
                     description: Cooldown seconds after a scaling operation before
                       another one
                     format: int32
                     type: integer
+                  disabled:
+                    description: Whether to disable auto scaling Set to "true" when
+                      using Kubernetes HPA or any other 3rd party auto scaling strategies
+                    type: boolean
                   lookbackSeconds:
                     description: Lookback seconds to calculate the average pending
                       messages and processing rate

@@ -160,10 +160,24 @@ func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req
 			}
 		}
 	}
+	pendings := make(map[string]int64, 0)
+	if value, ok := result[metricspkg.VertexPendingMessages]; ok {
+		metrics := value.GetMetric()
+		for _, metric := range metrics {
+			labels := metric.GetLabel()
+			for _, label := range labels {
+				if label.GetName() == metricspkg.LabelPeriod {
+					lookback := label.GetValue()
+					pendings[lookback] = int64(metric.Gauge.GetValue())
+				}
+			}
+		}
+	}
 	v := &daemon.VertexMetrics{
 		Pipeline:        &ps.pipeline.Name,
 		Vertex:          req.Vertex,
 		ProcessingRates: processingRates,
+		Pendings:        pendings,
 	}
 	resp.Vertex = v
 	return resp, nil

@@ -108,6 +108,7 @@ message AbstractVertex {
   // +optional
   optional VertexLimits limits = 17;
 
+  // Settings for auto scaling
   // +optional
   optional Scale scale = 18;
 }
@@ -798,27 +799,32 @@ message RedisSettings {
 }
 
 message Scale {
+  // Whether to disable auto scaling
+  // Set to "true" when using Kubernetes HPA or any other 3rd party auto scaling strategies
+  // +optional
+  optional bool disabled = 1;
+
   // Minimal replicas
   // +kubebuilder:default=1
   // +optional
-  optional int32 min = 1;
+  optional int32 min = 2;
 
   // Maximum replicas
   // +kubebuilder:default=100
   // +optional
-  optional int32 max = 2;
+  optional int32 max = 3;
 
   // Lookback seconds to calculate the average pending messages and processing rate
   // +optional
-  optional int32 lookbackSeconds = 3;
+  optional int32 lookbackSeconds = 4;
 
   // Cooldown seconds after a scaling operation before another one
   // +optional
-  optional int32 cooldownSeconds = 4;
+  optional int32 cooldownSeconds = 5;
 
   // After scaling down to 0, sleep how many seconds before scaling up to peek
   // +optional
-  optional int32 zeroReplicaSleepSeconds = 5;
+  optional int32 zeroReplicaSleepSeconds = 6;
 }
 
 message Sink {
