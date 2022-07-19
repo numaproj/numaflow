@@ -24,6 +24,7 @@ import (
 	isbsvcctrl "github.com/numaproj/numaflow/controllers/isbsvc"
 	plctrl "github.com/numaproj/numaflow/controllers/pipeline"
 	vertexctrl "github.com/numaproj/numaflow/controllers/vertex"
+	"github.com/numaproj/numaflow/controllers/vertex/scaling"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	logging "github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -35,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -156,8 +156,9 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	// Vertex controller
+	autoscaler := scaling.NewScaler(mgr.GetClient(), scaling.WithWorkers(20))
 	vertexController, err := controller.New(dfv1.ControllerVertex, mgr, controller.Options{
-		Reconciler: vertexctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, logger),
+		Reconciler: vertexctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, autoscaler, logger),
 	})
 	if err != nil {
 		logger.Fatalw("Unable to set up Vertex controller", zap.Error(err))
@@ -181,8 +182,11 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 
+	ctx := ctrl.SetupSignalHandler()
+	go autoscaler.Start(logging.WithLogger(ctx, logging.NewLogger().Named("auto-scaler")))
+
 	logger.Infow("Starting controller manager", "version", numaflow.GetVersion())
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		logger.Fatalw("Unable to run controller manager", zap.Error(err))
 	}
 }

@@ -26,7 +26,7 @@ type Scaler struct {
 	vertexMap map[string]*list.Element
 	// List of the vertex namespaced name, format is "namespace/name"
 	vertexList *list.List
-	lock       sync.RWMutex
+	lock       *sync.RWMutex
 	options    *options
 }
 
@@ -36,7 +36,7 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 		options:    defaultOptions(),
 		vertexMap:  make(map[string]*list.Element),
 		vertexList: list.New(),
-		lock:       sync.RWMutex{},
+		lock:       new(sync.RWMutex),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -82,14 +82,14 @@ func (s *Scaler) StopWatching(key string) {
 
 func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 	log := logging.FromContext(ctx)
-	log.Infof("Started sacling worker %v", id)
+	log.Infof("Started auto scaling worker %v", id)
 	for {
 		select {
 		case <-ctx.Done():
 			log.Infof("Stopped scaling worker %v", id)
 			return
 		case key := <-keyCh:
-			if err := s.scaleOneVertex(ctx, key); err != nil {
+			if err := s.scaleOneVertex(ctx, key, id); err != nil {
 				log.Errorw("Failed to scale a vertex", zap.String("vertex", key), zap.Error(err))
 			}
 		}
@@ -97,8 +97,9 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 }
 
 // The detail logic of scaling a vertex
-func (s *Scaler) scaleOneVertex(ctx context.Context, key string) error {
-	log := logging.FromContext(ctx)
+func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) error {
+	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker))
+	log.Debugf("Working on key: %s", key)
 	strs := strings.Split(key, "/")
 	if len(strs) != 2 {
 		return fmt.Errorf("invalid key %q", key)
@@ -156,7 +157,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string) error {
 		}
 		return nil
 	}
-	// TODO: cache
+	// TODO: cache it.
 	dClient, err := daemonclient.NewDaemonServiceClient(pl.GetDaemonServiceURL())
 	if err != nil {
 		return fmt.Errorf("failed to get daemon service client for pipeline %s, %w", pl.Name, err)
@@ -177,7 +178,8 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string) error {
 		log.Debugf("Vertex %s has no pending messages information, skip scaling", vertex.Name)
 		return nil
 	}
-	availBufferLength := int64(0)
+	totalBufferLength := int64(0)
+	targetAvailableBufferLength := int64(0)
 	if !vertex.IsASource() { // Only non-source vertex has buffer to read
 		bufferName := vertex.GetFromBuffers()[0].Name
 		if bInfo, err := dClient.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
@@ -186,64 +188,76 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string) error {
 			if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == nil {
 				return fmt.Errorf("invalid read buffer information of vertex %q, length or usage limit is missing", vertex.Name)
 			}
-			availBufferLength = int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
+			totalBufferLength = int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
+			targetAvailableBufferLength = int64(float64(*bInfo.BufferLength) * float64(vertex.Spec.Scale.GetTargetBufferUsage()) / 100)
 		}
 	}
 
-	if desired, err := s.desiredReplicas(ctx, vertex, rate, pending, availBufferLength); err != nil {
-		return fmt.Errorf("failed to calculate desired replicas for vertex %q, %w", vertex.Name, err)
-	} else {
-		current := int32(vertex.Spec.GetReplicas())
-		max := vertex.Spec.Scale.GetMaxReplicas()
-		min := vertex.Spec.Scale.GetMinReplicas()
-		if desired > max {
-			desired = max
+	desired := s.desiredReplicas(ctx, vertex, rate, pending, totalBufferLength, targetAvailableBufferLength)
+	log.Debugf("Calculated desired replica number of vertex %q is: %v", vertex.Name, desired)
+	current := int32(vertex.Spec.GetReplicas())
+	max := vertex.Spec.Scale.GetMaxReplicas()
+	min := vertex.Spec.Scale.GetMinReplicas()
+	if desired > max {
+		desired = max
+	}
+	if desired < min {
+		desired = min
+	}
+	if current > max || current < min { // Someone might have manually scaled up/down the vertex
+		return s.patchVertexReplicas(ctx, vertex, desired)
+	}
+	maxAllowed := int32(vertex.Spec.Scale.GetReplicasPerScale())
+	if desired < current {
+		diff := current - desired
+		if diff > maxAllowed {
+			diff = maxAllowed
 		}
-		if desired < min {
-			desired = min
+		return s.patchVertexReplicas(ctx, vertex, current-diff) // We scale down gradually
+	}
+	if desired > current {
+		diff := desired - current
+		if diff > maxAllowed {
+			diff = maxAllowed
 		}
-		if current > max || current < min { // Someone might have manually scaled up/down the vertex
-			return s.patchVertexReplicas(ctx, vertex, desired)
-		}
-		if desired < current {
-			return s.patchVertexReplicas(ctx, vertex, current-1) // We scale down gradually
-		}
-		if desired > current {
-			return s.patchVertexReplicas(ctx, vertex, current+1) // We scale up gradually
-		}
+		return s.patchVertexReplicas(ctx, vertex, current+diff) // We scale up gradually
 	}
 	return nil
 }
 
-func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate float64, pending int64, availBufferLength int64) (int32, error) {
+func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate float64, pending int64, totalBufferLength int64, targetAvailableBufferLength int64) int32 {
 	if rate == 0 && pending == 0 { // This could scale down to 0
-		return 0, nil
+		return 0
 	}
 	if vertex.IsASource() {
-		singleRate := rate / float64(vertex.Status.Replicas)
-		desired := int32(pending / (int64(singleRate) * int64(vertex.Spec.Scale.GetTargetProcessingSeconds()))) // Expect to finish all the pending in N seconds
+		// For sources, we calculate the time of finishing processing the pending messages,
+		// and then we know how many replicas are needed to get them done in target seconds.
+		desired := int32(((float64(pending) / rate) / float64(vertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(vertex.Status.Replicas))
 		if desired == 0 {
 			desired = 1
 		}
-		return desired, nil
+		return desired
 	} else {
-		singleContribution := (availBufferLength - pending) / int64(vertex.Status.Replicas)
-		if singleContribution < 0 {
-			// Simply return a doubled replica number if the pending messages are more than available buffer length
-			return 2 * int32(vertex.Status.Replicas), nil
+		// For UDF and sinks, we calculate the available buffer length, and consider it is the contribution of current replicas,
+		// then we figure out how many replicas are needed to keep the available buffer length at target level.
+		if pending > totalBufferLength {
+			// Simply return current replica number + max allowed if the pending messages are more than available buffer length
+			return int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScale())
 		}
-		desired := int32((availBufferLength * int64(vertex.Spec.Scale.GetTargetBufferUsage()) / 100) / singleContribution)
+		singleReplicaContribution := (totalBufferLength - pending) / int64(vertex.Status.Replicas)
+		desired := int32(targetAvailableBufferLength / singleReplicaContribution)
 		// TODO: Consider back pressure for UDF
 		if desired == 0 {
 			desired = 1
 		}
-		return desired, nil
+		return desired
 	}
 }
 
 // Start function starts the auto-scaling worker group
 func (s *Scaler) Start(ctx context.Context) {
 	log := logging.FromContext(ctx)
+	log.Info("Starting auto scaler...")
 	keyCh := make(chan string)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

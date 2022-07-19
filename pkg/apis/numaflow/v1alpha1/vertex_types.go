@@ -392,9 +392,13 @@ type Scale struct {
 	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
 	// TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read.
 	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
-	// It only applies to UDF and Sink vertice as only they have buffer to read.
+	// It only applies to UDF and Sink vertices as only they have buffers to read.
 	// +optional
 	TargetBufferUsage *uint32 `json:"targetBufferUsage,omitempty" protobuf:"varint,8,opt,name=targetBufferUsage"`
+	// ReplicasPerScale defines maximum replicas can be scaled up or down at once.
+	// The is use to prevent too aggresive scaling operations
+	// +optional
+	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
 }
 
 func (s Scale) GetLookbackSeconds() int {
@@ -430,6 +434,13 @@ func (s Scale) GetTargetBufferUsage() int {
 		return int(*s.TargetBufferUsage)
 	}
 	return DefaultTargetBufferUsage
+}
+
+func (s Scale) GetReplicasPerScale() int {
+	if s.ReplicasPerScale != nil {
+		return int(*s.ReplicasPerScale)
+	}
+	return DefaultReplicasPerScale
 }
 
 func (s Scale) GetMinReplicas() int32 {

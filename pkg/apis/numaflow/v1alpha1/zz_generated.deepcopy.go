@@ -1274,6 +1274,11 @@ func (in *Scale) DeepCopyInto(out *Scale) {
 		*out = new(uint32)
 		**out = **in
 	}
+	if in.ReplicasPerScale != nil {
+		in, out := &in.ReplicasPerScale, &out.ReplicasPerScale
+		*out = new(uint32)
+		**out = **in
+	}
 	return
 }
 

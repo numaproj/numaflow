@@ -3054,8 +3054,20 @@ Only effective for source vertices.
 TargetBufferUsage is used to define the target pencentage of usage of
 the buffer to be read. A valid and meaningful value should be less than
 the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
-example, 50. It only applies to UDF and Sink vertice as only they have
-buffer to read.
+example, 50. It only applies to UDF and Sink vertices as only they have
+buffers to read.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>replicasPerScale</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+ReplicasPerScale defines maximum replicas can be scaled up or down at
+once. The is use to prevent too aggresive scaling operations
 </p>
 </td>
 </tr>

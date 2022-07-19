@@ -831,9 +831,14 @@ message Scale {
 
   // TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read.
   // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
-  // It only applies to UDF and Sink vertice as only they have buffer to read.
+  // It only applies to UDF and Sink vertices as only they have buffers to read.
   // +optional
   optional uint32 targetBufferUsage = 8;
+
+  // ReplicasPerScale defines maximum replicas can be scaled up or down at once.
+  // The is use to prevent too aggresive scaling operations
+  // +optional
+  optional uint32 replicasPerScale = 9;
 }
 
 message Sink {

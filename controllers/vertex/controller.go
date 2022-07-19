@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/controllers"
+	"github.com/numaproj/numaflow/controllers/vertex/scaling"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -32,10 +33,12 @@ type vertexReconciler struct {
 	config *controllers.GlobalConfig
 	image  string
 	logger *zap.SugaredLogger
+
+	scaler *scaling.Scaler
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *controllers.GlobalConfig, image string, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &vertexReconciler{client: client, scheme: scheme, config: config, image: image, logger: logger}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *controllers.GlobalConfig, image string, scaler *scaling.Scaler, logger *zap.SugaredLogger) reconcile.Reconciler {
+	return &vertexReconciler{client: client, scheme: scheme, config: config, image: image, scaler: scaler, logger: logger}
 }
 
 func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -68,6 +71,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	log := logging.FromContext(ctx)
 	if !vertex.DeletionTimestamp.IsZero() {
 		log.Info("Deleting vertex")
+		r.scaler.StopWatching(fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name))
 		return ctrl.Result{}, nil
 	}
 
@@ -92,6 +96,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		vertex.Status.MarkPhaseFailed("ISBSvcNotReady", "isbsvc not ready")
 		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
 	}
+	// Add to auto scaling watcher
+	r.scaler.StartWatching(fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name))
 
 	desiredReplicas := vertex.Spec.GetReplicas()
 	currentReplicas := int(vertex.Status.Replicas)
