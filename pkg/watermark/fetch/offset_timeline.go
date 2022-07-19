@@ -134,15 +134,20 @@ func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
 // GetEventTime will return the event-time for the given offset.
 // TODO(jyu6): will make Watermark an interface make it easy to get a Watermark and return an Offset?
 func (t *OffsetTimeline) GetEventTime(inputOffset isb.Offset) int64 {
+	// TODO: handle err?
+	inputOffsetInt64, _ := inputOffset.Sequence()
+	return t.GetEventtimeFromInt64(inputOffsetInt64)
+}
+
+func (t *OffsetTimeline) GetEventtimeFromInt64(inputOffsetInt64 int64) int64 {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
+
 	var (
 		offset    int64 = -1
 		eventTime int64 = -1
 	)
 
-	// TODO: handle err?
-	inputOffsetInt64, _ := inputOffset.Sequence()
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
 		// get the event time has the closest offset to the input offset
 		// exclude the same offset because this offset may not finish processing yet
@@ -152,7 +157,7 @@ func (t *OffsetTimeline) GetEventTime(inputOffset isb.Offset) int64 {
 			eventTime = e.Value.(OffsetWatermark).watermark
 		}
 	}
-	// reach the end of the list
+
 	return eventTime
 }
 
