@@ -6182,7 +6182,7 @@ spec:
                           format: int32
                           type: integer
                         min:
-                          description: Minimal replicas.
+                          description: Minimum replicas.
                           format: int32
                           type: integer
                         replicasPerScale:
@@ -10102,7 +10102,7 @@ spec:
                     format: int32
                     type: integer
                   min:
-                    description: Minimal replicas.
+                    description: Minimum replicas.
                     format: int32
                     type: integer
                   replicasPerScale:

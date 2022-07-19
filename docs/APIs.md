@@ -2982,7 +2982,7 @@ or any other 3rd party auto scaling strategies.
 <td>
 <em>(Optional)</em>
 <p>
-Minimal replicas.
+Minimum replicas.
 </p>
 </td>
 </tr>

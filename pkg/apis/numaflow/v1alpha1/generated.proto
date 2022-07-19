@@ -804,7 +804,7 @@ message Scale {
   // +optional
   optional bool disabled = 1;
 
-  // Minimal replicas.
+  // Minimum replicas.
   // +optional
   optional int32 min = 2;
 
