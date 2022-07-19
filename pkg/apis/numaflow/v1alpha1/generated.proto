@@ -799,32 +799,41 @@ message RedisSettings {
 }
 
 message Scale {
-  // Whether to disable auto scaling
-  // Set to "true" when using Kubernetes HPA or any other 3rd party auto scaling strategies
+  // Whether to disable auto scaling.
+  // Set to "true" when using Kubernetes HPA or any other 3rd party auto scaling strategies.
   // +optional
   optional bool disabled = 1;
 
-  // Minimal replicas
-  // +kubebuilder:default=1
+  // Minimal replicas.
   // +optional
   optional int32 min = 2;
 
-  // Maximum replicas
-  // +kubebuilder:default=100
+  // Maximum replicas.
   // +optional
   optional int32 max = 3;
 
-  // Lookback seconds to calculate the average pending messages and processing rate
+  // Lookback seconds to calculate the average pending messages and processing rate.
   // +optional
-  optional int32 lookbackSeconds = 4;
+  optional uint32 lookbackSeconds = 4;
 
-  // Cooldown seconds after a scaling operation before another one
+  // Cooldown seconds after a scaling operation before another one.
   // +optional
-  optional int32 cooldownSeconds = 5;
+  optional uint32 cooldownSeconds = 5;
 
-  // After scaling down to 0, sleep how many seconds before scaling up to peek
+  // After scaling down to 0, sleep how many seconds before scaling up to peek.
   // +optional
-  optional int32 zeroReplicaSleepSeconds = 6;
+  optional uint32 zeroReplicaSleepSeconds = 6;
+
+  // How many seconds are expected to finish processing the pending messages.
+  // Only effective for source vertices.
+  // +optional
+  optional uint32 targetProcessingSeconds = 7;
+
+  // TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read.
+  // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+  // It only applies to UDF and Sink vertice as only they have buffer to read.
+  // +optional
+  optional uint32 targetBufferUsage = 8;
 }
 
 message Sink {

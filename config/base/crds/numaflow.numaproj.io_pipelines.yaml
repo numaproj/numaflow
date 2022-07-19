@@ -1438,32 +1438,44 @@ spec:
                       properties:
                         cooldownSeconds:
                           description: Cooldown seconds after a scaling operation
-                            before another one
+                            before another one.
                           format: int32
                           type: integer
                         disabled:
-                          description: Whether to disable auto scaling Set to "true"
+                          description: Whether to disable auto scaling. Set to "true"
                             when using Kubernetes HPA or any other 3rd party auto
-                            scaling strategies
+                            scaling strategies.
                           type: boolean
                         lookbackSeconds:
                           description: Lookback seconds to calculate the average pending
-                            messages and processing rate
+                            messages and processing rate.
                           format: int32
                           type: integer
                         max:
-                          default: 100
-                          description: Maximum replicas
+                          description: Maximum replicas.
                           format: int32
                           type: integer
                         min:
-                          default: 1
-                          description: Minimal replicas
+                          description: Minimal replicas.
+                          format: int32
+                          type: integer
+                        targetBufferUsage:
+                          description: TargetBufferUsage is used to define the target
+                            pencentage of usage of the buffer to be read. A valid
+                            and meaningful value should be less than the BufferUsageLimit
+                            defined in the Edge spec (or Pipeline spec), for example,
+                            50. It only applies to UDF and Sink vertice as only they
+                            have buffer to read.
+                          format: int32
+                          type: integer
+                        targetProcessingSeconds:
+                          description: How many seconds are expected to finish processing
+                            the pending messages. Only effective for source vertices.
                           format: int32
                           type: integer
                         zeroReplicaSleepSeconds:
                           description: After scaling down to 0, sleep how many seconds
-                            before scaling up to peek
+                            before scaling up to peek.
                           format: int32
                           type: integer
                       type: object

@@ -25,7 +25,7 @@ type metricsHttpClient interface {
 }
 
 type pipelineMetricsQueryService struct {
-	isbsvcClient isbsvc.ISBService
+	isbSvcClient isbsvc.ISBService
 	pipeline     *v1alpha1.Pipeline
 	httpClient   metricsHttpClient
 }
@@ -33,12 +33,14 @@ type pipelineMetricsQueryService struct {
 // NewPipelineMetricsQueryService returns a new instance of pipelineMetricsQueryService
 func NewPipelineMetricsQueryService(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) *pipelineMetricsQueryService {
 	return &pipelineMetricsQueryService{
-		isbsvcClient: isbSvcClient,
+		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
-		httpClient: &http.Client{Transport: &http.Transport{
-			TLSHandshakeTimeout: time.Second * 3,
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-		}},
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+			Timeout: time.Second * 3,
+		},
 	}
 }
 
@@ -50,7 +52,7 @@ func (ps *pipelineMetricsQueryService) ListBuffers(ctx context.Context, req *dae
 	buffers := []*daemon.BufferInfo{}
 	for _, edge := range ps.pipeline.Spec.Edges {
 		buffer := v1alpha1.GenerateEdgeBufferName(ps.pipeline.Namespace, ps.pipeline.Name, edge.From, edge.To)
-		bufferInfo, err := ps.isbsvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
+		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
 		}
@@ -81,7 +83,7 @@ func (ps *pipelineMetricsQueryService) ListBuffers(ctx context.Context, req *dae
 
 // GetBuffer is used to obtain one buffer information of a pipeline
 func (ps *pipelineMetricsQueryService) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
-	bufferInfo, err := ps.isbsvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: *req.Buffer, Type: v1alpha1.EdgeBuffer})
+	bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: *req.Buffer, Type: v1alpha1.EdgeBuffer})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of buffer %q:%v", *req.Buffer, err)
 	}

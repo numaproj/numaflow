@@ -64,7 +64,7 @@ func (v Vertex) IsASink() bool {
 	return v.Spec.Sink != nil
 }
 
-func (v Vertex) IsAnUDF() bool {
+func (v Vertex) IsAUDF() bool {
 	return v.Spec.Sink == nil && v.Spec.Source == nil
 }
 
@@ -367,27 +367,34 @@ type AbstractVertex struct {
 }
 
 type Scale struct {
-	// Whether to disable auto scaling
-	// Set to "true" when using Kubernetes HPA or any other 3rd party auto scaling strategies
+	// Whether to disable auto scaling.
+	// Set to "true" when using Kubernetes HPA or any other 3rd party auto scaling strategies.
 	// +optional
 	Disabled bool `json:"disabled,omitempty" protobuf:"bytes,1,opt,name=disabled"`
-	// Minimal replicas
-	// +kubebuilder:default=1
+	// Minimal replicas.
 	// +optional
 	Min *int32 `json:"min,omitempty" protobuf:"varint,2,opt,name=min"`
-	// Maximum replicas
-	// +kubebuilder:default=100
+	// Maximum replicas.
 	// +optional
 	Max *int32 `json:"max,omitempty" protobuf:"varint,3,opt,name=max"`
-	// Lookback seconds to calculate the average pending messages and processing rate
+	// Lookback seconds to calculate the average pending messages and processing rate.
 	// +optional
-	LookbackSeconds *int32 `json:"lookbackSeconds,omitempty" protobuf:"varint,4,opt,name=lookbackSeconds"`
-	// Cooldown seconds after a scaling operation before another one
+	LookbackSeconds *uint32 `json:"lookbackSeconds,omitempty" protobuf:"varint,4,opt,name=lookbackSeconds"`
+	// Cooldown seconds after a scaling operation before another one.
 	// +optional
-	CooldownSeconds *int32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`
-	// After scaling down to 0, sleep how many seconds before scaling up to peek
+	CooldownSeconds *uint32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`
+	// After scaling down to 0, sleep how many seconds before scaling up to peek.
 	// +optional
-	ZeroReplicaSleepSeconds *int32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,6,opt,name=zeroReplicaSleepSeconds"`
+	ZeroReplicaSleepSeconds *uint32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,6,opt,name=zeroReplicaSleepSeconds"`
+	// How many seconds are expected to finish processing the pending messages.
+	// Only effective for source vertices.
+	// +optional
+	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
+	// TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read.
+	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+	// It only applies to UDF and Sink vertice as only they have buffer to read.
+	// +optional
+	TargetBufferUsage *uint32 `json:"targetBufferUsage,omitempty" protobuf:"varint,8,opt,name=targetBufferUsage"`
 }
 
 func (s Scale) GetLookbackSeconds() int {
@@ -408,7 +415,37 @@ func (s Scale) GetZeroReplicaSleepSeconds() int {
 	if s.ZeroReplicaSleepSeconds != nil {
 		return int(*s.ZeroReplicaSleepSeconds)
 	}
-	return DefaultZeorReplicaSleepSeconds
+	return DefaultZeroReplicaSleepSeconds
+}
+
+func (s Scale) GetTargetProcessingSeconds() int {
+	if s.TargetProcessingSeconds != nil {
+		return int(*s.TargetProcessingSeconds)
+	}
+	return DefaultTargetProcessingSeconds
+}
+
+func (s Scale) GetTargetBufferUsage() int {
+	if s.TargetBufferUsage != nil {
+		return int(*s.TargetBufferUsage)
+	}
+	return DefaultTargetBufferUsage
+}
+
+func (s Scale) GetMinReplicas() int32 {
+	if x := s.Min; x == nil || *x < 0 {
+		return 0
+	} else {
+		return *x
+	}
+}
+
+func (s Scale) GetMaxReplicas() int32 {
+	if x := s.Max; x == nil || *x > DefaultMaxReplicas {
+		return DefaultMaxReplicas
+	} else {
+		return *x
+	}
 }
 
 type VertexLimits struct {

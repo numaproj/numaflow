@@ -294,7 +294,7 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 			}
 			podSpec.Containers[0].Env = envs
 		}
-	} else if vertex.IsAnUDF() {
+	} else if vertex.IsAUDF() {
 		// Add default UDF content-type to udf container
 		envs := []corev1.EnvVar{}
 		userDefined := false

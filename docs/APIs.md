@@ -2970,8 +2970,8 @@ Description
 <td>
 <em>(Optional)</em>
 <p>
-Whether to disable auto scaling Set to “true” when using Kubernetes HPA
-or any other 3rd party auto scaling strategies
+Whether to disable auto scaling. Set to “true” when using Kubernetes HPA
+or any other 3rd party auto scaling strategies.
 </p>
 </td>
 </tr>
@@ -2982,7 +2982,7 @@ or any other 3rd party auto scaling strategies
 <td>
 <em>(Optional)</em>
 <p>
-Minimal replicas
+Minimal replicas.
 </p>
 </td>
 </tr>
@@ -2993,42 +2993,69 @@ Minimal replicas
 <td>
 <em>(Optional)</em>
 <p>
-Maximum replicas
+Maximum replicas.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>lookbackSeconds</code></br> <em> int32 </em>
+<code>lookbackSeconds</code></br> <em> uint32 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
 Lookback seconds to calculate the average pending messages and
-processing rate
+processing rate.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>cooldownSeconds</code></br> <em> int32 </em>
+<code>cooldownSeconds</code></br> <em> uint32 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-Cooldown seconds after a scaling operation before another one
+Cooldown seconds after a scaling operation before another one.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>zeroReplicaSleepSeconds</code></br> <em> int32 </em>
+<code>zeroReplicaSleepSeconds</code></br> <em> uint32 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
 After scaling down to 0, sleep how many seconds before scaling up to
-peek
+peek.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>targetProcessingSeconds</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+How many seconds are expected to finish processing the pending messages.
+Only effective for source vertices.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>targetBufferUsage</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+TargetBufferUsage is used to define the target pencentage of usage of
+the buffer to be read. A valid and meaningful value should be less than
+the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
+example, 50. It only applies to UDF and Sink vertice as only they have
+buffer to read.
 </p>
 </td>
 </tr>

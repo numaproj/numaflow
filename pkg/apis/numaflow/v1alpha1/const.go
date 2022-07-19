@@ -105,7 +105,10 @@ const (
 	// Auto scaling
 	DefaultLookbackSeconds         = 180
 	DefaultCooldownSeconds         = 60
-	DefaultZeorReplicaSleepSeconds = 180
+	DefaultZeroReplicaSleepSeconds = 180
+	DefaultMaxReplicas             = 100
+	DefaultTargetProcessingSeconds = 3
+	DefaultTargetBufferUsage       = 50
 )
 
 type ContentType string

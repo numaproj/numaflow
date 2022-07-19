@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
@@ -119,15 +120,15 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 }
 
 func validateVertex(v dfv1.AbstractVertex) error {
-	min, max := int32(1), int32(1)
+	min, max := int32(0), int32(dfv1.DefaultMaxReplicas)
 	if v.Scale.Min != nil {
 		min = *v.Scale.Min
 	}
 	if v.Scale.Max != nil {
 		max = *v.Scale.Max
 	}
-	if min < 1 {
-		return fmt.Errorf("vertex %q: min number of replicas should be greater than 0", v.Name) // Do not support scale to 0 now.
+	if min < 0 {
+		return fmt.Errorf("vertex %q: min number of replicas should not be smaller than 0", v.Name)
 	}
 	if min > max {
 		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
