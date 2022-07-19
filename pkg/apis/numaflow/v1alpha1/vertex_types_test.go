@@ -351,3 +351,15 @@ func Test_VertexGetInitContainer(t *testing.T) {
 func TestGenerateEdgeBufferName(t *testing.T) {
 	assert.Equal(t, "a-b-c-d", GenerateEdgeBufferName("a", "b", "c", "d"))
 }
+
+func Test_Scale_Parameters(t *testing.T) {
+	s := Scale{}
+	assert.Equal(t, int32(0), s.GetMinReplicas())
+	assert.Equal(t, int32(DefaultMaxReplicas), s.GetMaxReplicas())
+	assert.Equal(t, DefaultCooldownSeconds, s.GetCooldownSeconds())
+	assert.Equal(t, DefaultLookbackSeconds, s.GetLookbackSeconds())
+	assert.Equal(t, DefaultReplicasPerScale, s.GetReplicasPerScale())
+	assert.Equal(t, DefaultTargetBufferUsage, s.GetTargetBufferUsage())
+	assert.Equal(t, DefaultTargetProcessingSeconds, s.GetTargetProcessingSeconds())
+	assert.Equal(t, DefaultZeroReplicaSleepSeconds, s.GetZeroReplicaSleepSeconds())
+}

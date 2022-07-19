@@ -371,7 +371,7 @@ type Scale struct {
 	// Set to "true" when using Kubernetes HPA or any other 3rd party auto scaling strategies.
 	// +optional
 	Disabled bool `json:"disabled,omitempty" protobuf:"bytes,1,opt,name=disabled"`
-	// Minimal replicas.
+	// Minimum replicas.
 	// +optional
 	Min *int32 `json:"min,omitempty" protobuf:"varint,2,opt,name=min"`
 	// Maximum replicas.
