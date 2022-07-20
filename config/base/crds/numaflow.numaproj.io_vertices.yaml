@@ -1310,7 +1310,7 @@ spec:
                 format: int32
                 type: integer
               scale:
-                description: Settings for auto scaling
+                description: Settings for autoscaling
                 properties:
                   cooldownSeconds:
                     description: Cooldown seconds after a scaling operation before
@@ -1318,8 +1318,8 @@ spec:
                     format: int32
                     type: integer
                   disabled:
-                    description: Whether to disable auto scaling. Set to "true" when
-                      using Kubernetes HPA or any other 3rd party auto scaling strategies.
+                    description: Whether to disable autoscaling. Set to "true" when
+                      using Kubernetes HPA or any other 3rd party autoscaling strategies.
                     type: boolean
                   lookbackSeconds:
                     description: Lookback seconds to calculate the average pending

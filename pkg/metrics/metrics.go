@@ -56,7 +56,7 @@ type metricsServer struct {
 	vertex    *dfv1.Vertex
 	rater     isb.Ratable
 	lagReader isb.LagReader
-	// lookbackSeconds is the look back seconds for pending and rate calculation used for auto scaling
+	// lookbackSeconds is the look back seconds for pending and rate calculation used for autoscaling
 	lookbackSeconds     int64
 	lagCheckingInterval time.Duration
 	refreshInterval     time.Duration
@@ -139,7 +139,7 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 		return
 	}
 	log := logging.FromContext(ctx)
-	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds} // Metrics for auto-scaling use key "default"
+	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds} // Metrics for autoscaling use key "default"
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}

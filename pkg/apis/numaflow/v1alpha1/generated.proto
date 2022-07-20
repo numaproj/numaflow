@@ -108,7 +108,7 @@ message AbstractVertex {
   // +optional
   optional VertexLimits limits = 17;
 
-  // Settings for auto scaling
+  // Settings for autoscaling
   // +optional
   optional Scale scale = 18;
 }
@@ -799,8 +799,8 @@ message RedisSettings {
 }
 
 message Scale {
-  // Whether to disable auto scaling.
-  // Set to "true" when using Kubernetes HPA or any other 3rd party auto scaling strategies.
+  // Whether to disable autoscaling.
+  // Set to "true" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
   // +optional
   optional bool disabled = 1;
 

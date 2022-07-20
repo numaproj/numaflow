@@ -377,14 +377,14 @@ type AbstractVertex struct {
 	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings
 	// +optional
 	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,17,opt,name=limits"`
-	// Settings for auto scaling
+	// Settings for autoscaling
 	// +optional
 	Scale Scale `json:"scale,omitempty" protobuf:"bytes,18,opt,name=scale"`
 }
 
 type Scale struct {
-	// Whether to disable auto scaling.
-	// Set to "true" when using Kubernetes HPA or any other 3rd party auto scaling strategies.
+	// Whether to disable autoscaling.
+	// Set to "true" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
 	// +optional
 	Disabled bool `json:"disabled,omitempty" protobuf:"bytes,1,opt,name=disabled"`
 	// Minimum replicas.

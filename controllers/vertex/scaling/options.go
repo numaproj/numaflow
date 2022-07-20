@@ -1,7 +1,7 @@
 package scaling
 
 type options struct {
-	// Number of workers working on auto scaling
+	// Number of workers working on autoscaling
 	workers int
 	// Time in milliseconds, each element in the work queue will be picked up in an interval of this period of time.
 	taskInterval int

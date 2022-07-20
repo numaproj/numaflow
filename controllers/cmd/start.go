@@ -183,7 +183,7 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	go autoscaler.Start(logging.WithLogger(ctx, logging.NewLogger().Named("auto-scaler")))
+	go autoscaler.Start(logging.WithLogger(ctx, logging.NewLogger().Named("autoscaler")))
 
 	logger.Infow("Starting controller manager", "version", numaflow.GetVersion())
 	if err := mgr.Start(ctx); err != nil {

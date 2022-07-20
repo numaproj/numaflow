@@ -97,7 +97,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
 	}
 
-	if vertex.Scalable() { // Add to auto scaling watcher
+	if vertex.Scalable() { // Add to autoscaling watcher
 		r.scaler.StartWatching(fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name))
 	}
 

@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: auto-scaling-pipeline
+  name: autoscaling-pipeline
 spec:
   vertices:
     - name: in

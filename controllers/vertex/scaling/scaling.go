@@ -55,7 +55,7 @@ func (s *Scaler) Contains(key string) bool {
 	return ok
 }
 
-// Length returns how many vetices are being watched for auto scaling
+// Length returns how many vetices are being watched for autoscaling
 func (s *Scaler) Length() int {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -71,7 +71,7 @@ func (s *Scaler) StartWatching(key string) {
 	}
 }
 
-// StopWatching stops auto scaling on the key (namespace/name)
+// StopWatching stops autoscaling on the key (namespace/name)
 func (s *Scaler) StopWatching(key string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -85,7 +85,7 @@ func (s *Scaler) StopWatching(key string) {
 // It waits for keys in the channel, and starts a scaling job
 func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 	log := logging.FromContext(ctx)
-	log.Infof("Started auto scaling worker %v", id)
+	log.Infof("Started autoscaling worker %v", id)
 	for {
 		select {
 		case <-ctx.Done():
@@ -130,7 +130,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Debug("Vertex being deleted")
 		return nil
 	}
-	if !vertex.Scalable() { // A vertex which is not scalable, such as HTTP source, or auto-scaling disabled.
+	if !vertex.Scalable() { // A vertex which is not scalable, such as HTTP source, or autoscaling disabled.
 		s.StopWatching(key) // Remove it in case it's watched.
 		return nil
 	}
@@ -178,7 +178,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	if err != nil {
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
 	}
-	// Avg rate and pending for auto-scaling are both in the map with key "default", see "pkg/metrics/metrics.go".
+	// Avg rate and pending for autoscaling are both in the map with key "default", see "pkg/metrics/metrics.go".
 	rate, existing := vMetrics.ProcessingRates["default"]
 	if !existing || rate < 0 || rate == isb.RateNotAvailable { // Rate not available
 		log.Debugf("Vertex %s has no rate information, skip scaling", vertex.Name)
@@ -269,12 +269,12 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 	}
 }
 
-// Start function starts the auto-scaling worker group.
+// Start function starts the autoscaling worker group.
 // Each worker keeps picking up scaling tasks (which contains vertex keys) to calculate the desired replicas,
 // and patch the vetex spec with the new replica number if needed.
 func (s *Scaler) Start(ctx context.Context) {
 	log := logging.FromContext(ctx)
-	log.Info("Starting auto scaler...")
+	log.Info("Starting autoscaler...")
 	keyCh := make(chan string)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

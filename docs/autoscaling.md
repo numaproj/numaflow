@@ -1,4 +1,4 @@
-# Auto Scaling
+# Autoscaling
 
 Numaflow is able to run with both `Horizontal Pod Autoscaling` and `Vertical Pod Autoscaling`.
 
@@ -12,13 +12,58 @@ Numaflow is able to run with both `Horizontal Pod Autoscaling` and `Vertical Pod
 
 ### Numaflow Autoscaling
 
-Numaflow provides autoscaling capability out of the box.
+Numaflow provides `0 - N` autoscaling capability out of the box, it's available for all the `UDF`, `Sink` and following `Source` vertices.
 
-More detail is coming soon.
+- Kafka
+
+Numaflow autoscaling is enabled by default, there are some parameters can be tuned to achieve better results.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  vertices:
+    - name: my-vertex
+      scale:
+        disabled: false # Optional, defaults to false.
+        min: 0 # Optional, minimum replicas, defaults to 0.
+        max: 20 # Optional, maximum replicas, defaults to 50.
+        lookbackSeconds: 180 # Optional, defaults to 180.
+        cooldownSeconds: 90 # Optional, defaults to 90.
+        zeroReplicaSleepSeconds: 180 # Optional, defaults to 180.
+        targetProcessingSeconds: 3 # Optional, defaults to 0.
+        targetBufferUsage: 50 # Optional, defaults to 50.
+        replicasPerScale: 2 # Optional, defaults to 2.
+```
+
+- `disabled` - Whether to disable Numaflow autoscaling, defaults to `false`.
+- `min` - Minimum replicas, valid value could be an interger >= 0. Defaults to `0`, which means it could be scaled down to 0.
+- `max` - Maximum replicas, positive interger which should not be less than `min`, defaults to `50`. if `max` and `min` are the same, that will be the fixed replica number.
+- `lookbackSeconds` - How many seconds to lookback for vertex average processing rate (tps) and pending messages calculation, defaults to `180`. Rate and pending messages metrics are critical for autoscaling, you might need to tune this parameter a bit to see better results. For example, your data source only have 1 minute data input in every 5 minutes, and you don't want the vertices to be scaled down to `0`. In this case, you need to increase `lookbackSeconds` to cover all the 5 minutes, so that the calculated average rate and pending messages won't be `0` during the silent period, to prevent scaling down to 0 from happening.
+- `zeroReplicaSleepSeconds` - How many seconds it will wait after scaling down to `0`, defaults to `180`. Numaflow autoscaler periodically scales up a vertex pod to "peek" the incoming data, this is the period of time to wait before peeking.
+- `targetProcessingSeconds` - To finish processing the pending messages in how many seconds, defaults to `3`. This is only effective for the `Source` vertices which support autoscaling, it determines how aggressive you want to do for the autoscaling, increasing the value will bring less replicas.
+- `targetBufferUsage` - Targeted buffer usage percentage, defaults to `50`. It is only effective for `UDF` and `Sink` vertices, it also determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.
+- `replicasPerScale` - How many maximum replicas will be scaled up or down at once, defaults to `2`.
+
+To disable Numaflow autoscaling, set `disabled: true` as following.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  vertices:
+    - name: my-vertex
+      scale:
+        disabled: true
+```
 
 ### Kubernetes HPA
 
-[Kubernetes HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) is supported in Numaflow for any type of Vertex. To use HPA, remember to point the `scaleTargetRef` to the vertex as below.
+[Kubernetes HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) is supported in Numaflow for any type of Vertex. To use HPA, remember to point the `scaleTargetRef` to the vertex as below, and disable Numaflow autoscaling in your Pipeline spec.
 
 ```yaml
 apiVersion: autoscaling/v2beta1
@@ -45,9 +90,9 @@ Kubernetes HPA autoscaling is usful for those Source vertice not able to count p
 
 ### Third Party Autoscaling
 
-Third party autoscaling tools like [KEDA](https://keda.sh/) are also supported in Numaflow, which can be used to auto scale any type of vertex with the scalers it supports.
+Third party autoscaling tools like [KEDA](https://keda.sh/) are also supported in Numaflow, which can be used to autoscale any type of vertex with the scalers it supports.
 
-To use KEDA for vertex auto scaling, same as Kubernetes HPA, point the `scaleTargetRef` to your vertex.
+To use KEDA for vertex autoscaling, same as Kubernetes HPA, point the `scaleTargetRef` to your vertex, and disable Numaflow autoscaling in your Pipeline spec.
 
 ```yaml
 apiVersion: keda.sh/v1alpha1

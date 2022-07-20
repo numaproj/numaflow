@@ -1434,7 +1434,7 @@ spec:
                         if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/'
                       type: string
                     scale:
-                      description: Settings for auto scaling
+                      description: Settings for autoscaling
                       properties:
                         cooldownSeconds:
                           description: Cooldown seconds after a scaling operation
@@ -1442,9 +1442,9 @@ spec:
                           format: int32
                           type: integer
                         disabled:
-                          description: Whether to disable auto scaling. Set to "true"
-                            when using Kubernetes HPA or any other 3rd party auto
-                            scaling strategies.
+                          description: Whether to disable autoscaling. Set to "true"
+                            when using Kubernetes HPA or any other 3rd party autoscaling
+                            strategies.
                           type: boolean
                         lookbackSeconds:
                           description: Lookback seconds to calculate the average pending

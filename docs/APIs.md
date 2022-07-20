@@ -240,7 +240,7 @@ vertices of a pipleine, will override pipeline level settings
 <td>
 <em>(Optional)</em>
 <p>
-Settings for auto scaling
+Settings for autoscaling
 </p>
 </td>
 </tr>
@@ -2970,8 +2970,8 @@ Description
 <td>
 <em>(Optional)</em>
 <p>
-Whether to disable auto scaling. Set to “true” when using Kubernetes HPA
-or any other 3rd party auto scaling strategies.
+Whether to disable autoscaling. Set to “true” when using Kubernetes HPA
+or any other 3rd party autoscaling strategies.
 </p>
 </td>
 </tr>
