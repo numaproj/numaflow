@@ -185,13 +185,13 @@ func TestValidateVertex(t *testing.T) {
 	t.Run("bad min", func(t *testing.T) {
 		v := dfv1.AbstractVertex{
 			Scale: dfv1.Scale{
-				Min: pointer.Int32(0),
+				Min: pointer.Int32(-1),
 				Max: pointer.Int32(1),
 			},
 		}
 		err := validateVertex(v)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "greater than 0")
+		assert.Contains(t, err.Error(), "not be smaller than 0")
 	})
 
 	t.Run("min > max", func(t *testing.T) {

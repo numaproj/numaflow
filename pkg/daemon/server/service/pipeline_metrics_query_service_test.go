@@ -64,6 +64,13 @@ vertex_processing_rate{period="15m",pipeline="simple-pipeline",vertex="cat"} 4.8
 vertex_processing_rate{period="1m",pipeline="simple-pipeline",vertex="cat"} 5.084745762711864
 vertex_processing_rate{period="5m",pipeline="simple-pipeline",vertex="cat"} 4.894736842105263
 vertex_processing_rate{period="default",pipeline="simple-pipeline",vertex="cat"} 4.894736842105263
+
+# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
+# TYPE vertex_pending_messages gauge
+vertex_pending_messages{period="15m",pipeline="simple-pipeline",vertex="cat"} 4.011
+vertex_pending_messages{period="1m",pipeline="simple-pipeline",vertex="cat"} 5.333
+vertex_pending_messages{period="5m",pipeline="simple-pipeline",vertex="cat"} 6.002
+vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"} 7.00002
 `
 	ioReader := ioutil.NopCloser(bytes.NewReader([]byte(metricsResponse)))
 
@@ -84,13 +91,20 @@ vertex_processing_rate{period="default",pipeline="simple-pipeline",vertex="cat"}
 	resp, err := pipelineMetricsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)
 
-	processingRates := make(map[string]float32)
+	processingRates := make(map[string]float64)
 
-	processingRates["15m"] = 4.894737
-	processingRates["1m"] = 5.084746
-	processingRates["5m"] = 4.894737
-	processingRates["default"] = 4.894737
+	processingRates["15m"] = 4.894736842105263
+	processingRates["1m"] = 5.084745762711864
+	processingRates["5m"] = 4.894736842105263
+	processingRates["default"] = 4.894736842105263
 	assert.Equal(t, resp.Vertex.GetProcessingRates(), processingRates)
+
+	pendings := make(map[string]int64)
+	pendings["15m"] = 4
+	pendings["1m"] = 5
+	pendings["5m"] = 6
+	pendings["default"] = 7
+	assert.Equal(t, resp.Vertex.GetPendings(), pendings)
 }
 
 func TestGetBuffer(t *testing.T) {

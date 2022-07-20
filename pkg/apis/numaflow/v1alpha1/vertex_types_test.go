@@ -351,3 +351,60 @@ func Test_VertexGetInitContainer(t *testing.T) {
 func TestGenerateEdgeBufferName(t *testing.T) {
 	assert.Equal(t, "a-b-c-d", GenerateEdgeBufferName("a", "b", "c", "d"))
 }
+
+func TestScalable(t *testing.T) {
+	v := Vertex{}
+	v.Spec.Scale.Disabled = true
+	assert.False(t, v.Scalable())
+	v.Spec.Scale.Disabled = false
+	v.Spec.Sink = &Sink{}
+	assert.True(t, v.Scalable())
+	v.Spec.Sink = nil
+	v.Spec.UDF = &UDF{}
+	assert.True(t, v.Scalable())
+	v.Spec.UDF = nil
+	v.Spec.Source = &Source{
+		HTTP: &HTTPSource{},
+	}
+	assert.False(t, v.Scalable())
+	v.Spec.Source = &Source{
+		Kafka: &KafkaSource{},
+	}
+	assert.True(t, v.Scalable())
+}
+
+func Test_Scale_Parameters(t *testing.T) {
+	s := Scale{}
+	assert.Equal(t, int32(0), s.GetMinReplicas())
+	assert.Equal(t, int32(DefaultMaxReplicas), s.GetMaxReplicas())
+	assert.Equal(t, DefaultCooldownSeconds, s.GetCooldownSeconds())
+	assert.Equal(t, DefaultLookbackSeconds, s.GetLookbackSeconds())
+	assert.Equal(t, DefaultReplicasPerScale, s.GetReplicasPerScale())
+	assert.Equal(t, DefaultTargetBufferUsage, s.GetTargetBufferUsage())
+	assert.Equal(t, DefaultTargetProcessingSeconds, s.GetTargetProcessingSeconds())
+	assert.Equal(t, DefaultZeroReplicaSleepSeconds, s.GetZeroReplicaSleepSeconds())
+	cds := uint32(100)
+	lbs := uint32(101)
+	rps := uint32(3)
+	tps := uint32(102)
+	tbu := uint32(33)
+	zrss := uint32(44)
+	s = Scale{
+		Min:                     pointer.Int32(2),
+		Max:                     pointer.Int32(4),
+		CooldownSeconds:         &cds,
+		LookbackSeconds:         &lbs,
+		ReplicasPerScale:        &rps,
+		TargetProcessingSeconds: &tps,
+		TargetBufferUsage:       &tbu,
+		ZeroReplicaSleepSeconds: &zrss,
+	}
+	assert.Equal(t, int32(2), s.GetMinReplicas())
+	assert.Equal(t, int32(4), s.GetMaxReplicas())
+	assert.Equal(t, int(cds), s.GetCooldownSeconds())
+	assert.Equal(t, int(lbs), s.GetLookbackSeconds())
+	assert.Equal(t, int(rps), s.GetReplicasPerScale())
+	assert.Equal(t, int(tbu), s.GetTargetBufferUsage())
+	assert.Equal(t, int(tps), s.GetTargetProcessingSeconds())
+	assert.Equal(t, int(zrss), s.GetZeroReplicaSleepSeconds())
+}
