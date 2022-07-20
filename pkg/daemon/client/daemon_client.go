@@ -73,3 +73,15 @@ func (dc *DaemonClient) GetVertexMetrics(ctx context.Context, namespace, pipelin
 		return rspn.Vertex, nil
 	}
 }
+
+func (dc *DaemonClient) GetVertexWatermark(ctx context.Context, namespace, pipeline, vertex string) (*daemon.VertexWatermark, error) {
+	if rspn, err := dc.client.GetVertexWatermark(ctx, &daemon.GetVertexWatermarkRequest{
+		Namespace: &namespace,
+		Pipeline:  &pipeline,
+		Vertex:    &vertex,
+	}); err != nil {
+		return nil, err
+	} else {
+		return rspn.VertexWatermark, nil
+	}
+}

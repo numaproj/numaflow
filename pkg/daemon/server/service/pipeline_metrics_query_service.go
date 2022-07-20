@@ -4,12 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"net/http"
-	"time"
-
 	"github.com/prometheus/common/expfmt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
+	"net/http"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -25,23 +24,25 @@ type metricsHttpClient interface {
 }
 
 type pipelineMetricsQueryService struct {
-	isbSvcClient isbsvc.ISBService
-	pipeline     *v1alpha1.Pipeline
-	httpClient   metricsHttpClient
+	isbSvcClient    isbsvc.ISBService
+	pipeline        *v1alpha1.Pipeline
+	httpClient      metricsHttpClient
+	vertexWatermark *vertexWatermarkFetcher
 }
 
 // NewPipelineMetricsQueryService returns a new instance of pipelineMetricsQueryService
 func NewPipelineMetricsQueryService(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) *pipelineMetricsQueryService {
-	return &pipelineMetricsQueryService{
+	ps := pipelineMetricsQueryService{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
-		httpClient: &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
-			Timeout: time.Second * 3,
-		},
+		httpClient: &http.Client{Transport: &http.Transport{
+			TLSHandshakeTimeout: time.Second * 3,
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		}},
 	}
+
+	ps.vertexWatermark = ps.newVertexWatermarkFetcher(context.Background())
+	return &ps
 }
 
 // ListBuffers is used to obtain the all the edge buffers information of a pipeline
