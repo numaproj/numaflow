@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -129,8 +130,8 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Debug("Vertex being deleted")
 		return nil
 	}
-	if vertex.Spec.Scale.Disabled { // Auto scaling disabled
-		s.StopWatching(key) // Remove it in case it's watched
+	if !vertex.Scalable() { // A vertex which is not scalable, such as HTTP source, or auto-scaling disabled.
+		s.StopWatching(key) // Remove it in case it's watched.
 		return nil
 	}
 	if time.Since(vertex.Status.LastScaledAt.Time).Seconds() < float64(vertex.Spec.Scale.GetCooldownSeconds()) {
@@ -240,10 +241,13 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 	if rate == 0 && pending == 0 { // This could scale down to 0
 		return 0
 	}
+	if rate == 0 { // Something is wrong, we don't do anything.
+		return int32(vertex.Status.Replicas)
+	}
 	if vertex.IsASource() {
 		// For sources, we calculate the time of finishing processing the pending messages,
 		// and then we know how many replicas are needed to get them done in target seconds.
-		desired := int32(((float64(pending) / rate) / float64(vertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(vertex.Status.Replicas))
+		desired := int32(math.Round(((float64(pending) / rate) / float64(vertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(vertex.Status.Replicas)))
 		if desired == 0 {
 			desired = 1
 		}
@@ -255,8 +259,8 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 			// Simply return current replica number + max allowed if the pending messages are more than available buffer length
 			return int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScale())
 		}
-		singleReplicaContribution := (totalBufferLength - pending) / int64(vertex.Status.Replicas)
-		desired := int32(targetAvailableBufferLength / singleReplicaContribution)
+		singleReplicaContribution := float64(totalBufferLength-pending) / float64(vertex.Status.Replicas)
+		desired := int32(math.Round(float64(targetAvailableBufferLength) / singleReplicaContribution))
 		// TODO: Consider back pressure for UDF
 		if desired == 0 {
 			desired = 1
