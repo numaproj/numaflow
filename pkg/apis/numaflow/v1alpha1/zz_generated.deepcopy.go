@@ -1251,7 +1251,32 @@ func (in *Scale) DeepCopyInto(out *Scale) {
 	}
 	if in.LookbackSeconds != nil {
 		in, out := &in.LookbackSeconds, &out.LookbackSeconds
-		*out = new(int32)
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.CooldownSeconds != nil {
+		in, out := &in.CooldownSeconds, &out.CooldownSeconds
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.ZeroReplicaSleepSeconds != nil {
+		in, out := &in.ZeroReplicaSleepSeconds, &out.ZeroReplicaSleepSeconds
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.TargetProcessingSeconds != nil {
+		in, out := &in.TargetProcessingSeconds, &out.TargetProcessingSeconds
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.TargetBufferUsage != nil {
+		in, out := &in.TargetBufferUsage, &out.TargetBufferUsage
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.ReplicasPerScale != nil {
+		in, out := &in.ReplicasPerScale, &out.ReplicasPerScale
+		*out = new(uint32)
 		**out = **in
 	}
 	return

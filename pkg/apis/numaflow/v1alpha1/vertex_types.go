@@ -64,8 +64,24 @@ func (v Vertex) IsASink() bool {
 	return v.Spec.Sink != nil
 }
 
-func (v Vertex) IsAnUDF() bool {
+func (v Vertex) IsUDF() bool {
 	return v.Spec.Sink == nil && v.Spec.Source == nil
+}
+
+func (v Vertex) Scalable() bool {
+	if v.Spec.Scale.Disabled {
+		return false
+	}
+	if v.IsASink() || v.IsUDF() {
+		return true
+	}
+	if v.IsASource() {
+		src := v.Spec.Source
+		if src.Kafka != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (v Vertex) GetHeadlessServiceName() string {
@@ -361,23 +377,103 @@ type AbstractVertex struct {
 	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings
 	// +optional
 	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,17,opt,name=limits"`
+	// Settings for autoscaling
 	// +optional
 	Scale Scale `json:"scale,omitempty" protobuf:"bytes,18,opt,name=scale"`
 }
 
 type Scale struct {
-	// Minimal replicas
-	// +kubebuilder:default=1
+	// Whether to disable autoscaling.
+	// Set to "true" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
 	// +optional
-	Min *int32 `json:"min,omitempty" protobuf:"varint,1,opt,name=min"`
-	// Maximum replicas
-	// +kubebuilder:default=100
+	Disabled bool `json:"disabled,omitempty" protobuf:"bytes,1,opt,name=disabled"`
+	// Minimum replicas.
 	// +optional
-	Max *int32 `json:"max,omitempty" protobuf:"varint,2,opt,name=max"`
-	// Lookback seconds to calculate the average pending messages and processing rate
-	// +kubebuilder:default=180
+	Min *int32 `json:"min,omitempty" protobuf:"varint,2,opt,name=min"`
+	// Maximum replicas.
 	// +optional
-	LookbackSeconds *int32 `json:"lookbackSeconds,omitempty" protobuf:"varint,3,opt,name=lookbackSeconds"`
+	Max *int32 `json:"max,omitempty" protobuf:"varint,3,opt,name=max"`
+	// Lookback seconds to calculate the average pending messages and processing rate.
+	// +optional
+	LookbackSeconds *uint32 `json:"lookbackSeconds,omitempty" protobuf:"varint,4,opt,name=lookbackSeconds"`
+	// Cooldown seconds after a scaling operation before another one.
+	// +optional
+	CooldownSeconds *uint32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`
+	// After scaling down to 0, sleep how many seconds before scaling up to peek.
+	// +optional
+	ZeroReplicaSleepSeconds *uint32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,6,opt,name=zeroReplicaSleepSeconds"`
+	// TargetProcessingSeconds is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast
+	// you want the vertex to process all the pending messages. Typically increasing the value, which leads to lower processing
+	// rate, thus less replicas. It's only effective for source vertices.
+	// +optional
+	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
+	// TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read.
+	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+	// It only applies to UDF and Sink vertices as only they have buffers to read.
+	// +optional
+	TargetBufferUsage *uint32 `json:"targetBufferUsage,omitempty" protobuf:"varint,8,opt,name=targetBufferUsage"`
+	// ReplicasPerScale defines maximum replicas can be scaled up or down at once.
+	// The is use to prevent too aggresive scaling operations
+	// +optional
+	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
+}
+
+func (s Scale) GetLookbackSeconds() int {
+	if s.LookbackSeconds != nil {
+		return int(*s.LookbackSeconds)
+	}
+	return DefaultLookbackSeconds
+}
+
+func (s Scale) GetCooldownSeconds() int {
+	if s.CooldownSeconds != nil {
+		return int(*s.CooldownSeconds)
+	}
+	return DefaultCooldownSeconds
+}
+
+func (s Scale) GetZeroReplicaSleepSeconds() int {
+	if s.ZeroReplicaSleepSeconds != nil {
+		return int(*s.ZeroReplicaSleepSeconds)
+	}
+	return DefaultZeroReplicaSleepSeconds
+}
+
+func (s Scale) GetTargetProcessingSeconds() int {
+	if s.TargetProcessingSeconds != nil {
+		return int(*s.TargetProcessingSeconds)
+	}
+	return DefaultTargetProcessingSeconds
+}
+
+func (s Scale) GetTargetBufferUsage() int {
+	if s.TargetBufferUsage != nil {
+		return int(*s.TargetBufferUsage)
+	}
+	return DefaultTargetBufferUsage
+}
+
+func (s Scale) GetReplicasPerScale() int {
+	if s.ReplicasPerScale != nil {
+		return int(*s.ReplicasPerScale)
+	}
+	return DefaultReplicasPerScale
+}
+
+func (s Scale) GetMinReplicas() int32 {
+	if x := s.Min; x == nil || *x < 0 {
+		return 0
+	} else {
+		return *x
+	}
+}
+
+func (s Scale) GetMaxReplicas() int32 {
+	if x := s.Max; x == nil || *x > DefaultMaxReplicas {
+		return DefaultMaxReplicas
+	} else {
+		return *x
+	}
 }
 
 type VertexLimits struct {

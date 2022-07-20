@@ -10,6 +10,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 )
@@ -77,7 +78,7 @@ func (s *ToLog) IsFull() bool {
 func (s *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	prefix := "(" + s.GetName() + ")"
 	for _, message := range messages {
-		logSinkWriteCount.With(map[string]string{"vertex": s.name, "pipeline": s.pipelineName}).Inc()
+		logSinkWriteCount.With(map[string]string{metricspkg.LabelVertex: s.name, metricspkg.LabelPipeline: s.pipelineName}).Inc()
 		log.Println(prefix, string(message.Payload))
 	}
 	return nil, make([]error, len(messages))

@@ -14,6 +14,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -24,7 +25,7 @@ type metricsHttpClient interface {
 }
 
 type pipelineMetricsQueryService struct {
-	isbsvcClient isbsvc.ISBService
+	isbSvcClient isbsvc.ISBService
 	pipeline     *v1alpha1.Pipeline
 	httpClient   metricsHttpClient
 }
@@ -32,12 +33,14 @@ type pipelineMetricsQueryService struct {
 // NewPipelineMetricsQueryService returns a new instance of pipelineMetricsQueryService
 func NewPipelineMetricsQueryService(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) *pipelineMetricsQueryService {
 	return &pipelineMetricsQueryService{
-		isbsvcClient: isbSvcClient,
+		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
-		httpClient: &http.Client{Transport: &http.Transport{
-			TLSHandshakeTimeout: time.Second * 3,
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-		}},
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+			Timeout: time.Second * 3,
+		},
 	}
 }
 
@@ -49,7 +52,7 @@ func (ps *pipelineMetricsQueryService) ListBuffers(ctx context.Context, req *dae
 	buffers := []*daemon.BufferInfo{}
 	for _, edge := range ps.pipeline.Spec.Edges {
 		buffer := v1alpha1.GenerateEdgeBufferName(ps.pipeline.Namespace, ps.pipeline.Name, edge.From, edge.To)
-		bufferInfo, err := ps.isbsvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
+		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
 		}
@@ -80,7 +83,7 @@ func (ps *pipelineMetricsQueryService) ListBuffers(ctx context.Context, req *dae
 
 // GetBuffer is used to obtain one buffer information of a pipeline
 func (ps *pipelineMetricsQueryService) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
-	bufferInfo, err := ps.isbsvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: *req.Buffer, Type: v1alpha1.EdgeBuffer})
+	bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: *req.Buffer, Type: v1alpha1.EdgeBuffer})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of buffer %q:%v", *req.Buffer, err)
 	}
@@ -145,17 +148,29 @@ func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req
 		return nil, err
 	}
 
-	processingRates := make(map[string]float32, 0)
+	processingRates := make(map[string]float64, 0)
 	// Check if the resultant metrics list contains the processingRate, if it does look for the period label
-	if value, ok := result[v1alpha1.VertexProcessingRate]; ok {
+	if value, ok := result[metricspkg.VertexProcessingRate]; ok {
 		metrics := value.GetMetric()
 		for _, metric := range metrics {
 			labels := metric.GetLabel()
 			for _, label := range labels {
-				if label.GetName() == v1alpha1.MetricPeriodLabel {
+				if label.GetName() == metricspkg.LabelPeriod {
 					lookback := label.GetValue()
-					rate := float32(metric.Gauge.GetValue())
-					processingRates[lookback] = rate
+					processingRates[lookback] = metric.Gauge.GetValue()
+				}
+			}
+		}
+	}
+	pendings := make(map[string]int64, 0)
+	if value, ok := result[metricspkg.VertexPendingMessages]; ok {
+		metrics := value.GetMetric()
+		for _, metric := range metrics {
+			labels := metric.GetLabel()
+			for _, label := range labels {
+				if label.GetName() == metricspkg.LabelPeriod {
+					lookback := label.GetValue()
+					pendings[lookback] = int64(metric.Gauge.GetValue())
 				}
 			}
 		}
@@ -164,6 +179,7 @@ func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req
 		Pipeline:        &ps.pipeline.Name,
 		Vertex:          req.Vertex,
 		ProcessingRates: processingRates,
+		Pendings:        pendings,
 	}
 	resp.Vertex = v
 	return resp, nil

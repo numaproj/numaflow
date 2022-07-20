@@ -3,13 +3,14 @@ package sinks
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/redis"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/metrics"
-	"sync"
 
 	"go.uber.org/zap"
 
@@ -76,10 +77,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := []metrics.Option{}
-	if s := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; s != nil {
-		metricsOpts = append(metricsOpts, metrics.WithLookbackSeconds(int64(*s)))
-	}
+	metricsOpts := []metrics.Option{metrics.WithLookbackSeconds(int64(u.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds()))}
 	if x, ok := reader.(isb.LagReader); ok {
 		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
 	}

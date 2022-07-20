@@ -108,6 +108,7 @@ message AbstractVertex {
   // +optional
   optional VertexLimits limits = 17;
 
+  // Settings for autoscaling
   // +optional
   optional Scale scale = 18;
 }
@@ -798,20 +799,47 @@ message RedisSettings {
 }
 
 message Scale {
-  // Minimal replicas
-  // +kubebuilder:default=1
+  // Whether to disable autoscaling.
+  // Set to "true" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
   // +optional
-  optional int32 min = 1;
+  optional bool disabled = 1;
 
-  // Maximum replicas
-  // +kubebuilder:default=100
+  // Minimum replicas.
   // +optional
-  optional int32 max = 2;
+  optional int32 min = 2;
 
-  // Lookback seconds to calculate the average pending messages and processing rate
-  // +kubebuilder:default=180
+  // Maximum replicas.
   // +optional
-  optional int32 lookbackSeconds = 3;
+  optional int32 max = 3;
+
+  // Lookback seconds to calculate the average pending messages and processing rate.
+  // +optional
+  optional uint32 lookbackSeconds = 4;
+
+  // Cooldown seconds after a scaling operation before another one.
+  // +optional
+  optional uint32 cooldownSeconds = 5;
+
+  // After scaling down to 0, sleep how many seconds before scaling up to peek.
+  // +optional
+  optional uint32 zeroReplicaSleepSeconds = 6;
+
+  // TargetProcessingSeconds is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast
+  // you want the vertex to process all the pending messages. Typically increasing the value, which leads to lower processing
+  // rate, thus less replicas. It's only effective for source vertices.
+  // +optional
+  optional uint32 targetProcessingSeconds = 7;
+
+  // TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read.
+  // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+  // It only applies to UDF and Sink vertices as only they have buffers to read.
+  // +optional
+  optional uint32 targetBufferUsage = 8;
+
+  // ReplicasPerScale defines maximum replicas can be scaled up or down at once.
+  // The is use to prevent too aggresive scaling operations
+  // +optional
+  optional uint32 replicasPerScale = 9;
 }
 
 message Sink {
