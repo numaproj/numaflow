@@ -80,6 +80,8 @@ func (s *Scaler) StopWatching(key string) {
 	}
 }
 
+// Function scale() defines each of the worker's job.
+// It waits for keys in the channel, and starts a scaling job
 func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 	log := logging.FromContext(ctx)
 	log.Infof("Started auto scaling worker %v", id)
@@ -105,7 +107,7 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 //    singleReplicaContribution = (totalAvailableBufferLength - pending) / currentReplicas
 //    desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
 func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) error {
-	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("vertex", key)
+	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("vertexKey", key)
 	log.Debugf("Working on key: %s", key)
 	strs := strings.Split(key, "/")
 	if len(strs) != 2 {
@@ -117,14 +119,14 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	if err := s.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: vertexFullName}, vertex); err != nil {
 		if apierrors.IsNotFound(err) {
 			s.StopWatching(key)
-			log.Infow("No corresponding Vertex found, stopped watching", zap.String("vertex", key))
+			log.Info("No corresponding Vertex found, stopped watching")
 			return nil
 		}
 		return fmt.Errorf("failed to query vertex object of key %q, %w", key, err)
 	}
 	if !vertex.GetDeletionTimestamp().IsZero() {
 		s.StopWatching(key)
-		log.Debugw("Vertex being deleted", zap.String("vertex", key))
+		log.Debug("Vertex being deleted")
 		return nil
 	}
 	if vertex.Spec.Scale.Disabled { // Auto scaling disabled
@@ -132,7 +134,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		return nil
 	}
 	if time.Since(vertex.Status.LastScaledAt.Time).Seconds() < float64(vertex.Spec.Scale.GetCooldownSeconds()) {
-		log.Debugw("Cooldown period, skip scaling.")
+		log.Debug("Cooldown period, skip scaling.")
 		return nil
 	}
 	pl := &dfv1.Pipeline{}
