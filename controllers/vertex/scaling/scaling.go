@@ -156,15 +156,17 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		return nil
 	}
 	if int(vertex.Status.Replicas) != vertex.Spec.GetReplicas() {
-		log.Debugf("Vertex %s has is under processing, replicas mismatch", vertex.Name)
+		log.Debugf("Vertex %s might be under processing, replicas mismatch", vertex.Name)
 		return nil
 	}
 	if vertex.Status.Replicas == 0 { // Was scaled to 0
 		if seconds := time.Since(vertex.Status.LastScaledAt.Time).Seconds(); seconds >= float64(vertex.Spec.Scale.GetZeroReplicaSleepSeconds()) {
 			log.Debugf("Vertex %s has slept %v seconds, scaling up to peek", vertex.Name, seconds)
 			return s.patchVertexReplicas(ctx, vertex, 1)
+		} else {
+			log.Debugf("Vertex %q has slept %v seconds, hasn't reached zeroReplicaSleepSeconds (%v seconds)", vertex.Name, seconds, vertex.Spec.Scale.GetZeroReplicaSleepSeconds())
+			return nil
 		}
-		return nil
 	}
 	// TODO: cache it.
 	dClient, err := daemonclient.NewDaemonServiceClient(pl.GetDaemonServiceURL())
