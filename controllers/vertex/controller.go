@@ -96,8 +96,10 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		vertex.Status.MarkPhaseFailed("ISBSvcNotReady", "isbsvc not ready")
 		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
 	}
-	// Add to auto scaling watcher
-	r.scaler.StartWatching(fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name))
+
+	if vertex.Scalable() { // Add to auto scaling watcher
+		r.scaler.StartWatching(fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name))
+	}
 
 	desiredReplicas := vertex.Spec.GetReplicas()
 	currentReplicas := int(vertex.Status.Replicas)

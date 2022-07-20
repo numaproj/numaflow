@@ -96,9 +96,16 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 	}
 }
 
-// The detail logic of scaling a vertex
+// Fucntion that implements the detail logic of scaling up/down a vertex.
+//
+// For source vertices which have both rate and pending message information,
+//    desiredReplicas = currentReplicas * pending / (targetProcessingTime * rate)
+//
+// For UDF and sinks which have the read buffer information
+//    singleReplicaContribution = (totalAvailableBufferLength - pending) / currentReplicas
+//    desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
 func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) error {
-	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker))
+	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("vertex", key)
 	log.Debugf("Working on key: %s", key)
 	strs := strings.Split(key, "/")
 	if len(strs) != 2 {
@@ -132,18 +139,18 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	if err := s.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: vertex.Spec.PipelineName}, pl); err != nil {
 		if apierrors.IsNotFound(err) {
 			s.StopWatching(key)
-			log.Infow("No corresponding Pipeline found, stopped watching", zap.String("vertex", key))
+			log.Info("No corresponding Pipeline found, stopped watching")
 			return nil
 		}
 		return fmt.Errorf("failed to query Pipeline object of key %q, %w", key, err)
 	}
 	if !pl.GetDeletionTimestamp().IsZero() {
 		s.StopWatching(key)
-		log.Debugw("Corresponding Pipeline being deleted", zap.String("vertex", key))
+		log.Debug("Corresponding Pipeline being deleted")
 		return nil
 	}
 	if pl.Spec.Lifecycle.DesiredPhase != dfv1.PipelinePhaseRunning {
-		log.Debugw("Corresponding Pipeline not in Running state", zap.String("vertex", key))
+		log.Debug("Corresponding Pipeline not in Running state")
 		return nil
 	}
 	if int(vertex.Status.Replicas) != vertex.Spec.GetReplicas() {
@@ -240,7 +247,7 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 	} else {
 		// For UDF and sinks, we calculate the available buffer length, and consider it is the contribution of current replicas,
 		// then we figure out how many replicas are needed to keep the available buffer length at target level.
-		if pending > totalBufferLength {
+		if pending >= totalBufferLength {
 			// Simply return current replica number + max allowed if the pending messages are more than available buffer length
 			return int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScale())
 		}
@@ -254,17 +261,22 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 	}
 }
 
-// Start function starts the auto-scaling worker group
+// Start function starts the auto-scaling worker group.
+// Each worker keeps picking up scaling tasks (which contains vertex keys) to calculate the desired replicas,
+// and patch the vetex spec with the new replica number if needed.
 func (s *Scaler) Start(ctx context.Context) {
 	log := logging.FromContext(ctx)
 	log.Info("Starting auto scaler...")
 	keyCh := make(chan string)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	// Worker group
 	for i := 1; i <= s.options.workers; i++ {
 		go s.scale(ctx, i, keyCh)
 	}
 
+	// Function assign() moves an element in the list from the front to the back,
+	// and send to the channel so that it can be picked up by a worker.
 	assign := func() {
 		s.lock.Lock()
 		defer s.lock.Unlock()
@@ -278,11 +290,12 @@ func (s *Scaler) Start(ctx context.Context) {
 		}
 	}
 
-	n := 30000 // Milliseconds of the interval that each vertex key gets assigned.
+	// Following for loop keeps calling assign() function to assign scaling tasks to the workers.
+	// It makes sure each element in the list will be assigned every N milliseconds.
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info("Exiting scaling controller assigning job")
+			log.Info("Shutting down scaling job assigner")
 			return
 		default:
 			assign()
@@ -291,9 +304,9 @@ func (s *Scaler) Start(ctx context.Context) {
 		time.Sleep(time.Millisecond * time.Duration(func() int {
 			l := s.Length()
 			if l == 0 {
-				return n
+				return s.options.taskInterval
 			}
-			result := n / l
+			result := s.options.taskInterval / l
 			if result > 0 {
 				return result
 			}

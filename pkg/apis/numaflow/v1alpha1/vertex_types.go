@@ -68,6 +68,22 @@ func (v Vertex) IsAUDF() bool {
 	return v.Spec.Sink == nil && v.Spec.Source == nil
 }
 
+func (v Vertex) Scalable() bool {
+	if v.Spec.Scale.Disabled {
+		return false
+	}
+	if v.IsASink() || v.IsAUDF() {
+		return true
+	}
+	if v.IsASource() {
+		src := v.Spec.Source
+		if src.Kafka != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (v Vertex) GetHeadlessServiceName() string {
 	return v.Name + "-headless"
 }
