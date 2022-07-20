@@ -1434,21 +1434,58 @@ spec:
                         if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/'
                       type: string
                     scale:
+                      description: Settings for autoscaling
                       properties:
+                        cooldownSeconds:
+                          description: Cooldown seconds after a scaling operation
+                            before another one.
+                          format: int32
+                          type: integer
+                        disabled:
+                          description: Whether to disable autoscaling. Set to "true"
+                            when using Kubernetes HPA or any other 3rd party autoscaling
+                            strategies.
+                          type: boolean
                         lookbackSeconds:
-                          default: 180
                           description: Lookback seconds to calculate the average pending
-                            messages and processing rate
+                            messages and processing rate.
                           format: int32
                           type: integer
                         max:
-                          default: 100
-                          description: Maximum replicas
+                          description: Maximum replicas.
                           format: int32
                           type: integer
                         min:
-                          default: 1
-                          description: Minimal replicas
+                          description: Minimum replicas.
+                          format: int32
+                          type: integer
+                        replicasPerScale:
+                          description: ReplicasPerScale defines maximum replicas can
+                            be scaled up or down at once. The is use to prevent too
+                            aggresive scaling operations
+                          format: int32
+                          type: integer
+                        targetBufferUsage:
+                          description: TargetBufferUsage is used to define the target
+                            pencentage of usage of the buffer to be read. A valid
+                            and meaningful value should be less than the BufferUsageLimit
+                            defined in the Edge spec (or Pipeline spec), for example,
+                            50. It only applies to UDF and Sink vertices as only they
+                            have buffers to read.
+                          format: int32
+                          type: integer
+                        targetProcessingSeconds:
+                          description: TargetProcessingSeconds is used to tune the
+                            aggressiveness of autoscaling for source vertices, it
+                            measures how fast you want the vertex to process all the
+                            pending messages. Typically increasing the value, which
+                            leads to lower processing rate, thus less replicas. It's
+                            only effective for source vertices.
+                          format: int32
+                          type: integer
+                        zeroReplicaSleepSeconds:
+                          description: After scaling down to 0, sleep how many seconds
+                            before scaling up to peek.
                           format: int32
                           type: integer
                       type: object

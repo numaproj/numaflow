@@ -239,6 +239,9 @@ vertices of a pipleine, will override pipeline level settings
 </td>
 <td>
 <em>(Optional)</em>
+<p>
+Settings for autoscaling
+</p>
 </td>
 </tr>
 </tbody>
@@ -2962,12 +2965,24 @@ Description
 <tbody>
 <tr>
 <td>
+<code>disabled</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Whether to disable autoscaling. Set to “true” when using Kubernetes HPA
+or any other 3rd party autoscaling strategies.
+</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>min</code></br> <em> int32 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-Minimal replicas
+Minimum replicas.
 </p>
 </td>
 </tr>
@@ -2978,19 +2993,84 @@ Minimal replicas
 <td>
 <em>(Optional)</em>
 <p>
-Maximum replicas
+Maximum replicas.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>lookbackSeconds</code></br> <em> int32 </em>
+<code>lookbackSeconds</code></br> <em> uint32 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
 Lookback seconds to calculate the average pending messages and
-processing rate
+processing rate.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>cooldownSeconds</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Cooldown seconds after a scaling operation before another one.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>zeroReplicaSleepSeconds</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+After scaling down to 0, sleep how many seconds before scaling up to
+peek.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>targetProcessingSeconds</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+TargetProcessingSeconds is used to tune the aggressiveness of
+autoscaling for source vertices, it measures how fast you want the
+vertex to process all the pending messages. Typically increasing the
+value, which leads to lower processing rate, thus less replicas. It’s
+only effective for source vertices.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>targetBufferUsage</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+TargetBufferUsage is used to define the target pencentage of usage of
+the buffer to be read. A valid and meaningful value should be less than
+the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
+example, 50. It only applies to UDF and Sink vertices as only they have
+buffers to read.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>replicasPerScale</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+ReplicasPerScale defines maximum replicas can be scaled up or down at
+once. The is use to prevent too aggresive scaling operations
 </p>
 </td>
 </tr>

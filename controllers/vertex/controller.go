@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/controllers"
+	"github.com/numaproj/numaflow/controllers/vertex/scaling"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -32,10 +33,12 @@ type vertexReconciler struct {
 	config *controllers.GlobalConfig
 	image  string
 	logger *zap.SugaredLogger
+
+	scaler *scaling.Scaler
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *controllers.GlobalConfig, image string, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &vertexReconciler{client: client, scheme: scheme, config: config, image: image, logger: logger}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *controllers.GlobalConfig, image string, scaler *scaling.Scaler, logger *zap.SugaredLogger) reconcile.Reconciler {
+	return &vertexReconciler{client: client, scheme: scheme, config: config, image: image, scaler: scaler, logger: logger}
 }
 
 func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -68,6 +71,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	log := logging.FromContext(ctx)
 	if !vertex.DeletionTimestamp.IsZero() {
 		log.Info("Deleting vertex")
+		r.scaler.StopWatching(fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name))
 		return ctrl.Result{}, nil
 	}
 
@@ -91,6 +95,10 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		log.Errorw("ISB Service is not in ready status", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		vertex.Status.MarkPhaseFailed("ISBSvcNotReady", "isbsvc not ready")
 		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
+	}
+
+	if vertex.Scalable() { // Add to autoscaling watcher
+		r.scaler.StartWatching(fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name))
 	}
 
 	desiredReplicas := vertex.Spec.GetReplicas()
@@ -294,7 +302,7 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 			}
 			podSpec.Containers[0].Env = envs
 		}
-	} else if vertex.IsAnUDF() {
+	} else if vertex.IsUDF() {
 		// Add default UDF content-type to udf container
 		envs := []corev1.EnvVar{}
 		userDefined := false

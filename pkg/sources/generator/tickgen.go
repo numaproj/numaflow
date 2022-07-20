@@ -10,16 +10,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"go.uber.org/zap"
 )
 
 var log = logging.NewLogger()
@@ -206,7 +208,7 @@ func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, er
 		// we implement Read With Wait semantics
 		select {
 		case r := <-mg.srcchan:
-			tickgenSourceReadCount.With(map[string]string{"vertex": mg.name, "pipeline": mg.pipelineName}).Inc()
+			tickgenSourceReadCount.With(map[string]string{metricspkg.LabelVertex: mg.name, metricspkg.LabelPipeline: mg.pipelineName}).Inc()
 			msgs = append(msgs, newreadmessage(r.data, r.offset))
 			// publish the last message's offset with watermark, this is an optimization to avoid too many insert calls
 			// into the offset timeline store.
@@ -269,7 +271,7 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 				log.Info("Context.Done is called. exiting generator loop.")
 				return
 			case <-ticker.C:
-				tickgenSourceCount.With(map[string]string{"vertex": mg.name, "pipeline": mg.pipelineName})
+				tickgenSourceCount.With(map[string]string{metricspkg.LabelVertex: mg.name, metricspkg.LabelPipeline: mg.pipelineName})
 				// swapped implies that the rcount is at limit
 				if !atomic.CompareAndSwapInt32(&rcount, limit-1, limit) {
 					go func() {

@@ -149,10 +149,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := []metrics.Option{}
-	if s := u.VertexInstance.Vertex.Spec.Scale.LookbackSeconds; s != nil {
-		metricsOpts = append(metricsOpts, metrics.WithLookbackSeconds(int64(*s)))
-	}
+	metricsOpts := []metrics.Option{metrics.WithLookbackSeconds(int64(u.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds()))}
 	if x, ok := reader.(isb.LagReader); ok {
 		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
 	}

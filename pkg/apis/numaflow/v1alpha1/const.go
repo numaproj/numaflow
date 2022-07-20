@@ -102,12 +102,14 @@ const (
 
 	UDFApplierMessageKey = "x-numa-message-key" // The key in the UDF applier HTTP header used to pass the map-reduce key
 
-	// processing rate and pending prometheus metrics and labels
-	MetricPipelineLabel   = "pipeline"
-	MetricVertexLabel     = "vertex"
-	MetricPeriodLabel     = "period"
-	VertexProcessingRate  = "vertex_processing_rate"
-	VertexPendingMessages = "vertex_pending_messages"
+	// Auto scaling
+	DefaultLookbackSeconds         = 180 // Default lookback seconds for calculating avg rate and pending
+	DefaultCooldownSeconds         = 90  // Default cooldown seconds after a scaling operation
+	DefaultZeroReplicaSleepSeconds = 180 // Default sleep time in seconds after scaling down to 0, before peeking
+	DefaultMaxReplicas             = 50  // Default max replicas
+	DefaultTargetProcessingSeconds = 3   // Default targeted time in seconds to finish processing all the pending messages for a source
+	DefaultTargetBufferUsage       = 50  // Default targeted percentage of balanced buffer usage
+	DefaultReplicasPerScale        = 2   // Default maximum replicas to be scaled up or down at once
 )
 
 type ContentType string
