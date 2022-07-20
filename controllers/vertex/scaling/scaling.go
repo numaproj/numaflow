@@ -99,7 +99,7 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 	}
 }
 
-// Fucntion that implements the detail logic of scaling up/down a vertex.
+// scaleOneVertex implements the detailed logic of scaling up/down a vertex.
 //
 // For source vertices which have both rate and pending message information,
 //    desiredReplicas = currentReplicas * pending / (targetProcessingTime * rate)

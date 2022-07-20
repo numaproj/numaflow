@@ -109,7 +109,7 @@ const (
 	DefaultMaxReplicas             = 50  // Default max replicas
 	DefaultTargetProcessingSeconds = 3   // Default targeted time in seconds to finish processing all the pending messages for a source
 	DefaultTargetBufferUsage       = 50  // Default targeted percentage of balanced buffer usage
-	DefaultReplicasPerScale        = 2   //Default maximum replicas to be scaled up or down at once
+	DefaultReplicasPerScale        = 2   // Default maximum replicas to be scaled up or down at once
 )
 
 type ContentType string

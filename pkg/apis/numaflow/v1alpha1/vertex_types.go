@@ -64,7 +64,7 @@ func (v Vertex) IsASink() bool {
 	return v.Spec.Sink != nil
 }
 
-func (v Vertex) IsAUDF() bool {
+func (v Vertex) IsUDF() bool {
 	return v.Spec.Sink == nil && v.Spec.Source == nil
 }
 
@@ -72,7 +72,7 @@ func (v Vertex) Scalable() bool {
 	if v.Spec.Scale.Disabled {
 		return false
 	}
-	if v.IsASink() || v.IsAUDF() {
+	if v.IsASink() || v.IsUDF() {
 		return true
 	}
 	if v.IsASource() {
@@ -402,8 +402,9 @@ type Scale struct {
 	// After scaling down to 0, sleep how many seconds before scaling up to peek.
 	// +optional
 	ZeroReplicaSleepSeconds *uint32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,6,opt,name=zeroReplicaSleepSeconds"`
-	// How many seconds are expected to finish processing the pending messages.
-	// Only effective for source vertices.
+	// TargetProcessingSeconds is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast
+	// you want the vertex to process all the pending messages. Typically increasing the value, which leads to lower processing
+	// rate, thus less replicas. It's only effective for source vertices.
 	// +optional
 	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
 	// TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read.

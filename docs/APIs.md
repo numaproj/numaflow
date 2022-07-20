@@ -3039,8 +3039,11 @@ peek.
 <td>
 <em>(Optional)</em>
 <p>
-How many seconds are expected to finish processing the pending messages.
-Only effective for source vertices.
+TargetProcessingSeconds is used to tune the aggressiveness of
+autoscaling for source vertices, it measures how fast you want the
+vertex to process all the pending messages. Typically increasing the
+value, which leads to lower processing rate, thus less replicas. It’s
+only effective for source vertices.
 </p>
 </td>
 </tr>
