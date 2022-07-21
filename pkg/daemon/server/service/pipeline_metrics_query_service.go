@@ -1,3 +1,4 @@
+// Package for Daemon based service in cluster
 package service
 
 import (
@@ -25,14 +26,15 @@ type metricsHttpClient interface {
 }
 
 type pipelineMetricsQueryService struct {
-	isbSvcClient isbsvc.ISBService
-	pipeline     *v1alpha1.Pipeline
-	httpClient   metricsHttpClient
+	isbSvcClient    isbsvc.ISBService
+	pipeline        *v1alpha1.Pipeline
+	httpClient      metricsHttpClient
+	vertexWatermark *watermarkFetchers
 }
 
 // NewPipelineMetricsQueryService returns a new instance of pipelineMetricsQueryService
 func NewPipelineMetricsQueryService(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) *pipelineMetricsQueryService {
-	return &pipelineMetricsQueryService{
+	ps := pipelineMetricsQueryService{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
 		httpClient: &http.Client{
@@ -42,6 +44,8 @@ func NewPipelineMetricsQueryService(isbSvcClient isbsvc.ISBService, pipeline *v1
 			Timeout: time.Second * 3,
 		},
 	}
+	ps.vertexWatermark = newVertexWatermarkFetcher(pipeline)
+	return &ps
 }
 
 // ListBuffers is used to obtain the all the edge buffers information of a pipeline
