@@ -16,7 +16,7 @@ type ISBService interface {
 
 // bufferCreateOptions describes the options for creating buffers
 type bufferCreateOptions struct {
-	// bufferConfig is configuratiion for the to be created buffer
+	// bufferConfig is configuration for the to be created buffer
 	bufferConfig string
 }
 

@@ -1,3 +1,4 @@
+// Package service for Daemon based service in cluster
 package service
 
 import (
@@ -27,7 +28,7 @@ type pipelineMetricsQueryService struct {
 	isbSvcClient    isbsvc.ISBService
 	pipeline        *v1alpha1.Pipeline
 	httpClient      metricsHttpClient
-	vertexWatermark *vertexWatermarkFetcher
+	vertexWatermark *watermarkFetchers
 }
 
 // NewPipelineMetricsQueryService returns a new instance of pipelineMetricsQueryService
@@ -35,13 +36,14 @@ func NewPipelineMetricsQueryService(isbSvcClient isbsvc.ISBService, pipeline *v1
 	ps := pipelineMetricsQueryService{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
-		httpClient: &http.Client{Transport: &http.Transport{
-			TLSHandshakeTimeout: time.Second * 3,
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-		}},
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+			Timeout: time.Second * 3,
+		},
 	}
-
-	ps.vertexWatermark = ps.newVertexWatermarkFetcher(context.Background())
+	ps.vertexWatermark = newVertexWatermarkFetcher(pipeline)
 	return &ps
 }
 

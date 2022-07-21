@@ -1,3 +1,4 @@
+// Package service for Daemon based service in cluster
 package service
 
 import (
@@ -14,23 +15,29 @@ import (
 	"time"
 )
 
-type vertexWatermarkFetcher struct {
+// watermarkFetchers used to store watermark metadata for propagation
+type watermarkFetchers struct {
 	fetchMap map[string]fetch.Fetcher
 }
 
-func (ps *pipelineMetricsQueryService) newVertexWatermarkFetcher(ctx context.Context) *vertexWatermarkFetcher {
+// newVertexWatermarkFetcher creates a new instance of watermarkFetchers. This is used to populate a map of vertices to
+// corresponding fetchers. These fetchers are tied to the incoming edge buffer of the current vertex (Vn), and read the
+// watermark propagated by the vertex (Vn-1). As each vertex has one incoming edge, for the input vertex we read the source
+// data buffer.
+func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
+	ctx := context.Background()
 	log := logging.FromContext(ctx)
 	vertexWmMap := make(map[string]fetch.Fetcher)
-	pipelineName := ps.pipeline.Name
+	pipelineName := pipeline.Name
 	var fromBufferName string
-	for _, vertex := range ps.pipeline.Spec.Vertices {
+	for _, vertex := range pipeline.Spec.Vertices {
 		// TODO: Checking if Vertex is source
 		if vertex.Source != nil {
-			fromBufferName = v1alpha1.GenerateSourceBufferName(ps.pipeline.Namespace, pipelineName, vertex.Name)
+			fromBufferName = v1alpha1.GenerateSourceBufferName(pipeline.Namespace, pipelineName, vertex.Name)
 		} else {
 			// Currently we support only one incoming edge
-			edge := ps.pipeline.GetFromEdges(vertex.Name)[0]
-			fromBufferName = v1alpha1.GenerateEdgeBufferName(ps.pipeline.Namespace, pipelineName, edge.From, edge.To)
+			edge := pipeline.GetFromEdges(vertex.Name)[0]
+			fromBufferName = v1alpha1.GenerateEdgeBufferName(pipeline.Namespace, pipelineName, edge.From, edge.To)
 		}
 		hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, fromBufferName)
 		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
@@ -46,11 +53,12 @@ func (ps *pipelineMetricsQueryService) newVertexWatermarkFetcher(ctx context.Con
 		fetchWatermark := generic.NewGenericFetch(ctx, vertex.Name, fetchWmWatchers)
 		vertexWmMap[vertex.Name] = fetchWatermark
 	}
-	return &vertexWatermarkFetcher{
+	return &watermarkFetchers{
 		fetchMap: vertexWmMap,
 	}
 }
 
+// GetVertexWatermark is used to return the head watermark for a given vertex.
 func (ps *pipelineMetricsQueryService) GetVertexWatermark(ctx context.Context, request *daemon.GetVertexWatermarkRequest) (*daemon.GetVertexWatermarkResponse, error) {
 	log := logging.FromContext(ctx)
 	resp := new(daemon.GetVertexWatermarkResponse)
