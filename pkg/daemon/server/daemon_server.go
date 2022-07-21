@@ -120,7 +120,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	gwmux := runtime.NewServeMux(gwMuxOpts,
 		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
 			if key == "Connection" {
-				// Remove "Connection: keep-alive", which is always included in the header in a browser access,
+				// Remove "Connection: keep-alive", which is always included in the header of a browser access,
 				// it will cause "500 Internal Server Error caused by: stream error: stream ID 19; PROTOCOL_ERROR"
 				return key, false
 			}
