@@ -3,12 +3,15 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	. "github.com/numaproj/numaflow/test/fixtures"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -66,7 +69,18 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Expect().
 		Status(200).Body().Contains("pipeline")
 
-	// TODO: test Daemon service with gRPC
+	// Test Daemon service with gRPC
+	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	assert.NoError(s.T(), err)
+	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 2, len(buffers))
+	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateEdgeBufferName(Namespace, pipelineName, "input", "p1"))
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
+	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), pipelineName, m.Pipeline)
 }
 
 func (s *FunctionalSuite) TestFiltering() {

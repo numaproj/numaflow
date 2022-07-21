@@ -49,7 +49,6 @@ message GetBufferResponse {
 }
 
 message GetVertexMetricsRequest {
-  required string namespace = 1;
   required string pipeline = 2;
   required string vertex = 3;
 

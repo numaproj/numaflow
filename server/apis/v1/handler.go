@@ -267,7 +267,7 @@ func (h *handler) GetVertexMetrics(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	l, err := client.GetVertexMetrics(context.Background(), ns, pipeline, vertex)
+	l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
