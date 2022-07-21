@@ -84,9 +84,8 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 	}
 
 	vertex := "cat"
-	namespace := "numaflow-system"
 
-	req := &daemon.GetVertexMetricsRequest{Vertex: &vertex, Namespace: &namespace}
+	req := &daemon.GetVertexMetricsRequest{Vertex: &vertex}
 
 	resp, err := pipelineMetricsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)

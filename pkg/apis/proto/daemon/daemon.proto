@@ -49,7 +49,6 @@ message GetBufferResponse {
 }
 
 message GetVertexMetricsRequest {
-  required string namespace = 1;
   required string pipeline = 2;
   required string vertex = 3;
 
@@ -71,6 +70,6 @@ service DaemonService {
   };
 
   rpc GetVertexMetrics (GetVertexMetricsRequest) returns (GetVertexMetricsResponse) {
-    option (google.api.http).get = "/api/v1/namespace/{namespace}/pipelines/{pipeline}/vertices/{vertex}/metrics";
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/metrics";
   };
 }

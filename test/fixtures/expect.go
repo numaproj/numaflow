@@ -30,7 +30,7 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 	ctx := context.Background()
 	_, err := t.isbSvcClient.Get(ctx, t.isbSvc.Name, metav1.GetOptions{})
 	if err == nil || !apierr.IsNotFound(err) {
-		t.t.Fatalf("expected ISB svc to be deleted: %v", err)
+		t.t.Fatalf("Expected ISB svc to be deleted: %v", err)
 	}
 
 	labelSelector := fmt.Sprintf("%s=isbsvc-controller,%s=%s", dfv1.KeyManagedBy, dfv1.KeyISBSvcName, ISBSvcName)
@@ -43,14 +43,14 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 	for {
 		podList, err := t.kubeClient.CoreV1().Pods(Namespace).List(ctx, opts)
 		if err != nil && !apierr.IsNotFound(err) {
-			t.t.Fatalf("failed to check if ISB svc pods have been deleted: %v", err)
+			t.t.Fatalf("Failed to check if ISB svc pods have been deleted: %v", err)
 		}
 		if len(podList.Items) == 0 {
 			return t
 		}
 		select {
 		case <-timeoutCh:
-			t.t.Fatalf("timeout after %v waiting for ISB svc to be deleted", timeout)
+			t.t.Fatalf("Timeout after %v waiting for ISB svc to be deleted", timeout)
 		default:
 		}
 	}
@@ -62,14 +62,14 @@ func (t *Expect) VertexPodsRunning() *Expect {
 	for _, v := range t.pipeline.Spec.Vertices {
 		_, err := t.vertexClient.Get(ctx, t.pipeline.Name+"-"+v.Name, metav1.GetOptions{})
 		if err != nil {
-			t.t.Fatalf("expected vertex %q existing: %v", v.Name, err)
+			t.t.Fatalf("Expected vertex %q existing: %v", v.Name, err)
 		}
 	}
 	// check pods running
 	timeout := 2 * time.Minute
 	for _, v := range t.pipeline.Spec.Vertices {
 		if err := WaitForVertexPodRunning(t.kubeClient, t.vertexClient, Namespace, t.pipeline.Name, v.Name, timeout); err != nil {
-			t.t.Fatalf("expected vertex %q pod running: %v", v.Name, err)
+			t.t.Fatalf("Expected vertex %q pod running: %v", v.Name, err)
 		}
 	}
 	return t
@@ -80,10 +80,10 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 	ctx := context.Background()
 	contains, err := VertexPodLogContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, vertexName, regex, opts...)
 	if err != nil {
-		t.t.Fatalf("expected vertex pod logs: %v", err)
+		t.t.Fatalf("Failed to check vertex pod logs: %v", err)
 	}
 	if !contains {
-		t.t.Fatalf("expected vertex pod log contains %q", regex)
+		t.t.Fatalf("Expected vertex pod log contains %q", regex)
 	}
 	return t
 }
@@ -93,10 +93,32 @@ func (t *Expect) VertexPodLogNotContains(vertexName, regex string, opts ...PodLo
 	ctx := context.Background()
 	yes, err := VertexPodLogNotContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, vertexName, regex, opts...)
 	if err != nil {
-		t.t.Fatalf("not expected vertex pod logs: %v", err)
+		t.t.Fatalf("Failed to check vertex pod logs: %v", err)
 	}
 	if !yes {
-		t.t.Fatalf("not expected vertex pod log contains %q", regex)
+		t.t.Fatalf("Not expected vertex pod log contains %q", regex)
+	}
+	return t
+}
+
+func (t *Expect) DaemonPodsRunning() *Expect {
+	t.t.Helper()
+	timeout := 2 * time.Minute
+	if err := WaitForDaemonPodsRunning(t.kubeClient, Namespace, t.pipeline.Name, timeout); err != nil {
+		t.t.Fatalf("Expected daemon pods of pipeline %q running: %v", t.pipeline.Name, err)
+	}
+	return t
+}
+
+func (t *Expect) DaemonPodLogContains(pipelineName, regex string, opts ...PodLogCheckOption) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	contains, err := DaemonPodLogContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, regex, opts...)
+	if err != nil {
+		t.t.Fatalf("Failed to check daemon pod logs: %v", err)
+	}
+	if !contains {
+		t.t.Fatalf("Expected daemon pod log contains %q", regex)
 	}
 	return t
 }
