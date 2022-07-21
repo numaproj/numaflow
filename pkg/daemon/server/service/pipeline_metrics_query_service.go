@@ -131,7 +131,7 @@ func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req
 	headlessServiceName := vertex.GetHeadlessServiceName()
 	// We can query the metrics endpoint of the 0th pod to obtain this value.
 	// example: https://simple-pipeline-in-0.simple-pipeline-in-headless.svc.cluster.local:2469/metrics
-	url := fmt.Sprintf("https://%s-0.%s.%s.svc.cluster.local:%v/metrics", vertexName, headlessServiceName, req.GetNamespace(), v1alpha1.VertexMetricsPort)
+	url := fmt.Sprintf("https://%s-0.%s.%s.svc.cluster.local:%v/metrics", vertexName, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 
 	res, err := ps.httpClient.Get(url)
 

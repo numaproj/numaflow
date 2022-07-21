@@ -39,14 +39,6 @@ func NewDaemonServer(pl *v1alpha1.Pipeline, isbSvcType v1alpha1.ISBSvcType) *dae
 
 func (ds *daemonServer) Run(ctx context.Context) error {
 	log := logging.FromContext(ctx)
-	// Start listener
-	var conn net.Listener
-	var listerErr error
-	address := fmt.Sprintf(":%d", v1alpha1.DaemonServicePort)
-	conn, err := net.Listen("tcp", address)
-	if err != nil {
-		return fmt.Errorf("failed to listen: %v", listerErr)
-	}
 	var isbSvcClient isbsvc.ISBService
 	switch ds.isbSvcType {
 	case v1alpha1.ISBSvcTypeRedis:
@@ -63,6 +55,14 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	default:
 		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
+	}
+	// Start listener
+	var conn net.Listener
+	var listerErr error
+	address := fmt.Sprintf(":%d", v1alpha1.DaemonServicePort)
+	conn, err := net.Listen("tcp", address)
+	if err != nil {
+		return fmt.Errorf("failed to listen: %v", listerErr)
 	}
 
 	cer, err := sharedtls.GenerateX509KeyPair()
@@ -85,14 +85,15 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = httpServer.Serve(httpL) }()
 	go func() { _ = tcpm.Serve() }()
 
-	log.Infof("Daemon Server started successfully on %s", address)
+	log.Infof("Daemon server started successfully on %s", address)
 	<-ctx.Done()
 	return nil
 }
 
 func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) *grpc.Server {
-
-	// "Prometheus histograms are a great way to measure latency distributions of your RPCs. However, since it is bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default. To enable them please call the following in your server initialization code:"
+	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
+	// However, since it is bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
+	// To enable them please call the following in your server initialization code:"
 	grpc_prometheus.EnableHandlingTimeHistogram()
 
 	sOpts := []grpc.ServerOption{
@@ -111,23 +112,31 @@ func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) *grpc.Serv
 // using grpc-gateway as a proxy to the gRPC server.
 func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *tls.Config) *http.Server {
 	log := logging.FromContext(ctx)
-	endpoint := fmt.Sprintf("localhost:%d", port)
-	mux := http.NewServeMux()
-	httpServer := http.Server{
-		Addr:    endpoint,
-		Handler: mux,
-	}
-
+	endpoint := fmt.Sprintf(":%d", port)
 	dialOpts := []grpc.DialOption{
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})),
 	}
 	gwMuxOpts := runtime.WithMarshalerOption(runtime.MIMEWildcard, new(runtime.JSONPb))
 	gwmux := runtime.NewServeMux(gwMuxOpts,
-		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) { return key, true }),
+		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
+			if key == "Connection" {
+				// Remove "Connection: keep-alive", which is always included in the header of a browser access,
+				// it will cause "500 Internal Server Error caused by: stream error: stream ID 19; PROTOCOL_ERROR"
+				return key, false
+			}
+			return key, true
+		}),
 		runtime.WithProtoErrorHandler(runtime.DefaultHTTPProtoErrorHandler),
 	)
 	if err := daemon.RegisterDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
-		log.Errorw("Failed to Register Daemon handler on HTTP Server", zap.Error(err))
+		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))
 	}
+	mux := http.NewServeMux()
+	httpServer := http.Server{
+		Addr:      endpoint,
+		Handler:   mux,
+		TLSConfig: tlsConfig,
+	}
+	mux.Handle("/api/", gwmux)
 	return &httpServer
 }

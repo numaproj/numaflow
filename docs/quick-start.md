@@ -71,6 +71,6 @@ The `Inter-Step Buffer Service` can be deleted by
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
 
-## Coming UP
+## Coming Up
 
 Next, let's take a peek at [an advance pipeline](./advanced-start.md), to learn some powerful features of Numaflow.
