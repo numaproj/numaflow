@@ -37,6 +37,7 @@ const (
 	LogSourceVertexStarted = "Start processing source messages"
 	LogSinkVertexStarted   = "Start processing sink messages"
 	LogUDFVertexStarted    = "Start processing udf messages"
+	LogDaemonStarted       = "Daemon server started successfully"
 )
 
 var (
@@ -178,7 +179,7 @@ func (s *E2ESuite) Given() *Given {
 
 func (s *E2ESuite) StartPortForward(podName string, port int) (stopPortForward func()) {
 
-	s.T().Log("starting port-forward to pod :", podName, port)
+	s.T().Log("Starting port-forward to pod :", podName, port)
 	transport, upgrader, err := spdy.RoundTripperFor(s.restConfig)
 	if err != nil {
 		panic(err)
@@ -200,12 +201,10 @@ func (s *E2ESuite) StartPortForward(podName string, port int) (stopPortForward f
 		}
 	}()
 	<-readyChan
-	s.T().Log("started port-forward :", podName, port)
+	s.T().Log("Started port-forward :", podName, port)
 	return func() {
 		stopChan <- struct{}{}
-		// not needed
-		// forwarder.Close()
-		s.T().Log("stopped port-forward :", podName, port)
+		s.T().Log("Stopped port-forward :", podName, port)
 	}
 }
 
