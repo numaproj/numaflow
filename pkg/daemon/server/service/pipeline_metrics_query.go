@@ -1,3 +1,4 @@
+// Package service is built for querying metadata and to expose it over daemon service.
 package service
 
 import (
@@ -24,15 +25,17 @@ type metricsHttpClient interface {
 	Get(url string) (*http.Response, error)
 }
 
-type pipelineMetricsQueryService struct {
-	isbSvcClient isbsvc.ISBService
-	pipeline     *v1alpha1.Pipeline
-	httpClient   metricsHttpClient
+// pipelineMetadataQuery has the metadata required for the pipeline queries
+type pipelineMetadataQuery struct {
+	isbSvcClient    isbsvc.ISBService
+	pipeline        *v1alpha1.Pipeline
+	httpClient      metricsHttpClient
+	vertexWatermark *watermarkFetchers
 }
 
-// NewPipelineMetricsQueryService returns a new instance of pipelineMetricsQueryService
-func NewPipelineMetricsQueryService(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) *pipelineMetricsQueryService {
-	return &pipelineMetricsQueryService{
+// NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
+func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) *pipelineMetadataQuery {
+	ps := pipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
 		httpClient: &http.Client{
@@ -42,10 +45,12 @@ func NewPipelineMetricsQueryService(isbSvcClient isbsvc.ISBService, pipeline *v1
 			Timeout: time.Second * 3,
 		},
 	}
+	ps.vertexWatermark = newVertexWatermarkFetcher(pipeline)
+	return &ps
 }
 
 // ListBuffers is used to obtain the all the edge buffers information of a pipeline
-func (ps *pipelineMetricsQueryService) ListBuffers(ctx context.Context, req *daemon.ListBuffersRequest) (*daemon.ListBuffersResponse, error) {
+func (ps *pipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.ListBuffersRequest) (*daemon.ListBuffersResponse, error) {
 	log := logging.FromContext(ctx)
 	resp := new(daemon.ListBuffersResponse)
 
@@ -82,7 +87,7 @@ func (ps *pipelineMetricsQueryService) ListBuffers(ctx context.Context, req *dae
 }
 
 // GetBuffer is used to obtain one buffer information of a pipeline
-func (ps *pipelineMetricsQueryService) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
+func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
 	bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: *req.Buffer, Type: v1alpha1.EdgeBuffer})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of buffer %q:%v", *req.Buffer, err)
@@ -117,7 +122,7 @@ func (ps *pipelineMetricsQueryService) GetBuffer(ctx context.Context, req *daemo
 // GetVertexMetrics is used to query the metrics service and is used to obtain the processing rate of a given vertex for 1m, 5m and 15m.
 // In the future maybe latency will also be added here?
 // Should this method live here or maybe another file?
-func (ps *pipelineMetricsQueryService) GetVertexMetrics(ctx context.Context, req *daemon.GetVertexMetricsRequest) (*daemon.GetVertexMetricsResponse, error) {
+func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daemon.GetVertexMetricsRequest) (*daemon.GetVertexMetricsResponse, error) {
 	log := logging.FromContext(ctx)
 	resp := new(daemon.GetVertexMetricsResponse)
 
