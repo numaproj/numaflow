@@ -285,7 +285,7 @@ func (h *handler) GetVertexWatermark(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	l, err := client.GetVertexWatermark(context.Background(), ns, pipeline, vertex)
+	l, err := client.GetVertexWatermark(context.Background(), pipeline, vertex)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return

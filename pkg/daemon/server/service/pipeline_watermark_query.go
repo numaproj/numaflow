@@ -1,8 +1,9 @@
-// Package for Daemon based service in cluster
+// Package service is built for querying metadata and to expose it over daemon service.
 package service
 
 import (
 	"context"
+	"fmt"
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
@@ -17,7 +18,8 @@ import (
 
 // watermarkFetchers used to store watermark metadata for propagation
 type watermarkFetchers struct {
-	fetchMap map[string]fetch.Fetcher
+	fetchMap           map[string]fetch.Fetcher
+	isWatermarkEnabled bool
 }
 
 // newVertexWatermarkFetcher creates a new instance of watermarkFetchers. This is used to populate a map of vertices to
@@ -27,9 +29,17 @@ type watermarkFetchers struct {
 func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
 	ctx := context.Background()
 	log := logging.FromContext(ctx)
+	var wmFetcher = new(watermarkFetchers)
+	var fromBufferName string
+
+	wmFetcher.isWatermarkEnabled = pipeline.Spec.Watermark.Propagate
+	if !wmFetcher.isWatermarkEnabled {
+		return wmFetcher
+	}
+
 	vertexWmMap := make(map[string]fetch.Fetcher)
 	pipelineName := pipeline.Name
-	var fromBufferName string
+
 	for _, vertex := range pipeline.Spec.Vertices {
 		// TODO: Checking if Vertex is source
 		if vertex.Source != nil {
@@ -53,26 +63,44 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
 		fetchWatermark := generic.NewGenericFetch(ctx, vertex.Name, fetchWmWatchers)
 		vertexWmMap[vertex.Name] = fetchWatermark
 	}
-	return &watermarkFetchers{
-		fetchMap: vertexWmMap,
-	}
+	wmFetcher.fetchMap = vertexWmMap
+	return wmFetcher
 }
 
 // GetVertexWatermark is used to return the head watermark for a given vertex.
-func (ps *pipelineMetricsQueryService) GetVertexWatermark(ctx context.Context, request *daemon.GetVertexWatermarkRequest) (*daemon.GetVertexWatermarkResponse, error) {
+func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request *daemon.GetVertexWatermarkRequest) (*daemon.GetVertexWatermarkResponse, error) {
 	log := logging.FromContext(ctx)
 	resp := new(daemon.GetVertexWatermarkResponse)
 	vertexName := request.GetVertex()
-	vertexFetcher := ps.vertexWatermark.fetchMap[vertexName]
-	// Error case?
-	if vertexFetcher == nil {
-		log.Errorf("Fetcher not available")
+	retFalse := false
+	retTrue := true
+
+	// If watermark is not enabled, return time zero
+	if !ps.vertexWatermark.isWatermarkEnabled {
+		timeZero := time.Unix(0, 0).Unix()
+		v := &daemon.VertexWatermark{
+			Pipeline:           &ps.pipeline.Name,
+			Vertex:             request.Vertex,
+			Watermark:          &timeZero,
+			IsWatermarkEnabled: &retFalse,
+		}
+		resp.VertexWatermark = v
+		return resp, nil
+	}
+
+	// Watermark is enabled
+	vertexFetcher, ok := ps.vertexWatermark.fetchMap[vertexName]
+	// Vertex not found
+	if !ok {
+		log.Errorf("watermark fetcher not available for vertex %s in the fetcher map", vertexName)
+		return nil, fmt.Errorf("watermark not available for given vertex, %s", vertexName)
 	}
 	vertexWatermark := time.Time(vertexFetcher.GetHeadWatermark()).Unix()
 	v := &daemon.VertexWatermark{
-		Pipeline:  &ps.pipeline.Name,
-		Vertex:    request.Vertex,
-		Watermark: &vertexWatermark,
+		Pipeline:           &ps.pipeline.Name,
+		Vertex:             request.Vertex,
+		Watermark:          &vertexWatermark,
+		IsWatermarkEnabled: &retTrue,
 	}
 	resp.VertexWatermark = v
 	return resp, nil

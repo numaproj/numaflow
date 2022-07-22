@@ -64,6 +64,7 @@ message VertexWatermark {
   required string pipeline = 1;
   required string vertex = 2;
   required int64 watermark = 3;
+  required bool isWatermarkEnabled = 4;
 }
 
 message GetVertexWatermarkResponse {
@@ -72,9 +73,8 @@ message GetVertexWatermarkResponse {
 
 // GetVertexWatermarksRequest requests for the watermark for a pipeline's vertex.
 message GetVertexWatermarkRequest {
-  required string namespace = 1;
-  required string pipeline = 2;
-  required string vertex = 3;
+  required string pipeline = 1;
+  required string vertex = 2;
 }
 
 // DaemonService is a grpc service that is used to provide APIs for giving any pipeline information.
