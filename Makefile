@@ -184,7 +184,7 @@ lint: $(GOPATH)/bin/golangci-lint
 start: image
 	kubectl apply -f test/manifests/numaflow-ns.yaml
 	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
-	kubectl -n numaflow-system wait --for=condition=Ready --timeout 60s pod --all
+	kubectl -n numaflow-system wait -lapp.kubernetes.io/part-of=numaflow --for=condition=Ready --timeout 60s pod --all
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi

@@ -17,6 +17,8 @@ import (
 type Fetcher interface {
 	// GetWatermark returns the inorder monotonically increasing watermark of the edge connected to Vn-1.
 	GetWatermark(offset isb.Offset) processor.Watermark
+	// GetHeadWatermark returns the latest watermark based on the head offset
+	GetHeadWatermark() processor.Watermark
 }
 
 // Edge is the edge relation between two vertices.
@@ -38,6 +40,31 @@ func NewEdgeBuffer(ctx context.Context, edgeName string, fromV *FromVertex) *Edg
 	}
 }
 
+// GetHeadWatermark returns the watermark using the HeadOffset (latest offset). This
+// can be used in showing the watermark progression for a vertex when not consuming the messages
+// directly (eg. UX, tests,)
+func (e *Edge) GetHeadWatermark() processor.Watermark {
+	var debugString strings.Builder
+	var headOffset int64 = math.MinInt64
+	var epoch int64 = math.MaxInt64
+	var allProcessors = e.fromVertex.GetAllProcessors()
+	// get the head offset of each processor
+	for _, p := range allProcessors {
+		debugString.WriteString(fmt.Sprintf("[HB:%s OT:%s] (headoffset:%d) %s\n", e.fromVertex.hbWatcher.GetKVName(), e.fromVertex.otWatcher.GetKVName(), p.offsetTimeline.GetHeadOffset(), p))
+		var o = p.offsetTimeline.GetHeadOffset()
+		if o != -1 && o > headOffset {
+			headOffset = o
+			epoch = p.offsetTimeline.GetEventtimeFromInt64(o)
+		}
+	}
+
+	if epoch == math.MaxInt64 {
+		return processor.Watermark(time.Time{})
+	}
+
+	return processor.Watermark(time.Unix(epoch, 0))
+}
+
 // GetWatermark gets the smallest timestamp for the given offset
 func (e *Edge) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var offset, err = inputOffset.Sequence()
@@ -47,8 +74,8 @@ func (e *Edge) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	}
 	var debugString strings.Builder
 	var epoch int64 = math.MaxInt64
-	var podMap = e.fromVertex.GetAllProcessors()
-	for _, p := range podMap {
+	var allProcessors = e.fromVertex.GetAllProcessors()
+	for _, p := range allProcessors {
 		debugString.WriteString(fmt.Sprintf("[HB:%s OT:%s] %s\n", e.fromVertex.hbWatcher.GetKVName(), e.fromVertex.otWatcher.GetKVName(), p))
 		var t = p.offsetTimeline.GetEventTime(inputOffset)
 		if t != -1 && t < epoch {

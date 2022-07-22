@@ -27,7 +27,8 @@ message BufferInfo {
 message VertexMetrics {
   required string pipeline = 1;
   required string vertex = 2;
-  map<string, float> processingRates = 3;
+  map<string, double> processingRates = 3;
+  map<string, int64> pendings = 4;
 }
 
 message ListBuffersRequest {
@@ -48,7 +49,6 @@ message GetBufferResponse {
 }
 
 message GetVertexMetricsRequest {
-  required string namespace = 1;
   required string pipeline = 2;
   required string vertex = 3;
 
@@ -70,6 +70,6 @@ service DaemonService {
   };
 
   rpc GetVertexMetrics (GetVertexMetricsRequest) returns (GetVertexMetricsResponse) {
-    option (google.api.http).get = "/api/v1/namespace/{namespace}/pipelines/{pipeline}/vertices/{vertex}/metrics";
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/metrics";
   };
 }

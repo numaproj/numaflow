@@ -11,6 +11,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
@@ -144,7 +145,7 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 				// Need to close and recreate later because the successes and errors channels might be unclean
 				_ = tk.producer.Close()
 				tk.connected = false
-				kafkaSinkWriteTimeouts.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
+				kafkaSinkWriteTimeouts.With(map[string]string{metricspkg.LabelVertex: tk.name, metricspkg.LabelPipeline: tk.pipelineName}).Inc()
 				close(done)
 				return
 			default:
@@ -162,9 +163,9 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 	<-done
 	for _, err := range errs {
 		if err != nil {
-			kafkaSinkWriteErrors.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
+			kafkaSinkWriteErrors.With(map[string]string{metricspkg.LabelVertex: tk.name, metricspkg.LabelPipeline: tk.pipelineName}).Inc()
 		} else {
-			kafkaSinkWriteCount.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
+			kafkaSinkWriteCount.With(map[string]string{metricspkg.LabelVertex: tk.name, metricspkg.LabelPipeline: tk.pipelineName}).Inc()
 		}
 	}
 	return nil, errs

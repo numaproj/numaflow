@@ -94,12 +94,12 @@ func (w *When) DeletePipelineAndWait() *When {
 	for {
 		select {
 		case <-ctx.Done():
-			w.t.Fatal(fmt.Errorf("timeout after %v waiting for pipeline pods terminating", timeout))
+			w.t.Fatalf("Timeout after %v waiting for pipeline pods terminating", timeout)
 		default:
 		}
 		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
-			w.t.Fatal(fmt.Errorf("error getting pipeline pods: %w", err))
+			w.t.Fatalf("Error getting pipeline pods: %v", err)
 		}
 		if len(podList.Items) == 0 {
 			return w
@@ -126,14 +126,36 @@ func (w *When) VertexPodPortForward(vertexName string, localPort, remotePort int
 	ctx := context.Background()
 	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 	if err != nil {
-		w.t.Fatalf("error getting vertex pod name: %v", err)
+		w.t.Fatalf("Error getting vertex pod name: %v", err)
 	}
 	podName := podList.Items[0].GetName()
 	w.t.Logf("Vertex POD name: %s", podName)
 
 	stopCh := make(chan struct{}, 1)
 	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
-		w.t.Fatalf("expected vertex pod port-forward: %v", err)
+		w.t.Fatalf("Expected vertex pod port-forward: %v", err)
+	}
+	if w.portForwarderStopChanels == nil {
+		w.portForwarderStopChanels = make(map[string]chan struct{})
+	}
+	w.portForwarderStopChanels[podName] = stopCh
+	return w
+}
+
+func (w *When) DaemonPodPortForward(pipelineName string, localPort, remotePort int) *When {
+	w.t.Helper()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyComponent, dfv1.ComponentDaemon)
+	ctx := context.Background()
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting daemon pod name: %v", err)
+	}
+	podName := podList.Items[0].GetName()
+	w.t.Logf("Daemon POD name: %s", podName)
+
+	stopCh := make(chan struct{}, 1)
+	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
+		w.t.Fatalf("Expected daemon pod port-forward: %v", err)
 	}
 	if w.portForwarderStopChanels == nil {
 		w.portForwarderStopChanels = make(map[string]chan struct{})

@@ -9,15 +9,16 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent
-    target:
-      kind: Deployment
-      name: numaflow-controller
-  - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
           name: NUMAFLOW_IMAGE_PULL_POLICY
           value: IfNotPresent
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: NUMAFLOW_DEBUG
+          value: "true"
     target:
       kind: Deployment
       name: numaflow-controller

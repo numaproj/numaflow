@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/numaproj/numaflow/controllers"
+	"github.com/numaproj/numaflow/controllers/vertex/scaling"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
@@ -154,7 +155,7 @@ func init() {
 
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
-	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, zaptest.NewLogger(t).Sugar())
+	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, scaling.NewScaler(cl), zaptest.NewLogger(t).Sugar())
 	_, ok := r.(*vertexReconciler)
 	assert.True(t, ok)
 }
@@ -331,6 +332,7 @@ func Test_reconcile(t *testing.T) {
 			scheme: scheme.Scheme,
 			config: fakeConfig,
 			image:  testFlowImage,
+			scaler: scaling.NewScaler(cl),
 			logger: zaptest.NewLogger(t).Sugar(),
 		}
 		testObj := testVertex.DeepCopy()
@@ -376,6 +378,7 @@ func Test_reconcile(t *testing.T) {
 			scheme: scheme.Scheme,
 			config: fakeConfig,
 			image:  testFlowImage,
+			scaler: scaling.NewScaler(cl),
 			logger: zaptest.NewLogger(t).Sugar(),
 		}
 		testObj := testVertex.DeepCopy()
@@ -407,6 +410,7 @@ func Test_reconcile(t *testing.T) {
 			scheme: scheme.Scheme,
 			config: fakeConfig,
 			image:  testFlowImage,
+			scaler: scaling.NewScaler(cl),
 			logger: zaptest.NewLogger(t).Sugar(),
 		}
 		testObj := testVertex.DeepCopy()

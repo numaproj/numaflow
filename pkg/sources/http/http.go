@@ -14,6 +14,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -186,7 +187,7 @@ func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage,
 			return msgs, nil
 		}
 	}
-	httpSourceReadCount.With(map[string]string{"vertex": h.name, "pipeline": h.pipelineName}).Inc()
+	httpSourceReadCount.With(map[string]string{metricspkg.LabelVertex: h.name, metricspkg.LabelPipeline: h.pipelineName}).Inc()
 	h.logger.Debugf("Read %d messages.", len(msgs))
 	return msgs, nil
 }

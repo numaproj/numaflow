@@ -48,3 +48,8 @@ func NewGenericFetch(ctx context.Context, vertexName string, fetchWM FetchWMWatc
 func (g *GenericFetch) GetWatermark(offset isb.Offset) processor.Watermark {
 	return g.fromEdge.GetWatermark(offset)
 }
+
+// GetHeadWatermark returns the head watermark based on the head offset.
+func (g *GenericFetch) GetHeadWatermark() processor.Watermark {
+	return g.fromEdge.GetHeadWatermark()
+}

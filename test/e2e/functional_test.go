@@ -3,11 +3,15 @@
 package e2e
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	. "github.com/numaproj/numaflow/test/fixtures"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -21,35 +25,62 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
 
+	pipelineName := "simple-pipeline"
+
 	w.Expect().
-		VertexPodsRunning().
+		VertexPodsRunning().DaemonPodsRunning().
 		VertexPodLogContains("input", LogSourceVertexStarted).
 		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
 		VertexPodLogContains("output", LogSinkVertexStarted).
+		DaemonPodLogContains(pipelineName, LogDaemonStarted).
 		VertexPodLogContains("output", `"Data":".*","Createdts":.*`)
 
 	defer w.VertexPodPortForward("input", 8001, dfv1.VertexMetricsPort).
 		VertexPodPortForward("p1", 8002, dfv1.VertexMetricsPort).
 		VertexPodPortForward("output", 8003, dfv1.VertexMetricsPort).
+		DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
 		TerminateAllPodPortForwards()
 
+	// Check vertex pod metrics endpoints
 	HTTPExpect(s.T(), "https://localhost:8001").GET("/metrics").
 		Expect().
-		Status(200).
-		Body().
-		Contains("total")
+		Status(200).Body().Contains("total")
 
 	HTTPExpect(s.T(), "https://localhost:8002").GET("/metrics").
 		Expect().
-		Status(200).
-		Body().
-		Contains("total")
+		Status(200).Body().Contains("total")
 
 	HTTPExpect(s.T(), "https://localhost:8003").GET("/metrics").
 		Expect().
-		Status(200).
-		Body().
-		Contains("total")
+		Status(200).Body().Contains("total")
+
+	// Test daemon service with REST
+	HTTPExpect(s.T(), "https://localhost:1234").GET(fmt.Sprintf("/api/v1/pipelines/%s/buffers", pipelineName)).
+		Expect().
+		Status(200).Body().Contains("buffers")
+
+	HTTPExpect(s.T(), "https://localhost:1234").
+		GET(fmt.Sprintf("/api/v1/pipelines/%s/buffers/%s", pipelineName, dfv1.GenerateEdgeBufferName(Namespace, pipelineName, "input", "p1"))).
+		Expect().
+		Status(200).Body().Contains("pipeline")
+
+	HTTPExpect(s.T(), "https://localhost:1234").
+		GET(fmt.Sprintf("/api/v1/pipelines/%s/vertices/%s/metrics", pipelineName, "p1")).
+		Expect().
+		Status(200).Body().Contains("pipeline")
+
+	// Test Daemon service with gRPC
+	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	assert.NoError(s.T(), err)
+	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 2, len(buffers))
+	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateEdgeBufferName(Namespace, pipelineName, "input", "p1"))
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
+	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), pipelineName, m.Pipeline)
 }
 
 func (s *FunctionalSuite) TestFiltering() {

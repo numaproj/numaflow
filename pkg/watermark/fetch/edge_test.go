@@ -123,6 +123,12 @@ func TestBuffer_GetWatermark(t *testing.T) {
 			want:       10,
 		},
 		{
+			name:       "offset_22",
+			fromVertex: testVertex,
+			args:       args{23},
+			want:       10,
+		},
+		{
 			name:       "offset_28",
 			fromVertex: testVertex,
 			args:       args{28},
@@ -146,6 +152,8 @@ func TestBuffer_GetWatermark(t *testing.T) {
 			if got := b.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.Unix(tt.want, 0).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, processor.Watermark(time.Unix(tt.want, 0)))
 			}
+			// this will always be 14 because the timeline has been populated ahead of time
+			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.Unix(14, 0).In(location))
 		})
 	}
 }
