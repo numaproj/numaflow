@@ -27,6 +27,8 @@ type watermarkFetchers struct {
 // watermark propagated by the vertex (Vn-1). As each vertex has one incoming edge, for the input vertex we read the source
 // data buffer.
 func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
+
+	// TODO: Return err instead of logging (https://github.com/numaproj/numaflow/pull/120#discussion_r927271677)
 	ctx := context.Background()
 	log := logging.FromContext(ctx)
 	var wmFetcher = new(watermarkFetchers)
@@ -40,6 +42,7 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
 	vertexWmMap := make(map[string]fetch.Fetcher)
 	pipelineName := pipeline.Name
 
+	// TODO: https://github.com/numaproj/numaflow/pull/120#discussion_r927316015
 	for _, vertex := range pipeline.Spec.Vertices {
 		// TODO: Checking if Vertex is source
 		if vertex.Source != nil {
