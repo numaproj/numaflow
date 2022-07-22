@@ -56,7 +56,7 @@ func TestGetVertexMetrics(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName)
-	pipelineMetricsQueryService := NewPipelineMetricsQueryService(client, pipeline)
+	pipelineMetricsQueryService := NewPipelineMetadataQuery(client, pipeline)
 
 	metricsResponse := `# HELP vertex_processing_rate Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.
 # TYPE vertex_processing_rate gauge
@@ -125,7 +125,7 @@ func TestGetBuffer(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService := NewPipelineMetricsQueryService(ms, pipeline)
+	pipelineMetricsQueryService := NewPipelineMetadataQuery(ms, pipeline)
 
 	bufferName := "numaflow-system-simple-pipeline-in-cat"
 
@@ -160,7 +160,7 @@ func TestListBuffers(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService := NewPipelineMetricsQueryService(ms, pipeline)
+	pipelineMetricsQueryService := NewPipelineMetadataQuery(ms, pipeline)
 
 	req := &daemon.ListBuffersRequest{Pipeline: &pipelineName}
 
