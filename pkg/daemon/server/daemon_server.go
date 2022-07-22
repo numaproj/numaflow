@@ -104,7 +104,7 @@ func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) *grpc.Serv
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	daemon.RegisterDaemonServiceServer(grpcServer, service.NewPipelineMetricsQueryService(isbSvcClient, ds.pipeline))
+	daemon.RegisterDaemonServiceServer(grpcServer, service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline))
 	return grpcServer
 }
 

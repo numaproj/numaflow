@@ -83,7 +83,7 @@ func (p *Publish) initialSetup() {
 // is less than the current head watermark.
 func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	// update p.headWatermark only if wm > p.headWatermark
-	if !time.Time(wm).Before(time.Time(p.headWatermark)) {
+	if time.Time(wm).After(time.Time(p.headWatermark)) {
 		p.headWatermark = wm
 	} else {
 		p.log.Errorw("new watermark is older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
