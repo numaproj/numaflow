@@ -1,41 +1,39 @@
 import {memo} from 'react';
 import {Handle, NodeProps, Position} from 'react-flow-renderer';
 import {Tooltip} from "@mui/material";
+import "./Node.css";
 
-const handleStyle = { left: 100 };
-
-
-const SourceNode = ({ data, isConnectable, sourcePosition = Position.Bottom }: NodeProps) => {
+const SourceNode = ({
+                        data, isConnectable,
+                        sourcePosition = Position.Bottom,
+                    }: NodeProps) => {
     return (
-    <div>
-    <div className={"react-flow__node-default"} style = {{
-        background: "#34BFFF",
-        boxShadow: "1",
-        color: "#333",
-        border: "1px solid #b8cee2",
-        cursor: "pointer",
-        fontFamily: "IBM Plex Sans",
-        fontWeight: 400,
-        fontSize: "0.50rem"
+        <div>
+            <div className={"react-flow__node-input"} style={{
+                background: "#34BFFF",
+                boxShadow: "1",
+                color: "#333",
+                border: "1px solid #2382ad",
+                cursor: "pointer",
+                fontFamily: "IBM Plex Sans",
+                fontWeight: 400,
+                fontSize: "0.50rem",
 
-    }}>
-        {data?.label}
-        <Handle type="source" position={sourcePosition} isConnectable={isConnectable}/>
-    </div>
-        <Handle position={Position.Top} id="a" style={handleStyle} >
-            <Tooltip title="ProcessingRates &#010; 5min" placement="top" style={{cursor:"pointer"}} arrow>
-            <svg  width={20} height={20}
-                  viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
-                <g>
-                <rect width="100" height="10" style={{fill: "white", backgroundColor: "black"}} />
-                    <text x="5" y="5" fontSize={"0.8em"} fontWeight={"bold"}  color="blue" textAnchor="center" >{data?.rate.toFixed(2)}</text>
+            }}>
+                <Tooltip title={<div className={"node-tooltip"}>
+                    <div>Processing Rates</div>
+                    <div>1 min: {data?.rate?.ratePerMin}</div>
+                    <div>5 min: {data?.rate?.ratePerFiveMin}</div>
+                    <div>15 min: {data?.rate?.ratePerFifteenMin}</div>
+                </div>} arrow>
+                    <div className={"node-rate"}>{data?.rate?.ratePerMin}/min</div>
+                </Tooltip>
 
-                </g>
-            </svg>
-            </Tooltip>
-        </Handle>
-    </div>
+                {data?.label}
+                <Handle type="source" position={sourcePosition} isConnectable={isConnectable}/>
+            </div>
+        </div>
 
-);
+    );
 }
 export default memo(SourceNode);

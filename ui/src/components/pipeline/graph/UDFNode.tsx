@@ -1,43 +1,40 @@
 import {memo} from 'react';
 import {Handle, NodeProps, Position} from 'react-flow-renderer';
+import {Tooltip} from "@mui/material";
+import "./Node.css"
 
-const handleStyle = { left: 100 };
-
-
-const UDFNode = ({ data, isConnectable, targetPosition = Position.Top,
-                     sourcePosition = Position.Bottom, }: NodeProps) => {
+const UDFNode = ({
+                     data, isConnectable, targetPosition = Position.Top,
+                     sourcePosition = Position.Bottom,
+                 }: NodeProps) => {
     return (
         <div>
-            <div className={"react-flow__node-input"} style = {{
+            <div className={"react-flow__node-default"} style={{
                 background: "#82DBE4",
                 boxShadow: "1",
                 color: "#333",
-                border: "1px solid #f1c5a8",
+                border: "1px solid #59959c",
                 cursor: "pointer",
                 fontFamily: "IBM Plex Sans",
                 fontWeight: 400,
                 fontSize: "0.50rem"
 
             }}>
-                <Handle type="target" position={targetPosition} isConnectable={isConnectable} />
+                <Tooltip title={<div className={"node-tooltip"}>
+                    <div>Processing Rates</div>
+                    <div>1 min: {data?.rate?.ratePerMin}</div>
+                    <div>5 min: {data?.rate?.ratePerFiveMin}</div>
+                    <div>15 min: {data?.rate?.ratePerFifteenMin}</div>
+                </div>} arrow>
+                    <div className={"node-rate"}>{data?.rate?.ratePerMin}/min</div>
+                </Tooltip>
+                <Handle type="target" position={targetPosition} isConnectable={isConnectable}/>
                 {data?.label}
-                <Handle type="source" position={sourcePosition} isConnectable={isConnectable} />
+                <Handle type="source" position={sourcePosition} isConnectable={isConnectable}/>
             </div>
-            <Handle position={Position.Top} id="a" style={handleStyle} >
-                <svg  width={20} height={20}
-                      viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
-                    <g>
-                        <rect width="40" height="10" style={{fill: "#B1b192"}} />
-                        <text x="5" y="5" fontSize={"0.8em"} fontWeight={"bold"}  color="blue" textAnchor="center" >{data?.rate.toFixed(2)}</text>
-
-                    </g>
-                </svg>
-            </Handle>
         </div>
 
     );
 }
-
-//SourceNode.displayName = 'SourceNode';
 
 export default memo(UDFNode);
