@@ -25,6 +25,7 @@ type metricsHttpClient interface {
 	Get(url string) (*http.Response, error)
 }
 
+// pipelineMetadataQuery has the metadata required for the pipeline queries
 type pipelineMetadataQuery struct {
 	isbSvcClient    isbsvc.ISBService
 	pipeline        *v1alpha1.Pipeline
