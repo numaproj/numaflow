@@ -1,0 +1,20 @@
+.node-rate {
+    width: 40px;
+    height: 10px;
+    background: #ccd6dd;
+    border: 1px solid #8fa4b1;
+    position: absolute;
+    bottom: -5px;
+    right: 10px;
+    border-radius: 5px;
+    padding: 0 5px;
+    font-size: 0.8em;
+    text-transform: lowercase;
+    margin-right: 1px;
+    text-align: center;
+    font-family: "IBM Plex Sans", sans-serif;
+}
+
+.node-tooltip {
+    font-size: 1.2em;
+}

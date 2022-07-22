@@ -8,19 +8,28 @@ import ReactFlow, {
   EdgeChange,
   Node,
   NodeChange,
+  NodeTypes,
   Position,
 } from "react-flow-renderer";
 import dagre from "dagre";
 import EdgeInfo from "../edgeinfo/EdgeInfo";
 import NodeInfo from "../nodeinfo/NodeInfo";
 import { GraphData } from "../../../utils/models/pipeline";
-
 import "./Graph.css";
 import Spec from "../spec/Spec";
 import { Card } from "@mui/material";
+import SourceNode from "./SourceNode";
+import UDFNode from "./UDFNode";
+import SinkNode from "./SinkNode";
 
 const nodeWidth = 172;
 const nodeHeight = 36;
+
+const defaultNodeTypes: NodeTypes = {
+  udf: UDFNode,
+  sink: SinkNode,
+  source: SourceNode,
+};
 
 const getLayoutedElements = (
   nodes: Node[],
@@ -156,6 +165,7 @@ export default function Graph(props: GraphProps) {
       >
         <ReactFlow
           preventScrolling={false}
+          nodeTypes={defaultNodeTypes}
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}

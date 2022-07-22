@@ -1,5 +1,11 @@
 import { Node, Edge } from "react-flow-renderer";
 
+export interface ProcessingRates {
+  ratePerMin: number;
+  ratePerFiveMin: number;
+  ratePerFifteenMin: number;
+}
+
 export interface EdgeInfo {
   fromVertex: string;
   toVertex: string;
