@@ -4,7 +4,7 @@ import { ConnectionLineType, Edge, Node } from "react-flow-renderer";
 import Graph from "./graph/Graph";
 import { usePipelineFetch } from "../../utils/fetchWrappers/pipelineFetch";
 import { useEdgesInfoFetch } from "../../utils/fetchWrappers/edgeInfoFetch";
-import { ProcessingRates } from "../../utils/models/pipeline";
+import { VertexMetrics } from "../../utils/models/pipeline";
 import "./Pipeline.css";
 
 export function Pipeline() {
@@ -14,8 +14,8 @@ export function Pipeline() {
 
   const [vertexPods, setVertexPods] = useState<Map<string, number>>(null);
 
-  const [vertexRate, setVertexRate] =
-    useState<Map<string, ProcessingRates>>(null);
+  const [vertexMetrics, setVertexMetrics] =
+    useState<Map<string, VertexMetrics>>(null);
 
   const { pipeline, error: pipelineError } = usePipelineFetch(
     namespaceId,
@@ -73,7 +73,7 @@ export function Pipeline() {
 
   // This useEffect is used to obtain all the rates for a given vertex in a pipeline.
   useEffect(() => {
-    const vertexToRateMap = new Map();
+    const vertexToMetricsMap = new Map();
 
     if (pipeline?.spec?.vertices) {
       Promise.all(
@@ -83,23 +83,28 @@ export function Pipeline() {
           )
             .then((response) => response.json())
             .then((json) => {
-              const processinRates = {} as ProcessingRates;
-              processinRates.ratePerMin =
+              const vertexMetrics = {} as VertexMetrics;
+              vertexMetrics.ratePerMin =
                 json["processingRates"]["1m"].toFixed(2);
-              processinRates.ratePerFiveMin =
+              vertexMetrics.ratePerFiveMin =
                 json["processingRates"]["5m"].toFixed(2);
-              processinRates.ratePerFifteenMin =
+              vertexMetrics.ratePerFifteenMin =
                 json["processingRates"]["15m"].toFixed(2);
-              vertexToRateMap.set(vertex.name, processinRates);
+              vertexMetrics.isWaterMarkEnabled = json["isWaterMarkEnabled"];
+              vertexMetrics.watermark = json["watermark"];
+              vertexMetrics.watermarkLocalTime = new Date(
+                json["watermark"] * 1000
+              ).toLocaleTimeString();
+              vertexToMetricsMap.set(vertex.name, vertexMetrics);
             });
         })
-      ).then(() => setVertexRate(vertexToRateMap));
+      ).then(() => setVertexMetrics(vertexToMetricsMap));
     }
   }, [pipeline]);
 
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];
-    if (pipeline?.spec?.vertices && vertexPods && vertexRate) {
+    if (pipeline?.spec?.vertices && vertexPods && vertexMetrics) {
       pipeline.spec.vertices.map((vertex) => {
         const podsLength = vertexPods.has(vertex.name)
           ? vertexPods.get(vertex.name)
@@ -127,14 +132,14 @@ export function Pipeline() {
           newNode.data.udf = vertex;
           newNode.type = "udf";
         }
-        newNode.data.rate = vertexRate.has(vertex.name)
-          ? vertexRate.get(vertex.name)
+        newNode.data.vertexMetrics = vertexMetrics.has(vertex.name)
+          ? vertexMetrics.get(vertex.name)
           : 0;
         newVertices.push(newNode);
       });
     }
     return newVertices;
-  }, [pipeline, vertexPods, vertexRate]);
+  }, [pipeline, vertexPods, vertexMetrics]);
 
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];

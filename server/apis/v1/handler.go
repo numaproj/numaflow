@@ -272,7 +272,21 @@ func (h *handler) GetVertexMetrics(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, l)
+	w, err := client.GetVertexWatermark(context.Background(), pipeline, vertex)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	vertexMetrics := map[string]interface{}{
+		"pipeline":           pipeline,
+		"vertex":             vertex,
+		"watermark":          w.GetWatermark(),
+		"isWaterMarkEnabled": w.GetIsWatermarkEnabled(),
+		"processingRates":    l.GetProcessingRates(),
+	}
+
+	c.JSON(http.StatusOK, vertexMetrics)
 }
 
 // GetVertexWatermark is used to provide the head watermark for a given vertex

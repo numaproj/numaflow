@@ -23,18 +23,36 @@ const SourceNode = ({
           fontSize: "0.50rem",
         }}
       >
+        {data?.vertexMetrics?.isWaterMarkEnabled && (
+          <Tooltip
+            title={
+              <div className={"node-tooltip"}>
+                <div>Watermark</div>
+                <div>{data?.vertexMetrics?.watermarkLocalTime}</div>
+              </div>
+            }
+            arrow
+            placement={"top"}
+          >
+            <div className={"node-watermark"}>
+              {data?.vertexMetrics?.watermark}
+            </div>
+          </Tooltip>
+        )}
         <Tooltip
           title={
             <div className={"node-tooltip"}>
               <div>Processing Rates</div>
-              <div>1 min: {data?.rate?.ratePerMin}</div>
-              <div>5 min: {data?.rate?.ratePerFiveMin}</div>
-              <div>15 min: {data?.rate?.ratePerFifteenMin}</div>
+              <div>1 min: {data?.vertexMetrics?.ratePerMin}</div>
+              <div>5 min: {data?.vertexMetrics?.ratePerFiveMin}</div>
+              <div>15 min: {data?.vertexMetrics?.ratePerFifteenMin}</div>
             </div>
           }
           arrow
         >
-          <div className={"node-rate"}>{data?.rate?.ratePerMin}/min</div>
+          <div className={"node-rate"}>
+            {data?.vertexMetrics?.ratePerMin}/min
+          </div>
         </Tooltip>
 
         {data?.label}
