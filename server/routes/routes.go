@@ -33,6 +33,6 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/metrics/namespaces/:namespace/pods/:pod", handler.GetPodMetrics)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/edges", handler.ListPipelineEdges)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/edges/:edge", handler.GetPipelineEdge)
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics", handler.GetVertexMetrics)
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics", handler.GetVertexMetricsAndWatermark)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/watermark", handler.GetVertexWatermark)
 }
