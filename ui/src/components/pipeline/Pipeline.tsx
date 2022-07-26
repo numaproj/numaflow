@@ -95,7 +95,9 @@ export function Pipeline() {
               vertexToMetricsMap.set(vertex.name, vertexMetrics);
             });
         })
-      ).then(() => setVertexMetrics(vertexToMetricsMap));
+      )
+        .then(() => setVertexMetrics(vertexToMetricsMap))
+        .catch(console.error);
     }
   };
 
@@ -107,7 +109,7 @@ export function Pipeline() {
     }, 300000);
 
     return () => clearInterval(interval);
-  }, [pipeline]);
+  }, [pipeline, getMetrics]);
 
   // This is used to obtain the watermark of a given vertex
   const getWatermark = () => {
@@ -129,7 +131,9 @@ export function Pipeline() {
               vertexToWatermarkMap.set(vertex.name, vertexWatermark);
             });
         })
-      ).then(() => setVertexWatermark(vertexToWatermarkMap));
+      )
+        .then(() => setVertexWatermark(vertexToWatermarkMap))
+        .catch(console.error);
     }
   };
 
@@ -141,7 +145,7 @@ export function Pipeline() {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [pipeline]);
+  }, [pipeline, getWatermark]);
 
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];

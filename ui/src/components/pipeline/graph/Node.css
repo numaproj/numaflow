@@ -1,5 +1,5 @@
 .node-rate {
-    width: 40px;
+    width: fit-content;
     height: 10px;
     background: #ccd6dd;
     border: 1px solid #8fa4b1;
@@ -20,7 +20,7 @@
 }
 
 .node-watermark {
-    width: 50px;
+    width: fit-content;
     height: 10px;
     background: #ccd6dd;
     border: 1px solid #8fa4b1;
