@@ -4,7 +4,7 @@ import { ConnectionLineType, Edge, Node } from "react-flow-renderer";
 import Graph from "./graph/Graph";
 import { usePipelineFetch } from "../../utils/fetchWrappers/pipelineFetch";
 import { useEdgesInfoFetch } from "../../utils/fetchWrappers/edgeInfoFetch";
-import { VertexMetrics } from "../../utils/models/pipeline";
+import { VertexMetrics, VertexWatermark } from "../../utils/models/pipeline";
 import "./Pipeline.css";
 
 export function Pipeline() {
@@ -16,6 +16,9 @@ export function Pipeline() {
 
   const [vertexMetrics, setVertexMetrics] =
     useState<Map<string, VertexMetrics>>(null);
+
+  const [vertexWatermark, setVertexWatermark] =
+    useState<Map<string, VertexWatermark>>(null);
 
   const { pipeline, error: pipelineError } = usePipelineFetch(
     namespaceId,
@@ -90,11 +93,6 @@ export function Pipeline() {
                 json["processingRates"]["5m"].toFixed(2);
               vertexMetrics.ratePerFifteenMin =
                 json["processingRates"]["15m"].toFixed(2);
-              vertexMetrics.isWaterMarkEnabled = json["isWaterMarkEnabled"];
-              vertexMetrics.watermark = json["watermark"];
-              vertexMetrics.watermarkLocalTime = new Date(
-                json["watermark"] * 1000
-              ).toLocaleTimeString();
               vertexToMetricsMap.set(vertex.name, vertexMetrics);
             });
         })
@@ -102,9 +100,39 @@ export function Pipeline() {
     }
   }, [pipeline]);
 
+  // This useEffect is used to obtain watermark for a given vertex in a pipeline.
+  useEffect(() => {
+    const vertexToWatermarkMap = new Map();
+
+    if (pipeline?.spec?.vertices) {
+      Promise.all(
+        pipeline?.spec?.vertices.map((vertex) => {
+          return fetch(
+            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/watermark`
+          )
+            .then((response) => response.json())
+            .then((json) => {
+              const vertexWatermark = {} as VertexWatermark;
+              vertexWatermark.isWaterMarkEnabled = json["isWatermarkEnabled"];
+              vertexWatermark.watermark = json["watermark"];
+              vertexWatermark.watermarkLocalTime = new Date(
+                json["watermark"] * 1000
+              ).toLocaleString();
+              vertexToWatermarkMap.set(vertex.name, vertexWatermark);
+            });
+        })
+      ).then(() => setVertexWatermark(vertexToWatermarkMap));
+    }
+  }, [pipeline]);
+
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];
-    if (pipeline?.spec?.vertices && vertexPods && vertexMetrics) {
+    if (
+      pipeline?.spec?.vertices &&
+      vertexPods &&
+      vertexMetrics &&
+      vertexWatermark
+    ) {
       pipeline.spec.vertices.map((vertex) => {
         const podsLength = vertexPods.has(vertex.name)
           ? vertexPods.get(vertex.name)
@@ -135,11 +163,14 @@ export function Pipeline() {
         newNode.data.vertexMetrics = vertexMetrics.has(vertex.name)
           ? vertexMetrics.get(vertex.name)
           : 0;
+        newNode.data.vertexWatermark = vertexWatermark.has(vertex.name)
+          ? vertexWatermark.get(vertex.name)
+          : 0;
         newVertices.push(newNode);
       });
     }
     return newVertices;
-  }, [pipeline, vertexPods, vertexMetrics]);
+  }, [pipeline, vertexPods, vertexMetrics, vertexWatermark]);
 
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];

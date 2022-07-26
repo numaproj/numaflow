@@ -23,19 +23,19 @@ const SinkNode = ({
           fontSize: "0.50rem",
         }}
       >
-        {data?.vertexMetrics?.isWaterMarkEnabled && (
+        {data?.vertexWatermark?.isWaterMarkEnabled && (
           <Tooltip
             title={
               <div className={"node-tooltip"}>
                 <div>Watermark</div>
-                <div>{data?.vertexMetrics?.watermarkLocalTime}</div>
+                <div>{data?.vertexWatermark?.watermarkLocalTime}</div>
               </div>
             }
             arrow
             placement={"top"}
           >
             <div className={"node-watermark"}>
-              {data?.vertexMetrics?.watermark}
+              {data?.vertexWatermark?.watermark}
             </div>
           </Tooltip>
         )}

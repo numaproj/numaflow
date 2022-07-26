@@ -10,7 +10,7 @@ type Handler interface {
 	GetInterStepBufferService(c *gin.Context)
 	ListVertices(c *gin.Context)
 	GetVertex(c *gin.Context)
-	GetVertexMetricsAndWatermark(c *gin.Context)
+	GetVertexMetrics(c *gin.Context)
 	ListVertexPods(c *gin.Context)
 	PodLogs(c *gin.Context)
 	ListPodsMetrics(c *gin.Context)

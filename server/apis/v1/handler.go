@@ -257,8 +257,8 @@ func (h *handler) GetPipelineEdge(c *gin.Context) {
 	c.JSON(http.StatusOK, i)
 }
 
-// GetVertexMetricsAndWatermark is used to provide information about the vertex including processing Rate and watermark
-func (h *handler) GetVertexMetricsAndWatermark(c *gin.Context) {
+// GetVertexMetrics is used to provide information about the vertex including processing Rate and watermark
+func (h *handler) GetVertexMetrics(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
 	vertex := c.Param("vertex")
@@ -272,21 +272,8 @@ func (h *handler) GetVertexMetricsAndWatermark(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	w, err := client.GetVertexWatermark(context.Background(), pipeline, vertex)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
 
-	vertexMetrics := map[string]interface{}{
-		"pipeline":           pipeline,
-		"vertex":             vertex,
-		"watermark":          w.GetWatermark(),
-		"isWaterMarkEnabled": w.GetIsWatermarkEnabled(),
-		"processingRates":    l.GetProcessingRates(),
-	}
-
-	c.JSON(http.StatusOK, vertexMetrics)
+	c.JSON(http.StatusOK, l)
 }
 
 // GetVertexWatermark is used to provide the head watermark for a given vertex
