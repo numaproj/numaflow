@@ -133,12 +133,12 @@ export function Pipeline() {
     }
   };
 
-  // This useEffect is used to obtain watermark for a given vertex in a pipeline and refreshes every 5 seconds
+  // This useEffect is used to obtain watermark for a given vertex in a pipeline and refreshes every 1 minute
   useEffect(() => {
     getWatermark();
     const interval = setInterval(() => {
       getWatermark();
-    }, 5000);
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [pipeline]);
