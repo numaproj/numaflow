@@ -74,8 +74,7 @@ export function Pipeline() {
     }
   }, [pipeline]);
 
-  // This useEffect is used to obtain all the rates for a given vertex in a pipeline.
-  useEffect(() => {
+  const getMetrics = () => {
     const vertexToMetricsMap = new Map();
 
     if (pipeline?.spec?.vertices) {
@@ -98,12 +97,21 @@ export function Pipeline() {
         })
       ).then(() => setVertexMetrics(vertexToMetricsMap));
     }
+  };
+
+  // This useEffect is used to obtain metrics for a given vertex in a pipeline and refreshes every 5 minutes
+  useEffect(() => {
+    getMetrics();
+    const interval = setInterval(() => {
+      getMetrics();
+    }, 300000);
+
+    return () => clearInterval(interval);
   }, [pipeline]);
 
-  // This useEffect is used to obtain watermark for a given vertex in a pipeline.
-  useEffect(() => {
+  // This is used to obtain the watermark of a given vertex
+  const getWatermark = () => {
     const vertexToWatermarkMap = new Map();
-
     if (pipeline?.spec?.vertices) {
       Promise.all(
         pipeline?.spec?.vertices.map((vertex) => {
@@ -123,6 +131,16 @@ export function Pipeline() {
         })
       ).then(() => setVertexWatermark(vertexToWatermarkMap));
     }
+  };
+
+  // This useEffect is used to obtain watermark for a given vertex in a pipeline and refreshes every 5 seconds
+  useEffect(() => {
+    getWatermark();
+    const interval = setInterval(() => {
+      getWatermark();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [pipeline]);
 
   const vertices = useMemo(() => {

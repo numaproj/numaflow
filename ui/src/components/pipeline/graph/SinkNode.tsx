@@ -27,7 +27,7 @@ const SinkNode = ({
           <Tooltip
             title={
               <div className={"node-tooltip"}>
-                <div>Watermark</div>
+                <div className={"node-watermark-tooltip"}>Watermark</div>
                 <div>{data?.vertexWatermark?.watermarkLocalTime}</div>
               </div>
             }

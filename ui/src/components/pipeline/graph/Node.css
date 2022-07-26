@@ -35,3 +35,6 @@
     text-align: center;
     font-family: "IBM Plex Sans", sans-serif;
 }
+.node-watermark-tooltip {
+    text-align: center;
+}
