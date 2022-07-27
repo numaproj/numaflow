@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ConnectionLineType, Edge, Node } from "react-flow-renderer";
 import Graph from "./graph/Graph";
@@ -74,7 +74,7 @@ export function Pipeline() {
     }
   }, [pipeline]);
 
-  const getMetrics = () => {
+  const getMetrics = useCallback(() => {
     const vertexToMetricsMap = new Map();
 
     if (pipeline?.spec?.vertices) {
@@ -99,7 +99,7 @@ export function Pipeline() {
         .then(() => setVertexMetrics(vertexToMetricsMap))
         .catch(console.error);
     }
-  };
+  }, [pipeline]);
 
   // This useEffect is used to obtain metrics for a given vertex in a pipeline and refreshes every 5 minutes
   useEffect(() => {
@@ -109,10 +109,10 @@ export function Pipeline() {
     }, 300000);
 
     return () => clearInterval(interval);
-  }, [pipeline, getMetrics]);
+  }, [getMetrics]);
 
   // This is used to obtain the watermark of a given vertex
-  const getWatermark = () => {
+  const getWatermark = useCallback(() => {
     const vertexToWatermarkMap = new Map();
     if (pipeline?.spec?.vertices) {
       Promise.all(
@@ -135,7 +135,7 @@ export function Pipeline() {
         .then(() => setVertexWatermark(vertexToWatermarkMap))
         .catch(console.error);
     }
-  };
+  }, [pipeline]);
 
   // This useEffect is used to obtain watermark for a given vertex in a pipeline and refreshes every 1 minute
   useEffect(() => {
@@ -145,7 +145,7 @@ export function Pipeline() {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [pipeline, getWatermark]);
+  }, [getWatermark]);
 
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];
