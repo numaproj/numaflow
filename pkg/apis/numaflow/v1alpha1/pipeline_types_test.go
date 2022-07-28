@@ -211,4 +211,10 @@ func Test_GetDownstreamEdges(t *testing.T) {
 
 	edges = pl.GetDownstreamEdges("p1")
 	assert.Equal(t, 3, len(edges))
+
+	edges = pl.GetDownstreamEdges("output")
+	assert.Equal(t, 0, len(edges))
+
+	edges = pl.GetDownstreamEdges("notexisting")
+	assert.Equal(t, 0, len(edges))
 }
