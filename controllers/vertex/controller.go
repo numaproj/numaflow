@@ -69,9 +69,10 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 // reconcile does the real logic
 func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (ctrl.Result, error) {
 	log := logging.FromContext(ctx)
+	vertexKey := scaling.KeyOfVertex(*vertex)
 	if !vertex.DeletionTimestamp.IsZero() {
 		log.Info("Deleting vertex")
-		r.scaler.StopWatching(fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name))
+		r.scaler.StopWatching(vertexKey)
 		return ctrl.Result{}, nil
 	}
 
@@ -98,7 +99,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	}
 
 	if vertex.Scalable() { // Add to autoscaling watcher
-		r.scaler.StartWatching(fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name))
+		r.scaler.StartWatching(vertexKey)
 	}
 
 	desiredReplicas := vertex.Spec.GetReplicas()

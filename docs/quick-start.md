@@ -73,4 +73,4 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exa
 
 ## Coming Up
 
-Next, let's take a peek at [an advance pipeline](./advanced-start.md), to learn some powerful features of Numaflow.
+Next, let's take a peek at [an advanced pipeline](./advanced-start.md), to learn some powerful features of Numaflow.
