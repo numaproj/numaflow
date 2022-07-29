@@ -1,5 +1,5 @@
 .node-rate {
-    width: 40px;
+    width: fit-content;
     height: 10px;
     background: #ccd6dd;
     border: 1px solid #8fa4b1;
@@ -17,4 +17,24 @@
 
 .node-tooltip {
     font-size: 1.2em;
+}
+
+.node-watermark {
+    width: fit-content;
+    height: 10px;
+    background: #ccd6dd;
+    border: 1px solid #8fa4b1;
+    position: absolute;
+    top: -5px;
+    left: 50px;
+    border-radius: 5px;
+    padding: 0 5px;
+    font-size: 0.8em;
+    text-transform: lowercase;
+    margin-right: 1px;
+    text-align: center;
+    font-family: "IBM Plex Sans", sans-serif;
+}
+.node-watermark-tooltip {
+    text-align: center;
 }
