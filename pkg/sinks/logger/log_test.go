@@ -32,7 +32,7 @@ func TestToLog_Start(t *testing.T) {
 		Name: "sinks.logger",
 	}}
 
-	s, err := NewToLog(vertex, fromStep)
+	s, err := NewToLog(vertex, fromStep, nil, nil)
 	assert.NoError(t, err)
 
 	stopped := s.Start()
@@ -73,8 +73,8 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 	vertex2 := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
 		Name: "sinks.logger2",
 	}}
-	logger1, _ := NewToLog(vertex1, to1)
-	logger2, _ := NewToLog(vertex2, to2)
+	logger1, _ := NewToLog(vertex1, to1, nil, nil)
+	logger2, _ := NewToLog(vertex2, to2, nil, nil)
 	logger1Stopped := logger1.Start()
 	logger2Stopped := logger2.Start()
 
