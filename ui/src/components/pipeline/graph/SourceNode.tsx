@@ -43,15 +43,15 @@ const SourceNode = ({
           title={
             <div className={"node-tooltip"}>
               <div>Processing Rates</div>
-              <div>1 min: {data?.vertexMetrics?.ratePerMin}</div>
-              <div>5 min: {data?.vertexMetrics?.ratePerFiveMin}</div>
-              <div>15 min: {data?.vertexMetrics?.ratePerFifteenMin}</div>
+              <div>1 min: {data?.vertexMetrics?.ratePerMin}/sec</div>
+              <div>5 min: {data?.vertexMetrics?.ratePerFiveMin}/sec</div>
+              <div>15 min: {data?.vertexMetrics?.ratePerFifteenMin}/sec</div>
             </div>
           }
           arrow
         >
           <div className={"node-rate"}>
-            {data?.vertexMetrics?.ratePerMin}/min
+            {data?.vertexMetrics?.ratePerMin}/sec
           </div>
         </Tooltip>
 
