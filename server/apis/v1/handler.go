@@ -257,7 +257,7 @@ func (h *handler) GetPipelineEdge(c *gin.Context) {
 	c.JSON(http.StatusOK, i)
 }
 
-// GetVertexMetrics is used to provide information about the vertex including processing Rate
+// GetVertexMetrics is used to provide information about the vertex including processing rates.
 func (h *handler) GetVertexMetrics(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
