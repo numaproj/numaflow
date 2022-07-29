@@ -23,18 +23,36 @@ const SinkNode = ({
           fontSize: "0.50rem",
         }}
       >
+        {data?.vertexWatermark?.isWaterMarkEnabled && (
+          <Tooltip
+            title={
+              <div className={"node-tooltip"}>
+                <div className={"node-watermark-tooltip"}>Watermark</div>
+                <div>{data?.vertexWatermark?.watermarkLocalTime}</div>
+              </div>
+            }
+            arrow
+            placement={"top"}
+          >
+            <div className={"node-watermark"}>
+              {data?.vertexWatermark?.watermark}
+            </div>
+          </Tooltip>
+        )}
         <Tooltip
           title={
             <div className={"node-tooltip"}>
               <div>Processing Rates</div>
-              <div>1 min: {data?.rate?.ratePerMin}</div>
-              <div>5 min: {data?.rate?.ratePerFiveMin}</div>
-              <div>15 min: {data?.rate?.ratePerFifteenMin}</div>
+              <div>1 min: {data?.vertexMetrics?.ratePerMin}/sec</div>
+              <div>5 min: {data?.vertexMetrics?.ratePerFiveMin}/sec</div>
+              <div>15 min: {data?.vertexMetrics?.ratePerFifteenMin}/sec</div>
             </div>
           }
           arrow
         >
-          <div className={"node-rate"}>{data?.rate?.ratePerMin}/min</div>
+          <div className={"node-rate"}>
+            {data?.vertexMetrics?.ratePerMin}/sec
+          </div>
         </Tooltip>
         <Handle
           type="target"

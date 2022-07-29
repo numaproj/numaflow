@@ -1,9 +1,15 @@
 import { Node, Edge } from "react-flow-renderer";
 
-export interface ProcessingRates {
+export interface VertexMetrics {
   ratePerMin: number;
   ratePerFiveMin: number;
   ratePerFifteenMin: number;
+}
+
+export interface VertexWatermark {
+  watermark: number;
+  watermarkLocalTime: string;
+  isWaterMarkEnabled: boolean;
 }
 
 export interface EdgeInfo {
