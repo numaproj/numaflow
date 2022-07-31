@@ -122,6 +122,22 @@ func (p Pipeline) GetAllBuffers() []Buffer {
 	return r
 }
 
+// GetDownstreamEdges returns all the downstream edges of a vertex
+func (p Pipeline) GetDownstreamEdges(vertexName string) []Edge {
+	var f func(vertexName string, edges *[]Edge)
+	f = func(vertexName string, edges *[]Edge) {
+		for _, b := range p.Spec.Edges {
+			if b.From == vertexName {
+				*edges = append(*edges, b)
+				f(b.To, edges)
+			}
+		}
+	}
+	result := []Edge{}
+	f(vertexName, &result)
+	return result
+}
+
 func (p Pipeline) GetDaemonServiceName() string {
 	return fmt.Sprintf("%s-daemon-svc", p.Name)
 }
