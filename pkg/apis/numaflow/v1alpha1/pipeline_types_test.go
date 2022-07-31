@@ -188,3 +188,33 @@ func Test_PipelineMarkPhases(t *testing.T) {
 	s.MarkPhaseRunning()
 	assert.Equal(t, PipelinePhaseRunning, s.Phase)
 }
+
+func Test_GetDownstreamEdges(t *testing.T) {
+	pl := Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pl",
+			Namespace: "test-ns",
+		},
+		Spec: PipelineSpec{
+			Edges: []Edge{
+				{From: "input", To: "p1"},
+				{From: "p1", To: "p11"},
+				{From: "p1", To: "p2"},
+				{From: "p2", To: "output"},
+			},
+		},
+	}
+	edges := pl.GetDownstreamEdges("input")
+	assert.Equal(t, 4, len(edges))
+	assert.Equal(t, edges, pl.Spec.Edges)
+	assert.Equal(t, edges[2], Edge{From: "p1", To: "p2"})
+
+	edges = pl.GetDownstreamEdges("p1")
+	assert.Equal(t, 3, len(edges))
+
+	edges = pl.GetDownstreamEdges("output")
+	assert.Equal(t, 0, len(edges))
+
+	edges = pl.GetDownstreamEdges("notexisting")
+	assert.Equal(t, 0, len(edges))
+}
