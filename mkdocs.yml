@@ -74,7 +74,9 @@ nav:
           - metrics/metrics.md
   - Developer Guide:
       - development.md
-      - Architecture: "architecture/architecture.md"
+      - Specifications:
+          - Overview: "specs/overview.md"
+          - "specs/autoscaling.md"
       - debugging.md
       - static-code-analysis.md
       - releasing.md

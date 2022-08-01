@@ -289,7 +289,6 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 		}
 		singleReplicaContribution := float64(totalBufferLength-pending) / float64(vertex.Status.Replicas)
 		desired := int32(math.Round(float64(targetAvailableBufferLength) / singleReplicaContribution))
-		// TODO: Consider back pressure for UDF
 		if desired == 0 {
 			desired = 1
 		}
