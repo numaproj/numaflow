@@ -14,7 +14,7 @@ With `scale` subresource implemented, `vertex` object can be scaled by either ho
 
 ## Numaflow Autoscaling
 
-The out of box Numaflow autoscaling strategy is implemented differently according to different type of vertices.
+The out of box Numaflow autoscaling strategy is implemented according to different type of vertices.
 
 ## Source Vertices
 
@@ -30,11 +30,11 @@ For example, if `targetSeconds` is 3, current replica number is `2`, current `tp
   desiredReplicas = 60000 / (3 * (10000 / 2)) = 4
 ```
 
-Numaflow autoscaling does not work for those source vertices can not calculate pending messages.
+Numaflow autoscaling does not work for those source vertices that can not calculate pending messages.
 
 ## UDF and Sink Vertices
 
-Pending messages of a UDF or Sink vertex does not represent the real number because of the restrained writing caused by back presure, so we use a different model to achieve autoscaling strategy.
+Pending messages of a UDF or Sink vertex does not represent the real number because of the restrained writing caused by back pressure, so we use a different model to achieve autoscaling for them.
 
 For each of the vertices, we calculate the available buffer length, and consider it is contributed by all the replicas, so that we can get each replica's contribution.
 
@@ -51,15 +51,15 @@ We define a target available buffer length, and then calculate how many replicas
 
 ## Back Pressure Impact
 
-Back pressure is condidered during autoscaling (which is only available for Source and UDF vertices).
+Back pressure is considered during autoscaling (which is only available for Source and UDF vertices).
 
-We measure the back presure by define a threshold of the buffer usage in the past period of time. For example, the total buffer length is 50000, buffer limit is 80%, and the back pressure threshold is 90%, if in the past period of time, if the average pending messages is more than `36000` (50000 _ 80% _ 90%), we consider there's back pressure.
+We measure the back presure by defining a threshold of the buffer usage. For example, the total buffer length is 50000, buffer limit is 80%, and the back pressure threshold is 90%, if in the past period of time, the average pending messages is more than `36000` (50000 x 80% x 90%), we consider there's back pressure.
 
 When the calculated desired replicas is greater than current replicas:
 
-1. For vetices which have back pressure from the directly connected vertices, instead of increasing the replica number, we reduce it by 1;
+1. For vetices which have back pressure from the directly connected vertices, instead of increasing the replica number, we decrease it by 1;
 2. For vertices which have back pressure in any of its downstream vertices, the replica number remains unchanged.
 
 ## Autocaling Tuning
 
-Numaflow autoscaling can be tuned by updating paramaters, find the details at the [doc](../autoscaling.md).
+Numaflow autoscaling can be tuned by updating some paramaters, find the details at the [doc](../autoscaling.md).
