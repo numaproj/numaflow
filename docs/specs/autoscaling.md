@@ -7,6 +7,7 @@
 ```
 
 Pods management is done by vertex controller.
+
 ![Vertex Controller Reconciliation Loop](../assets/vertex_controller_loop.png)
 
 With `scale` subresource implemented, `vertex` object can be scaled by either horizontal or vetical pod autoscaling.
