@@ -53,7 +53,7 @@ We define a target available buffer length, and then calculate how many replicas
 
 Back pressure is considered during autoscaling (which is only available for Source and UDF vertices).
 
-We measure the back presure by defining a threshold of the buffer usage. For example, the total buffer length is 50000, buffer limit is 80%, and the back pressure threshold is 90%, if in the past period of time, the average pending messages is more than `36000` (50000 x 80% x 90%), we consider there's back pressure.
+We measure the back presure by defining a threshold of the buffer usage. For example, the total buffer length is 50000, buffer limit is 80%, and the back pressure threshold is 90%, if in the past period of time, the average pending messages is more than `36000 (50000 * 80% * 90%)`, we consider there's back pressure.
 
 When the calculated desired replicas is greater than current replicas:
 
