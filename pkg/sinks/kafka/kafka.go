@@ -41,7 +41,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewToKafka returns ToKafka type.
-func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, publishWatermark map[string]publish.Publisher, fetchWatermark fetch.Fetcher, opts ...Option) (*ToKafka, error) {
+func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*ToKafka, error) {
 	kafkaSink := vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
 	//apply options for kafka sink

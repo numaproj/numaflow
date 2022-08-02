@@ -31,6 +31,7 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
 
 	// TODO: Return err instead of logging (https://github.com/numaproj/numaflow/pull/120#discussion_r927271677)
 	ctx := context.Background()
+	log := logging.FromContext(ctx)
 	var wmFetcher = new(watermarkFetchers)
 	var fromBufferName string
 
@@ -56,33 +57,37 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
 		// Can be checked by querying sinkName_SINK in the service
 		if vertex.Sink != nil {
 			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipelineName, vertex.Name)
-			fetchWatermark := createWatermarkFetcher(ctx, pipelineName, toBufferName, vertex.Name)
+			fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName, vertex.Name)
+			if err != nil {
+				log.Fatalw("failed to create watermark fetcher", zap.Error(err))
+			}
 			sinkVertex := vertex.Name + "_SINK"
 			vertexWmMap[sinkVertex] = fetchWatermark
 		}
-		fetchWatermark := createWatermarkFetcher(ctx, pipelineName, fromBufferName, vertex.Name)
+		fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, fromBufferName, vertex.Name)
+		if err != nil {
+			log.Fatalw("failed to create watermark fetcher", zap.Error(err))
+		}
 		vertexWmMap[vertex.Name] = fetchWatermark
 	}
 	wmFetcher.fetchMap = vertexWmMap
 	return wmFetcher
 }
 
-func createWatermarkFetcher(ctx context.Context, pipelineName string, fromBufferName string, vertexName string) *generic.GenericFetch {
-	log := logging.FromContext(ctx)
+func createWatermarkFetcher(ctx context.Context, pipelineName string, fromBufferName string, vertexName string) (*generic.GenericFetch, error) {
 	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, fromBufferName)
 	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
 	if err != nil {
-		log.Fatalw("JetStreamKVWatch failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
+		return nil, err
 	}
 	otBucket := isbsvc.JetStreamOTBucket(pipelineName, fromBufferName)
 	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucket, clients.NewInClusterJetStreamClient())
 	if err != nil {
-		log.Fatalw("JetStreamKVWatch failed", zap.String("OTBucket", otBucket), zap.Error(err))
+		return nil, err
 	}
 	var fetchWmWatchers = generic.BuildFetchWMWatchers(hbWatch, otWatch)
 	fetchWatermark := generic.NewGenericFetch(ctx, vertexName, fetchWmWatchers)
-	return fetchWatermark
-
+	return fetchWatermark, nil
 }
 
 // GetVertexWatermark is used to return the head watermark for a given vertex.
