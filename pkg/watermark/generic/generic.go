@@ -117,7 +117,7 @@ func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInst
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 
 	sourceBufferName := vertexInstance.Vertex.GetFromBuffers()[0].Name
-	// hearbeat
+	// heartbeat
 	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, sourceBufferName)
 	hbKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
 	if err != nil {
@@ -135,4 +135,14 @@ func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInst
 	publishWM = BuildPublishWMStores(hbKVStore, otKVStore)
 
 	return fetchWatermark, publishWatermark, publishWM
+}
+
+// GetSinkOutboundEdge returns the outbound edge name for a sink vertex.
+// It will have only one outbound edge by design
+func GetSinkOutboundEdge(vertex *dfv1.Vertex) (edge string) {
+	// TODO: What should be returned here?
+	if len(vertex.GetToBuffers()) == 0 {
+		return ""
+	}
+	return vertex.GetToBuffers()[0].Name
 }

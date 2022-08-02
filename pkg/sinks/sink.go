@@ -121,7 +121,7 @@ func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLo
 	if x := sink.Log; x != nil {
 		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {
-		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, kafkasink.WithLogger(logger))
+		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, nil, nil, kafkasink.WithLogger(logger))
 	} else if x := sink.UDSink; x != nil {
 		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, udsink.WithLogger(logger))
 	}

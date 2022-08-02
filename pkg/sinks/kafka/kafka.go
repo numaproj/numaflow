@@ -3,10 +3,12 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/Shopify/sarama"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
+	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -39,7 +41,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewToKafka returns ToKafka type.
-func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option) (*ToKafka, error) {
+func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, publishWatermark map[string]publish.Publisher, fetchWatermark fetch.Fetcher, opts ...Option) (*ToKafka, error) {
 	kafkaSink := vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
 	//apply options for kafka sink
@@ -65,7 +67,7 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.Name: toKafka}, forward.All, applier.Terminal, nil, nil, forwardOpts...)
+	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{generic.GetSinkOutboundEdge(vertex): toKafka}, forward.All, applier.Terminal, nil, nil, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
