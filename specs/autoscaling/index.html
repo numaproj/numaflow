@@ -13,7 +13,7 @@
     
     
       
-        <title>User Defined Sinks - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Autoscaling - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#user-defined-sinks" class="md-skip">
+        <a href="#autoscaling" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              User Defined Sinks
+              Autoscaling
             
           </span>
         </div>
@@ -224,8 +224,6 @@
         
   
   
-    
-  
 
 
   
@@ -237,7 +235,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../pipeline/" class="md-tabs__link md-tabs__link--active">
+      <a href="../../pipeline/" class="md-tabs__link">
         User Guide
       </a>
     </li>
@@ -265,13 +263,15 @@
         
   
   
+    
+  
 
 
   
   
   
     <li class="md-tabs__item">
-      <a href="../../development/" class="md-tabs__link">
+      <a href="../../development/" class="md-tabs__link md-tabs__link--active">
         Developer Guide
       </a>
     </li>
@@ -410,14 +410,12 @@
 
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" >
       
       
       
@@ -602,14 +600,12 @@
               
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_3" type="checkbox" id="__nav_3_3" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_3" type="checkbox" id="__nav_3_3" >
       
       
       
@@ -632,7 +628,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../kafka/" class="md-nav__link">
+      <a href="../../sinks/kafka/" class="md-nav__link">
         Kafka Sink
       </a>
     </li>
@@ -646,7 +642,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../log/" class="md-nav__link">
+      <a href="../../sinks/log/" class="md-nav__link">
         Log Sink
       </a>
     </li>
@@ -658,52 +654,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          User Defined Sinks
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../sinks/user-defined-sinks/" class="md-nav__link">
         User Defined Sinks
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#available-environment-variables" class="md-nav__link">
-    Available Environment Variables
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1071,12 +1026,14 @@
 
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5" type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5" type="checkbox" id="__nav_5" checked>
       
       
       
@@ -1111,12 +1068,14 @@
               
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5_2" type="checkbox" id="__nav_5_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5_2" type="checkbox" id="__nav_5_2" checked>
       
       
       
@@ -1139,7 +1098,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../specs/overview/" class="md-nav__link">
+      <a href="../overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1151,11 +1110,80 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../../specs/autoscaling/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Autoscaling
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Autoscaling
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#numaflow-autoscaling" class="md-nav__link">
+    Numaflow Autoscaling
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-vertices" class="md-nav__link">
+    Source Vertices
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#udf-and-sink-vertices" class="md-nav__link">
+    UDF and Sink Vertices
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#back-pressure-impact" class="md-nav__link">
+    Back Pressure Impact
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#autocaling-tuning" class="md-nav__link">
+    Autocaling Tuning
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1243,8 +1271,36 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#available-environment-variables" class="md-nav__link">
-    Available Environment Variables
+  <a href="#numaflow-autoscaling" class="md-nav__link">
+    Numaflow Autoscaling
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-vertices" class="md-nav__link">
+    Source Vertices
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#udf-and-sink-vertices" class="md-nav__link">
+    UDF and Sink Vertices
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#back-pressure-impact" class="md-nav__link">
+    Back Pressure Impact
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#autocaling-tuning" class="md-nav__link">
+    Autocaling Tuning
   </a>
   
 </li>
@@ -1261,33 +1317,48 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/sinks/user-defined-sinks.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/specs/autoscaling.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="user-defined-sinks">User Defined Sinks<a class="headerlink" href="#user-defined-sinks" title="Permanent link">&para;</a></h1>
-<p>A <code>Pipleline</code> may have multiple Sinks, those sinks could either be a pre-defined sink such as <code>kafka</code>, <code>log</code>, etc, or a <code>User Defined Sink</code>.</p>
-<p>A pre-defined sink vertex runs single-container pods, a user defined sink runs two-container pods.</p>
-<p>A user defined sink vertex looks like below.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">output</span><span class="w"></span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">udsink</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
-<span class="w">            </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span><span class="w"></span>
+<h1 id="autoscaling">Autoscaling<a class="headerlink" href="#autoscaling" title="Permanent link">&para;</a></h1>
+<p><a href="https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource">Scale Subresource</a> is enabled in <code>Vertex</code> <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>, which makes it possible to scale vertex pods. To be specifically, it is enabled by adding following comments to <code>Vertex</code> struct model, and then corresponding CRD definition is automatically generated.</p>
+<div class="highlight"><pre><span></span><code>// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 </code></pre></div>
-<h2 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h2>
-<p>Some environment variables are available in the user defined sink Pods:</p>
-<ul>
-<li><code>NUMAFLOW_NAMESPACE</code> - Namespace.</li>
-<li><code>NUMAFLOW_POD</code> - Pod name.</li>
-<li><code>NUMAFLOW_REPLICA</code> - Replica index.</li>
-<li><code>NUMAFLOW_PIPELINE_NAME</code> - Name of the pipeline.</li>
-<li><code>NUMAFLOW_VERTEX_NAME</code> - Name of the vertex.</li>
-</ul>
+<p>Pods management is done by vertex controller.</p>
+<p><img alt="Vertex Controller Reconciliation Loop" src="../../assets/vertex_controller_loop.png" /></p>
+<p>With <code>scale</code> subresource implemented, <code>vertex</code> object can be scaled by either horizontal or vetical pod autoscaling.</p>
+<h2 id="numaflow-autoscaling">Numaflow Autoscaling<a class="headerlink" href="#numaflow-autoscaling" title="Permanent link">&para;</a></h2>
+<p>The out of box Numaflow autoscaling strategy is implemented according to different type of vertices.</p>
+<h2 id="source-vertices">Source Vertices<a class="headerlink" href="#source-vertices" title="Permanent link">&para;</a></h2>
+<p>For source vertices, we define a target time (in seconds) to finish processing the pending messages based on the processing rate (tps) of the vertex.</p>
+<div class="highlight"><pre><span></span><code>  pendingMessages / processingRate = targetSeconds
+</code></pre></div>
+<p>For example, if <code>targetSeconds</code> is 3, current replica number is <code>2</code>, current <code>tps</code> is 10000/second, and the pending messages is 60000, so we calculate the desired replica number as following:</p>
+<div class="highlight"><pre><span></span><code>  desiredReplicas = 60000 / (3 * (10000 / 2)) = 4
+</code></pre></div>
+<p>Numaflow autoscaling does not work for those source vertices that can not calculate pending messages.</p>
+<h2 id="udf-and-sink-vertices">UDF and Sink Vertices<a class="headerlink" href="#udf-and-sink-vertices" title="Permanent link">&para;</a></h2>
+<p>Pending messages of a UDF or Sink vertex does not represent the real number because of the restrained writing caused by back pressure, so we use a different model to achieve autoscaling for them.</p>
+<p>For each of the vertices, we calculate the available buffer length, and consider it is contributed by all the replicas, so that we can get each replica's contribution.</p>
+<div class="highlight"><pre><span></span><code>  availableBufferLength = totalBufferLength * bufferLimit(%) - pendingMessages
+  singleReplicaContribution = availableBufferLength / currentReplicas
+</code></pre></div>
+<p>We define a target available buffer length, and then calculate how many replicas are needed to achieve the target.</p>
+<div class="highlight"><pre><span></span><code>  desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
+</code></pre></div>
+<h2 id="back-pressure-impact">Back Pressure Impact<a class="headerlink" href="#back-pressure-impact" title="Permanent link">&para;</a></h2>
+<p>Back pressure is considered during autoscaling (which is only available for Source and UDF vertices).</p>
+<p>We measure the back presure by defining a threshold of the buffer usage. For example, the total buffer length is 50000, buffer limit is 80%, and the back pressure threshold is 90%, if in the past period of time, the average pending messages is more than <code>36000 (50000 * 80% * 90%)</code>, we consider there's back pressure.</p>
+<p>When the calculated desired replicas is greater than current replicas:</p>
+<ol>
+<li>For vetices which have back pressure from the directly connected vertices, instead of increasing the replica number, we decrease it by 1;</li>
+<li>For vertices which have back pressure in any of its downstream vertices, the replica number remains unchanged.</li>
+</ol>
+<h2 id="autocaling-tuning">Autocaling Tuning<a class="headerlink" href="#autocaling-tuning" title="Permanent link">&para;</a></h2>
+<p>Numaflow autoscaling can be tuned by updating some paramaters, find the details at the <a href="../../autoscaling/">doc</a>.</p>
 
               
             </article>
@@ -1308,7 +1379,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../log/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Log Sink" rel="prev">
+        <a href="../overview/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Overview" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -1317,20 +1388,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Log Sink
+              Overview
             </div>
           </div>
         </a>
       
       
         
-        <a href="../../builtin-functions/" class="md-footer__link md-footer__link--next" aria-label="Next: Overview" rel="next">
+        <a href="../../debugging/" class="md-footer__link md-footer__link--next" aria-label="Next: How To Debug" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Overview
+              How To Debug
             </div>
           </div>
           <div class="md-footer__button md-icon">
