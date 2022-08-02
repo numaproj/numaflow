@@ -138,14 +138,14 @@ Logic:
   - Uniquely identify the source of the message.
 - Sink processors should avoid writing output for the same input when possible.
 - Numaflow should support the following types of flows:
-  _ Line
-  ![Line Dag](../assets/line_dag.png)
-  _ Tree
-  ![Tree Dag](../assets/tree_dag.png)
-  _ Diamond (In Future)
-  ![Diamond Dag](../assets/diamond_dag.png)
-  _ Multiple Sources with same schema (In Future)
-  ![Multi Source Dag](../assets/multi_source_dag.png)
+  - Line
+    ![Line Dag](../assets/line_dag.png)
+  - Tree
+    ![Tree Dag](../assets/tree_dag.png)
+  - Diamond (In Future)
+    ![Diamond Dag](../assets/diamond_dag.png)
+  - Multiple Sources with same schema (In Future)
+    ![Multi Source Dag](../assets/multi_source_dag.png)
 
 ## Non-Requirements
 

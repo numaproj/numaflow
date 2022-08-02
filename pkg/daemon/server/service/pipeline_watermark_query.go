@@ -4,6 +4,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
@@ -13,7 +15,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"go.uber.org/zap"
-	"time"
 )
 
 // watermarkFetchers used to store watermark metadata for propagation

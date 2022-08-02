@@ -80,7 +80,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
 	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), pipelineName, m.Pipeline)
+	assert.Equal(s.T(), pipelineName, *m.Pipeline)
 }
 
 func (s *FunctionalSuite) TestFiltering() {

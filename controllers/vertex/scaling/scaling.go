@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"go.uber.org/zap"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,8 +30,11 @@ type Scaler struct {
 	vertexList *list.List
 	lock       *sync.RWMutex
 	options    *options
+	// Cache to store the vertex metrics such as pending message number
+	vertexMetricsCache *lru.Cache
 }
 
+// NewScaler returns a Scaler instance.
 func NewScaler(client client.Client, opts ...Option) *Scaler {
 	s := &Scaler{
 		client:     client,
@@ -39,6 +43,8 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 		vertexList: list.New(),
 		lock:       new(sync.RWMutex),
 	}
+	vertexMetricsCache, _ := lru.New(10000)
+	s.vertexMetricsCache = vertexMetricsCache
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s.options)
@@ -107,6 +113,11 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 // For UDF and sinks which have the read buffer information
 //    singleReplicaContribution = (totalAvailableBufferLength - pending) / currentReplicas
 //    desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
+//
+// Back pressure factor
+// When desiredReplicas > currentReplics:
+// If there's back pressure in the directly connectied vertices, desiredReplicas = currentReplicas-1;
+// If there's back pressure in the downstream vertices (not connected), desiredReplicas remains the same.
 func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) error {
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("vertexKey", key)
 	log.Debugf("Working on key: %s", key)
@@ -190,6 +201,8 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Debugf("Vertex %s has no pending messages information, skip scaling", vertex.Name)
 		return nil
 	}
+	// Add to cache for back pressure calculation
+	_ = s.vertexMetricsCache.Add(key+"/pending", pending)
 	totalBufferLength := int64(0)
 	targetAvailableBufferLength := int64(0)
 	if !vertex.IsASource() { // Only non-source vertex has buffer to read
@@ -202,12 +215,13 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 			}
 			totalBufferLength = int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
 			targetAvailableBufferLength = int64(float64(*bInfo.BufferLength) * float64(vertex.Spec.Scale.GetTargetBufferUsage()) / 100)
+			// Add to cache for back pressure calculation
+			_ = s.vertexMetricsCache.Add(*bInfo.BufferName+"/length", totalBufferLength)
 		}
 	}
-
+	current := int32(vertex.Spec.GetReplicas())
 	desired := s.desiredReplicas(ctx, vertex, rate, pending, totalBufferLength, targetAvailableBufferLength)
 	log.Debugf("Calculated desired replica number of vertex %q is: %v", vertex.Name, desired)
-	current := int32(vertex.Spec.GetReplicas())
 	max := vertex.Spec.Scale.GetMaxReplicas()
 	min := vertex.Spec.Scale.GetMinReplicas()
 	if desired > max {
@@ -228,6 +242,20 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		return s.patchVertexReplicas(ctx, vertex, current-diff) // We scale down gradually
 	}
 	if desired > current {
+		// When scaling up, need to check back pressure
+		directPressure, downstreamPressure := s.hasBackPressure(*pl, *vertex)
+		if directPressure {
+			if current > 1 {
+				log.Debugf("Vertex %s has direct back pressure from connected vertices, decreasing one replica")
+				return s.patchVertexReplicas(ctx, vertex, current-1)
+			} else {
+				log.Debugf("Vertex %s has direct back pressure from connected vertices, skip scaling")
+				return nil
+			}
+		} else if downstreamPressure {
+			log.Debugf("Vertex %s has back pressure in downstream vertices, skip scaling")
+			return nil
+		}
 		diff := desired - current
 		if diff > maxAllowed {
 			diff = maxAllowed
@@ -261,7 +289,6 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 		}
 		singleReplicaContribution := float64(totalBufferLength-pending) / float64(vertex.Status.Replicas)
 		desired := int32(math.Round(float64(targetAvailableBufferLength) / singleReplicaContribution))
-		// TODO: Consider back pressure for UDF
 		if desired == 0 {
 			desired = 1
 		}
@@ -323,6 +350,37 @@ func (s *Scaler) Start(ctx context.Context) {
 	}
 }
 
+// hasBackPressure checks if there's back pressure in the downstream buffers
+// It returns if 2 bool values, which represent:
+// 1. If there's back pressure in the connected vertices;
+// 2. If there's back pressure in any of the downstream vertices.
+func (s *Scaler) hasBackPressure(pl dfv1.Pipeline, vertex dfv1.Vertex) (bool, bool) {
+	downstreamEdges := pl.GetDownstreamEdges(vertex.Spec.Name)
+	directPressure, downstreamPressure := false, false
+	for _, e := range downstreamEdges {
+		vertexKey := pl.Namespace + "/" + pl.Name + "-" + e.To
+		bufferName := dfv1.GenerateEdgeBufferName(pl.Namespace, pl.Name, e.From, e.To)
+		pendingVal, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
+		if !ok { // Vertex key has not been cached, skip it.
+			continue
+		}
+		pending := pendingVal.(int64)
+		bufferLengthVal, ok := s.vertexMetricsCache.Get(bufferName + "/length")
+		if !ok { // Buffer length has not been cached, skip it.
+			continue
+		}
+		length := bufferLengthVal.(int64)
+		if float64(pending)/float64(length) >= s.options.backPressureThreshold {
+			downstreamPressure = true
+			if e.From == vertex.Spec.Name {
+				directPressure = true
+				break
+			}
+		}
+	}
+	return directPressure, downstreamPressure
+}
+
 func (s *Scaler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, desiredReplicas int32) error {
 	log := logging.FromContext(ctx)
 	origin := vertex.Spec.Replicas
@@ -336,4 +394,9 @@ func (s *Scaler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, d
 	}
 	log.Infow("Auto scaling - vertex replicas changed", zap.Int32p("from", origin), zap.Int32("to", desiredReplicas), zap.String("pipeline", vertex.Spec.PipelineName), zap.String("vertex", vertex.Spec.Name))
 	return nil
+}
+
+// KeyOfVertex returns the unique key of a vertex
+func KeyOfVertex(vertex dfv1.Vertex) string {
+	return fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name)
 }
