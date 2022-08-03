@@ -59,15 +59,15 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipelineName, vertex.Name)
 			fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName, vertex.Name)
 			if err != nil {
-				log.Debugw("failed to create watermark fetcher", zap.Error(err))
+				log.Errorw("failed to create watermark fetcher", zap.Error(err))
 				return nil, err
 			}
 			sinkVertex := vertex.Name + "_SINK"
 			vertexWmMap[sinkVertex] = fetchWatermark
-		}
+		}g
 		fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, fromBufferName, vertex.Name)
 		if err != nil {
-			log.Debugw("failed to create watermark fetcher", zap.Error(err))
+			log.Errorw("failed to create watermark fetcher", zap.Error(err))
 			return nil, err
 		}
 		vertexWmMap[vertex.Name] = fetchWatermark
