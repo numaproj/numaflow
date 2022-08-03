@@ -67,7 +67,7 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{generic.GetSinkOutboundEdge(vertex): toKafka}, forward.All, applier.Terminal, nil, nil, forwardOpts...)
+	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{generic.GetSinkOutboundEdge(vertex): toKafka}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

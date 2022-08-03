@@ -27,7 +27,7 @@ type watermarkFetchers struct {
 // corresponding fetchers. These fetchers are tied to the incoming edge buffer of the current vertex (Vn), and read the
 // watermark propagated by the vertex (Vn-1). As each vertex has one incoming edge, for the input vertex we read the source
 // data buffer.
-func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
+func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers, error) {
 
 	// TODO: Return err instead of logging (https://github.com/numaproj/numaflow/pull/120#discussion_r927271677)
 	ctx := context.Background()
@@ -37,7 +37,7 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
 
 	wmFetcher.isWatermarkEnabled = pipeline.Spec.Watermark.Propagate
 	if !wmFetcher.isWatermarkEnabled {
-		return wmFetcher
+		return wmFetcher, nil
 	}
 
 	vertexWmMap := make(map[string]fetch.Fetcher)
@@ -59,19 +59,21 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) *watermarkFetchers {
 			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipelineName, vertex.Name)
 			fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName, vertex.Name)
 			if err != nil {
-				log.Fatalw("failed to create watermark fetcher", zap.Error(err))
+				log.Debugw("failed to create watermark fetcher", zap.Error(err))
+				return nil, err
 			}
 			sinkVertex := vertex.Name + "_SINK"
 			vertexWmMap[sinkVertex] = fetchWatermark
 		}
 		fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, fromBufferName, vertex.Name)
 		if err != nil {
-			log.Fatalw("failed to create watermark fetcher", zap.Error(err))
+			log.Debugw("failed to create watermark fetcher", zap.Error(err))
+			return nil, err
 		}
 		vertexWmMap[vertex.Name] = fetchWatermark
 	}
 	wmFetcher.fetchMap = vertexWmMap
-	return wmFetcher
+	return wmFetcher, nil
 }
 
 func createWatermarkFetcher(ctx context.Context, pipelineName string, fromBufferName string, vertexName string) (*generic.GenericFetch, error) {

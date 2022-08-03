@@ -34,7 +34,8 @@ type pipelineMetadataQuery struct {
 }
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
-func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) *pipelineMetadataQuery {
+func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) (*pipelineMetadataQuery, error) {
+	var err error
 	ps := pipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
@@ -45,8 +46,11 @@ func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1
 			Timeout: time.Second * 3,
 		},
 	}
-	ps.vertexWatermark = newVertexWatermarkFetcher(pipeline)
-	return &ps
+	ps.vertexWatermark, err = newVertexWatermarkFetcher(pipeline)
+	if err != nil {
+		return nil, err
+	}
+	return &ps, nil
 }
 
 // ListBuffers is used to obtain the all the edge buffers information of a pipeline
