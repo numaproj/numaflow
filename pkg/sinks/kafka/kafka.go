@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/Shopify/sarama"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 	"time"
@@ -67,7 +66,11 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{generic.GetSinkOutboundEdge(vertex): toKafka}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	bufferKey := ""
+	if len(vertex.GetToBuffers()) > 0 {
+		bufferKey = vertex.GetToBuffers()[0].Name
+	}
+	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{bufferKey: toKafka}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

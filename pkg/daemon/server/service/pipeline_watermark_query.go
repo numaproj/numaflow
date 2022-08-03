@@ -14,7 +14,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
-	"go.uber.org/zap"
 )
 
 // watermarkFetchers used to store watermark metadata for propagation
@@ -31,7 +30,6 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 
 	// TODO: Return err instead of logging (https://github.com/numaproj/numaflow/pull/120#discussion_r927271677)
 	ctx := context.Background()
-	log := logging.FromContext(ctx)
 	var wmFetcher = new(watermarkFetchers)
 	var fromBufferName string
 
@@ -59,16 +57,14 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipelineName, vertex.Name)
 			fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName, vertex.Name)
 			if err != nil {
-				log.Errorw("failed to create watermark fetcher", zap.Error(err))
-				return nil, err
+				return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 			}
 			sinkVertex := vertex.Name + "_SINK"
 			vertexWmMap[sinkVertex] = fetchWatermark
 		}
 		fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, fromBufferName, vertex.Name)
 		if err != nil {
-			log.Errorw("failed to create watermark fetcher", zap.Error(err))
-			return nil, err
+			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 		}
 		vertexWmMap[vertex.Name] = fetchWatermark
 	}
