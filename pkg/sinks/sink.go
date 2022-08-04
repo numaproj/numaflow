@@ -3,9 +3,10 @@ package sinks
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"sync"
 
 	"go.uber.org/zap"
 
