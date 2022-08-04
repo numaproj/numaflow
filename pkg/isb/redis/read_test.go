@@ -10,17 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
-
 	"github.com/go-redis/redis/v8"
 	"github.com/montanaflynn/stats"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/forward"
+	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
 
 var (

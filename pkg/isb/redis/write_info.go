@@ -10,7 +10,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"go.uber.org/zap"
 
-	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
 
 // setWriteInfo is used to update the values of isFull flag and MINID

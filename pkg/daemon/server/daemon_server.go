@@ -20,8 +20,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/daemon/server/service"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
-	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )

@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
@@ -40,7 +40,7 @@ func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClie
 			}
 		}
 	}
-	conn, err := client.Connect(ctx, jsclient.AutoReconnect())
+	conn, err := client.Connect(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nats connection, %w", err)
 	}

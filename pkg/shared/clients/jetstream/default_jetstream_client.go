@@ -9,13 +9,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// defaultJetStreamClient is used to provide default jetstream client credentials
+// defaultJetStreamClient is used to provide default jetstream client
 type defaultJetStreamClient struct {
 	url  string
 	opts []nats.Option
 }
 
-// NewDefaultJetStreamClient is used to provide NewDefaultJetStreamClient
+// NewDefaultJetStreamClient is used to get a default JetStream client instance
 func NewDefaultJetStreamClient(url string, opts ...nats.Option) *defaultJetStreamClient {
 	return &defaultJetStreamClient{
 		url:  url,
@@ -36,19 +36,18 @@ func (dc *defaultJetStreamClient) Connect(ctx context.Context, opts ...JetStream
 func natsJetStreamConnection(ctx context.Context, url string, natsOptions []nats.Option) (*nats.Conn, error) {
 	log := logging.FromContext(ctx)
 	opts := []nats.Option{
-		nats.NoReconnect(),
 		// Retry forever
-		// nats.MaxReconnects(-1),
-		// nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-		// 	if err != nil {
-		// 		log.Error(err, "Nats connection lost")
-		// 	} else {
-		// 		log.Info("Nats disconnected")
-		// 	}
-		// }),
-		// nats.ReconnectHandler(func(nnc *nats.Conn) {
-		// 	log.Info("Reconnected to nats server")
-		// }),
+		nats.MaxReconnects(-1),
+		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+			if err != nil {
+				log.Error(err, "Nats connection lost")
+			} else {
+				log.Info("Nats disconnected")
+			}
+		}),
+		nats.ReconnectHandler(func(nnc *nats.Conn) {
+			log.Info("Reconnected to nats server")
+		}),
 	}
 
 	opts = append(opts, natsOptions...)

@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
@@ -51,7 +51,7 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 	}
 
 	connectAndSubscribe := func() (*jsclient.NatsConn, *jsclient.JetStreamContext, *nats.Subscription, error) {
-		conn, err := client.Connect(ctx, jsclient.AutoReconnect(), jsclient.ReconnectHandler(func(c *jsclient.NatsConn) {
+		conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(c *jsclient.NatsConn) {
 			if result.js == nil {
 				log.Error("JetStreamContext is nil")
 				return

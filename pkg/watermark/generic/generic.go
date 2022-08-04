@@ -6,17 +6,18 @@ import (
 	"context"
 	"fmt"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
-	"go.uber.org/zap"
 )
 
 // GetFetchKeyspace gets the fetch keyspace name fromEdge the vertex.

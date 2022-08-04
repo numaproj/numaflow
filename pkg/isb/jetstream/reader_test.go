@@ -12,7 +12,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 )
 
 var natsJetStreamUrl = "nats://localhost:4222"

@@ -15,7 +15,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
 
 func TestRedisQWrite_Write(t *testing.T) {

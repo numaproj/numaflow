@@ -8,7 +8,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// NatsConn is a wrapper of nats.Conn, where implements our own magic for auto reconnection.
+// NatsConn is a wrapper of nats.Conn, which implements our own magic for auto reconnection.
 type NatsConn struct {
 	Conn *nats.Conn
 
@@ -64,7 +64,7 @@ func (nc *NatsConn) IsClosed() bool {
 // and check if it works for determination. To reduce occasionality, it checks
 // 3 times if there's a failure.
 func (nc *NatsConn) IsConnected() bool {
-	if nc.Conn == nil || nc.Conn.IsClosed() || !nc.Conn.IsConnected() {
+	if nc.Conn == nil || nc.Conn.IsClosed() || !nc.Conn.IsConnected() { // This is not good enough, sometimes IsConnected() can not detect dropped connection
 		return false
 	}
 	if nc.pingContext == nil {

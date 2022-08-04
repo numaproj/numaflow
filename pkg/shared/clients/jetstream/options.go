@@ -14,17 +14,17 @@ type jsClientOptions struct {
 
 func defaultJetStreamClientOptions() *jsClientOptions {
 	return &jsClientOptions{
-		reconnect:               false,
-		connectionCheckInterval: 5 * time.Second,
+		reconnect:               true,
+		connectionCheckInterval: 6 * time.Second,
 	}
 }
 
 type JetStreamClientOption func(*jsClientOptions)
 
-// Set auto reconnect
-func AutoReconnect() JetStreamClientOption {
+// Set no auto reconnect
+func NoReconnect() JetStreamClientOption {
 	return func(opts *jsClientOptions) {
-		opts.reconnect = true
+		opts.reconnect = false
 	}
 }
 

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/isb"
-
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // OffsetTimeline is to store the event time to the offset records.

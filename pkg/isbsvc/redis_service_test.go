@@ -13,7 +13,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/redis"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
 
 func TestIsbsRedisSvc_Buffers(t *testing.T) {

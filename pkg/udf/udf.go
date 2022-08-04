@@ -6,21 +6,22 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/redis"
-	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
-	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"go.uber.org/zap"
 )
 
 type UDFProcessor struct {

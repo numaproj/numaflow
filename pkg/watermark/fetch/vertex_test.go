@@ -10,19 +10,19 @@ import (
 	"testing"
 	"time"
 
-	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
-	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
-
 	"github.com/nats-io/nats.go"
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/isb"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
 func TestFetcherWithSameOTBucket(t *testing.T) {
 	var ctx = context.Background()
 
 	// Connect to NATS
-	nc, err := nats.Connect(nats.DefaultURL)
+	nc, err := jsclient.NewDefaultJetStreamClient(nats.DefaultURL).Connect(context.TODO())
 	assert.Nil(t, err)
 
 	// Create JetStream Context
@@ -242,7 +242,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	var ctx = context.Background()
 
 	// Connect to NATS
-	nc, err := nats.Connect(nats.DefaultURL)
+	nc, err := jsclient.NewDefaultJetStreamClient(nats.DefaultURL).Connect(context.TODO())
 	assert.Nil(t, err)
 
 	// Create JetStream Context

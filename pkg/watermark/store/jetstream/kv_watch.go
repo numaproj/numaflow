@@ -6,16 +6,17 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	"go.uber.org/zap"
+
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"go.uber.org/zap"
 )
 
 // KVJetStreamWatch implements the watermark's KV store backed up by Jetstream.
 type KVJetStreamWatch struct {
 	pipelineName string
-	conn         *nats.Conn
+	conn         *jsclient.NatsConn
 	kv           nats.KeyValue
 	js           *jsclient.JetStreamContext
 	log          *zap.SugaredLogger
@@ -26,7 +27,7 @@ var _ store.WatermarkKVWatcher = (*KVJetStreamWatch)(nil)
 // NewKVJetStreamKVWatch returns KVJetStreamWatch specific to Jetsteam which implements the WatermarkKVWatcher interface.
 func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketName string, client jsclient.JetStreamClient, opts ...JSKVWatcherOption) (*KVJetStreamWatch, error) {
 	var err error
-	conn, err := client.Connect(ctx, jsclient.AutoReconnect())
+	conn, err := client.Connect(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nats connection, %w", err)
 	}
@@ -40,6 +41,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 
 	j := &KVJetStreamWatch{
 		pipelineName: pipelineName,
+		conn:         conn,
 		js:           js,
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("kvBucketName", kvBucketName),
 	}

@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"go.uber.org/zap"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 // FromVertexer defines an interface which builds the view of Vn-th vertex from the point of view of Vn-th vertex.

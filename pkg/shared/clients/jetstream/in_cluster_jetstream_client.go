@@ -62,7 +62,9 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 		}
 	}
 	log := logging.FromContext(ctx)
-	if options.reconnect { // Start auto reconnection daemon
+	if options.reconnect {
+		// Start auto reconnection daemon.
+		// Raw Nats auto reconnection is not always working
 		go func() {
 			log.Info("Starting Nats JetStream auto reconnection daemon...")
 			ticker := time.NewTicker(options.connectionCheckInterval)
@@ -87,7 +89,7 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 							options.reconnectHandler(result)
 						}
 					} else {
-						log.Debug("Nats JetStream connection is OK")
+						log.Debug("Nats JetStream connection is good")
 					}
 				case <-ctx.Done():
 					log.Info("Exiting Nats JetStream auto reconnection daemon...")

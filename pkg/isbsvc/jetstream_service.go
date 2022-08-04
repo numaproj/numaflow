@@ -8,8 +8,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
-	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -55,7 +54,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 		return err
 	}
 
-	nc, err := jetstream.NewInClusterJetStreamClient().Connect(ctx)
+	nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 	}
@@ -147,7 +146,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 
 func (jss *jetStreamSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
 	log := logging.FromContext(ctx)
-	nc, err := jetstream.NewInClusterJetStreamClient().Connect(ctx)
+	nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 	}
@@ -220,7 +219,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) 
 	if jss.js != nil { // Daemon server use case
 		js = jss.js
 	} else if jss.jsClient != nil { // Daemon server first time access use case
-		nc, err := jss.jsClient.Connect(ctx, jetstream.AutoReconnect())
+		nc, err := jss.jsClient.Connect(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get nats connection with given JetStream client, %w", err)
 		}
@@ -230,7 +229,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) 
 		}
 		jss.js = js
 	} else { // Short running use case
-		nc, err := jetstream.NewInClusterJetStreamClient().Connect(ctx)
+		nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 		}
