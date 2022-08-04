@@ -12,7 +12,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -53,7 +53,7 @@ func NewISBSvcBufferCreateCommand() *cobra.Command {
 			ctx := logging.WithLogger(context.Background(), logger)
 			switch v1alpha1.ISBSvcType(isbSvcType) {
 			case v1alpha1.ISBSvcTypeRedis:
-				isbsClient = isbsvc.NewISBRedisSvc(clients.NewInClusterRedisClient())
+				isbsClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
 			case v1alpha1.ISBSvcTypeJetStream:
 				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName)
 				if err != nil {

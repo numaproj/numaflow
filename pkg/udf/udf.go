@@ -11,7 +11,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/redis"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -43,7 +44,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		redisClient := clients.NewInClusterRedisClient()
+		redisClient := redisclient.NewInClusterRedisClient()
 		fromGroup := fromBufferName + "-group"
 		readerOpts := []redisisb.Option{}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
@@ -73,7 +74,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
-		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, clients.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName, readOptions...)
+		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName, readOptions...)
 		if err != nil {
 			return err
 		}
@@ -91,7 +92,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			}
 			buffer := dfv1.GenerateEdgeBufferName(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
 			streamName := fmt.Sprintf("%s-%s", u.VertexInstance.Vertex.Spec.PipelineName, buffer)
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, clients.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err
 			}

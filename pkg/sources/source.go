@@ -5,22 +5,23 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/redis"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
 
 type SourceProcessor struct {
@@ -55,7 +56,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
 			group := buffer + "-group"
-			redisClient := clients.NewInClusterRedisClient()
+			redisClient := redisclient.NewInClusterRedisClient()
 			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
 			writers = append(writers, writer)
 		}
@@ -76,7 +77,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
 			streamName := fmt.Sprintf("%s-%s", sp.VertexInstance.Vertex.Spec.PipelineName, buffer)
-			jetStreamClient := clients.NewInClusterJetStreamClient()
+			jetStreamClient := jsclient.NewInClusterJetStreamClient()
 			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err

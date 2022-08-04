@@ -13,7 +13,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/montanaflynn/stats"
@@ -34,14 +34,14 @@ var (
 
 func TestRedisQRead_Read(t *testing.T) {
 	ctx := context.Background()
-	client := clients.NewRedisClient(redisOptions)
+	client := redisclient.NewRedisClient(redisOptions)
 	stream := "somestream"
 	group := "testgroup1"
 	consumer := "con-0"
 
 	count := int64(10)
 	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer).(*BufferRead)
-	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, clients.ReadFromEarliest)
+	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
 	defer func() { _ = client.DeleteStreamGroup(ctx, rqr.GetStreamName(), group) }()
@@ -66,14 +66,14 @@ func TestRedisQRead_Read(t *testing.T) {
 func TestRedisCheckBacklog(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client := clients.NewRedisClient(redisOptions)
+	client := redisclient.NewRedisClient(redisOptions)
 	stream := "readbacklog"
 	group := "readbacklog-group"
 	consumer := "readbacklog-consumer"
 
 	count := int64(10)
 	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer).(*BufferRead)
-	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, clients.ReadFromEarliest)
+	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
 	defer func() { _ = client.DeleteStreamGroup(ctx, rqr.GetStreamName(), group) }()
@@ -106,7 +106,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 	}}
 
 	rqw, _ := NewBufferWrite(ctx, client, "toStream", "toGroup", WithInfoRefreshInterval(2*time.Millisecond), WithLagDuration(time.Minute)).(*BufferWrite)
-	err = client.CreateStreamGroup(ctx, rqw.GetStreamName(), "toGroup", clients.ReadFromEarliest)
+	err = client.CreateStreamGroup(ctx, rqw.GetStreamName(), "toGroup", redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
 	defer func() { _ = client.DeleteStreamGroup(ctx, rqw.GetStreamName(), "toGroup") }()
@@ -130,14 +130,14 @@ func TestRedisCheckBacklog(t *testing.T) {
 type ReadTestSuite struct {
 	suite.Suite
 	ctx     context.Context
-	rclient *clients.RedisClient
+	rclient *redisclient.RedisClient
 	rqr     *BufferRead
 	rqw     *BufferWrite
 	count   int64
 }
 
 func (suite *ReadTestSuite) SetupSuite() {
-	client := clients.NewRedisClient(redisOptions)
+	client := redisclient.NewRedisClient(redisOptions)
 	ctx := context.Background()
 	stream := "testsuitestream"
 	group := "testsuitegroup1"
@@ -158,7 +158,7 @@ func (suite *ReadTestSuite) TearDownSuite() {
 
 // run before each test
 func (suite *ReadTestSuite) SetupTest() {
-	err := suite.rclient.CreateStreamGroup(suite.ctx, suite.rqr.Stream, suite.rqr.Group, clients.ReadFromEarliest)
+	err := suite.rclient.CreateStreamGroup(suite.ctx, suite.rqr.Stream, suite.rqr.Group, redisclient.ReadFromEarliest)
 	// better fail early
 	_ = suite.NoError(err) || suite.Failf("CreateStreamGroup failed", "%s", err)
 }
@@ -262,7 +262,7 @@ func TestReadTestSuite(t *testing.T) {
 type ReadWritePerformance struct {
 	suite.Suite
 	ctx            context.Context
-	rclient        *clients.RedisClient
+	rclient        *redisclient.RedisClient
 	rqr            *BufferRead
 	rqw            *BufferWrite
 	isdf           *forward.InterStepDataForward
@@ -283,7 +283,7 @@ func (f forwardReadWritePerformance) Apply(ctx context.Context, message *isb.Rea
 }
 
 func (suite *ReadWritePerformance) SetupSuite() {
-	client := clients.NewRedisClient(redisOptions)
+	client := redisclient.NewRedisClient(redisOptions)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	fromStream := "ReadWritePerformance-from"
 	toStream := "ReadWritePerformance-to"
@@ -322,10 +322,10 @@ func (suite *ReadWritePerformance) TearDownSuite() {
 
 // run before each test
 func (suite *ReadWritePerformance) SetupTest() {
-	err := suite.rclient.CreateStreamGroup(suite.ctx, suite.rqr.GetStreamName(), suite.rqr.GetGroupName(), clients.ReadFromEarliest)
+	err := suite.rclient.CreateStreamGroup(suite.ctx, suite.rqr.GetStreamName(), suite.rqr.GetGroupName(), redisclient.ReadFromEarliest)
 	// better fail early
 	_ = suite.NoError(err) || suite.Failf("CreateStreamGroup failed", "%s", err)
-	err = suite.rclient.CreateStreamGroup(suite.ctx, suite.rqw.GetStreamName(), suite.rqw.GetGroupName(), clients.ReadFromEarliest)
+	err = suite.rclient.CreateStreamGroup(suite.ctx, suite.rqw.GetStreamName(), suite.rqw.GetGroupName(), redisclient.ReadFromEarliest)
 	_ = suite.NoError(err) || suite.Failf("CreateStreamGroup failed", "%s", err)
 }
 
@@ -443,7 +443,7 @@ func getPercentiles(t *testing.T, latency []float64) string {
 
 // writeTestMessages is used to add some dummy messages using XADD
 
-func writeTestMessages(ctx context.Context, client *clients.RedisClient, messages []isb.Message, streamName string) {
+func writeTestMessages(ctx context.Context, client *redisclient.RedisClient, messages []isb.Message, streamName string) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {

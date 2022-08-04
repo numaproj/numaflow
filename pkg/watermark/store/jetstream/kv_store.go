@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/nats-io/nats.go"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"go.uber.org/zap"
@@ -26,9 +26,9 @@ type KVJetStreamStore struct {
 var _ store.WatermarkKVStorer = (*KVJetStreamStore)(nil)
 
 // NewKVJetStreamKVStore returns KVJetStreamStore.
-func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client clients.JetStreamClient, opts ...JSKVStoreOption) (*KVJetStreamStore, error) {
+func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client jsclient.JetStreamClient, opts ...JSKVStoreOption) (*KVJetStreamStore, error) {
 	var err error
-	conn, err := client.Connect(ctx)
+	conn, err := client.Connect(ctx, jsclient.AutoReconnect())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nats connection, %w", err)
 	}

@@ -13,7 +13,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/redis"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
 )
 
 func TestIsbsRedisSvc_Buffers(t *testing.T) {
@@ -24,7 +24,7 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	buffer := "isbsRedisSvcBuffer"
 	group := buffer + "-group"
 	buffers := []dfv1.Buffer{{Name: buffer, Type: dfv1.EdgeBuffer}}
-	redisClient := clients.NewRedisClient(redisOptions)
+	redisClient := redisclient.NewRedisClient(redisOptions)
 	isbsRedisSvc := NewISBRedisSvc(redisClient)
 	assert.NoError(t, isbsRedisSvc.CreateBuffers(ctx, buffers))
 
@@ -52,7 +52,7 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	// ACK just 1 message, which leaves a pending count of 9
 	var readOffsets = make([]string, 1)
 	readOffsets[0] = readMessages[0].ReadOffset.String()
-	_ = redisClient.Client.XAck(clients.RedisContext, buffer, group, readOffsets...).Err()
+	_ = redisClient.Client.XAck(redisclient.RedisContext, buffer, group, readOffsets...).Err()
 
 	// test GetBufferInfo
 	for _, buffer := range buffers {

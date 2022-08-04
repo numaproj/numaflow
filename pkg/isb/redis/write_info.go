@@ -8,15 +8,14 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
-
 	"go.uber.org/zap"
+
+	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
 )
 
 // setWriteInfo is used to update the values of isFull flag and MINID
 func (bw *BufferWrite) setWriteInfo(_ context.Context) {
-	ctx := clients.RedisContext
+	ctx := redisclient.RedisContext
 	bw.updateIsFullAndLag(ctx)
 	bw.updateMinId(ctx)
 }

@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
@@ -21,7 +21,7 @@ type jetStreamReader struct {
 	name                  string
 	stream                string
 	subject               string
-	conn                  *nats.Conn
+	conn                  *jsclient.NatsConn
 	js                    nats.JetStreamContext
 	sub                   *nats.Subscription
 	opts                  *readOptions
@@ -32,9 +32,9 @@ type jetStreamReader struct {
 }
 
 // NewJetStreamBufferReader is used to provide a new JetStream buffer reader connection
-func NewJetStreamBufferReader(ctx context.Context, client clients.JetStreamClient, name, stream, subject string, opts ...ReadOption) (isb.BufferReader, error) {
-	connectAndSubscribe := func() (*nats.Conn, nats.JetStreamContext, *nats.Subscription, error) {
-		conn, err := client.Connect(ctx)
+func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, opts ...ReadOption) (isb.BufferReader, error) {
+	connectAndSubscribe := func() (*jsclient.NatsConn, nats.JetStreamContext, *nats.Subscription, error) {
+		conn, err := client.Connect(ctx, jsclient.AutoReconnect())
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get nats connection, %w", err)
 		}

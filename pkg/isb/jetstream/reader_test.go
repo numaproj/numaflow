@@ -12,7 +12,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
 )
 
 var natsJetStreamUrl = "nats://localhost:4222"
@@ -22,7 +22,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -105,7 +105,7 @@ func TestGetName(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -129,7 +129,7 @@ func TestClose(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()

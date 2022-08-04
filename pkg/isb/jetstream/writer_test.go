@@ -7,15 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/nats-io/nats.go"
+	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
 )
 
 type myForwardJetStreamTest struct {
@@ -35,7 +34,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -145,7 +144,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -201,7 +200,7 @@ func TestWriteGetName(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -226,7 +225,7 @@ func TestWriteClose(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()

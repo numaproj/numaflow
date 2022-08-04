@@ -9,7 +9,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
@@ -62,13 +62,13 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 	fromBufferName := vertexInstance.Vertex.GetFromBuffers()[0].Name
 	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, fromBufferName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		log.Fatalw("JetStreamKVWatch failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
 	}
 
 	otBucket := isbsvc.JetStreamOTBucket(pipelineName, fromBufferName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucket, clients.NewInClusterJetStreamClient())
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucket, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		log.Fatalw("JetStreamKVWatch failed", zap.String("OTBucket", otBucket), zap.Error(err))
 	}
@@ -82,13 +82,13 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 		hbPublisherBucket := isbsvc.JetStreamProcessorBucket(pipelineName, buffer.Name)
 		// We create a separate Heartbeat bucket for each edge though it can be reused. We can reuse because heartbeat is at
 		// vertex level. We are creating a new one for the time being because controller creates a pair of buckets per edge.
-		hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherBucket, clients.NewInClusterJetStreamClient())
+		hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherBucket, jsclient.NewInClusterJetStreamClient())
 		if err != nil {
 			log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatPublisherBucket", hbPublisherBucket), zap.Error(err))
 		}
 
 		otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, buffer.Name)
-		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
+		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, jsclient.NewInClusterJetStreamClient())
 		if err != nil {
 			log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
 		}
@@ -119,14 +119,14 @@ func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInst
 	sourceBufferName := vertexInstance.Vertex.GetFromBuffers()[0].Name
 	// heartbeat
 	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, sourceBufferName)
-	hbKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
+	hbKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		log.Fatalw("JetStreamKVStore failed", zap.String("HeartbeatBucket", hbBucket), zap.Error(err))
 	}
 
 	// OT
 	otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, sourceBufferName)
-	otKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, clients.NewInClusterJetStreamClient())
+	otKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		log.Fatalw("JetStreamKVStore failed", zap.String("OTBucket", otStoreBucket), zap.Error(err))
 	}

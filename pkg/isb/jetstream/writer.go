@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
@@ -20,7 +20,7 @@ type jetStreamWriter struct {
 	name    string
 	stream  string
 	subject string
-	conn    *nats.Conn
+	conn    *jsclient.NatsConn
 	js      nats.JetStreamContext
 	opts    *writeOptions
 	log     *zap.SugaredLogger
@@ -31,7 +31,7 @@ type jetStreamWriter struct {
 }
 
 // NewJetStreamBufferWriter is used to provide a new instance of JetStreamBufferWriter
-func NewJetStreamBufferWriter(ctx context.Context, client clients.JetStreamClient, name, stream, subject string, opts ...WriteOption) (isb.BufferWriter, error) {
+func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, opts ...WriteOption) (isb.BufferWriter, error) {
 	o := defaultWriteOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -40,7 +40,7 @@ func NewJetStreamBufferWriter(ctx context.Context, client clients.JetStreamClien
 			}
 		}
 	}
-	conn, err := client.Connect(ctx)
+	conn, err := client.Connect(ctx, jsclient.AutoReconnect())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nats connection, %w", err)
 	}

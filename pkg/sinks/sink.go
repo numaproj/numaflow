@@ -3,16 +3,18 @@ package sinks
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"sync"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/redis"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
 	"github.com/numaproj/numaflow/pkg/metrics"
 
 	"go.uber.org/zap"
@@ -46,7 +48,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		redisClient := clients.NewInClusterRedisClient()
+		redisClient := redisclient.NewInClusterRedisClient()
 		fromGroup := fromBufferName + "-group"
 		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 		readOptions := []redisisb.Option{}
@@ -65,7 +67,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		// build watermark progressors
 		fetchWatermark, publishWatermark = generic.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
 
-		jetStreamClient := clients.NewInClusterJetStreamClient()
+		jetStreamClient := jsclient.NewInClusterJetStreamClient()
 		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)
 		if err != nil {
 			return err

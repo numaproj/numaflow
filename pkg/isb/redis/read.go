@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	redisclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -23,7 +23,7 @@ type BufferRead struct {
 	Group    string
 	Consumer string
 	*BufferReadInfo
-	*clients.RedisClient
+	*redisclient.RedisClient
 	options
 	log *zap.SugaredLogger
 }
@@ -39,7 +39,7 @@ type BufferReadInfo struct {
 var _ isb.BufferReader = (*BufferRead)(nil)
 
 // NewBufferRead returns a new redis buffer reader.
-func NewBufferRead(ctx context.Context, client *clients.RedisClient, name string, group string, consumer string, opts ...Option) isb.BufferReader {
+func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, opts ...Option) isb.BufferReader {
 	options := &options{
 		infoRefreshInterval: time.Second,
 		readTimeOut:         time.Second,
@@ -116,7 +116,7 @@ func (br *BufferRead) GetLag() time.Duration {
 // We assume that if the difference of the lastGeneratedId and lastDelivered = 0 the buffer is considered empty
 // It is tough to get the exact numbers https://github.com/redis/redis/issues/8392
 func (br *BufferRead) updateIsEmptyFlag(_ context.Context) {
-	ctx := clients.RedisContext
+	ctx := redisclient.RedisContext
 	infoStream := br.Client.XInfoStream(ctx, br.GetStreamName())
 
 	labels := map[string]string{"buffer": br.GetName()}
@@ -260,7 +260,7 @@ func (br *BufferRead) Ack(_ context.Context, offsets []isb.Offset) []error {
 	for _, o := range offsets {
 		strOffsets = append(strOffsets, o.String())
 	}
-	if err := br.Client.XAck(clients.RedisContext, br.Stream, br.Group, strOffsets...).Err(); err != nil {
+	if err := br.Client.XAck(redisclient.RedisContext, br.Stream, br.Group, strOffsets...).Err(); err != nil {
 		for i := 0; i < len(offsets); i++ {
 			errs[i] = err
 		}
@@ -270,7 +270,7 @@ func (br *BufferRead) Ack(_ context.Context, offsets []isb.Offset) []error {
 
 // processXReadResult is used to process the results of XREADGROUP
 func (br *BufferRead) processXReadResult(startIndex string, count int64) ([]redis.XStream, error) {
-	result := br.Client.XReadGroup(clients.RedisContext, &redis.XReadGroupArgs{
+	result := br.Client.XReadGroup(redisclient.RedisContext, &redis.XReadGroupArgs{
 		Group:    br.Group,
 		Consumer: br.Consumer,
 		Streams:  []string{br.Stream, startIndex},

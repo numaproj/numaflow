@@ -6,11 +6,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
-	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"strconv"
 	"testing"
 	"time"
+
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 
 	"github.com/nats-io/nats.go"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -68,7 +69,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	_, err = ot.Put(fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
 	assert.NoError(t, err)
 
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
@@ -301,7 +302,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	_, err = p2OT.Put(fmt.Sprintf("%d", epoch), b)
 	assert.NoError(t, err)
 
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
