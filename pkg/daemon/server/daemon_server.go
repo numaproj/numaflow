@@ -71,8 +71,10 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-
-	grpcServer := ds.newGRPCServer(isbSvcClient)
+	grpcServer, err := ds.newGRPCServer(isbSvcClient)
+	if err != nil {
+		return fmt.Errorf("failed to create grpc server: %w", err)
+	}
 	httpServer := ds.newHTTPServer(ctx, v1alpha1.DaemonServicePort, tlsConfig)
 
 	conn = tls.NewListener(conn, tlsConfig)
@@ -90,7 +92,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) *grpc.Server {
+func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -104,8 +106,12 @@ func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) *grpc.Serv
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	daemon.RegisterDaemonServiceServer(grpcServer, service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline))
-	return grpcServer
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline)
+	if err != nil {
+		return nil, err
+	}
+	daemon.RegisterDaemonServiceServer(grpcServer, pipelineMetadataQuery)
+	return grpcServer, nil
 }
 
 // newHTTPServer returns the HTTP server to serve HTTP/HTTPS requests. This is implemented
