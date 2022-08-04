@@ -8,16 +8,20 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// NatsConn is a wrapper of nats.Conn, where we
+// NatsConn is a wrapper of nats.Conn, where implements our own magic for auto reconnection.
 type NatsConn struct {
 	Conn *nats.Conn
 
+	// pintConext is a dedicated JetStreamContext used to check if connection is OK.
 	pingContext nats.JetStreamContext
-	contextMap  map[int64]*JetStreamContext
-	jsOptMap    map[int64][]nats.JSOpt
-	lock        *sync.RWMutex
+	// contextMap stores all the JetStreamContext created through this connection.
+	contextMap map[int64]*JetStreamContext
+	// jsOptMap stores all the options used for JetStreamContext creation.
+	jsOptMap map[int64][]nats.JSOpt
+	lock     *sync.RWMutex
 }
 
+// NewNatsConn returns a NatsConn instance
 func NewNatsConn(conn *nats.Conn) *NatsConn {
 	return &NatsConn{
 		Conn:       conn,
@@ -27,10 +31,13 @@ func NewNatsConn(conn *nats.Conn) *NatsConn {
 	}
 }
 
+// Close function closes the underlying Nats connection.
 func (nc *NatsConn) Close() {
 	nc.Conn.Close()
 }
 
+// JetStream function invokes same function of underlying Nats connection for returning,
+// meanwhile store the JetStreamContext for restoration after reconnection.
 func (nc *NatsConn) JetStream(opts ...nats.JSOpt) (*JetStreamContext, error) {
 	js, err := nc.Conn.JetStream(opts...)
 	if err != nil {
@@ -47,10 +54,15 @@ func (nc *NatsConn) JetStream(opts ...nats.JSOpt) (*JetStreamContext, error) {
 	return jsc, nil
 }
 
+// IsClosed is a simple proxy invocation.
 func (nc *NatsConn) IsClosed() bool {
 	return nc.Conn.IsClosed()
 }
 
+// IsConnected function implements the magic to check if the connection is OK.
+// It utilize the dedicated JetStreamContext to call AccountInfo() function,
+// and check if it works for determination. To reduce occasionality, it checks
+// 3 times if there's a failure.
 func (nc *NatsConn) IsConnected() bool {
 	if nc.Conn == nil || nc.Conn.IsClosed() || !nc.Conn.IsConnected() {
 		return false
@@ -75,6 +87,7 @@ retry:
 	return !failed
 }
 
+// reloadContexts is a function to recreate JetStreamContext after reconnection.
 func (nc *NatsConn) reloadContexts() {
 	if nc.Conn == nil || nc.Conn.IsClosed() || !nc.Conn.IsConnected() {
 		return

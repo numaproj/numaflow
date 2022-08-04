@@ -2,6 +2,9 @@ package jetstream
 
 import "github.com/nats-io/nats.go"
 
+// JetStreamContext is a proxy struct to nats.JetStreamContext
+// This existence of this proxy is used to replace underlying nats.JetStreamContext
+// with new one after reconnection.
 type JetStreamContext struct {
 	js nats.JetStreamContext
 }
