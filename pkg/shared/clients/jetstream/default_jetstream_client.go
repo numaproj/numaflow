@@ -36,17 +36,18 @@ func (dc *defaultJetStreamClient) Connect(ctx context.Context, opts ...JetStream
 func natsJetStreamConnection(ctx context.Context, url string, natsOptions []nats.Option) (*nats.Conn, error) {
 	log := logging.FromContext(ctx)
 	opts := []nats.Option{
+		// TODO: Shall we disable raw Nats auto reconnection?
 		// Retry forever
 		nats.MaxReconnects(-1),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			if err != nil {
-				log.Error(err, "Nats connection lost")
+				log.Error(err, "Nats: connection lost")
 			} else {
-				log.Info("Nats disconnected")
+				log.Info("Nats: disconnected")
 			}
 		}),
 		nats.ReconnectHandler(func(nnc *nats.Conn) {
-			log.Info("Reconnected to nats server")
+			log.Info("Nats: reconnected to nats server")
 		}),
 	}
 
@@ -55,7 +56,7 @@ func natsJetStreamConnection(ctx context.Context, url string, natsOptions []nats
 	if nc, err := nats.Connect(url, opts...); err != nil {
 		return nil, fmt.Errorf("failed to connect to nats url=%s: %w", url, err)
 	} else {
-		log.Info("Connected to nats server")
+		log.Info("Nats: connected to nats server")
 		return nc, nil
 	}
 }
