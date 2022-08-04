@@ -302,6 +302,7 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 // has been initiated while we are stuck looping on an InternalError.
 func (isdf *InterStepDataForward) writeToBuffers(ctx context.Context, messageToStep map[string][]isb.Message) (writeOffsetsEdge map[string][]isb.Offset, err error) {
 	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
+	// TODO: rename key to edgeName
 	for key, toBuffer := range isdf.toBuffers {
 		writeOffsetsEdge[key], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[key])
 		if err != nil {

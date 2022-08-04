@@ -117,7 +117,7 @@ func BuildJetStreamWatermarkProgressorsForSource(ctx context.Context, vertexInst
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 
 	sourceBufferName := vertexInstance.Vertex.GetFromBuffers()[0].Name
-	// hearbeat
+	// heartbeat
 	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, sourceBufferName)
 	hbKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
 	if err != nil {
