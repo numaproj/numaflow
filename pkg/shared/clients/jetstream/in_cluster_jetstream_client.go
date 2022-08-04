@@ -25,7 +25,8 @@ func NewInClusterJetStreamClient() *inClusterJetStreamClient {
 }
 
 // Function to get a nats connection
-func (isc *inClusterJetStreamClient) connect(ctx context.Context, opts ...JetStreamClientOption) (*nats.Conn, error) {
+func (isc *inClusterJetStreamClient) connect(ctx context.Context) (*nats.Conn, error) {
+	// log := logging.FromContext(ctx)
 	url, existing := os.LookupEnv(dfv1.EnvISBSvcJetStreamURL)
 	if !existing {
 		return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvISBSvcJetStreamURL)
@@ -38,7 +39,7 @@ func (isc *inClusterJetStreamClient) connect(ctx context.Context, opts ...JetStr
 	if !existing {
 		return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvISBSvcJetStreamPassword)
 	}
-	// pass nats options for username password
+	// Pass nats options for username password
 	natsOpts := []nats.Option{nats.UserInfo(user, password)}
 	if sharedutil.LookupEnvStringOr(dfv1.EnvISBSvcJetStreamTLSEnabled, "false") == "true" {
 		natsOpts = append(natsOpts, nats.Secure(&tls.Config{
@@ -50,17 +51,17 @@ func (isc *inClusterJetStreamClient) connect(ctx context.Context, opts ...JetStr
 
 // Connect is used to establish an incluster NATS jetstream connection
 func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStreamClientOption) (*NatsConn, error) {
-	nc, err := isc.connect(ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	result := NewNatsConn(nc)
 	options := defaultJetStreamClientOptions()
 	for _, o := range opts {
 		if o != nil {
 			o(options)
 		}
 	}
+	nc, err := isc.connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := NewNatsConn(nc)
 	log := logging.FromContext(ctx)
 	if options.reconnect {
 		// Start auto reconnection daemon.
@@ -77,7 +78,7 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 						if options.disconnectHandler != nil {
 							options.disconnectHandler(result, fmt.Errorf("connection lost"))
 						}
-						conn, err := isc.connect(ctx, opts...)
+						conn, err := isc.connect(ctx)
 						if err != nil {
 							log.Errorw("Failed to reconnect", zap.Error(err))
 							continue
