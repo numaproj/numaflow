@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func createAndLaterDeleteBucket(js nats.JetStreamContext, kvConfig *nats.KeyValueConfig) (func(), error) {
+func createAndLaterDeleteBucket(js *jsclient.JetStreamContext, kvConfig *nats.KeyValueConfig) (func(), error) {
 	kv, err := js.CreateKeyValue(kvConfig)
 	if err != nil {
 		return nil, err

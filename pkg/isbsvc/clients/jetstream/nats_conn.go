@@ -13,14 +13,16 @@ type NatsConn struct {
 	Conn *nats.Conn
 
 	pingContext nats.JetStreamContext
-	contextMap  map[int64]nats.JetStreamContext
+	contextMap  map[int64]*JetStreamContext
+	jsOptMap    map[int64][]nats.JSOpt
 	lock        *sync.RWMutex
 }
 
 func NewNatsConn(conn *nats.Conn) *NatsConn {
 	return &NatsConn{
 		Conn:       conn,
-		contextMap: make(map[int64]nats.JetStreamContext),
+		contextMap: make(map[int64]*JetStreamContext),
+		jsOptMap:   make(map[int64][]nats.JSOpt),
 		lock:       new(sync.RWMutex),
 	}
 }
@@ -29,15 +31,20 @@ func (nc *NatsConn) Close() {
 	nc.Conn.Close()
 }
 
-func (nc *NatsConn) JetStream(opts ...nats.JSOpt) (nats.JetStreamContext, error) {
+func (nc *NatsConn) JetStream(opts ...nats.JSOpt) (*JetStreamContext, error) {
 	js, err := nc.Conn.JetStream(opts...)
 	if err != nil {
 		return nil, err
 	}
+	jsc := &JetStreamContext{
+		js: js,
+	}
 	nc.lock.Lock()
-	nc.contextMap[time.Now().UnixMicro()] = js
+	_key := time.Now().UnixNano()
+	nc.contextMap[_key] = jsc
+	nc.jsOptMap[_key] = opts
 	nc.lock.Unlock()
-	return js, nil
+	return jsc, nil
 }
 
 func (nc *NatsConn) IsClosed() bool {
@@ -73,8 +80,9 @@ func (nc *NatsConn) reloadContexts() {
 		return
 	}
 	nc.pingContext, _ = nc.Conn.JetStream()
-	for k := range nc.contextMap {
-		js, _ := nc.Conn.JetStream()
-		nc.contextMap[k] = js
+	for k, v := range nc.contextMap {
+		opts := nc.jsOptMap[k]
+		js, _ := nc.Conn.JetStream(opts...)
+		v.js = js
 	}
 }

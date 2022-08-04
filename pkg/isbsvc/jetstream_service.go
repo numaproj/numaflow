@@ -9,6 +9,7 @@ import (
 	"github.com/nats-io/nats.go"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/isbsvc/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -17,8 +18,8 @@ import (
 type jetStreamSvc struct {
 	pipelineName string
 
-	jsClient jetstream.JetStreamClient
-	js       nats.JetStreamContext
+	jsClient jsclient.JetStreamClient
+	js       *jsclient.JetStreamContext
 }
 
 func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBService, error) {
@@ -33,7 +34,7 @@ func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBServic
 
 type JSServiceOption func(*jetStreamSvc) error
 
-func WithJetStreamClient(jsClient jetstream.JetStreamClient) JSServiceOption {
+func WithJetStreamClient(jsClient jsclient.JetStreamClient) JSServiceOption {
 	return func(j *jetStreamSvc) error {
 		j.jsClient = jsClient
 		return nil
@@ -179,7 +180,7 @@ func (jss *jetStreamSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffe
 
 func (jss *jetStreamSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
 	log := logging.FromContext(ctx)
-	nc, err := jetstream.NewInClusterJetStreamClient().Connect(ctx)
+	nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 	}
@@ -215,7 +216,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) 
 	if buffer.Type != dfv1.EdgeBuffer {
 		return nil, fmt.Errorf("buffer infomation inquiry is not supported for type %q", buffer.Type)
 	}
-	var js nats.JetStreamContext
+	var js *jsclient.JetStreamContext
 	if jss.js != nil { // Daemon server use case
 		js = jss.js
 	} else if jss.jsClient != nil { // Daemon server first time access use case

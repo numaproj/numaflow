@@ -21,7 +21,7 @@ type jetStreamWriter struct {
 	stream  string
 	subject string
 	conn    *jsclient.NatsConn
-	js      nats.JetStreamContext
+	js      *jsclient.JetStreamContext
 	opts    *writeOptions
 	log     *zap.SugaredLogger
 

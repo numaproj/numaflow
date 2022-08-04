@@ -17,7 +17,7 @@ type KVJetStreamWatch struct {
 	pipelineName string
 	conn         *nats.Conn
 	kv           nats.KeyValue
-	js           nats.JetStreamContext
+	js           *jsclient.JetStreamContext
 	log          *zap.SugaredLogger
 }
 

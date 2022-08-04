@@ -71,7 +71,7 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 				select {
 				case <-ticker.C:
 					if !result.IsConnected() {
-						log.Info("88888888888")
+						log.Info("Nats JetStream connection lost")
 						if options.disconnectHandler != nil {
 							options.disconnectHandler(result, fmt.Errorf("connection lost"))
 						}
@@ -87,7 +87,7 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 							options.reconnectHandler(result)
 						}
 					} else {
-						log.Info("9999999999")
+						log.Debug("Nats JetStream connection is OK")
 					}
 				case <-ctx.Done():
 					log.Info("Exiting Nats JetStream auto reconnection daemon...")

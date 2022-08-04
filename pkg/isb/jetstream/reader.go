@@ -22,7 +22,7 @@ type jetStreamReader struct {
 	stream                string
 	subject               string
 	conn                  *jsclient.NatsConn
-	js                    nats.JetStreamContext
+	js                    *jsclient.JetStreamContext
 	sub                   *nats.Subscription
 	opts                  *readOptions
 	inProgessTickDuration time.Duration
@@ -33,8 +33,38 @@ type jetStreamReader struct {
 
 // NewJetStreamBufferReader is used to provide a new JetStream buffer reader connection
 func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, opts ...ReadOption) (isb.BufferReader, error) {
-	connectAndSubscribe := func() (*jsclient.NatsConn, nats.JetStreamContext, *nats.Subscription, error) {
-		conn, err := client.Connect(ctx, jsclient.AutoReconnect())
+	log := logging.FromContext(ctx).With("bufferReader", name).With("stream", stream).With("subject", subject)
+	o := defaultReadOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(o); err != nil {
+				return nil, err
+			}
+		}
+	}
+	result := &jetStreamReader{
+		name:    name,
+		stream:  stream,
+		subject: subject,
+		opts:    o,
+		log:     log,
+	}
+
+	connectAndSubscribe := func() (*jsclient.NatsConn, *jsclient.JetStreamContext, *nats.Subscription, error) {
+		conn, err := client.Connect(ctx, jsclient.AutoReconnect(), jsclient.ReconnectHandler(func(c *jsclient.NatsConn) {
+			if result.js == nil {
+				log.Error("JetStreamContext is nil")
+				return
+			}
+			var e error
+			if result.sub, e = result.js.PullSubscribe(subject, stream, nats.Bind(stream, stream)); e != nil {
+				log.Errorw("Failed to re-subcribe to the stream after reconnection", zap.Error(e))
+			} else {
+				log.Info("Re-subscribed to the stream successfully")
+			}
+		}), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
+			log.Error("Nats JetStream connection lost")
+		}))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get nats connection, %w", err)
 		}
@@ -50,20 +80,12 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 		}
 		return conn, js, sub, nil
 	}
+
 	conn, js, sub, err := connectAndSubscribe()
 	if err != nil {
 		return nil, err
 	}
 
-	o := defaultReadOptions()
-	for _, opt := range opts {
-		if opt != nil {
-			if err := opt(o); err != nil {
-				return nil, err
-			}
-		}
-	}
-	log := logging.FromContext(ctx).With("bufferReader", name).With("stream", stream).With("subject", subject)
 	consumer, err := js.ConsumerInfo(stream, stream)
 	if err != nil {
 		conn.Close()
@@ -75,17 +97,10 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 		inProgessTickSeconds = 1
 	}
 
-	result := &jetStreamReader{
-		name:                  name,
-		stream:                stream,
-		subject:               subject,
-		conn:                  conn,
-		js:                    js,
-		sub:                   sub,
-		opts:                  o,
-		inProgessTickDuration: time.Duration(inProgessTickSeconds * int64(time.Second)),
-		log:                   log,
-	}
+	result.conn = conn
+	result.js = js
+	result.sub = sub
+	result.inProgessTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
 	if o.useAckInfoAsRate {
 		result.ackedInfo = sharedqueue.New[timestampedSequence](1800)
 		go result.runAckInfomationChecker(ctx)
