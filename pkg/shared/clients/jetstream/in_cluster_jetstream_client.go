@@ -61,7 +61,7 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 	if err != nil {
 		return nil, err
 	}
-	result := NewNatsConn(nc)
+	natsConn := NewNatsConn(nc)
 	log := logging.FromContext(ctx)
 	if options.reconnect {
 		// Start auto reconnection daemon.
@@ -70,21 +70,21 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 			log.Info("Starting Nats JetStream auto reconnection daemon...")
 			defer log.Info("Exited Nats JetStream auto reconnection daemon...")
 			wait.JitterUntilWithContext(ctx, func(ctx context.Context) {
-				if !result.IsConnected() {
+				if !natsConn.IsConnected() {
 					log.Info("Nats JetStream connection lost")
 					if options.disconnectHandler != nil {
-						options.disconnectHandler(result, fmt.Errorf("connection lost"))
+						options.disconnectHandler(natsConn, fmt.Errorf("connection lost"))
 					}
 					conn, err := isc.connect(ctx)
 					if err != nil {
 						log.Errorw("Failed to reconnect", zap.Error(err))
 						return
 					}
-					result.Conn = conn
-					result.reloadContexts()
+					natsConn.Conn = conn
+					natsConn.reloadContexts()
 					log.Info("Succeeded to reconnect to Nat JetStream server")
 					if options.reconnectHandler != nil {
-						options.reconnectHandler(result)
+						options.reconnectHandler(natsConn)
 					}
 				} else {
 					log.Debug("Nats JetStream connection is good")
@@ -94,5 +94,5 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 	} else {
 		log.Info("Nats JetStream auto reconnection is not enabled.")
 	}
-	return result, nil
+	return natsConn, nil
 }

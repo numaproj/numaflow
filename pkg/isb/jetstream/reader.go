@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,7 +80,7 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 				log.Fatalw("Failed to re-subscribe after retries", zap.Error(e))
 			}
 		}), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
-			log.Error("Nats JetStream connection lost")
+			log.Errorw("Nats JetStream connection lost", zap.Error(err))
 		}))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get nats connection, %w", err)
@@ -235,7 +236,12 @@ func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error 
 			defer wg.Done()
 			if err := o.AckIt(); err != nil {
 				jr.log.Errorw("Failed to ack message", zap.Error(err))
-				errs[index] = err
+				// If the error is related to nats/jetstream, we skip it because it might end up with infinite ack retries.
+				// Skipping those errors to let the whole read/write/ack for loop to restart from reading, to pick up those
+				// redelivered messages.
+				if !strings.HasPrefix(err.Error(), "nats:") {
+					errs[index] = err
+				}
 			}
 		}(idx, o)
 	}

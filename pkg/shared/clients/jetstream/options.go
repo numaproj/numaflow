@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// Options for JetStream client
+// jsClientOptions is a struct of the options for JetStream client.
 type jsClientOptions struct {
 	reconnect               bool
 	connectionCheckInterval time.Duration
@@ -12,6 +12,7 @@ type jsClientOptions struct {
 	disconnectHandler       func(*NatsConn, error)
 }
 
+// defaultJetStreamClientOptions returns a default instance of jsClientOptions.
 func defaultJetStreamClientOptions() *jsClientOptions {
 	return &jsClientOptions{
 		reconnect:               true,
@@ -21,28 +22,28 @@ func defaultJetStreamClientOptions() *jsClientOptions {
 
 type JetStreamClientOption func(*jsClientOptions)
 
-// Set no auto reconnect
+// NoReconnect is an Option to set no auto reconnect.
 func NoReconnect() JetStreamClientOption {
 	return func(opts *jsClientOptions) {
 		opts.reconnect = false
 	}
 }
 
-// Set connection check interval
+// ConnectionCheckInterval is an Option to set connection check interval.
 func ConnectionCheckInterval(d time.Duration) JetStreamClientOption {
 	return func(opts *jsClientOptions) {
 		opts.connectionCheckInterval = d
 	}
 }
 
-// Set reconnect handler
+// ReconnectHandler is an Option to set reconnect handler.
 func ReconnectHandler(f func(*NatsConn)) JetStreamClientOption {
 	return func(opts *jsClientOptions) {
 		opts.reconnectHandler = f
 	}
 }
 
-// Set disconnect handler
+// DisconnectErrHandler is an option to set disconnect handler.
 func DisconnectErrHandler(f func(*NatsConn, error)) JetStreamClientOption {
 	return func(opts *jsClientOptions) {
 		opts.disconnectHandler = f

@@ -12,7 +12,7 @@ import (
 type NatsConn struct {
 	Conn *nats.Conn
 
-	// pintConext is a dedicated JetStreamContext used to check if connection is OK.
+	// pingConext is a dedicated JetStreamContext used to check if connection is OK.
 	pingContext nats.JetStreamContext
 	// contextMap stores all the JetStreamContext created through this connection.
 	contextMap map[int64]*JetStreamContext
