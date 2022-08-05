@@ -15,18 +15,18 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
-// inClusterJetStreamClient is used to provide inClusterJetStreamClient credentials
+// inClusterJetStreamClient is a client which is expected to be only used in a K8s cluster,
+// where some environment variables for connection are available.
 type inClusterJetStreamClient struct {
 }
 
-// NewInClusterJetStreamClient is used to provide NewInClusterJetStreamClient
+// NewInClusterJetStreamClient return an instance of inClusterJetStreamClient
 func NewInClusterJetStreamClient() *inClusterJetStreamClient {
 	return &inClusterJetStreamClient{}
 }
 
 // Function to get a nats connection
 func (isc *inClusterJetStreamClient) connect(ctx context.Context) (*nats.Conn, error) {
-	// log := logging.FromContext(ctx)
 	url, existing := os.LookupEnv(dfv1.EnvISBSvcJetStreamURL)
 	if !existing {
 		return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvISBSvcJetStreamURL)
