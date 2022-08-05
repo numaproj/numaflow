@@ -10,6 +10,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
@@ -57,10 +58,25 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 				return
 			}
 			var e error
-			if result.sub, e = result.js.PullSubscribe(subject, stream, nats.Bind(stream, stream)); e != nil {
-				log.Errorw("Failed to re-subcribe to the stream after reconnection", zap.Error(e))
-			} else {
-				log.Info("Re-subscribed to the stream successfully")
+			_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
+				Steps:    5,
+				Duration: 1 * time.Second,
+				Factor:   1.0,
+				Jitter:   0.1,
+			}, func() (bool, error) {
+				var s *nats.Subscription
+				if s, e = result.js.PullSubscribe(subject, stream, nats.Bind(stream, stream)); e != nil {
+					log.Errorw("Failed to re-subscribe to the stream after reconnection, will retry if the limit is not reached", zap.Error(e))
+					return false, nil
+				} else {
+					result.sub = s
+					log.Info("Re-subscribed to the stream successfully")
+					return true, nil
+				}
+			})
+			if e != nil {
+				// Let it panic to start over
+				log.Fatalw("Failed to re-subscribe after retries", zap.Error(e))
 			}
 		}), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
 			log.Error("Nats JetStream connection lost")

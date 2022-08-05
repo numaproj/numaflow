@@ -5,10 +5,10 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -68,35 +68,28 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 		// Raw Nats auto reconnection is not always working
 		go func() {
 			log.Info("Starting Nats JetStream auto reconnection daemon...")
-			ticker := time.NewTicker(options.connectionCheckInterval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ticker.C:
-					if !result.IsConnected() {
-						log.Info("Nats JetStream connection lost")
-						if options.disconnectHandler != nil {
-							options.disconnectHandler(result, fmt.Errorf("connection lost"))
-						}
-						conn, err := isc.connect(ctx)
-						if err != nil {
-							log.Errorw("Failed to reconnect", zap.Error(err))
-							continue
-						}
-						result.Conn = conn
-						result.reloadContexts()
-						log.Info("Succeeded to reconnect to Nat JetStream server")
-						if options.reconnectHandler != nil {
-							options.reconnectHandler(result)
-						}
-					} else {
-						log.Debug("Nats JetStream connection is good")
+			defer log.Info("Exited Nats JetStream auto reconnection daemon...")
+			wait.JitterUntilWithContext(ctx, func(ctx context.Context) {
+				if !result.IsConnected() {
+					log.Info("Nats JetStream connection lost")
+					if options.disconnectHandler != nil {
+						options.disconnectHandler(result, fmt.Errorf("connection lost"))
 					}
-				case <-ctx.Done():
-					log.Info("Exiting Nats JetStream auto reconnection daemon...")
-					return
+					conn, err := isc.connect(ctx)
+					if err != nil {
+						log.Errorw("Failed to reconnect", zap.Error(err))
+						return
+					}
+					result.Conn = conn
+					result.reloadContexts()
+					log.Info("Succeeded to reconnect to Nat JetStream server")
+					if options.reconnectHandler != nil {
+						options.reconnectHandler(result)
+					}
+				} else {
+					log.Debug("Nats JetStream connection is good")
 				}
-			}
+			}, options.connectionCheckInterval, 1.1, true)
 		}()
 	} else {
 		log.Info("Nats JetStream auto reconnection is not enabled.")

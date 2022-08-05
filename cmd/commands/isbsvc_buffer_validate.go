@@ -56,13 +56,14 @@ func NewISBSvcBufferValidateCommand() *cobra.Command {
 			for k, v := range buffers {
 				bfs = append(bfs, v1alpha1.Buffer{Name: k, Type: v1alpha1.BufferType(v)})
 			}
-			if err := wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func() (bool, error) {
-				if err := isbsClient.ValidateBuffers(ctx, bfs); err != nil {
+			_ = wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func() (bool, error) {
+				if err = isbsClient.ValidateBuffers(ctx, bfs); err != nil {
 					logger.Errorw("Buffers validation failed, will retry if the limit is not reached", zap.Error(err))
 					return false, nil
 				}
 				return true, nil
-			}); err != nil {
+			})
+			if err != nil {
 				logger.Errorw("Failed buffer validation after retrying.", zap.Error(err))
 				return err
 			}
