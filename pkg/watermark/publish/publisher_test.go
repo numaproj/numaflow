@@ -9,14 +9,15 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
-	"github.com/stretchr/testify/assert"
 )
 
-func createAndLaterDeleteBucket(js nats.JetStreamContext, kvConfig *nats.KeyValueConfig) (func(), error) {
+func createAndLaterDeleteBucket(js *jsclient.JetStreamContext, kvConfig *nats.KeyValueConfig) (func(), error) {
 	kv, err := js.CreateKeyValue(kvConfig)
 	if err != nil {
 		return nil, err
@@ -31,7 +32,7 @@ func createAndLaterDeleteBucket(js nats.JetStreamContext, kvConfig *nats.KeyValu
 func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 	var ctx = context.Background()
 
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -86,7 +87,7 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 func TestPublisherWithSharedOTBucket(t *testing.T) {
 	var ctx = context.Background()
 
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(nats.DefaultURL)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()

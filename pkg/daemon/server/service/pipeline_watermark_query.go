@@ -9,7 +9,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -74,12 +74,12 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 
 func createWatermarkFetcher(ctx context.Context, pipelineName string, fromBufferName string, vertexName string) (*generic.GenericFetch, error) {
 	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, fromBufferName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, clients.NewInClusterJetStreamClient())
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, err
 	}
 	otBucket := isbsvc.JetStreamOTBucket(pipelineName, fromBufferName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucket, clients.NewInClusterJetStreamClient())
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucket, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, err
 	}

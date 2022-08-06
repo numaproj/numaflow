@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"go.uber.org/zap"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type status int

@@ -60,6 +60,6 @@ When the calculated desired replicas is greater than current replicas:
 1. For vetices which have back pressure from the directly connected vertices, instead of increasing the replica number, we decrease it by 1;
 2. For vertices which have back pressure in any of its downstream vertices, the replica number remains unchanged.
 
-## Autocaling Tuning
+## Autoscaling Tuning
 
 Numaflow autoscaling can be tuned by updating some paramaters, find the details at the [doc](../autoscaling.md).

@@ -20,7 +20,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/daemon/server/service"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
@@ -40,15 +41,12 @@ func NewDaemonServer(pl *v1alpha1.Pipeline, isbSvcType v1alpha1.ISBSvcType) *dae
 func (ds *daemonServer) Run(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	var isbSvcClient isbsvc.ISBService
+	var err error
 	switch ds.isbSvcType {
 	case v1alpha1.ISBSvcTypeRedis:
-		isbSvcClient = isbsvc.NewISBRedisSvc(clients.NewInClusterRedisClient())
+		isbSvcClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
 	case v1alpha1.ISBSvcTypeJetStream:
-		nc, err := clients.NewInClusterJetStreamClient().Connect(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get a in-cluster nats connection, %w", err)
-		}
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithNatsConnection(nc))
+		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithJetStreamClient(jsclient.NewInClusterJetStreamClient()))
 		if err != nil {
 			log.Errorw("Failed to get a ISB Service client.", zap.Error(err))
 			return err
@@ -60,7 +58,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	var conn net.Listener
 	var listerErr error
 	address := fmt.Sprintf(":%d", v1alpha1.DaemonServicePort)
-	conn, err := net.Listen("tcp", address)
+	conn, err = net.Listen("tcp", address)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", listerErr)
 	}

@@ -5,6 +5,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
+
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 )
 
 // _bucketWatchRetryCount is max number of retry to make sure we can connect to a bucket to watch.
@@ -15,7 +17,7 @@ const _delayInSecBetweenBucketWatchRetry = 1
 
 // RetryUntilSuccessfulWatcherCreation creates a watcher and will wait till it is created if infiniteLoop is set to true.
 // TODO: use `wait.ExponentialBackoffWithContext`
-func RetryUntilSuccessfulWatcherCreation(js nats.JetStreamContext, bucketName string, infiniteLoop bool, log *zap.SugaredLogger) nats.KeyWatcher {
+func RetryUntilSuccessfulWatcherCreation(js *jsclient.JetStreamContext, bucketName string, infiniteLoop bool, log *zap.SugaredLogger) nats.KeyWatcher {
 	for i := 0; i < _bucketWatchRetryCount || infiniteLoop; i++ {
 		bucket, err := js.KeyValue(bucketName)
 		if err != nil {
