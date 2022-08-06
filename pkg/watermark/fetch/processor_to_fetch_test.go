@@ -6,8 +6,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 )
 
 func TestFromProcessor_setStatus(t *testing.T) {

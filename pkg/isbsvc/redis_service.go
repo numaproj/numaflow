@@ -8,16 +8,16 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/redis"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 type isbsRedisSvc struct {
-	client *clients.RedisClient
+	client *redisclient.RedisClient
 }
 
 // NewISBRedisSvc is used to return a new object of type isbsRedisSvc
-func NewISBRedisSvc(client *clients.RedisClient) ISBService {
+func NewISBRedisSvc(client *redisclient.RedisClient) ISBService {
 	return &isbsRedisSvc{client: client}
 }
 
@@ -31,9 +31,9 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer,
 		}
 		stream := s.Name
 		group := fmt.Sprintf("%s-group", stream)
-		err := r.client.CreateStreamGroup(ctx, stream, group, clients.ReadFromEarliest)
+		err := r.client.CreateStreamGroup(ctx, stream, group, redisclient.ReadFromEarliest)
 		if err != nil {
-			if clients.IsAlreadyExistError(err) {
+			if redisclient.IsAlreadyExistError(err) {
 				log.Warnw("Stream already exists.", zap.String("group", group), zap.String("stream", stream))
 			} else {
 				failToCreate = true
@@ -62,7 +62,7 @@ func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer)
 		streamNames = append(streamNames, stream)
 		group := fmt.Sprintf("%s-group", stream)
 		if err := r.client.DeleteStreamGroup(ctx, stream, group); err != nil {
-			if clients.NotFoundError(err) {
+			if redisclient.NotFoundError(err) {
 				log.Warnw("Redis Streams group is not found.", zap.String("group", group), zap.String("stream", stream))
 			} else {
 				failToDelete = true
@@ -111,7 +111,7 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*
 		return nil, fmt.Errorf("buffer infomation inquiry is not supported for type %q", buffer.Type)
 	}
 	group := fmt.Sprintf("%s-group", buffer.Name)
-	rqw := redis.NewBufferWrite(ctx, clients.NewInClusterRedisClient(), buffer.Name, group, redis.WithRefreshBufferWriteInfo(false))
+	rqw := redis.NewBufferWrite(ctx, redisclient.NewInClusterRedisClient(), buffer.Name, group, redis.WithRefreshBufferWriteInfo(false))
 	var bufferWrite = rqw.(*redis.BufferWrite)
 
 	bufferInfo := &BufferInfo{

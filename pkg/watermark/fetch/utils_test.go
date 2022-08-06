@@ -7,14 +7,15 @@ import (
 	"testing"
 
 	"github.com/nats-io/nats.go"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
+
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 )
 
 func TestRetryUntilSuccessfulWatcherCreation(t *testing.T) {
-	var ctx = context.Background()
 	// Connect to NATS
-	nc, err := nats.Connect(nats.DefaultURL)
+	nc, err := jsclient.NewDefaultJetStreamClient(nats.DefaultURL).Connect(context.TODO())
 	assert.Nil(t, err)
 
 	// Create JetStream Context
@@ -34,9 +35,9 @@ func TestRetryUntilSuccessfulWatcherCreation(t *testing.T) {
 	})
 	defer js.DeleteKeyValue("utilTest")
 
-	watcher := RetryUntilSuccessfulWatcherCreation(js, "utilTest", false, logging.FromContext(ctx))
+	watcher := RetryUntilSuccessfulWatcherCreation(js, "utilTest", false, zaptest.NewLogger(t).Sugar())
 	assert.NotNil(t, watcher)
 
-	watcherNil := RetryUntilSuccessfulWatcherCreation(js, "nonExist", false, logging.FromContext(ctx))
+	watcherNil := RetryUntilSuccessfulWatcherCreation(js, "nonExist", false, zaptest.NewLogger(t).Sugar())
 	assert.Nil(t, watcherNil)
 }
