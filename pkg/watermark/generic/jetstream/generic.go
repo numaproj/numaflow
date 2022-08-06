@@ -8,6 +8,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"go.uber.org/zap"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
