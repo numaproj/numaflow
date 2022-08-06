@@ -13,7 +13,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -29,7 +29,7 @@ type BufferWrite struct {
 	Stream string
 	Group  string
 	*BufferWriteInfo
-	*clients.RedisClient
+	*redisclient.RedisClient
 	options
 	log *zap.SugaredLogger
 }
@@ -49,7 +49,7 @@ type BufferWriteInfo struct {
 var _ isb.BufferWriter = (*BufferWrite)(nil)
 
 // NewBufferWrite returns a new redis queue writer.
-func NewBufferWrite(ctx context.Context, client *clients.RedisClient, name string, group string, opts ...Option) isb.BufferWriter {
+func NewBufferWrite(ctx context.Context, client *redisclient.RedisClient, name string, group string, opts ...Option) isb.BufferWriter {
 	options := &options{
 		pipelining:             true,
 		infoRefreshInterval:    time.Second,
@@ -118,7 +118,7 @@ func (bw *BufferWrite) refreshWriteInfo(ctx context.Context) {
 
 // trim is used to explicitly call TRIM on buffer being full
 func (bw *BufferWrite) trim(_ context.Context) {
-	ctx := clients.RedisContext
+	ctx := redisclient.RedisContext
 	bw.log.Infow("Explicit trim on MINID", zap.String("MINID", bw.minId.Load()))
 	result := bw.Client.XTrimMinID(ctx, bw.GetStreamName(), bw.minId.Load())
 
@@ -133,7 +133,7 @@ func (br *BufferWrite) Close() error {
 
 // Write is used to write data to the redis interstep buffer
 func (bw *BufferWrite) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	ctx := clients.RedisContext
+	ctx := redisclient.RedisContext
 	var errs = make([]error, len(messages))
 
 	script := redis.NewScript(exactlyOnceInsertLuaScript)
