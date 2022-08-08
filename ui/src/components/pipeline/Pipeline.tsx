@@ -85,13 +85,21 @@ export function Pipeline() {
           )
             .then((response) => response.json())
             .then((json) => {
-              const vertexMetrics = {} as VertexMetrics;
-              vertexMetrics.ratePerMin =
-                json["processingRates"]["1m"].toFixed(2);
-              vertexMetrics.ratePerFiveMin =
-                json["processingRates"]["5m"].toFixed(2);
-              vertexMetrics.ratePerFifteenMin =
-                json["processingRates"]["15m"].toFixed(2);
+              const vertexMetrics = {ratePerMin: 0, ratePerFiveMin: 0, ratePerFifteenMin: 0} as VertexMetrics;
+              if ("processingRates" in json) {
+                if ("1m" in json["processingRates"]) {
+                  vertexMetrics.ratePerMin =
+                  json["processingRates"]["1m"].toFixed(2);
+                }
+                if ("5m" in json["processingRates"]) {
+                  vertexMetrics.ratePerFiveMin =
+                  json["processingRates"]["5m"].toFixed(2);
+                }
+                if ("15m" in json["processingRates"]) {
+                  vertexMetrics.ratePerFifteenMin =
+                  json["processingRates"]["15m"].toFixed(2);
+                }
+              }
               vertexToMetricsMap.set(vertex.name, vertexMetrics);
             });
         })
