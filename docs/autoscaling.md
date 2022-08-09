@@ -33,7 +33,7 @@ spec:
         lookbackSeconds: 180 # Optional, defaults to 180.
         cooldownSeconds: 90 # Optional, defaults to 90.
         zeroReplicaSleepSeconds: 180 # Optional, defaults to 180.
-        targetProcessingSeconds: 3 # Optional, defaults to 0.
+        targetProcessingSeconds: 20 # Optional, defaults to 20.
         targetBufferUsage: 50 # Optional, defaults to 50.
         replicasPerScale: 2 # Optional, defaults to 2.
 ```
@@ -42,10 +42,11 @@ spec:
 - `min` - Minimum replicas, valid value could be an interger >= 0. Defaults to `0`, which means it could be scaled down to 0.
 - `max` - Maximum replicas, positive interger which should not be less than `min`, defaults to `50`. if `max` and `min` are the same, that will be the fixed replica number.
 - `lookbackSeconds` - How many seconds to lookback for vertex average processing rate (tps) and pending messages calculation, defaults to `180`. Rate and pending messages metrics are critical for autoscaling, you might need to tune this parameter a bit to see better results. For example, your data source only have 1 minute data input in every 5 minutes, and you don't want the vertices to be scaled down to `0`. In this case, you need to increase `lookbackSeconds` to cover all the 5 minutes, so that the calculated average rate and pending messages won't be `0` during the silent period, to prevent scaling down to 0 from happening.
+- `cooldownSeconds` - After a scaling operation, how many seconds to wait before doing another scaling on the same vertex. This is to give some time for a vertex to stablize, defaults to 90 seconds.
 - `zeroReplicaSleepSeconds` - How many seconds it will wait after scaling down to `0`, defaults to `180`. Numaflow autoscaler periodically scales up a vertex pod to "peek" the incoming data, this is the period of time to wait before peeking.
-- `targetProcessingSeconds` - It is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast you want the vertex to process all the pending messages. It defaults to `3`. This is only effective for the `Source` vertices which support autoscaling, typically increasing the value, which leads to lower processing rate, thus less replicas.
+- `targetProcessingSeconds` - It is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast you want the vertex to process all the pending messages, defaults to `20`. It is only effective for the `Source` vertices which support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.
 - `targetBufferUsage` - Targeted buffer usage percentage, defaults to `50`. It is only effective for `UDF` and `Sink` vertices, it also determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.
-- `replicasPerScale` - How many maximum replicas will be scaled up or down at once, defaults to `2`.
+- `replicasPerScale` - Maximum number of replicas change happens in one scale up or down operation, defaults to `2`. For example, if current replica number is 3, the calculated desired replica number is 8; instead of scaling up the vertex to 8, it only does 5.
 
 To disable Numaflow autoscaling, set `disabled: true` as following.
 
