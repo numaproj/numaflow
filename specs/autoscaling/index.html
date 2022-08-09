@@ -1331,7 +1331,7 @@
 <p><img alt="Vertex Controller Reconciliation Loop" src="../../assets/vertex_controller_loop.png" /></p>
 <p>With <code>scale</code> subresource implemented, <code>vertex</code> object can be scaled by either horizontal or vetical pod autoscaling.</p>
 <h2 id="numaflow-autoscaling">Numaflow Autoscaling<a class="headerlink" href="#numaflow-autoscaling" title="Permanent link">&para;</a></h2>
-<p>The out of box Numaflow autoscaling strategy is implemented according to different type of vertices.</p>
+<p>The out of box Numaflow autoscaling is done by a <code>scaling</code> component running in the controller manager, you can find the source code <a href="https://github.com/numaproj/numaflow/tree/main/controllers/vertex/scaling">here</a>. The autoscaling strategy is implemented according to different type of vertices.</p>
 <h2 id="source-vertices">Source Vertices<a class="headerlink" href="#source-vertices" title="Permanent link">&para;</a></h2>
 <p>For source vertices, we define a target time (in seconds) to finish processing the pending messages based on the processing rate (tps) of the vertex.</p>
 <div class="highlight"><pre><span></span><code>  pendingMessages / processingRate = targetSeconds
