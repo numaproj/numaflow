@@ -14,7 +14,7 @@ With `scale` subresource implemented, `vertex` object can be scaled by either ho
 
 ## Numaflow Autoscaling
 
-The out of box Numaflow autoscaling strategy is implemented according to different type of vertices.
+The out of box Numaflow autoscaling is done by a `scaling` component running in the controller manager, you can find the source code [here](https://github.com/numaproj/numaflow/tree/main/controllers/vertex/scaling). The autoscaling strategy is implemented according to different type of vertices.
 
 ## Source Vertices
 
