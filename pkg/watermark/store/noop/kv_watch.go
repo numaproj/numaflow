@@ -24,6 +24,6 @@ func (K KVNoOpWatch) GetKVName() string {
 	return ""
 }
 
-// Close We do not close the channel created during watch here, that should be taken care by the context done
+// Close closes, but we do not close the channel created during watch here; that should be taken care of by the context done
 func (K KVNoOpWatch) Close() {
 }
