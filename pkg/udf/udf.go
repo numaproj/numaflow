@@ -3,6 +3,7 @@ package udf
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"sync"
 	"time"
 
@@ -20,7 +21,6 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
@@ -81,7 +81,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// build watermark progressors
-		fetchWatermark, publishWatermark = generic.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
 
 		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{}

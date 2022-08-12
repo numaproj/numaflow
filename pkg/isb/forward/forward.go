@@ -180,10 +180,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
 	var processorWM processor.Watermark
-	if isdf.fetchWatermark != nil {
-		// let's track only the last element's watermark
-		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
-	}
+	// let's track only the last element's watermark
+	processorWM = isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
 
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][]isb.Message)
@@ -249,12 +247,10 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	// forward the highest watermark to all the edges to avoid idle edge problem
-	if isdf.publishWatermark != nil {
-		// TODO: sort and get the highest value
-		for edgeName, offsets := range writeOffsets {
-			if len(offsets) > 0 {
-				isdf.publishWatermark[edgeName].PublishWatermark(processorWM, offsets[len(offsets)-1])
-			}
+	// TODO: sort and get the highest value
+	for edgeName, offsets := range writeOffsets {
+		if len(offsets) > 0 {
+			isdf.publishWatermark[edgeName].PublishWatermark(processorWM, offsets[len(offsets)-1])
 		}
 	}
 
