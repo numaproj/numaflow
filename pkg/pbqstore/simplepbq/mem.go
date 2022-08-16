@@ -9,7 +9,7 @@ type MemoryStore struct {
 }
 
 func NewMemoryStore() *MemoryStore {
-
+	return nil
 }
 
 // Read reads data from the in memory storage
