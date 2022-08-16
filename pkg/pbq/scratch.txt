@@ -1,0 +1,269 @@
+/*
+
+each partition has two dimensions (key, window)
+window duration could be in the order of minutes/hours
+
+- how big a file should be ?
+- will you truncate the file?
+- does that means you will write partial results? and if so will you do it all the time?
+- header/delimiter
+- header
+	- size (no of bytes that the message length is)
+	- nextoffset (byte offset)
+- delimiter (separate messages - EOL)
+- append
+- read
+*/
+
+/*
+Package pbq provides management functions for all the pbq storage
+creation, deletion, querying, metadata management etc
+
+pbq delegates operations to underlying implementation
+metadata management is independent of underlying implementation
+but metadata itself needs to be persisted.
+executed for every new partition { window or window + key }
+
+pbq needs to be configured with queue store and a metadata store.
+
+actual queue backed by a storage { memory, s3, ebs }
+queue needs to implement publisher and reader interfaces.
+it also needs to implement management operations
+
+persistent queue vs in memory queue
+storage for the queue could be a block store or a blob store. (EBS or S3)
+client for pbq service ->
+queue operations client.
+
+when an element arrives, the pbq service is asked for queue that maps to the partition based on element key + wm
+*/
+
+package pbq
+
+//
+//import (
+//	"context"
+//	"github.com/nats-io/nats.go"
+//	"github.com/numaproj/numaflow/pkg/isb"
+//	"io"
+//)
+//
+//type queuepublisher interface {
+//	Enqueue(ctx context.Context, message isb.Message)
+//}
+//
+//type queuereader interface {
+//	Dequeue(ctx context.Context)
+//	DequeueFromOffset(ctx context.Context, offset int64)
+//}
+//
+//
+//// block storage
+//// blob storage
+//// KV store type
+//type pbcstore interface {
+//	// implement methods that can invoked by the publisher or reader
+//}
+//
+//// partition assigner
+//
+//// NewPBQ(store attributes) -> controlplane handle *pbqManager
+//// *p -> queue handle
+//// queuehandle.enqueue(element)
+//
+//type pbqManager struct {
+//	dir string
+//
+//}
+//
+//
+//func NewpbgManager() *pbqManager {
+//	return &pbqManager{}
+//}
+//
+//func (pbqm *pbqManager) Newpbq(partitionid string) pbq {
+//
+//}
+//
+//func (pbqm *pbqManager) startup() {
+//	pbqm
+//}
+//
+//
+//type pbqstore interface {
+//	New(partitionid string) error
+//	Remove(partitionid string) error
+//	CleanUp(partitionid string) error
+//	Read(offset int64, n int) ([]*isb.Message, error)
+//	Write(data []isb.Message) (int, error)
+//}
+//
+//type filestore struct {
+//	// local filepath
+//	// syncduration
+//	// batchsize
+//	// channel store
+//
+//}
+//
+//func (ft *filestore) Newforpartition(partitionid string) {
+//
+//}
+//
+//
+//pbqm := NewpbqManager()
+//pbq := pbqm.Newpbq("some partition")
+//pbq.Push(nil)
+//
+//// controlplane.queueforpartition() -> queue handle
+//// queuehadle.deque
+//
+//// block storage backed pbq
+//type fsqueue struct {
+//	// file system directory
+//	// current write offset
+//	// current read offset
+//	// name of the backing file
+//	name string
+//	// file details
+//	//
+//
+//}
+//
+//type pbqmanager interface {
+//	NewPBQ
+//	ListPBQ
+//}
+//
+//
+//type pbq struct {
+//	id string
+//	output chan [][]byte
+//	store pbqstore
+//}
+//
+//func New(id string, opts nats.Options) *pbq {
+//	return nil
+//}
+//
+//func ListPartitions(store *pbqstore) []*pbq {
+//
+//}
+//
+//func (fsq *pbq) Push(msg *isb.Message) error {
+//	// outputchan<-msg
+//	// store.Write(msg)
+//	return nil
+//}
+//
+//// dedup logic based on offset?
+//func (fsq *pbq) PushN(msg []*isb.Message) error {
+//	// outputchan<-msg
+//	// store.Write(msg)
+//	return nil
+//}
+//
+//
+//func (fsq *pbq) Close() error {
+//	// close the output channel
+//	return nil
+//}
+//
+//func (fsq *pbq) Pop() (*isb.Message, error) {
+//	return nil, nil
+//}
+//
+//func (fsq *pbq) PopN() ([]*isb.Message, error) {
+//	return nil, nil
+//}
+//
+//func (fsq *pbq) CleanUp() error {
+//
+//	return nil
+//}
+//
+//
+//NewPbq(storage, )
+//store.New(directory string, partitionid string, pbqoptions...)
+//store.List(directory string)
+//
+//
+//
+//
+//// interfaces :
+//// store
+//// turbo mode vs tunable consistent mode
+//// turbo batch fsync
+//// tunable consistent - ack for every N messages.
+//type pbqstore interface {
+//	Cleaner()
+//	io.ReadWriteCloser
+//	PartitionId()
+//}
+//// pbqreader to be used by ProcessAndForward
+//type pbqreader interface {
+//	io.Reader
+//}
+//
+//type pbqcleaner interface {
+//	Cleaner()
+//}
+//// pbqwriter to be used by Partitioner
+//type pbqwriter interface {
+//	io.WriteCloser
+//}
+//// struct :
+//// pbq // reader, writer
+//// filestore // store
+//// s3store // store
+//// kvstore // store
+//
+//type filestore struct {
+//	dirpath string
+//	filename string
+//	syncduration int64
+//	batchsize int64
+//	partitionid string
+//
+//}
+//
+//type memorystorage struct {
+//	storage  chan [][]byte
+//	capacity int64
+//	partitionid string
+//}
+//
+//
+//element ->
+//	w1 = windowAssigner.mergewindow(element.time, key, watermark)
+//	partitioner.process(w1, element)
+//	if not found w1:
+//		partitioner.newPbq(w1)
+//		partitioner.newPRocessandforward()
+//	pbq.push(element)
+//
+//
+//	processandforward
+//
+//
+//windowAssigner
+//- {k1, t1} - {k1, t2}  : w1
+//	{k1, t1.5} - {k1, t2.5} ==> w1
+//  {k2, t1} - {k2, t2} : W3
+//
+//	{k, w} -> partition
+//
+//
+//partitioner
+//	partitions -> pbq
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
