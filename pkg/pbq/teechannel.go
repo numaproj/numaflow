@@ -6,15 +6,9 @@ type Tee struct {
 }
 
 func (t *Tee) tee() {
-	for {
-		
-		v, open := <-t.Input
-		if open {
-			for _, och := range t.Outputs {
-				och <- v
-			}
-		} else {
-			return
+	for elem := range t.Input {
+		for _, och := range t.Outputs {
+			och <- elem
 		}
 	}
 }

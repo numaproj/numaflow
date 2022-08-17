@@ -46,8 +46,12 @@ func TestOutputWithClosedInput(t *testing.T) {
 
 	tc.close()
 
-	assert.Len(t, o1, l)
-	assert.Len(t, o2, l)
+	for i := 0; i < l; i++ {
+		v1 := <-o1
+		assert.Equal(t, i, v1.(int))
+		v2 := <-o2
+		assert.Equal(t, i, v2.(int))
+	}
 
 }
 
@@ -66,9 +70,9 @@ func TestBackPressureHandling(t *testing.T) {
 	go tc.tee()
 
 	var wg sync.WaitGroup
+	wg.Add(1)
 
 	go func(tc *Tee) {
-		wg.Add(1)
 		defer wg.Done()
 		timer := time.NewTimer(2 * time.Second)
 		for i := 0; i < l; i++ {
@@ -83,5 +87,8 @@ func TestBackPressureHandling(t *testing.T) {
 	}(tc)
 
 	wg.Wait()
+
+	assert.Len(t, o1, c+1)
+	assert.Len(t, o2, c)
 
 }
