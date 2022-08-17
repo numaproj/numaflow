@@ -151,7 +151,7 @@ func (t *OffsetTimeline) GetEventtimeFromInt64(inputOffsetInt64 int64) int64 {
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
 		// get the event time has the closest offset to the input offset
 		// exclude the same offset because this offset may not finish processing yet
-		// offset <= e.Value.(OffsetWatermark).offset: use <= because we want the largest possible timestamp
+		// offset < e.Value.(OffsetWatermark).offset: use < because we want the largest possible timestamp
 		if offset < e.Value.(OffsetWatermark).offset && e.Value.(OffsetWatermark).offset < inputOffsetInt64 {
 			offset = e.Value.(OffsetWatermark).offset
 			eventTime = e.Value.(OffsetWatermark).watermark

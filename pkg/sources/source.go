@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"sync"
 
 	"go.uber.org/zap"
@@ -36,12 +37,8 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var writers []isb.BufferWriter
 
 	// watermark variables no-op initialization
-	var fetchWatermark fetch.Fetcher = generic.NewNoOpWMProgressor()
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
-	publishWatermark := make(map[string]publish.Publisher)
-	for _, buffer := range sp.VertexInstance.Vertex.GetToBuffers() {
-		publishWatermark[buffer.Name] = generic.NewNoOpWMProgressor()
-	}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(sp.VertexInstance.Vertex.GetToBuffers()))
 	var publishWMStore = generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 
 	switch sp.ISBSvcType {
@@ -63,7 +60,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	case dfv1.ISBSvcTypeJetStream:
 		// build the right watermark progessor if watermark is enabled
 		// build watermark progressors
-		fetchWatermark, publishWatermark, publishWMStore = generic.BuildJetStreamWatermarkProgressorsForSource(ctx, sp.VertexInstance)
+		fetchWatermark, publishWatermark, publishWMStore = jetstream.BuildJetStreamWatermarkProgressorsForSource(ctx, sp.VertexInstance)
 
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{

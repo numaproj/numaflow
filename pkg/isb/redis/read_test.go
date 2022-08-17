@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"sync"
 	"testing"
 	"time"
@@ -110,10 +111,11 @@ func TestRedisCheckBacklog(t *testing.T) {
 
 	defer func() { _ = client.DeleteStreamGroup(ctx, rqw.GetStreamName(), "toGroup") }()
 	defer func() { _ = client.DeleteKeys(ctx, rqw.GetStreamName()) }()
-
-	f, err := forward.NewInterStepDataForward(vertex, rqr, map[string]isb.BufferWriter{
+	toSteps := map[string]isb.BufferWriter{
 		"to1": rqw,
-	}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, nil, forward.WithReadBatchSize(10))
+	}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	f, err := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(10))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -304,7 +306,8 @@ func (suite *ReadWritePerformance) SetupSuite() {
 		},
 	}}
 
-	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, nil)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -388,10 +391,11 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 			Name: "testVertex",
 		},
 	}}
-
-	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, map[string]isb.BufferWriter{
+	toSteps := map[string]isb.BufferWriter{
 		"to1": suite.rqw,
-	}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, nil)
+	}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)
