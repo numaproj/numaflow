@@ -2,6 +2,7 @@ package pbq
 
 import (
 	"github.com/stretchr/testify/assert"
+	"sync"
 	"testing"
 	"time"
 )
@@ -11,7 +12,7 @@ func TestBaseCase(t *testing.T) {
 	l := 10
 	o1 := make(chan interface{}, l)
 	o2 := make(chan interface{}, l)
-	outputs := []*chan interface{}{&o1, &o2}
+	outputs := []chan interface{}{o1, o2}
 	tc := &Tee{
 		Input:   make(chan interface{}),
 		Outputs: outputs,
@@ -32,7 +33,7 @@ func TestOutputWithClosedInput(t *testing.T) {
 	l := 10
 	o1 := make(chan interface{}, l)
 	o2 := make(chan interface{}, l)
-	outputs := []*chan interface{}{&o1, &o2}
+	outputs := []chan interface{}{o1, o2}
 	tc := &Tee{
 		Input:   make(chan interface{}),
 		Outputs: outputs,
@@ -53,9 +54,10 @@ func TestOutputWithClosedInput(t *testing.T) {
 func TestBackPressureHandling(t *testing.T) {
 	l := 10
 	c := 2
+
 	o1 := make(chan interface{}, l)
 	o2 := make(chan interface{}, c)
-	outputs := []*chan interface{}{&o1, &o2}
+	outputs := []chan interface{}{o1, o2}
 	tc := &Tee{
 		Input:   make(chan interface{}),
 		Outputs: outputs,
@@ -63,7 +65,11 @@ func TestBackPressureHandling(t *testing.T) {
 
 	go tc.tee()
 
+	var wg sync.WaitGroup
+
 	go func(tc *Tee) {
+		wg.Add(1)
+		defer wg.Done()
 		timer := time.NewTimer(2 * time.Second)
 		for i := 0; i < l; i++ {
 			select {
@@ -71,14 +77,11 @@ func TestBackPressureHandling(t *testing.T) {
 				tc.close()
 				return
 			case tc.Input <- i:
-				println("wrote to the channel")
+				t.Log("wrote to the channel")
 			}
 		}
 	}(tc)
 
-	println(len(o1))
-	println(len(o2))
+	wg.Wait()
 
-	assert.Len(t, o1, c)
-	assert.Len(t, o2, c)
 }

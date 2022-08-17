@@ -2,17 +2,15 @@ package pbq
 
 type Tee struct {
 	Input   chan interface{}
-	Outputs []*chan interface{}
+	Outputs []chan interface{}
 }
 
 func (t *Tee) tee() {
 	for {
 		v, open := <-t.Input
 		if open {
-			for _, och := range t.Outputs {
-				println(len(*och))
-				println("dequed and wrote to the output channel")
-				*och <- v
+			for i := 0; i < len(t.Outputs); i++ {
+				t.Outputs[i] <- v
 			}
 		} else {
 			return

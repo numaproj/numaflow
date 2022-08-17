@@ -37,7 +37,7 @@ func NewPBQ(store pbqstore.Store) *PBQ {
 	output := make(chan interface{})
 	tch := Tee{
 		Input:   make(chan interface{}),
-		Outputs: []*chan interface{}{&output, store.WriterCh()},
+		Outputs: []chan interface{}{output, store.WriterCh()},
 	}
 
 	go tch.tee()
