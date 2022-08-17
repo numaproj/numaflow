@@ -4,8 +4,9 @@ import "context"
 
 // MemoryStore implements PBQStore which stores the data in memory
 type MemoryStore struct {
-	Storage  chan [][]byte
-	Capacity int64
+	input    chan interface{}
+	store    []interface{}
+	capacity int64
 }
 
 func NewMemoryStore() *MemoryStore {
