@@ -7,10 +7,11 @@ type Tee struct {
 
 func (t *Tee) tee() {
 	for {
+		
 		v, open := <-t.Input
 		if open {
-			for i := 0; i < len(t.Outputs); i++ {
-				t.Outputs[i] <- v
+			for _, och := range t.Outputs {
+				och <- v
 			}
 		} else {
 			return
