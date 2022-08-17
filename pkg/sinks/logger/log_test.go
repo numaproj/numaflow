@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 	"time"
 
@@ -34,8 +35,8 @@ func TestToLog_Start(t *testing.T) {
 			},
 		},
 	}}
-
-	s, err := NewToLog(vertex, fromStep, nil, nil)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex.GetToBuffers()))
+	s, err := NewToLog(vertex, fromStep, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := s.Start()
@@ -87,9 +88,10 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 			},
 		},
 	}}
-
-	logger1, _ := NewToLog(vertex1, to1, nil, nil)
-	logger2, _ := NewToLog(vertex2, to2, nil, nil)
+	fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex1.GetToBuffers()))
+	logger1, _ := NewToLog(vertex1, to1, fetchWatermark1, publishWatermark1)
+	fetchWatermark2, publishWatermark2 := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex2.GetToBuffers()))
+	logger2, _ := NewToLog(vertex2, to2, fetchWatermark2, publishWatermark2)
 	logger1Stopped := logger1.Start()
 	logger2Stopped := logger2.Start()
 
@@ -105,8 +107,8 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 			Name: "testVertex",
 		},
 	}}
-
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, nil, nil)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := f.Start()

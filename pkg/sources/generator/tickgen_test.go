@@ -26,8 +26,13 @@ func TestRead(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
+
 	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, &publishWMStore)
+	toSteps := map[string]isb.BufferWriter{
+		"writer": dest,
+	}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, fetchWatermark, publishWatermark, &publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -56,7 +61,11 @@ func TestStop(t *testing.T) {
 		Replica:  0,
 	}
 	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, &publishWMStore)
+	toSteps := map[string]isb.BufferWriter{
+		"writer": dest,
+	}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, fetchWatermark, publishWatermark, &publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
