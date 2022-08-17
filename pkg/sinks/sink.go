@@ -3,6 +3,8 @@ package sinks
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"sync"
 
 	"github.com/numaproj/numaflow/pkg/watermark/generic"

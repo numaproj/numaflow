@@ -5,6 +5,7 @@ package jetstream
 import (
 	"context"
 	"fmt"
+
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"go.uber.org/zap"
 
