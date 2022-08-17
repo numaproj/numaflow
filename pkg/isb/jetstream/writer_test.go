@@ -4,6 +4,7 @@ package jetstream
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 	"time"
 
@@ -97,8 +98,8 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
-
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, nil, nil)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := f.Start()

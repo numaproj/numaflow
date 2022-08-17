@@ -3,6 +3,8 @@ package sinks
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"sync"
 
 	"go.uber.org/zap"
@@ -19,7 +21,6 @@ import (
 	logsink "github.com/numaproj/numaflow/pkg/sinks/logger"
 	udsink "github.com/numaproj/numaflow/pkg/sinks/udsink"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
@@ -37,12 +38,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
 
 	// watermark variables no-op initialization
-	var fetchWatermark fetch.Fetcher = generic.NewNoOpWMProgressor()
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
-	publishWatermark := make(map[string]publish.Publisher)
-	for _, buffer := range u.VertexInstance.Vertex.GetToBuffers() {
-		publishWatermark[buffer.Name] = generic.NewNoOpWMProgressor()
-	}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -63,7 +60,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		// build watermark progressors
-		fetchWatermark, publishWatermark = generic.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
 
 		jetStreamClient := jsclient.NewInClusterJetStreamClient()
 		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)
