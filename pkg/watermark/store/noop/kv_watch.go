@@ -14,7 +14,7 @@ func NewKVOpWatch() *KVNoOpWatch {
 	return &KVNoOpWatch{}
 }
 
-// Watch We return a nil channel as we do not wish to progress the watermark
+// Watch returns a blocking channel.
 func (K KVNoOpWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 	retChan := make(chan store.WatermarkKVEntry)
 	return retChan
