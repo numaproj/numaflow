@@ -133,6 +133,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
+		// TODO: make it part of interface?
 		// Readiness check
 		if err := udfHandler.(*applier.UDSGRPCBasedUDF).WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on UDF readiness check, %w", err)
@@ -147,8 +148,8 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		if err := udfHandler.(*applier.UDSHTTPBasedUDF).WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on UDF readiness check, %w", err)
 		}
-		log.Infow("Start processing udf messages", zap.String("isbs", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
 	}
+	log.Infow("Start processing udf messages", zap.String("isbs", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
 
 	opts := []forward.Option{forward.WithLogger(log)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {

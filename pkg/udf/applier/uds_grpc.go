@@ -11,11 +11,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func apply() {
-	var d functionpb.Datum
-	_ = d
-}
-
 // TODO: only support map operation ATM
 
 type UDSGRPCBasedUDF struct {
@@ -70,7 +65,7 @@ func (u *UDSGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 	if err != nil {
 		return nil, ApplyUDFErr{
 			UserUDFErr: false,
-			Message:    fmt.Sprintf("http.NewRequestWithContext failed, %s", err),
+			Message:    fmt.Sprintf("grpc client.DoFn failed, %s", err),
 			InternalErr: InternalErr{
 				Flag:        true,
 				MainCarDown: false,
