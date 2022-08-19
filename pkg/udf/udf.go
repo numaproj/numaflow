@@ -3,9 +3,12 @@ package udf
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/numaproj/numaflow-go/pkg/function"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 
 	"go.uber.org/zap"
 
@@ -120,12 +123,33 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		return result, nil
 	})
 
-	udfHandler := applier.NewUDSHTTPBasedUDF(dfv1.PathVarRun+"/udf.sock", applier.WithHTTPClientTimeout(120*time.Second))
-	// Readiness check
-	if err := udfHandler.WaitUntilReady(ctx); err != nil {
-		return fmt.Errorf("failed on UDF readiness check, %w", err)
+	var udfHandler applier.Applier
+	udsProtocol := os.Getenv("UDS_PROTOCOL")
+	switch udsProtocol {
+	case function.Protocol:
+		// TODO: logger correct ?
+		logger := logging.NewLogger().Named("uds-grpc-udf")
+		udfHandler, err = applier.NewUDSGRPCBasedUDF(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create gRPC client, %w", err)
+		}
+		// Readiness check
+		if err := udfHandler.(*applier.UDSGRPCBasedUDF).WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on UDF readiness check, %w", err)
+		}
+		defer func() {
+			err = udfHandler.(*applier.UDSGRPCBasedUDF).CloseConn(ctx)
+			logger.Errorw("failed to close grpc client conn", zap.Error(err))
+		}()
+	case "http":
+		udfHandler = applier.NewUDSHTTPBasedUDF(dfv1.PathVarRun+"/udf.sock", applier.WithHTTPClientTimeout(120*time.Second))
+		// Readiness check
+		if err := udfHandler.(*applier.UDSHTTPBasedUDF).WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on UDF readiness check, %w", err)
+		}
+		log.Infow("Start processing udf messages", zap.String("isbs", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
 	}
-	log.Infow("Start processing udf messages", zap.String("isbs", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
+
 	opts := []forward.Option{forward.WithLogger(log)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
