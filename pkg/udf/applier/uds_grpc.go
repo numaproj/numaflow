@@ -37,7 +37,7 @@ func (u *UDSGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 		case <-ctx.Done():
 			return fmt.Errorf("failed to wait for ready: %w", ctx.Err())
 		default:
-			if u.client.IsReady() {
+			if u.client.IsReady(ctx, nil) {
 				return nil
 			}
 			time.Sleep(1 * time.Second)
@@ -49,16 +49,15 @@ func (u *UDSGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 	key := string(readMessage.Key)
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
-	offsetInEpoch, _ := offset.Sequence()
-	offsetInTime := time.Unix(offsetInEpoch, 0).In(time.UTC) // TODO: nano second or second?
-	parentPaneInfo := readMessage.PaneInfo                   // TODO: how to utilize the IsWindow?
+	parentPaneInfo := readMessage.PaneInfo
 
+	// TODO: revisit EventTime, IntervalWindow, and PaneInfo
 	var d = &functionpb.Datum{
 		Key:            key,
 		Value:          payload,
 		EventTime:      &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
 		IntervalWindow: &functionpb.IntervalWindow{StartTime: timestamppb.New(parentPaneInfo.StartTime), EndTime: timestamppb.New(parentPaneInfo.EndTime)},
-		PaneInfo:       &functionpb.PaneInfo{Watermark: timestamppb.New(offsetInTime)},
+		PaneInfo:       &functionpb.PaneInfo{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
 	}
 
 	datumList, err := u.client.DoFn(ctx, d)

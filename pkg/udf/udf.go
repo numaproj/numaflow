@@ -127,20 +127,18 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	udsProtocol := os.Getenv("UDS_PROTOCOL")
 	switch udsProtocol {
 	case function.Protocol:
-		// TODO: logger correct ?
-		logger := logging.NewLogger().Named("uds-grpc-udf")
+		logger := logging.FromContext(ctx).Named("uds-grpc-udf")
 		udfHandler, err = applier.NewUDSGRPCBasedUDF(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
-		// TODO: make it part of interface?
 		// Readiness check
 		if err := udfHandler.(*applier.UDSGRPCBasedUDF).WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on UDF readiness check, %w", err)
 		}
 		defer func() {
 			err = udfHandler.(*applier.UDSGRPCBasedUDF).CloseConn(ctx)
-			logger.Errorw("failed to close grpc client conn", zap.Error(err))
+			logger.Warnw("failed to close grpc client conn", zap.Error(err))
 		}()
 	case "http":
 		udfHandler = applier.NewUDSHTTPBasedUDF(dfv1.PathVarRun+"/udf.sock", applier.WithHTTPClientTimeout(120*time.Second))
