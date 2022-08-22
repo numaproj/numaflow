@@ -41,7 +41,7 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	readMessages, err := memStore.ReadFromStore()
+	readMessages, err := memStore.ReadFromStore(10)
 	assert.Len(t, readMessages, msgCount)
 }
 
@@ -51,7 +51,7 @@ func TestEmptyStore_Read(t *testing.T) {
 	memStore, err := NewMemoryStore(store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
 	assert.NoError(t, err)
 
-	_, err = memStore.ReadFromStore()
+	_, err = memStore.ReadFromStore(10)
 	assert.ErrorContains(t, err, "no messages")
 
 }

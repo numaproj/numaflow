@@ -24,7 +24,7 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 
 	// lets create a pbq with buffer size 10
 	buffSize := 10
-	pq, err := NewPBQ(int64(buffSize), memStore)
+	pq, err := NewPBQ("newpartition", int64(buffSize), memStore)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
@@ -33,7 +33,7 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 	}
 
 	// check if the messages are persisted in store
-	storeMessages, _ := pq.Store.ReadFromStore()
+	storeMessages, _ := pq.Store.ReadFromStore(10)
 	assert.Len(t, storeMessages, msgCount)
 	pq.CloseOfBook()
 	// this means we successfully wrote 10 messages to pbq
@@ -52,7 +52,7 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 
 	// lets create a pbq with buffer size 10
 	buffSize := 10
-	pq, err := NewPBQ(int64(buffSize), memStore)
+	pq, err := NewPBQ("newpartition", int64(buffSize), memStore)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
@@ -60,8 +60,7 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	err = pq.CloseOfBook()
-	assert.NoError(t, err)
+	pq.CloseOfBook()
 
 	readChannel := pq.ReadFromPBQ()
 

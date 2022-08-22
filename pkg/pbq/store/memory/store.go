@@ -37,7 +37,7 @@ func NewMemoryStore(opts ...store.PbQStoreOption) (*MemoryStore, error) {
 
 // ReadFromStore will return all the messages that are persisted in store
 // this function will be invoked during bootstrap if there is restart
-func (m *MemoryStore) ReadFromStore() ([]*isb.Message, error) {
+func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, error) {
 	if m.writePos == 0 {
 		return nil, errors.New("no messages in store")
 	}
@@ -68,5 +68,7 @@ func (m *MemoryStore) Close() error {
 // for in-memory implementation we set the storage to nil, so that it will
 // ready for GC
 func (m *MemoryStore) GC() error {
+	m.storage = nil
+	m.writePos = -1
 	return nil
 }

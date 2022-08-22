@@ -7,42 +7,41 @@ import (
 )
 
 type PBQ struct {
-	Store  store.Store
-	output chan *isb.Message
-	closed bool
+	Store       store.Store
+	output      chan *isb.Message
+	closed      bool // closed to avoid panic in case writes happen after closeofbook
+	partitionID string
 }
 
 //NewPBQ accepts size and store and returns new PBQ
-func NewPBQ(bufferSize int64, store store.Store) (*PBQ, error) {
+func NewPBQ(partitionID string, bufferSize int64, store store.Store) (*PBQ, error) {
 
 	// output channel is buffered
 	p := &PBQ{
-		Store:  store,
-		output: make(chan *isb.Message, bufferSize),
-		closed: false,
+		Store:       store,
+		output:      make(chan *isb.Message, bufferSize),
+		closed:      false,
+		partitionID: partitionID,
 	}
 
 	return p, nil
 }
 
-//WriteFromISB writes message to pbq and persistent store
-func (p *PBQ) WriteFromISB(message *isb.Message) error {
+// WriteFromISB writes message to pbq and persistent store
+// We dont need a context here as this is invoked for every message.
+func (p *PBQ) WriteFromISB(message *isb.Message) (WriteErr error) {
 	if p.closed {
 		return errors.New("pbq is closed, cannot write the message")
 	}
 	p.output <- message
-	err := p.Store.WriteToStore(message)
-	if err != nil {
-		return err
-	}
-	return nil
+	WriteErr = p.Store.WriteToStore(message)
+	return
 }
 
 //CloseOfBook closes output channel
-func (p *PBQ) CloseOfBook() error {
+func (p *PBQ) CloseOfBook() {
 	p.closed = true
 	close(p.output)
-	return nil
 }
 
 //ReadFromPBQ exposes read channel to read message
@@ -50,18 +49,17 @@ func (p *PBQ) ReadFromPBQ() <-chan *isb.Message {
 	return p.output
 }
 
-func (p *PBQ) Close() error {
-	err := p.Store.Close()
-	if err != nil {
-		return err
-	}
-	return nil
+// Close is used by the Reader to indicate that it has finished
+// consuming the data from output channel
+func (p *PBQ) Close() (CloseErr error) {
+	CloseErr = p.Store.Close()
+	return
 }
 
-func (p *PBQ) GC() error {
-	err := p.Store.GC()
-	if err != nil {
-		return err
-	}
-	return nil
+// GC is invoked after the Reader (ProcessAndForward) has finished
+// Forwarding the output to ISB.
+func (p *PBQ) GC() (GcErr error) {
+	GcErr = p.Store.GC()
+	p.Store = nil
+	return
 }

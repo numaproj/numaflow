@@ -7,7 +7,7 @@ import (
 // Store provides methods to read, write and delete data from a durable store.
 type Store interface {
 	//ReadFromStore returns all the messages from the persisted store
-	ReadFromStore() ([]*isb.Message, error)
+	ReadFromStore(size int64) ([]*isb.Message, error)
 	//WriteToStore writes message to persisted store
 	WriteToStore(msg *isb.Message) error
 	// Close closes store
