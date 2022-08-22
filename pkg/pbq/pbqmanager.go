@@ -77,10 +77,14 @@ func (m *Manager) StartUp(ctx context.Context) {
 }
 
 //ShutDown for clean shut down, flushes pending messages to store and closes the store
-func (m *Manager) ShutDown(ctx context.Context) {
+func (m *Manager) ShutDown(ctx context.Context) error {
 	// iterate through the map of pbq
 	// close all the pbq
 	for _, v := range m.pbqMap {
-		v.Close()
+		err := v.Close()
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }

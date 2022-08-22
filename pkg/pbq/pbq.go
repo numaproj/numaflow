@@ -28,7 +28,7 @@ func NewPBQ(partitionID string, bufferSize int64, store store.Store) (*PBQ, erro
 }
 
 // WriteFromISB writes message to pbq and persistent store
-// We dont need a context here as this is invoked for every message.
+// We don't need a context here as this is invoked for every message.
 func (p *PBQ) WriteFromISB(message *isb.Message) (WriteErr error) {
 	if p.closed {
 		return errors.New("pbq is closed, cannot write the message")
@@ -43,6 +43,8 @@ func (p *PBQ) CloseOfBook() {
 	p.closed = true
 	close(p.output)
 }
+
+// if one partition created back pressure it will affect all the other partitions
 
 //ReadFromPBQ exposes read channel to read message
 func (p *PBQ) ReadFromPBQ() <-chan *isb.Message {
