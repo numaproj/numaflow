@@ -1,5 +1,7 @@
 package store
 
+import dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+
 type StoreOptions struct {
 	// maxBufferSize max size of buffer before it's flushed to store
 	maxBufferSize int64
@@ -9,14 +11,17 @@ type StoreOptions struct {
 	pbqStoreType string
 	// ChannelSize buffered channel size
 	ChannelSize int64
+	// StoreSize store array size
+	StoreSize int64
 }
 
 func DefaultPBQStoreOptions() *StoreOptions {
 	return &StoreOptions{
-		//maxBufferSize: dfv1.DefaultMaxBufferSize,
-		//syncDuration:  dfv1.DefaultSyncDuration,
-		//pbqStoreType:  dfv1.DefaultStoreType,
-		//ChannelSize:   dfv1.DefaultChannelSize,
+		maxBufferSize: dfv1.DefaultMaxBufferSize,
+		syncDuration:  dfv1.DefaultSyncDuration,
+		pbqStoreType:  dfv1.DefaultStoreType,
+		ChannelSize:   dfv1.DefaultChannelSize,
+		StoreSize:     dfv1.DefaultStoreSize,
 	}
 }
 
@@ -49,6 +54,13 @@ func WithPbqStoreType(storeType string) PbQStoreOption {
 func WithChannelSize(size int64) PbQStoreOption {
 	return func(o *StoreOptions) error {
 		o.ChannelSize = size
+		return nil
+	}
+}
+
+func WithStoreSize(size int64) PbQStoreOption {
+	return func(o *StoreOptions) error {
+		o.StoreSize = size
 		return nil
 	}
 }

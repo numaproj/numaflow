@@ -2,7 +2,9 @@ package pbq
 
 import (
 	"context"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 )
 
 // Manager helps in managing the lifecycle of PBQ instances
@@ -30,17 +32,34 @@ func (m *Manager) ListPartitions() []*PBQ {
 }
 
 //GetPBQ returns pbq for the given partitionID, if createIfMissing is set to true
-// it returns new PBQ
-func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, storeType string, opts ...store.PbQStoreOption) (p *PBQ, isNew bool) {
+// it creates and return a new pbq instance
+func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, bufferSize int64, storeType string, opts ...store.PbQStoreOption) (*PBQ, bool, error) {
 	if !createIfMissing {
 		pbqInstance, ok := m.pbqMap[partitionID]
 		if !ok {
-			return nil, false
+			return nil, false, nil
 		}
-		return pbqInstance, false
+		return pbqInstance, false, nil
 	}
 
-	return
+	var persistentStore store.Store
+	var err error
+
+	switch storeType {
+	case dfv1.InMemoryStoreType:
+		persistentStore, err = memory.NewMemoryStore(opts...)
+		if err != nil {
+			return nil, true, err
+		}
+	case dfv1.FileSystemStoreType:
+
+	}
+	pbq, err := NewPBQ(bufferSize, persistentStore)
+	if err != nil {
+		return nil, true, err
+	}
+	m.pbqMap[partitionID] = pbq
+	return pbq, true, nil
 }
 
 //StartUp creates list of PBQ instances using the persistent store
