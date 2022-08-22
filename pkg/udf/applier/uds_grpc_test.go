@@ -23,6 +23,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/vmihailenco/msgpack/v5"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func handle(_ context.Context, key string, msg []byte) (functionsdk.Messages, error) {
@@ -73,48 +75,125 @@ func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGRPCBasedUDF_BasicApply(t *testing.T) {
-	t.Run("test 200", func(t *testing.T) {
-		u := NewUDSHTTPBasedUDF(testSocketPath)
+type rpcMsg struct {
+	msg proto.Message
+}
+
+func (r *rpcMsg) Matches(msg interface{}) bool {
+	m, ok := msg.(proto.Message)
+	if !ok {
+		return false
+	}
+	return proto.Equal(m, r.msg)
+}
+
+func (r *rpcMsg) String() string {
+	return fmt.Sprintf("is %s", r.msg)
+}
+
+func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
+	t.Run("test success", func(t *testing.T) {
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
+		req := &functionpb.Datum{
+			Key:            "test_success_key",
+			Value:          []byte(`forward_message`),
+			EventTime:      &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
+			IntervalWindow: &functionpb.IntervalWindow{StartTime: timestamppb.New(time.Unix(1661169600, 0)), EndTime: timestamppb.New(time.Unix(1661169660, 0))},
+			PaneInfo:       &functionpb.PaneInfo{Watermark: timestamppb.New(time.Time{})},
+		}
+		mockClient.EXPECT().DoFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
+			Elements: []*functionpb.Datum{
+				req,
+			},
+		}, nil)
+
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
+		go func() {
+			<-ctx.Done()
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
 
-		// 200
-		ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Add("Content-Type", string(dfv1.MsgPackType))
-			w.WriteHeader(http.StatusOK)
-			msgs := functionsdk.MessagesBuilder().Append(functionsdk.Message{Key: "", Value: []byte("test")})
-			b, _ := msgpack.Marshal(msgs)
-			_, _ = w.Write(b)
-		}))
-		_ = os.Remove(testSocketPath)
-		listener, _ := net.Listen("unix", testSocketPath)
-		defer func() { _ = listener.Close() }()
-		ts.Listener = listener
-		ts.Start()
-		u.client = testClient
-		_, err := u.Apply(ctx, &isb.ReadMessage{ReadOffset: isb.SimpleOffset(func() string { return "" })})
+		u := NewMockUDSGRPCBasedUDF(mockClient)
+		got, err := u.Apply(ctx, &isb.ReadMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					PaneInfo: isb.PaneInfo{
+						EventTime: time.Unix(1661169600, 0),
+						StartTime: time.Unix(1661169600, 0),
+						EndTime:   time.Unix(1661169660, 0),
+					},
+					ID:  "test_id",
+					Key: []byte(`test_success_key`),
+				},
+				Body: isb.Body{
+					Payload: []byte(`forward_message`),
+				},
+			},
+			ReadOffset: isb.SimpleOffset(func() string { return "0" }),
+		},
+		)
 		assert.NoError(t, err)
-		ts.Close()
+		assert.Equal(t, req.Key, string(got[0].Key))
+		assert.Equal(t, req.Value, got[0].Payload)
 	})
 
-	t.Run("test 503", func(t *testing.T) {
-		u := NewUDSHTTPBasedUDF(testSocketPath)
-		ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = fmt.Fprintln(w, "test")
-		}))
-		_ = os.Remove(testSocketPath)
-		listener, _ := net.Listen("unix", testSocketPath)
-		defer func() { _ = listener.Close() }()
-		ts.Listener = listener
-		ts.Start()
-		u.client = testClient
+	t.Run("test error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
+		req := &functionpb.Datum{
+			Key:            "test_error_key",
+			Value:          []byte(`forward_message`),
+			EventTime:      &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
+			IntervalWindow: &functionpb.IntervalWindow{StartTime: timestamppb.New(time.Unix(1661169600, 0)), EndTime: timestamppb.New(time.Unix(1661169660, 0))},
+			PaneInfo:       &functionpb.PaneInfo{Watermark: timestamppb.New(time.Time{})},
+		}
+		mockClient.EXPECT().DoFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
+
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		_, err := u.Apply(ctx, &isb.ReadMessage{})
-		assert.Error(t, err)
-		ts.Close()
+		go func() {
+			<-ctx.Done()
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
+
+		u := NewMockUDSGRPCBasedUDF(mockClient)
+		_, err := u.Apply(ctx, &isb.ReadMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					PaneInfo: isb.PaneInfo{
+						EventTime: time.Unix(1661169600, 0),
+						StartTime: time.Unix(1661169600, 0),
+						EndTime:   time.Unix(1661169660, 0),
+					},
+					ID:  "test_id",
+					Key: []byte(`test_error_key`),
+				},
+				Body: isb.Body{
+					Payload: []byte(`forward_message`),
+				},
+			},
+			ReadOffset: isb.SimpleOffset(func() string { return "0" }),
+		},
+		)
+		assert.ErrorIs(t, err, ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("%s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		})
 	})
 }
 
