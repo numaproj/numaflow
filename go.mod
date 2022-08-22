@@ -3,7 +3,6 @@ module github.com/numaproj/numaflow
 go 1.18
 
 require (
-    github.com/numaproj/numaflow-go v0.0.1
 	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/Shopify/sarama v1.30.1
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
@@ -16,6 +15,7 @@ require (
 	github.com/go-swagger/go-swagger v0.28.0
 	github.com/goccy/go-json v0.9.7
 	github.com/gogo/protobuf v1.3.2
+	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.2.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0

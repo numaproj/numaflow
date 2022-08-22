@@ -8,6 +8,7 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/function/client"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -32,12 +33,14 @@ func (u *UDSGRPCBasedUDF) CloseConn(ctx context.Context) error {
 }
 
 func (u *UDSGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
+	var err error
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("failed to wait for ready: %w", ctx.Err())
+			// TODO: can use only one %w
+			return fmt.Errorf("failed to wait for ready: %v, %w", ctx.Err(), err)
 		default:
-			if u.client.IsReady(ctx, nil) {
+			if _, err = u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
 			}
 			time.Sleep(1 * time.Second)
