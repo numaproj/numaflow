@@ -11,7 +11,11 @@ import (
 func TestMemoryStore_WriteToStore(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	memStore, err := NewMemoryStore(store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	options := &store.Options{}
+	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithStoreSize(int64(storeSize))(options)
+
+	memStore, err := NewMemoryStore(options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -28,7 +32,11 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 func TestMemoryStore_ReadFromStore(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	memStore, err := NewMemoryStore(store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	options := &store.Options{}
+	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithStoreSize(int64(storeSize))(options)
+
+	memStore, err := NewMemoryStore(options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -42,25 +50,32 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	}
 
 	readMessages, err := memStore.ReadFromStore(int64(msgCount))
-	println(len(readMessages))
 	assert.Len(t, readMessages, msgCount)
 }
 
 func TestEmptyStore_Read(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	memStore, err := NewMemoryStore(store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	options := &store.Options{}
+	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithStoreSize(int64(storeSize))(options)
+
+	memStore, err := NewMemoryStore(options)
 	assert.NoError(t, err)
 
 	_, err = memStore.ReadFromStore(int64(storeSize))
-	assert.ErrorContains(t, err, "no messages")
+	assert.ErrorContains(t, err, "store is empty")
 
 }
 
 func TestFullStore_Write(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	memStore, err := NewMemoryStore(store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	options := &store.Options{}
+	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithStoreSize(int64(storeSize))(options)
+
+	memStore, err := NewMemoryStore(options)
 	assert.NoError(t, err)
 
 	//write 100 isb messages to persisted store

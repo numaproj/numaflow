@@ -1,6 +1,7 @@
 package pbq
 
 import (
+	"context"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
@@ -15,7 +16,11 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	memStore, err := memory.NewMemoryStore(store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	options := &store.Options{}
+	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithStoreSize(int64(storeSize))(options)
+
+	memStore, err := memory.NewMemoryStore(options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -25,7 +30,8 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 
 	// lets create a pbq with buffer size 10
 	buffSize := 10
-	pq, err := NewPBQ("newpartition", int64(buffSize), memStore)
+	_ = store.WithBufferSize(int64(buffSize))(options)
+	pq, err := NewPBQ("new-partition", memStore, options)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
@@ -43,7 +49,11 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 func TestPBQ_ReadFromPBQ(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	memStore, err := memory.NewMemoryStore(store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	options := &store.Options{}
+	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithStoreSize(int64(storeSize))(options)
+
+	memStore, err := memory.NewMemoryStore(options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -53,7 +63,8 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 
 	// lets create a pbq with buffer size 10
 	buffSize := 10
-	pq, err := NewPBQ("newpartition", int64(buffSize), memStore)
+	_ = store.WithBufferSize(int64(buffSize))(options)
+	pq, err := NewPBQ("new-partition", memStore, options)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
@@ -62,15 +73,8 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 	}
 
 	pq.CloseOfBook()
-
-	readChannel := pq.ReadFromPBQ()
-
-	var readMessages []*isb.Message
-
-	for msg := range readChannel {
-		readMessages = append(readMessages, msg)
-	}
-
+	ctx := context.Background()
+	readMessages, _ := pq.ReadFromPBQ(ctx, int64(100))
 	// number of messages written should be equal to number of messages read
 	assert.Len(t, readMessages, msgCount)
 	err = pq.GC()
@@ -80,26 +84,36 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 func TestPBQ_ReadWrite(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	memStore, err := memory.NewMemoryStore(store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	options := &store.Options{}
+	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithStoreSize(int64(storeSize))(options)
+
+	memStore, err := memory.NewMemoryStore(options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
-	msgCount := 100
+	msgCount := 10
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
 	//create a pbq with buffer size 10
-	buffSize := 2
-	pq, err := NewPBQ("newpartition", int64(buffSize), memStore)
+	buffSize := 10
+	_ = store.WithBufferSize(int64(buffSize))(options)
+	pq, err := NewPBQ("new-partition", memStore, options)
 	assert.NoError(t, err)
 
-	msgChan := make(chan *isb.Message, msgCount)
+	var readMessages []*isb.Message
 	// run a parallel go routine which reads from pbq and writes to a channel
 	var wg sync.WaitGroup
 	wg.Add(1)
+
 	go func() {
-		for msg := range pq.ReadFromPBQ() {
-			msgChan <- msg
+		for {
+			msgs, err := pq.ReadFromPBQ(context.Background(), 1)
+			readMessages = append(readMessages, msgs...)
+			if err != nil {
+				break
+			}
 		}
 		err := pq.Close()
 		assert.NoError(t, err)
@@ -115,6 +129,64 @@ func TestPBQ_ReadWrite(t *testing.T) {
 
 	wg.Wait()
 	// count of messages read by parallel go routine should be equal to produced messages
-	assert.Len(t, msgChan, msgCount)
+	assert.Len(t, readMessages, msgCount)
 
+}
+
+func Test_PBQReadWithCanceledContext(t *testing.T) {
+	// create a store of size 100 (it can store max 100 messages)
+	storeSize := 100
+	options := &store.Options{}
+	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithStoreSize(int64(storeSize))(options)
+
+	memStore, err := memory.NewMemoryStore(options)
+	assert.NoError(t, err)
+
+	//write 10 isb messages to persisted store
+	msgCount := 10
+	startTime := time.Now()
+	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+
+	//create a pbq with buffer size 10
+	bufferSize := 10
+	_ = store.WithBufferSize(int64(bufferSize))(options)
+	pq, err := NewPBQ("new-partition", memStore, options)
+	assert.NoError(t, err)
+
+	var readMessages []*isb.Message
+	// run a parallel go routine which reads from pbq and writes to a channel
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	ctx := context.Background()
+	childCtx, cancelFn := context.WithCancel(ctx)
+
+	go func() {
+		//cancelFn()
+		for {
+			msgs, err := pq.ReadFromPBQ(childCtx, 1)
+			readMessages = append(readMessages, msgs...)
+			if err != nil {
+				break
+			}
+		}
+		//err := pq.Close()
+		assert.NoError(t, err)
+		wg.Done()
+	}()
+
+	//since we are closing the context before writing to pbq, read message count should be zero, and it should not block
+	cancelFn()
+
+	for _, msg := range writeMessages {
+		err := pq.WriteFromISB(&msg)
+		assert.NoError(t, err)
+	}
+
+	pq.CloseOfBook()
+
+	wg.Wait()
+	// count of messages read by parallel go routine should be equal to produced messages
+	assert.Len(t, readMessages, 0)
 }

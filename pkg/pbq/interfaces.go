@@ -1,11 +1,14 @@
 package pbq
 
-import "github.com/numaproj/numaflow/pkg/isb"
+import (
+	"context"
+	"github.com/numaproj/numaflow/pkg/isb"
+)
 
 // Reader provides methods to read from PBQ.
 type Reader interface {
 	// ReadFromPBQ exposes read channel to read from PBQ
-	ReadFromPBQ() <-chan *isb.Message
+	ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, error)
 	// Close closes the reader channel.
 	Close() error
 	// GC does garbage collection, it deletes all the persisted data from the store

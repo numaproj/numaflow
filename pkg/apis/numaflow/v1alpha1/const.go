@@ -115,7 +115,7 @@ const (
 	DefaultMaxBufferSize = 100000        // Default buffer size for pbq in bytes
 	DefaultSyncDuration  = 2             // Default sync duration for pbq in seconds
 	DefaultStoreType     = "file-system" // Default store type in string
-	DefaultChannelSize   = 10000         // Default channel size in int
+	DefaultBufferSize    = 10000         // Default channel size in int
 	DefaultStoreSize     = 1000000       // Default persistent store size
 
 	InMemoryStoreType   = "in-memory"

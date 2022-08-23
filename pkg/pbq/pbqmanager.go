@@ -6,21 +6,41 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
+	"sync"
 )
 
 var NonExistentPBQError error = errors.New("missing PBQ for the partition")
 
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
-	// options
-	pbqMap map[string]*PBQ
-	// pbqstore options
+	options *store.Options
+	pbqMap  map[string]*PBQ
 }
 
-//NewManager returns new instance of manager
-func NewManager(opts ...store.StoreOptions) *Manager {
-	manager := &Manager{pbqMap: make(map[string]*PBQ)}
-	return manager
+var createManagerOnce sync.Once
+var pbqManager *Manager
+var createManagerError error
+
+// * create options during create manager and pass the options around ?
+
+//CreateManager returns new instance of manager
+func CreateManager(opts ...store.SetOption) (*Manager, error) {
+	options := store.DefaultOptions()
+	createManagerOnce.Do(func() {
+		for _, opt := range opts {
+			if opt != nil {
+				if err := opt(options); err != nil {
+					createManagerError = err
+					return
+				}
+			}
+		}
+		pbqManager = &Manager{
+			pbqMap:  make(map[string]*PBQ),
+			options: options,
+		}
+	})
+	return pbqManager, createManagerError
 }
 
 // ListPartitions returns all the pbq instances
@@ -37,7 +57,7 @@ func (m *Manager) ListPartitions() []*PBQ {
 
 //GetPBQ returns pbq for the given partitionID, if createIfMissing is set to true
 // it creates and return a new pbq instance
-func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, bufferSize int64, storeType string, opts ...store.PbQStoreOption) (*PBQ, bool, error) {
+func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, storeType string) (*PBQ, bool, error) {
 
 	pbqInstance, ok := m.pbqMap[partitionID]
 	if ok {
@@ -55,14 +75,14 @@ func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, bufferSize in
 
 	switch storeType {
 	case dfv1.InMemoryStoreType:
-		persistentStore, err = memory.NewMemoryStore(opts...)
+		persistentStore, err = memory.NewMemoryStore(m.options)
 		if err != nil {
 			return nil, true, err
 		}
 	case dfv1.FileSystemStoreType:
 		return nil, true, nil
 	}
-	pbq, err := NewPBQ(partitionID, bufferSize, persistentStore)
+	pbq, err := NewPBQ(partitionID, persistentStore, m.options)
 	if err != nil {
 		return nil, true, err
 	}

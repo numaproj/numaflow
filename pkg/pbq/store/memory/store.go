@@ -2,9 +2,9 @@ package memory
 
 import (
 	"errors"
-	"fmt"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 var StoreFullError error = errors.New("error while writing to store, store is full")
@@ -17,20 +17,12 @@ type MemoryStore struct {
 	writePos int64
 	readPos  int64
 	storage  []*isb.Message
-	options  *store.StoreOptions
+	options  *store.Options
 }
 
 //NewMemoryStore returns new memory store
-func NewMemoryStore(opts ...store.PbQStoreOption) (*MemoryStore, error) {
-	options := store.DefaultPBQStoreOptions()
+func NewMemoryStore(options *store.Options) (*MemoryStore, error) {
 
-	for _, opt := range opts {
-		if opt != nil {
-			if err := opt(options); err != nil {
-				return nil, err
-			}
-		}
-	}
 	memStore := &MemoryStore{
 		writePos: 0,
 		readPos:  0,
@@ -42,15 +34,14 @@ func NewMemoryStore(opts ...store.PbQStoreOption) (*MemoryStore, error) {
 	return memStore, nil
 }
 
-// ReadFromStore will return all the messages that are persisted in store
-// this function will be invoked during bootstrap if there is restart
+// ReadFromStore will return upto N messages persisted in store
+// this function will be invoked during bootstrap if there is a restart
 func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, error) {
-	if m.writePos == 0 {
-		return nil, StoreEmptyError
+	if m.IsEmpty() || m.readPos > m.writePos {
+		return []*isb.Message{}, StoreEmptyError
 	}
-	if m.readPos+size > m.writePos || m.readPos+size > int64(len(m.storage)) {
-		return nil, fmt.Errorf("error while reading, request %d messages, but found only %d messages in store", size, m.writePos-m.readPos)
-	}
+
+	size = util.Min(size, m.writePos-m.readPos)
 	readMessages := make([]*isb.Message, size)
 	copy(m.storage[m.readPos:m.readPos+size], readMessages)
 	m.readPos += size
@@ -84,4 +75,12 @@ func (m *MemoryStore) GC() error {
 	m.storage = nil
 	m.writePos = -1
 	return nil
+}
+
+// IsEmpty check if there are any records persisted in store
+func (m *MemoryStore) IsEmpty() bool {
+	if m.writePos == 0 {
+		return true
+	}
+	return false
 }

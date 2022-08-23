@@ -14,4 +14,6 @@ type Store interface {
 	Close() error
 	// GC does garbage collection and deletes all the messages that are persisted
 	GC() error
+	// IsEmpty checks if there are any records persisted in store
+	IsEmpty() bool
 }
