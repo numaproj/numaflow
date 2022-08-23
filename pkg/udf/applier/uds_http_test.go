@@ -101,7 +101,7 @@ func TestHTTPBasedUDF_BasicApply(t *testing.T) {
 }
 
 func TestHTTPBasedUDF_Apply(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	multiplyBy2 := func(body []byte) interface{} {

@@ -4,11 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -18,11 +13,10 @@ import (
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/function/client"
 	"github.com/numaproj/numaflow-go/pkg/function/server"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/stretchr/testify/assert"
-	"github.com/vmihailenco/msgpack/v5"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -197,10 +191,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 	})
 }
 
-func TestHGRPCBasedUDF_Apply(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
+func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 	multiplyBy2 := func(body []byte) interface{} {
 		var result testutils.PayloadForTest
 		_ = json.Unmarshal(body, &result)
@@ -208,37 +199,63 @@ func TestHGRPCBasedUDF_Apply(t *testing.T) {
 		return result
 	}
 
-	s := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := ioutil.ReadAll(r.Body)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		// set header as even or odd based on the original request
-		var orignalReq testutils.PayloadForTest
-		_ = json.Unmarshal(body, &orignalReq)
-		result, _ := json.Marshal(multiplyBy2(body).(testutils.PayloadForTest))
-		m := &functionsdk.Message{Value: result}
-		if orignalReq.Value%2 == 0 {
-			m.Key = "even"
-		} else {
-			m.Key = "odd"
+	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
+	mockClient.EXPECT().DoFn(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
+			var originalValue testutils.PayloadForTest
+			_ = json.Unmarshal(datum.GetValue(), &originalValue)
+			doubledValue, _ := json.Marshal(multiplyBy2(datum.GetValue()).(testutils.PayloadForTest))
+			var elements []*functionpb.Datum
+			if originalValue.Value%2 == 0 {
+				elements = append(elements, &functionpb.Datum{
+					Key:            "even",
+					Value:          doubledValue,
+					EventTime:      datum.GetEventTime(),
+					PaneInfo:       datum.GetPaneInfo(),
+					IntervalWindow: datum.GetIntervalWindow(),
+				})
+			} else {
+				elements = append(elements, &functionpb.Datum{
+					Key:            "odd",
+					Value:          doubledValue,
+					EventTime:      datum.GetEventTime(),
+					PaneInfo:       datum.GetPaneInfo(),
+					IntervalWindow: datum.GetIntervalWindow(),
+				})
+			}
+			datumList := &functionpb.DatumList{
+				Elements: elements,
+			}
+			return datumList, nil
+		},
+	).AnyTimes()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
 		}
-		b, _ := msgpack.Marshal(functionsdk.MessagesBuilder().Append(*m))
-		w.Header().Add("Content-Type", string(dfv1.MsgPackType))
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(b)
+	}()
 
-		_, _ = w.Write(result)
-	}))
-	_ = os.Remove(testSocketPath)
-	listener, _ := net.Listen("unix", testSocketPath)
-	defer func() { _ = listener.Close() }()
-	s.Listener = listener
-	s.Start()
-	defer s.Close()
+	u := NewMockUDSGRPCBasedUDF(mockClient)
 
-	u := NewUDSHTTPBasedUDF(testSocketPath)
-	u.client = testClient
 	var count = int64(10)
-	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1636470000, 0))
+	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
+
+	var results = make([][]byte, len(readMessages))
+	var resultKeys = make([]string, len(readMessages))
+	for idx, readMessage := range readMessages {
+		apply, err := u.Apply(ctx, &readMessage)
+		assert.NoError(t, err)
+		results[idx] = apply[0].Payload
+		resultKeys[idx] = string(apply[0].Header.Key)
+	}
+
 	var expectedResults = make([][]byte, count)
 	var expectedKeys = make([]string, count)
 	for idx, readMessage := range readMessages {
@@ -251,15 +268,6 @@ func TestHGRPCBasedUDF_Apply(t *testing.T) {
 		}
 		marshal, _ := json.Marshal(multiplyBy2(readMessage.Payload))
 		expectedResults[idx] = marshal
-	}
-
-	var results = make([][]byte, len(readMessages))
-	var resultKeys = make([]string, len(readMessages))
-	for idx, readMessage := range readMessages {
-		apply, err := u.Apply(ctx, &readMessage)
-		assert.NoError(t, err)
-		results[idx] = apply[0].Payload
-		resultKeys[idx] = string(apply[0].Header.Key)
 	}
 
 	assert.Equal(t, expectedResults, results)
