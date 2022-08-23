@@ -139,8 +139,13 @@ export function Pods(props: PodsProps) {
     );
   }
 
-  if (podsError || podsDetailError || !podsDetailMap) {
+  if (podsError || pods.length === 0 || podsDetailError || !podsDetailMap) {
     const errors = [];
+
+    if (pods.length === 0) {
+      errors.push(<Box  key = {"no pods"}>{`No pods found`}</Box>);
+    }
+
     if (podsError) {
       errors.push(
         <Box
