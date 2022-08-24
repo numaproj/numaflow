@@ -19,8 +19,10 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 	options := &store.Options{}
 	_ = store.WithPbqStoreType("in-memory")(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
+	ctx := context.Background()
 
-	memStore, err := memory.NewMemoryStore(options)
+	qManager, _ := NewManager(ctx, store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -31,7 +33,7 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 	// lets create a pbq with buffer size 10
 	buffSize := 10
 	_ = store.WithBufferSize(int64(buffSize))(options)
-	pq, err := NewPBQ("new-partition", memStore, options)
+	pq, err := NewPBQ(ctx, "partition-1", memStore, qManager, options)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
@@ -52,8 +54,12 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 	options := &store.Options{}
 	_ = store.WithPbqStoreType("in-memory")(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
+	_ = store.WithReadTimeout(1)(options)
 
-	memStore, err := memory.NewMemoryStore(options)
+	ctx := context.Background()
+
+	qManager, _ := NewManager(ctx, store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -64,7 +70,7 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 	// lets create a pbq with buffer size 10
 	buffSize := 10
 	_ = store.WithBufferSize(int64(buffSize))(options)
-	pq, err := NewPBQ("new-partition", memStore, options)
+	pq, err := NewPBQ(ctx, "new-partition", memStore, qManager, options)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
@@ -73,7 +79,6 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 	}
 
 	pq.CloseOfBook()
-	ctx := context.Background()
 	readMessages, _ := pq.ReadFromPBQ(ctx, int64(100))
 	// number of messages written should be equal to number of messages read
 	assert.Len(t, readMessages, msgCount)
@@ -87,8 +92,12 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	options := &store.Options{}
 	_ = store.WithPbqStoreType("in-memory")(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
+	_ = store.WithReadTimeout(1)(options)
 
-	memStore, err := memory.NewMemoryStore(options)
+	ctx := context.Background()
+
+	qManager, _ := NewManager(ctx, store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -99,7 +108,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	//create a pbq with buffer size 10
 	buffSize := 10
 	_ = store.WithBufferSize(int64(buffSize))(options)
-	pq, err := NewPBQ("new-partition", memStore, options)
+	pq, err := NewPBQ(ctx, "new-partition", memStore, qManager, options)
 	assert.NoError(t, err)
 
 	var readMessages []*isb.Message
@@ -139,8 +148,12 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	options := &store.Options{}
 	_ = store.WithPbqStoreType("in-memory")(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
+	_ = store.WithReadTimeout(1)(options)
+	
+	ctx := context.Background()
 
-	memStore, err := memory.NewMemoryStore(options)
+	qManager, _ := NewManager(ctx, store.WithPbqStoreType("in-memory"), store.WithStoreSize(int64(storeSize)))
+	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -151,7 +164,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	//create a pbq with buffer size 10
 	bufferSize := 10
 	_ = store.WithBufferSize(int64(bufferSize))(options)
-	pq, err := NewPBQ("new-partition", memStore, options)
+	pq, err := NewPBQ(ctx, "new-partition", memStore, qManager, options)
 	assert.NoError(t, err)
 
 	var readMessages []*isb.Message
@@ -159,7 +172,6 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	ctx := context.Background()
 	childCtx, cancelFn := context.WithCancel(ctx)
 
 	go func() {

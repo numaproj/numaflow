@@ -117,6 +117,7 @@ const (
 	DefaultStoreType     = "file-system" // Default store type in string
 	DefaultBufferSize    = 10000         // Default channel size in int
 	DefaultStoreSize     = 1000000       // Default persistent store size
+	DefaultReadTimeout   = 1             // Default read timeout for pbq
 
 	InMemoryStoreType   = "in-memory"
 	FileSystemStoreType = "file-system"

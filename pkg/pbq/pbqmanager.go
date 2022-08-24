@@ -6,6 +6,8 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"go.uber.org/zap"
 	"sync"
 )
 
@@ -15,6 +17,7 @@ var NonExistentPBQError error = errors.New("missing PBQ for the partition")
 type Manager struct {
 	options *store.Options
 	pbqMap  map[string]*PBQ
+	log     *zap.SugaredLogger
 }
 
 var createManagerOnce sync.Once
@@ -25,7 +28,7 @@ var createManagerError error
 
 // NewManager returns new instance of manager
 // We dont intend this to be called by multiple routines.
-func NewManager(opts ...store.SetOption) (*Manager, error) {
+func NewManager(ctx context.Context, opts ...store.SetOption) (*Manager, error) {
 	options := store.DefaultOptions()
 	createManagerOnce.Do(func() {
 		for _, opt := range opts {
@@ -39,6 +42,7 @@ func NewManager(opts ...store.SetOption) (*Manager, error) {
 		pbqManager = &Manager{
 			pbqMap:  make(map[string]*PBQ),
 			options: options,
+			log:     logging.FromContext(ctx),
 		}
 	})
 	return pbqManager, createManagerError
@@ -58,7 +62,7 @@ func (m *Manager) ListPartitions() []*PBQ {
 
 // GetPBQ returns pbq for the given partitionID, if createIfMissing is set to true
 // it creates and return a new pbq instance
-func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, storeType string) (*PBQ, bool, error) {
+func (m *Manager) GetPBQ(ctx context.Context, partitionID string, createIfMissing bool, storeType string) (*PBQ, bool, error) {
 
 	pbqInstance, ok := m.pbqMap[partitionID]
 	if ok {
@@ -67,6 +71,7 @@ func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, storeType str
 
 	// no match and nothing to create
 	if !ok && !createIfMissing {
+		m.log.Info("requested pbq is not created", zap.Any("partitionID", partitionID))
 		return nil, false, NonExistentPBQError
 	}
 
@@ -76,16 +81,17 @@ func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, storeType str
 
 	switch storeType {
 	case dfv1.InMemoryStoreType:
-		persistentStore, err = memory.NewMemoryStore(m.options)
+		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.options)
 		if err != nil {
+			m.log.Fatal("error while creating persistent store", zap.Any("partitionID", partitionID), zap.Any("store type", storeType))
 			return nil, true, err
 		}
 	case dfv1.FileSystemStoreType:
-		// TODO return a NotImplementedError
-		return nil, true, nil
+		return nil, true, errors.New("not implemented")
 	}
-	pbq, err := NewPBQ(partitionID, persistentStore, m.options)
+	pbq, err := NewPBQ(ctx, partitionID, persistentStore, m, m.options)
 	if err != nil {
+		m.log.Fatal("error while creating PBQ", zap.Any("Partition ID", partitionID))
 		return nil, true, err
 	}
 	m.pbqMap[partitionID] = pbq
@@ -93,11 +99,13 @@ func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, storeType str
 }
 
 // StartUp creates list of PBQ instances using the persistent store
-// TODO
 func (m *Manager) StartUp(ctx context.Context) {
-	// storeoptions -> update pbqmap
-	// setting the replay flag.
-	// even if its exchanging pointers
+
+	// TODO create pbqMap from the information persisted in disk
+	for _, value := range m.pbqMap {
+		// set is replay flag so that it replays messages from the store during startup
+		value.SetIsReplaying(true)
+	}
 	return
 }
 
@@ -115,13 +123,16 @@ func (m *Manager) ShutDown(ctx context.Context) error {
 }
 
 // Register - intended to be used by PBQ to register itself with the manager.
-func (m *Manager) Register() error {
-	// TODO implement me
+func (m *Manager) Register(partitionID string, p *PBQ) error {
+	_, ok := m.pbqMap[partitionID]
+	if !ok {
+		m.pbqMap[partitionID] = p
+	}
 	return nil
 }
 
 // Deregister - intended to be used by PBQ to deregister itself after GC is called.
-func (m *Manager) Deregister() error {
-	// TODO implement me
-	return nil
+func (m *Manager) Deregister(partitionID string) {
+	delete(m.pbqMap, partitionID)
+	return
 }

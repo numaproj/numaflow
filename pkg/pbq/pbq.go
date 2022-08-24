@@ -5,24 +5,28 @@ import (
 	"errors"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"go.uber.org/zap"
+	"time"
 )
 
-var EOFError error = errors.New("error while reading, EOF")
+var EOF error = errors.New("error while reading, EOF")
 var ContextClosedError error = errors.New("context was cob")
 
 type PBQ struct {
 	Store       store.Store
 	output      chan *isb.Message
-	cob         bool // close of book to avoid panic in case writes happen after closeofbook
+	cob         bool // cob to avoid panic in case writes happen after close of book
 	partitionID string
 	options     *store.Options
 	isReplaying bool
 	manager     *Manager
+	log         *zap.SugaredLogger
 }
 
 // NewPBQ accepts size and store and returns new PBQ
 // TODO lets think if we need an error
-func NewPBQ(partitionID string, persistentStore store.Store, pbqManager *Manager, options *store.Options) (*PBQ, error) {
+func NewPBQ(ctx context.Context, partitionID string, persistentStore store.Store, pbqManager *Manager, options *store.Options) (*PBQ, error) {
 
 	// output channel is buffered
 	p := &PBQ{
@@ -32,9 +36,13 @@ func NewPBQ(partitionID string, persistentStore store.Store, pbqManager *Manager
 		partitionID: partitionID,
 		options:     options,
 		manager:     pbqManager,
+		log:         logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 
-	p.manager.Register()
+	err := p.manager.Register(partitionID, p)
+	if err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -42,6 +50,7 @@ func NewPBQ(partitionID string, persistentStore store.Store, pbqManager *Manager
 // We don't need a context here as this is invoked for every message.
 func (p *PBQ) WriteFromISB(message *isb.Message) (WriteErr error) {
 	if p.cob {
+		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("partitionID", p.partitionID), zap.Any("header", message.Header))
 		return errors.New("pbq is cob, cannot write the message")
 	}
 	p.output <- message
@@ -59,7 +68,7 @@ func (p *PBQ) CloseOfBook() {
 // if replay flag is set its reads messages from persisted store
 func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, error) {
 	if p.cob && len(p.output) == 0 {
-		return []*isb.Message{}, EOFError
+		return []*isb.Message{}, EOF
 	}
 	var storeReadMessages []*isb.Message
 	var err error
@@ -67,36 +76,46 @@ func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, erro
 	// replay flag is set, so we will consider store messages
 	if p.isReplaying {
 		storeReadMessages, err = p.Store.ReadFromStore(size)
-		if err == nil {
-			return storeReadMessages, nil
+		// if store has no messages un set the replay flag
+		if err == store.WriteStoreClosedError {
+			p.isReplaying = false
 		}
-		p.isReplaying = false
 		return storeReadMessages, nil
 	}
-
 	var pbqReadMessages []*isb.Message
 	chanDrained := false
+	readTicker := time.NewTicker(time.Second * time.Duration(p.options.ReadTimeout))
+	defer readTicker.Stop()
 
-readLoop:
 	for i := int64(0); i < size; i++ {
 		select {
 		case <-ctx.Done():
 			return pbqReadMessages, ctx.Err()
 		default:
-			// TODO select with timed wait
-			msg, ok := <-p.output
-			if msg != nil {
-				pbqReadMessages = append(pbqReadMessages, msg)
-			}
-			// if cob and nothing more to read from output channel
-			if !ok && len(p.output) == 0 {
-				chanDrained = true
-				break readLoop
+		readLoop:
+			for {
+				select {
+				case msg, ok := <-p.output:
+					if msg != nil {
+						pbqReadMessages = append(pbqReadMessages, msg)
+					}
+					// if cob and nothing more to read from output channel
+					if !ok && len(p.output) == 0 {
+						chanDrained = true
+						goto exit
+					}
+					break readLoop
+				case <-readTicker.C:
+					// if timeout return
+					goto exit
+				}
 			}
 		}
 	}
+
+exit:
 	if chanDrained {
-		return pbqReadMessages, EOFError
+		return pbqReadMessages, EOF
 	}
 	return pbqReadMessages, nil
 }
@@ -113,7 +132,7 @@ func (p *PBQ) Close() (CloseErr error) {
 func (p *PBQ) GC() (GcErr error) {
 	GcErr = p.Store.GC()
 	p.Store = nil
-	p.manager.Deregister()
+	p.manager.Deregister(p.partitionID)
 	return
 }
 

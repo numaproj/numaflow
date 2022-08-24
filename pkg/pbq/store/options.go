@@ -13,6 +13,8 @@ type Options struct {
 	BufferSize int64
 	// StoreSize store array size
 	StoreSize int64
+	// ReadTimeout timeout in seconds for pbq reads
+	ReadTimeout int
 }
 
 func DefaultOptions() *Options {
@@ -22,6 +24,7 @@ func DefaultOptions() *Options {
 		pbqStoreType: dfv1.DefaultStoreType,
 		BufferSize:   dfv1.DefaultBufferSize,
 		StoreSize:    dfv1.DefaultStoreSize,
+		ReadTimeout:  dfv1.DefaultReadTimeout,
 	}
 }
 
@@ -63,6 +66,13 @@ func WithBufferSize(size int64) SetOption {
 func WithStoreSize(size int64) SetOption {
 	return func(o *Options) error {
 		o.StoreSize = size
+		return nil
+	}
+}
+
+func WithReadTimeout(seconds int) SetOption {
+	return func(o *Options) error {
+		o.ReadTimeout = seconds
 		return nil
 	}
 }

@@ -1,34 +1,36 @@
 package memory
 
 import (
-	"errors"
+	"context"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
-	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/pbq/util"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"go.uber.org/zap"
 )
-
-var StoreFullError error = errors.New("error while writing to store, store is full")
-var StoreClosedError error = errors.New("error while writing to store, store is closed")
-var StoreEmptyError error = errors.New("error while reading from store, store is empty")
 
 // MemoryStore implements PBQStore which stores the data in memory
 type MemoryStore struct {
-	closed   bool
-	writePos int64
-	readPos  int64
-	storage  []*isb.Message
-	options  *store.Options
+	closed      bool
+	writePos    int64
+	readPos     int64
+	storage     []*isb.Message
+	options     *store.Options
+	log         *zap.SugaredLogger
+	partitionID string
 }
 
 //NewMemoryStore returns new memory store
-func NewMemoryStore(options *store.Options) (*MemoryStore, error) {
+func NewMemoryStore(ctx context.Context, partitionID string, options *store.Options) (*MemoryStore, error) {
 
 	memStore := &MemoryStore{
-		writePos: 0,
-		readPos:  0,
-		closed:   false,
-		storage:  make([]*isb.Message, options.StoreSize),
-		options:  options,
+		writePos:    0,
+		readPos:     0,
+		closed:      false,
+		storage:     make([]*isb.Message, options.StoreSize),
+		options:     options,
+		log:         logging.FromContext(ctx).With("PBQ Store", "Memory Store").With("Partition ID", partitionID),
+		partitionID: partitionID,
 	}
 
 	return memStore, nil
@@ -38,10 +40,10 @@ func NewMemoryStore(options *store.Options) (*MemoryStore, error) {
 // this function will be invoked during bootstrap if there is a restart
 func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, error) {
 	if m.IsEmpty() || m.readPos >= m.writePos {
-		return []*isb.Message{}, StoreEmptyError
+		m.log.Errorw(store.ReadStoreEmptyError.Error())
+		return []*isb.Message{}, store.ReadStoreEmptyError
 	}
 
-	// TODO move the Min to pbq/util
 	size = util.Min(size, m.writePos-m.readPos)
 	readMessages := m.storage[m.readPos : m.readPos+size]
 	m.readPos += size
@@ -51,10 +53,12 @@ func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, error) {
 // WriteToStore writes message to store
 func (m *MemoryStore) WriteToStore(msg *isb.Message) error {
 	if m.writePos >= m.options.StoreSize {
-		return StoreFullError
+		m.log.Errorw(store.WriteStoreFullError.Error(), zap.Any("msg header", msg.Header))
+		return store.WriteStoreFullError
 	}
 	if m.closed {
-		return StoreClosedError
+		m.log.Errorw(store.WriteStoreClosedError.Error(), zap.Any("msg header", msg.Header))
+		return store.WriteStoreClosedError
 	}
 	m.storage[m.writePos] = msg
 	m.writePos += 1
