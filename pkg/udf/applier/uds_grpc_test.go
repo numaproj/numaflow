@@ -10,9 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/function/client"
-	"github.com/numaproj/numaflow-go/pkg/function/server"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/stretchr/testify/assert"
@@ -21,30 +19,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func handle(_ context.Context, key string, msg []byte) (functionsdk.Messages, error) {
-	return functionsdk.MessagesBuilder().Append(functionsdk.MessageTo(key, msg)), nil
-}
-
-func TestGRPCBasedUDF_WaitUntilReady(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-		}
-	}()
-
-	go server.NewServer().RegisterMapper(functionsdk.DoFunc(handle)).Start()
-
-	u, err := NewUDSGRPCBasedUDF(ctx)
-	assert.Nil(t, err)
-	err = u.WaitUntilReady(ctx)
-	assert.NoError(t, err)
-}
-
 func NewMockUDSGRPCBasedUDF(mockClient *funcmock.MockUserDefinedFunctionClient) *UDSGRPCBasedUDF {
-	c, _ := client.NewClient(client.WithMockGRPCClient(mockClient))
+	c, _ := client.New(client.WithMockGRPCClient(mockClient))
 	return &UDSGRPCBasedUDF{c}
 }
 

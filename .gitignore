@@ -16,3 +16,6 @@ site/
 *.idea/
 *.pytest_cache/
 docs/APIs.html
+
+# for local testing only
+1-simple-pipeline-grpc.yaml

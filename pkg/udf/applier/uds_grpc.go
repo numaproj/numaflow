@@ -21,7 +21,7 @@ type UDSGRPCBasedUDF struct {
 var _ Applier = (*UDSGRPCBasedUDF)(nil)
 
 func NewUDSGRPCBasedUDF(ctx context.Context) (*UDSGRPCBasedUDF, error) {
-	c, err := client.NewClient()
+	c, err := client.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
 	}
