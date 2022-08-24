@@ -3,10 +3,9 @@ package udf
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"sync"
-	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -120,12 +119,21 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		return result, nil
 	})
 
-	udfHandler := applier.NewUDSHTTPBasedUDF(dfv1.PathVarRun+"/udf.sock", applier.WithHTTPClientTimeout(120*time.Second))
+	log = log.With("protocol", "uds-grpc-udf")
+	udfHandler, err := applier.NewUDSGRPCBasedUDF(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create gRPC client, %w", err)
+	}
 	// Readiness check
 	if err := udfHandler.WaitUntilReady(ctx); err != nil {
 		return fmt.Errorf("failed on UDF readiness check, %w", err)
 	}
+	defer func() {
+		err = udfHandler.CloseConn(ctx)
+		log.Warnw("failed to close grpc client conn", zap.Error(err))
+	}()
 	log.Infow("Start processing udf messages", zap.String("isbs", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
+
 	opts := []forward.Option{forward.WithLogger(log)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
