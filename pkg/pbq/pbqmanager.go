@@ -23,8 +23,9 @@ var createManagerError error
 
 // * create options during create manager and pass the options around ?
 
-//CreateManager returns new instance of manager
-func CreateManager(opts ...store.SetOption) (*Manager, error) {
+// NewManager returns new instance of manager
+// We dont intend this to be called by multiple routines.
+func NewManager(opts ...store.SetOption) (*Manager, error) {
 	options := store.DefaultOptions()
 	createManagerOnce.Do(func() {
 		for _, opt := range opts {
@@ -55,7 +56,7 @@ func (m *Manager) ListPartitions() []*PBQ {
 	return pbqList
 }
 
-//GetPBQ returns pbq for the given partitionID, if createIfMissing is set to true
+// GetPBQ returns pbq for the given partitionID, if createIfMissing is set to true
 // it creates and return a new pbq instance
 func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, storeType string) (*PBQ, bool, error) {
 
@@ -80,6 +81,7 @@ func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, storeType str
 			return nil, true, err
 		}
 	case dfv1.FileSystemStoreType:
+		// TODO return a NotImplementedError
 		return nil, true, nil
 	}
 	pbq, err := NewPBQ(partitionID, persistentStore, m.options)
@@ -90,9 +92,12 @@ func (m *Manager) GetPBQ(partitionID string, createIfMissing bool, storeType str
 	return pbq, true, nil
 }
 
-//StartUp creates list of PBQ instances using the persistent store
+// StartUp creates list of PBQ instances using the persistent store
+// TODO
 func (m *Manager) StartUp(ctx context.Context) {
 	// storeoptions -> update pbqmap
+	// setting the replay flag.
+	// even if its exchanging pointers
 	return
 }
 
@@ -106,5 +111,17 @@ func (m *Manager) ShutDown(ctx context.Context) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// Register - intended to be used by PBQ to register itself with the manager.
+func (m *Manager) Register() error {
+	// TODO implement me
+	return nil
+}
+
+// Deregister - intended to be used by PBQ to deregister itself after GC is called.
+func (m *Manager) Deregister() error {
+	// TODO implement me
 	return nil
 }

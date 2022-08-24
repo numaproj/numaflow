@@ -7,20 +7,20 @@ import (
 
 // Reader provides methods to read from PBQ.
 type Reader interface {
-	// ReadFromPBQ exposes read channel to read from PBQ
+	// ReadFromPBQ reads from PBQ
 	ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, error)
-	// Close closes the reader channel.
+	// Close closes the reader.
 	Close() error
 	// GC does garbage collection, it deletes all the persisted data from the store
 	GC() error
 }
 
 // Writer provides methods to write data to and close a PBQ.
-// No data can be written to PBQ after it is closed.
+// No data can be written to PBQ after it is cob.
 type Writer interface {
 	// WriteFromISB writes message to PBQ
 	WriteFromISB(msg *isb.Message) error
-	// CloseOfBook closes pbq, no writes will be accepted once closed
+	// CloseOfBook closes pbq, no writes will be accepted once cob
 	// Any pending data can be flushed to the persistent store at this point.
 	CloseOfBook()
 }

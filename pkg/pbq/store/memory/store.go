@@ -37,13 +37,13 @@ func NewMemoryStore(options *store.Options) (*MemoryStore, error) {
 // ReadFromStore will return upto N messages persisted in store
 // this function will be invoked during bootstrap if there is a restart
 func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, error) {
-	if m.IsEmpty() || m.readPos > m.writePos {
+	if m.IsEmpty() || m.readPos >= m.writePos {
 		return []*isb.Message{}, StoreEmptyError
 	}
 
+	// TODO move the Min to pbq/util
 	size = util.Min(size, m.writePos-m.readPos)
-	readMessages := make([]*isb.Message, size)
-	copy(m.storage[m.readPos:m.readPos+size], readMessages)
+	readMessages := m.storage[m.readPos : m.readPos+size]
 	m.readPos += size
 	return readMessages, nil
 }
