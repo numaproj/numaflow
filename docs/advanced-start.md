@@ -21,23 +21,30 @@ kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test
 Run a port-forward to the `HTTP` source pod to make it possible to post data from the laptop.
 
 ```shell
-# Replace with the coresponding "in" vertex pod name
+# Replace with the corresponding "in" vertex pod name
 kubectl port-forward even-odd-in-0-xxxx 8443
 ```
 
 Run following testing commands to post some numbers, and verfiy if they are displayed in coresponding pod logs.
 
 ```shell
-curl -kq -X POST -d "101" https://localhost:8443/vertices/in # 101 should be display in the log of both "odd" and "number" pods.
-curl -kq -X POST -d "102" https://localhost:8443/vertices/in # 102 should be display in the log of both "even" and "number" pods.
+# 101 should be display in the log of both "odd" and "number" pods
+curl -kq -X POST -d "101" https://localhost:8443/vertices/in
+```
+```shell
+# 102 should be display in the log of both "even" and "number" pods
+curl -kq -X POST -d "102" https://localhost:8443/vertices/in 
 ```
 
 The source code of the `even-odd` [User Defined Function](./user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/examples/function/evenodd). You also can replace the [Log](./sinks/log.md) Sink with some other sinks like [Kafka](./sinks/kafka.md) to forward the data to Kafka topics.
 
-In the end, run the commands below to clean up the testing pipeline and ISB service.
-
+In the end, run the commands below to clean up the testing pipeline and ISB service.  
+The pipeline can be deleted by
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+```
+The `Inter-Step Buffer Service` can be deleted by
+```shell
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 ```
 
