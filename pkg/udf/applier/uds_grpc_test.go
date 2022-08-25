@@ -20,7 +20,7 @@ import (
 )
 
 func NewMockUDSGRPCBasedUDF(mockClient *funcmock.MockUserDefinedFunctionClient) *UDSGRPCBasedUDF {
-	c, _ := client.New(client.WithMockGRPCClient(mockClient))
+	c, _ := client.NewMock(mockClient)
 	return &UDSGRPCBasedUDF{c}
 }
 
