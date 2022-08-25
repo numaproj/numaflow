@@ -10,7 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
-	"github.com/numaproj/numaflow-go/pkg/function/client"
+	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/stretchr/testify/assert"
@@ -20,7 +20,7 @@ import (
 )
 
 func NewMockUDSGRPCBasedUDF(mockClient *funcmock.MockUserDefinedFunctionClient) *UDSGRPCBasedUDF {
-	c, _ := client.NewMock(mockClient)
+	c, _ := clienttest.New(mockClient)
 	return &UDSGRPCBasedUDF{c}
 }
 

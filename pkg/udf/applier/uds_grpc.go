@@ -6,6 +6,7 @@ import (
 	"time"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
+	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/function/client"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -15,12 +16,12 @@ import (
 // TODO: only support map operation ATM
 
 type UDSGRPCBasedUDF struct {
-	client *client.Client
+	client functionsdk.Client
 }
 
 var _ Applier = (*UDSGRPCBasedUDF)(nil)
 
-func NewUDSGRPCBasedUDF(ctx context.Context) (*UDSGRPCBasedUDF, error) {
+func NewUDSGRPCBasedUDF() (*UDSGRPCBasedUDF, error) {
 	c, err := client.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
