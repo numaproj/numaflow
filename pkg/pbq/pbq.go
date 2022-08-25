@@ -28,7 +28,7 @@ type PBQ struct {
 // TODO lets think if we need an error
 func NewPBQ(ctx context.Context, partitionID string, persistentStore store.Store, pbqManager *Manager, options *store.Options) (*PBQ, error) {
 
-	// output channel is buffered
+	// output channel is buffered to support bulk reads
 	p := &PBQ{
 		Store:       persistentStore,
 		output:      make(chan *isb.Message, options.BufferSize),
@@ -39,10 +39,7 @@ func NewPBQ(ctx context.Context, partitionID string, persistentStore store.Store
 		log:         logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 
-	err := p.manager.Register(partitionID, p)
-	if err != nil {
-		return nil, err
-	}
+	p.manager.Register(partitionID, p)
 	return p, nil
 }
 
@@ -84,9 +81,11 @@ func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, erro
 	}
 	var pbqReadMessages []*isb.Message
 	chanDrained := false
-	readTicker := time.NewTicker(time.Second * time.Duration(p.options.ReadTimeout))
-	defer readTicker.Stop()
 
+	readTimer := time.NewTimer(time.Second * time.Duration(p.options.ReadTimeout))
+	defer readTimer.Stop()
+
+	// TODO simplify the loop here cause close of channel is not set to true until the channel is empty
 	for i := int64(0); i < size; i++ {
 		select {
 		case <-ctx.Done():
@@ -105,7 +104,7 @@ func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, erro
 						goto exit
 					}
 					break readLoop
-				case <-readTicker.C:
+				case <-readTimer.C:
 					// if timeout return
 					goto exit
 				}

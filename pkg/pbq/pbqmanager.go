@@ -122,16 +122,14 @@ func (m *Manager) ShutDown(ctx context.Context) error {
 	return nil
 }
 
-// Register - intended to be used by PBQ to register itself with the manager.
-func (m *Manager) Register(partitionID string, p *PBQ) error {
-	_, ok := m.pbqMap[partitionID]
-	if !ok {
+// Register is intended to be used by PBQ to register itself with the manager.
+func (m *Manager) Register(partitionID string, p *PBQ) {
+	if _, ok := m.pbqMap[partitionID]; !ok {
 		m.pbqMap[partitionID] = p
 	}
-	return nil
 }
 
-// Deregister - intended to be used by PBQ to deregister itself after GC is called.
+// Deregister is intended to be used by PBQ to deregister itself after GC is called.
 func (m *Manager) Deregister(partitionID string) {
 	delete(m.pbqMap, partitionID)
 	return
