@@ -11,7 +11,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -41,7 +41,7 @@ func NewISBSvcBufferValidateCommand() *cobra.Command {
 			ctx := logging.WithLogger(context.Background(), logger)
 			switch v1alpha1.ISBSvcType(isbSvcType) {
 			case v1alpha1.ISBSvcTypeRedis:
-				isbsClient = isbsvc.NewISBRedisSvc(clients.NewInClusterRedisClient())
+				isbsClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
 			case v1alpha1.ISBSvcTypeJetStream:
 				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName)
 				if err != nil {
@@ -56,13 +56,14 @@ func NewISBSvcBufferValidateCommand() *cobra.Command {
 			for k, v := range buffers {
 				bfs = append(bfs, v1alpha1.Buffer{Name: k, Type: v1alpha1.BufferType(v)})
 			}
-			if err := wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func() (bool, error) {
-				if err := isbsClient.ValidateBuffers(ctx, bfs); err != nil {
+			_ = wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func() (bool, error) {
+				if err = isbsClient.ValidateBuffers(ctx, bfs); err != nil {
 					logger.Errorw("Buffers validation failed, will retry if the limit is not reached", zap.Error(err))
 					return false, nil
 				}
 				return true, nil
-			}); err != nil {
+			})
+			if err != nil {
 				logger.Errorw("Failed buffer validation after retrying.", zap.Error(err))
 				return err
 			}

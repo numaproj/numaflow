@@ -27,7 +27,7 @@ func NewMemoryStore(ctx context.Context, partitionID string, options *store.Opti
 		writePos:    0,
 		readPos:     0,
 		closed:      false,
-		storage:     make([]*isb.Message, options.StoreSize),
+		storage:     make([]*isb.Message, options.StoreSize()),
 		options:     options,
 		log:         logging.FromContext(ctx).With("PBQ Store", "Memory Store").With("Partition ID", partitionID),
 		partitionID: partitionID,
@@ -52,7 +52,7 @@ func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, error) {
 
 // WriteToStore writes message to store
 func (m *MemoryStore) WriteToStore(msg *isb.Message) error {
-	if m.writePos >= m.options.StoreSize {
+	if m.writePos >= m.options.StoreSize() {
 		m.log.Errorw(store.WriteStoreFullError.Error(), zap.Any("msg header", msg.Header))
 		return store.WriteStoreFullError
 	}

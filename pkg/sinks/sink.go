@@ -3,21 +3,25 @@ package sinks
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"sync"
+
+	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/redis"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/metrics"
-
-	"go.uber.org/zap"
-
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	kafkasink "github.com/numaproj/numaflow/pkg/sinks/kafka"
 	logsink "github.com/numaproj/numaflow/pkg/sinks/logger"
 	udsink "github.com/numaproj/numaflow/pkg/sinks/udsink"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
 type SinkProcessor struct {
@@ -32,9 +36,14 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	var reader isb.BufferReader
 	var err error
 	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
+
+	// watermark variables no-op initialization
+	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
+
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		redisClient := clients.NewInClusterRedisClient()
+		redisClient := redisclient.NewInClusterRedisClient()
 		fromGroup := fromBufferName + "-group"
 		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 		readOptions := []redisisb.Option{}
@@ -50,7 +59,10 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
-		jetStreamClient := clients.NewInClusterJetStreamClient()
+		// build watermark progressors
+		fetchWatermark, publishWatermark = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+
+		jetStreamClient := jsclient.NewInClusterJetStreamClient()
 		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)
 		if err != nil {
 			return err
@@ -59,7 +71,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
 	}
 
-	sinker, err := u.getSinker(reader, log)
+	sinker, err := u.getSinker(reader, log, fetchWatermark, publishWatermark)
 	if err != nil {
 		return fmt.Errorf("failed to find a sink, errpr: %w", err)
 	}
@@ -100,15 +112,15 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 }
 
 // getSinker takes in the logger from the parent context
-func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger) (Sinker, error) {
+func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	// TODO: add watermark
 	if x := sink.Log; x != nil {
-		return logsink.NewToLog(u.VertexInstance.Vertex, reader, logsink.WithLogger(logger))
+		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {
-		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, kafkasink.WithLogger(logger))
+		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, fetchWM, publishWM, kafkasink.WithLogger(logger))
 	} else if x := sink.UDSink; x != nil {
-		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, udsink.WithLogger(logger))
+		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, udsink.WithLogger(logger))
 	}
 	return nil, fmt.Errorf("invalid sink spec")
 }

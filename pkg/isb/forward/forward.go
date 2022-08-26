@@ -179,9 +179,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
+	// let's track only the last element's watermark
 	var processorWM processor.Watermark
 	if isdf.fetchWatermark != nil {
-		// let's track only the last element's watermark
 		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
 	}
 
@@ -249,8 +249,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	// forward the highest watermark to all the edges to avoid idle edge problem
+	// TODO: sort and get the highest value
 	if isdf.publishWatermark != nil {
-		// TODO: sort and get the highest value
 		for edgeName, offsets := range writeOffsets {
 			if len(offsets) > 0 {
 				isdf.publishWatermark[edgeName].PublishWatermark(processorWM, offsets[len(offsets)-1])
@@ -302,6 +302,7 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 // has been initiated while we are stuck looping on an InternalError.
 func (isdf *InterStepDataForward) writeToBuffers(ctx context.Context, messageToStep map[string][]isb.Message) (writeOffsetsEdge map[string][]isb.Offset, err error) {
 	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
+	// TODO: rename key to edgeName
 	for key, toBuffer := range isdf.toBuffers {
 		writeOffsetsEdge[key], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[key])
 		if err != nil {

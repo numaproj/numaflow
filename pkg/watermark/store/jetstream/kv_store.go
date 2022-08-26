@@ -8,25 +8,26 @@ import (
 	"fmt"
 
 	"github.com/nats-io/nats.go"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	"go.uber.org/zap"
+
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"go.uber.org/zap"
 )
 
 // KVJetStreamStore implements the watermark's KV store backed up by Jetstream.
 type KVJetStreamStore struct {
 	pipelineName string
-	conn         *nats.Conn
+	conn         *jsclient.NatsConn
 	kv           nats.KeyValue
-	js           nats.JetStreamContext
+	js           *jsclient.JetStreamContext
 	log          *zap.SugaredLogger
 }
 
 var _ store.WatermarkKVStorer = (*KVJetStreamStore)(nil)
 
 // NewKVJetStreamKVStore returns KVJetStreamStore.
-func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client clients.JetStreamClient, opts ...JSKVStoreOption) (*KVJetStreamStore, error) {
+func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client jsclient.JetStreamClient, opts ...JSKVStoreOption) (*KVJetStreamStore, error) {
 	var err error
 	conn, err := client.Connect(ctx)
 	if err != nil {
@@ -42,6 +43,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 
 	j := &KVJetStreamStore{
 		pipelineName: pipelineName,
+		conn:         conn,
 		js:           js,
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}

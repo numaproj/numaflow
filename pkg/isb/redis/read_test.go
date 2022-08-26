@@ -6,14 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/montanaflynn/stats"
@@ -21,6 +17,10 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/forward"
+	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
 
 var (
@@ -34,14 +34,14 @@ var (
 
 func TestRedisQRead_Read(t *testing.T) {
 	ctx := context.Background()
-	client := clients.NewRedisClient(redisOptions)
+	client := redisclient.NewRedisClient(redisOptions)
 	stream := "somestream"
 	group := "testgroup1"
 	consumer := "con-0"
 
 	count := int64(10)
 	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer).(*BufferRead)
-	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, clients.ReadFromEarliest)
+	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
 	defer func() { _ = client.DeleteStreamGroup(ctx, rqr.GetStreamName(), group) }()
@@ -66,14 +66,14 @@ func TestRedisQRead_Read(t *testing.T) {
 func TestRedisCheckBacklog(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client := clients.NewRedisClient(redisOptions)
+	client := redisclient.NewRedisClient(redisOptions)
 	stream := "readbacklog"
 	group := "readbacklog-group"
 	consumer := "readbacklog-consumer"
 
 	count := int64(10)
 	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer).(*BufferRead)
-	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, clients.ReadFromEarliest)
+	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
 	defer func() { _ = client.DeleteStreamGroup(ctx, rqr.GetStreamName(), group) }()
@@ -106,15 +106,16 @@ func TestRedisCheckBacklog(t *testing.T) {
 	}}
 
 	rqw, _ := NewBufferWrite(ctx, client, "toStream", "toGroup", WithInfoRefreshInterval(2*time.Millisecond), WithLagDuration(time.Minute)).(*BufferWrite)
-	err = client.CreateStreamGroup(ctx, rqw.GetStreamName(), "toGroup", clients.ReadFromEarliest)
+	err = client.CreateStreamGroup(ctx, rqw.GetStreamName(), "toGroup", redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
 	defer func() { _ = client.DeleteStreamGroup(ctx, rqw.GetStreamName(), "toGroup") }()
 	defer func() { _ = client.DeleteKeys(ctx, rqw.GetStreamName()) }()
-
-	f, err := forward.NewInterStepDataForward(vertex, rqr, map[string]isb.BufferWriter{
+	toSteps := map[string]isb.BufferWriter{
 		"to1": rqw,
-	}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, nil, forward.WithReadBatchSize(10))
+	}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	f, err := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(10))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -130,14 +131,14 @@ func TestRedisCheckBacklog(t *testing.T) {
 type ReadTestSuite struct {
 	suite.Suite
 	ctx     context.Context
-	rclient *clients.RedisClient
+	rclient *redisclient.RedisClient
 	rqr     *BufferRead
 	rqw     *BufferWrite
 	count   int64
 }
 
 func (suite *ReadTestSuite) SetupSuite() {
-	client := clients.NewRedisClient(redisOptions)
+	client := redisclient.NewRedisClient(redisOptions)
 	ctx := context.Background()
 	stream := "testsuitestream"
 	group := "testsuitegroup1"
@@ -158,7 +159,7 @@ func (suite *ReadTestSuite) TearDownSuite() {
 
 // run before each test
 func (suite *ReadTestSuite) SetupTest() {
-	err := suite.rclient.CreateStreamGroup(suite.ctx, suite.rqr.Stream, suite.rqr.Group, clients.ReadFromEarliest)
+	err := suite.rclient.CreateStreamGroup(suite.ctx, suite.rqr.Stream, suite.rqr.Group, redisclient.ReadFromEarliest)
 	// better fail early
 	_ = suite.NoError(err) || suite.Failf("CreateStreamGroup failed", "%s", err)
 }
@@ -262,7 +263,7 @@ func TestReadTestSuite(t *testing.T) {
 type ReadWritePerformance struct {
 	suite.Suite
 	ctx            context.Context
-	rclient        *clients.RedisClient
+	rclient        *redisclient.RedisClient
 	rqr            *BufferRead
 	rqw            *BufferWrite
 	isdf           *forward.InterStepDataForward
@@ -283,7 +284,7 @@ func (f forwardReadWritePerformance) Apply(ctx context.Context, message *isb.Rea
 }
 
 func (suite *ReadWritePerformance) SetupSuite() {
-	client := clients.NewRedisClient(redisOptions)
+	client := redisclient.NewRedisClient(redisOptions)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	fromStream := "ReadWritePerformance-from"
 	toStream := "ReadWritePerformance-to"
@@ -305,7 +306,8 @@ func (suite *ReadWritePerformance) SetupSuite() {
 		},
 	}}
 
-	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, nil)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -322,10 +324,10 @@ func (suite *ReadWritePerformance) TearDownSuite() {
 
 // run before each test
 func (suite *ReadWritePerformance) SetupTest() {
-	err := suite.rclient.CreateStreamGroup(suite.ctx, suite.rqr.GetStreamName(), suite.rqr.GetGroupName(), clients.ReadFromEarliest)
+	err := suite.rclient.CreateStreamGroup(suite.ctx, suite.rqr.GetStreamName(), suite.rqr.GetGroupName(), redisclient.ReadFromEarliest)
 	// better fail early
 	_ = suite.NoError(err) || suite.Failf("CreateStreamGroup failed", "%s", err)
-	err = suite.rclient.CreateStreamGroup(suite.ctx, suite.rqw.GetStreamName(), suite.rqw.GetGroupName(), clients.ReadFromEarliest)
+	err = suite.rclient.CreateStreamGroup(suite.ctx, suite.rqw.GetStreamName(), suite.rqw.GetGroupName(), redisclient.ReadFromEarliest)
 	_ = suite.NoError(err) || suite.Failf("CreateStreamGroup failed", "%s", err)
 }
 
@@ -389,10 +391,11 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 			Name: "testVertex",
 		},
 	}}
-
-	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, map[string]isb.BufferWriter{
+	toSteps := map[string]isb.BufferWriter{
 		"to1": suite.rqw,
-	}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, nil)
+	}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)
@@ -443,7 +446,7 @@ func getPercentiles(t *testing.T, latency []float64) string {
 
 // writeTestMessages is used to add some dummy messages using XADD
 
-func writeTestMessages(ctx context.Context, client *clients.RedisClient, messages []isb.Message, streamName string) {
+func writeTestMessages(ctx context.Context, client *redisclient.RedisClient, messages []isb.Message, streamName string) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {

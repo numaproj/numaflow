@@ -3,24 +3,26 @@ package sources
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/redis"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
 
 type SourceProcessor struct {
@@ -35,12 +37,8 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var writers []isb.BufferWriter
 
 	// watermark variables no-op initialization
-	var fetchWatermark fetch.Fetcher = generic.NewNoOpWMProgressor()
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
-	publishWatermark := make(map[string]publish.Publisher)
-	for _, buffer := range sp.VertexInstance.Vertex.GetToBuffers() {
-		publishWatermark[buffer.Name] = generic.NewNoOpWMProgressor()
-	}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(sp.VertexInstance.Vertex.GetToBuffers()))
 	var publishWMStore = generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 
 	switch sp.ISBSvcType {
@@ -55,14 +53,14 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
 			group := buffer + "-group"
-			redisClient := clients.NewInClusterRedisClient()
+			redisClient := redisclient.NewInClusterRedisClient()
 			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
 			writers = append(writers, writer)
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build the right watermark progessor if watermark is enabled
 		// build watermark progressors
-		fetchWatermark, publishWatermark, publishWMStore = generic.BuildJetStreamWatermarkProgressorsForSource(ctx, sp.VertexInstance)
+		fetchWatermark, publishWatermark, publishWMStore = jetstream.BuildJetStreamWatermarkProgressorsForSource(ctx, sp.VertexInstance)
 
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{
@@ -76,7 +74,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
 			streamName := fmt.Sprintf("%s-%s", sp.VertexInstance.Vertex.Spec.PipelineName, buffer)
-			jetStreamClient := clients.NewInClusterJetStreamClient()
+			jetStreamClient := jsclient.NewInClusterJetStreamClient()
 			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
 			if err != nil {
 				return err

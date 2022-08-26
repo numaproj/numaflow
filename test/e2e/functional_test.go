@@ -5,6 +5,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -181,6 +182,81 @@ func (s *FunctionalSuite) TestFlatmapUDF() {
 		Status(204)
 
 	w.Expect().VertexPodLogContains("out", "hello", PodLogCheckOptionWithCount(3))
+}
+
+func (s *FunctionalSuite) TestWatermarkEnabled() {
+	w := s.Given().Pipeline("@testdata/watermark.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	pipelineName := "simple-pipeline-watermark"
+	// TODO: Any way to extract the list from suite
+	vertexList := []string{"input", "cat1", "cat2", "cat3", "output1", "output2"}
+
+	w.Expect().
+		VertexPodsRunning().DaemonPodsRunning().
+		VertexPodLogContains("input", LogSourceVertexStarted).
+		VertexPodLogContains("cat1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("cat2", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("cat3", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("output1", LogSinkVertexStarted).
+		VertexPodLogContains("output2", LogSinkVertexStarted).
+		DaemonPodLogContains(pipelineName, LogDaemonStarted).
+		VertexPodLogContains("output1", `"Data":".*","Createdts":.*`).
+		VertexPodLogContains("output2", `"Data":".*","Createdts":.*`)
+
+	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
+		TerminateAllPodPortForwards()
+
+	// Test Daemon service with gRPC
+	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	assert.NoError(s.T(), err)
+	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 5, len(buffers))
+	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateEdgeBufferName(Namespace, pipelineName, "input", "cat1"))
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	for _, vertex := range vertexList {
+		wg.Add(1)
+		go func(vertex string) {
+			defer wg.Done()
+			// timeout for checking watermark progression
+			isProgressing, err := isWatermarkProgressing(ctx, client, pipelineName, vertex, 3)
+			assert.NoError(s.T(), err, "TestWatermarkEnabled failed %s\n", err)
+			assert.Truef(s.T(), isProgressing, "isWatermarkProgressing\n")
+		}(vertex)
+	}
+	wg.Wait()
+}
+
+// isWatermarkProgressing checks whether the watermark for a given vertex is progressing monotonically.
+// progressCount is the number of progressions the watermark value should undertake within the timeout deadline for it
+// to be considered as valid.
+func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClient, pipelineName string, vertexName string, progressCount int) (bool, error) {
+	prevWatermark := int64(-1)
+	for i := 0; i < progressCount; i++ {
+		currentWatermark := prevWatermark
+		for currentWatermark <= prevWatermark {
+			wm, err := client.GetVertexWatermark(ctx, pipelineName, vertexName)
+			if err != nil {
+				return false, err
+			}
+			currentWatermark = *wm.Watermark
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			default:
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
+		prevWatermark = currentWatermark
+	}
+	return true, nil
 }
 
 func TestFunctionalSuite(t *testing.T) {

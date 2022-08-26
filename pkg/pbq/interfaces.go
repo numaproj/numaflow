@@ -16,7 +16,7 @@ type Reader interface {
 }
 
 // Writer provides methods to write data to and close a PBQ.
-// No data can be written to PBQ after it is cob.
+// No data can be written to PBQ after cob.
 type Writer interface {
 	// WriteFromISB writes message to PBQ
 	WriteFromISB(msg *isb.Message) error

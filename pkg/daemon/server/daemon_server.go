@@ -20,7 +20,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/daemon/server/service"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
@@ -40,15 +41,12 @@ func NewDaemonServer(pl *v1alpha1.Pipeline, isbSvcType v1alpha1.ISBSvcType) *dae
 func (ds *daemonServer) Run(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	var isbSvcClient isbsvc.ISBService
+	var err error
 	switch ds.isbSvcType {
 	case v1alpha1.ISBSvcTypeRedis:
-		isbSvcClient = isbsvc.NewISBRedisSvc(clients.NewInClusterRedisClient())
+		isbSvcClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
 	case v1alpha1.ISBSvcTypeJetStream:
-		nc, err := clients.NewInClusterJetStreamClient().Connect(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get a in-cluster nats connection, %w", err)
-		}
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithNatsConnection(nc))
+		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithJetStreamClient(jsclient.NewInClusterJetStreamClient()))
 		if err != nil {
 			log.Errorw("Failed to get a ISB Service client.", zap.Error(err))
 			return err
@@ -60,7 +58,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	var conn net.Listener
 	var listerErr error
 	address := fmt.Sprintf(":%d", v1alpha1.DaemonServicePort)
-	conn, err := net.Listen("tcp", address)
+	conn, err = net.Listen("tcp", address)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", listerErr)
 	}
@@ -71,8 +69,10 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-
-	grpcServer := ds.newGRPCServer(isbSvcClient)
+	grpcServer, err := ds.newGRPCServer(isbSvcClient)
+	if err != nil {
+		return fmt.Errorf("failed to create grpc server: %w", err)
+	}
 	httpServer := ds.newHTTPServer(ctx, v1alpha1.DaemonServicePort, tlsConfig)
 
 	conn = tls.NewListener(conn, tlsConfig)
@@ -90,7 +90,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) *grpc.Server {
+func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -104,8 +104,12 @@ func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) *grpc.Serv
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	daemon.RegisterDaemonServiceServer(grpcServer, service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline))
-	return grpcServer
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline)
+	if err != nil {
+		return nil, err
+	}
+	daemon.RegisterDaemonServiceServer(grpcServer, pipelineMetadataQuery)
+	return grpcServer, nil
 }
 
 // newHTTPServer returns the HTTP server to serve HTTP/HTTPS requests. This is implemented

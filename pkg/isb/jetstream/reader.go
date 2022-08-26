@@ -5,14 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
@@ -21,8 +23,8 @@ type jetStreamReader struct {
 	name                  string
 	stream                string
 	subject               string
-	conn                  *nats.Conn
-	js                    nats.JetStreamContext
+	conn                  *jsclient.NatsConn
+	js                    *jsclient.JetStreamContext
 	sub                   *nats.Subscription
 	opts                  *readOptions
 	inProgessTickDuration time.Duration
@@ -32,9 +34,54 @@ type jetStreamReader struct {
 }
 
 // NewJetStreamBufferReader is used to provide a new JetStream buffer reader connection
-func NewJetStreamBufferReader(ctx context.Context, client clients.JetStreamClient, name, stream, subject string, opts ...ReadOption) (isb.BufferReader, error) {
-	connectAndSubscribe := func() (*nats.Conn, nats.JetStreamContext, *nats.Subscription, error) {
-		conn, err := client.Connect(ctx)
+func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, opts ...ReadOption) (isb.BufferReader, error) {
+	log := logging.FromContext(ctx).With("bufferReader", name).With("stream", stream).With("subject", subject)
+	o := defaultReadOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(o); err != nil {
+				return nil, err
+			}
+		}
+	}
+	result := &jetStreamReader{
+		name:    name,
+		stream:  stream,
+		subject: subject,
+		opts:    o,
+		log:     log,
+	}
+
+	connectAndSubscribe := func() (*jsclient.NatsConn, *jsclient.JetStreamContext, *nats.Subscription, error) {
+		conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(c *jsclient.NatsConn) {
+			if result.js == nil {
+				log.Error("JetStreamContext is nil")
+				return
+			}
+			var e error
+			_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
+				Steps:    5,
+				Duration: 1 * time.Second,
+				Factor:   1.0,
+				Jitter:   0.1,
+			}, func() (bool, error) {
+				var s *nats.Subscription
+				if s, e = result.js.PullSubscribe(subject, stream, nats.Bind(stream, stream)); e != nil {
+					log.Errorw("Failed to re-subscribe to the stream after reconnection, will retry if the limit is not reached", zap.Error(e))
+					return false, nil
+				} else {
+					result.sub = s
+					log.Info("Re-subscribed to the stream successfully")
+					return true, nil
+				}
+			})
+			if e != nil {
+				// Let it panic to start over
+				log.Fatalw("Failed to re-subscribe after retries", zap.Error(e))
+			}
+		}), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
+			log.Errorw("Nats JetStream connection lost", zap.Error(err))
+		}))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get nats connection, %w", err)
 		}
@@ -50,20 +97,12 @@ func NewJetStreamBufferReader(ctx context.Context, client clients.JetStreamClien
 		}
 		return conn, js, sub, nil
 	}
+
 	conn, js, sub, err := connectAndSubscribe()
 	if err != nil {
 		return nil, err
 	}
 
-	o := defaultReadOptions()
-	for _, opt := range opts {
-		if opt != nil {
-			if err := opt(o); err != nil {
-				return nil, err
-			}
-		}
-	}
-	log := logging.FromContext(ctx).With("bufferReader", name).With("stream", stream).With("subject", subject)
 	consumer, err := js.ConsumerInfo(stream, stream)
 	if err != nil {
 		conn.Close()
@@ -75,17 +114,10 @@ func NewJetStreamBufferReader(ctx context.Context, client clients.JetStreamClien
 		inProgessTickSeconds = 1
 	}
 
-	result := &jetStreamReader{
-		name:                  name,
-		stream:                stream,
-		subject:               subject,
-		conn:                  conn,
-		js:                    js,
-		sub:                   sub,
-		opts:                  o,
-		inProgessTickDuration: time.Duration(inProgessTickSeconds * int64(time.Second)),
-		log:                   log,
-	}
+	result.conn = conn
+	result.js = js
+	result.sub = sub
+	result.inProgessTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
 	if o.useAckInfoAsRate {
 		result.ackedInfo = sharedqueue.New[timestampedSequence](1800)
 		go result.runAckInfomationChecker(ctx)
@@ -204,7 +236,12 @@ func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error 
 			defer wg.Done()
 			if err := o.AckIt(); err != nil {
 				jr.log.Errorw("Failed to ack message", zap.Error(err))
-				errs[index] = err
+				// If the error is related to nats/jetstream, we skip it because it might end up with infinite ack retries.
+				// Skipping those errors to let the whole read/write/ack for loop to restart from reading, to pick up those
+				// redelivered messages.
+				if !strings.HasPrefix(err.Error(), "nats:") {
+					errs[index] = err
+				}
 			}
 		}(idx, o)
 	}

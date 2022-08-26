@@ -4,18 +4,18 @@ package jetstream
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/nats-io/nats.go"
+	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 )
 
 type myForwardJetStreamTest struct {
@@ -35,7 +35,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -98,8 +98,8 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
-
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, nil, nil)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := f.Start()
@@ -145,7 +145,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -201,7 +201,7 @@ func TestWriteGetName(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -226,7 +226,7 @@ func TestWriteClose(t *testing.T) {
 	defer cancel()
 
 	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := clients.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()

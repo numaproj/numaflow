@@ -11,7 +11,7 @@ import (
 )
 
 var EOF error = errors.New("error while reading, EOF")
-var ContextClosedError error = errors.New("context was cob")
+var COBError error = errors.New("error while writing to pbq, pbq is closed")
 
 type PBQ struct {
 	Store       store.Store
@@ -25,13 +25,12 @@ type PBQ struct {
 }
 
 // NewPBQ accepts size and store and returns new PBQ
-// TODO lets think if we need an error
 func NewPBQ(ctx context.Context, partitionID string, persistentStore store.Store, pbqManager *Manager, options *store.Options) (*PBQ, error) {
 
 	// output channel is buffered to support bulk reads
 	p := &PBQ{
 		Store:       persistentStore,
-		output:      make(chan *isb.Message, options.BufferSize),
+		output:      make(chan *isb.Message, options.BufferSize()),
 		cob:         false,
 		partitionID: partitionID,
 		options:     options,
@@ -48,7 +47,8 @@ func NewPBQ(ctx context.Context, partitionID string, persistentStore store.Store
 func (p *PBQ) WriteFromISB(message *isb.Message) (WriteErr error) {
 	if p.cob {
 		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("partitionID", p.partitionID), zap.Any("header", message.Header))
-		return errors.New("pbq is cob, cannot write the message")
+		WriteErr = COBError
+		return
 	}
 	p.output <- message
 	WriteErr = p.Store.WriteToStore(message)
@@ -64,6 +64,7 @@ func (p *PBQ) CloseOfBook() {
 // ReadFromPBQ reads upto N messages (specified by size) from pbq
 // if replay flag is set its reads messages from persisted store
 func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, error) {
+	// if its close of book and there are no messages in output channel, return EOF
 	if p.cob && len(p.output) == 0 {
 		return []*isb.Message{}, EOF
 	}
@@ -73,7 +74,7 @@ func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, erro
 	// replay flag is set, so we will consider store messages
 	if p.isReplaying {
 		storeReadMessages, err = p.Store.ReadFromStore(size)
-		// if store has no messages un set the replay flag
+		// if store has no messages unset the replay flag
 		if err == store.WriteStoreClosedError {
 			p.isReplaying = false
 		}
@@ -82,10 +83,11 @@ func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, erro
 	var pbqReadMessages []*isb.Message
 	chanDrained := false
 
-	readTimer := time.NewTimer(time.Second * time.Duration(p.options.ReadTimeout))
+	readTimer := time.NewTimer(time.Second * time.Duration(p.options.ReadTimeout()))
 	defer readTimer.Stop()
 
-	// TODO simplify the loop here cause close of channel is not set to true until the channel is empty
+	// read n(size) messages from pbq, if context is canceled we should return,
+	// to avoid infinite blocking we have timer
 	for i := int64(0); i < size; i++ {
 		select {
 		case <-ctx.Done():
@@ -98,8 +100,8 @@ func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, erro
 					if msg != nil {
 						pbqReadMessages = append(pbqReadMessages, msg)
 					}
-					// if cob and nothing more to read from output channel
-					if !ok && len(p.output) == 0 {
+					// channel is closed and all the messages are read
+					if !ok {
 						chanDrained = true
 						goto exit
 					}
@@ -127,7 +129,7 @@ func (p *PBQ) Close() (CloseErr error) {
 }
 
 // GC is invoked after the Reader (ProcessAndForward) has finished
-// Forwarding the output to ISB.
+// forwarding the output to ISB.
 func (p *PBQ) GC() (GcErr error) {
 	GcErr = p.Store.GC()
 	p.Store = nil
@@ -135,6 +137,7 @@ func (p *PBQ) GC() (GcErr error) {
 	return
 }
 
+// SetIsReplaying sets the replay flag
 func (p *PBQ) SetIsReplaying(isReplaying bool) {
 	p.isReplaying = isReplaying
 }

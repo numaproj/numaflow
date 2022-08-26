@@ -24,10 +24,8 @@ var createManagerOnce sync.Once
 var pbqManager *Manager
 var createManagerError error
 
-// * create options during create manager and pass the options around ?
-
 // NewManager returns new instance of manager
-// We dont intend this to be called by multiple routines.
+// We don't intend this to be called by multiple routines.
 func NewManager(ctx context.Context, opts ...store.SetOption) (*Manager, error) {
 	options := store.DefaultOptions()
 	createManagerOnce.Do(func() {
@@ -83,7 +81,7 @@ func (m *Manager) GetPBQ(ctx context.Context, partitionID string, createIfMissin
 	case dfv1.InMemoryStoreType:
 		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.options)
 		if err != nil {
-			m.log.Fatal("error while creating persistent store", zap.Any("partitionID", partitionID), zap.Any("store type", storeType))
+			m.log.Fatal("Error while creating persistent store", zap.Any("partitionID", partitionID), zap.Any("store type", storeType), zap.Error(err))
 			return nil, true, err
 		}
 	case dfv1.FileSystemStoreType:
@@ -91,7 +89,7 @@ func (m *Manager) GetPBQ(ctx context.Context, partitionID string, createIfMissin
 	}
 	pbq, err := NewPBQ(ctx, partitionID, persistentStore, m, m.options)
 	if err != nil {
-		m.log.Fatal("error while creating PBQ", zap.Any("Partition ID", partitionID))
+		m.log.Fatal("Error while creating PBQ", zap.Any("Partition ID", partitionID), zap.Error(err))
 		return nil, true, err
 	}
 	m.pbqMap[partitionID] = pbq
@@ -103,7 +101,7 @@ func (m *Manager) StartUp(ctx context.Context) {
 
 	// TODO create pbqMap from the information persisted in disk
 	for _, value := range m.pbqMap {
-		// set is replay flag so that it replays messages from the store during startup
+		// set replay flag so that it replays messages from the store during startup
 		value.SetIsReplaying(true)
 	}
 	return

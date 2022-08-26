@@ -10,11 +10,23 @@ type Options struct {
 	// pbqStoreType store type (memory or s3 or file system)
 	pbqStoreType string
 	// ChannelSize buffered channel size
-	BufferSize int64
-	// StoreSize store array size
-	StoreSize int64
-	// ReadTimeout timeout in seconds for pbq reads
-	ReadTimeout int
+	bufferSize int64
+	// storeSize store array size
+	storeSize int64
+	// readTimeout timeout in seconds for pbq reads
+	readTimeout int
+}
+
+func (o *Options) StoreSize() int64 {
+	return o.storeSize
+}
+
+func (o *Options) BufferSize() int64 {
+	return o.bufferSize
+}
+
+func (o *Options) ReadTimeout() int {
+	return o.readTimeout
 }
 
 func DefaultOptions() *Options {
@@ -22,9 +34,9 @@ func DefaultOptions() *Options {
 		maxBatchSize: dfv1.DefaultMaxBufferSize,
 		syncDuration: dfv1.DefaultSyncDuration,
 		pbqStoreType: dfv1.DefaultStoreType,
-		BufferSize:   dfv1.DefaultBufferSize,
-		StoreSize:    dfv1.DefaultStoreSize,
-		ReadTimeout:  dfv1.DefaultReadTimeout,
+		bufferSize:   dfv1.DefaultBufferSize,
+		storeSize:    dfv1.DefaultStoreSize,
+		readTimeout:  dfv1.DefaultReadTimeout,
 	}
 }
 
@@ -57,7 +69,7 @@ func WithPbqStoreType(storeType string) SetOption {
 // WithBufferSize sets buffer size option
 func WithBufferSize(size int64) SetOption {
 	return func(o *Options) error {
-		o.BufferSize = size
+		o.bufferSize = size
 		return nil
 	}
 }
@@ -65,14 +77,14 @@ func WithBufferSize(size int64) SetOption {
 // WithStoreSize sets store size option
 func WithStoreSize(size int64) SetOption {
 	return func(o *Options) error {
-		o.StoreSize = size
+		o.storeSize = size
 		return nil
 	}
 }
 
 func WithReadTimeout(seconds int) SetOption {
 	return func(o *Options) error {
-		o.ReadTimeout = seconds
+		o.readTimeout = seconds
 		return nil
 	}
 }
