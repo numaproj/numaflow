@@ -1499,7 +1499,7 @@
 <span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use &quot;latest&quot; but a specific version in your real deployment</span><span class="w"></span>
 </code></pre></div>
 <p><code>InterStepBufferService</code> is a namespaced object, it can be used by all the Pipelines in the same namespace. By default, Pipeline objects look for an <code>InterStepBufferService</code> named <code>default</code>, so a common practice is to create an <code>InterStepBufferService</code> with the name <code>default</code>. If you give the <code>InterStepBufferService</code> a name other than <code>default</code>, then you need to give the same name in the Pipeline spec.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
+<p><div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
 <span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
@@ -1507,6 +1507,9 @@
 <span class="w">  </span><span class="c1"># Optional, if not specified, defaults to &quot;default&quot;</span><span class="w"></span>
 <span class="w">  </span><span class="nt">interStepBufferServiceName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">different-name</span><span class="w"></span>
 </code></pre></div>
+To query <code>Inter-Step Buffer Service</code> objects with <code>kubectl</code>:
+<div class="highlight"><pre><span></span><code>kubectl get isbsvc
+</code></pre></div></p>
 <h2 id="jetstream">JetStream<a class="headerlink" href="#jetstream" title="Permanent link">&para;</a></h2>
 <p><code>JetStream</code> is one of the supported <code>Inter-Step Buffer Service</code> implementations. A keyword <code>jetstream</code> under <code>spec</code> means a JetStream cluster will be created in the namespace.</p>
 <h3 id="version">Version<a class="headerlink" href="#version" title="Permanent link">&para;</a></h3>

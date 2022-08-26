@@ -1310,8 +1310,8 @@
 <h1 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h1>
 <p>To see how Numaflow works, you can install it, and run a simple pipeline, which contains a source vertex to generate messages, and a function vertex that echos the messages, and a log sink printing the messages.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
-<p>A Kubernetes cluster is needed to try out Numaflow. If needed, you can create a cluster locally using
-<a href="https://k3d.io/"><code>k3d</code></a> as below. You also need to get <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/"><code>kubectl</code></a> installed.</p>
+<p>A Kubernetes cluster is needed to try out Numaflow. You can create a cluster locally using
+<a href="https://k3d.io/"><code>k3d</code></a> as below. As the requirements for <a href="https://k3d.io/"><code>k3d</code></a>, you also need to get <a href="https://docs.docker.com/get-docker/"><code>docker</code></a> and <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/"><code>kubectl</code></a> installed.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Create a cluster with default name k3s-default</span>
 k3d cluster create -i rancher/k3s:v1.21.7-k3s1
 
@@ -1320,36 +1320,61 @@ k3d kubeconfig get k3s-default
 </code></pre></div>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
 <p>Run following command lines to install Numaflow.</p>
-<div class="highlight"><pre><span></span><code>kubectl create ns numaflow-system
-kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
+<p><div class="highlight"><pre><span></span><code>kubectl create ns numaflow-system
 </code></pre></div>
-<p>Open a port-forward so you can access the UI on <a href="https://localhost:8443">https://localhost:8443</a>.</p>
+<div class="highlight"><pre><span></span><code>kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
+</code></pre></div></p>
+<p>Open a port-forward so that you can access the UI on <a href="https://localhost:8443">https://localhost:8443</a>.</p>
 <div class="highlight"><pre><span></span><code>kubectl -n numaflow-system port-forward deployment/numaflow-server <span class="m">8443</span>:8443
 </code></pre></div>
 <h2 id="a-simple-pipeline">A Simple Pipeline<a class="headerlink" href="#a-simple-pipeline" title="Permanent link">&para;</a></h2>
-<p><a href="../inter-step-buffer/">Inter-Step Buffers</a> are essential to run Numaflow pipelines, to get Inter-Step Buffers in place, an <a href="../inter-step-buffer-service/">Inter-Step Buffer Service</a> is required. We use <a href="https://docs.nats.io/nats-concepts/jetstream">Nats JetStream</a> as an <code>Inter-Step Buffer Service</code> provider in this example.</p>
-<div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
+<p><a href="../inter-step-buffer/">Inter-Step Buffers</a> are essential to run Numaflow pipelines. To get Inter-Step Buffers in place, an <a href="../inter-step-buffer-service/">Inter-Step Buffer Service</a> is required. We use <a href="https://docs.nats.io/nats-concepts/jetstream">Nats JetStream</a> as an <code>Inter-Step Buffer Service</code> provider in this example.</p>
+<p><div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
-<p>After all the isbsvc pods are up, create a simple pipeline, and you can see the pipeline topology in the UI.</p>
+You can run the following command to check if the <code>Inter-Step Buffer Service</code> is up and running. The <code>PHASE</code> for the <code>default</code> <code>Inter-Step Buffer Service</code> should be <code>Running</code>.
+<div class="highlight"><pre><span></span><code>kubectl get isbsvc
+</code></pre></div></p>
+<p>After the<code>Inter-Step Buffer Service</code> is up and running, create a <code>simple pipeline</code>, and you can see the pipeline topology in the UI.
 <div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 </code></pre></div>
-<p>Watch the <code>output</code> vertex pod log, you will see messages keep coming.</p>
-<div class="highlight"><pre><span></span><code>2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;5dkN+42qwRY=&quot;,&quot;Createdts&quot;:1639779266118670821}
-2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;L+QN+42qwRY=&quot;,&quot;Createdts&quot;:1639779266118673455}
-2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;d+kN+42qwRY=&quot;,&quot;Createdts&quot;:1639779266118674807}
-2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;lu4N+42qwRY=&quot;,&quot;Createdts&quot;:1639779266118676118}
-2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;RoKqNo6qwRY=&quot;,&quot;Createdts&quot;:1639779267118793286}
-2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;FUqrNo6qwRY=&quot;,&quot;Createdts&quot;:1639779267118844437}
-2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;oFKrNo6qwRY=&quot;,&quot;Createdts&quot;:1639779267118846624}
-2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;eVarNo6qwRY=&quot;,&quot;Createdts&quot;:1639779267118847609}
-2021/12/17 22:14:35 (simple-pipeline-output) {&quot;Data&quot;:&quot;6FmrNo6qwRY=&quot;,&quot;Createdts&quot;:1639779267118848488}
+You can run the following command to check if the pipeline is up and running. The <code>PHASE</code> for the <code>simple-pipeline</code> should be <code>Running</code>.
+<div class="highlight"><pre><span></span><code>kubectl get pipeline <span class="c1"># or &quot;pl&quot; as a short name</span>
 </code></pre></div>
-<p>You can delete the pipeline by</p>
+You can run the following command to check the isbsvc pods and the pipeline pods.
+<div class="highlight"><pre><span></span><code>kubectl get pods
+</code></pre></div>
+Here is an example output showing all the pods are up and running.
+<div class="highlight"><pre><span></span><code>NAME                                         READY   STATUS      RESTARTS   AGE
+isbsvc-default-js-0                          <span class="m">3</span>/3     Running     <span class="m">0</span>          19s
+isbsvc-default-js-1                          <span class="m">3</span>/3     Running     <span class="m">0</span>          19s
+isbsvc-default-js-2                          <span class="m">3</span>/3     Running     <span class="m">0</span>          19s
+simple-pipeline-daemon-78b798fb98-qf4t4      <span class="m">1</span>/1     Running     <span class="m">0</span>          10s
+simple-pipeline-out-0-xc0pf                  <span class="m">1</span>/1     Running     <span class="m">0</span>          10s
+simple-pipeline-cat-0-kqrhy                  <span class="m">2</span>/2     Running     <span class="m">0</span>          10s
+simple-pipeline-in-0-rhpjm                   <span class="m">1</span>/1     Running     <span class="m">0</span>          11s
+</code></pre></div>
+Watch the <code>output</code> vertex pod log. Replace <code>xxxx</code> with the corresponding "out" vertex pod name.<br />
+Use the above output as an example, the <code>output</code> vertex pod name is <code>simple-pipeline-out-0-xc0pf</code>.
+<div class="highlight"><pre><span></span><code>kubectl logs -f simple-pipeline-out-0-xxxx main
+</code></pre></div>
+You will see messages keep coming. Here is an example log output.
+<div class="highlight"><pre><span></span><code>2022/08/25 23:59:38 (out) {&quot;Data&quot;:&quot;VT+G+/W7Dhc=&quot;,&quot;Createdts&quot;:1661471977707552597}
+2022/08/25 23:59:38 (out) {&quot;Data&quot;:&quot;0TaH+/W7Dhc=&quot;,&quot;Createdts&quot;:1661471977707615953}
+2022/08/25 23:59:38 (out) {&quot;Data&quot;:&quot;EEGH+/W7Dhc=&quot;,&quot;Createdts&quot;:1661471977707618576}
+2022/08/25 23:59:38 (out) {&quot;Data&quot;:&quot;WESH+/W7Dhc=&quot;,&quot;Createdts&quot;:1661471977707619416}
+2022/08/25 23:59:38 (out) {&quot;Data&quot;:&quot;YEaH+/W7Dhc=&quot;,&quot;Createdts&quot;:1661471977707619936}
+2022/08/25 23:59:39 (out) {&quot;Data&quot;:&quot;qfomN/a7Dhc=&quot;,&quot;Createdts&quot;:1661471978707942057}
+2022/08/25 23:59:39 (out) {&quot;Data&quot;:&quot;aUcnN/a7Dhc=&quot;,&quot;Createdts&quot;:1661471978707961705}
+2022/08/25 23:59:39 (out) {&quot;Data&quot;:&quot;iUonN/a7Dhc=&quot;,&quot;Createdts&quot;:1661471978707962505}
+2022/08/25 23:59:39 (out) {&quot;Data&quot;:&quot;mkwnN/a7Dhc=&quot;,&quot;Createdts&quot;:1661471978707963034}
+2022/08/25 23:59:39 (out) {&quot;Data&quot;:&quot;jk4nN/a7Dhc=&quot;,&quot;Createdts&quot;:1661471978707963534}
+</code></pre></div>
+The pipeline can be deleted by
 <div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 </code></pre></div>
-<p>The <code>Inter-Step Buffer Service</code> can be deleted by</p>
-<div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
-</code></pre></div>
+The <code>Inter-Step Buffer Service</code> can be deleted by
+<div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
+</code></pre></div></p>
 <h2 id="coming-up">Coming Up<a class="headerlink" href="#coming-up" title="Permanent link">&para;</a></h2>
 <p>Next, let's take a peek at <a href="../advanced-start/">an advanced pipeline</a>, to learn some powerful features of Numaflow.</p>
 

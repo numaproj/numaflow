@@ -1276,18 +1276,24 @@
 <div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
 </code></pre></div>
 <p>Run a port-forward to the <code>HTTP</code> source pod to make it possible to post data from the laptop.</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># Replace with the coresponding &quot;in&quot; vertex pod name</span>
+<div class="highlight"><pre><span></span><code><span class="c1"># Replace xxxx with the corresponding &quot;in&quot; vertex pod name</span>
 kubectl port-forward even-odd-in-0-xxxx <span class="m">8443</span>
 </code></pre></div>
 <p>Run following testing commands to post some numbers, and verfiy if they are displayed in coresponding pod logs.</p>
-<div class="highlight"><pre><span></span><code>curl -kq -X POST -d <span class="s2">&quot;101&quot;</span> https://localhost:8443/vertices/in <span class="c1"># 101 should be display in the log of both &quot;odd&quot; and &quot;number&quot; pods.</span>
-curl -kq -X POST -d <span class="s2">&quot;102&quot;</span> https://localhost:8443/vertices/in <span class="c1"># 102 should be display in the log of both &quot;even&quot; and &quot;number&quot; pods.</span>
+<p><div class="highlight"><pre><span></span><code><span class="c1"># 101 should be display in the log of both &quot;odd&quot; and &quot;number&quot; pods</span>
+curl -kq -X POST -d <span class="s2">&quot;101&quot;</span> https://localhost:8443/vertices/in
 </code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># 102 should be display in the log of both &quot;even&quot; and &quot;number&quot; pods</span>
+curl -kq -X POST -d <span class="s2">&quot;102&quot;</span> https://localhost:8443/vertices/in 
+</code></pre></div></p>
 <p>The source code of the <code>even-odd</code> <a href="../user-defined-functions/">User Defined Function</a> can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/examples/function/evenodd">here</a>. You also can replace the <a href="../sinks/log/">Log</a> Sink with some other sinks like <a href="../sinks/kafka/">Kafka</a> to forward the data to Kafka topics.</p>
-<p>In the end, run the commands below to clean up the testing pipeline and ISB service.</p>
+<p>In the end, run the commands below to clean up the testing pipeline and ISB service.<br />
+The pipeline can be deleted by
 <div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
-kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
+The <code>Inter-Step Buffer Service</code> can be deleted by
+<div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
+</code></pre></div></p>
 <h2 id="whats-next">What's Next<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h2>
 <p>After exploring how Numaflow pipeline run, you can check what data <a href="../sources/generator/">Sources</a> and <a href="../sinks/kafka/">Sinks</a> Numaflow supports out of the box, or learn how to write <a href="../user-defined-functions/">User Defined Functions</a>.</p>
 
