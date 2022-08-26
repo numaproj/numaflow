@@ -25,6 +25,10 @@ spec:
   # Optional, if not specified, defaults to "default"
   interStepBufferServiceName: different-name
 ```
+To query `Inter-Step Buffer Service` objects with `kubectl`:
+```sh
+kubectl get isbsvc
+```
 
 ## JetStream
 

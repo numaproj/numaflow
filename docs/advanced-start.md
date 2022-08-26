@@ -21,7 +21,7 @@ kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test
 Run a port-forward to the `HTTP` source pod to make it possible to post data from the laptop.
 
 ```shell
-# Replace with the corresponding "in" vertex pod name
+# Replace xxxx with the corresponding "in" vertex pod name
 kubectl port-forward even-odd-in-0-xxxx 8443
 ```
 
