@@ -59,12 +59,12 @@ kubectl get pods
 Here is an example output showing all the pods are up and running.
 ```shell
 NAME                                         READY   STATUS      RESTARTS   AGE
-isbsvc-default-js-0                          2/3     Running     0          19s
-isbsvc-default-js-1                          2/3     Running     0          19s
-isbsvc-default-js-2                          2/3     Running     0          19s
+isbsvc-default-js-0                          3/3     Running     0          19s
+isbsvc-default-js-1                          3/3     Running     0          19s
+isbsvc-default-js-2                          3/3     Running     0          19s
 simple-pipeline-daemon-78b798fb98-qf4t4      1/1     Running     0          10s
-simple-pipeline-out-0-xc0pf                  0/1     Running     0          10s
-simple-pipeline-cat-0-kqrhy                  1/2     Running     0          10s
+simple-pipeline-out-0-xc0pf                  1/1     Running     0          10s
+simple-pipeline-cat-0-kqrhy                  2/2     Running     0          10s
 simple-pipeline-in-0-rhpjm                   1/1     Running     0          11s
 ```
 Watch the `output` vertex pod log. Replace `xxxx` with the corresponding "out" vertex pod name.  
