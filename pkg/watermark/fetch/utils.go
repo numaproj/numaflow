@@ -21,17 +21,17 @@ func RetryUntilSuccessfulWatcherCreation(js *jsclient.JetStreamContext, bucketNa
 	for i := 0; i < _bucketWatchRetryCount || infiniteLoop; i++ {
 		bucket, err := js.KeyValue(bucketName)
 		if err != nil {
-			log.Errorw("failed to get the bucket by bucket name", zap.String("bucket", bucketName), zap.Error(err))
+			log.Errorw("Failed to get the bucket by bucket name", zap.String("bucket", bucketName), zap.Error(err))
 			time.Sleep(_delayInSecBetweenBucketWatchRetry * time.Second)
 			continue
 		}
 		watcher, err := bucket.WatchAll()
 		if err != nil {
-			log.Errorw("failed to create the watch all watcher for bucket name", zap.String("bucket", bucketName), zap.Error(err))
+			log.Errorw("Failed to create the watch all watcher for bucket name", zap.String("bucket", bucketName), zap.Error(err))
 			time.Sleep(_delayInSecBetweenBucketWatchRetry * time.Second)
 			continue
 		}
-		log.Infow("watcher created for bucket", zap.String("bucket", bucketName))
+		log.Infow("Watcher created for bucket", zap.String("bucket", bucketName))
 		return watcher
 	}
 	return nil

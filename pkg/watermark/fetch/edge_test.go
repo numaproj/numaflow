@@ -49,7 +49,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherHBBucketName, defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherOTBucketName, defaultJetStreamClient)
-	testVertex := NewFromVertex(ctx, hbWatcher, otWatcher)
+	testVertex := NewFromVertex(ctx, hbWatcher, otWatcher).(*fromVertex)
 	var (
 		// TODO: watcher should not be nil
 		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, otWatcher)
@@ -85,16 +85,16 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	for _, watermark := range pod2Timeline {
 		testPod2.offsetTimeline.Put(watermark)
 	}
-	testVertex.AddProcessor("testPod0", testPod0)
-	testVertex.AddProcessor("testPod1", testPod1)
-	testVertex.AddProcessor("testPod2", testPod2)
+	testVertex.addProcessor("testPod0", testPod0)
+	testVertex.addProcessor("testPod1", testPod1)
+	testVertex.addProcessor("testPod2", testPod2)
 
 	type args struct {
 		offset int64
 	}
 	tests := []struct {
 		name       string
-		fromVertex *FromVertex
+		fromVertex FromVertexer
 		args       args
 		want       int64
 	}{
