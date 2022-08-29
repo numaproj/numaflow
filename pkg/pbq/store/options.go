@@ -13,8 +13,12 @@ type Options struct {
 	bufferSize int64
 	// storeSize store array size
 	storeSize int64
-	// readTimeout timeout in seconds for pbq reads
-	readTimeout int
+	// readTimeoutSecs timeout in seconds for pbq reads
+	readTimeoutSecs int
+}
+
+func (o *Options) PbqStoreType() string {
+	return o.pbqStoreType
 }
 
 func (o *Options) StoreSize() int64 {
@@ -25,18 +29,18 @@ func (o *Options) BufferSize() int64 {
 	return o.bufferSize
 }
 
-func (o *Options) ReadTimeout() int {
-	return o.readTimeout
+func (o *Options) ReadTimeoutSecs() int {
+	return o.readTimeoutSecs
 }
 
 func DefaultOptions() *Options {
 	return &Options{
-		maxBatchSize: dfv1.DefaultMaxBufferSize,
-		syncDuration: dfv1.DefaultSyncDuration,
-		pbqStoreType: dfv1.DefaultStoreType,
-		bufferSize:   dfv1.DefaultBufferSize,
-		storeSize:    dfv1.DefaultStoreSize,
-		readTimeout:  dfv1.DefaultReadTimeout,
+		maxBatchSize:    dfv1.DefaultPBQMaxBufferSize,
+		syncDuration:    dfv1.DefaultPBQSyncDuration,
+		pbqStoreType:    dfv1.DefaultPBQStoreType,
+		bufferSize:      dfv1.DefaultPBQBufferSize,
+		storeSize:       dfv1.DefaultPBQStoreSize,
+		readTimeoutSecs: dfv1.DefaultPBQReadTimeoutSecs,
 	}
 }
 
@@ -82,9 +86,10 @@ func WithStoreSize(size int64) SetOption {
 	}
 }
 
-func WithReadTimeout(seconds int) SetOption {
+// WithReadTimeoutSecs sets read timeout option
+func WithReadTimeoutSecs(seconds int) SetOption {
 	return func(o *Options) error {
-		o.readTimeout = seconds
+		o.readTimeoutSecs = seconds
 		return nil
 	}
 }

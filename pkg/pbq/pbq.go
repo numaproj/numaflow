@@ -3,15 +3,16 @@ package pbq
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"go.uber.org/zap"
-	"time"
 )
 
 var EOF error = errors.New("error while reading, EOF")
-var COBError error = errors.New("error while writing to pbq, pbq is closed")
+var COBErr error = errors.New("error while writing to pbq, pbq is closed")
 
 type PBQ struct {
 	Store       store.Store
@@ -44,14 +45,21 @@ func NewPBQ(ctx context.Context, partitionID string, persistentStore store.Store
 
 // WriteFromISB writes message to pbq and persistent store
 // We don't need a context here as this is invoked for every message.
-func (p *PBQ) WriteFromISB(message *isb.Message) (WriteErr error) {
+func (p *PBQ) WriteFromISB(ctx context.Context, message *isb.Message) (WriteErr error) {
 	if p.cob {
 		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("partitionID", p.partitionID), zap.Any("header", message.Header))
-		WriteErr = COBError
+		WriteErr = COBErr
 		return
 	}
-	p.output <- message
-	WriteErr = p.Store.WriteToStore(message)
+	// we need context to get out of blocking write
+	select {
+	case p.output <- message:
+		WriteErr = p.Store.WriteToStore(message)
+	case <-ctx.Done():
+		// closing the output channel will not cause panic, since its inside select case
+		close(p.output)
+		WriteErr = p.Store.Close()
+	}
 	return
 }
 
@@ -75,7 +83,7 @@ func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, erro
 	if p.isReplaying {
 		storeReadMessages, err = p.Store.ReadFromStore(size)
 		// if store has no messages unset the replay flag
-		if err == store.WriteStoreClosedError {
+		if errors.Is(err, store.WriteStoreClosedErr) {
 			p.isReplaying = false
 		}
 		return storeReadMessages, nil
@@ -83,34 +91,29 @@ func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, erro
 	var pbqReadMessages []*isb.Message
 	chanDrained := false
 
-	readTimer := time.NewTimer(time.Second * time.Duration(p.options.ReadTimeout()))
+	readTimer := time.NewTimer(time.Second * time.Duration(p.options.ReadTimeoutSecs()))
 	defer readTimer.Stop()
 
+	readCount := 0
 	// read n(size) messages from pbq, if context is canceled we should return,
 	// to avoid infinite blocking we have timer
 	for i := int64(0); i < size; i++ {
 		select {
 		case <-ctx.Done():
 			return pbqReadMessages, ctx.Err()
-		default:
-		readLoop:
-			for {
-				select {
-				case msg, ok := <-p.output:
-					if msg != nil {
-						pbqReadMessages = append(pbqReadMessages, msg)
-					}
-					// channel is closed and all the messages are read
-					if !ok {
-						chanDrained = true
-						goto exit
-					}
-					break readLoop
-				case <-readTimer.C:
-					// if timeout return
-					goto exit
-				}
+		case <-readTimer.C:
+			return pbqReadMessages, nil
+		case msg, ok := <-p.output:
+			if msg != nil {
+				pbqReadMessages = append(pbqReadMessages, msg)
+				readCount += 1
 			}
+			if !ok {
+				chanDrained = true
+			}
+		}
+		if chanDrained || size == int64(readCount) {
+			break
 		}
 	}
 

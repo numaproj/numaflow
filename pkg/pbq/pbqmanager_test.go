@@ -16,7 +16,7 @@ func TestManager_ListPartitions(t *testing.T) {
 	size := 100
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType("in-memory"), store.WithReadTimeout(1), store.WithBufferSize(10))
+	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
 
 	// create a new pbq using pbq manager
@@ -48,7 +48,7 @@ func TestManager_GetPBQ(t *testing.T) {
 	size := 100
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType("in-memory"), store.WithReadTimeout(1), store.WithBufferSize(10))
+	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
 
 	// create a new pbq using Get PBQ
@@ -66,7 +66,7 @@ func TestPBQFlow(t *testing.T) {
 	size := 100
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType("in-memory"), store.WithReadTimeout(1), store.WithBufferSize(10))
+	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
 
 	pq, _, err := pbqManager.GetPBQ(ctx, "partition-4", true, dfv1.InMemoryStoreType)
@@ -80,7 +80,7 @@ func TestPBQFlow(t *testing.T) {
 
 	go func() {
 		for _, msg := range writeMessages {
-			err := pq.WriteFromISB(&msg)
+			err := pq.WriteFromISB(ctx, &msg)
 			assert.NoError(t, err)
 		}
 		pq.CloseOfBook()
@@ -118,7 +118,7 @@ func TestPBQFlowWithStoreFullError(t *testing.T) {
 	size := 100
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType("in-memory"), store.WithReadTimeout(1), store.WithBufferSize(10))
+	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
 
 	pq, _, err := pbqManager.GetPBQ(ctx, "partition-5", true, dfv1.InMemoryStoreType)
@@ -133,8 +133,8 @@ func TestPBQFlowWithStoreFullError(t *testing.T) {
 
 	go func() {
 		for _, msg := range writeMessages {
-			err := pq.WriteFromISB(&msg)
-			if err == store.WriteStoreFullError {
+			err := pq.WriteFromISB(ctx, &msg)
+			if err == store.WriteStoreFullErr {
 				count += 1
 			}
 		}

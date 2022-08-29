@@ -19,8 +19,8 @@ type Reader interface {
 // No data can be written to PBQ after cob.
 type Writer interface {
 	// WriteFromISB writes message to PBQ
-	WriteFromISB(msg *isb.Message) error
-	// CloseOfBook closes pbq, no writes will be accepted once cob
+	WriteFromISB(ctx context.Context, msg *isb.Message) error
+	// CloseOfBook (cob) closes PBQ, no writes will be accepted after cob
 	// Any pending data can be flushed to the persistent store at this point.
 	CloseOfBook()
 }

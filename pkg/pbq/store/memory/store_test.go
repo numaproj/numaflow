@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"context"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/stretchr/testify/assert"
@@ -12,10 +14,11 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
+	ctx := context.Background()
 
-	memStore, err := NewMemoryStore(options)
+	memStore, err := NewMemoryStore(ctx, "new-partition", options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -33,10 +36,11 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
+	ctx := context.Background()
 
-	memStore, err := NewMemoryStore(options)
+	memStore, err := NewMemoryStore(ctx, "new-partition-2", options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -57,10 +61,10 @@ func TestEmptyStore_Read(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType("in-memory")(options)
-	_ = store.WithStoreSize(int64(storeSize))(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	ctx := context.Background()
 
-	memStore, err := NewMemoryStore(options)
+	memStore, err := NewMemoryStore(ctx, "new-partition-3", options)
 	assert.NoError(t, err)
 
 	_, err = memStore.ReadFromStore(int64(storeSize))
@@ -72,10 +76,11 @@ func TestFullStore_Write(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType("in-memory")(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
+	ctx := context.Background()
 
-	memStore, err := NewMemoryStore(options)
+	memStore, err := NewMemoryStore(ctx, "new-partition-4", options)
 	assert.NoError(t, err)
 
 	//write 100 isb messages to persisted store

@@ -20,7 +20,7 @@ type MemoryStore struct {
 	partitionID string
 }
 
-//NewMemoryStore returns new memory store
+// NewMemoryStore returns new memory store
 func NewMemoryStore(ctx context.Context, partitionID string, options *store.Options) (*MemoryStore, error) {
 
 	memStore := &MemoryStore{
@@ -40,8 +40,8 @@ func NewMemoryStore(ctx context.Context, partitionID string, options *store.Opti
 // this function will be invoked during bootstrap if there is a restart
 func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, error) {
 	if m.IsEmpty() || m.readPos >= m.writePos {
-		m.log.Errorw(store.ReadStoreEmptyError.Error())
-		return []*isb.Message{}, store.ReadStoreEmptyError
+		m.log.Errorw(store.ReadStoreEmptyErr.Error())
+		return []*isb.Message{}, store.ReadStoreEmptyErr
 	}
 
 	size = util.Min(size, m.writePos-m.readPos)
@@ -53,12 +53,12 @@ func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, error) {
 // WriteToStore writes message to store
 func (m *MemoryStore) WriteToStore(msg *isb.Message) error {
 	if m.writePos >= m.options.StoreSize() {
-		m.log.Errorw(store.WriteStoreFullError.Error(), zap.Any("msg header", msg.Header))
-		return store.WriteStoreFullError
+		m.log.Errorw(store.WriteStoreFullErr.Error(), zap.Any("msg header", msg.Header))
+		return store.WriteStoreFullErr
 	}
 	if m.closed {
-		m.log.Errorw(store.WriteStoreClosedError.Error(), zap.Any("msg header", msg.Header))
-		return store.WriteStoreClosedError
+		m.log.Errorw(store.WriteStoreClosedErr.Error(), zap.Any("msg header", msg.Header))
+		return store.WriteStoreClosedErr
 	}
 	m.storage[m.writePos] = msg
 	m.writePos += 1

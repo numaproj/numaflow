@@ -111,13 +111,13 @@ const (
 	DefaultTargetBufferUsage       = 50  // Default targeted percentage of balanced buffer usage
 	DefaultReplicasPerScale        = 2   // Default maximum replicas to be scaled up or down at once
 
-	// Persistent Buffer Queue
-	DefaultMaxBufferSize = 100000        // Default buffer size for pbq in bytes
-	DefaultSyncDuration  = 2             // Default sync duration for pbq in seconds
-	DefaultStoreType     = "file-system" // Default store type in string
-	DefaultBufferSize    = 10000         // Default channel size in int
-	DefaultStoreSize     = 1000000       // Default persistent store size
-	DefaultReadTimeout   = 1             // Default read timeout for pbq
+	// Default Persistent Buffer Queue Options
+	DefaultPBQMaxBufferSize   = 100000        // Default buffer size for pbq in bytes
+	DefaultPBQSyncDuration    = 2             // Default sync duration for pbq in seconds
+	DefaultPBQStoreType       = "file-system" // Default store type in string
+	DefaultPBQBufferSize      = 10000         // Default channel size in int
+	DefaultPBQStoreSize       = 1000000       // Default persistent store size
+	DefaultPBQReadTimeoutSecs = 1             // Default read timeout for pbq
 
 	InMemoryStoreType   = "in-memory"
 	FileSystemStoreType = "file-system"
