@@ -10,6 +10,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
@@ -148,6 +149,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 				ctx:        ctx,
 				edgeName:   "testBuffer",
 				fromVertex: tt.fromVertex,
+				log:        zaptest.NewLogger(t).Sugar(),
 			}
 			if got := b.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.Unix(tt.want, 0).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, processor.Watermark(time.Unix(tt.want, 0)))
