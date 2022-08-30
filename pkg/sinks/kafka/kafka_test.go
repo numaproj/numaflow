@@ -3,8 +3,9 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
+
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 
@@ -51,14 +52,14 @@ func TestWriteSuccessToKafka(t *testing.T) {
 		{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{},
-				Key:      []byte("key1"),
+				Key:      "key1",
 			},
 			Body: isb.Body{Payload: []byte("welcome1")},
 		},
 		{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{},
-				Key:      []byte("key1"),
+				Key:      "key1",
 			},
 			Body: isb.Body{Payload: []byte("welcome1")},
 		},
@@ -103,14 +104,14 @@ func TestWriteFailureToKafka(t *testing.T) {
 		{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{},
-				Key:      []byte("key1"),
+				Key:      "key1",
 			},
 			Body: isb.Body{Payload: []byte("welcome1")},
 		},
 		{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{},
-				Key:      []byte("key1"),
+				Key:      "key1",
 			},
 			Body: isb.Body{Payload: []byte("welcome1")},
 		},

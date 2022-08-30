@@ -325,7 +325,7 @@ func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
 		Header: isb.Header{
 			PaneInfo: isb.PaneInfo{EventTime: m.Timestamp},
 			ID:       offset,
-			Key:      m.Key,
+			Key:      string(m.Key),
 		},
 		Body: isb.Body{Payload: m.Value},
 	}

@@ -5,9 +5,10 @@ package redis
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
@@ -285,7 +286,7 @@ func Test_GetRefreshFullError(t *testing.T) {
 type myForwardRedisTest struct {
 }
 
-func (f myForwardRedisTest) WhereTo(_ []byte) ([]string, error) {
+func (f myForwardRedisTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
