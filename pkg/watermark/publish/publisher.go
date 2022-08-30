@@ -166,7 +166,7 @@ func (p *publish) StopPublisher() {
 
 	p.log.Infow("Stopping publisher", zap.String("bucket", p.heartbeatStore.GetStoreName()))
 	if !p.entity.IsOTBucketShared() {
-		p.log.Errorw("Non sharing of bucket is not supported by controller as of today", zap.String("bucket", p.heartbeatStore.GetStoreName()))
+		p.log.Warnw("Non sharing of bucket is not supported by controller as of today", zap.String("bucket", p.heartbeatStore.GetStoreName()))
 	}
 
 	// clean up heartbeat bucket

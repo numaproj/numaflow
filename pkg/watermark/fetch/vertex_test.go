@@ -138,8 +138,9 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
 	allProcessors = testBuffer.fromVertex.GetAllProcessors()
-	assert.Equal(t, 1, len(allProcessors))
+	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
+	assert.False(t, allProcessors["p1"].IsActive())
 
 	time.Sleep(time.Second)
 	// resume after one second
