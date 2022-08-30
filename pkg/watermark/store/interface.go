@@ -10,7 +10,7 @@ type WMStorer interface {
 	WatermarkKVWatcher
 }
 
-// WatermarkKVStorer is defines the storage for publishing the watermark.
+// WatermarkKVStorer defines the storage for publishing the watermark.
 type WatermarkKVStorer interface {
 	// GetAllKeys the keys from KV store.
 	GetAllKeys(context.Context) ([]string, error)
