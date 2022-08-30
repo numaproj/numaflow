@@ -166,7 +166,7 @@ retry:
 			Header: isb.Header{
 				PaneInfo: parentPaneInfo,
 				ID:       fmt.Sprintf("%s-%d", offset.String(), i),
-				// TODO: change to use string directly after SKD upgrade
+				// TODO: change to use string directly after SDK upgrade
 				Key: string(key),
 			},
 			Body: isb.Body{
