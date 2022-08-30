@@ -154,6 +154,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	}()
 
 	// wait until p1 becomes active
+	time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 	allProcessors = testBuffer.fromVertex.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
