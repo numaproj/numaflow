@@ -107,7 +107,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
 	}
 
-	conditionalForwarder := forward.GoWhere(func(key []byte) ([]string, error) {
+	conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
 		result := []string{}
 		_key := string(key)
 		if _key == dfv1.MessageKeyAll || _key == dfv1.MessageKeyDrop {

@@ -166,7 +166,8 @@ retry:
 			Header: isb.Header{
 				PaneInfo: parentPaneInfo,
 				ID:       fmt.Sprintf("%s-%d", offset.String(), i),
-				Key:      key,
+				// TODO: change to use string directly after SDK upgrade
+				Key: string(key),
 			},
 			Body: isb.Body{
 				Payload: m.Value,
