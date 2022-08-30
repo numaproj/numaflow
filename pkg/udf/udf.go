@@ -82,7 +82,10 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// build watermark progressors
-		fetchWatermark, publishWatermark = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		if err != nil {
+			return err
+		}
 
 		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{}

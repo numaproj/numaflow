@@ -10,6 +10,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
@@ -49,7 +50,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherHBBucketName, defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherOTBucketName, defaultJetStreamClient)
-	testVertex := NewFromVertex(ctx, hbWatcher, otWatcher)
+	testVertex := NewFromVertex(ctx, hbWatcher, otWatcher).(*fromVertex)
 	var (
 		// TODO: watcher should not be nil
 		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, otWatcher)
@@ -85,16 +86,16 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	for _, watermark := range pod2Timeline {
 		testPod2.offsetTimeline.Put(watermark)
 	}
-	testVertex.AddProcessor("testPod0", testPod0)
-	testVertex.AddProcessor("testPod1", testPod1)
-	testVertex.AddProcessor("testPod2", testPod2)
+	testVertex.addProcessor("testPod0", testPod0)
+	testVertex.addProcessor("testPod1", testPod1)
+	testVertex.addProcessor("testPod2", testPod2)
 
 	type args struct {
 		offset int64
 	}
 	tests := []struct {
 		name       string
-		fromVertex *FromVertex
+		fromVertex FromVertexer
 		args       args
 		want       int64
 	}{
@@ -148,6 +149,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 				ctx:        ctx,
 				edgeName:   "testBuffer",
 				fromVertex: tt.fromVertex,
+				log:        zaptest.NewLogger(t).Sugar(),
 			}
 			if got := b.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.Unix(tt.want, 0).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, processor.Watermark(time.Unix(tt.want, 0)))
