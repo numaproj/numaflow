@@ -26,8 +26,8 @@ type Publisher interface {
 	StopPublisher()
 }
 
-// Publish publishes the watermark for a processor entity.
-type Publish struct {
+// publish publishes the watermark for a processor entity.
+type publish struct {
 	ctx            context.Context
 	entity         processor.ProcessorEntitier
 	heartbeatStore store.WatermarkKVStorer
@@ -42,7 +42,7 @@ type Publish struct {
 }
 
 // NewPublish returns `Publish`.
-func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer, inputOpts ...PublishOption) *Publish {
+func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer, inputOpts ...PublishOption) Publisher {
 
 	log := logging.FromContext(ctx)
 
@@ -54,7 +54,7 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 		opt(opts)
 	}
 
-	p := &Publish{
+	p := &publish{
 		ctx:                  ctx,
 		entity:               processorEntity,
 		heartbeatStore:       hbStore,
@@ -75,18 +75,18 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 }
 
 // initialSetup inserts the default values as the ProcessorEntity starts emitting watermarks.
-func (p *Publish) initialSetup() {
+func (p *publish) initialSetup() {
 	p.headWatermark = p.loadLatestFromStore()
 }
 
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
 // is less than the current head watermark.
-func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
+func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	// update p.headWatermark only if wm > p.headWatermark
 	if time.Time(wm).After(time.Time(p.headWatermark)) {
 		p.headWatermark = wm
 	} else {
-		p.log.Errorw("new watermark is older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		p.log.Errorw("New watermark is older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
 		return
 	}
 
@@ -101,7 +101,7 @@ func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	for {
 		err := p.otStore.PutKV(p.ctx, key, value)
 		if err != nil {
-			p.log.Errorw("unable to publish watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+			p.log.Errorw("Unable to publish watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
@@ -112,7 +112,8 @@ func (p *Publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 
 // loadLatestFromStore loads the latest watermark stored in the watermark store.
 // TODO: how to repopulate if the processing unit is down for a really long time?
-func (p *Publish) loadLatestFromStore() processor.Watermark {
+func (p *publish) loadLatestFromStore() processor.Watermark {
+	// TODO: this is too much.
 	var watermarks = p.getAllOTKeysFromBucket()
 	var latestWatermark int64 = math.MinInt64
 
@@ -124,7 +125,8 @@ func (p *Publish) loadLatestFromStore() processor.Watermark {
 			continue
 		}
 		if err != nil {
-			p.log.Panicw("invalid epoch time string", zap.Error(err))
+			p.log.Errorw("Invalid epoch time string", zap.Error(err))
+			continue
 		}
 		if latestWatermark < epoch {
 			latestWatermark = epoch
@@ -135,11 +137,11 @@ func (p *Publish) loadLatestFromStore() processor.Watermark {
 }
 
 // GetLatestWatermark returns the latest watermark for that processor.
-func (p *Publish) GetLatestWatermark() processor.Watermark {
+func (p *publish) GetLatestWatermark() processor.Watermark {
 	return p.headWatermark
 }
 
-func (p *Publish) publishHeartbeat() {
+func (p *publish) publishHeartbeat() {
 	ticker := time.NewTicker(time.Second * time.Duration(p.podHeartbeatRate))
 	defer ticker.Stop()
 	p.log.Infow("Refreshing ActiveProcessors ticker started")
@@ -150,34 +152,34 @@ func (p *Publish) publishHeartbeat() {
 		case <-ticker.C:
 			err := p.heartbeatStore.PutKV(p.ctx, p.entity.GetID(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			if err != nil {
-				p.log.Errorw("put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
+				p.log.Errorw("Put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 			}
 		}
 	}
 }
 
 // StopPublisher stops the publisher and cleans up the data associated with key.
-func (p *Publish) StopPublisher() {
+func (p *publish) StopPublisher() {
 	// TODO: cleanup after processor dies
 	//   - delete the Offset-Timeline bucket
 	//   - remove itself from heartbeat bucket
 
-	p.log.Infow("stopping publisher", zap.String("bucket", p.heartbeatStore.GetStoreName()))
+	p.log.Infow("Stopping publisher", zap.String("bucket", p.heartbeatStore.GetStoreName()))
 	if !p.entity.IsOTBucketShared() {
-		p.log.Errorw("non sharing of bucket is not supported by controller as of today", zap.String("bucket", p.heartbeatStore.GetStoreName()))
+		p.log.Warnw("Non sharing of bucket is not supported by controller as of today", zap.String("bucket", p.heartbeatStore.GetStoreName()))
 	}
 
 	// clean up heartbeat bucket
 	err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetID())
 	if err != nil {
-		p.log.Errorw("failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetID()), zap.Error(err))
+		p.log.Errorw("Failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetID()), zap.Error(err))
 	}
 }
 
-func (p *Publish) getAllOTKeysFromBucket() []string {
+func (p *publish) getAllOTKeysFromBucket() []string {
 	keys, err := p.otStore.GetAllKeys(p.ctx)
 	if err != nil && !errors.Is(err, nats.ErrNoKeysFound) {
-		p.log.Fatalw("failed to get the keys", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
+		p.log.Fatalw("Failed to get the keys", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 	}
 	return keys
 }

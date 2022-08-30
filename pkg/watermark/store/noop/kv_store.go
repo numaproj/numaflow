@@ -8,36 +8,36 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// KVNoOpStore is a no-op store which does not do any operation but can be safely invoked.
-type KVNoOpStore struct {
+// noOpStore is a no-op store which does not do any operation but can be safely invoked.
+type noOpStore struct {
 }
 
-var _ store.WatermarkKVStorer = (*KVNoOpStore)(nil)
+var _ store.WatermarkKVStorer = (*noOpStore)(nil)
 
-// NewKVNoOpStore returns KVNoOpStore.
-func NewKVNoOpStore() *KVNoOpStore {
-	return &KVNoOpStore{}
+// NewKVNoOpStore returns a no-op WatermarkKVStorer.
+func NewKVNoOpStore() store.WatermarkKVStorer {
+	return &noOpStore{}
 }
 
-func (K KVNoOpStore) GetAllKeys(_ context.Context) ([]string, error) {
+func (k noOpStore) GetAllKeys(_ context.Context) ([]string, error) {
 	return []string{}, nil
 }
 
-func (K KVNoOpStore) DeleteKey(_ context.Context, _ string) error {
+func (k noOpStore) DeleteKey(_ context.Context, _ string) error {
 	return nil
 }
 
-func (K KVNoOpStore) PutKV(_ context.Context, _ string, _ []byte) error {
+func (k noOpStore) PutKV(_ context.Context, _ string, _ []byte) error {
 	return nil
 }
 
-func (K KVNoOpStore) GetValue(_ context.Context, _ string) ([]byte, error) {
+func (k noOpStore) GetValue(_ context.Context, _ string) ([]byte, error) {
 	return []byte{}, nil
 }
 
-func (K KVNoOpStore) GetStoreName() string {
+func (k noOpStore) GetStoreName() string {
 	return "noop"
 }
 
-func (K KVNoOpStore) Close() {
+func (k noOpStore) Close() {
 }

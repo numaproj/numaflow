@@ -91,7 +91,7 @@ type memgen struct {
 }
 
 type watermark struct {
-	sourcePublish *publish.Publish
+	sourcePublish publish.Publisher
 	wmProgressor  generic.Progressor
 }
 
