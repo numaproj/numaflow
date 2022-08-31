@@ -1,12 +1,15 @@
+#
+# Controller only with namespaced install, witout CRD
+#
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - crds/full
-  - numaflow-sa.yaml
-  - numaflow-server-sa.yaml
-  - controller-manager
-  - numaflow-server
+  - ../../base/controller-manager
+  - ../../namespace-install/rbac/controller-manager
+
+namespace: numaflow-system
 
 images:
   - name: quay.io/numaproj/numaflow
@@ -26,17 +29,12 @@ patchesStrategicMerge:
               env:
                 - name: NUMAFLOW_IMAGE
                   value: quay.io/numaproj/numaflow:latest
-  - |-
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: numaflow-server
-    spec:
-      template:
-        spec:
-          containers:
-            - name: main
-              image: quay.io/numaproj/numaflow:latest
-              args: 
-              - "server"
 
+patches:
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --namespaced
+    target:
+      kind: Deployment
+      name: numaflow-controller
