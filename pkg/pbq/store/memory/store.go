@@ -83,8 +83,5 @@ func (m *MemoryStore) GC() error {
 
 // IsEmpty check if there are any records persisted in store
 func (m *MemoryStore) IsEmpty() bool {
-	if m.writePos == 0 {
-		return true
-	}
-	return false
+	return m.writePos == 0
 }

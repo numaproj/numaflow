@@ -4,7 +4,6 @@ package jetstream
 
 import (
 	"context"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 	"time"
 

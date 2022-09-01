@@ -124,9 +124,9 @@ const (
 type StoreType string
 
 const (
-	InMemoryStoreType   StoreType = "in-memory"
-	FileSystemStoreType StoreType = "file-system"
-	NoOpStoreType       StoreType = "no-op"
+	InMemoryType   StoreType = "in-memory"
+	FileSystemType StoreType = "file-system"
+	NoOpType       StoreType = "no-op"
 )
 
 type ContentType string

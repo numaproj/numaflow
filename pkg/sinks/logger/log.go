@@ -6,9 +6,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"log"
 
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 
 	"go.uber.org/zap"

@@ -19,11 +19,11 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
-	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithStoreSize(int64(storeSize)))
+	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryType), store.WithStoreSize(int64(storeSize)))
 	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
@@ -35,7 +35,8 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 	// create a pbq with buffer size 10
 	buffSize := 10
 	_ = store.WithBufferSize(int64(buffSize))(options)
-	pq, err := NewPBQ(ctx, "partition-1", memStore, qManager, options)
+	var pq *PBQ
+	pq, err = NewPBQ(ctx, "partition-1", memStore, qManager, options)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
@@ -54,13 +55,13 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	_ = store.WithReadTimeoutSecs(1)(options)
 
 	ctx := context.Background()
 
-	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithStoreSize(int64(storeSize)))
+	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryType), store.WithStoreSize(int64(storeSize)))
 	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
@@ -72,7 +73,8 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 	// create a pbq with buffer size 10
 	buffSize := 10
 	_ = store.WithBufferSize(int64(buffSize))(options)
-	pq, err := NewPBQ(ctx, "new-partition", memStore, qManager, options)
+	var pq *PBQ
+	pq, err = NewPBQ(ctx, "new-partition", memStore, qManager, options)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
@@ -92,13 +94,13 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	_ = store.WithReadTimeoutSecs(1)(options)
 
 	ctx := context.Background()
 
-	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithStoreSize(int64(storeSize)))
+	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryType), store.WithStoreSize(int64(storeSize)))
 	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
@@ -110,7 +112,8 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	// create a pbq with buffer size 10
 	buffSize := 10
 	_ = store.WithBufferSize(int64(buffSize))(options)
-	pq, err := NewPBQ(ctx, "new-partition", memStore, qManager, options)
+	var pq *PBQ
+	pq, err = NewPBQ(ctx, "new-partition", memStore, qManager, options)
 	assert.NoError(t, err)
 
 	var readMessages []*isb.Message
@@ -148,13 +151,13 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	_ = store.WithReadTimeoutSecs(1)(options)
 
 	ctx := context.Background()
 
-	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithStoreSize(int64(storeSize)))
+	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryType), store.WithStoreSize(int64(storeSize)))
 	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
@@ -166,7 +169,8 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	// create a pbq with buffer size 10
 	bufferSize := 10
 	_ = store.WithBufferSize(int64(bufferSize))(options)
-	pq, err := NewPBQ(ctx, "new-partition", memStore, qManager, options)
+	var pq *PBQ
+	pq, err = NewPBQ(ctx, "new-partition", memStore, qManager, options)
 	assert.NoError(t, err)
 
 	var readMessages []*isb.Message
@@ -212,13 +216,13 @@ func TestPBQ_ReadWithEOF(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	_ = store.WithReadTimeoutSecs(1)(options)
 
 	ctx := context.Background()
 
-	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithStoreSize(int64(storeSize)))
+	qManager, _ := NewManager(ctx, store.WithPbqStoreType(dfv1.InMemoryType), store.WithStoreSize(int64(storeSize)))
 	memStore, err := memory.NewMemoryStore(ctx, "partition-2", options)
 	assert.NoError(t, err)
 
@@ -230,7 +234,8 @@ func TestPBQ_ReadWithEOF(t *testing.T) {
 	// create a pbq with buffer size 10
 	bufferSize := 10
 	_ = store.WithBufferSize(int64(bufferSize))(options)
-	pq, err := NewPBQ(ctx, "partition-2", memStore, qManager, options)
+	var pq *PBQ
+	pq, err = NewPBQ(ctx, "partition-2", memStore, qManager, options)
 	assert.NoError(t, err)
 
 	var readMessages []*isb.Message

@@ -14,7 +14,7 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
@@ -36,7 +36,7 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
@@ -61,7 +61,7 @@ func TestEmptyStore_Read(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	ctx := context.Background()
 
 	memStore, err := NewMemoryStore(ctx, "new-partition-3", options)
@@ -76,7 +76,7 @@ func TestFullStore_Write(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
 	options := &store.Options{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryStoreType)(options)
+	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 

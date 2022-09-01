@@ -2,10 +2,9 @@ package logger
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 	"time"
-
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"

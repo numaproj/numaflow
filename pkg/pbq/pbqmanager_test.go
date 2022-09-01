@@ -17,15 +17,14 @@ func TestManager_ListPartitions(t *testing.T) {
 	size := 100
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
+	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
-
+	var pq1, pq2 *PBQ
 	// create a new pbq using pbq manager
-	pq1, _, err := pbqManager.GetPBQ(ctx, "partition-1", true)
-
+	pq1, _, err = pbqManager.GetPBQ(ctx, "partition-1", true)
 	assert.NoError(t, err)
 
-	pq2, _, err := pbqManager.GetPBQ(ctx, "partition-2", true)
+	pq2, _, err = pbqManager.GetPBQ(ctx, "partition-2", true)
 	assert.NoError(t, err)
 
 	// list partitions should return 2 pbq entries
@@ -49,9 +48,9 @@ func TestManager_GetPBQ(t *testing.T) {
 	size := 100
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
+	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
-
+	var pb1, pb2 *PBQ
 	// create a new pbq using Get PBQ
 	pb1, _, err = pbqManager.GetPBQ(ctx, "partition-3", true)
 	assert.NoError(t, err)
@@ -67,10 +66,11 @@ func TestPBQFlow(t *testing.T) {
 	size := 100
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
+	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
+	var pq *PBQ
 
-	pq, _, err := pbqManager.GetPBQ(ctx, "partition-4", true)
+	pq, _, err = pbqManager.GetPBQ(ctx, "partition-4", true)
 	assert.NoError(t, err)
 	msgsCount := 5
 	var wg sync.WaitGroup
@@ -119,10 +119,10 @@ func TestPBQFlowWithStoreFullError(t *testing.T) {
 	size := 100
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
+	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
-
-	pq, _, err := pbqManager.GetPBQ(ctx, "partition-5", true)
+	var pq *PBQ
+	pq, _, err = pbqManager.GetPBQ(ctx, "partition-5", true)
 	assert.NoError(t, err)
 	msgsCount := 150
 	var wg sync.WaitGroup

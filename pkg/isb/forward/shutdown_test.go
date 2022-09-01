@@ -2,7 +2,6 @@ package forward
 
 import (
 	"context"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 	"time"
 

@@ -5,7 +5,6 @@ package redis
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 	"time"
 

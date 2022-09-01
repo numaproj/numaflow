@@ -73,13 +73,13 @@ func (m *Manager) GetPBQ(ctx context.Context, partitionID string, createIfMissin
 	var err error
 
 	switch m.options.PbqStoreType() {
-	case dfv1.InMemoryStoreType:
+	case dfv1.InMemoryType:
 		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.options)
 		if err != nil {
 			m.log.Errorw("Error while creating persistent store", zap.Any("partitionID", partitionID), zap.Any("store type", m.options.PbqStoreType()), zap.Error(err))
 			return nil, true, err
 		}
-	case dfv1.FileSystemStoreType:
+	case dfv1.FileSystemType:
 		return nil, true, errors.New("not implemented")
 	}
 	pbq, err := NewPBQ(ctx, partitionID, persistentStore, m, m.options)
@@ -95,9 +95,9 @@ func (m *Manager) GetPBQ(ctx context.Context, partitionID string, createIfMissin
 func (m *Manager) StartUp(ctx context.Context) error {
 
 	switch m.options.PbqStoreType() {
-	case dfv1.InMemoryStoreType:
+	case dfv1.InMemoryType:
 		return nil
-	case dfv1.FileSystemStoreType:
+	case dfv1.FileSystemType:
 		return errors.New("not implemented")
 	}
 

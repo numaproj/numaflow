@@ -3,7 +3,6 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 
 	"github.com/numaproj/numaflow/pkg/watermark/generic"

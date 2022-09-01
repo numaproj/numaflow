@@ -3,7 +3,6 @@ package forward
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"strings"
 	"testing"
 	"time"

@@ -112,7 +112,6 @@ func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, erro
 		}
 	}
 
-exit:
 	if chanDrained {
 		return pbqReadMessages, EOF
 	}

@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"sync"
 	"testing"
 	"time"
