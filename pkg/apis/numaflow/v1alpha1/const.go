@@ -110,6 +110,22 @@ const (
 	DefaultTargetProcessingSeconds = 20  // Default targeted time in seconds to finish processing all the pending messages for a source
 	DefaultTargetBufferUsage       = 50  // Default targeted percentage of balanced buffer usage
 	DefaultReplicasPerScale        = 2   // Default maximum replicas to be scaled up or down at once
+
+	// Default Persistent Buffer Queue Options
+	DefaultPBQMaxBufferSize   = 100000        // Default buffer size for pbq in bytes
+	DefaultPBQSyncDuration    = 2             // Default sync duration for pbq in seconds
+	DefaultPBQStoreType       = "file-system" // Default store type in string
+	DefaultPBQBufferSize      = 10000         // Default channel size in int
+	DefaultPBQStoreSize       = 1000000       // Default persistent store size
+	DefaultPBQReadTimeoutSecs = 1             // Default read timeout for pbq
+	DefaultReadBatchSize      = 100           // Default read batch size for pbq
+)
+
+type StoreType string
+
+const (
+	InMemoryType   StoreType = "in-memory"
+	FileSystemType StoreType = "file-system"
 )
 
 type ContentType string
