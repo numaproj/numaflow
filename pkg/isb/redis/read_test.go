@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/montanaflynn/stats"
 	"github.com/stretchr/testify/assert"
@@ -275,7 +277,7 @@ type ReadWritePerformance struct {
 type forwardReadWritePerformance struct {
 }
 
-func (f forwardReadWritePerformance) WhereTo(_ []byte) ([]string, error) {
+func (f forwardReadWritePerformance) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 

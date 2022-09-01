@@ -262,7 +262,7 @@ func convert2IsbMsgHeader(header nats.Header) isb.Header {
 		r.ID = x
 	}
 	if x := header.Get(_key); x != "" {
-		r.Key = []byte(x)
+		r.Key = x
 	}
 	if x := header.Get(_eventTime); x != "" {
 		i, _ := strconv.ParseInt(x, 10, 64)

@@ -15,8 +15,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// KVJetStreamStore implements the watermark's KV store backed up by Jetstream.
-type KVJetStreamStore struct {
+// jetStreamStore implements the watermark's KV store backed up by Jetstream.
+type jetStreamStore struct {
 	pipelineName string
 	conn         *jsclient.NatsConn
 	kv           nats.KeyValue
@@ -24,10 +24,10 @@ type KVJetStreamStore struct {
 	log          *zap.SugaredLogger
 }
 
-var _ store.WatermarkKVStorer = (*KVJetStreamStore)(nil)
+var _ store.WatermarkKVStorer = (*jetStreamStore)(nil)
 
 // NewKVJetStreamKVStore returns KVJetStreamStore.
-func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client jsclient.JetStreamClient, opts ...JSKVStoreOption) (*KVJetStreamStore, error) {
+func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client jsclient.JetStreamClient, opts ...JSKVStoreOption) (store.WatermarkKVStorer, error) {
 	var err error
 	conn, err := client.Connect(ctx)
 	if err != nil {
@@ -41,7 +41,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
 	}
 
-	j := &KVJetStreamStore{
+	j := &jetStreamStore{
 		pipelineName: pipelineName,
 		conn:         conn,
 		js:           js,
@@ -62,10 +62,10 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 }
 
 // JSKVStoreOption is to pass in Jetstream options.
-type JSKVStoreOption func(*KVJetStreamStore) error
+type JSKVStoreOption func(*jetStreamStore) error
 
 // GetAllKeys returns all the keys in the key-value store.
-func (kv *KVJetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
+func (kv *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
 	keys, err := kv.kv.Keys()
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (kv *KVJetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
 }
 
 // GetValue returns the value for a given key.
-func (kv *KVJetStreamStore) GetValue(_ context.Context, k string) ([]byte, error) {
+func (kv *jetStreamStore) GetValue(_ context.Context, k string) ([]byte, error) {
 	kvEntry, err := kv.kv.Get(k)
 	if err != nil {
 		return []byte(""), err
@@ -85,23 +85,23 @@ func (kv *KVJetStreamStore) GetValue(_ context.Context, k string) ([]byte, error
 }
 
 // GetStoreName returns the store name.
-func (kv *KVJetStreamStore) GetStoreName() string {
+func (kv *jetStreamStore) GetStoreName() string {
 	return kv.kv.Bucket()
 }
 
 // DeleteKey deletes the key from the JS key-value store.
-func (kv *KVJetStreamStore) DeleteKey(_ context.Context, k string) error {
+func (kv *jetStreamStore) DeleteKey(_ context.Context, k string) error {
 	return kv.kv.Delete(k)
 }
 
 // PutKV puts an element to the JS key-value store.
-func (kv *KVJetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
+func (kv *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
 	_, err := kv.kv.Put(k, v)
 	return err
 }
 
 // Close closes the jetstream connection.
-func (kv *KVJetStreamStore) Close() {
+func (kv *jetStreamStore) Close() {
 	if !kv.conn.IsClosed() {
 		kv.conn.Close()
 	}

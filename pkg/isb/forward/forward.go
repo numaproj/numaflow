@@ -251,6 +251,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
 	if isdf.publishWatermark != nil {
+		// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)?
 		for edgeName, offsets := range writeOffsets {
 			if len(offsets) > 0 {
 				isdf.publishWatermark[edgeName].PublishWatermark(processorWM, offsets[len(offsets)-1])

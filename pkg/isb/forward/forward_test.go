@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
@@ -27,7 +29,7 @@ var (
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WhereTo(_ []byte) ([]string, error) {
+func (f myForwardTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
@@ -89,7 +91,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 type myForwardDropTest struct {
 }
 
-func (f myForwardDropTest) WhereTo(_ []byte) ([]string, error) {
+func (f myForwardDropTest) WhereTo(_ string) ([]string, error) {
 	return []string{"__DROP__"}, nil
 }
 
@@ -142,7 +144,7 @@ func TestNewInterStepDataForward_drop(t *testing.T) {
 type myForwardApplyErrTest struct {
 }
 
-func (f myForwardApplyErrTest) WhereTo(_ []byte) ([]string, error) {
+func (f myForwardApplyErrTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
@@ -194,7 +196,7 @@ func TestNewInterStepDataForward_WithInternalError(t *testing.T) {
 type myForwardApplyWhereToErrTest struct {
 }
 
-func (f myForwardApplyWhereToErrTest) WhereTo(_ []byte) ([]string, error) {
+func (f myForwardApplyWhereToErrTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, fmt.Errorf("whereToStep failed")
 }
 
@@ -241,7 +243,7 @@ func TestNewInterStepDataForward_WhereToError(t *testing.T) {
 type myForwardApplyUDFErrTest struct {
 }
 
-func (f myForwardApplyUDFErrTest) WhereTo(_ []byte) ([]string, error) {
+func (f myForwardApplyUDFErrTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
@@ -290,7 +292,7 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 type myForwardToAllTest struct {
 }
 
-func (f myForwardToAllTest) WhereTo(_ []byte) ([]string, error) {
+func (f myForwardToAllTest) WhereTo(_ string) ([]string, error) {
 	return []string{dfv1.MessageKeyAll}, nil
 }
 

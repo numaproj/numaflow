@@ -16,7 +16,8 @@ import (
 // OffsetTimeline is to store the event time to the offset records.
 // Our list is sorted by event time from highest to lowest.
 type OffsetTimeline struct {
-	ctx        context.Context
+	ctx context.Context
+	// TODO: replace it with OverflowQueue, which is thread safe and 2 times faster.
 	watermarks list.List
 	capacity   int
 	lock       sync.RWMutex

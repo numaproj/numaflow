@@ -73,7 +73,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	var testVertex = NewFromVertex(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
+	var testVertex = NewFromVertex(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false)).(*fromVertex)
 	var testBuffer = NewEdgeBuffer(ctx, "testBuffer", testVertex)
 
 	go func() {
@@ -138,8 +138,9 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
 	allProcessors = testBuffer.fromVertex.GetAllProcessors()
-	assert.Equal(t, 1, len(allProcessors))
+	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
+	assert.False(t, allProcessors["p1"].IsActive())
 
 	time.Sleep(time.Second)
 	// resume after one second
@@ -153,6 +154,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	}()
 
 	// wait until p1 becomes active
+	time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 	allProcessors = testBuffer.fromVertex.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
@@ -306,7 +308,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	var testVertex = NewFromVertex(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
+	var testVertex = NewFromVertex(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true)).(*fromVertex)
 	var testBuffer = NewEdgeBuffer(ctx, "testBuffer", testVertex)
 
 	//var location, _ = time.LoadLocation("UTC")

@@ -20,12 +20,16 @@ type FromVertexer interface {
 	// GetAllProcessors fetches all the processors from Vn-1 vertex. processors could be pods or when the vertex is a
 	// source vertex, it could be partitions if the source is Kafka.
 	GetAllProcessors() map[string]*ProcessorToFetch
+	// GetProcessor gets a processor.
+	GetProcessor(processor string) *ProcessorToFetch
+	// DeleteProcessor deletes a processor.
+	DeleteProcessor(processor string)
 }
 
-// FromVertex is the point of view of Vn-1 from Vn vertex. The code is running on Vn vertex.
+// fromVertex is the point of view of Vn-1 from Vn vertex. The code is running on Vn vertex.
 // It has the mapping of all the processors which in turn has all the information about each processor
 // timelines.
-type FromVertex struct {
+type fromVertex struct {
 	ctx        context.Context
 	hbWatcher  store.WatermarkKVWatcher
 	otWatcher  store.WatermarkKVWatcher
@@ -39,7 +43,7 @@ type FromVertex struct {
 }
 
 // NewFromVertex returns `FromVertex`
-func NewFromVertex(ctx context.Context, hbWatcher store.WatermarkKVWatcher, otWatcher store.WatermarkKVWatcher, inputOpts ...VertexOption) *FromVertex {
+func NewFromVertex(ctx context.Context, hbWatcher store.WatermarkKVWatcher, otWatcher store.WatermarkKVWatcher, inputOpts ...VertexOption) FromVertexer {
 	opts := &vertexOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
@@ -49,7 +53,7 @@ func NewFromVertex(ctx context.Context, hbWatcher store.WatermarkKVWatcher, otWa
 		opt(opts)
 	}
 
-	v := &FromVertex{
+	v := &fromVertex{
 		ctx:        ctx,
 		hbWatcher:  hbWatcher,
 		otWatcher:  otWatcher,
@@ -66,15 +70,15 @@ func NewFromVertex(ctx context.Context, hbWatcher store.WatermarkKVWatcher, otWa
 	return v
 }
 
-// AddProcessor adds a new processor.
-func (v *FromVertex) AddProcessor(processor string, p *ProcessorToFetch) {
+// addProcessor adds a new processor.
+func (v *fromVertex) addProcessor(processor string, p *ProcessorToFetch) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 	v.processors[processor] = p
 }
 
 // GetProcessor gets a processor.
-func (v *FromVertex) GetProcessor(processor string) *ProcessorToFetch {
+func (v *fromVertex) GetProcessor(processor string) *ProcessorToFetch {
 	v.lock.RLock()
 	defer v.lock.RUnlock()
 	if p, ok := v.processors[processor]; ok {
@@ -84,7 +88,7 @@ func (v *FromVertex) GetProcessor(processor string) *ProcessorToFetch {
 }
 
 // DeleteProcessor deletes a processor.
-func (v *FromVertex) DeleteProcessor(processor string) {
+func (v *fromVertex) DeleteProcessor(processor string) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 	// we do not require this processor's reference anymore
@@ -92,7 +96,7 @@ func (v *FromVertex) DeleteProcessor(processor string) {
 }
 
 // GetAllProcessors returns all the processors.
-func (v *FromVertex) GetAllProcessors() map[string]*ProcessorToFetch {
+func (v *fromVertex) GetAllProcessors() map[string]*ProcessorToFetch {
 	v.lock.RLock()
 	defer v.lock.RUnlock()
 	var processors = make(map[string]*ProcessorToFetch, len(v.processors))
@@ -102,7 +106,7 @@ func (v *FromVertex) GetAllProcessors() map[string]*ProcessorToFetch {
 	return processors
 }
 
-func (v *FromVertex) startRefreshingProcessors() {
+func (v *fromVertex) startRefreshingProcessors() {
 	ticker := time.NewTicker(time.Duration(v.opts.refreshingProcessorsRate) * time.Second)
 	defer ticker.Stop()
 	v.log.Infow("Refreshing ActiveProcessors ticker started")
@@ -117,7 +121,7 @@ func (v *FromVertex) startRefreshingProcessors() {
 }
 
 // refreshingProcessors keeps the v.ActivePods to be a map of live ActivePods
-func (v *FromVertex) refreshingProcessors() {
+func (v *fromVertex) refreshingProcessors() {
 	var debugStr strings.Builder
 	for pName, pTime := range v.heartbeat.GetAll() {
 		p := v.GetProcessor(pName)
@@ -137,12 +141,12 @@ func (v *FromVertex) refreshingProcessors() {
 			debugStr.WriteString(fmt.Sprintf("[%s] ", pName))
 		}
 	}
-	v.log.Debugw("active processors", zap.String("HB", v.hbWatcher.GetKVName()), zap.String("OT", v.otWatcher.GetKVName()), zap.String("DebugStr", debugStr.String()))
+	v.log.Debugw("Active processors", zap.String("HB", v.hbWatcher.GetKVName()), zap.String("OT", v.otWatcher.GetKVName()), zap.String("DebugStr", debugStr.String()))
 }
 
 // startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
-func (v *FromVertex) startHeatBeatWatcher() {
+func (v *fromVertex) startHeatBeatWatcher() {
 	watchCh := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {
@@ -162,7 +166,7 @@ func (v *FromVertex) startHeatBeatWatcher() {
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
 					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.otWatcher)
-					v.AddProcessor(value.Key(), fromProcessor)
+					v.addProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active
 					p.setStatus(_active)
@@ -170,23 +174,24 @@ func (v *FromVertex) startHeatBeatWatcher() {
 				// value is epoch
 				intValue, convErr := strconv.Atoi(string(value.Value()))
 				if convErr != nil {
-					v.log.Errorw("unable to convert intValue.Value() to int64", zap.Error(convErr))
+					v.log.Errorw("Unable to convert intValue.Value() to int64", zap.Error(convErr))
+				} else {
+					// insert the last seen timestamp. we use this to figure whether this processor entity is inactive.
+					v.heartbeat.Put(value.Key(), int64(intValue))
 				}
-				// insert the last seen timestamp. we use this to figure whether this processor entity is inactive.
-				v.heartbeat.Put(value.Key(), int64(intValue))
 			case store.KVDelete:
 				p := v.GetProcessor(value.Key())
 				if p == nil {
-					v.log.Errorw("nil pointer for the processor, perhaps already deleted", zap.String("key", value.Key()))
+					v.log.Infow("Nil pointer for the processor, perhaps already deleted", zap.String("key", value.Key()))
 				} else if p.IsDeleted() {
-					v.log.Warnw("already deleted", zap.String("key", value.Key()), zap.String(value.Key(), p.String()))
+					v.log.Warnw("Already deleted", zap.String("key", value.Key()), zap.String(value.Key(), p.String()))
 				} else {
-					v.log.Infow("deleting", zap.String("key", value.Key()), zap.String(value.Key(), p.String()))
+					v.log.Infow("Deleting", zap.String("key", value.Key()), zap.String(value.Key(), p.String()))
 					p.setStatus(_deleted)
 					v.heartbeat.Delete(value.Key())
 				}
 			case store.KVPurge:
-				v.log.Errorw("received nats.KeyValuePurge", zap.String("bucket", v.hbWatcher.GetKVName()))
+				v.log.Warnw("Received nats.KeyValuePurge", zap.String("bucket", v.hbWatcher.GetKVName()))
 			}
 			v.log.Debugw("processorHeartbeatWatcher - Updates:", zap.String("Operation", value.Operation().String()),
 				zap.String("HB", v.hbWatcher.GetKVName()), zap.String("key", value.Key()), zap.String("value", string(value.Value())))

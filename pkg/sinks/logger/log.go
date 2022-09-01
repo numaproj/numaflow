@@ -2,6 +2,8 @@ package logger
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"log"
 
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"

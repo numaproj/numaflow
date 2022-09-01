@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 
@@ -21,7 +23,7 @@ import (
 type myForwardJetStreamTest struct {
 }
 
-func (f myForwardJetStreamTest) WhereTo(_ []byte) ([]string, error) {
+func (f myForwardJetStreamTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 

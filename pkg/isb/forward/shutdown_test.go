@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -17,7 +19,7 @@ import (
 type myShutdownTest struct {
 }
 
-func (s myShutdownTest) WhereTo(_ []byte) ([]string, error) {
+func (s myShutdownTest) WhereTo(_ string) ([]string, error) {
 	return []string{dfv1.MessageKeyAll}, nil
 }
 
