@@ -20,11 +20,12 @@ func TestManager_ListPartitions(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create a new pbq using pbq manager
-	pq1, _, err := pbqManager.GetPBQ(ctx, "partition-1", true)
+	var pq1, pq2 *PBQ
+	pq1, _, err = pbqManager.GetPBQ(ctx, "partition-1", true)
 
 	assert.NoError(t, err)
 
-	pq2, _, err := pbqManager.GetPBQ(ctx, "partition-2", true)
+	pq2, _, err = pbqManager.GetPBQ(ctx, "partition-2", true)
 	assert.NoError(t, err)
 
 	// list partitions should return 2 pbq entries
@@ -46,7 +47,6 @@ func TestManager_ListPartitions(t *testing.T) {
 
 func TestManager_GetPBQ(t *testing.T) {
 	size := 100
-	var err error
 	var pb1, pb2 *PBQ
 	ctx := context.Background()
 	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
@@ -70,8 +70,8 @@ func TestPBQFlow(t *testing.T) {
 	ctx := context.Background()
 	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
-
-	pq, _, err := pbqManager.GetPBQ(ctx, "partition-4", true)
+	var pq *PBQ
+	pq, _, err = pbqManager.GetPBQ(ctx, "partition-4", true)
 	assert.NoError(t, err)
 	msgsCount := 5
 	var wg sync.WaitGroup
@@ -94,18 +94,11 @@ func TestPBQFlow(t *testing.T) {
 	var readMessages []*isb.Message
 
 	go func() {
-	readLoop:
 		for {
-			select {
-			case msg, ok := <-pq.ReadFromPBQCh():
-				if msg != nil {
-					readMessages = append(readMessages, msg)
-				}
-				if !ok {
-					break readLoop
-				}
-			case <-ctx.Done():
-				break readLoop
+			msgs, err := pq.ReadFromPBQ(ctx, 10)
+			readMessages = append(readMessages, msgs...)
+			if err == EOF {
+				break
 			}
 		}
 		wg.Done()
@@ -129,8 +122,8 @@ func TestPBQFlowWithStoreFullError(t *testing.T) {
 	ctx := context.Background()
 	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
-
-	pq, _, err := pbqManager.GetPBQ(ctx, "partition-5", true)
+	var pq *PBQ
+	pq, _, err = pbqManager.GetPBQ(ctx, "partition-5", true)
 	assert.NoError(t, err)
 	msgsCount := 150
 	var wg sync.WaitGroup
@@ -156,18 +149,11 @@ func TestPBQFlowWithStoreFullError(t *testing.T) {
 	var readMessages []*isb.Message
 
 	go func() {
-	readLoop:
 		for {
-			select {
-			case msg, ok := <-pq.ReadFromPBQCh():
-				if msg != nil {
-					readMessages = append(readMessages, msg)
-				}
-				if !ok {
-					break readLoop
-				}
-			case <-ctx.Done():
-				break readLoop
+			msgs, err := pq.ReadFromPBQ(ctx, 10)
+			readMessages = append(readMessages, msgs...)
+			if err == EOF {
+				break
 			}
 		}
 		wg.Done()
@@ -184,4 +170,53 @@ func TestPBQFlowWithStoreFullError(t *testing.T) {
 
 	err = pq.GC()
 	assert.NoError(t, err)
+}
+
+func TestManagerWithNoOpStore(t *testing.T) {
+	size := 100
+
+	ctx := context.Background()
+	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.NoOpType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
+	assert.NoError(t, err)
+
+	// create a pbq backed with no op store
+	var pq *PBQ
+	pq, _, err = pbqManager.GetPBQ(ctx, "partition-6", true)
+	msgsCount := 50
+	// write messages to pbq
+	writeMessages := testutils.BuildTestWriteMessages(int64(msgsCount), time.Now())
+	var count int
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// write messages to pbq(with no op store)
+	go func() {
+		for _, msg := range writeMessages {
+			err := pq.WriteFromISB(ctx, &msg)
+			if err == store.WriteStoreFullErr {
+				count += 1
+			}
+		}
+		pq.CloseOfBook()
+		assert.NoError(t, err)
+		wg.Done()
+	}()
+
+	var readMessages []*isb.Message
+	wg.Add(1)
+
+	// read messages from pbq(with no op store)
+	go func() {
+		for {
+			msgs, err := pq.ReadFromPBQ(ctx, 10)
+			readMessages = append(readMessages, msgs...)
+			if err == EOF {
+				break
+			}
+		}
+		wg.Done()
+	}()
+	wg.Wait()
+
+	assert.Len(t, readMessages, msgsCount)
 }

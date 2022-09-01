@@ -6,6 +6,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/pbq/store/noop"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -73,6 +74,8 @@ func (m *Manager) GetPBQ(ctx context.Context, partitionID string, createIfMissin
 	var err error
 
 	switch m.options.PbqStoreType() {
+	case dfv1.NoOpType:
+		persistentStore, _ = noop.NewPBQNoOpStore()
 	case dfv1.InMemoryType:
 		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.options)
 		if err != nil {
@@ -95,6 +98,8 @@ func (m *Manager) GetPBQ(ctx context.Context, partitionID string, createIfMissin
 func (m *Manager) StartUp(ctx context.Context) error {
 
 	switch m.options.PbqStoreType() {
+	case dfv1.NoOpType:
+		return nil
 	case dfv1.InMemoryType:
 		return nil
 	case dfv1.FileSystemType:

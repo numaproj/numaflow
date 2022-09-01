@@ -7,8 +7,8 @@ import (
 
 // Reader provides methods to read from PBQ.
 type Reader interface {
-	// ReadFromPBQCh exposes channel to read from PBQ
-	ReadFromPBQCh() <-chan *isb.Message
+	// ReadFromPBQ reads from PBQ
+	ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, error)
 	// CloseReader closes the reader.
 	CloseReader() error
 	// GC does garbage collection, it deletes all the persisted data from the store

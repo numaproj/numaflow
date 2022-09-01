@@ -56,6 +56,7 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	var readMessages []*isb.Message
 	readMessages, _, err = memStore.ReadFromStore(int64(msgCount))
 	assert.NoError(t, err)
+	// number of read messages should be equal to msgCount
 	assert.Len(t, readMessages, msgCount)
 }
 
@@ -70,6 +71,8 @@ func TestEmptyStore_Read(t *testing.T) {
 	assert.NoError(t, err)
 	var eof bool
 	_, eof, err = memStore.ReadFromStore(int64(storeSize))
+	assert.NoError(t, err)
+	// since store is empty, eof will be true
 	assert.Equal(t, eof, true)
 
 }

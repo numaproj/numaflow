@@ -126,6 +126,7 @@ type StoreType string
 const (
 	InMemoryType   StoreType = "in-memory"
 	FileSystemType StoreType = "file-system"
+	NoOpType       StoreType = "no-op"
 )
 
 type ContentType string
