@@ -39,26 +39,25 @@ func NewPBQ(ctx context.Context, partitionID string, persistentStore store.Store
 		log:         logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 
-	p.manager.Register(partitionID, p)
 	return p, nil
 }
 
 // WriteFromISB writes message to pbq and persistent store
 // We don't need a context here as this is invoked for every message.
-func (p *PBQ) WriteFromISB(ctx context.Context, message *isb.Message) (WriteErr error) {
+func (p *PBQ) WriteFromISB(ctx context.Context, message *isb.Message) (writeErr error) {
 	if p.cob {
 		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("partitionID", p.partitionID), zap.Any("header", message.Header))
-		WriteErr = COBErr
+		writeErr = COBErr
 		return
 	}
 	// we need context to get out of blocking write
 	select {
 	case p.output <- message:
-		WriteErr = p.Store.WriteToStore(message)
+		writeErr = p.Store.WriteToStore(message)
 	case <-ctx.Done():
 		// closing the output channel will not cause panic, since its inside select case
 		close(p.output)
-		WriteErr = p.Store.Close()
+		writeErr = p.Store.Close()
 	}
 	return
 }
@@ -72,10 +71,6 @@ func (p *PBQ) CloseOfBook() {
 // ReadFromPBQ reads upto N messages (specified by size) from pbq
 // if replay flag is set its reads messages from persisted store
 func (p *PBQ) ReadFromPBQ(ctx context.Context, size int64) ([]*isb.Message, error) {
-	// if its close of book and there are no messages in output channel, return EOF
-	if p.cob && len(p.output) == 0 {
-		return []*isb.Message{}, EOF
-	}
 	var storeReadMessages []*isb.Message
 	var err error
 
@@ -124,17 +119,23 @@ exit:
 	return pbqReadMessages, nil
 }
 
-// Close is used by the Reader to indicate that it has finished
+// CloseWriter is used by the Writer to indicate close of context
+// we should flush pending messages to store
+func (p *PBQ) CloseWriter() (closeErr error) {
+	closeErr = p.Store.Close()
+	return
+}
+
+// CloseReader is used by the Reader to indicate that it has finished
 // consuming the data from output channel
-func (p *PBQ) Close() (CloseErr error) {
-	CloseErr = p.Store.Close()
+func (p *PBQ) CloseReader() (closeErr error) {
 	return
 }
 
 // GC is invoked after the Reader (ProcessAndForward) has finished
 // forwarding the output to ISB.
-func (p *PBQ) GC() (GcErr error) {
-	GcErr = p.Store.GC()
+func (p *PBQ) GC() (gcErr error) {
+	gcErr = p.Store.GC()
 	p.Store = nil
 	p.manager.Deregister(p.partitionID)
 	return

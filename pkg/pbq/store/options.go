@@ -8,7 +8,7 @@ type Options struct {
 	// syncDuration timeout to sync to store
 	syncDuration int64
 	// pbqStoreType store type (memory or s3 or file system)
-	pbqStoreType string
+	pbqStoreType dfv1.StoreType
 	// ChannelSize buffered channel size
 	bufferSize int64
 	// storeSize store array size
@@ -17,7 +17,7 @@ type Options struct {
 	readTimeoutSecs int
 }
 
-func (o *Options) PbqStoreType() string {
+func (o *Options) PbqStoreType() dfv1.StoreType {
 	return o.pbqStoreType
 }
 
@@ -63,7 +63,7 @@ func WithSyncDuration(maxDuration int64) SetOption {
 }
 
 // WithPbqStoreType sets store type option
-func WithPbqStoreType(storeType string) SetOption {
+func WithPbqStoreType(storeType dfv1.StoreType) SetOption {
 	return func(o *Options) error {
 		o.pbqStoreType = storeType
 		return nil

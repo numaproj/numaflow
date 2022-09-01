@@ -119,8 +119,14 @@ const (
 	DefaultPBQStoreSize       = 1000000       // Default persistent store size
 	DefaultPBQReadTimeoutSecs = 1             // Default read timeout for pbq
 
-	InMemoryStoreType   = "in-memory"
-	FileSystemStoreType = "file-system"
+)
+
+type StoreType string
+
+const (
+	InMemoryStoreType   StoreType = "in-memory"
+	FileSystemStoreType StoreType = "file-system"
+	NoOpStoreType       StoreType = "no-op"
 )
 
 type ContentType string

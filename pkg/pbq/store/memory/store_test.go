@@ -21,7 +21,7 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 	memStore, err := NewMemoryStore(ctx, "new-partition", options)
 	assert.NoError(t, err)
 
-	//write 10 isb messages to persisted store
+	// write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
@@ -43,7 +43,7 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	memStore, err := NewMemoryStore(ctx, "new-partition-2", options)
 	assert.NoError(t, err)
 
-	//write 10 isb messages to persisted store
+	// write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
@@ -83,7 +83,7 @@ func TestFullStore_Write(t *testing.T) {
 	memStore, err := NewMemoryStore(ctx, "new-partition-4", options)
 	assert.NoError(t, err)
 
-	//write 100 isb messages to persisted store
+	// write 100 isb messages to persisted store
 	msgCount := 100
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
@@ -93,7 +93,7 @@ func TestFullStore_Write(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	// now the store is full, if we write to store we should get an error
+	// store is full, if we write to store we should get an error
 	err = memStore.WriteToStore(&writeMessages[0])
 	assert.ErrorContains(t, err, "store is full")
 }

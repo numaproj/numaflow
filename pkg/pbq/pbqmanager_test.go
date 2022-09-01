@@ -2,14 +2,15 @@ package pbq
 
 import (
 	"context"
+	"sync"
+	"testing"
+	"time"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/stretchr/testify/assert"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestManager_ListPartitions(t *testing.T) {
@@ -20,11 +21,11 @@ func TestManager_ListPartitions(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create a new pbq using pbq manager
-	pq1, _, err := pbqManager.GetPBQ(ctx, "partition-1", true, dfv1.InMemoryStoreType)
+	pq1, _, err := pbqManager.GetPBQ(ctx, "partition-1", true)
 
 	assert.NoError(t, err)
 
-	pq2, _, err := pbqManager.GetPBQ(ctx, "partition-2", true, dfv1.InMemoryStoreType)
+	pq2, _, err := pbqManager.GetPBQ(ctx, "partition-2", true)
 	assert.NoError(t, err)
 
 	// list partitions should return 2 pbq entries
@@ -52,11 +53,11 @@ func TestManager_GetPBQ(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create a new pbq using Get PBQ
-	pb1, _, err := pbqManager.GetPBQ(ctx, "partition-3", true, dfv1.InMemoryStoreType)
+	pb1, _, err = pbqManager.GetPBQ(ctx, "partition-3", true)
 	assert.NoError(t, err)
 
 	// get the created pbq
-	pb2, _, err := pbqManager.GetPBQ(ctx, "partition-3", false, dfv1.InMemoryStoreType)
+	pb2, _, err = pbqManager.GetPBQ(ctx, "partition-3", false)
 
 	assert.Equal(t, pb1, pb2)
 }
@@ -69,7 +70,7 @@ func TestPBQFlow(t *testing.T) {
 	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
 
-	pq, _, err := pbqManager.GetPBQ(ctx, "partition-4", true, dfv1.InMemoryStoreType)
+	pq, _, err := pbqManager.GetPBQ(ctx, "partition-4", true)
 	assert.NoError(t, err)
 	msgsCount := 5
 	var wg sync.WaitGroup
@@ -121,7 +122,7 @@ func TestPBQFlowWithStoreFullError(t *testing.T) {
 	pbqManager, err := NewManager(ctx, store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryStoreType), store.WithReadTimeoutSecs(1), store.WithBufferSize(10))
 	assert.NoError(t, err)
 
-	pq, _, err := pbqManager.GetPBQ(ctx, "partition-5", true, dfv1.InMemoryStoreType)
+	pq, _, err := pbqManager.GetPBQ(ctx, "partition-5", true)
 	assert.NoError(t, err)
 	msgsCount := 150
 	var wg sync.WaitGroup

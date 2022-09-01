@@ -27,12 +27,12 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
-	//write 10 isb messages to persisted store
+	// write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	// lets create a pbq with buffer size 10
+	// create a pbq with buffer size 10
 	buffSize := 10
 	_ = store.WithBufferSize(int64(buffSize))(options)
 	pq, err := NewPBQ(ctx, "partition-1", memStore, qManager, options)
@@ -64,12 +64,12 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
-	//write 10 isb messages to persisted store
+	// write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	// lets create a pbq with buffer size 10
+	// create a pbq with buffer size 10
 	buffSize := 10
 	_ = store.WithBufferSize(int64(buffSize))(options)
 	pq, err := NewPBQ(ctx, "new-partition", memStore, qManager, options)
@@ -102,12 +102,12 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
-	//write 10 isb messages to persisted store
+	// write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	//create a pbq with buffer size 10
+	// create a pbq with buffer size 10
 	buffSize := 10
 	_ = store.WithBufferSize(int64(buffSize))(options)
 	pq, err := NewPBQ(ctx, "new-partition", memStore, qManager, options)
@@ -126,7 +126,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 				break
 			}
 		}
-		err := pq.Close()
+		err := pq.CloseReader()
 		assert.NoError(t, err)
 		wg.Done()
 	}()
@@ -158,12 +158,12 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	memStore, err := memory.NewMemoryStore(ctx, "partition-1", options)
 	assert.NoError(t, err)
 
-	//write 10 isb messages to persisted store
+	// write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	//create a pbq with buffer size 10
+	// create a pbq with buffer size 10
 	bufferSize := 10
 	_ = store.WithBufferSize(int64(bufferSize))(options)
 	pq, err := NewPBQ(ctx, "new-partition", memStore, qManager, options)
@@ -185,7 +185,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 				break
 			}
 		}
-		//err := pq.Close()
+		err := pq.CloseReader()
 		assert.NoError(t, err)
 		wg.Done()
 	}()
@@ -198,6 +198,9 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
+	time.Sleep(1 * time.Second)
+	// since we are closing the context, it should not block
+	cancelFn()
 	pq.CloseOfBook()
 
 	wg.Wait()
@@ -219,12 +222,12 @@ func TestPBQ_ReadWithEOF(t *testing.T) {
 	memStore, err := memory.NewMemoryStore(ctx, "partition-2", options)
 	assert.NoError(t, err)
 
-	//write 50 isb messages to persisted store
+	// write 50 isb messages to persisted store
 	msgCount := 50
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	//create a pbq with buffer size 10
+	// create a pbq with buffer size 10
 	bufferSize := 10
 	_ = store.WithBufferSize(int64(bufferSize))(options)
 	pq, err := NewPBQ(ctx, "partition-2", memStore, qManager, options)
@@ -235,19 +238,17 @@ func TestPBQ_ReadWithEOF(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	childCtx, _ := context.WithCancel(ctx)
-
-	// try reading 100 messages from the store, you should get EOF since you only have 50 messages
+	// reading 100 messages from the store, you should get EOF since you only have 50 messages
 	go func() {
 		var err error
 		var msgs []*isb.Message
 		for i := 0; i < 100; i++ {
-			msgs, err = pq.ReadFromPBQ(childCtx, 1)
+			msgs, err = pq.ReadFromPBQ(ctx, 1)
 			readMessages = append(readMessages, msgs...)
 		}
 		// check for EOF, since there are only 50 messages in store
 		assert.Error(t, err, EOF)
-		err = pq.Close()
+		err = pq.CloseReader()
 		assert.NoError(t, err)
 		wg.Done()
 	}()
