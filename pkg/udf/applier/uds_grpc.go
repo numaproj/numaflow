@@ -3,7 +3,6 @@ package applier
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
@@ -54,7 +53,7 @@ func (u *UDSGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 }
 
 func (u *UDSGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
-	key := string(readMessage.Key)
+	key := readMessage.Key
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
 	parentPaneInfo := readMessage.PaneInfo
@@ -93,79 +92,6 @@ func (u *UDSGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 			},
 		}
 		writeMessages = append(writeMessages, writeMessage)
-	}
-	return writeMessages, nil
-}
-
-// ApplyReduce applies the reduce udf on the incoming data stream.
-// TODO: incomplete implementation
-func (u *UDSGRPCBasedUDF) ApplyReduce(ctx context.Context, readMessageCh <-chan *isb.ReadMessage) ([]*isb.Message, error) {
-	var (
-		reduceDatumCh = make(chan *functionpb.Datum, 10)
-		writeMessages = make([]*isb.Message, 0)
-		wg            sync.WaitGroup
-		reduceFnErr   error
-	)
-
-	// TODO: how to set the key?
-	// ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: key}))
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var datumList []*functionpb.Datum
-		datumList, reduceFnErr = u.client.ReduceFn(ctx, reduceDatumCh)
-		if reduceFnErr != nil {
-			reduceFnErr = ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", reduceFnErr),
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			}
-			// no need to populate the datum list
-			return
-		}
-		for i, datum := range datumList {
-			_ = i
-			key := datum.Key
-			writeMessage := &isb.Message{
-				Header: isb.Header{
-					// TODO: how to set PaneInfo?
-					// PaneInfo: parentPaneInfo,
-					// TODO: how to set offset?
-					// ID:       fmt.Sprintf("%s-%d", offset.String(), i),
-					Key: key,
-				},
-				Body: isb.Body{
-					Payload: datum.Value,
-				},
-			}
-			writeMessages = append(writeMessages, writeMessage)
-		}
-	}()
-
-	// send read messages to the reduce function
-	for readMessage := range readMessageCh {
-		key := readMessage.Key
-		payload := readMessage.Body.Payload
-		// TODO: how to set offset?
-		// offset := readMessage.ReadOffset
-		parentPaneInfo := readMessage.PaneInfo
-
-		reduceDatumCh <- &functionpb.Datum{
-			Key:       key,
-			Value:     payload,
-			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
-			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
-		}
-	}
-	// end of message stream, close the channel to the reduce function
-	close(reduceDatumCh)
-	// wait for the reduce function go routine to complete
-	wg.Wait()
-	if reduceFnErr != nil {
-		return nil, reduceFnErr
 	}
 	return writeMessages, nil
 }
