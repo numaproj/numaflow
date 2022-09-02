@@ -109,8 +109,8 @@ func (u *UDSGRPCBasedUDF) ApplyReduce(ctx context.Context, readMessageCh <-chan 
 
 	// TODO: how to set the key?
 	// ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: key}))
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 		var datumList []*functionpb.Datum
 		datumList, reduceFnErr = u.client.ReduceFn(ctx, reduceDatumCh)
