@@ -133,7 +133,9 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	}
 	defer func() {
 		err = udfHandler.CloseConn(ctx)
-		log.Warnw("failed to close grpc client conn", zap.Error(err))
+		if err != nil {
+			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+		}
 	}()
 	log.Infow("Start processing udf messages", zap.String("isbs", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
 

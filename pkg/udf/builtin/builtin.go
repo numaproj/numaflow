@@ -22,11 +22,11 @@ func (b *Builtin) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	log.Infow("Start a builtin function", zap.Any("name", b.Name), zap.Strings("args", b.Args), zap.Any("kwargs", b.KWArgs))
 
-	excutor, err := b.executor()
+	executor, err := b.executor()
 	if err != nil {
 		return err
 	}
-	server.New().RegisterMapper(excutor).Start(context.Background())
+	server.New().RegisterMapper(executor).Start(ctx)
 	return nil
 }
 
