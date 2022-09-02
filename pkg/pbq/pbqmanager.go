@@ -24,6 +24,9 @@ type Manager struct {
 	pbqOptions   *Options
 	pbqMap       map[string]*PBQ
 	log          *zap.SugaredLogger
+	// we need lock to access pbqMap, since Deregister will be called inside pbq
+	// and each pbq will be inside a go routine, and also entire PBQ could be managed
+	// through a go routine (depends on the orchestrator)
 	sync.RWMutex
 }
 
@@ -150,7 +153,8 @@ func (m *Manager) ShutDown(ctx context.Context) {
 				closeErr = q.CloseWriter()
 				if closeErr != nil {
 					attempt += 1
-					m.log.Errorw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", q.partitionID), zap.Error(closeErr))
+					m.log.Warnw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", q.partitionID), zap.Error(closeErr))
+					// exponential backoff will return if err is not nil
 					return false, nil
 				}
 				return true, nil

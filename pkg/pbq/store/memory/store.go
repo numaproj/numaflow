@@ -39,11 +39,13 @@ func NewMemoryStore(ctx context.Context, partitionID string, options *store.Stor
 // ReadFromStore will return upto N messages persisted in store
 // this function will be invoked during bootstrap if there is a restart
 func (m *memoryStore) Read(size int64) ([]*isb.Message, bool, error) {
-	if m.IsEmpty() || m.readPos >= m.writePos {
+	if m.isEmpty() || m.readPos >= m.writePos {
 		m.log.Errorw(store.ReadStoreEmptyErr.Error())
 		return []*isb.Message{}, true, nil
 	}
 
+	// if size is greater than the number of messages in the store
+	// we will assign size with the number of messages in the store
 	size = util.Min(size, m.writePos-m.readPos)
 	readMessages := m.storage[m.readPos : m.readPos+size]
 	m.readPos += size
@@ -81,7 +83,8 @@ func (m *memoryStore) GC() error {
 	return nil
 }
 
-// IsEmpty check if there are any records persisted in store
-func (m *memoryStore) IsEmpty() bool {
+// isEmpty check if there are any records persisted in store
+func (m *memoryStore) isEmpty() bool {
+	// is empty should return true when the store is created and no messages are written
 	return m.writePos == 0
 }

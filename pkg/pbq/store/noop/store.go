@@ -30,7 +30,3 @@ func (p *PBQNoOpStore) Close() error {
 func (p *PBQNoOpStore) GC() error {
 	return nil
 }
-
-func (p *PBQNoOpStore) IsEmpty() bool {
-	return false
-}

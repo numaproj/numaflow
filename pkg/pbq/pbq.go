@@ -10,6 +10,8 @@ import (
 
 var COBErr error = errors.New("error while writing to pbq, pbq is closed")
 
+// PBQ Buffer queue which is backed with a persisted store, each partition
+// will have a PBQ associated with it
 type PBQ struct {
 	store       store.Store
 	output      chan *isb.Message
@@ -21,25 +23,26 @@ type PBQ struct {
 }
 
 // Write writes message to pbq and persistent store
-// We don't need a context here as this is invoked for every message.
-func (p *PBQ) Write(ctx context.Context, message *isb.Message) (writeErr error) {
+func (p *PBQ) Write(ctx context.Context, message *isb.Message) error {
 	// if cob we should return
 	if p.cob {
 		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("partitionID", p.partitionID), zap.Any("header", message.Header))
-		writeErr = COBErr
-		return
+		return COBErr
 	}
+	var writeErr error
 	// we need context to get out of blocking write
 	select {
 	case p.output <- message:
+		// this store.Write is an `inSync` flush (if need be). The performance will be very bad but the system is correct.
+		// TODO: shortly in the near future we will move to async writes.
 		writeErr = p.store.Write(message)
-		return
 	case <-ctx.Done():
 		// closing the output channel will not cause panic, since its inside select case
+		// ctx.Done implicitly means write hasn't succeeded.
 		close(p.output)
-		writeErr = p.store.Close()
+		writeErr = ctx.Err()
 	}
-	return
+	return writeErr
 }
 
 //CloseOfBook closes output channel
@@ -50,9 +53,8 @@ func (p *PBQ) CloseOfBook() {
 
 // CloseWriter is used by the writer to indicate close of context
 // we should flush pending messages to store
-func (p *PBQ) CloseWriter() (closeErr error) {
-	closeErr = p.store.Close()
-	return
+func (p *PBQ) CloseWriter() error {
+	return p.store.Close()
 }
 
 // ReadCh exposes read channel to read messages from PBQ
@@ -63,17 +65,17 @@ func (p *PBQ) ReadCh() <-chan *isb.Message {
 
 // CloseReader is used by the Reader to indicate that it has finished
 // consuming the data from output channel
-func (p *PBQ) CloseReader() (closeErr error) {
-	return
+func (p *PBQ) CloseReader() error {
+	return nil
 }
 
 // GC is invoked after the Reader (ProcessAndForward) has finished
 // forwarding the output to ISB.
-func (p *PBQ) GC() (gcErr error) {
-	gcErr = p.store.GC()
+func (p *PBQ) GC() error {
+	err := p.store.GC()
 	p.store = nil
 	p.manager.Deregister(p.partitionID)
-	return
+	return err
 }
 
 // ReplayRecordsFromStore replays store messages when replay flag is set during start up time
