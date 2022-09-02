@@ -14,7 +14,7 @@ import (
 func TestMemoryStore_WriteToStore(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	options := &store.Options{}
+	options := &store.StoreOptions{}
 	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
@@ -28,7 +28,7 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
 	for _, msg := range writeMessages {
-		err := memStore.WriteToStore(&msg)
+		err := memStore.Write(&msg)
 		assert.NoError(t, err)
 	}
 }
@@ -36,7 +36,7 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 func TestMemoryStore_ReadFromStore(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	options := &store.Options{}
+	options := &store.StoreOptions{}
 	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
@@ -50,11 +50,11 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
 	for _, msg := range writeMessages {
-		err := memStore.WriteToStore(&msg)
+		err := memStore.Write(&msg)
 		assert.NoError(t, err)
 	}
 	var readMessages []*isb.Message
-	readMessages, _, err = memStore.ReadFromStore(int64(msgCount))
+	readMessages, _, err = memStore.Read(int64(msgCount))
 	assert.NoError(t, err)
 	// number of read messages should be equal to msgCount
 	assert.Len(t, readMessages, msgCount)
@@ -63,14 +63,14 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 func TestEmptyStore_Read(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	options := &store.Options{}
+	options := &store.StoreOptions{}
 	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	ctx := context.Background()
 
 	memStore, err := NewMemoryStore(ctx, "new-partition-3", options)
 	assert.NoError(t, err)
 	var eof bool
-	_, eof, err = memStore.ReadFromStore(int64(storeSize))
+	_, eof, err = memStore.Read(int64(storeSize))
 	assert.NoError(t, err)
 	// since store is empty, eof will be true
 	assert.Equal(t, eof, true)
@@ -80,7 +80,7 @@ func TestEmptyStore_Read(t *testing.T) {
 func TestFullStore_Write(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
 	storeSize := 100
-	options := &store.Options{}
+	options := &store.StoreOptions{}
 	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
@@ -94,11 +94,11 @@ func TestFullStore_Write(t *testing.T) {
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
 	for _, msg := range writeMessages {
-		err := memStore.WriteToStore(&msg)
+		err := memStore.Write(&msg)
 		assert.NoError(t, err)
 	}
 
 	// now the store is full, if we write to store we should get an error
-	err = memStore.WriteToStore(&writeMessages[0])
+	err = memStore.Write(&writeMessages[0])
 	assert.ErrorContains(t, err, "store is full")
 }

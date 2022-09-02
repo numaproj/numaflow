@@ -3,7 +3,9 @@ package pbq
 import (
 	"context"
 	"errors"
+	"fmt"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/pbq/store/noop"
@@ -18,32 +20,73 @@ var NonExistentPBQErr error = errors.New("missing PBQ for the partition")
 
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
-	options *store.Options
-	pbqMap  map[string]*PBQ
-	log     *zap.SugaredLogger
+	storeOptions *store.StoreOptions
+	pbqOptions   *Options
+	pbqMap       map[string]*PBQ
+	log          *zap.SugaredLogger
+	sync.RWMutex
 }
 
 // NewManager returns new instance of manager
 // We don't intend this to be called by multiple routines.
-func NewManager(ctx context.Context, opts ...store.SetOption) (*Manager, error) {
-	options := store.DefaultOptions()
+func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
+	pbqOpts := DefaultOptions()
 	for _, opt := range opts {
 		if opt != nil {
-			if err := opt(options); err != nil {
+			if err := opt(pbqOpts); err != nil {
 				return nil, err
 			}
 		}
 	}
+
 	pbqManager := &Manager{
-		pbqMap:  make(map[string]*PBQ),
-		options: options,
-		log:     logging.FromContext(ctx),
+		pbqMap:       make(map[string]*PBQ),
+		pbqOptions:   pbqOpts,
+		storeOptions: pbqOpts.storeOptions,
+		log:          logging.FromContext(ctx),
 	}
+
 	return pbqManager, nil
+}
+
+// NewPBQ creates new pbq for a partition
+func (m *Manager) NewPBQ(ctx context.Context, partitionID string) (*PBQ, error) {
+
+	var persistentStore store.Store
+	var err error
+
+	switch m.storeOptions.PbqStoreType() {
+	case dfv1.NoOpType:
+		persistentStore, _ = noop.NewPBQNoOpStore()
+	case dfv1.InMemoryType:
+		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.storeOptions)
+		if err != nil {
+			m.log.Errorw("Error while creating persistent store", zap.Any("partitionID", partitionID), zap.Any("store type", m.storeOptions.PbqStoreType()), zap.Error(err))
+			return nil, err
+		}
+	case dfv1.FileSystemType:
+		return nil, errors.New("not implemented")
+	}
+
+	// output channel is buffered to support bulk reads
+	p := &PBQ{
+		store:       persistentStore,
+		output:      make(chan *isb.Message, m.pbqOptions.channelBufferSize),
+		cob:         false,
+		partitionID: partitionID,
+		options:     m.pbqOptions,
+		manager:     m,
+		log:         logging.FromContext(ctx).With("PBQ", partitionID),
+	}
+
+	m.Register(partitionID, p)
+	return p, nil
 }
 
 // ListPartitions returns all the pbq instances
 func (m *Manager) ListPartitions() []*PBQ {
+	m.RLock()
+	defer m.RUnlock()
 
 	pbqList := make([]*PBQ, len(m.pbqMap))
 	i := 0
@@ -51,66 +94,36 @@ func (m *Manager) ListPartitions() []*PBQ {
 		pbqList[i] = val
 		i++
 	}
+
 	return pbqList
 }
 
-// GetPBQ returns pbq for the given partitionID, if createIfMissing is set to true
-// it creates and return a new pbq instance
-func (m *Manager) GetPBQ(ctx context.Context, partitionID string, createIfMissing bool) (*PBQ, bool, error) {
+// GetPBQ returns pbq for the given partitionID
+func (m *Manager) GetPBQ(partitionID string) (*PBQ, error) {
+	m.RLock()
+	defer m.RUnlock()
 
-	pbqInstance, ok := m.pbqMap[partitionID]
-	if ok {
-		return pbqInstance, false, nil
+	if pbqInstance, ok := m.pbqMap[partitionID]; ok {
+		return pbqInstance, nil
 	}
 
-	// no match and nothing to create
-	if !ok && !createIfMissing {
-		m.log.Info("requested pbq is not created", zap.Any("partitionID", partitionID))
-		return nil, false, NonExistentPBQErr
-	}
-
-	// no match and create if missing
-	var persistentStore store.Store
-	var err error
-
-	switch m.options.PbqStoreType() {
-	case dfv1.NoOpType:
-		persistentStore, _ = noop.NewPBQNoOpStore()
-	case dfv1.InMemoryType:
-		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.options)
-		if err != nil {
-			m.log.Errorw("Error while creating persistent store", zap.Any("partitionID", partitionID), zap.Any("store type", m.options.PbqStoreType()), zap.Error(err))
-			return nil, true, err
-		}
-	case dfv1.FileSystemType:
-		return nil, true, errors.New("not implemented")
-	}
-	pbq, err := NewPBQ(ctx, partitionID, persistentStore, m, m.options)
-	if err != nil {
-		m.log.Errorw("Error while creating PBQ", zap.Any("Partition ID", partitionID), zap.Error(err))
-		return nil, true, err
-	}
-	m.Register(partitionID, pbq)
-	return pbq, true, nil
+	return nil, NonExistentPBQErr
 }
 
 // StartUp creates list of PBQ instances using the persistent store
 func (m *Manager) StartUp(ctx context.Context) error {
 
-	switch m.options.PbqStoreType() {
+	switch m.storeOptions.PbqStoreType() {
 	case dfv1.NoOpType:
 		return nil
 	case dfv1.InMemoryType:
 		return nil
 	case dfv1.FileSystemType:
-		return errors.New("not implemented")
+		return fmt.Errorf("not implemented store type %s", m.storeOptions.PbqStoreType())
+	default:
+		return fmt.Errorf("unknown store type %s", m.storeOptions.PbqStoreType())
 	}
 
-	for _, value := range m.pbqMap {
-		// set replay flag so that it replays messages from the store during startup
-		value.SetIsReplaying(ctx, true)
-	}
-	return nil
 }
 
 // ShutDown for clean shut down, flushes pending messages to store and closes the store
@@ -138,7 +151,7 @@ func (m *Manager) ShutDown(ctx context.Context) {
 				if closeErr != nil {
 					attempt += 1
 					m.log.Errorw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", q.partitionID), zap.Error(closeErr))
-					return false, err
+					return false, nil
 				}
 				return true, nil
 			})
@@ -153,6 +166,9 @@ func (m *Manager) ShutDown(ctx context.Context) {
 
 // Register is intended to be used by PBQ to register itself with the manager.
 func (m *Manager) Register(partitionID string, p *PBQ) {
+	m.Lock()
+	defer m.Unlock()
+
 	if _, ok := m.pbqMap[partitionID]; !ok {
 		m.pbqMap[partitionID] = p
 	}
@@ -160,5 +176,24 @@ func (m *Manager) Register(partitionID string, p *PBQ) {
 
 // Deregister is intended to be used by PBQ to deregister itself after GC is called.
 func (m *Manager) Deregister(partitionID string) {
+	m.Lock()
+	defer m.Unlock()
+
 	delete(m.pbqMap, partitionID)
+}
+
+// Replay replays messages which are persisted in pbq store
+func (m *Manager) Replay(ctx context.Context) {
+	var wg sync.WaitGroup
+
+	for _, val := range m.pbqMap {
+		wg.Add(1)
+		m.log.Info("Replaying records from store", zap.Any("PBQ", val.partitionID))
+		go func(ctx context.Context, p *PBQ) {
+			defer wg.Done()
+			p.ReplayRecordsFromStore(ctx)
+		}(ctx, val)
+	}
+
+	wg.Wait()
 }

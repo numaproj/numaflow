@@ -9,27 +9,27 @@ import (
 	"go.uber.org/zap"
 )
 
-// MemoryStore implements PBQStore which stores the data in memory
-type MemoryStore struct {
+// memoryStore implements PBQStore which stores the data in memory
+type memoryStore struct {
 	closed      bool
 	writePos    int64
 	readPos     int64
 	storage     []*isb.Message
-	options     *store.Options
+	options     *store.StoreOptions
 	log         *zap.SugaredLogger
 	partitionID string
 }
 
 // NewMemoryStore returns new memory store
-func NewMemoryStore(ctx context.Context, partitionID string, options *store.Options) (*MemoryStore, error) {
+func NewMemoryStore(ctx context.Context, partitionID string, options *store.StoreOptions) (store.Store, error) {
 
-	memStore := &MemoryStore{
+	memStore := &memoryStore{
 		writePos:    0,
 		readPos:     0,
 		closed:      false,
 		storage:     make([]*isb.Message, options.StoreSize()),
 		options:     options,
-		log:         logging.FromContext(ctx).With("PBQ Store", "Memory Store").With("Partition ID", partitionID),
+		log:         logging.FromContext(ctx).With("PBQ store", "Memory store").With("Partition ID", partitionID),
 		partitionID: partitionID,
 	}
 
@@ -38,7 +38,7 @@ func NewMemoryStore(ctx context.Context, partitionID string, options *store.Opti
 
 // ReadFromStore will return upto N messages persisted in store
 // this function will be invoked during bootstrap if there is a restart
-func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, bool, error) {
+func (m *memoryStore) Read(size int64) ([]*isb.Message, bool, error) {
 	if m.IsEmpty() || m.readPos >= m.writePos {
 		m.log.Errorw(store.ReadStoreEmptyErr.Error())
 		return []*isb.Message{}, true, nil
@@ -51,7 +51,7 @@ func (m *MemoryStore) ReadFromStore(size int64) ([]*isb.Message, bool, error) {
 }
 
 // WriteToStore writes a message to store
-func (m *MemoryStore) WriteToStore(msg *isb.Message) error {
+func (m *memoryStore) Write(msg *isb.Message) error {
 	if m.writePos >= m.options.StoreSize() {
 		m.log.Errorw(store.WriteStoreFullErr.Error(), zap.Any("msg header", msg.Header))
 		return store.WriteStoreFullErr
@@ -67,7 +67,7 @@ func (m *MemoryStore) WriteToStore(msg *isb.Message) error {
 
 // Close closes the store, no more writes to persistent store
 // no implementation for in memory store
-func (m *MemoryStore) Close() error {
+func (m *memoryStore) Close() error {
 	m.closed = true
 	return nil
 }
@@ -75,13 +75,13 @@ func (m *MemoryStore) Close() error {
 // GC does garbage collection
 // for in-memory implementation we set the storage to nil, so that it will
 // ready for GC
-func (m *MemoryStore) GC() error {
+func (m *memoryStore) GC() error {
 	m.storage = nil
 	m.writePos = -1
 	return nil
 }
 
 // IsEmpty check if there are any records persisted in store
-func (m *MemoryStore) IsEmpty() bool {
+func (m *memoryStore) IsEmpty() bool {
 	return m.writePos == 0
 }
