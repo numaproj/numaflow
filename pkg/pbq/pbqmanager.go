@@ -110,7 +110,7 @@ func (m *Manager) GetPBQ(partitionID string) (*PBQ, error) {
 	return nil, NonExistentPBQErr
 }
 
-// StartUp creates list of PBQ instances using the persistent store
+// StartUp restores the state of the pbqManager
 func (m *Manager) StartUp(ctx context.Context) error {
 
 	switch m.storeOptions.PbqStoreType() {
