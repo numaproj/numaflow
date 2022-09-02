@@ -731,7 +731,7 @@ message PipelineSpec {
   // Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been
   // created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline
   // should be recreated.
-  // +kubebuilder:default={"propagate": false}
+  // +kubebuilder:default={"disabled": false}
   // +optional
   optional Watermark watermark = 6;
 }
@@ -983,9 +983,14 @@ message VertexStatus {
 }
 
 message Watermark {
-  // Propagate toggles the watermark propagation.
+  // Disabled toggles the watermark propagation, defaults to false.
   // +kubebuilder:default=false
   // +optional
-  optional bool propagate = 1;
+  optional bool disabled = 1;
+
+  // Maximum delay allowed for watermark calculation, defaults to "0s", which means no delay.
+  // +kubebuilder:default="0s"
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxDelay = 2;
 }
 

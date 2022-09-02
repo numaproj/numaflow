@@ -33,7 +33,7 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 	var wmFetcher = new(watermarkFetchers)
 	var fromBufferName string
 
-	wmFetcher.isWatermarkEnabled = pipeline.Spec.Watermark.Propagate
+	wmFetcher.isWatermarkEnabled = !pipeline.Spec.Watermark.Disabled
 	if !wmFetcher.isWatermarkEnabled {
 		return wmFetcher, nil
 	}

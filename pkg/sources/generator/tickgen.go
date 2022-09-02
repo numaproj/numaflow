@@ -84,15 +84,8 @@ type memgen struct {
 	vertexInstance *dfv1.VertexInstance
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
-	// TODO: delete this watermark progressor
-	progressor *watermark
 
 	logger *zap.SugaredLogger
-}
-
-type watermark struct {
-	sourcePublish publish.Publisher
-	wmProgressor  generic.Progressor
 }
 
 type Option func(*memgen) error
@@ -135,12 +128,8 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 		pipelineName:   vertexInstance.Vertex.Spec.PipelineName,
 		genfn:          recordGenerator,
 		vertexInstance: vertexInstance,
-		progressor: &watermark{
-			sourcePublish: nil,
-			wmProgressor:  nil,
-		},
-		srcchan:     make(chan record, rpu*5),
-		readTimeout: 3 * time.Second, // default timeout
+		srcchan:        make(chan record, rpu*5),
+		readTimeout:    3 * time.Second, // default timeout
 	}
 
 	for _, o := range opts {

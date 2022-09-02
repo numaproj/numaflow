@@ -22,8 +22,8 @@ func TestWatermark(t *testing.T) {
 	// for use by the buffer reader on the other side of the stream
 	ctx := context.Background()
 
-	_ = os.Setenv(dfv1.EnvWatermarkOn, "true")
-	defer func() { _ = os.Unsetenv(dfv1.EnvWatermarkOn) }()
+	_ = os.Setenv(dfv1.EnvWatermarkDisabled, "false")
+	defer func() { _ = os.Unsetenv(dfv1.EnvWatermarkDisabled) }()
 
 	dest := simplebuffer.NewInMemoryBuffer("writer", 1000)
 	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{

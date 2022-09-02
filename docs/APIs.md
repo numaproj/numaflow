@@ -3742,12 +3742,26 @@ Description
 <tbody>
 <tr>
 <td>
-<code>propagate</code></br> <em> bool </em>
+<code>disabled</code></br> <em> bool </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-Propagate toggles the watermark propagation.
+Disabled toggles the watermark propagation, defaults to false.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>maxDelay</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Maximum delay allowed for watermark calculation, defaults to “0s”, which
+means no delay.
 </p>
 </td>
 </tr>

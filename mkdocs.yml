@@ -4,7 +4,7 @@ edit_uri: edit/main/docs/
 strict: true
 theme:
   name: material
-  favicon: assets/numa.svg
+  favicon: assets/numaproj.svg
   font:
     text: Roboto
     code: Roboto Mono

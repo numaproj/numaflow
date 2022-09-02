@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,10 @@ import (
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
 type httpSource struct {
@@ -31,7 +36,11 @@ type httpSource struct {
 	logger       *zap.SugaredLogger
 
 	forwarder *forward.InterStepDataForward
-	shutdown  func(context.Context) error
+	// source watermark publisher
+	sourcePublishWM publish.Publisher
+	// context cancel function
+	cancelfn context.CancelFunc
+	shutdown func(context.Context) error
 }
 
 type Option func(*httpSource) error
@@ -59,10 +68,10 @@ func WithBufferSize(s int) Option {
 	}
 }
 
-func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*httpSource, error) {
+func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores *generic.PublishWMStores, opts ...Option) (*httpSource, error) {
 	h := &httpSource{
-		name:         vertex.Spec.Name,
-		pipelineName: vertex.Spec.PipelineName,
+		name:         vertexInstance.Vertex.Spec.Name,
+		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
 		ready:        false,
 		bufferSize:   1000,            // default size
 		readTimeout:  1 * time.Second, // default timeout
@@ -79,7 +88,7 @@ func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*http
 	h.messages = make(chan *isb.ReadMessage, h.bufferSize)
 
 	auth := ""
-	if x := vertex.Spec.Source.HTTP.Auth; x != nil && x.Token != nil {
+	if x := vertexInstance.Vertex.Spec.Source.HTTP.Auth; x != nil && x.Token != nil {
 		if s, err := sharedutil.GetSecretFromVolume(x.Token); err != nil {
 			return nil, fmt.Errorf("failed to get auth token, %w", err)
 		} else {
@@ -95,7 +104,7 @@ func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*http
 		}
 		w.WriteHeader(204)
 	})
-	mux.HandleFunc("/vertices/"+vertex.Spec.Name, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/vertices/"+vertexInstance.Vertex.Spec.Name, func(w http.ResponseWriter, r *http.Request) {
 		if auth != "" && r.Header.Get("Authorization") != "Bearer "+auth {
 			w.WriteHeader(403)
 			_, _ = w.Write([]byte("403 forbidden\n"))
@@ -109,7 +118,7 @@ func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*http
 		msg, err := ioutil.ReadAll(r.Body)
 		_ = r.Body.Close()
 		if err != nil {
-			w.WriteHeader(400)
+			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(err.Error()))
 			return
 		}
@@ -118,20 +127,32 @@ func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*http
 		if id == "" {
 			id = uuid.New().String()
 		}
+		eventTime := time.Now()
+		if x := r.Header.Get(dfv1.KeyMetaEventTime); x != "" {
+			i, err := strconv.ParseInt(x, 10, 64)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(err.Error()))
+				return
+			}
+			eventTime = time.Unix(i, 0)
+		}
 		m := &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{EventTime: time.Now()},
+					PaneInfo: isb.PaneInfo{EventTime: eventTime},
 					ID:       id,
 				},
 				Body: isb.Body{
 					Payload: msg,
 				},
 			},
-			ReadOffset: isb.SimpleOffset(func() string { return id }),
+			// This offset is only used for wartermark publishing and fetching in the source,
+			// it has to be integer format so that function Sequence() has correct return.
+			ReadOffset: isb.SimpleOffset(func() string { return fmt.Sprint(time.Now().UnixNano()) }),
 		}
 		h.messages <- m
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	})
 	cer, err := sharedtls.GenerateX509KeyPair()
 	if err != nil {
@@ -157,17 +178,22 @@ func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*http
 	}
 
 	forwardOpts := []forward.Option{forward.WithLogger(h.logger)}
-	if x := vertex.Spec.Limits; x != nil {
+	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertex, h, destinations, forward.All, applier.Terminal, nil, nil, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
 	h.forwarder = forwarder
+	ctx, cancel := context.WithCancel(context.Background())
+	h.cancelfn = cancel
+	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
+	processorEntity := processor.NewProcessorEntity(entityName)
+	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores.HBStore, publishWMStores.OTStore, publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
 	return h, nil
 }
 
@@ -177,18 +203,26 @@ func (h *httpSource) GetName() string {
 
 func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := []*isb.ReadMessage{}
+	var earliest time.Time
 	timeout := time.After(h.readTimeout)
+loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-h.messages:
+			if earliest.IsZero() || m.EventTime.Before(earliest) {
+				earliest = m.EventTime
+			}
 			msgs = append(msgs, m)
+			httpSourceReadCount.With(map[string]string{metricspkg.LabelVertex: h.name, metricspkg.LabelPipeline: h.pipelineName}).Inc()
 		case <-timeout:
 			h.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", h.readTimeout), zap.Int("read", len(msgs)))
-			return msgs, nil
+			break loop
 		}
 	}
-	httpSourceReadCount.With(map[string]string{metricspkg.LabelVertex: h.name, metricspkg.LabelPipeline: h.pipelineName}).Inc()
 	h.logger.Debugf("Read %d messages.", len(msgs))
+	if len(msgs) > 0 && !earliest.IsZero() {
+		h.sourcePublishWM.PublishWatermark(processor.Watermark(earliest), msgs[len(msgs)-1].ReadOffset)
+	}
 	return msgs, nil
 }
 
@@ -198,6 +232,7 @@ func (h *httpSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 
 func (h *httpSource) Close() error {
 	h.logger.Info("Shutting down http source server...")
+	h.cancelfn()
 	close(h.messages)
 	if err := h.shutdown(context.Background()); err != nil {
 		return err

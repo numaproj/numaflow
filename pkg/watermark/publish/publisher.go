@@ -39,6 +39,8 @@ type publish struct {
 	// autoRefreshHeartbeat is not required for all processors. e.g. Kafka source doesn't need it
 	autoRefreshHeartbeat bool
 	podHeartbeatRate     int64
+	// delay should only be used in source processors.
+	delay time.Duration
 }
 
 // NewPublish returns `Publish`.
@@ -62,6 +64,7 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 		log:                  log,
 		autoRefreshHeartbeat: opts.autoRefreshHeartbeat,
 		podHeartbeatRate:     opts.podHeartbeatRate,
+		delay:                opts.delay,
 	}
 
 	p.initialSetup()
@@ -82,6 +85,9 @@ func (p *publish) initialSetup() {
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
 // is less than the current head watermark.
 func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
+	if p.delay.Nanoseconds() >= 0 && !time.Time(wm).IsZero() {
+		wm = processor.Watermark(time.Time(wm).Add(-p.delay))
+	}
 	// update p.headWatermark only if wm > p.headWatermark
 	if time.Time(wm).After(time.Time(p.headWatermark)) {
 		p.headWatermark = wm
