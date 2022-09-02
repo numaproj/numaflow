@@ -26,11 +26,11 @@ func (b *Builtin) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	server.New().RegisterMapper(excutor).Start()
+	server.New().RegisterMapper(excutor).Start(context.Background())
 	return nil
 }
 
-func (b *Builtin) executor() (functionsdk.DoFunc, error) {
+func (b *Builtin) executor() (functionsdk.MapFunc, error) {
 	// TODO: deal with args later
 	switch b.Name {
 	case "cat":

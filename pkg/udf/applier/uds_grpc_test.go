@@ -69,15 +69,17 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 		req := &functionpb.Datum{
-			Key:            "test_success_key",
-			Value:          []byte(`forward_message`),
-			EventTime:      &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
-			IntervalWindow: &functionpb.IntervalWindow{StartTime: timestamppb.New(time.Unix(1661169600, 0)), EndTime: timestamppb.New(time.Unix(1661169660, 0))},
-			PaneInfo:       &functionpb.PaneInfo{Watermark: timestamppb.New(time.Time{})},
+			Key:       "test_success_key",
+			Value:     []byte(`forward_message`),
+			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
+			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 		}
-		mockClient.EXPECT().DoFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
-				req,
+				{
+					Key:   "test_success_key",
+					Value: []byte(`forward_message`),
+				},
 			},
 		}, nil)
 
@@ -96,8 +98,6 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 				Header: isb.Header{
 					PaneInfo: isb.PaneInfo{
 						EventTime: time.Unix(1661169600, 0),
-						StartTime: time.Unix(1661169600, 0),
-						EndTime:   time.Unix(1661169660, 0),
 					},
 					ID:  "test_id",
 					Key: []byte(`test_success_key`),
@@ -120,13 +120,12 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 		req := &functionpb.Datum{
-			Key:            "test_error_key",
-			Value:          []byte(`forward_message`),
-			EventTime:      &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
-			IntervalWindow: &functionpb.IntervalWindow{StartTime: timestamppb.New(time.Unix(1661169600, 0)), EndTime: timestamppb.New(time.Unix(1661169660, 0))},
-			PaneInfo:       &functionpb.PaneInfo{Watermark: timestamppb.New(time.Time{})},
+			Key:       "test_error_key",
+			Value:     []byte(`forward_message`),
+			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
+			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 		}
-		mockClient.EXPECT().DoFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -142,9 +141,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			Message: isb.Message{
 				Header: isb.Header{
 					PaneInfo: isb.PaneInfo{
-						EventTime: time.Unix(1661169600, 0),
-						StartTime: time.Unix(1661169600, 0),
-						EndTime:   time.Unix(1661169660, 0),
+						EventTime: time.Unix(1661169660, 0),
 					},
 					ID:  "test_id",
 					Key: []byte(`test_error_key`),
@@ -179,7 +176,7 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-	mockClient.EXPECT().DoFn(gomock.Any(), gomock.Any()).DoAndReturn(
+	mockClient.EXPECT().MapFn(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
 			var originalValue testutils.PayloadForTest
 			_ = json.Unmarshal(datum.GetValue(), &originalValue)
@@ -187,19 +184,13 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			var elements []*functionpb.Datum
 			if originalValue.Value%2 == 0 {
 				elements = append(elements, &functionpb.Datum{
-					Key:            "even",
-					Value:          doubledValue,
-					EventTime:      datum.GetEventTime(),
-					PaneInfo:       datum.GetPaneInfo(),
-					IntervalWindow: datum.GetIntervalWindow(),
+					Key:   "even",
+					Value: doubledValue,
 				})
 			} else {
 				elements = append(elements, &functionpb.Datum{
-					Key:            "odd",
-					Value:          doubledValue,
-					EventTime:      datum.GetEventTime(),
-					PaneInfo:       datum.GetPaneInfo(),
-					IntervalWindow: datum.GetIntervalWindow(),
+					Key:   "odd",
+					Value: doubledValue,
 				})
 			}
 			datumList := &functionpb.DatumList{

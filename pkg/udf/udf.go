@@ -120,7 +120,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	})
 
 	log = log.With("protocol", "uds-grpc-udf")
-	udfHandler, err := applier.NewUDSGRPCBasedUDF(ctx)
+	udfHandler, err := applier.NewUDSGRPCBasedUDF()
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)
 	}

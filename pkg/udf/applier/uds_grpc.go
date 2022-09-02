@@ -9,36 +9,39 @@ import (
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/function/client"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// TODO: only support map operation ATM
-
+// UDSGRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
 type UDSGRPCBasedUDF struct {
 	client functionsdk.Client
 }
 
 var _ Applier = (*UDSGRPCBasedUDF)(nil)
 
+// NewUDSGRPCBasedUDF returns a new UDSGRPCBasedUDF object.
 func NewUDSGRPCBasedUDF() (*UDSGRPCBasedUDF, error) {
 	c, err := client.New()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
+		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
 	return &UDSGRPCBasedUDF{c}, nil
 }
 
+// CloseConn closes the gRPC client connection.
 func (u *UDSGRPCBasedUDF) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
+// WaitUntilReady waits until the client is connected.
 func (u *UDSGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	var err error
 	for {
 		select {
 		case <-ctx.Done():
-			// TODO: can use only one %w
+			// using %v for ctx.Err() because only one %w can exist in the fmt.Errorf
 			return fmt.Errorf("failed to wait for ready: %v, %w", ctx.Err(), err)
 		default:
 			if _, err = u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
@@ -55,20 +58,19 @@ func (u *UDSGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 	offset := readMessage.ReadOffset
 	parentPaneInfo := readMessage.PaneInfo
 
-	// TODO: revisit EventTime, IntervalWindow, and PaneInfo
 	var d = &functionpb.Datum{
-		Key:            key,
-		Value:          payload,
-		EventTime:      &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
-		IntervalWindow: &functionpb.IntervalWindow{StartTime: timestamppb.New(parentPaneInfo.StartTime), EndTime: timestamppb.New(parentPaneInfo.EndTime)},
-		PaneInfo:       &functionpb.PaneInfo{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
+		Key:       key,
+		Value:     payload,
+		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
+		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
 	}
 
-	datumList, err := u.client.DoFn(ctx, d)
+	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: key}))
+	datumList, err := u.client.MapFn(ctx, d)
 	if err != nil {
 		return nil, ApplyUDFErr{
 			UserUDFErr: false,
-			Message:    fmt.Sprintf("grpc client.DoFn failed, %s", err),
+			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 			InternalErr: InternalErr{
 				Flag:        true,
 				MainCarDown: false,

@@ -6,13 +6,14 @@ import (
 
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow/pkg/shared/expr"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 type filter struct {
 	expression string
 }
 
-func New(args map[string]string) (functionsdk.DoFunc, error) {
+func New(args map[string]string) (functionsdk.MapFunc, error) {
 	expr, existing := args["expression"]
 	if !existing {
 		return nil, fmt.Errorf("missing \"expression\"")
@@ -21,10 +22,13 @@ func New(args map[string]string) (functionsdk.DoFunc, error) {
 		expression: expr,
 	}
 
-	return func(ctx context.Context, key string, msg []byte) (functionsdk.Messages, error) {
-		resultMsg, err := f.apply(msg)
-
-		return functionsdk.MessagesBuilder().Append(resultMsg), err
+	return func(ctx context.Context, key string, datum functionsdk.Datum) functionsdk.Messages {
+		log := logging.FromContext(ctx)
+		resultMsg, err := f.apply(datum.Value())
+		if err != nil {
+			log.Errorf("filter map function apply got an error: %v", err)
+		}
+		return functionsdk.MessagesBuilder().Append(resultMsg)
 	}, nil
 }
 
