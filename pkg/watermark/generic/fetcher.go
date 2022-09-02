@@ -9,12 +9,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// GenericFetch is a generic fetcher which can be used for most use cases.
-type GenericFetch struct {
+// genericFetch is a generic fetcher which can be used for most use cases.
+type genericFetch struct {
 	fromEdge *fetch.Edge
 }
 
-var _ fetch.Fetcher = (*GenericFetch)(nil)
+var _ fetch.Fetcher = (*genericFetch)(nil)
 
 // FetchWMWatchers has the watcher information required for fetching watermarks.
 type FetchWMWatchers struct {
@@ -33,11 +33,11 @@ func BuildFetchWMWatchers(hbWatch store.WatermarkKVWatcher, otWatch store.Waterm
 // NewGenericFetch returns GenericFetch. vertexName is the vertex currently processing.
 // fetchWM is a struct for retrieving both the heartbeat
 // and the offset watermark timeline (Vn-1 vertex).
-func NewGenericFetch(ctx context.Context, vertexName string, fetchWM FetchWMWatchers) *GenericFetch {
+func NewGenericFetch(ctx context.Context, vertexName string, fetchWM FetchWMWatchers) fetch.Fetcher {
 	fromVertex := fetch.NewFromVertex(ctx, fetchWM.HBWatch, fetchWM.OTWatch)
 	fromEdge := fetch.NewEdgeBuffer(ctx, vertexName, fromVertex)
 
-	gf := &GenericFetch{
+	gf := &genericFetch{
 		fromEdge: fromEdge,
 	}
 
@@ -45,11 +45,11 @@ func NewGenericFetch(ctx context.Context, vertexName string, fetchWM FetchWMWatc
 }
 
 // GetWatermark returns the watermark for the offset.
-func (g *GenericFetch) GetWatermark(offset isb.Offset) processor.Watermark {
+func (g *genericFetch) GetWatermark(offset isb.Offset) processor.Watermark {
 	return g.fromEdge.GetWatermark(offset)
 }
 
 // GetHeadWatermark returns the head watermark based on the head offset.
-func (g *GenericFetch) GetHeadWatermark() processor.Watermark {
+func (g *genericFetch) GetHeadWatermark() processor.Watermark {
 	return g.fromEdge.GetHeadWatermark()
 }

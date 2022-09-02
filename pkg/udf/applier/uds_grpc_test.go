@@ -100,7 +100,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 						EventTime: time.Unix(1661169600, 0),
 					},
 					ID:  "test_id",
-					Key: []byte(`test_success_key`),
+					Key: `test_success_key`,
 				},
 				Body: isb.Body{
 					Payload: []byte(`forward_message`),
@@ -144,7 +144,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 						EventTime: time.Unix(1661169660, 0),
 					},
 					ID:  "test_id",
-					Key: []byte(`test_error_key`),
+					Key: `test_error_key`,
 				},
 				Body: isb.Body{
 					Payload: []byte(`forward_message`),

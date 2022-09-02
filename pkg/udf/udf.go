@@ -80,7 +80,10 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// build watermark progressors
-		fetchWatermark, publishWatermark = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		if err != nil {
+			return err
+		}
 
 		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{}
@@ -102,7 +105,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
 	}
 
-	conditionalForwarder := forward.GoWhere(func(key []byte) ([]string, error) {
+	conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
 		result := []string{}
 		_key := string(key)
 		if _key == dfv1.MessageKeyAll || _key == dfv1.MessageKeyDrop {

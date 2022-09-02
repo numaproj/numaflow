@@ -85,7 +85,7 @@ func (u *UDSGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 			Header: isb.Header{
 				PaneInfo: parentPaneInfo,
 				ID:       fmt.Sprintf("%s-%d", offset.String(), i),
-				Key:      []byte(key),
+				Key:      key,
 			},
 			Body: isb.Body{
 				Payload: datum.Value,
