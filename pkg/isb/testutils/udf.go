@@ -17,7 +17,7 @@ func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb
 	_ = payload
 	// copy the payload
 	result := payload
-	var key []byte
+	var key string
 
 	writeMessage := &isb.Message{
 		Header: isb.Header{

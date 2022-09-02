@@ -9,5 +9,13 @@ if [ "$(command -v controller-gen)" = "" ]; then
 fi
 
 header "Generating CRDs"
-$(go env GOPATH)/bin/controller-gen crd:crdVersions=v1,maxDescLen=262143 paths=./pkg/apis/... output:dir=config/base/crds
+$(go env GOPATH)/bin/controller-gen crd:crdVersions=v1,maxDescLen=262143 paths=./pkg/apis/... output:dir=config/base/crds/full
+
+cp config/base/crds/full/numaflow.numaproj.io*.yaml config/base/crds/minimal/
+
+find config/base/crds/minimal -name 'numaflow.numaproj.io*.yaml' | while read -r file; do
+  echo "Patching ${file}"
+  # remove junk fields
+  go run ./hack/crdgen cleancrd "$file"
+done
 
