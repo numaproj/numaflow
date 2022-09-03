@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
@@ -12,8 +15,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"sync"
-	"time"
 )
 
 var NonExistentPBQErr error = errors.New("missing PBQ for the partition")
@@ -24,7 +25,7 @@ type Manager struct {
 	pbqOptions   *Options
 	pbqMap       map[string]*PBQ
 	log          *zap.SugaredLogger
-	// we need lock to access pbqMap, since Deregister will be called inside pbq
+	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
 	sync.RWMutex
@@ -52,8 +53,8 @@ func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
 	return pbqManager, nil
 }
 
-// NewPBQ creates new pbq for a partition
-func (m *Manager) NewPBQ(ctx context.Context, partitionID string) (*PBQ, error) {
+// CreateNewPBQ creates new pbq for a partition
+func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID string) (ReadWriteCloser, error) {
 
 	var persistentStore store.Store
 	var err error
@@ -82,7 +83,7 @@ func (m *Manager) NewPBQ(ctx context.Context, partitionID string) (*PBQ, error) 
 		log:         logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 
-	m.Register(partitionID, p)
+	m.register(partitionID, p)
 	return p, nil
 }
 
@@ -102,7 +103,7 @@ func (m *Manager) ListPartitions() []*PBQ {
 }
 
 // GetPBQ returns pbq for the given partitionID
-func (m *Manager) GetPBQ(partitionID string) (*PBQ, error) {
+func (m *Manager) GetPBQ(partitionID string) (ReadWriteCloser, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -114,7 +115,7 @@ func (m *Manager) GetPBQ(partitionID string) (*PBQ, error) {
 }
 
 // StartUp restores the state of the pbqManager
-func (m *Manager) StartUp(ctx context.Context) error {
+func (m *Manager) StartUp(_ context.Context) error {
 
 	switch m.storeOptions.PbqStoreType() {
 	case dfv1.NoOpType:
@@ -150,7 +151,7 @@ func (m *Manager) ShutDown(ctx context.Context) {
 			var closeErr error
 			var attempt int
 			closeErr = wait.ExponentialBackoffWithContext(ctx, PBQCloseBackOff, func() (done bool, err error) {
-				closeErr = q.CloseWriter()
+				closeErr = q.Close()
 				if closeErr != nil {
 					attempt += 1
 					m.log.Warnw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", q.partitionID), zap.Error(closeErr))
@@ -168,8 +169,8 @@ func (m *Manager) ShutDown(ctx context.Context) {
 	wg.Wait()
 }
 
-// Register is intended to be used by PBQ to register itself with the manager.
-func (m *Manager) Register(partitionID string, p *PBQ) {
+// register is intended to be used by PBQ to register itself with the manager.
+func (m *Manager) register(partitionID string, p *PBQ) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -178,8 +179,8 @@ func (m *Manager) Register(partitionID string, p *PBQ) {
 	}
 }
 
-// Deregister is intended to be used by PBQ to deregister itself after GC is called.
-func (m *Manager) Deregister(partitionID string) {
+// deregister is intended to be used by PBQ to deregister itself after GC is called.
+func (m *Manager) deregister(partitionID string) {
 	m.Lock()
 	defer m.Unlock()
 

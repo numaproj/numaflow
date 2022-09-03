@@ -2,14 +2,15 @@ package pbq
 
 import (
 	"context"
+	"sync"
+	"testing"
+	"time"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/stretchr/testify/assert"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestPBQ_WriteFromISB(t *testing.T) {
@@ -31,18 +32,23 @@ func TestPBQ_WriteFromISB(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	pq, err := qManager.NewPBQ(ctx, "partition-10")
+	pq, err := qManager.CreateNewPBQ(ctx, "partition-10")
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
 		err := pq.Write(ctx, &msg)
 		assert.NoError(t, err)
 	}
+	pq.CloseOfBook()
 
 	// check if the messages are persisted in store
-	storeMessages, _, _ := pq.store.Read(10)
+	pbqCh := pq.ReadCh()
+	var storeMessages = make([]*isb.Message, 0)
+	for msg := range pbqCh {
+		storeMessages = append(storeMessages, msg)
+	}
 	assert.Len(t, storeMessages, msgCount)
-	pq.CloseOfBook()
+
 	// this means we successfully wrote 10 messages to pbq
 }
 
@@ -62,7 +68,7 @@ func TestPBQ_ReadFromPBQ(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	pq, err := qManager.NewPBQ(ctx, "partition-12")
+	pq, err := qManager.CreateNewPBQ(ctx, "partition-12")
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
@@ -99,10 +105,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	var pq *PBQ
-	var err error
-
-	pq, err = qManager.NewPBQ(ctx, "partition-13")
+	pq, err := qManager.CreateNewPBQ(ctx, "partition-13")
 	assert.NoError(t, err)
 
 	var readMessages []*isb.Message
@@ -125,8 +128,6 @@ func TestPBQ_ReadWrite(t *testing.T) {
 				break readLoop
 			}
 		}
-		err := pq.CloseReader()
-		assert.NoError(t, err)
 		wg.Done()
 	}()
 
@@ -162,8 +163,8 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	var pq *PBQ
-	pq, err = qManager.NewPBQ(ctx, "partition-14")
+	var pq ReadWriteCloser
+	pq, err = qManager.CreateNewPBQ(ctx, "partition-14")
 	assert.NoError(t, err)
 
 	var readMessages []*isb.Message
@@ -188,8 +189,6 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 				break readLoop
 			}
 		}
-		err := pq.CloseReader()
-		assert.NoError(t, err)
 		wg.Done()
 	}()
 
@@ -226,16 +225,21 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	var pq *PBQ
-	pq, err = qManager.NewPBQ(ctx, "partition-10")
+	var pq ReadWriteCloser
+	pq, err = qManager.CreateNewPBQ(ctx, "partition-10")
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
 		err = pq.Write(ctx, &msg)
 	}
+	pq.CloseOfBook()
+
 	assert.Error(t, err, store.WriteStoreFullErr)
 	// check if the messages are persisted in store
-	storeMessages, _, _ := pq.store.Read(100)
-	assert.Len(t, storeMessages, storeSize)
-	pq.CloseOfBook()
+	pbqCh := pq.ReadCh()
+	var storeMessages = make([]*isb.Message, 0)
+	for msg := range pbqCh {
+		storeMessages = append(storeMessages, msg)
+	}
+	assert.Len(t, storeMessages, buffSize)
 }
