@@ -3,6 +3,7 @@ package pbq
 import (
 	"context"
 	"errors"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"go.uber.org/zap"
@@ -21,6 +22,8 @@ type PBQ struct {
 	manager     *Manager
 	log         *zap.SugaredLogger
 }
+
+var _ ReadWriteCloser = (*PBQ)(nil)
 
 // Write writes message to pbq and persistent store
 func (p *PBQ) Write(ctx context.Context, message *isb.Message) error {
@@ -51,9 +54,9 @@ func (p *PBQ) CloseOfBook() {
 	p.cob = true
 }
 
-// CloseWriter is used by the writer to indicate close of context
+// Close is used by the writer to indicate close of context
 // we should flush pending messages to store
-func (p *PBQ) CloseWriter() error {
+func (p *PBQ) Close() error {
 	return p.store.Close()
 }
 
@@ -63,18 +66,12 @@ func (p *PBQ) ReadCh() <-chan *isb.Message {
 	return p.output
 }
 
-// CloseReader is used by the Reader to indicate that it has finished
-// consuming the data from output channel
-func (p *PBQ) CloseReader() error {
-	return nil
-}
-
 // GC is invoked after the Reader (ProcessAndForward) has finished
 // forwarding the output to ISB.
 func (p *PBQ) GC() error {
 	err := p.store.GC()
 	p.store = nil
-	p.manager.Deregister(p.partitionID)
+	p.manager.deregister(p.partitionID)
 	return err
 }
 
