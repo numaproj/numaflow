@@ -220,19 +220,20 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if len(ms.healthCheckExecutors) > 0 {
 			for _, ex := range ms.healthCheckExecutors {
 				if err := ex(); err != nil {
 					log.Errorw("Failed execute health check", zap.Error(err))
-					w.WriteHeader(500)
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte(err.Error()))
 					return
 				}
 			}
 		}
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	})
 	debugEnabled := os.Getenv(dfv1.EnvDebug)
 	if debugEnabled == "true" {
