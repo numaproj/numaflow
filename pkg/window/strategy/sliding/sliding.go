@@ -4,7 +4,6 @@
 package sliding
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/window"
@@ -12,9 +11,12 @@ import (
 
 // Sliding implements Sliding window.
 type Sliding struct {
-	Length          time.Duration
+	// Length is the total length of the sliding window
+	Length time.Duration
+	// PeriodInSeconds is the time in seconds to slide in every step
 	PeriodInSeconds int
-	sliceCount      int
+	// sliceCount is the total number of slices in the window (Length/Period)
+	sliceCount int
 }
 
 var _ window.Windower = (*Sliding)(nil)
@@ -39,15 +41,9 @@ func (s *Sliding) AssignWindow(eventTime time.Time) []*window.IntervalWindow {
 		start := tmp
 		slidingWindows[i] = &window.IntervalWindow{
 			Start: start,
-			End:   start.Add(time.Second * time.Duration(s.PeriodInSeconds)),
+			End:   start.Add(s.Length),
 		}
-		fmt.Println(slidingWindows[i].Start, slidingWindows[i].End)
 		tmp = tmp.Add(-1 * time.Second * time.Duration(s.PeriodInSeconds))
 	}
 	return slidingWindows
-}
-
-// TrackWindowByKey tracks Sliding window.
-func (s *Sliding) TrackWindowByKey(_ string, _ *window.IntervalWindow) {
-	return
 }
