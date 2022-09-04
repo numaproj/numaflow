@@ -34,11 +34,11 @@ func TestSliding_AssignWindow(t *testing.T) {
 			want: []*window.IntervalWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129260, 0).In(loc),
+					End:   time.Unix(1651129320, 0).In(loc),
 				},
 				{
 					Start: time.Unix(1651129200-60, 0).In(loc),
-					End:   time.Unix(1651129260-60, 0).In(loc),
+					End:   time.Unix(1651129320-60, 0).In(loc),
 				},
 			},
 		},
@@ -52,11 +52,11 @@ func TestSliding_AssignWindow(t *testing.T) {
 			want: []*window.IntervalWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129200+60, 0).In(loc),
+					End:   time.Unix(1651129200+120, 0).In(loc),
 				},
 				{
 					Start: time.Unix(1651129200-60, 0).In(loc),
-					End:   time.Unix(1651129200+60-60, 0).In(loc),
+					End:   time.Unix(1651129200+120-60, 0).In(loc),
 				},
 			},
 		},
@@ -70,11 +70,11 @@ func TestSliding_AssignWindow(t *testing.T) {
 			want: []*window.IntervalWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129200+120, 0).In(loc),
+					End:   time.Unix(1651129200+240, 0).In(loc),
 				},
 				{
 					Start: time.Unix(1651129200-120, 0).In(loc),
-					End:   time.Unix(1651129200+120-120, 0).In(loc),
+					End:   time.Unix(1651129200+240-120, 0).In(loc),
 				},
 			},
 		},
@@ -100,6 +100,32 @@ func TestSliding_AssignWindow(t *testing.T) {
 			},
 			eventTime: baseTime,
 			want:      []*window.IntervalWindow{},
+		},
+		{
+			name: "4min_1min",
+			fields: fields{
+				Length:          4 * time.Minute,
+				PeriodInSeconds: 60,
+			},
+			eventTime: baseTime,
+			want: []*window.IntervalWindow{
+				{
+					Start: time.Unix(1651129200, 0).In(loc),
+					End:   time.Unix(1651129200+240, 0).In(loc),
+				},
+				{
+					Start: time.Unix(1651129200-60, 0).In(loc),
+					End:   time.Unix(1651129200+240-60, 0).In(loc),
+				},
+				{
+					Start: time.Unix(1651129200-120, 0).In(loc),
+					End:   time.Unix(1651129200+240-120, 0).In(loc),
+				},
+				{
+					Start: time.Unix(1651129200-180, 0).In(loc),
+					End:   time.Unix(1651129200+240-180, 0).In(loc),
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
