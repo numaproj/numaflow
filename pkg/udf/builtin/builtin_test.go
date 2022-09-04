@@ -18,7 +18,7 @@ func TestGetExecutors(t *testing.T) {
 			},
 		}
 		for _, b := range builtins {
-			e, err := b.excutor()
+			e, err := b.executor()
 			assert.NoError(t, err)
 			assert.NotNil(t, e)
 		}
@@ -28,7 +28,7 @@ func TestGetExecutors(t *testing.T) {
 		b := &Builtin{
 			Name: "catt",
 		}
-		_, err := b.excutor()
+		_, err := b.executor()
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unrecognized function")
 	})
