@@ -15,6 +15,7 @@ require (
 	github.com/go-swagger/go-swagger v0.28.0
 	github.com/goccy/go-json v0.9.7
 	github.com/gogo/protobuf v1.3.2
+	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.2.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
@@ -23,7 +24,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe
 	github.com/nats-io/nats.go v1.16.0
-	github.com/numaproj/numaflow-go v0.0.1
+	github.com/numaproj/numaflow-go v0.2.1
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/common v0.32.1
 	github.com/soheilhy/cmux v0.1.5
@@ -34,8 +35,8 @@ require (
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.19.1
 	google.golang.org/genproto v0.0.0-20220118154757-00ab72f36ad5
-	google.golang.org/grpc v1.43.0
-	google.golang.org/protobuf v1.28.0
+	google.golang.org/grpc v1.48.0
+	google.golang.org/protobuf v1.28.1
 	k8s.io/api v0.23.3
 	k8s.io/apimachinery v0.23.3
 	k8s.io/client-go v0.23.3
