@@ -40,8 +40,7 @@ func (u *UDSGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			// using %v for ctx.Err() because only one %w can exist in the fmt.Errorf
-			return fmt.Errorf("failed to wait for ready: %w", ctx.Err())
+			return fmt.Errorf("failed on readiness check: %w", ctx.Err())
 		default:
 			if _, err := u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
