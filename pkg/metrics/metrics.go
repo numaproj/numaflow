@@ -228,7 +228,7 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 				if err := ex(); err != nil {
 					log.Errorw("Failed execute health check", zap.Error(err))
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(err.Error()))
+					_, _ = w.Write([]byte(err.Error()))
 					return
 				}
 			}
