@@ -65,7 +65,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID string) (ReadWri
 	case dfv1.InMemoryType:
 		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.storeOptions)
 		if err != nil {
-			m.log.Errorw("Error while creating persistent store", zap.Any("partitionID", partitionID), zap.Any("store type", m.storeOptions.PbqStoreType()), zap.Error(err))
+			m.log.Errorw("Error while creating persistent store", zap.Any("partitionID", partitionID), zap.Any("storeType", m.storeOptions.PbqStoreType()), zap.Error(err))
 			return nil, err
 		}
 	case dfv1.FileSystemType:
