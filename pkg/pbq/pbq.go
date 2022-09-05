@@ -18,7 +18,7 @@ type PBQ struct {
 	output      chan *isb.Message
 	cob         bool // cob to avoid panic in case writes happen after close of book
 	partitionID string
-	options     *Options
+	options     *options
 	manager     *Manager
 	log         *zap.SugaredLogger
 }
@@ -75,8 +75,8 @@ func (p *PBQ) GC() error {
 	return err
 }
 
-// ReplayRecordsFromStore replays store messages when replay flag is set during start up time
-func (p *PBQ) ReplayRecordsFromStore(ctx context.Context) {
+// replayRecordsFromStore replays store messages when replay flag is set during start up time
+func (p *PBQ) replayRecordsFromStore(ctx context.Context) {
 	size := p.options.readBatchSize
 readLoop:
 	for {

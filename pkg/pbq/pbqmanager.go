@@ -22,7 +22,7 @@ var NonExistentPBQErr error = errors.New("missing PBQ for the partition")
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
 	storeOptions *store.StoreOptions
-	pbqOptions   *Options
+	pbqOptions   *options
 	pbqMap       map[string]*PBQ
 	log          *zap.SugaredLogger
 	// we need lock to access pbqMap, since deregister will be called inside pbq
@@ -196,7 +196,7 @@ func (m *Manager) Replay(ctx context.Context) {
 		m.log.Info("Replaying records from store", zap.Any("PBQ", val.partitionID))
 		go func(ctx context.Context, p *PBQ) {
 			defer wg.Done()
-			p.ReplayRecordsFromStore(ctx)
+			p.replayRecordsFromStore(ctx)
 		}(ctx, val)
 	}
 

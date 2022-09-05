@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type Options struct {
+type options struct {
 	// channelBufferSize buffered channel size
 	channelBufferSize int64
 	// readTimeout timeout in seconds for pbq reads
@@ -17,14 +17,14 @@ type Options struct {
 	storeOptions *store.StoreOptions
 }
 
-func (o *Options) StoreOptions() *store.StoreOptions {
+func (o *options) StoreOptions() *store.StoreOptions {
 	return o.storeOptions
 }
 
-type PBQOption func(options *Options) error
+type PBQOption func(options *options) error
 
-func DefaultOptions() *Options {
-	return &Options{
+func DefaultOptions() *options {
+	return &options{
 		channelBufferSize: dfv1.DefaultPBQChannelBufferSize,
 		readTimeout:       dfv1.DefaultPBQReadTimeout,
 		readBatchSize:     dfv1.DefaultPBQReadBatchSize,
@@ -34,7 +34,7 @@ func DefaultOptions() *Options {
 
 // WithChannelBufferSize sets buffer size option
 func WithChannelBufferSize(size int64) PBQOption {
-	return func(o *Options) error {
+	return func(o *options) error {
 		o.channelBufferSize = size
 		return nil
 	}
@@ -42,7 +42,7 @@ func WithChannelBufferSize(size int64) PBQOption {
 
 // WithReadTimeout sets read timeout option
 func WithReadTimeout(seconds time.Duration) PBQOption {
-	return func(o *Options) error {
+	return func(o *options) error {
 		o.readTimeout = seconds
 		return nil
 	}
@@ -50,7 +50,7 @@ func WithReadTimeout(seconds time.Duration) PBQOption {
 
 // WithReadBatchSize sets read batch size option
 func WithReadBatchSize(size int64) PBQOption {
-	return func(o *Options) error {
+	return func(o *options) error {
 		o.readBatchSize = size
 		return nil
 	}
@@ -58,7 +58,7 @@ func WithReadBatchSize(size int64) PBQOption {
 
 // WithPBQStoreOptions sets different pbq store options
 func WithPBQStoreOptions(opts ...store.StoreOption) PBQOption {
-	return func(options *Options) error {
+	return func(options *options) error {
 		for _, opt := range opts {
 			err := opt(options.storeOptions)
 			if err != nil {
