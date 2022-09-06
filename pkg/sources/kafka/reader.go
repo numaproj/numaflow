@@ -121,7 +121,7 @@ loop:
 		case m := <-r.handler.messages:
 			kafkaSourceReadCount.With(map[string]string{metricspkg.LabelVertex: r.name, metricspkg.LabelPipeline: r.pipelineName}).Inc()
 			_m := toReadMessage(m)
-			msgs = append(msgs)
+			msgs = append(msgs, _m)
 			// Get earliest timestamps for different partitions
 			if t, ok := earliestTimes[m.Partition]; !ok || m.Timestamp.Before(t) {
 				earliestTimes[m.Partition] = m.Timestamp
@@ -261,6 +261,7 @@ func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWri
 		readTimeout:        1 * time.Second, // default timeout
 		handlerbuffer:      100,             // default buffer size for kafka reads
 		srcPublishWMStores: publishWMStores,
+		sourcePublishWMs:   make(map[int32]publish.Publisher, 0),
 		lock:               new(sync.RWMutex),
 		logger:             logging.NewLogger(), // default logger
 	}
