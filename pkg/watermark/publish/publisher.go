@@ -85,7 +85,7 @@ func (p *publish) initialSetup() {
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
 // is less than the current head watermark.
 func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
-	if p.delay.Nanoseconds() >= 0 && !time.Time(wm).IsZero() {
+	if p.delay.Nanoseconds() > 0 && !time.Time(wm).IsZero() {
 		wm = processor.Watermark(time.Time(wm).Add(-p.delay))
 	}
 	// update p.headWatermark only if wm > p.headWatermark
