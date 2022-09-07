@@ -110,6 +110,39 @@ const (
 	DefaultTargetProcessingSeconds = 20  // Default targeted time in seconds to finish processing all the pending messages for a source
 	DefaultTargetBufferUsage       = 50  // Default targeted percentage of balanced buffer usage
 	DefaultReplicasPerScale        = 2   // Default maximum replicas to be scaled up or down at once
+
+	// Default persistent buffer queue options
+	DefaultPBQChannelBufferSize = 10000           // Default channel size in int
+	DefaultPBQReadTimeout       = 1 * time.Second // Default read timeout for pbq
+	DefaultPBQReadBatchSize     = 100             // Default read batch size for pbq
+
+	// Default persistent store options
+	DefaultStoreSyncDuration  = 2 * time.Second // Default sync duration for pbq
+	DefaultStoreType          = NoOpType        // Default store type
+	DefaultStoreSize          = 1000000         // Default persistent store size
+	DefaultStoreMaxBufferSize = 100000          // Default buffer size for pbq in bytes
+
+)
+
+type StoreType string
+
+func (st StoreType) String() string {
+	switch st {
+	case InMemoryType:
+		return string(InMemoryType)
+	case FileSystemType:
+		return string(FileSystemType)
+	case NoOpType:
+		return string(NoOpType)
+	default:
+		return "unknownStoreType"
+	}
+}
+
+const (
+	InMemoryType   StoreType = "in-memory"
+	FileSystemType StoreType = "file-system"
+	NoOpType       StoreType = "no-op"
 )
 
 type ContentType string
