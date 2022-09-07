@@ -53,7 +53,7 @@ kubectl logs -f simple-pipeline-out-0-xxxx main
 # Port forward the UI to https://localhost:8443/
 kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 ```
-<img src="numaflow-ui-simple-pipeline.png" alt="numaflo-ui" width="650"/>
+![Numaflow UI](assets/numaflow-ui-simple-pipeline.png)
 
 The pipeline can be deleted by
 ```shell
