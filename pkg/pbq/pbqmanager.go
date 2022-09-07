@@ -17,8 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-var NonExistentPBQErr error = errors.New("missing PBQ for the partition")
-
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
 	storeOptions *store.StoreOptions
@@ -103,15 +101,15 @@ func (m *Manager) ListPartitions() []*PBQ {
 }
 
 // GetPBQ returns pbq for the given partitionID
-func (m *Manager) GetPBQ(partitionID string) (ReadWriteCloser, error) {
+func (m *Manager) GetPBQ(partitionID string) ReadWriteCloser {
 	m.RLock()
 	defer m.RUnlock()
 
 	if pbqInstance, ok := m.pbqMap[partitionID]; ok {
-		return pbqInstance, nil
+		return pbqInstance
 	}
 
-	return nil, NonExistentPBQErr
+	return nil
 }
 
 // StartUp restores the state of the pbqManager

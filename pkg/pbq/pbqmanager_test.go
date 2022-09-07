@@ -56,8 +56,7 @@ func TestManager_GetPBQ(t *testing.T) {
 	assert.NoError(t, err)
 
 	// get the created pbq
-	pb2, err = pbqManager.GetPBQ("partition-3")
-	assert.NoError(t, err)
+	pb2 = pbqManager.GetPBQ("partition-3")
 
 	assert.Equal(t, pb1, pb2)
 }
@@ -74,6 +73,7 @@ func TestPBQFlow(t *testing.T) {
 	var pq ReadWriteCloser
 	pq, err = pbqManager.CreateNewPBQ(ctx, "partition-4")
 	assert.NoError(t, err)
+
 	msgsCount := 5
 	var wg sync.WaitGroup
 	wg.Add(1)
