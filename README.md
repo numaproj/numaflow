@@ -12,17 +12,17 @@ Numaflow is a Kubernetes-native platform for running massive parallel data proce
 
 A Numaflow Pipeline is implemented as a Kubernetes custom resource, and consists of one or more source, data processing, and sink vertices.
 
-Numaflow installs in less than a minute and is easier and cheaper for simple data processing applications than full-featured stream processing platforms.
+Numaflow installs in a few minutes and is easier and cheaper to use for simple data processing applications than full-featured stream processing platforms.
 
 ## Key Features
 
 - Kubernetes-native: If you know Kubernetes, you already know 90% of what you need to use Numaflow.
 - Language agnostic: Use your favorite programming language.
 - Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted.
+- Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed.
 
 ## Roadmap
 
-- Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed.
 - Data aggregation (e.g. group-by)
 
 ## Resources
