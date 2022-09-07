@@ -1,6 +1,6 @@
 # Quick Start
 
-Install Numaflow and run a simple pipeline, which contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages.
+Install Numaflow and run a couple of example pipelines.
 
 ## Prerequisites
 
@@ -21,7 +21,8 @@ kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exam
 ```
 
 ## A Simple Pipeline
-Create a `simple pipeline`.
+
+Create a `simple pipeline`, which contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages.
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 kubectl get pipeline # or "pl" as a short name
@@ -53,13 +54,68 @@ kubectl logs -f simple-pipeline-out-0-xxxx main
 # Port forward the UI to https://localhost:8443/
 kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 ```
-<img src="numaflow-ui-simple-pipeline.png" alt="numaflo-ui" width="650"/>
+<img src="assets/numaflow-ui-simple-pipeline.png" alt="numaflo-ui" width="650"/>
 
 The pipeline can be deleted by
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
 
-## Coming Up
+## An Advanced Pipeline
 
-Next, let's take a peek at [an advanced pipeline](./advanced-start.md), to learn some powerful features of Numaflow.
+In this example, there are five vertices in a pipeline. An [HTTP](./sources/http.md) source vertex which serves an HTTP endpoint to receive numbers as source data, a [UDF](./user-defined-functions.md) vertex to tag the ingested numbers with the key `even` or `odd`, three [Log](./sinks/log.md) sinks, one to print the `even` numbers, one to print the `odd` numbers, and the other one to print both the even and odd numbers.
+
+![Pipeline Diagram](assets/even-odd.png)
+
+Create the `even-odd` pipeline.
+```shell
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+
+# Wait for pods to be ready
+kubectl get pods
+NAME                               READY   STATUS    RESTARTS   AGE
+even-odd-daemon-64d65c945d-vjs9f   1/1     Running   0          5m3s
+even-odd-even-or-odd-0-pr4ze       2/2     Running   0          30s
+even-odd-even-sink-0-unffo         1/1     Running   0          22s
+even-odd-in-0-a7iyd                1/1     Running   0          5m3s
+even-odd-number-sink-0-zmg2p       1/1     Running   0          7s
+even-odd-odd-sink-0-2736r          1/1     Running   0          15s
+isbsvc-default-js-0                3/3     Running   0          10m
+isbsvc-default-js-1                3/3     Running   0          10m
+isbsvc-default-js-2                3/3     Running   0          10m
+
+# Port-forward the HTTP endpoint so we can post data from the laptop
+kubectl port-forward even-odd-in-0-xxxx 8444:8443
+
+# Post data to the HTTP endpoint
+curl -kq -X POST -d "101" https://localhost:8444/vertices/in
+curl -kq -X POST -d "102" https://localhost:8444/vertices/in 
+curl -kq -X POST -d "103" https://localhost:8444/vertices/in
+curl -kq -X POST -d "104" https://localhost:8444/vertices/in 
+
+# Watch the log for the even vertex
+kubectl logs -f even-odd-even-sink-0-nf2ql main
+2022/09/07 22:29:40 (even-sink) 102
+2022/09/07 22:29:40 (even-sink) 104
+
+# Watch the log for the odd vertex
+kubectl logs -f even-odd-odd-sink-0-a6p0n main
+2022/09/07 22:30:19 (odd-sink) 101
+2022/09/07 22:30:19 (odd-sink) 103
+```
+
+View the UI for the advanced pipleline at https://localhost:8443/
+<img src="assets/numaflow-ui-advanced-pipeline.png" alt="numaflo-ui" width="650"/>
+
+The source code of the `even-odd` [User Defined Function](./user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/examples/function/evenodd). You also can replace the [Log](./sinks/log.md) Sink with some other sinks like [Kafka](./sinks/kafka.md) to forward the data to Kafka topics.
+
+The pipeline can be deleted by
+```shell
+kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+```
+
+## What's Next
+
+Try more examples in the [`examples`](../examples) directory.
+
+After exploring how Numaflow pipeline run, you can check what data [Sources](./sources/generator.md) and [Sinks](./sinks/kafka.md) Numaflow supports out of the box, or learn how to write [User Defined Functions](./user-defined-functions.md).
