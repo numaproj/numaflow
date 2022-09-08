@@ -36,10 +36,10 @@ endif
 PYTHON:=$(shell command -v python 2> /dev/null)
 ifndef PYTHON
 PYTHON:=$(shell command -v python3 2> /dev/null)
+endif
 ifndef PYTHON
 $(error "Python is not available, please install.")
 endif
-ifeq (, $(shell which python))
 
 K3D ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo true || echo false)
 
@@ -205,6 +205,19 @@ e2eapi-image: clean dist/e2eapi
 ifeq ($(K3D),true)
 	k3d image import $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
+
+/usr/local/bin/mkdocs:
+	$(BINARY_NAME) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9
+
+# docs
+
+.PHONY: docs
+docs: /usr/local/bin/mkdocs
+	mkdocs build
+
+.PHONY: docs-serve
+docs-serve: docs
+	mkdocs serve
 
 # pre-push checks
 
