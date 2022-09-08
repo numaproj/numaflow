@@ -105,7 +105,7 @@ kubectl logs -f even-odd-odd-sink-0-a6p0n main
 ```
 
 View the UI for the advanced pipleline at https://localhost:8443/
-<img src="assets/numaflow-ui-advanced-pipeline.png" alt="numaflo-ui" width="650"/>
+![Numaflow UI](assets/numaflow-ui-advanced-pipeline.png)
 
 The source code of the `even-odd` [User Defined Function](./user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/examples/function/evenodd). You also can replace the [Log](./sinks/log.md) Sink with some other sinks like [Kafka](./sinks/kafka.md) to forward the data to Kafka topics.
 
@@ -116,6 +116,6 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/tes
 
 ## What's Next
 
-Try more examples in the [`examples`](../examples) directory.
+Try more examples in the [`examples`](https://github.com/numaproj/numaflow/tree/main/examples) directory.
 
 After exploring how Numaflow pipeline run, you can check what data [Sources](./sources/generator.md) and [Sinks](./sinks/kafka.md) Numaflow supports out of the box, or learn how to write [User Defined Functions](./user-defined-functions.md).
