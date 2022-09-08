@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// NumaMessage is the representation of a message flowing through the numaflow
-type NumaMessage interface {
+// Message is the representation of a message flowing through the numaflow
+type Message interface {
 	ReadMessage
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
@@ -20,14 +20,14 @@ type NumaMessage interface {
 	// please note that EventTime does not mean only the event time.
 	// This is intended to be set once and should be immutable. Therefore, an error could be thrown if
 	// an attempt is made to overwrite the time on a message.
-	SetEventTime(t time.Time) error
+	SetEventTime(t time.Time)
 	// EventTime returns the timestamp of the message. Calling Time() on a message should give a meaningful error
 	// for the user to understand that a time has not been set yet.
-	EventTime() (time.Time, error)
+	EventTime() time.Time
 	// Key returns the key of the message
 	Key() string
 	// Payload returns the payload received from the source it was read.
-	Payload() ([]byte, error)
+	Payload() []byte
 }
 
 // ReadMessage exposes functions to set and get in-vertex stream characteristics of a NumaMessage.
