@@ -231,6 +231,9 @@ func (h *handler) ListPipelineEdges(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	defer func() {
+		_ = client.Close()
+	}()
 	l, err := client.ListPipelineBuffers(context.Background(), pipeline)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
@@ -248,6 +251,9 @@ func (h *handler) GetPipelineEdge(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	defer func() {
+		_ = client.Close()
+	}()
 	// Assume edge is the buffer name
 	i, err := client.GetPipelineBuffer(context.Background(), pipeline, c.Param("edge"))
 	if err != nil {
@@ -267,6 +273,9 @@ func (h *handler) GetVertexMetrics(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	defer func() {
+		_ = client.Close()
+	}()
 	l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
@@ -285,6 +294,9 @@ func (h *handler) GetVertexWatermark(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	defer func() {
+		_ = client.Close()
+	}()
 	l, err := client.GetVertexWatermark(context.Background(), pipeline, vertex)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())

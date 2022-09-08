@@ -567,6 +567,9 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	if err != nil {
 		return true, err
 	}
+	defer func() {
+		_ = daemonClient.Close()
+	}()
 	drainCompleted, err := daemonClient.IsDrained(ctx, pl.Name)
 	if err != nil {
 		return true, err
@@ -634,5 +637,8 @@ func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline
 	if err != nil {
 		return false, err
 	}
+	defer func() {
+		_ = daemonClient.Close()
+	}()
 	return daemonClient.IsDrained(ctx, pl.Name)
 }

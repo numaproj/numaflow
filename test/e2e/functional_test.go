@@ -73,6 +73,9 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	// Test Daemon service with gRPC
 	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
 	assert.NoError(s.T(), err)
+	defer func() {
+		_ = client.Close()
+	}()
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 2, len(buffers))
@@ -212,6 +215,9 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	// Test Daemon service with gRPC
 	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
 	assert.NoError(s.T(), err)
+	defer func() {
+		_ = client.Close()
+	}()
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 5, len(buffers))

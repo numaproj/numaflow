@@ -3217,6 +3217,12 @@ state.
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.StoreType">
+StoreType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.TLS">
 TLS
 </h3>
