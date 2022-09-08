@@ -207,7 +207,7 @@ ifeq ($(K3D),true)
 endif
 
 /usr/local/bin/mkdocs:
-	$(BINARY_NAME) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9
+	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9
 
 # docs
 
