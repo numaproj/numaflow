@@ -3,8 +3,9 @@ package sources
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"sync"
+
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 
 	"go.uber.org/zap"
 
@@ -40,6 +41,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(sp.VertexInstance.Vertex.GetToBuffers()))
 	var publishWMStore = generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	var err error
 
 	switch sp.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -60,7 +62,10 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	case dfv1.ISBSvcTypeJetStream:
 		// build the right watermark progessor if watermark is enabled
 		// build watermark progressors
-		fetchWatermark, publishWatermark, publishWMStore = jetstream.BuildJetStreamWatermarkProgressorsForSource(ctx, sp.VertexInstance)
+		fetchWatermark, publishWatermark, publishWMStore, err = jetstream.BuildJetStreamWatermarkProgressorsForSource(ctx, sp.VertexInstance)
+		if err != nil {
+			return err
+		}
 
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{
@@ -85,7 +90,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
 
-	sourcer, err := sp.getSourcer(writers, fetchWatermark, publishWatermark, &publishWMStore, log)
+	sourcer, err := sp.getSourcer(writers, fetchWatermark, publishWatermark, publishWMStore, log)
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
 	}

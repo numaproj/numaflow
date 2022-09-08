@@ -3,9 +3,10 @@ package sinks
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"sync"
 
 	"go.uber.org/zap"
 
@@ -60,7 +61,10 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		// build watermark progressors
-		fetchWatermark, publishWatermark = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		if err != nil {
+			return err
+		}
 
 		jetStreamClient := jsclient.NewInClusterJetStreamClient()
 		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)

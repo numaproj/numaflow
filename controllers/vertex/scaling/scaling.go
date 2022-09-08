@@ -185,6 +185,9 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	if err != nil {
 		return fmt.Errorf("failed to get daemon service client for pipeline %s, %w", pl.Name, err)
 	}
+	defer func() {
+		_ = dClient.Close()
+	}()
 	vMetrics, err := dClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)

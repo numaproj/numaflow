@@ -13,8 +13,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// KVJetStreamWatch implements the watermark's KV store backed up by Jetstream.
-type KVJetStreamWatch struct {
+// jetStreamWatch implements the watermark's KV store backed up by Jetstream.
+type jetStreamWatch struct {
 	pipelineName string
 	conn         *jsclient.NatsConn
 	kv           nats.KeyValue
@@ -22,10 +22,10 @@ type KVJetStreamWatch struct {
 	log          *zap.SugaredLogger
 }
 
-var _ store.WatermarkKVWatcher = (*KVJetStreamWatch)(nil)
+var _ store.WatermarkKVWatcher = (*jetStreamWatch)(nil)
 
 // NewKVJetStreamKVWatch returns KVJetStreamWatch specific to Jetsteam which implements the WatermarkKVWatcher interface.
-func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketName string, client jsclient.JetStreamClient, opts ...JSKVWatcherOption) (*KVJetStreamWatch, error) {
+func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketName string, client jsclient.JetStreamClient, opts ...JSKVWatcherOption) (store.WatermarkKVWatcher, error) {
 	var err error
 	conn, err := client.Connect(ctx)
 	if err != nil {
@@ -39,7 +39,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
 	}
 
-	j := &KVJetStreamWatch{
+	j := &jetStreamWatch{
 		pipelineName: pipelineName,
 		conn:         conn,
 		js:           js,
@@ -63,7 +63,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 }
 
 // JSKVWatcherOption is to pass in Jetstream options.
-type JSKVWatcherOption func(*KVJetStreamWatch) error
+type JSKVWatcherOption func(*jetStreamWatch) error
 
 // kvEntry is each key-value entry in the store and the operation associated with the kv pair.
 type kvEntry struct {
@@ -88,7 +88,7 @@ func (k kvEntry) Operation() store.KVWatchOp {
 }
 
 // Watch watches the key-value store (aka bucket).
-func (k *KVJetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
+func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 	kvWatcher, err := k.kv.WatchAll()
 	for err != nil {
 		k.log.Errorw("WatchAll failed", zap.String("watcher", k.GetKVName()), zap.Error(err))
@@ -134,12 +134,12 @@ func (k *KVJetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEn
 }
 
 // GetKVName returns the KV store (bucket) name.
-func (k *KVJetStreamWatch) GetKVName() string {
+func (k *jetStreamWatch) GetKVName() string {
 	return k.kv.Bucket()
 }
 
 // Close closes the connection.
-func (k *KVJetStreamWatch) Close() {
+func (k *jetStreamWatch) Close() {
 	if !k.conn.IsClosed() {
 		k.conn.Close()
 	}
