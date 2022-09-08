@@ -32,6 +32,15 @@ VERSION=$(GIT_TAG)
 override LDFLAGS += -X ${PACKAGE}.gitTag=${GIT_TAG}
 endif
 
+# Check Python
+PYTHON:=$(shell command -v python 2> /dev/null)
+ifndef PYTHON
+PYTHON:=$(shell command -v python3 2> /dev/null)
+ifndef PYTHON
+$(error "Python is not available, please install.")
+endif
+ifeq (, $(shell which python))
+
 K3D ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo true || echo false)
 
 .PHONY: build
