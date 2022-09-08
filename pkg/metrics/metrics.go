@@ -52,6 +52,9 @@ type timestampedPending struct {
 	timestamp int64
 }
 
+// metricsServer runs an HTTP server to:
+// 1. Expose metrics;
+// 2. Serve an endpoint to execute health checks
 type metricsServer struct {
 	vertex    *dfv1.Vertex
 	rater     isb.Ratable
@@ -62,31 +65,44 @@ type metricsServer struct {
 	refreshInterval     time.Duration
 	// pendingInfo stores a list of pending/timestamp(seconds) information
 	pendingInfo *sharedqueue.OverflowQueue[timestampedPending]
+	// Functions that health check executes
+	healthCheckExecutors []func() error
 }
 
 type Option func(*metricsServer)
 
+// WithRater sets the rater
 func WithRater(r isb.Ratable) Option {
 	return func(m *metricsServer) {
 		m.rater = r
 	}
 }
 
+// WithLagReader sets the lag reader
 func WithLagReader(r isb.LagReader) Option {
 	return func(m *metricsServer) {
 		m.lagReader = r
 	}
 }
 
+// WithRefreshInterval sets how often to refresh the rate and pending
 func WithRefreshInterval(d time.Duration) Option {
 	return func(m *metricsServer) {
 		m.refreshInterval = d
 	}
 }
 
+// WithLookbackSeconds sets lookback seconds for avg rate and pending calculation
 func WithLookbackSeconds(seconds int64) Option {
 	return func(m *metricsServer) {
 		m.lookbackSeconds = seconds
+	}
+}
+
+// WithHealthCheckExecutor appends a health check executor
+func WithHealthCheckExecutor(f func() error) Option {
+	return func(m *metricsServer) {
+		m.healthCheckExecutors = append(m.healthCheckExecutors, f)
 	}
 }
 
@@ -204,10 +220,20 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(204)
+		if len(ms.healthCheckExecutors) > 0 {
+			for _, ex := range ms.healthCheckExecutors {
+				if err := ex(); err != nil {
+					log.Errorw("Failed execute health check", zap.Error(err))
+					w.WriteHeader(http.StatusInternalServerError)
+					_, _ = w.Write([]byte(err.Error()))
+					return
+				}
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	debugEnabled := os.Getenv(dfv1.EnvDebug)
 	if debugEnabled == "true" {

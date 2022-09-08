@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"go.uber.org/zap"
@@ -164,7 +165,14 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := []metrics.Option{metrics.WithLookbackSeconds(int64(u.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds()))}
+	metricsOpts := []metrics.Option{
+		metrics.WithLookbackSeconds(int64(u.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds())),
+		metrics.WithHealthCheckExecutor(func() error {
+			cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			return udfHandler.WaitUntilReady(cctx)
+		}),
+	}
 	if x, ok := reader.(isb.LagReader); ok {
 		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
 	}

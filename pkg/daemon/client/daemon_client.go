@@ -12,6 +12,7 @@ import (
 
 type DaemonClient struct {
 	client daemon.DaemonServiceClient
+	conn   *grpc.ClientConn
 }
 
 func NewDaemonServiceClient(address string) (*DaemonClient, error) {
@@ -23,7 +24,15 @@ func NewDaemonServiceClient(address string) (*DaemonClient, error) {
 		return nil, err
 	}
 	daemonClient := daemon.NewDaemonServiceClient(conn)
-	return &DaemonClient{client: daemonClient}, nil
+	return &DaemonClient{conn: conn, client: daemonClient}, nil
+}
+
+// Close function closes the gRPC connection, it has to be called after a daemon client has finished all its jobs.
+func (dc *DaemonClient) Close() error {
+	if dc.conn != nil {
+		return dc.conn.Close()
+	}
+	return nil
 }
 
 func (dc *DaemonClient) IsDrained(ctx context.Context, pipeline string) (bool, error) {
