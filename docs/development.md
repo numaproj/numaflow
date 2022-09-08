@@ -38,3 +38,9 @@ k3d kubeconfig get k3s-default
 
 - `make start`
   Build the source code, image, and install the Numa controller in the `numaflow-system` namespace.
+
+- `make docs`
+  Convert the docs to Github pages, check if there's any error.
+
+- `make docs-serve`
+  Start [an HTTP server](http://127.0.0.1:8000/) on your local to host the docs generated Github pages.
