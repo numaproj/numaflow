@@ -5,8 +5,9 @@
 //
 // Windows are of different types, quite popular ones are Fixed windows and Sliding windows. Sessions are managed via
 // little less popular windowing strategy called Session windows. Windowing is implemented as a two stage process,
-//   * Assign windows - assign the event to a window
-//   * Merge windows - group all the events that below to the same window
+//   - Assign windows - assign the event to a window
+//   - Merge windows - group all the events that below to the same window
+//
 // The two stage approach is required because assignment of windows could happen as elements are streaming in, but merging
 // could happen before the data materialization happens. This is important esp. when we handle session windows where a
 // new event can change the end time of the window.
