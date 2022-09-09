@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb/redis"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
@@ -111,8 +111,8 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*
 		return nil, fmt.Errorf("buffer infomation inquiry is not supported for type %q", buffer.Type)
 	}
 	group := fmt.Sprintf("%s-group", buffer.Name)
-	rqw := redis.NewBufferWrite(ctx, redisclient.NewInClusterRedisClient(), buffer.Name, group, redis.WithRefreshBufferWriteInfo(false))
-	var bufferWrite = rqw.(*redis.BufferWrite)
+	rqw := redis2.NewBufferWrite(ctx, redisclient.NewInClusterRedisClient(), buffer.Name, group, redis2.WithRefreshBufferWriteInfo(false))
+	var bufferWrite = rqw.(*redis2.BufferWrite)
 
 	bufferInfo := &BufferInfo{
 		Name:            buffer.Name,
