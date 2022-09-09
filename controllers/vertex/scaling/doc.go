@@ -22,5 +22,4 @@ limitations under the License.
 //
 // Function StartWatching() and StopWatching() are also provided in the package,
 // so that vertices can be added into and removed from the workqueue.
-//
 package scaling

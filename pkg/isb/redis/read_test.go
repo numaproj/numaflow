@@ -381,7 +381,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatency() {
 	<-stopped
 }
 
-//TestReadWriteLatencyPipelining is performs wthe latency test during a forward.
+// TestReadWriteLatencyPipelining is performs wthe latency test during a forward.
 func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 	suite.rqw, _ = NewBufferWrite(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", WithInfoRefreshInterval(2*time.Second), WithLagDuration(time.Minute), WithoutPipelining(), WithMaxLength(20000)).(*BufferWrite)
 	_ = NewBufferRead(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", "consumer-0")
