@@ -57,7 +57,8 @@ var _ ProcessorEntitier = (*ProcessorEntity)(nil)
 
 // _defaultKeySeparator is the key separate when we have shared OT buckets.
 // NOTE: we can only use `_` as the separator, Jetstream will not let any other special character.
-//       Perhaps we can encode the key using base64, but it will have a performance hit.
+//
+//	Perhaps we can encode the key using base64, but it will have a performance hit.
 const _defaultKeySeparator = "_"
 
 // NewProcessorEntity returns a new `ProcessorEntity`.
