@@ -1,6 +1,8 @@
 package window
 
-import "time"
+import (
+	"time"
+)
 
 // Windower assigns the element to zero or more windows.
 type Windower interface {
