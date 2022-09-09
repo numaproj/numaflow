@@ -1,7 +1,7 @@
 package fixtures
 
 import (
-	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -79,7 +79,7 @@ func (g *Given) readResource(text string, v metav1.Object) {
 	if strings.HasPrefix(text, "@") {
 		file = strings.TrimPrefix(text, "@")
 	} else {
-		f, err := ioutil.TempFile("", "numaflow-e2e")
+		f, err := os.CreateTemp("", "numaflow-e2e")
 		if err != nil {
 			g.t.Fatal(err)
 		}
@@ -94,7 +94,7 @@ func (g *Given) readResource(text string, v metav1.Object) {
 		file = f.Name()
 	}
 
-	f, err := ioutil.ReadFile(file)
+	f, err := os.ReadFile(file)
 	if err != nil {
 		g.t.Fatal(err)
 	}

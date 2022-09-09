@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -110,7 +110,7 @@ func init() {
 	http.HandleFunc("/kafka/produce-topic", func(w http.ResponseWriter, r *http.Request) {
 		topic := r.URL.Query().Get("topic")
 		key := r.URL.Query().Get("key")
-		buf, err := ioutil.ReadAll(r.Body)
+		buf, err := io.ReadAll(r.Body)
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(500)

@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -106,7 +106,7 @@ func New(vertex *dfv1.Vertex, writers []isb.BufferWriter, opts ...Option) (*http
 			_, _ = w.Write([]byte("503 not ready\n"))
 			return
 		}
-		msg, err := ioutil.ReadAll(r.Body)
+		msg, err := io.ReadAll(r.Body)
 		_ = r.Body.Close()
 		if err != nil {
 			w.WriteHeader(400)
