@@ -38,4 +38,6 @@ type ReadMessage interface {
 	SetWatermark(watermark processor.Watermark)
 	// Watermark returns the watermark for a message.
 	Watermark() processor.Watermark
+	// Ack acknowledges a message
+	Ack()
 }
