@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -15,7 +16,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/stretchr/testify/assert"

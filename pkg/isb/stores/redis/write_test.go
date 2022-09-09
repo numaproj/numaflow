@@ -191,14 +191,14 @@ func TestLua(t *testing.T) {
 
 	// first insert
 	res, err := script.Run(ctx, client, []string{hashName, streamName}, "10", message.Header, message.Payload, "0-0").Result()
-	assert.NoErrorf(t, err, "lua script execution failed, %s")
+	assert.NoErrorf(t, err, "lua script execution failed, %s", err)
 	id, err := splitId(res.(string))
 	assert.NoError(t, err)
 	assert.Positive(t, id, res)
 
 	// duplicate insert
 	res, err = script.Run(ctx, client, []string{hashName, streamName}, "10", message.Header, message.Payload, "0-0").Result()
-	assert.NoErrorf(t, err, "lua script execution failed, %s")
+	assert.NoErrorf(t, err, "lua script execution failed, %s", err)
 	id, err = splitId(res.(string))
 	assert.NoError(t, err)
 	assert.Positive(t, id, res)
