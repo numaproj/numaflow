@@ -38,9 +38,7 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			kw = NewKeyedWindow(iw)
-			for _, key := range tt.given.Keys {
-				kw.Keys = append(kw.Keys, key)
-			}
+			kw.Keys = append(kw.Keys, tt.given.Keys...)
 			kw.AddKey(tt.input)
 			assert.True(t, compareStringArr(kw.Keys, tt.expectedKeys))
 		})
