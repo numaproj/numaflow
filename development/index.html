@@ -1283,7 +1283,7 @@
 <p>This doc explains how to set up a development environment for Numaflow.</p>
 <h3 id="install-required-tools">Install required tools<a class="headerlink" href="#install-required-tools" title="Permanent link">&para;</a></h3>
 <ol>
-<li><a href="https://golang.org/doc/install"><code>go</code></a> 1.18+</li>
+<li><a href="https://golang.org/doc/install"><code>go</code></a> 1.19+</li>
 <li><a href="https://help.github.com/articles/set-up-git/"><code>git</code></a></li>
 <li><a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/"><code>kubectl</code></a></li>
 <li><a href="https://github.com/protocolbuffers/protobuf"><code>protoc</code></a> for compiling protocol buffers</li>
@@ -1319,6 +1319,14 @@ k3d kubeconfig get k3s-default
 <li>
 <p><code>make start</code>
   Build the source code, image, and install the Numa controller in the <code>numaflow-system</code> namespace.</p>
+</li>
+<li>
+<p><code>make docs</code>
+  Convert the docs to Github pages, check if there's any error.</p>
+</li>
+<li>
+<p><code>make docs-serve</code>
+  Start <a href="http://127.0.0.1:8000/">an HTTP server</a> on your local to host the docs generated Github pages.</p>
 </li>
 </ul>
 
