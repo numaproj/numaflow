@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
@@ -124,10 +123,10 @@ retry:
 			}
 			return errs
 		} else {
-			data, err = ioutil.ReadAll(resp.Body)
+			data, err = io.ReadAll(resp.Body)
 			if err != nil {
 				failed = true
-				logging.FromContext(ctx).Warnf("ioutil.ReadAll failed (%d/%d), %w", i, retryCount, err)
+				logging.FromContext(ctx).Warnf("io.ReadAll failed (%d/%d), %w", i, retryCount, err)
 				goto retry
 			}
 			_ = resp.Body.Close()

@@ -108,11 +108,13 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 // scaleOneVertex implements the detailed logic of scaling up/down a vertex.
 //
 // For source vertices which have both rate and pending message information,
-//    desiredReplicas = currentReplicas * pending / (targetProcessingTime * rate)
+//
+//	desiredReplicas = currentReplicas * pending / (targetProcessingTime * rate)
 //
 // For UDF and sinks which have the read buffer information
-//    singleReplicaContribution = (totalAvailableBufferLength - pending) / currentReplicas
-//    desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
+//
+//	singleReplicaContribution = (totalAvailableBufferLength - pending) / currentReplicas
+//	desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
 //
 // Back pressure factor
 // When desiredReplicas > currentReplics:
@@ -185,6 +187,9 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	if err != nil {
 		return fmt.Errorf("failed to get daemon service client for pipeline %s, %w", pl.Name, err)
 	}
+	defer func() {
+		_ = dClient.Close()
+	}()
 	vMetrics, err := dClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)

@@ -107,7 +107,9 @@ func WithReadTimeOut(timeout time.Duration) Option {
 
 // NewMemGen fuction creates an instance of generator.
 // ctx  - context passed by the cmd/start.go a new context with cancel
-//        is created for use by this vertex.
+//
+//	is created for use by this vertex.
+//
 // name - name of this vertex
 // rpu  - no of records to generate per time unit. by default the channel buffer size is set to 5*rpu
 // msgSize - size of each generated message
@@ -185,7 +187,6 @@ func (mg *memgen) IsEmpty() bool {
 // will not mark the message in the buffer as "READ" if the read for that index is erring.
 // There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 // at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages.
-//
 //
 // the context passed to read should be different from the lifecycle context that is used by this vertex.
 func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {

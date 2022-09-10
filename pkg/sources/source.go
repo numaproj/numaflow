@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/jetstream"
-	redisisb "github.com/numaproj/numaflow/pkg/isb/redis"
+	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
+	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -22,6 +20,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
