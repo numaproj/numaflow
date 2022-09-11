@@ -14,43 +14,38 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 )
 
-// Fetcher fetches watermark data from Vn-1 vertex.
-type Fetcher interface {
-	// GetWatermark returns the inorder monotonically increasing watermark of the edge connected to Vn-1.
-	GetWatermark(offset isb.Offset) processor.Watermark
-	// GetHeadWatermark returns the latest watermark based on the head offset
-	GetHeadWatermark() processor.Watermark
+// edgeFetcher is a fetcher between two vertices.
+type edgeFetcher struct {
+	ctx              context.Context
+	edgeName         string
+	processorManager *ProcessorManager
+	log              *zap.SugaredLogger
 }
 
-// Edge is the edge relation between two vertices.
-type Edge struct {
-	ctx        context.Context
-	edgeName   string
-	fromVertex FromVertexer
-	log        *zap.SugaredLogger
-}
-
-// NewEdgeBuffer returns a new Edge. FromVertex has the details about the processors responsible for writing to this
+// NewEdgeFetcher returns a new edge fetcher, processorManager has the details about the processors responsible for writing to this
 // edge.
-func NewEdgeBuffer(ctx context.Context, edgeName string, fromV FromVertexer) *Edge {
-	return &Edge{
-		ctx:        ctx,
-		edgeName:   edgeName,
-		fromVertex: fromV,
-		log:        logging.FromContext(ctx).With("edgeName", edgeName),
+func NewEdgeFetcher(ctx context.Context, edgeName string, processorManager *ProcessorManager) Fetcher {
+	return &edgeFetcher{
+		ctx:              ctx,
+		edgeName:         edgeName,
+		processorManager: processorManager,
+		log:              logging.FromContext(ctx).With("edgeName", edgeName),
 	}
 }
 
 // GetHeadWatermark returns the watermark using the HeadOffset (latest offset). This
 // can be used in showing the watermark progression for a vertex when not consuming the messages
 // directly (eg. UX, tests,)
-func (e *Edge) GetHeadWatermark() processor.Watermark {
+func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
 	var debugString strings.Builder
 	var headOffset int64 = math.MinInt64
 	var epoch int64 = math.MaxInt64
-	var allProcessors = e.fromVertex.GetAllProcessors()
+	var allProcessors = e.processorManager.GetAllProcessors()
 	// get the head offset of each processor
 	for _, p := range allProcessors {
+		if !p.IsActive() {
+			continue
+		}
 		e.log.Debugf("Processor: %v (headoffset:%d)", p, p.offsetTimeline.GetHeadOffset())
 		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headoffset:%d) \n", p, p.offsetTimeline.GetHeadOffset()))
 		var o = p.offsetTimeline.GetHeadOffset()
@@ -68,7 +63,7 @@ func (e *Edge) GetHeadWatermark() processor.Watermark {
 }
 
 // GetWatermark gets the smallest timestamp for the given offset
-func (e *Edge) GetWatermark(inputOffset isb.Offset) processor.Watermark {
+func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("unable to get offset from isb.Offset.Sequence()", zap.Error(err))
@@ -76,7 +71,7 @@ func (e *Edge) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	}
 	var debugString strings.Builder
 	var epoch int64 = math.MaxInt64
-	var allProcessors = e.fromVertex.GetAllProcessors()
+	var allProcessors = e.processorManager.GetAllProcessors()
 	for _, p := range allProcessors {
 		if !p.IsActive() {
 			continue

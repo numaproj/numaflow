@@ -140,15 +140,9 @@ func TestOffsetFrom(t *testing.T) {
 func TestOffset(t *testing.T) {
 	topic := "t1"
 	partition := int32(1)
-	of := int64(23)
-	o := offset{
-		topic:        topic,
-		partition:    partition,
-		originOffset: of,
-	}
-	expected := fmt.Sprintf("%s:%v:%v", topic, partition, of)
-	assert.Equal(t, expected, o.String())
-	s, err := o.Sequence()
-	assert.Nil(t, err)
-	assert.True(t, s > 0)
+	offset := int64(23)
+
+	formattedoffset := toOffset(topic, partition, offset)
+	expected := fmt.Sprintf("%s:%v:%v", topic, partition, offset)
+	assert.Equal(t, expected, formattedoffset)
 }

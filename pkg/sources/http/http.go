@@ -147,9 +147,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 					Payload: msg,
 				},
 			},
-			// This offset is only used for wartermark publishing and fetching in the source,
-			// it has to be integer format so that function Sequence() has correct return.
-			ReadOffset: isb.SimpleOffset(func() string { return fmt.Sprint(time.Now().UnixNano()) }),
+			ReadOffset: isb.SimpleOffset(func() string { return id }),
 		}
 		h.messages <- m
 		w.WriteHeader(http.StatusNoContent)
@@ -193,7 +191,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 	h.cancelfn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores.HBStore, publishWMStores.OTStore, publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
+	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores.HBStore, publishWMStores.OTStore, publish.IsSource(), publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
 	return h, nil
 }
 

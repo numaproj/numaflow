@@ -158,7 +158,7 @@ func (r *KafkaSource) loadSourceWartermarkPublisher(partitionID int32) publish.P
 	}
 	entityName := fmt.Sprintf("%s-%s-%d", r.pipelineName, r.name, partitionID)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores.HBStore, r.srcPublishWMStores.OTStore, publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
+	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores.HBStore, r.srcPublishWMStores.OTStore, publish.IsSource(), publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
 	r.sourcePublishWMs[partitionID] = sourcePublishWM
 	return sourcePublishWM
 }
@@ -368,48 +368,25 @@ func (r *KafkaSource) startConsumer() {
 }
 
 func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
-	offset := offset{
-		topic:        m.Topic,
-		partition:    m.Partition,
-		originOffset: m.Offset,
-	}
+	offset := toOffset(m.Topic, m.Partition, m.Offset)
 	msg := isb.Message{
 		Header: isb.Header{
 			PaneInfo: isb.PaneInfo{EventTime: m.Timestamp},
-			ID:       offset.String(),
+			ID:       offset,
 			Key:      string(m.Key),
 		},
 		Body: isb.Body{Payload: m.Value},
 	}
 
 	return &isb.ReadMessage{
-		ReadOffset: offset,
+		ReadOffset: isb.SimpleOffset(func() string { return offset }),
 		Message:    msg,
 	}
 }
 
-// offset implements isb.Offset interface for Kafka source
-type offset struct {
-	topic        string
-	partition    int32
-	originOffset int64
-}
-
-func (os offset) String() string {
+func toOffset(topic string, partition int32, offset int64) string {
 	// TODO handle this elegantly
-	return fmt.Sprintf("%s:%v:%v", os.topic, os.partition, os.originOffset)
-}
-
-func (os offset) Sequence() (int64, error) {
-	// This offset sequence is going to be used for wartermark publishing and fetching in the source,
-	// which needs to be integer format so that function Sequence() has correct return.
-	// Can not use partition offset as it's not unique across partitions.
-	// Assume m.Partition < 100, to make sure offset is globally unique as much as possible.
-	return time.Now().UnixNano()*100 + int64(os.partition), nil
-}
-
-func (os offset) AckIt() error {
-	return nil
+	return fmt.Sprintf("%s:%v:%v", topic, partition, offset)
 }
 
 func offsetFrom(offset string) (string, int32, int64, error) {

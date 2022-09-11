@@ -2,17 +2,18 @@ package publish
 
 import (
 	"time"
-
-	"github.com/nats-io/nats.go"
 )
 
 type publishOptions struct {
+	// autoRefreshHeartbeat indicates whether to auto refresh heartbeat
 	autoRefreshHeartbeat bool
-	bucketConfigs        *nats.KeyValueConfig
-	podHeartbeatRate     int64
+	// The interval of refresh heartbeat
+	podHeartbeatRate int64
 	// Watermark delay.
 	// It should only be used in a source publisher.
 	delay time.Duration
+	// Whether it is source publisher or not
+	isSource bool
 }
 
 type PublishOption func(*publishOptions)
@@ -20,12 +21,6 @@ type PublishOption func(*publishOptions)
 func WithAutoRefreshHeartbeatDisabled() PublishOption {
 	return func(opts *publishOptions) {
 		opts.autoRefreshHeartbeat = false
-	}
-}
-
-func WithBucketConfigs(cfgs *nats.KeyValueConfig) PublishOption {
-	return func(opts *publishOptions) {
-		opts.bucketConfigs = cfgs
 	}
 }
 
@@ -39,5 +34,12 @@ func WithPodHeartbeatRate(rate int64) PublishOption {
 func WithDelay(t time.Duration) PublishOption {
 	return func(opts *publishOptions) {
 		opts.delay = t
+	}
+}
+
+// IsSource indicates it's a source publisher
+func IsSource() PublishOption {
+	return func(opts *publishOptions) {
+		opts.isSource = true
 	}
 }
