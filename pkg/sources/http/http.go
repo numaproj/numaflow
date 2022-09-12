@@ -201,14 +201,14 @@ func (h *httpSource) GetName() string {
 
 func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := []*isb.ReadMessage{}
-	var earliest time.Time
+	var latest time.Time
 	timeout := time.After(h.readTimeout)
 loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-h.messages:
-			if earliest.IsZero() || m.EventTime.Before(earliest) {
-				earliest = m.EventTime
+			if latest.IsZero() || m.EventTime.After(latest) {
+				latest = m.EventTime
 			}
 			msgs = append(msgs, m)
 			httpSourceReadCount.With(map[string]string{metricspkg.LabelVertex: h.name, metricspkg.LabelPipeline: h.pipelineName}).Inc()
@@ -218,8 +218,8 @@ loop:
 		}
 	}
 	h.logger.Debugf("Read %d messages.", len(msgs))
-	if len(msgs) > 0 && !earliest.IsZero() {
-		h.sourcePublishWM.PublishWatermark(processor.Watermark(earliest), msgs[len(msgs)-1].ReadOffset)
+	if len(msgs) > 0 && !latest.IsZero() {
+		h.sourcePublishWM.PublishWatermark(processor.Watermark(latest), msgs[len(msgs)-1].ReadOffset)
 	}
 	return msgs, nil
 }

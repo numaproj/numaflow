@@ -109,10 +109,8 @@ func (r *KafkaSource) GetName() string {
 // There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 // at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages.
 func (r *KafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
-	// It stores earliest timestamps for different partitions
-	earliestTimes := make(map[int32]time.Time)
-	// It stores latest offsets for different partitions
-	latestOffsets := make(map[int32]isb.Offset)
+	// It stores latest timestamps for different partitions
+	latestTimestamps := make(map[int32]time.Time)
 	msgs := make([]*isb.ReadMessage, 0, count)
 	timeout := time.After(r.readTimeout)
 loop:
@@ -122,19 +120,9 @@ loop:
 			kafkaSourceReadCount.With(map[string]string{metricspkg.LabelVertex: r.name, metricspkg.LabelPipeline: r.pipelineName}).Inc()
 			_m := toReadMessage(m)
 			msgs = append(msgs, _m)
-			// Get earliest timestamps for different partitions
-			if t, ok := earliestTimes[m.Partition]; !ok || m.Timestamp.Before(t) {
-				earliestTimes[m.Partition] = m.Timestamp
-			}
-			// Get latest offsets for different partitions
-			if o, ok := latestOffsets[m.Partition]; !ok {
-				latestOffsets[m.Partition] = _m.ReadOffset
-			} else {
-				os, _ := o.Sequence()
-				ns, _ := _m.ReadOffset.Sequence()
-				if ns > os {
-					latestOffsets[m.Partition] = _m.ReadOffset
-				}
+			// Get latest timestamps for different partitions
+			if t, ok := latestTimestamps[m.Partition]; !ok || m.Timestamp.After(t) {
+				latestTimestamps[m.Partition] = m.Timestamp
 			}
 		case <-timeout:
 			// log that timeout has happened and don't return an error
@@ -142,9 +130,9 @@ loop:
 			break loop
 		}
 	}
-	for p, t := range earliestTimes {
+	for p, t := range latestTimestamps {
 		publisher := r.loadSourceWartermarkPublisher(p)
-		publisher.PublishWatermark(processor.Watermark(t), latestOffsets[p])
+		publisher.PublishWatermark(processor.Watermark(t), nil) // Source publisher does not care about the offset
 	}
 	return msgs, nil
 }
