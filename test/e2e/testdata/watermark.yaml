@@ -4,7 +4,7 @@ metadata:
   name: simple-pipeline-watermark
 spec:
   watermark:
-    disabled: true
+    disabled: false
   vertices:
     - name: input
       source:
