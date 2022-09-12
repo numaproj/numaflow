@@ -178,7 +178,6 @@ func (jss *jetStreamSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffe
 }
 
 func (jss *jetStreamSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
-	log := logging.FromContext(ctx)
 	nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
