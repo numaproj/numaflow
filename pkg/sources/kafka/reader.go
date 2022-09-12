@@ -315,7 +315,7 @@ func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWri
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.WithLogger(kafkasource.logger)}
+	forwardOpts := []forward.Option{forward.FromSourceVertex(), forward.WithLogger(kafkasource.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))

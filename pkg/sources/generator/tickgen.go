@@ -154,7 +154,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.WithLogger(gensrc.logger)}
+	forwardOpts := []forward.Option{forward.FromSourceVertex(), forward.WithLogger(gensrc.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))

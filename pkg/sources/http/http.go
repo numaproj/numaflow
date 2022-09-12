@@ -175,7 +175,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.WithLogger(h.logger)}
+	forwardOpts := []forward.Option{forward.FromSourceVertex(), forward.WithLogger(h.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))

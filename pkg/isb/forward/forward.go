@@ -183,6 +183,13 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	var processorWM processor.Watermark
 	if isdf.fetchWatermark != nil {
 		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
+		if isdf.opts.isFromSourceVertex { // Set late data at source level
+			for _, m := range readMessages {
+				if processorWM.After(m.EventTime) {
+					m.IsLate = true
+				}
+			}
+		}
 	}
 
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
