@@ -1,7 +1,6 @@
 // Package aligned maintains the state of active keyed windows in a vertex.
 // Keyed Window maintains the association between set of keys and an interval window.
-// aligned provides functionality Add, Get window for a given interval, remove windows whose End time is before the
-// current watermark.
+// aligned also provides the lifecycle management of an interval window. Watermark is used to trigger the expiration of windows.
 package aligned
 
 import (
