@@ -255,8 +255,8 @@ func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error 
 
 func convert2IsbMsgHeader(header nats.Header) isb.Header {
 	r := isb.Header{}
-	if header.Get(_window) == "1" {
-		r.IsWindow = true
+	if header.Get(_late) == "1" {
+		r.IsLate = true
 	}
 	if x := header.Get(_id); x != "" {
 		r.ID = x

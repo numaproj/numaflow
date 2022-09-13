@@ -1,31 +1,31 @@
 package fetch
 
-type vertexOptions struct {
+type processorManagerOptions struct {
 	podHeartbeatRate         int64
 	refreshingProcessorsRate int64
 	separateOTBucket         bool
 }
 
-// VertexOption set options for FromVertex.
-type VertexOption func(*vertexOptions)
+// ProcessorManagerOption set options for FromVertex.
+type ProcessorManagerOption func(*processorManagerOptions)
 
 // WithPodHeartbeatRate sets the heartbeat rate in seconds.
-func WithPodHeartbeatRate(rate int64) VertexOption {
-	return func(opts *vertexOptions) {
+func WithPodHeartbeatRate(rate int64) ProcessorManagerOption {
+	return func(opts *processorManagerOptions) {
 		opts.podHeartbeatRate = rate
 	}
 }
 
 // WithRefreshingProcessorsRate sets the processor refreshing rate in seconds.
-func WithRefreshingProcessorsRate(rate int64) VertexOption {
-	return func(opts *vertexOptions) {
+func WithRefreshingProcessorsRate(rate int64) ProcessorManagerOption {
+	return func(opts *processorManagerOptions) {
 		opts.refreshingProcessorsRate = rate
 	}
 }
 
 // WithSeparateOTBuckets creates a different bucket for maintaining each processor offset-timeline.
-func WithSeparateOTBuckets(separate bool) VertexOption {
-	return func(opts *vertexOptions) {
+func WithSeparateOTBuckets(separate bool) ProcessorManagerOption {
+	return func(opts *processorManagerOptions) {
 		opts.separateOTBucket = separate
 	}
 }

@@ -79,6 +79,14 @@ When posting data to the HTTP Source, an optional HTTP header `x-numaflow-id` ca
 curl -kq -X POST -H "x-numaflow-id: ${id}" -d "hello world" ${http-source-url}
 ```
 
+## x-numaflow-event-time
+
+By default, the time of the date coming to the HTTP source is used as the event time, it could be set by putting an HTTP header `x-numaflow-event-time` with value of the number of seconds elapsed since January 1, 1970 UTC.
+
+```sh
+curl -kq -X POST -H "x-numaflow-event-time: 1663006726" -d "hello world" ${http-source-url}
+```
+
 ## Auth
 
 A `Bearer` token can be configured to prevent the HTTP Source from being accessed by unexpected clients. To do so, a Kubernetes Secret needs to be created to store the token, and the valid clients also need to include the token in its HTTP request header.

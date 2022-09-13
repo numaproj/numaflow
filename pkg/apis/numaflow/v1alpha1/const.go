@@ -24,7 +24,8 @@ const (
 	KeyReplica      = "numaflow.numaproj.io/replica"
 
 	// ID key in the header of sources like http
-	KeyMetaID = "x-numaflow-id"
+	KeyMetaID        = "x-numaflow-id"
+	KeyMetaEventTime = "x-numaflow-event-time"
 
 	DefaultISBSvcName = "default"
 
@@ -86,7 +87,8 @@ const (
 	EnvDebug                       = "NUMAFLOW_DEBUG"
 
 	// Watermark
-	EnvWatermarkOn = "NUMAFLOW_WATERMARK_ON"
+	EnvWatermarkDisabled = "NUMAFLOW_WATERMARK_DISABLED"
+	EnvWatermarkMaxDelay = "NUMAFLOW_WATERMARK_MAX_DELAY"
 
 	PathVarRun            = "/var/run/numaflow"
 	VertexMetricsPort     = 2469
