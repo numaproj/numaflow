@@ -40,7 +40,7 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 			kw = NewKeyedWindow(iw)
 			kw.Keys = append(kw.Keys, tt.given.Keys...)
 			kw.AddKey(tt.input)
-			assert.True(t, compareStringArr(kw.Keys, tt.expectedKeys))
+			assert.ElementsMatch(t, kw.Keys, tt.expectedKeys)
 		})
 	}
 }
@@ -79,23 +79,8 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 			kw.Keys = tt.given.Keys
 			ret := kw.Partitions()
 			for idx, s := range tt.expected {
-				assert.True(t, stringerAndEqCheck(ret[idx], s))
+				assert.EqualValues(t, ret[idx], s)
 			}
 		})
 	}
-}
-
-func stringerAndEqCheck(par PartitionId, s string) bool {
-	p := string(par)
-	return p == s
-}
-
-func compareStringArr(o []string, t []string) bool {
-	for idx, s := range o {
-		if t[idx] != s {
-			return false
-		}
-	}
-
-	return true
 }

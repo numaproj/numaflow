@@ -1,6 +1,6 @@
 // Package aligned maintains the state of active keyed windows in a vertex.
 // Keyed Window maintains the association between set of keys and an interval window.
-// aligned provides functionality Add, Get window for a given interval, remove windows whose End time is before the
+// aligned provides functionality to Add, Get window for a given interval, remove windows whose End time is before the
 // current watermark.
 package aligned
 
@@ -37,6 +37,7 @@ func (aw *ActiveWindows) CreateKeyedWindow(iw *window.IntervalWindow) *KeyedWind
 	// this could be the first window
 	if aw.entries.Len() == 0 {
 		aw.entries.PushFront(kw)
+		return kw
 	}
 
 	earliestWindow := aw.entries.Front().Value.(*KeyedWindow)
@@ -50,7 +51,7 @@ func (aw *ActiveWindows) CreateKeyedWindow(iw *window.IntervalWindow) *KeyedWind
 		aw.entries.PushBack(kw)
 	} else {
 		// a window in the middle
-		for e := aw.entries.Front(); e != nil; e = e.Next() {
+		for e := aw.entries.Back(); e != nil; e = e.Prev() {
 			win := e.Value.(*KeyedWindow)
 			if win.Start.After(kw.End) || win.Start == kw.End {
 				aw.entries.InsertBefore(kw, e)
@@ -66,7 +67,7 @@ func (aw *ActiveWindows) GetKeyedWindow(iw *window.IntervalWindow) *KeyedWindow 
 	aw.lock.RLock()
 	defer aw.lock.RUnlock()
 	// check if we already have a window
-	for e := aw.entries.Front(); e != nil; e = e.Next() {
+	for e := aw.entries.Back(); e != nil; e = e.Prev() {
 		win := e.Value.(*KeyedWindow)
 		if win.Start == iw.Start && win.End == iw.End {
 			return win
