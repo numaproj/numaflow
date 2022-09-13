@@ -8,7 +8,7 @@
       
       
       
-      <link rel="icon" href="../../assets/numa.svg">
+      <link rel="icon" href="../../assets/numaproj.svg">
       <meta name="generator" content="mkdocs-1.3.0, mkdocs-material-8.3.9">
     
     
@@ -627,6 +627,13 @@
         <li class="md-nav__item">
   <a href="#x-numaflow-id" class="md-nav__link">
     x-numaflow-id
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#x-numaflow-event-time" class="md-nav__link">
+    x-numaflow-event-time
   </a>
   
 </li>
@@ -1318,6 +1325,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#x-numaflow-event-time" class="md-nav__link">
+    x-numaflow-event-time
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#auth" class="md-nav__link">
     Auth
   </a>
@@ -1407,6 +1421,10 @@ curl -kq -X POST -d <span class="s2">&quot;hello world&quot;</span> https://loca
 <h2 id="x-numaflow-id">x-numaflow-id<a class="headerlink" href="#x-numaflow-id" title="Permanent link">&para;</a></h2>
 <p>When posting data to the HTTP Source, an optional HTTP header <code>x-numaflow-id</code> can be specified, which will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.</p>
 <div class="highlight"><pre><span></span><code>curl -kq -X POST -H <span class="s2">&quot;x-numaflow-id: </span><span class="si">${</span><span class="nv">id</span><span class="si">}</span><span class="s2">&quot;</span> -d <span class="s2">&quot;hello world&quot;</span> <span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+</code></pre></div>
+<h2 id="x-numaflow-event-time">x-numaflow-event-time<a class="headerlink" href="#x-numaflow-event-time" title="Permanent link">&para;</a></h2>
+<p>By default, the time of the date coming to the HTTP source is used as the event time, it could be set by putting an HTTP header <code>x-numaflow-event-time</code> with value of the number of seconds elapsed since January 1, 1970 UTC.</p>
+<div class="highlight"><pre><span></span><code>curl -kq -X POST -H <span class="s2">&quot;x-numaflow-event-time: 1663006726&quot;</span> -d <span class="s2">&quot;hello world&quot;</span> <span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 </code></pre></div>
 <h2 id="auth">Auth<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h2>
 <p>A <code>Bearer</code> token can be configured to prevent the HTTP Source from being accessed by unexpected clients. To do so, a Kubernetes Secret needs to be created to store the token, and the valid clients also need to include the token in its HTTP request header.</p>
