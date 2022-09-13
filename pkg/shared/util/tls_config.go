@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
@@ -47,7 +47,7 @@ func GetTLSConfig(config *dfv1.TLS) (*tls.Config, error) {
 		InsecureSkipVerify: config.InsecureSkipVerify,
 	}
 	if len(caCertPath) > 0 {
-		caCert, err := ioutil.ReadFile(caCertPath)
+		caCert, err := os.ReadFile(caCertPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read ca cert file %s, %w", caCertPath, err)
 		}
