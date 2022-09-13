@@ -261,7 +261,7 @@ func (w *writeOffset) AckIt() error {
 const (
 	_key       = "k"
 	_id        = "i"
-	_late      = "w"
+	_late      = "l"
 	_eventTime = "pev"
 	_startTime = "ps"
 	_endTime   = "pen"

@@ -22,9 +22,8 @@ func BuildPublishWMStores(hbStore store.WatermarkKVStorer, otStore store.Waterma
 	}
 }
 
-// NewGenericPublish returns GenericPublish. processorName is the unique processor (pod) that is running on this vertex.
-// publishKeyspace is obsolete, and will be removed in subsequent iterations. publishWM is a struct for storing both the heartbeat
-// and the offset watermark timeline stores for the Vn vertex.
+// NewGenericPublish returns GenericPublish, where processorName is the unique processor (pod) that is running on this
+// vertex, publishWM is a struct for storing both the heartbeat and the offset watermark timeline stores for the Vn vertex.
 func NewGenericPublish(ctx context.Context, processorName string, publishWM PublishWMStores) publish.Publisher {
 	publishEntity := processor.NewProcessorEntity(processorName)
 	return publish.NewPublish(ctx, publishEntity, publishWM.HBStore, publishWM.OTStore)
