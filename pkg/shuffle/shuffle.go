@@ -1,9 +1,9 @@
 package shuffle
 
 import (
-	"github.com/cespare/xxhash"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"hash"
+	"hash/fnv"
 )
 
 // Shuffle shuffles messages among ISB
@@ -17,7 +17,7 @@ type Shuffle struct {
 func NewShuffle(bufferIdentifiers []string) *Shuffle {
 	return &Shuffle{
 		bufferIdentifiers: bufferIdentifiers,
-		hash:              xxhash.New(),
+		hash:              fnv.New64(),
 	}
 }
 
