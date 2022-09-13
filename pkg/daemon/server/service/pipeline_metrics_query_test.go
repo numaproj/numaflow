@@ -3,7 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -73,7 +73,7 @@ vertex_pending_messages{period="1m",pipeline="simple-pipeline",vertex="cat"} 5.3
 vertex_pending_messages{period="5m",pipeline="simple-pipeline",vertex="cat"} 6.002
 vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"} 7.00002
 `
-	ioReader := ioutil.NopCloser(bytes.NewReader([]byte(metricsResponse)))
+	ioReader := io.NopCloser(bytes.NewReader([]byte(metricsResponse)))
 
 	pipelineMetricsQueryService.httpClient = &mockHttpClient{
 		MockGet: func(url string) (*http.Response, error) {

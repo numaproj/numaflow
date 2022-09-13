@@ -2,7 +2,7 @@ package util
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"strings"
 
@@ -21,7 +21,7 @@ func GetSecretFromVolume(selector *corev1.SecretKeySelector) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get secret value of name: %s, key: %s, %w", selector.Name, selector.Key, err)
 	}
@@ -45,7 +45,7 @@ func GetConfigMapFromVolume(selector *corev1.ConfigMapKeySelector) (string, erro
 	if err != nil {
 		return "", err
 	}
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get configMap value of name: %s, key: %s, %w", selector.Name, selector.Key, err)
 	}

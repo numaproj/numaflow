@@ -8,10 +8,10 @@ import (
 	"time"
 
 	goredis "github.com/go-redis/redis/v8"
+	"github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb/redis"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )

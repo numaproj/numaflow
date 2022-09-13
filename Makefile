@@ -32,6 +32,15 @@ VERSION=$(GIT_TAG)
 override LDFLAGS += -X ${PACKAGE}.gitTag=${GIT_TAG}
 endif
 
+# Check Python
+PYTHON:=$(shell command -v python 2> /dev/null)
+ifndef PYTHON
+PYTHON:=$(shell command -v python3 2> /dev/null)
+endif
+ifndef PYTHON
+$(error "Python is not available, please install.")
+endif
+
 K3D ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo true || echo false)
 
 .PHONY: build
@@ -176,7 +185,7 @@ manifests: crds
 	kubectl kustomize config/advanced-install/minimal-crds > config/advanced-install/minimal-crds.yaml
 
 $(GOPATH)/bin/golangci-lint:
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b `go env GOPATH`/bin v1.46.2
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b `go env GOPATH`/bin v1.49.0
 
 .PHONY: lint
 lint: $(GOPATH)/bin/golangci-lint
@@ -196,6 +205,19 @@ e2eapi-image: clean dist/e2eapi
 ifeq ($(K3D),true)
 	k3d image import $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
+
+/usr/local/bin/mkdocs:
+	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9
+
+# docs
+
+.PHONY: docs
+docs: /usr/local/bin/mkdocs
+	mkdocs build
+
+.PHONY: docs-serve
+docs-serve: docs
+	mkdocs serve
 
 # pre-push checks
 

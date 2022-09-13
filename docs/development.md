@@ -4,7 +4,7 @@ This doc explains how to set up a development environment for Numaflow.
 
 ### Install required tools
 
-1. [`go`](https://golang.org/doc/install) 1.18+
+1. [`go`](https://golang.org/doc/install) 1.19+
 1. [`git`](https://help.github.com/articles/set-up-git/)
 1. [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 1. [`protoc`](https://github.com/protocolbuffers/protobuf) for compiling protocol buffers
@@ -38,3 +38,9 @@ k3d kubeconfig get k3s-default
 
 - `make start`
   Build the source code, image, and install the Numa controller in the `numaflow-system` namespace.
+
+- `make docs`
+  Convert the docs to Github pages, check if there's any error.
+
+- `make docs-serve`
+  Start [an HTTP server](http://127.0.0.1:8000/) on your local to host the docs generated Github pages.

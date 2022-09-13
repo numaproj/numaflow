@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 
@@ -23,7 +23,7 @@ func Test_Commands(t *testing.T) {
 		rootCmd.SetOut(b)
 		rootCmd.SetArgs([]string{"help"})
 		Execute()
-		output, _ := ioutil.ReadAll(b)
+		output, _ := io.ReadAll(b)
 		assert.Contains(t, string(output), "Available Commands")
 	})
 
