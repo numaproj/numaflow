@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 
@@ -137,10 +136,8 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 		}
 
 		// stop watermark publisher if watermarking is enabled
-		if isdf.publishWatermark != nil {
-			for _, publisher := range isdf.publishWatermark {
-				publisher.StopPublisher()
-			}
+		for _, publisher := range isdf.publishWatermark {
+			publisher.StopPublisher()
 		}
 		close(stopped)
 	}()
@@ -180,14 +177,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
 	// let's track only the last element's watermark
-	var processorWM processor.Watermark
-	if isdf.fetchWatermark != nil {
-		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
-		if isdf.opts.isFromSourceVertex { // Set late data at source level
-			for _, m := range readMessages {
-				if processorWM.After(m.EventTime) {
-					m.IsLate = true
-				}
+	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
+	if isdf.opts.isFromSourceVertex { // Set late data at source level
+		for _, m := range readMessages {
+			if processorWM.After(m.EventTime) {
+				m.IsLate = true
 			}
 		}
 	}
@@ -257,11 +251,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
-	if isdf.publishWatermark != nil {
-		// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)?
-		for edgeName, offsets := range writeOffsets {
-			if len(offsets) > 0 {
-				isdf.publishWatermark[edgeName].PublishWatermark(processorWM, offsets[len(offsets)-1])
+	// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)?
+	for edgeName, offsets := range writeOffsets {
+		if len(offsets) > 0 {
+			if publisher, ok := isdf.publishWatermark[edgeName]; ok {
+				publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
 			}
 		}
 	}
