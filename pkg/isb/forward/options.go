@@ -14,6 +14,8 @@ type options struct {
 	udfConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
+	// isFromSourceVertex indicates if the fromStep is a source
+	isFromSourceVertex bool
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
 }
@@ -48,6 +50,14 @@ func WithUDFConcurrency(f int) Option {
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *options) error {
 		o.logger = l
+		return nil
+	}
+}
+
+// FromSourceVertex indicates it reads from a buffer written by a source vertex
+func FromSourceVertex() Option {
+	return func(o *options) error {
+		o.isFromSourceVertex = true
 		return nil
 	}
 }

@@ -261,7 +261,7 @@ func (w *writeOffset) AckIt() error {
 const (
 	_key       = "k"
 	_id        = "i"
-	_window    = "w"
+	_late      = "l"
 	_eventTime = "pev"
 	_startTime = "ps"
 	_endTime   = "pen"
@@ -271,10 +271,10 @@ func convert2NatsMsgHeader(header isb.Header) nats.Header {
 	r := nats.Header{}
 	r.Add(_id, header.ID)
 	r.Add(_key, string(header.Key))
-	if header.IsWindow {
-		r.Add(_window, "1")
+	if header.IsLate {
+		r.Add(_late, "1")
 	} else {
-		r.Add(_window, "0")
+		r.Add(_late, "0")
 	}
 	if !header.EventTime.IsZero() {
 		r.Add(_eventTime, fmt.Sprint(header.EventTime.UnixMilli()))

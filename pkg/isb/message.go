@@ -10,9 +10,8 @@ type PaneInfo struct {
 	EventTime time.Time
 	StartTime time.Time
 	EndTime   time.Time
-	// IsWindow is used to represent whether we have applied window operator.
-	// ATM we do not support window as it requires an implicit reduce in the downstream.
-	IsWindow bool
+	// IsLate is used to indicate if it's a late data .
+	IsLate bool
 }
 
 // Header is the header of the message

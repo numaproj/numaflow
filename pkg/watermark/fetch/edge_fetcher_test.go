@@ -50,7 +50,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherHBBucketName, defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherOTBucketName, defaultJetStreamClient)
-	testVertex := NewFromVertex(ctx, hbWatcher, otWatcher).(*fromVertex)
+	processorManager := NewProcessorManager(ctx, hbWatcher, otWatcher)
 	var (
 		// TODO: watcher should not be nil
 		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, otWatcher)
@@ -86,70 +86,70 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	for _, watermark := range pod2Timeline {
 		testPod2.offsetTimeline.Put(watermark)
 	}
-	testVertex.addProcessor("testPod0", testPod0)
-	testVertex.addProcessor("testPod1", testPod1)
-	testVertex.addProcessor("testPod2", testPod2)
+	processorManager.addProcessor("testPod0", testPod0)
+	processorManager.addProcessor("testPod1", testPod1)
+	processorManager.addProcessor("testPod2", testPod2)
 
 	type args struct {
 		offset int64
 	}
 	tests := []struct {
-		name       string
-		fromVertex FromVertexer
-		args       args
-		want       int64
+		name             string
+		processorManager *ProcessorManager
+		args             args
+		want             int64
 	}{
 		{
-			name:       "offset_9",
-			fromVertex: testVertex,
-			args:       args{9},
-			want:       time.Time{}.Unix(),
+			name:             "offset_9",
+			processorManager: processorManager,
+			args:             args{9},
+			want:             time.Time{}.Unix(),
 		},
 		{
-			name:       "offset_15",
-			fromVertex: testVertex,
-			args:       args{15},
-			want:       8,
+			name:             "offset_15",
+			processorManager: processorManager,
+			args:             args{15},
+			want:             8,
 		},
 		{
-			name:       "offset_18",
-			fromVertex: testVertex,
-			args:       args{18},
-			want:       9,
+			name:             "offset_18",
+			processorManager: processorManager,
+			args:             args{18},
+			want:             9,
 		},
 		{
-			name:       "offset_22",
-			fromVertex: testVertex,
-			args:       args{22},
-			want:       10,
+			name:             "offset_22",
+			processorManager: processorManager,
+			args:             args{22},
+			want:             10,
 		},
 		{
-			name:       "offset_22",
-			fromVertex: testVertex,
-			args:       args{23},
-			want:       10,
+			name:             "offset_22",
+			processorManager: processorManager,
+			args:             args{23},
+			want:             10,
 		},
 		{
-			name:       "offset_28",
-			fromVertex: testVertex,
-			args:       args{28},
-			want:       14,
+			name:             "offset_28",
+			processorManager: processorManager,
+			args:             args{28},
+			want:             14,
 		},
 		{
-			name:       "offset_28",
-			fromVertex: testVertex,
-			args:       args{29},
-			want:       17,
+			name:             "offset_28",
+			processorManager: processorManager,
+			args:             args{29},
+			want:             17,
 		},
 	}
 	location, _ := time.LoadLocation("UTC")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := &Edge{
-				ctx:        ctx,
-				edgeName:   "testBuffer",
-				fromVertex: tt.fromVertex,
-				log:        zaptest.NewLogger(t).Sugar(),
+			b := &edgeFetcher{
+				ctx:              ctx,
+				edgeName:         "testBuffer",
+				processorManager: tt.processorManager,
+				log:              zaptest.NewLogger(t).Sugar(),
 			}
 			if got := b.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.Unix(tt.want, 0).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, processor.Watermark(time.Unix(tt.want, 0)))
