@@ -72,7 +72,7 @@ func (cl *RedisClient) StreamInfo(ctx context.Context, streamKey string) (*redis
 	return cl.Client.XInfoStream(ctx, streamKey).Result()
 }
 
-//StreamGroupInfo returns redis stream group info
+// StreamGroupInfo returns redis stream group info
 func (cl *RedisClient) StreamGroupInfo(ctx context.Context, streamKey string) ([]redis.XInfoGroup, error) {
 	return cl.Client.XInfoGroups(ctx, streamKey).Result()
 }

@@ -48,7 +48,7 @@ func (p *PBQ) Write(ctx context.Context, message *isb.Message) error {
 	return writeErr
 }
 
-//CloseOfBook closes output channel
+// CloseOfBook closes output channel
 func (p *PBQ) CloseOfBook() {
 	close(p.output)
 	p.cob = true
