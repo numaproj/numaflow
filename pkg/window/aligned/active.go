@@ -14,6 +14,8 @@ import (
 // All the operations in ActiveWindows order the entries in the ascending order of start time.
 // So the earliest window is at the front and the oldest window is at the end.
 type ActiveWindows struct {
+	// entries is the list of active windows that are currently being tracked.
+	// later windows are added at the end (tail) of the list and older windows can be found at the head.
 	entries *list.List
 	lock    sync.RWMutex
 }
