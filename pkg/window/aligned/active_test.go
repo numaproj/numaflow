@@ -170,6 +170,72 @@ func TestAligned_GetWindow(t *testing.T) {
 			expectedWindow: nil,
 		},
 		{
+			name: "non_existing_before_earlier",
+			given: []*KeyedWindow{
+				{
+					IntervalWindow: &window.IntervalWindow{
+						Start: time.Unix(60, 0),
+						End:   time.Unix(120, 0),
+					},
+				},
+				{
+					IntervalWindow: &window.IntervalWindow{
+						Start: time.Unix(120, 0),
+						End:   time.Unix(180, 0),
+					},
+				},
+			},
+			input: &window.IntervalWindow{
+				Start: time.Unix(0, 0),
+				End:   time.Unix(60, 0),
+			},
+			expectedWindow: nil,
+		},
+		{
+			name: "non_existing_after_recent",
+			given: []*KeyedWindow{
+				{
+					IntervalWindow: &window.IntervalWindow{
+						Start: time.Unix(60, 0),
+						End:   time.Unix(120, 0),
+					},
+				},
+				{
+					IntervalWindow: &window.IntervalWindow{
+						Start: time.Unix(120, 0),
+						End:   time.Unix(180, 0),
+					},
+				},
+			},
+			input: &window.IntervalWindow{
+				Start: time.Unix(180, 0),
+				End:   time.Unix(240, 0),
+			},
+			expectedWindow: nil,
+		},
+		{
+			name: "non_existing_middle",
+			given: []*KeyedWindow{
+				{
+					IntervalWindow: &window.IntervalWindow{
+						Start: time.Unix(60, 0),
+						End:   time.Unix(120, 0),
+					},
+				},
+				{
+					IntervalWindow: &window.IntervalWindow{
+						Start: time.Unix(180, 0),
+						End:   time.Unix(240, 0),
+					},
+				},
+			},
+			input: &window.IntervalWindow{
+				Start: time.Unix(120, 0),
+				End:   time.Unix(180, 0),
+			},
+			expectedWindow: nil,
+		},
+		{
 			name: "existing",
 			given: []*KeyedWindow{
 				{
