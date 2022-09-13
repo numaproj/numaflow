@@ -15,7 +15,15 @@ import (
 // So the earliest window is at the front and the oldest window is at the end.
 type ActiveWindows struct {
 	// entries is the list of active windows that are currently being tracked.
-	// later windows are added at the end (tail) of the list and older windows can be found at the head.
+	// windows are sorted in chronological order with the earliest window at the head of the list.
+	// list.List is implemented as a doubly linked list which allows us to traverse the nodes in
+	// both the directions.
+	// Although the worst case time complexity is O(n), because of the time based ordering and
+	// since the elements are rarely out of order, the amortized complexity works out to be closer to O(1)
+	// Because most of the keys are expected to be associated with the most recent window, we always start
+	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
+	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
+	// from the Head.
 	entries *list.List
 	lock    sync.RWMutex
 }
