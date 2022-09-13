@@ -1,7 +1,6 @@
 package shuffle
 
 import (
-	"context"
 	"fmt"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
@@ -30,7 +29,7 @@ func TestShuffle_ShuffleMessages(t *testing.T) {
 		testMessages = append(testMessages, &messages[index])
 	}
 
-	bufferIdMessageMap := shuffler.ShuffleMessages(context.Background(), testMessages)
+	bufferIdMessageMap := shuffler.ShuffleMessages(testMessages)
 	sum := 0
 	for _, value := range bufferIdMessageMap {
 		sum += len(value)
