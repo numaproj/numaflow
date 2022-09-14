@@ -1,9 +1,10 @@
-package aligned
+package keyed
 
 import (
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/window"
 	"sync"
+
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // PartitionId uniquely identifies a partition

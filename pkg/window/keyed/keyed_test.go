@@ -1,10 +1,11 @@
-package aligned
+package keyed
 
 import (
-	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestKeyedWindow_AddKey(t *testing.T) {

@@ -1,6 +1,9 @@
 // Package fixed implements Fixed windows. Fixed windows (sometimes called tumbling windows) are
 // defined by a static window size, e.g. minutely windows or hourly windows. They are generally aligned, i.e. every
 // window applies across all the data for the corresponding period of time.
+// Package fixed also maintains the state of active keyed windows in a vertex.
+// Keyed Window maintains the association between set of keys and an interval window.
+// keyed also provides the lifecycle management of an interval window. Watermark is used to trigger the expiration of windows.
 package fixed
 
 import (
