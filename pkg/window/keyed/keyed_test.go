@@ -69,8 +69,8 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 				Keys: []string{"key2", "key3"},
 			},
 			expected: []string{
-				"key2-60-120",
-				"key3-60-120",
+				"60-120-key2",
+				"60-120-key3",
 			},
 		},
 	}

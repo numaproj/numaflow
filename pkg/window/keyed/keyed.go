@@ -50,5 +50,5 @@ func (kw *KeyedWindow) Partitions() []PartitionId {
 
 // Partition returns the partitionId for a given window and a key
 func Partition(window *window.IntervalWindow, key string) PartitionId {
-	return PartitionId(fmt.Sprintf("%s-%v-%v", key, window.Start.Unix(), window.End.Unix()))
+	return PartitionId(fmt.Sprintf("%v-%v-%s", window.Start.Unix(), window.End.Unix(), key))
 }
