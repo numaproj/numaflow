@@ -1,11 +1,12 @@
-// Package aligned maintains the state of active keyed windows in a vertex.
+// Package tumbling maintains the state of active keyed windows in a vertex.
 // Keyed Window maintains the association between set of keys and an interval window.
 // aligned also provides the lifecycle management of an interval window. Watermark is used to trigger the expiration of windows.
-package aligned
+package tumbling
 
 import (
 	"container/list"
 	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/numaproj/numaflow/pkg/window/aligned"
 	"sync"
 	"time"
 )
@@ -37,11 +38,11 @@ func NewWindows() *ActiveWindows {
 }
 
 // CreateKeyedWindow adds a new keyed window for a given interval window
-func (aw *ActiveWindows) CreateKeyedWindow(iw *window.IntervalWindow) *KeyedWindow {
+func (aw *ActiveWindows) CreateKeyedWindow(iw *window.IntervalWindow) *aligned.KeyedWindow {
 	aw.lock.Lock()
 	defer aw.lock.Unlock()
 
-	kw := NewKeyedWindow(iw)
+	kw := aligned.NewKeyedWindow(iw)
 
 	// this could be the first window
 	if aw.entries.Len() == 0 {
@@ -49,8 +50,8 @@ func (aw *ActiveWindows) CreateKeyedWindow(iw *window.IntervalWindow) *KeyedWind
 		return kw
 	}
 
-	earliestWindow := aw.entries.Front().Value.(*KeyedWindow)
-	recentWindow := aw.entries.Back().Value.(*KeyedWindow)
+	earliestWindow := aw.entries.Front().Value.(*aligned.KeyedWindow)
+	recentWindow := aw.entries.Back().Value.(*aligned.KeyedWindow)
 
 	// late arrival
 	if earliestWindow.Start.Equal(kw.End) || earliestWindow.Start.After(kw.End) {
@@ -61,7 +62,7 @@ func (aw *ActiveWindows) CreateKeyedWindow(iw *window.IntervalWindow) *KeyedWind
 	} else {
 		// a window in the middle
 		for e := aw.entries.Back(); e != nil; e = e.Prev() {
-			win := e.Value.(*KeyedWindow)
+			win := e.Value.(*aligned.KeyedWindow)
 			if win.Start.After(kw.End) || win.Start.Equal(kw.End) {
 				aw.entries.InsertBefore(kw, e)
 				break
@@ -72,7 +73,7 @@ func (aw *ActiveWindows) CreateKeyedWindow(iw *window.IntervalWindow) *KeyedWind
 }
 
 // GetKeyedWindow returns an existing window for the given interval
-func (aw *ActiveWindows) GetKeyedWindow(iw *window.IntervalWindow) *KeyedWindow {
+func (aw *ActiveWindows) GetKeyedWindow(iw *window.IntervalWindow) *aligned.KeyedWindow {
 	aw.lock.RLock()
 	defer aw.lock.RUnlock()
 
@@ -82,21 +83,21 @@ func (aw *ActiveWindows) GetKeyedWindow(iw *window.IntervalWindow) *KeyedWindow 
 
 	// are we looking for a window that is later than the current latest?
 	latest := aw.entries.Back()
-	lkw := latest.Value.(*KeyedWindow)
+	lkw := latest.Value.(*aligned.KeyedWindow)
 	if lkw.End.Before(iw.Start) || lkw.End.Equal(iw.Start) {
 		return nil
 	}
 
 	// are we looking for a window that is earlier than the current earliest?
 	earliest := aw.entries.Front()
-	ekw := earliest.Value.(*KeyedWindow)
+	ekw := earliest.Value.(*aligned.KeyedWindow)
 	if ekw.Start.After(iw.End) || ekw.Start.Equal(iw.End) {
 		return nil
 	}
 
 	// check if we already have a window
 	for e := aw.entries.Back(); e != nil; e = e.Prev() {
-		win := e.Value.(*KeyedWindow)
+		win := e.Value.(*aligned.KeyedWindow)
 		if win.Start.Equal(iw.Start) && win.End.Equal(iw.End) {
 			return win
 		} else if win.Start.Before(iw.End) {
@@ -110,14 +111,14 @@ func (aw *ActiveWindows) GetKeyedWindow(iw *window.IntervalWindow) *KeyedWindow 
 
 // RemoveWindow returns an array of keyed windows that are before the current watermark.
 // So these windows can be closed.
-func (aw *ActiveWindows) RemoveWindow(wm time.Time) []*KeyedWindow {
+func (aw *ActiveWindows) RemoveWindow(wm time.Time) []*aligned.KeyedWindow {
 	aw.lock.Lock()
 	defer aw.lock.Unlock()
 
-	closedWindows := make([]*KeyedWindow, 0)
+	closedWindows := make([]*aligned.KeyedWindow, 0)
 
 	for e := aw.entries.Front(); e != nil; {
-		win := e.Value.(*KeyedWindow)
+		win := e.Value.(*aligned.KeyedWindow)
 		next := e.Next()
 		// remove window only after the watermark has passed the end of the window
 		if win.End.Before(wm) {
