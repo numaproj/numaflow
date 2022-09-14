@@ -4,10 +4,10 @@ import (
 	"context"
 )
 
-// WMStorer is the watermark store implementation.
-type WMStorer interface {
-	WatermarkKVStorer
-	WatermarkKVWatcher
+// WatermarkStorer defines a pair of heartbeat KV store and offset timeline KV store
+type WatermarkStorer interface {
+	HeartbeatStore() WatermarkKVStorer
+	OffsetTimelineStore() WatermarkKVStorer
 }
 
 // WatermarkKVStorer defines the storage for publishing the watermark.
@@ -66,4 +66,10 @@ type WatermarkKVWatcher interface {
 	Watch(context.Context) <-chan WatermarkKVEntry
 	GetKVName() string
 	Close()
+}
+
+// WatermarkStoreWatcher defines a pair of heartbeat KV watcher and offset timeline KV watcher
+type WatermarkStoreWatcher interface {
+	HeartbeatWatcher() WatermarkKVWatcher
+	OffsetTimelineWatcher() WatermarkKVWatcher
 }

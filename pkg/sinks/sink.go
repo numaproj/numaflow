@@ -60,7 +60,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
 		if err != nil {
 			return err
 		}
@@ -71,7 +71,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			return err
 		}
 	default:
-		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
+		return fmt.Errorf("unrecognized isb svc type %q", u.ISBSvcType)
 	}
 
 	sinker, err := u.getSinker(reader, log, fetchWatermark, publishWatermark)
@@ -79,7 +79,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to find a sink, errpr: %w", err)
 	}
 
-	log.Infow("Start processing sink messages", zap.String("isbs", string(u.ISBSvcType)), zap.String("from", fromBufferName))
+	log.Infow("Start processing sink messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName))
 	stopped := sinker.Start()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
