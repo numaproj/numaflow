@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/simplebuffer"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -22,8 +22,8 @@ func TestWatermark(t *testing.T) {
 	// for use by the buffer reader on the other side of the stream
 	ctx := context.Background()
 
-	_ = os.Setenv(dfv1.EnvWatermarkOn, "true")
-	defer func() { _ = os.Unsetenv(dfv1.EnvWatermarkOn) }()
+	_ = os.Setenv(dfv1.EnvWatermarkDisabled, "false")
+	defer func() { _ = os.Unsetenv(dfv1.EnvWatermarkDisabled) }()
 
 	dest := simplebuffer.NewInMemoryBuffer("writer", 1000)
 	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{

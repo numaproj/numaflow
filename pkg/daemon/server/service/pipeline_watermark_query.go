@@ -16,6 +16,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
+// TODO: This is not right, pending fix.
+
 // watermarkFetchers used to store watermark metadata for propagation
 type watermarkFetchers struct {
 	fetchMap           map[string]fetch.Fetcher
@@ -33,7 +35,7 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 	var wmFetcher = new(watermarkFetchers)
 	var fromBufferName string
 
-	wmFetcher.isWatermarkEnabled = pipeline.Spec.Watermark.Propagate
+	wmFetcher.isWatermarkEnabled = !pipeline.Spec.Watermark.Disabled
 	if !wmFetcher.isWatermarkEnabled {
 		return wmFetcher, nil
 	}
@@ -84,7 +86,7 @@ func createWatermarkFetcher(ctx context.Context, pipelineName string, fromBuffer
 		return nil, err
 	}
 	var fetchWmWatchers = generic.BuildFetchWMWatchers(hbWatch, otWatch)
-	fetchWatermark := generic.NewGenericFetch(ctx, vertexName, fetchWmWatchers)
+	fetchWatermark := generic.NewGenericEdgeFetch(ctx, vertexName, fetchWmWatchers)
 	return fetchWatermark, nil
 }
 

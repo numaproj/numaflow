@@ -110,7 +110,7 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 				if value == nil {
 					continue
 				}
-				k.log.Info(value.Key(), value.Value(), value.Operation())
+				k.log.Debug(value.Key(), value.Value(), value.Operation())
 				switch value.Operation() {
 				case nats.KeyValuePut:
 					updates <- kvEntry{

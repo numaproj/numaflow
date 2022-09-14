@@ -185,6 +185,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
+		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetToBuffers() {
@@ -221,6 +223,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
+		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetFromBuffers() {
@@ -296,6 +300,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
+		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
 		udfEnvNames := []string{}
 		udfEnvValues := []string{}
 		for _, e := range spec.Containers[1].Env {

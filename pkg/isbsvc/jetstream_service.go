@@ -178,7 +178,6 @@ func (jss *jetStreamSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffe
 }
 
 func (jss *jetStreamSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
-	log := logging.FromContext(ctx)
 	nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
@@ -198,14 +197,12 @@ func (jss *jetStreamSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buf
 
 		otBucket := JetStreamOTBucket(jss.pipelineName, buffer.Name)
 		if _, err := js.KeyValue(otBucket); err != nil {
-			// TODO: throw an error
-			log.Warnw("Failed to query bucket", zap.String("bucket", otBucket), zap.Error(err))
+			return fmt.Errorf("failed to query OT bucket %q, %w", otBucket, err)
 		}
 
 		procBucket := JetStreamProcessorBucket(jss.pipelineName, buffer.Name)
 		if _, err := js.KeyValue(procBucket); err != nil {
-			// TODO: throw an error
-			log.Warnw("Failed to query bucket", zap.String("bucket", procBucket), zap.Error(err))
+			return fmt.Errorf("failed to query processor bucket %q, %w", procBucket, err)
 		}
 	}
 	return nil
