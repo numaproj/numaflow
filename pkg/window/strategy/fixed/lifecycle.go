@@ -52,16 +52,16 @@ func (aw *ActiveWindows) CreateKeyedWindow(iw *window.IntervalWindow) *keyed.Key
 	recentWindow := aw.entries.Back().Value.(*keyed.KeyedWindow)
 
 	// late arrival
-	if earliestWindow.Start.Equal(kw.End) || earliestWindow.Start.After(kw.End) {
+	if !earliestWindow.Start.Before(kw.End) {
 		aw.entries.PushFront(kw)
-	} else if recentWindow.End.Equal(kw.Start) || recentWindow.End.Before(kw.Start) {
+	} else if !recentWindow.End.After(kw.Start) {
 		// early arrival
 		aw.entries.PushBack(kw)
 	} else {
 		// a window in the middle
 		for e := aw.entries.Back(); e != nil; e = e.Prev() {
 			win := e.Value.(*keyed.KeyedWindow)
-			if win.Start.After(kw.End) || win.Start.Equal(kw.End) {
+			if !win.Start.Before(kw.End) {
 				aw.entries.InsertBefore(kw, e)
 				break
 			}
@@ -82,14 +82,14 @@ func (aw *ActiveWindows) GetKeyedWindow(iw *window.IntervalWindow) *keyed.KeyedW
 	// are we looking for a window that is later than the current latest?
 	latest := aw.entries.Back()
 	lkw := latest.Value.(*keyed.KeyedWindow)
-	if lkw.End.Before(iw.Start) || lkw.End.Equal(iw.Start) {
+	if !lkw.End.After(iw.Start) {
 		return nil
 	}
 
 	// are we looking for a window that is earlier than the current earliest?
 	earliest := aw.entries.Front()
 	ekw := earliest.Value.(*keyed.KeyedWindow)
-	if ekw.Start.After(iw.End) || ekw.Start.Equal(iw.End) {
+	if !ekw.Start.Before(iw.End) {
 		return nil
 	}
 
