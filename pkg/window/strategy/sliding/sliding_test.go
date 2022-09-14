@@ -93,6 +93,24 @@ func TestSliding_AssignWindow(t *testing.T) {
 			},
 		},
 		{
+			name: "4min_3min",
+			fields: fields{
+				Length:          4 * time.Minute,
+				PeriodInSeconds: 180,
+			},
+			eventTime: baseTime.Add(181 * time.Second),
+			want: []*window.IntervalWindow{
+				{
+					Start: time.Unix(1651129200, 0).In(loc),
+					End:   time.Unix(1651129200+240, 0).In(loc),
+				},
+				{
+					Start: time.Unix(1651129200-180, 0).In(loc),
+					End:   time.Unix(1651129200+240-180, 0).In(loc),
+				},
+			},
+		},
+		{
 			name: "4min_5min",
 			fields: fields{
 				Length:          4 * time.Minute,

@@ -4,6 +4,7 @@
 package sliding
 
 import (
+	"math"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/window"
@@ -24,6 +25,11 @@ var _ window.Windower = (*Sliding)(nil)
 // NewSliding returns a Sliding window.
 func NewSliding(length time.Duration, periodInSeconds int) *Sliding {
 	sliceCount := int(length.Seconds() / float64(periodInSeconds))
+
+	// if the length is not exactly divisible, sliceCount needs to be bumped by 1
+	if (length.Seconds() > float64(periodInSeconds)) && math.Mod(length.Seconds(), float64(periodInSeconds)) > 0 {
+		sliceCount += 1
+	}
 
 	return &Sliding{
 		Length:          length,
