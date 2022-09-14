@@ -292,16 +292,20 @@ type PipelineSpec struct {
 	// Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been
 	// created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline
 	// should be recreated.
-	// +kubebuilder:default={"propagate": false}
+	// +kubebuilder:default={"disabled": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"`
 }
 
 type Watermark struct {
-	// Propagate toggles the watermark propagation.
+	// Disabled toggles the watermark propagation, defaults to false.
 	// +kubebuilder:default=false
 	// +optional
-	Propagate bool `json:"propagate,omitempty" protobuf:"bytes,1,opt,name=propagate"`
+	Disabled bool `json:"disabled,omitempty" protobuf:"bytes,1,opt,name=disabled"`
+	// Maximum delay allowed for watermark calculation, defaults to "0s", which means no delay.
+	// +kubebuilder:default="0s"
+	// +optional
+	MaxDelay *metav1.Duration `json:"maxDelay,omitempty" protobuf:"bytes,2,opt,name=maxDelay"`
 }
 
 type PipelineLimits struct {

@@ -19,7 +19,10 @@ func (w Watermark) String() string {
 	var location, _ = time.LoadLocation("UTC")
 	var t = time.Time(w).In(location)
 	return t.Format(time.RFC3339)
+}
 
+func (w Watermark) After(t time.Time) bool {
+	return time.Time(w).After(t)
 }
 
 type entityOptions struct {

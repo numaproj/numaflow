@@ -7,11 +7,11 @@ import (
 )
 
 func TestOptions(t *testing.T) {
-	testOpts := []VertexOption{
+	testOpts := []ProcessorManagerOption{
 		WithPodHeartbeatRate(10),
 		WithRefreshingProcessorsRate(15),
 	}
-	opts := &vertexOptions{
+	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
 	}
