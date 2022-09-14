@@ -148,9 +148,9 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, kafka.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return kafka.NewKafkaSource(sp.VertexInstance.Vertex, writers, readOptions...)
+		return kafka.NewKafkaSource(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.HTTP; x != nil {
-		return http.New(sp.VertexInstance.Vertex, writers, http.WithLogger(logger))
+		return http.New(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }

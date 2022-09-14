@@ -106,6 +106,16 @@ func (t *OffsetTimeline) GetHeadOffset() int64 {
 	return t.watermarks.Front().Value.(OffsetWatermark).offset
 }
 
+// GetHeadWatermark returns the head watermark, which is the highest one.
+func (t *OffsetTimeline) GetHeadWatermark() int64 {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	if t.watermarks.Len() == 0 {
+		return 0
+	}
+	return t.watermarks.Front().Value.(OffsetWatermark).watermark
+}
+
 // GetTailOffset returns the smallest offset with the smallest watermark.
 func (t *OffsetTimeline) GetTailOffset() int64 {
 	t.lock.RLock()

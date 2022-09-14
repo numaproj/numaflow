@@ -33,21 +33,26 @@ func BuildJetStreamWatermarkProgressors(ctx context.Context, vertexInstance *v1a
 	publishWatermark := make(map[string]publish.Publisher)
 	// Fetcher creation
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
-	fromBufferName := vertexInstance.Vertex.GetFromBuffers()[0].Name
-	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, fromBufferName)
+	fromBuffer := vertexInstance.Vertex.GetFromBuffers()[0]
+	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, fromBuffer.Name)
 	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed at new HB KVJetStreamKVWatch, HeartbeatBucket: %s, %w", hbBucket, err)
 	}
 
-	otBucket := isbsvc.JetStreamOTBucket(pipelineName, fromBufferName)
+	otBucket := isbsvc.JetStreamOTBucket(pipelineName, fromBuffer.Name)
 	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucket, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed at new OT KVJetStreamKVWatch, OTBucket: %s, %w", otBucket, err)
 	}
 
 	var fetchWmWatchers = generic.BuildFetchWMWatchers(hbWatch, otWatch)
-	fetchWatermark := generic.NewGenericFetch(ctx, vertexInstance.Vertex.Name, fetchWmWatchers)
+	var fetchWatermark fetch.Fetcher
+	if fromBuffer.Type == v1alpha1.SourceBuffer {
+		fetchWatermark = generic.NewGenericSourceFetch(ctx, fromBuffer.Name, fetchWmWatchers)
+	} else {
+		fetchWatermark = generic.NewGenericEdgeFetch(ctx, fromBuffer.Name, fetchWmWatchers)
+	}
 
 	// Publisher map creation, we need a publisher per edge.
 
