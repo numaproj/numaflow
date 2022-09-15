@@ -38,7 +38,7 @@ type publish struct {
 }
 
 // NewPublish returns `Publish`.
-func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer, inputOpts ...PublishOption) Publisher {
+func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, watermarkStores store.WatermarkStorer, inputOpts ...PublishOption) Publisher {
 
 	log := logging.FromContext(ctx)
 
@@ -55,15 +55,14 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 	p := &publish{
 		ctx:            ctx,
 		entity:         processorEntity,
-		heartbeatStore: hbStore,
-		otStore:        otStore,
+		heartbeatStore: watermarkStores.HeartbeatStore(),
+		otStore:        watermarkStores.OffsetTimelineStore(),
 		log:            log,
 		opts:           opts,
 	}
 
 	p.initialSetup()
 
-	// TODO: i do not think we need this autoRefreshHeartbeat flag anymore. Remove it?
 	if opts.autoRefreshHeartbeat {
 		go p.publishHeartbeat()
 	}
@@ -96,7 +95,7 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	// build value (offset)
 	value := make([]byte, 8)
 	var seq int64
-	if p.opts.isSource { // For source publisher, we dont' care about the offset, also the sequence of the offset might not be integer.
+	if p.opts.isSource || p.opts.isSink { // For source and sink publisher, we dont' care about the offset, also the sequence of the offset might not be integer.
 		seq = time.Now().UnixNano()
 	} else {
 		seq, _ = offset.Sequence()

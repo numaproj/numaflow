@@ -8,6 +8,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"github.com/stretchr/testify/assert"
 )
@@ -47,9 +48,9 @@ func Test_NewHTTP(t *testing.T) {
 		Replica:  0,
 	}
 	dest := []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("test", 100)}
-	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStores := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
-	h, err := New(vi, dest, fetchWatermark, publishWatermark, publishWMStore)
+	h, err := New(vi, dest, fetchWatermark, publishWatermark, publishWMStores)
 	assert.NoError(t, err)
 	assert.False(t, h.ready)
 	assert.Equal(t, v.Spec.Name, h.GetName())

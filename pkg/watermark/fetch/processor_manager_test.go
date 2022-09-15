@@ -15,6 +15,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
@@ -73,7 +74,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	var testVertex = NewProcessorManager(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
+	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
 	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
 
 	go func() {
@@ -308,7 +309,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	var testVertex = NewProcessorManager(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
+	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
 	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
 
 	//var location, _ = time.LoadLocation("UTC")

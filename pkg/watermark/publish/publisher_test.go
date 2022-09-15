@@ -14,6 +14,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
@@ -56,7 +57,7 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
 
-	p := NewPublish(ctx, publishEntity, heartbeatKV, otKV, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
+	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
 
 	var epoch int64 = 1651161600
 	var location, _ = time.LoadLocation("UTC")
@@ -108,7 +109,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	otKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 
-	p := NewPublish(ctx, publishEntity, heartbeatKV, otKV, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
+	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
 
 	var epoch int64 = 1651161600
 	var location, _ = time.LoadLocation("UTC")

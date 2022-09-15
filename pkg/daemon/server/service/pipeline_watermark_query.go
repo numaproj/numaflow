@@ -13,6 +13,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
@@ -85,8 +86,7 @@ func createWatermarkFetcher(ctx context.Context, pipelineName string, fromBuffer
 	if err != nil {
 		return nil, err
 	}
-	var fetchWmWatchers = generic.BuildFetchWMWatchers(hbWatch, otWatch)
-	fetchWatermark := generic.NewGenericEdgeFetch(ctx, vertexName, fetchWmWatchers)
+	fetchWatermark := generic.NewGenericEdgeFetch(ctx, vertexName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
 	return fetchWatermark, nil
 }
 
