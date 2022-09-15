@@ -262,7 +262,6 @@ const (
 	_key       = "k"
 	_id        = "i"
 	_late      = "l"
-	_watermark = "wm"
 	_eventTime = "pev"
 	_startTime = "ps"
 	_endTime   = "pen"
@@ -276,9 +275,6 @@ func convert2NatsMsgHeader(header isb.Header) nats.Header {
 		r.Add(_late, "1")
 	} else {
 		r.Add(_late, "0")
-	}
-	if !header.Watermark.IsZero() {
-		r.Add(_watermark, fmt.Sprint(header.Watermark.UnixMilli()))
 	}
 	if !header.EventTime.IsZero() {
 		r.Add(_eventTime, fmt.Sprint(header.EventTime.UnixMilli()))

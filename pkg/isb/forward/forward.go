@@ -178,12 +178,10 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// TODO: make it async (concurrent and wait later)
 	// let's track only the last element's watermark
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
-	if isdf.opts.isFromSourceVertex {
-		for _, m := range readMessages {
-			m.Watermark = time.Time(processorWM)
-			if processorWM.After(m.EventTime) { // Set late data at source level
-				m.IsLate = true
-			}
+	for _, m := range readMessages {
+		m.Watermark = time.Time(processorWM)
+		if processorWM.After(m.EventTime) { // Set late data at source level
+			m.IsLate = true
 		}
 	}
 

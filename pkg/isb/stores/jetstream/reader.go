@@ -268,10 +268,6 @@ func convert2IsbMsgHeader(header nats.Header) isb.Header {
 		i, _ := strconv.ParseInt(x, 10, 64)
 		r.EventTime = time.UnixMilli(i)
 	}
-	if x := header.Get(_watermark); x != "" {
-		i, _ := strconv.ParseInt(x, 10, 64)
-		r.Watermark = time.UnixMilli(i)
-	}
 	if x := header.Get(_startTime); x != "" {
 		i, _ := strconv.ParseInt(x, 10, 64)
 		r.StartTime = time.UnixMilli(i)

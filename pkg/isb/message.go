@@ -10,7 +10,6 @@ type PaneInfo struct {
 	EventTime time.Time
 	StartTime time.Time
 	EndTime   time.Time
-	Watermark time.Time
 	// IsLate is used to indicate if it's a late data .
 	IsLate bool
 }
@@ -39,6 +38,7 @@ type Message struct {
 type ReadMessage struct {
 	Message
 	ReadOffset Offset
+	Watermark  time.Time
 }
 
 // MarshalBinary encodes header to a binary format
