@@ -20,9 +20,9 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type KafkaSource struct {
@@ -61,7 +61,7 @@ type KafkaSource struct {
 	// source watermark publishers for different partitions
 	sourcePublishWMs map[int32]publish.Publisher
 	// source watermark publisher stores
-	srcPublishWMStores *generic.PublishWMStores
+	srcPublishWMStores store.WatermarkStorer
 	lock               *sync.RWMutex
 }
 
@@ -146,7 +146,7 @@ func (r *KafkaSource) loadSourceWartermarkPublisher(partitionID int32) publish.P
 	}
 	entityName := fmt.Sprintf("%s-%s-%d", r.pipelineName, r.name, partitionID)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores.HBStore, r.srcPublishWMStores.OTStore, publish.IsSource(), publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
+	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, publish.IsSource(), publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
 	r.sourcePublishWMs[partitionID] = sourcePublishWM
 	return sourcePublishWM
 }
@@ -239,7 +239,7 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 }
 
 // NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
-func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores *generic.PublishWMStores, opts ...Option) (*KafkaSource, error) {
+func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, opts ...Option) (*KafkaSource, error) {
 	source := vertexInstance.Vertex.Spec.Source.Kafka
 	kafkasource := &KafkaSource{
 		name:               vertexInstance.Vertex.Spec.Name,

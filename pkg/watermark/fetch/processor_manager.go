@@ -32,7 +32,7 @@ type ProcessorManager struct {
 }
 
 // NewProcessorManager returns a new ProcessorManager instance
-func NewProcessorManager(ctx context.Context, hbWatcher store.WatermarkKVWatcher, otWatcher store.WatermarkKVWatcher, inputOpts ...ProcessorManagerOption) *ProcessorManager {
+func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.WatermarkStoreWatcher, inputOpts ...ProcessorManagerOption) *ProcessorManager {
 	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
@@ -44,8 +44,8 @@ func NewProcessorManager(ctx context.Context, hbWatcher store.WatermarkKVWatcher
 
 	v := &ProcessorManager{
 		ctx:        ctx,
-		hbWatcher:  hbWatcher,
-		otWatcher:  otWatcher,
+		hbWatcher:  watermarkStoreWatcher.HeartbeatWatcher(),
+		otWatcher:  watermarkStoreWatcher.OffsetTimelineWatcher(),
 		heartbeat:  NewProcessorHeartbeat(),
 		processors: make(map[string]*ProcessorToFetch),
 		log:        logging.FromContext(ctx),

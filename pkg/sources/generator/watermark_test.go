@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -34,7 +34,7 @@ func TestWatermark(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	mgen, err := NewMemGen(m, 1, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
