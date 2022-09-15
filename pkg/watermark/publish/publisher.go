@@ -34,40 +34,36 @@ type publish struct {
 	otStore        store.WatermarkKVStorer
 	log            *zap.SugaredLogger
 	headWatermark  processor.Watermark
-
-	// opts
-	// autoRefreshHeartbeat is not required for all processors. e.g. Kafka source doesn't need it
-	autoRefreshHeartbeat bool
-	podHeartbeatRate     int64
+	opts           *publishOptions
 }
 
 // NewPublish returns `Publish`.
-func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, hbStore store.WatermarkKVStorer, otStore store.WatermarkKVStorer, inputOpts ...PublishOption) Publisher {
+func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, watermarkStores store.WatermarkStorer, inputOpts ...PublishOption) Publisher {
 
 	log := logging.FromContext(ctx)
 
 	opts := &publishOptions{
 		autoRefreshHeartbeat: true,
 		podHeartbeatRate:     5,
+		isSource:             false,
+		delay:                0,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
 	}
 
 	p := &publish{
-		ctx:                  ctx,
-		entity:               processorEntity,
-		heartbeatStore:       hbStore,
-		otStore:              otStore,
-		log:                  log,
-		autoRefreshHeartbeat: opts.autoRefreshHeartbeat,
-		podHeartbeatRate:     opts.podHeartbeatRate,
+		ctx:            ctx,
+		entity:         processorEntity,
+		heartbeatStore: watermarkStores.HeartbeatStore(),
+		otStore:        watermarkStores.OffsetTimelineStore(),
+		log:            log,
+		opts:           opts,
 	}
 
 	p.initialSetup()
 
-	// TODO: i do not think we need this autoRefreshHeartbeat flag anymore. Remove it?
-	if p.autoRefreshHeartbeat {
+	if opts.autoRefreshHeartbeat {
 		go p.publishHeartbeat()
 	}
 
@@ -82,11 +78,14 @@ func (p *publish) initialSetup() {
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
 // is less than the current head watermark.
 func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
+	if p.opts.isSource && p.opts.delay.Nanoseconds() > 0 && !time.Time(wm).IsZero() {
+		wm = processor.Watermark(time.Time(wm).Add(-p.opts.delay))
+	}
 	// update p.headWatermark only if wm > p.headWatermark
 	if time.Time(wm).After(time.Time(p.headWatermark)) {
 		p.headWatermark = wm
 	} else {
-		p.log.Errorw("New watermark is older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		p.log.Infow("New watermark is ignored because it's older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
 		return
 	}
 
@@ -95,8 +94,13 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 
 	// build value (offset)
 	value := make([]byte, 8)
-	o, _ := offset.Sequence()
-	binary.LittleEndian.PutUint64(value, uint64(o))
+	var seq int64
+	if p.opts.isSource || p.opts.isSink { // For source and sink publisher, we dont' care about the offset, also the sequence of the offset might not be integer.
+		seq = time.Now().UnixNano()
+	} else {
+		seq, _ = offset.Sequence()
+	}
+	binary.LittleEndian.PutUint64(value, uint64(seq))
 
 	for {
 		err := p.otStore.PutKV(p.ctx, key, value)
@@ -142,7 +146,7 @@ func (p *publish) GetLatestWatermark() processor.Watermark {
 }
 
 func (p *publish) publishHeartbeat() {
-	ticker := time.NewTicker(time.Second * time.Duration(p.podHeartbeatRate))
+	ticker := time.NewTicker(time.Second * time.Duration(p.opts.podHeartbeatRate))
 	defer ticker.Stop()
 	p.log.Infow("Refreshing ActiveProcessors ticker started")
 	for {

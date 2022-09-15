@@ -22,6 +22,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
 
@@ -39,7 +40,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(sp.VertexInstance.Vertex.GetToBuffers()))
-	var publishWMStore = generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	var sourcePublisherStores = store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	var err error
 
 	switch sp.ISBSvcType {
@@ -59,13 +60,15 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			writers = append(writers, writer)
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		// build the right watermark progessor if watermark is enabled
 		// build watermark progressors
-		fetchWatermark, publishWatermark, publishWMStore, err = jetstream.BuildJetStreamWatermarkProgressorsForSource(ctx, sp.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, sp.VertexInstance)
 		if err != nil {
 			return err
 		}
-
+		sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance)
+		if err != nil {
+			return err
+		}
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{
 				jetstreamisb.WithUsingWriteInfoAsRate(true),
@@ -89,7 +92,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
 
-	sourcer, err := sp.getSourcer(writers, fetchWatermark, publishWatermark, publishWMStore, log)
+	sourcer, err := sp.getSourcer(writers, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
 	}
@@ -129,7 +132,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 }
 
 // getSourcer is used to send the sourcer information
-func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores *generic.PublishWMStores, logger *zap.SugaredLogger) (Sourcer, error) {
+func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, logger *zap.SugaredLogger) (Sourcer, error) {
 	src := sp.VertexInstance.Vertex.Spec.Source
 
 	if x := src.Generator; x != nil {
@@ -148,9 +151,9 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, kafka.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return kafka.NewKafkaSource(sp.VertexInstance.Vertex, writers, readOptions...)
+		return kafka.NewKafkaSource(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.HTTP; x != nil {
-		return http.New(sp.VertexInstance.Vertex, writers, http.WithLogger(logger))
+		return http.New(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }

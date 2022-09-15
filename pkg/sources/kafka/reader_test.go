@@ -9,6 +9,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,7 +28,14 @@ func TestNewKafkasource(t *testing.T) {
 			},
 		},
 	}}
-	ks, err := NewKafkaSource(vertex, dest, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	vi := &dfv1.VertexInstance{
+		Vertex:   vertex,
+		Hostname: "test-host",
+		Replica:  0,
+	}
+	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
+	ks, err := NewKafkaSource(vi, dest, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	// no errors if everything is good.
 	assert.Nil(t, err)
@@ -54,7 +64,14 @@ func TestGroupNameOverride(t *testing.T) {
 			},
 		},
 	}}
-	ks, _ := NewKafkaSource(vertex, dest, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	vi := &dfv1.VertexInstance{
+		Vertex:   vertex,
+		Hostname: "test-host",
+		Replica:  0,
+	}
+	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
+	ks, _ := NewKafkaSource(vi, dest, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	assert.Equal(t, "default", ks.groupName)
 
@@ -73,7 +90,14 @@ func TestDefaultBufferSize(t *testing.T) {
 			},
 		},
 	}}
-	ks, _ := NewKafkaSource(vertex, dest, WithLogger(logging.NewLogger()), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	vi := &dfv1.VertexInstance{
+		Vertex:   vertex,
+		Hostname: "test-host",
+		Replica:  0,
+	}
+	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
+	ks, _ := NewKafkaSource(vi, dest, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	assert.Equal(t, 100, ks.handlerbuffer)
 
@@ -92,7 +116,14 @@ func TestBufferSizeOverrides(t *testing.T) {
 			},
 		},
 	}}
-	ks, _ := NewKafkaSource(vertex, dest, WithLogger(logging.NewLogger()), WithBufferSize(110), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	vi := &dfv1.VertexInstance{
+		Vertex:   vertex,
+		Hostname: "test-host",
+		Replica:  0,
+	}
+	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
+	ks, _ := NewKafkaSource(vi, dest, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()), WithBufferSize(110), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	assert.Equal(t, 110, ks.handlerbuffer)
 
@@ -107,7 +138,7 @@ func TestOffsetFrom(t *testing.T) {
 	assert.Equal(t, int64(64), offset)
 }
 
-func TestToOffset(t *testing.T) {
+func TestOffset(t *testing.T) {
 	topic := "t1"
 	partition := int32(1)
 	offset := int64(23)

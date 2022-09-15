@@ -15,21 +15,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// FromVertexer defines an interface which builds the view of Vn-th vertex from the point of view of Vn-th vertex.
-type FromVertexer interface {
-	// GetAllProcessors fetches all the processors from Vn-1 vertex. processors could be pods or when the vertex is a
-	// source vertex, it could be partitions if the source is Kafka.
-	GetAllProcessors() map[string]*ProcessorToFetch
-	// GetProcessor gets a processor.
-	GetProcessor(processor string) *ProcessorToFetch
-	// DeleteProcessor deletes a processor.
-	DeleteProcessor(processor string)
-}
-
-// fromVertex is the point of view of Vn-1 from Vn vertex. The code is running on Vn vertex.
+// ProcessorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor). The code is running on Vn vertex.
 // It has the mapping of all the processors which in turn has all the information about each processor
 // timelines.
-type fromVertex struct {
+type ProcessorManager struct {
 	ctx        context.Context
 	hbWatcher  store.WatermarkKVWatcher
 	otWatcher  store.WatermarkKVWatcher
@@ -39,12 +28,12 @@ type fromVertex struct {
 	log        *zap.SugaredLogger
 
 	// opts
-	opts *vertexOptions
+	opts *processorManagerOptions
 }
 
-// NewFromVertex returns `FromVertex`
-func NewFromVertex(ctx context.Context, hbWatcher store.WatermarkKVWatcher, otWatcher store.WatermarkKVWatcher, inputOpts ...VertexOption) FromVertexer {
-	opts := &vertexOptions{
+// NewProcessorManager returns a new ProcessorManager instance
+func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.WatermarkStoreWatcher, inputOpts ...ProcessorManagerOption) *ProcessorManager {
+	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
 		separateOTBucket:         false,
@@ -53,10 +42,10 @@ func NewFromVertex(ctx context.Context, hbWatcher store.WatermarkKVWatcher, otWa
 		opt(opts)
 	}
 
-	v := &fromVertex{
+	v := &ProcessorManager{
 		ctx:        ctx,
-		hbWatcher:  hbWatcher,
-		otWatcher:  otWatcher,
+		hbWatcher:  watermarkStoreWatcher.HeartbeatWatcher(),
+		otWatcher:  watermarkStoreWatcher.OffsetTimelineWatcher(),
 		heartbeat:  NewProcessorHeartbeat(),
 		processors: make(map[string]*ProcessorToFetch),
 		log:        logging.FromContext(ctx),
@@ -71,14 +60,14 @@ func NewFromVertex(ctx context.Context, hbWatcher store.WatermarkKVWatcher, otWa
 }
 
 // addProcessor adds a new processor.
-func (v *fromVertex) addProcessor(processor string, p *ProcessorToFetch) {
+func (v *ProcessorManager) addProcessor(processor string, p *ProcessorToFetch) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 	v.processors[processor] = p
 }
 
 // GetProcessor gets a processor.
-func (v *fromVertex) GetProcessor(processor string) *ProcessorToFetch {
+func (v *ProcessorManager) GetProcessor(processor string) *ProcessorToFetch {
 	v.lock.RLock()
 	defer v.lock.RUnlock()
 	if p, ok := v.processors[processor]; ok {
@@ -88,7 +77,7 @@ func (v *fromVertex) GetProcessor(processor string) *ProcessorToFetch {
 }
 
 // DeleteProcessor deletes a processor.
-func (v *fromVertex) DeleteProcessor(processor string) {
+func (v *ProcessorManager) DeleteProcessor(processor string) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 	// we do not require this processor's reference anymore
@@ -96,7 +85,7 @@ func (v *fromVertex) DeleteProcessor(processor string) {
 }
 
 // GetAllProcessors returns all the processors.
-func (v *fromVertex) GetAllProcessors() map[string]*ProcessorToFetch {
+func (v *ProcessorManager) GetAllProcessors() map[string]*ProcessorToFetch {
 	v.lock.RLock()
 	defer v.lock.RUnlock()
 	var processors = make(map[string]*ProcessorToFetch, len(v.processors))
@@ -106,7 +95,7 @@ func (v *fromVertex) GetAllProcessors() map[string]*ProcessorToFetch {
 	return processors
 }
 
-func (v *fromVertex) startRefreshingProcessors() {
+func (v *ProcessorManager) startRefreshingProcessors() {
 	ticker := time.NewTicker(time.Duration(v.opts.refreshingProcessorsRate) * time.Second)
 	defer ticker.Stop()
 	v.log.Infow("Refreshing ActiveProcessors ticker started")
@@ -121,7 +110,7 @@ func (v *fromVertex) startRefreshingProcessors() {
 }
 
 // refreshingProcessors keeps the v.ActivePods to be a map of live ActivePods
-func (v *fromVertex) refreshingProcessors() {
+func (v *ProcessorManager) refreshingProcessors() {
 	var debugStr strings.Builder
 	for pName, pTime := range v.heartbeat.GetAll() {
 		p := v.GetProcessor(pName)
@@ -146,7 +135,7 @@ func (v *fromVertex) refreshingProcessors() {
 
 // startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
-func (v *fromVertex) startHeatBeatWatcher() {
+func (v *ProcessorManager) startHeatBeatWatcher() {
 	watchCh := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {

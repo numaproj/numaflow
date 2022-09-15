@@ -81,7 +81,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildJetStreamWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
 		if err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}
 	}()
-	log.Infow("Start processing udf messages", zap.String("isbs", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
+	log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
 
 	opts := []forward.Option{forward.WithLogger(log)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {

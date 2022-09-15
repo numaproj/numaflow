@@ -15,6 +15,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
@@ -73,8 +74,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	var testVertex = NewFromVertex(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false)).(*fromVertex)
-	var testBuffer = NewEdgeBuffer(ctx, "testBuffer", testVertex)
+	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
+	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
 
 	go func() {
 		var err error
@@ -99,14 +100,14 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	allProcessors := testBuffer.fromVertex.GetAllProcessors()
+	allProcessors := testBuffer.processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
@@ -120,24 +121,24 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			t.Fatalf("expected p1 to be deleted: %s", ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=101
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
 	assert.False(t, allProcessors["p1"].IsActive())
@@ -155,14 +156,14 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	// wait until p1 becomes active
 	time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
@@ -171,7 +172,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors and a new offsetTimeline watcher for "p1" will be created
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
-	newP1 := testBuffer.fromVertex.GetProcessor("p1")
+	newP1 := testBuffer.processorManager.GetProcessor("p1")
 	assert.NotNil(t, newP1)
 	assert.True(t, newP1.IsActive())
 	assert.NotNil(t, newP1.offsetTimeline)
@@ -202,7 +203,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			t.Fatalf("expected p1 to be inactive: %s", ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
@@ -218,14 +219,14 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}()
 
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
@@ -308,8 +309,8 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	var testVertex = NewFromVertex(ctx, hbWatcher, otWatcher, WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true)).(*fromVertex)
-	var testBuffer = NewEdgeBuffer(ctx, "testBuffer", testVertex)
+	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
+	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
 
 	//var location, _ = time.LoadLocation("UTC")
 	go func() {
@@ -334,14 +335,14 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	allProcessors := testBuffer.fromVertex.GetAllProcessors()
+	allProcessors := testBuffer.processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
@@ -355,23 +356,23 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 			t.Fatalf("expected p1 to be deleted: %s", ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=101
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
 
@@ -388,14 +389,14 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	}()
 
 	// wait until p1 becomes active
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
@@ -405,7 +406,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors and a new offsetTimeline watcher for "p1" will be created
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
-	newP1 := testBuffer.fromVertex.GetProcessor("p1")
+	newP1 := testBuffer.processorManager.GetProcessor("p1")
 	assert.NotNil(t, newP1)
 	assert.True(t, newP1.IsActive())
 	assert.NotNil(t, newP1.offsetTimeline)
@@ -424,7 +425,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 			t.Fatalf("expected p1 to be inactive: %s", ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
@@ -440,14 +441,14 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 		}
 	}()
 
-	allProcessors = testBuffer.fromVertex.GetAllProcessors()
+	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.fromVertex.GetAllProcessors()
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
 		}
 	}
 
