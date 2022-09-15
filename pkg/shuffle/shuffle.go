@@ -9,6 +9,7 @@ import (
 // Shuffle shuffles messages among ISB
 type Shuffle struct {
 	bufferIdentifiers []string
+	buffersCount      int
 	hash              hash.Hash64
 }
 
@@ -17,20 +18,20 @@ type Shuffle struct {
 func NewShuffle(bufferIdentifiers []string) *Shuffle {
 	return &Shuffle{
 		bufferIdentifiers: bufferIdentifiers,
+		buffersCount:      len(bufferIdentifiers),
 		hash:              fnv.New64(),
 	}
 }
 
 // ShuffleMessages accepts list of isb messages and returns the mapping of isb to messages
 func (s *Shuffle) ShuffleMessages(messages []*isb.Message) map[string][]*isb.Message {
-	buffersCount := uint64(len(s.bufferIdentifiers))
 
 	// hash of the message key returns a unique hashValue
 	// mod of hashValue will decide which isb it will belong
 	hashMap := make(map[string][]*isb.Message)
 	for _, message := range messages {
 		hashValue := s.generateHash(message.Key)
-		hashValue = hashValue % buffersCount
+		hashValue = hashValue % uint64(s.buffersCount)
 		hashMap[s.bufferIdentifiers[hashValue]] = append(hashMap[s.bufferIdentifiers[hashValue]], message)
 	}
 	return hashMap
