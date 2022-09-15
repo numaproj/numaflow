@@ -13,7 +13,11 @@ type publishOptions struct {
 	// It should only be used in a source publisher.
 	delay time.Duration
 	// Whether it is source publisher or not
+	// isSource and isSink should not be both true
 	isSource bool
+	// Whether it is sink publisher or not
+	// isSource and isSink should not be both true
+	isSink bool
 }
 
 type PublishOption func(*publishOptions)
@@ -41,5 +45,12 @@ func WithDelay(t time.Duration) PublishOption {
 func IsSource() PublishOption {
 	return func(opts *publishOptions) {
 		opts.isSource = true
+	}
+}
+
+// IsSink indicates it's a sink publisher
+func IsSink() PublishOption {
+	return func(opts *publishOptions) {
+		opts.isSink = true
 	}
 }
