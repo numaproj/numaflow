@@ -178,9 +178,10 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// TODO: make it async (concurrent and wait later)
 	// let's track only the last element's watermark
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
-	if isdf.opts.isFromSourceVertex { // Set late data at source level
+	if isdf.opts.isFromSourceVertex {
 		for _, m := range readMessages {
-			if processorWM.After(m.EventTime) {
+			m.Watermark = time.Time(processorWM)
+			if processorWM.After(m.EventTime) { // Set late data at source level
 				m.IsLate = true
 			}
 		}
@@ -412,7 +413,6 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
 func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, messageToStep map[string][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-
 	to, err := isdf.FSD.WhereTo(writeMessage.Key)
 
 	if err != nil {
