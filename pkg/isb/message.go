@@ -10,6 +10,7 @@ type PaneInfo struct {
 	EventTime time.Time
 	StartTime time.Time
 	EndTime   time.Time
+	Watermark time.Time
 	// IsLate is used to indicate if it's a late data .
 	IsLate bool
 }
