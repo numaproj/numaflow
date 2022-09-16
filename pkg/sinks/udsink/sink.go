@@ -81,6 +81,7 @@ func (s *userDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 	msgs := make([]*sinkpb.Datum, len(messages))
 	for i, m := range messages {
 		msgs[i] = &sinkpb.Datum{
+			// NOTE: key is not used anywhere ATM
 			Id:        m.ID,
 			Value:     m.Payload,
 			EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(m.EventTime)},
