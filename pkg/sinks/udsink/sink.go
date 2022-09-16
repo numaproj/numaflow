@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	sinksdk "github.com/numaproj/numaflow-go/pkg/sink"
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -14,6 +14,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type userDefinedSink struct {
@@ -77,9 +78,14 @@ func (s *userDefinedSink) IsFull() bool {
 
 // Write writes to the UDSink container.
 func (s *userDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	msgs := make([]sinksdk.Message, len(messages))
+	msgs := make([]*sinkpb.Datum, len(messages))
 	for i, m := range messages {
-		msgs[i] = sinksdk.Message{ID: m.ID, Payload: m.Payload}
+		msgs[i] = &sinkpb.Datum{
+			Id:        m.ID,
+			Value:     m.Payload,
+			EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(m.EventTime)},
+			Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
+		}
 	}
 	return nil, s.udsink.Apply(ctx, msgs)
 }

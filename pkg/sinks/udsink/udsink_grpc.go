@@ -43,21 +43,12 @@ func (u *udsGRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *udsGRPCBasedUDSink) Apply(ctx context.Context, sinkMessages []sinksdk.Message) []error {
-	errs := make([]error, len(sinkMessages))
-
-	var dList []*sinkpb.Datum
-
-	for _, msg := range sinkMessages {
-		dList = append(dList, &sinkpb.Datum{
-			Id:    msg.ID,
-			Value: msg.Payload,
-		})
-	}
+func (u *udsGRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.Datum) []error {
+	errs := make([]error, len(dList))
 
 	responseList, err := u.client.SinkFn(ctx, dList)
 	if err != nil {
-		for i := range sinkMessages {
+		for i := range dList {
 			errs[i] = ApplyUDSinkErr{
 				UserUDSinkErr: false,
 				Message:       fmt.Sprintf("gRPC client.SinkFn failed, %s", err),
@@ -74,8 +65,8 @@ func (u *udsGRPCBasedUDSink) Apply(ctx context.Context, sinkMessages []sinksdk.M
 	for _, res := range responseList {
 		resMap[res.GetId()] = res
 	}
-	for i, m := range sinkMessages {
-		if r, existing := resMap[m.ID]; !existing {
+	for i, m := range dList {
+		if r, existing := resMap[m.GetId()]; !existing {
 			errs[i] = fmt.Errorf("not found in responseList")
 		} else {
 			if !r.Success {

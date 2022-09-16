@@ -9,10 +9,10 @@ import (
 	"github.com/golang/mock/gomock"
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1/sinkmock"
-	sinksdk "github.com/numaproj/numaflow-go/pkg/sink"
 	"github.com/numaproj/numaflow-go/pkg/sink/clienttest"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func NewMockUDSGRPCBasedUDF(mockClient *sinkmock.MockUserDefinedSinkClient) *udsGRPCBasedUDSink {
@@ -65,20 +65,17 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 
 		testDatumList := []*sinkpb.Datum{
 			{
-				Id:    "test_id_0",
-				Value: []byte(`sink_message_success`),
+				Id:        "test_id_0",
+				Value:     []byte(`sink_message_success`),
+				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
+				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 			},
 			{
-				Id:    "test_id_1",
-				Value: []byte(`sink_message_err`),
+				Id:        "test_id_1",
+				Value:     []byte(`sink_message_err`),
+				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
+				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 			},
-		}
-		var testSinkSDKMessageList []sinksdk.Message
-		for _, d := range testDatumList {
-			testSinkSDKMessageList = append(testSinkSDKMessageList, sinksdk.Message{
-				ID:      d.GetId(),
-				Payload: d.GetValue(),
-			})
 		}
 		testResponseList := []*sinkpb.Response{
 			{
@@ -111,7 +108,7 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		gotErrList := u.Apply(ctx, testSinkSDKMessageList)
+		gotErrList := u.Apply(ctx, testDatumList)
 		assert.Equal(t, 2, len(gotErrList))
 		assert.Equal(t, nil, gotErrList[0])
 		assert.Equal(t, fmt.Errorf("mock sink message error"), gotErrList[1])
@@ -124,20 +121,17 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 
 		testDatumList := []*sinkpb.Datum{
 			{
-				Id:    "test_id_0",
-				Value: []byte(`sink_message_grpc_err`),
+				Id:        "test_id_0",
+				Value:     []byte(`sink_message_grpc_err`),
+				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
+				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 			},
 			{
-				Id:    "test_id_1",
-				Value: []byte(`sink_message_grpc_err`),
+				Id:        "test_id_1",
+				Value:     []byte(`sink_message_grpc_err`),
+				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
+				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 			},
-		}
-		var testSinkSDKMessageList []sinksdk.Message
-		for _, d := range testDatumList {
-			testSinkSDKMessageList = append(testSinkSDKMessageList, sinksdk.Message{
-				ID:      d.GetId(),
-				Payload: d.GetValue(),
-			})
 		}
 
 		mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
@@ -158,7 +152,7 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		gotErrList := u.Apply(ctx, testSinkSDKMessageList)
+		gotErrList := u.Apply(ctx, testDatumList)
 		expectedErrList := []error{
 			ApplyUDSinkErr{
 				UserUDSinkErr: false,
