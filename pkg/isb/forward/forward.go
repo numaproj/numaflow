@@ -180,7 +180,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
 	for _, m := range readMessages {
 		m.Watermark = time.Time(processorWM)
-		if processorWM.After(m.EventTime) { // Set late data at source level
+		if isdf.opts.isFromSourceVertex && processorWM.After(m.EventTime) { // Set late data at source level
 			m.IsLate = true
 		}
 	}
