@@ -2,14 +2,14 @@ package udsink
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	sinksdk "github.com/numaproj/numaflow-go/sink"
+	sinksdk "github.com/numaproj/numaflow-go/pkg/sink"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -21,7 +21,7 @@ type userDefinedSink struct {
 	pipelineName string
 	isdf         *forward.InterStepDataForward
 	logger       *zap.SugaredLogger
-	udsink       *udsHTTPBasedUDSink
+	udsink       *udsGRPCBasedUDSink
 }
 
 type Option func(*userDefinedSink) error
@@ -54,8 +54,11 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchW
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	contentType := sharedutil.LookupEnvStringOr(dfv1.EnvUDSinkContentType, string(dfv1.MsgPackType))
-	s.udsink = NewUDSHTTPBasedUDSink(dfv1.PathVarRun+"/udsink.sock", withTimeout(20*time.Second), withContentType(dfv1.ContentType(contentType)))
+	udsink, err := NewUDSGRPCBasedUDSink()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gRPC client, %w", err)
+	}
+	s.udsink = udsink
 	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: s}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
