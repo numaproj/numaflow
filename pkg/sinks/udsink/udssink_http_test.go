@@ -37,7 +37,7 @@ func TestHTTPBasedUDSink_WaitUntilReady(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintln(w, "Hello, client")
 	}))
-	_ = os.Remove(testSocketPath)
+	_ = os.RemoveAll(testSocketPath)
 	listener, _ := net.Listen("unix", testSocketPath)
 	defer func() { _ = listener.Close() }()
 	ts.Listener = listener
@@ -65,7 +65,7 @@ func TestHTTPBasedUDSink_BasicApply(t *testing.T) {
 			b, _ := msgpack.Marshal(responses)
 			_, _ = w.Write(b)
 		}))
-		_ = os.Remove(testSocketPath)
+		_ = os.RemoveAll(testSocketPath)
 		listener, _ := net.Listen("unix", testSocketPath)
 		defer func() { _ = listener.Close() }()
 		ts.Listener = listener
@@ -83,7 +83,7 @@ func TestHTTPBasedUDSink_BasicApply(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = fmt.Fprintln(w, "test")
 		}))
-		_ = os.Remove(testSocketPath)
+		_ = os.RemoveAll(testSocketPath)
 		listener, _ := net.Listen("unix", testSocketPath)
 		defer func() { _ = listener.Close() }()
 		ts.Listener = listener

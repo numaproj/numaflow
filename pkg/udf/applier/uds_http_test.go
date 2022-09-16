@@ -41,7 +41,7 @@ func TestHTTPBasedUDF_WaitUntilReady(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintln(w, "Hello, client")
 	}))
-	_ = os.Remove(testSocketPath)
+	_ = os.RemoveAll(testSocketPath)
 	listener, _ := net.Listen("unix", testSocketPath)
 	defer func() { _ = listener.Close() }()
 	ts.Listener = listener
@@ -69,7 +69,7 @@ func TestHTTPBasedUDF_BasicApply(t *testing.T) {
 			b, _ := msgpack.Marshal(msgs)
 			_, _ = w.Write(b)
 		}))
-		_ = os.Remove(testSocketPath)
+		_ = os.RemoveAll(testSocketPath)
 		listener, _ := net.Listen("unix", testSocketPath)
 		defer func() { _ = listener.Close() }()
 		ts.Listener = listener
@@ -86,7 +86,7 @@ func TestHTTPBasedUDF_BasicApply(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = fmt.Fprintln(w, "test")
 		}))
-		_ = os.Remove(testSocketPath)
+		_ = os.RemoveAll(testSocketPath)
 		listener, _ := net.Listen("unix", testSocketPath)
 		defer func() { _ = listener.Close() }()
 		ts.Listener = listener
@@ -131,7 +131,7 @@ func TestHTTPBasedUDF_Apply(t *testing.T) {
 
 		_, _ = w.Write(result)
 	}))
-	_ = os.Remove(testSocketPath)
+	_ = os.RemoveAll(testSocketPath)
 	listener, _ := net.Listen("unix", testSocketPath)
 	defer func() { _ = listener.Close() }()
 	s.Listener = listener
