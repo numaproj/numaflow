@@ -24,7 +24,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe
 	github.com/nats-io/nats.go v1.16.0
-	github.com/numaproj/numaflow-go v0.2.1
+	github.com/numaproj/numaflow-go v0.2.3
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/common v0.32.1
 	github.com/soheilhy/cmux v0.1.5
@@ -186,6 +186,3 @@ require (
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 )
-
-replace github.com/numaproj/numaflow-go v0.2.1 => /Users/jyu6/work/external/numaflow-go
-
