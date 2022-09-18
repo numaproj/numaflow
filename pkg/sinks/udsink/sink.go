@@ -92,7 +92,8 @@ func (s *userDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 }
 
 func (br *userDefinedSink) Close() error {
-	return nil
+	// TODO: context.Background()
+	return br.udsink.CloseConn(context.Background())
 }
 
 func (s *userDefinedSink) Start() <-chan struct{} {
