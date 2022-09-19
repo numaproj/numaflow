@@ -5,15 +5,13 @@ Install Numaflow and run a couple of example pipelines.
 ## Prerequisites
 
 A Kubernetes cluster is needed to try out Numaflow. A simple way to create a local cluster is using Docker Desktop.
-<ul>
-  <li><a href="https://www.docker.com/">Docker</a></li>
-  <li><a href="https://www.docker.com/blog/how-kubernetes-works-under-the-hood-with-docker-desktop/">Docker Desktop</a></li>
-</ul>
+
+- [Docker](https://www.docker.com)
+- [Docker Desktop](https://www.docker.com/blog/how-kubernetes-works-under-the-hood-with-docker-desktop)
 
 You will also need `kubectl` to manage the cluster.
-<ul>
-  <li><a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/">kubectl</a></li>
-</ul>
+
+- [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 
 ## Installation
 
