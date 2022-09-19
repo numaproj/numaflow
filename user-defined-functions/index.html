@@ -1306,22 +1306,23 @@
 <span class="kn">import</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
 <span class="w">    </span><span class="s">&quot;context&quot;</span><span class="w"></span>
 
-<span class="w">    </span><span class="nx">funcsdk</span><span class="w"> </span><span class="s">&quot;github.com/numaproj/numaflow-go/function&quot;</span><span class="w"></span>
+<span class="w">    </span><span class="nx">functionsdk</span><span class="w"> </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/function&quot;</span><span class="w"></span>
+<span class="w">    </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/function/server&quot;</span><span class="w"></span>
 <span class="p">)</span><span class="w"></span>
 
-<span class="c1">// Simply return the same msg</span><span class="w"></span>
-<span class="kd">func</span><span class="w"> </span><span class="nx">handle</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">msg</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">MessageToAll</span><span class="p">(</span><span class="nx">msg</span><span class="p">)),</span><span class="w"> </span><span class="kc">nil</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">mapHandle</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="c1">// directly forward the input to the output</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MessageToAll</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">Value</span><span class="p">()))</span><span class="w"></span>
 <span class="p">}</span><span class="w"></span>
 
 <span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">Start</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">(),</span><span class="w"> </span><span class="nx">handle</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="nx">server</span><span class="p">.</span><span class="nx">New</span><span class="p">().</span><span class="nx">RegisterMapper</span><span class="p">(</span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MapFunc</span><span class="p">(</span><span class="nx">mapHandle</span><span class="p">)).</span><span class="nx">Start</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span><span class="w"></span>
 <span class="p">}</span><span class="w"></span>
 </code></pre></div>
 <p>Check the links below to see the UDF examples for different languages.</p>
 <ul>
 <li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/function">Python</a></li>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/function">Golang</a></li>
+<li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples">Golang</a></li>
 </ul>
 <p>After building a docker image for the written UDF, specify the image as below in the vertex spec.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>

@@ -1310,11 +1310,15 @@
 <h1 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h1>
 <p>Install Numaflow and run a couple of example pipelines.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
-<p>A Kubernetes cluster is needed to try out Numaflow. A simple way to create a local cluster is using Docker Desktop.
-* https://www.docker.com/
-* https://www.docker.com/blog/how-kubernetes-works-under-the-hood-with-docker-desktop/</p>
-<p>You will also need <code>kubectl</code> to manage the cluster.
-* <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/"><code>kubectl</code></a></p>
+<p>A Kubernetes cluster is needed to try out Numaflow. A simple way to create a local cluster is using Docker Desktop.</p>
+<ul>
+<li><a href="https://www.docker.com">Docker</a></li>
+<li><a href="https://www.docker.com/blog/how-kubernetes-works-under-the-hood-with-docker-desktop">Docker Desktop</a></li>
+</ul>
+<p>You will also need <code>kubectl</code> to manage the cluster.</p>
+<ul>
+<li><a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/">kubectl</a></li>
+</ul>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
 <p>Run the following command lines to install Numaflow and start the Inter-Step Buffer Service that handles communication between vertices.
 <div class="highlight"><pre><span></span><code>kubectl create ns numaflow-system
