@@ -23,7 +23,7 @@ Numaflow installs in a few minutes and is easier and cheaper to use for simple d
 
 ## Data Integrity Guarantees:
 - Minimally provide at-least-once semantics
-- Provide exactly-once semantics for bounded and near-real time data sources 
+- Provide exactly-once semantics for unbounded and near real-time data sources 
 - Preserving order is not required
 
 ## Roadmap
