@@ -469,7 +469,7 @@ func (s Scale) GetMinReplicas() int32 {
 }
 
 func (s Scale) GetMaxReplicas() int32 {
-	if x := s.Max; x == nil || *x > DefaultMaxReplicas {
+	if x := s.Max; x == nil {
 		return DefaultMaxReplicas
 	} else {
 		return *x
