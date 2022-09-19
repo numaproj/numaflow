@@ -20,7 +20,6 @@ Numaflow installs in a few minutes and is easier and cheaper to use for simple d
 - Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted.
 - Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed.
 
-Numaflow does out-of-the-box quality checks after a message/event is read from the source and before it is committed to the sink. It is quintessential that the quality checks are passed for each event to be processed and committed.
 
 ## Data Integrity Guarantees:
 - Minimally provide at-least-once semantics
