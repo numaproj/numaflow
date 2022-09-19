@@ -8,7 +8,7 @@
 
 ## Summary
 
-Numaflow is a Kubernetes-native tool for running massively parallel data and streaming processing.A Numaflow Pipeline is implemented as a Kubernetes custom resource, and consists of one or more source, data processing, and sink vertices.
+Numaflow is a Kubernetes-native tool for running massively parallel stream processing. A Numaflow Pipeline is implemented as a Kubernetes custom resource and consists of one or more source, data processing, and sink vertices.
 
 
 Numaflow installs in a few minutes and is easier and cheaper to use for simple data processing applications than a full-featured stream processing platforms.
