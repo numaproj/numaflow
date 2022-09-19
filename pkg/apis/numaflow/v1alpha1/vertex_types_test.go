@@ -407,4 +407,6 @@ func Test_Scale_Parameters(t *testing.T) {
 	assert.Equal(t, int(tbu), s.GetTargetBufferUsage())
 	assert.Equal(t, int(tps), s.GetTargetProcessingSeconds())
 	assert.Equal(t, int(zrss), s.GetZeroReplicaSleepSeconds())
+	s.Max = pointer.Int32(500)
+	assert.Equal(t, int32(500), s.GetMaxReplicas())
 }
