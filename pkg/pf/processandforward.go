@@ -2,19 +2,32 @@ package pf
 
 import (
 	"context"
+	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	udfreducer "github.com/numaproj/numaflow/pkg/udf/reducer"
+	"google.golang.org/grpc/metadata"
 	"sync"
 )
 
 // ProcessAndForward reads messages from pbq and invokes udf using grpc
 // and forwards the results to ISB
 type ProcessAndForward struct {
+	key       string
 	FSD       forward.ToWhichStepDecider
 	toBuffers map[string]isb.BufferWriter
 	UDF       udfreducer.Reducer
+}
+
+// NewProcessAndForward will return a new ProcessAndForward instance
+func NewProcessAndForward(ctx context.Context, key string, fsd forward.ToWhichStepDecider, toBuffers map[string]isb.BufferWriter, udf udfreducer.Reducer) *ProcessAndForward {
+	return &ProcessAndForward{
+		key:       key,
+		FSD:       fsd,
+		toBuffers: toBuffers,
+		UDF:       udf,
+	}
 }
 
 // 1. read messages from pbq
@@ -26,35 +39,13 @@ func (p *ProcessAndForward) process(ctx context.Context, pbqReader pbq.Reader) {
 	var reducedResult []*isb.Message
 	var err error
 
-	messageCh := make(chan *isb.Message)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		reducedResult, err = p.UDF.Reduce(ctx, messageCh)
+		ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: p.key}))
+		reducedResult, err = p.UDF.Reduce(ctx, pbqReader.ReadCh())
 	}()
 
-	readCh := pbqReader.ReadCh()
-readLoop:
-	for {
-		select {
-		case msg, ok := <-readCh:
-			if msg != nil {
-				// select to avoid blocking write on messageCh
-				select {
-				case messageCh <- msg:
-				case <-ctx.Done():
-					return
-				}
-			}
-			if !ok {
-				break readLoop
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-	// close the message channel, let the reducer know they are no more messages
-	close(messageCh)
 	// wait for the reduce method to return
 	wg.Wait()
 	if err != nil {
