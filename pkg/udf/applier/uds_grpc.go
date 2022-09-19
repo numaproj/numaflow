@@ -102,23 +102,34 @@ func (u *UDSGRPCBasedUDF) Reduce(ctx context.Context, messageStream <-chan *isb.
 	var wg sync.WaitGroup
 	var result []*functionpb.Datum
 	var err error
-	flag := true
 
-	for message := range messageStream {
-		d := createDatum(message)
-		datumCh <- d
+	// invoke the reduceFn method with datumCh channel
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		result, err = u.client.ReduceFn(ctx, datumCh)
+	}()
 
-		// ReduceFn should be invoked only once
-		if flag {
-			flag = false
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: d.Key}))
-				result, err = u.client.ReduceFn(ctx, datumCh)
-			}()
+readLoop:
+	for {
+		select {
+		case msg, ok := <-messageStream:
+			if msg != nil {
+				d := createDatum(msg)
+				select {
+				case datumCh <- d:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+			if !ok {
+				break readLoop
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 	}
+
 	// close the datumCh, let the reduceFn know that there are no more messages
 	close(datumCh)
 
