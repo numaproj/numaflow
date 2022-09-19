@@ -1397,7 +1397,7 @@ kubectl logs -f even-odd-odd-sink-0-a6p0n main
 </code></pre></div></p>
 <p>View the UI for the advanced pipleline at https://localhost:8443/
 <img alt="Numaflow UI" src="../assets/numaflow-ui-advanced-pipeline.png" /></p>
-<p>The source code of the <code>even-odd</code> <a href="../user-defined-functions/">User Defined Function</a> can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/examples/function/evenodd">here</a>. You also can replace the <a href="../sinks/log/">Log</a> Sink with some other sinks like <a href="../sinks/kafka/">Kafka</a> to forward the data to Kafka topics.</p>
+<p>The source code of the <code>even-odd</code> <a href="../user-defined-functions/">User Defined Function</a> can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd">here</a>. You also can replace the <a href="../sinks/log/">Log</a> Sink with some other sinks like <a href="../sinks/kafka/">Kafka</a> to forward the data to Kafka topics.</p>
 <p>The pipeline can be deleted by
 <div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
 </code></pre></div></p>
