@@ -3,6 +3,7 @@ package applier
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
@@ -91,4 +92,75 @@ func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 		writeMessages = append(writeMessages, writeMessage)
 	}
 	return writeMessages, nil
+}
+
+// should we pass metadata information ?
+
+// Reduce accepts a channel of isbMessages and returns the aggregated result
+func (u *UDSGRPCBasedUDF) Reduce(ctx context.Context, messageStream <-chan *isb.Message) ([]*isb.Message, error) {
+	datumCh := make(chan *functionpb.Datum)
+	var wg sync.WaitGroup
+	var result []*functionpb.Datum
+	var err error
+	flag := true
+
+	for message := range messageStream {
+		d := createDatum(message)
+		datumCh <- d
+
+		// ReduceFn should be invoked only once
+		if flag {
+			flag = false
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: d.Key}))
+				result, err = u.client.ReduceFn(ctx, datumCh)
+			}()
+		}
+	}
+	// close the datumCh, let the reduceFn know that there are no more messages
+	close(datumCh)
+
+	wg.Wait()
+
+	if err != nil {
+		return nil, ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		}
+	}
+
+	writeMessages := make([]*isb.Message, 0)
+	for _, datum := range result {
+		key := datum.Key
+		writeMessage := &isb.Message{
+			Header: isb.Header{
+				Key: key,
+			},
+			Body: isb.Body{
+				Payload: datum.Value,
+			},
+		}
+		writeMessages = append(writeMessages, writeMessage)
+	}
+	return writeMessages, nil
+}
+
+func createDatum(readMessage *isb.Message) *functionpb.Datum {
+	key := readMessage.Key
+	payload := readMessage.Body.Payload
+	parentPaneInfo := readMessage.PaneInfo
+
+	var d = &functionpb.Datum{
+		Key:       key,
+		Value:     payload,
+		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
+		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
+	}
+	return d
 }
