@@ -14,29 +14,29 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// UDSGRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
-type UDSGRPCBasedUDF struct {
+// udsGRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
+type udsGRPCBasedUDF struct {
 	client functionsdk.Client
 }
 
-var _ Applier = (*UDSGRPCBasedUDF)(nil)
+var _ Applier = (*udsGRPCBasedUDF)(nil)
 
-// NewUDSGRPCBasedUDF returns a new UDSGRPCBasedUDF object.
-func NewUDSGRPCBasedUDF() (*UDSGRPCBasedUDF, error) {
+// NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
+func NewUDSGRPCBasedUDF() (*udsGRPCBasedUDF, error) {
 	c, err := client.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
-	return &UDSGRPCBasedUDF{c}, nil
+	return &udsGRPCBasedUDF{c}, nil
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *UDSGRPCBasedUDF) CloseConn(ctx context.Context) error {
+func (u *udsGRPCBasedUDF) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // WaitUntilReady waits until the client is connected.
-func (u *UDSGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
+func (u *udsGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -50,7 +50,7 @@ func (u *UDSGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *UDSGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
+func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
 	key := readMessage.Key
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset

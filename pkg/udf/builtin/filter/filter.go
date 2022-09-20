@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/numaproj/numaflow-go/pkg/datum"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow/pkg/shared/expr"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -23,7 +22,7 @@ func New(args map[string]string) (functionsdk.MapFunc, error) {
 		expression: expr,
 	}
 
-	return func(ctx context.Context, key string, datum datum.Datum) functionsdk.Messages {
+	return func(ctx context.Context, key string, datum functionsdk.Datum) functionsdk.Messages {
 		log := logging.FromContext(ctx)
 		resultMsg, err := f.apply(datum.Value())
 		if err != nil {

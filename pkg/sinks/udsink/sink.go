@@ -2,18 +2,19 @@ package udsink
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	sinksdk "github.com/numaproj/numaflow-go/sink"
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type userDefinedSink struct {
@@ -21,7 +22,7 @@ type userDefinedSink struct {
 	pipelineName string
 	isdf         *forward.InterStepDataForward
 	logger       *zap.SugaredLogger
-	udsink       *udsHTTPBasedUDSink
+	udsink       *udsGRPCBasedUDSink
 }
 
 type Option func(*userDefinedSink) error
@@ -54,8 +55,11 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchW
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	contentType := sharedutil.LookupEnvStringOr(dfv1.EnvUDSinkContentType, string(dfv1.MsgPackType))
-	s.udsink = NewUDSHTTPBasedUDSink(dfv1.PathVarRun+"/udsink.sock", withTimeout(20*time.Second), withContentType(dfv1.ContentType(contentType)))
+	udsink, err := NewUDSGRPCBasedUDSink()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gRPC client, %w", err)
+	}
+	s.udsink = udsink
 	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: s}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
@@ -74,15 +78,22 @@ func (s *userDefinedSink) IsFull() bool {
 
 // Write writes to the UDSink container.
 func (s *userDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	msgs := make([]sinksdk.Message, len(messages))
+	msgs := make([]*sinkpb.Datum, len(messages))
 	for i, m := range messages {
-		msgs[i] = sinksdk.Message{ID: m.ID, Payload: m.Payload}
+		msgs[i] = &sinkpb.Datum{
+			// NOTE: key is not used anywhere ATM
+			Id:        m.ID,
+			Value:     m.Payload,
+			EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(m.EventTime)},
+			Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
+		}
 	}
 	return nil, s.udsink.Apply(ctx, msgs)
 }
 
 func (br *userDefinedSink) Close() error {
-	return nil
+	// TODO: context.Background()
+	return br.udsink.CloseConn(context.Background())
 }
 
 func (s *userDefinedSink) Start() <-chan struct{} {
