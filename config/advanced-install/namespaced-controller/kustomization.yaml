@@ -13,7 +13,7 @@ namespace: numaflow-system
 
 images:
   - name: quay.io/numaproj/numaflow
-    newTag: v0.5.5
+    newTag: v0.5.6
 
 patchesStrategicMerge:
   - |-
@@ -28,7 +28,7 @@ patchesStrategicMerge:
             - name: controller-manager
               env:
                 - name: NUMAFLOW_IMAGE
-                  value: quay.io/numaproj/numaflow:v0.5.5
+                  value: quay.io/numaproj/numaflow:v0.5.6
 
 patches:
   - patch: |-
