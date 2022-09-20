@@ -55,12 +55,11 @@ func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
 	parentPaneInfo := readMessage.PaneInfo
-
 	var d = &functionpb.Datum{
 		Key:       key,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
-		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
+		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
 	}
 
 	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: key}))

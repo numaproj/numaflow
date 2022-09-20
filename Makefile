@@ -106,12 +106,13 @@ test-e2e:
 test-kafka-e2e:
 test-http-e2e:
 test-%: 
+	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
 	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
-	-go test -v -timeout 10m -count 1 --tags test -p 1 ./test/$*
+	go test -v -timeout 10m -count 1 --tags test -p 1 ./test/$*
 	$(MAKE) cleanup-e2e
 	
 

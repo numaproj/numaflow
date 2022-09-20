@@ -10,7 +10,7 @@ spec:
     - name: even-or-odd
       udf:
         container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/examples/function/evenodd
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
           image: quay.io/numaio/go-even-odd-example
     - name: even-sink
       sink:

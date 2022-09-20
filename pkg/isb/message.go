@@ -38,6 +38,7 @@ type Message struct {
 type ReadMessage struct {
 	Message
 	ReadOffset Offset
+	Watermark  time.Time
 }
 
 // MarshalBinary encodes header to a binary format
