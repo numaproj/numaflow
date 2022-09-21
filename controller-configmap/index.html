@@ -1290,14 +1290,9 @@
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-config</span><span class="w"></span>
 <span class="nt">data</span><span class="p">:</span><span class="w"></span>
 <span class="w">  </span><span class="nt">controller-config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span><span class="w"></span>
-<span class="w">    </span><span class="no">udf:</span><span class="w"></span>
-<span class="w">      </span><span class="no"># UDF responds the messages in what Content-Type. Available options: application/msgpack, application/json.</span><span class="w"></span>
-<span class="w">      </span><span class="no"># Defaults to application/msgpack</span><span class="w"></span>
-<span class="w">      </span><span class="no">contentType: application/msgpack</span><span class="w"></span>
-<span class="w">    </span><span class="no">sink:</span><span class="w"></span>
-<span class="w">      </span><span class="no"># UDSink accepts and responds the messages in what Content-Type. Available options: application/msgpack, application/json.</span><span class="w"></span>
-<span class="w">      </span><span class="no"># Defaults to application/msgpack</span><span class="w"></span>
-<span class="w">      </span><span class="no">contentType: application/msgpack</span><span class="w"></span>
+<span class="w">    </span><span class="no">isbsvc:</span><span class="w"></span>
+<span class="w">      </span><span class="no">jetstream:</span><span class="w"></span>
+<span class="w">        </span><span class="no">...</span><span class="w"></span>
 </code></pre></div>
 <h3 id="isb-service-configuration">ISB Service Configuration<a class="headerlink" href="#isb-service-configuration" title="Permanent link">&para;</a></h3>
 <p>One of the important configuration items in the ConfigMap is about <a href="../inter-step-buffer-service/">ISB Service</a>. We currently use 3rd party technologies such as <code>JetStream</code> to implmement ISB Services, if those applications have new releases, to make them available in Numaflow, the new versions need to be added in the ConfigMap.</p>
