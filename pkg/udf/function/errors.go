@@ -1,4 +1,4 @@
-package applier
+package function
 
 import "fmt"
 

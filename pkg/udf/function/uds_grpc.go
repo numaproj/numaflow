@@ -1,8 +1,9 @@
-package applier
+package function
 
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"sync"
 	"time"
 
@@ -20,7 +21,7 @@ type udsGRPCBasedUDF struct {
 	client functionsdk.Client
 }
 
-var _ Applier = (*udsGRPCBasedUDF)(nil)
+var _ applier.Applier = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
 func NewUDSGRPCBasedUDF() (*udsGRPCBasedUDF, error) {
@@ -97,7 +98,7 @@ func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 // should we pass metadata information ?
 
 // Reduce accepts a channel of isbMessages and returns the aggregated result
-func (u *UDSGRPCBasedUDF) Reduce(ctx context.Context, messageStream <-chan *isb.Message) ([]*isb.Message, error) {
+func (u *udsGRPCBasedUDF) Reduce(ctx context.Context, messageStream <-chan *isb.Message) ([]*isb.Message, error) {
 	datumCh := make(chan *functionpb.Datum)
 	var wg sync.WaitGroup
 	var result []*functionpb.Datum

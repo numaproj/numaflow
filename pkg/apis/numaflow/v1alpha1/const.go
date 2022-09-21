@@ -102,7 +102,7 @@ const (
 	DefaultBufferLength     = 50000
 	DefaultBufferUsageLimit = 0.8
 
-	UDFApplierMessageKey = "x-numa-message-key" // The key in the UDF applier HTTP header used to pass the map-reduce key
+	UDFApplierMessageKey = "x-numa-message-key" // The key in the UDF function HTTP header used to pass the map-reduce key
 
 	// Auto scaling
 	DefaultLookbackSeconds         = 180 // Default lookback seconds for calculating avg rate and pending
