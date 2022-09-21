@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"log"
@@ -14,7 +15,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 )
 
 // ToLog prints the output to a log sinks.

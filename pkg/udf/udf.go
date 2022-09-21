@@ -19,7 +19,12 @@ import (
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+<<<<<<< HEAD
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+=======
+	"github.com/numaproj/numaflow/pkg/udf/function"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+>>>>>>> 03c295a (adding tests for reduce)
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 )
 
@@ -122,7 +127,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	})
 
 	log = log.With("protocol", "uds-grpc-udf")
-	udfHandler, err := applier.NewUDSGRPCBasedUDF()
+	udfHandler, err := function.NewUDSGRPCBasedUDF()
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)
 	}
