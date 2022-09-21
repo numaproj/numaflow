@@ -261,10 +261,6 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Equal(t, "cmd", spec.Containers[1].Command[0])
 		assert.Equal(t, 1, len(spec.Containers[1].Args))
 		assert.Equal(t, "arg0", spec.Containers[1].Args[0])
-		envNames := []string{}
-		for _, e := range spec.Containers[0].Env {
-			envNames = append(envNames, e.Name)
-		}
 	})
 
 	t.Run("test udf", func(t *testing.T) {
@@ -298,12 +294,6 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
 		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
 		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
-		udfEnvNames := []string{}
-		udfEnvValues := []string{}
-		for _, e := range spec.Containers[1].Env {
-			udfEnvNames = append(udfEnvNames, e.Name)
-			udfEnvValues = append(udfEnvValues, e.Value)
-		}
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetFromBuffers() {
