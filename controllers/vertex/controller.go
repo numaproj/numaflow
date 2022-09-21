@@ -280,52 +280,6 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 	}
 	podSpec.InitContainers[0].Args = append(podSpec.InitContainers[0].Args, "--buffers="+strings.Join(bfs, ","))
 
-	if vertex.IsASink() {
-		if vertex.Spec.Sink.UDSink != nil {
-			// Add UDSink content-type env to main container
-			envs := []corev1.EnvVar{}
-			userDefined := false
-			for _, env := range podSpec.Containers[0].Env {
-				if env.Name != dfv1.EnvUDSinkContentType {
-					envs = append(envs, env)
-				} else {
-					userDefined = true
-					switch dfv1.ContentType(env.Value) {
-					case dfv1.JsonType, dfv1.MsgPackType:
-						envs = append(envs, env)
-					default:
-						return nil, fmt.Errorf("invalid UDSink Content-Type config %q from environment variable %q", env.Value, dfv1.EnvUDSinkContentType)
-					}
-				}
-			}
-			if !userDefined {
-				envs = append(envs, corev1.EnvVar{Name: dfv1.EnvUDSinkContentType, Value: string(r.config.GetUDSinkContentType())})
-			}
-			podSpec.Containers[0].Env = envs
-		}
-	} else if vertex.IsUDF() {
-		// Add default UDF content-type to udf container
-		envs := []corev1.EnvVar{}
-		userDefined := false
-		for _, env := range podSpec.Containers[1].Env {
-			if env.Name != dfv1.EnvUDFContentType {
-				envs = append(envs, env)
-			} else {
-				userDefined = true
-				switch dfv1.ContentType(env.Value) {
-				case dfv1.JsonType, dfv1.MsgPackType:
-					envs = append(envs, env)
-				default:
-					return nil, fmt.Errorf("invalid UDF Content-Type config %q from environment variable %q", env.Value, dfv1.EnvUDFContentType)
-				}
-			}
-		}
-		if !userDefined {
-			envs = append(envs, corev1.EnvVar{Name: dfv1.EnvUDFContentType, Value: string(r.config.GetUDFContentType())})
-		}
-		podSpec.Containers[1].Env = envs
-	}
-
 	podSpec.Containers[0].Env = append(podSpec.Containers[0].Env, corev1.EnvVar{
 		Name:  dfv1.EnvWatermarkDisabled,
 		Value: fmt.Sprintf("%t", pl.Spec.Watermark.Disabled),
