@@ -520,12 +520,6 @@ Kubernetes core/v1.SecurityContext </a> </em>
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.ContentType">
-ContentType (<code>string</code> alias)
-</p>
-</h3>
-<p>
-</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Edge">
 Edge
 </h3>
