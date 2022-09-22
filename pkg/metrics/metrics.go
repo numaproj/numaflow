@@ -226,7 +226,7 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 		if len(ms.healthCheckExecutors) > 0 {
 			for _, ex := range ms.healthCheckExecutors {
 				if err := ex(); err != nil {
-					log.Errorw("Failed execute health check", zap.Error(err))
+					log.Errorw("Failed to execute health check", zap.Error(err))
 					w.WriteHeader(http.StatusInternalServerError)
 					_, _ = w.Write([]byte(err.Error()))
 					return

@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type userDefinedSink struct {
+type UserDefinedSink struct {
 	name         string
 	pipelineName string
 	isdf         *forward.InterStepDataForward
@@ -25,18 +25,18 @@ type userDefinedSink struct {
 	udsink       *udsGRPCBasedUDSink
 }
 
-type Option func(*userDefinedSink) error
+type Option func(*UserDefinedSink) error
 
 func WithLogger(log *zap.SugaredLogger) Option {
-	return func(t *userDefinedSink) error {
+	return func(t *UserDefinedSink) error {
 		t.logger = log
 		return nil
 	}
 }
 
 // NewUserDefinedSink returns genericSink type.
-func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*userDefinedSink, error) {
-	s := new(userDefinedSink)
+func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*UserDefinedSink, error) {
+	s := new(UserDefinedSink)
 	name := vertex.Spec.Name
 	s.name = name
 	s.pipelineName = vertex.Spec.PipelineName
@@ -68,16 +68,16 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchW
 	return s, nil
 }
 
-func (s *userDefinedSink) GetName() string {
+func (s *UserDefinedSink) GetName() string {
 	return s.name
 }
 
-func (s *userDefinedSink) IsFull() bool {
+func (s *UserDefinedSink) IsFull() bool {
 	return false
 }
 
 // Write writes to the UDSink container.
-func (s *userDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
+func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	msgs := make([]*sinkpb.Datum, len(messages))
 	for i, m := range messages {
 		msgs[i] = &sinkpb.Datum{
@@ -92,12 +92,14 @@ func (s *userDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 	return nil, s.udsink.Apply(ctx, msgs)
 }
 
-func (br *userDefinedSink) Close() error {
-	// TODO: context.Background()
-	return br.udsink.CloseConn(context.Background())
+func (br *UserDefinedSink) Close() error {
+	if br.udsink != nil {
+		return br.udsink.CloseConn(context.Background())
+	}
+	return nil
 }
 
-func (s *userDefinedSink) Start() <-chan struct{} {
+func (s *UserDefinedSink) Start() <-chan struct{} {
 	// Readiness check
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -107,10 +109,17 @@ func (s *userDefinedSink) Start() <-chan struct{} {
 	return s.isdf.Start()
 }
 
-func (s *userDefinedSink) Stop() {
+func (s *UserDefinedSink) Stop() {
 	s.isdf.Stop()
 }
 
-func (s *userDefinedSink) ForceStop() {
+func (s *UserDefinedSink) ForceStop() {
 	s.isdf.ForceStop()
+}
+
+// IsHealthy checks if the udsink sidecar is healthy.
+func (s *UserDefinedSink) IsHealthy() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	return s.udsink.WaitUntilReady(ctx)
 }
