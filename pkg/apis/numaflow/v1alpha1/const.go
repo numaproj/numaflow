@@ -100,7 +100,7 @@ const (
 
 	DefaultBufferLength     = 50000
 	DefaultBufferUsageLimit = 0.8
-	
+
 	// Auto scaling
 	DefaultLookbackSeconds         = 180 // Default lookback seconds for calculating avg rate and pending
 	DefaultCooldownSeconds         = 90  // Default cooldown seconds after a scaling operation
