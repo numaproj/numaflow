@@ -17,7 +17,7 @@ type PBQ struct {
 	store       store.Store
 	output      chan *isb.Message
 	cob         bool // cob to avoid panic in case writes happen after close of book
-	partitionID string
+	PartitionID string
 	options     *options
 	manager     *Manager
 	log         *zap.SugaredLogger
@@ -29,7 +29,7 @@ var _ ReadWriteCloser = (*PBQ)(nil)
 func (p *PBQ) Write(ctx context.Context, message *isb.Message) error {
 	// if cob we should return
 	if p.cob {
-		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("partitionID", p.partitionID), zap.Any("header", message.Header))
+		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("PartitionID", p.PartitionID), zap.Any("header", message.Header))
 		return COBErr
 	}
 	var writeErr error
@@ -71,7 +71,7 @@ func (p *PBQ) ReadCh() <-chan *isb.Message {
 func (p *PBQ) GC() error {
 	err := p.store.GC()
 	p.store = nil
-	p.manager.deregister(p.partitionID)
+	p.manager.deregister(p.PartitionID)
 	return err
 }
 
@@ -82,7 +82,7 @@ readLoop:
 	for {
 		readMessages, eof, err := p.store.Read(int64(size))
 		if err != nil {
-			p.log.Errorw("error while replaying records from store", zap.Any("partitionID", p.partitionID), zap.Error(err))
+			p.log.Errorw("error while replaying records from store", zap.Any("PartitionID", p.PartitionID), zap.Error(err))
 		}
 		for _, msg := range readMessages {
 			// select to avoid infinite blocking while writing to output channel
