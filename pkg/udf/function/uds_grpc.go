@@ -25,11 +25,16 @@ var _ applier.Applier = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
 func NewUDSGRPCBasedUDF() (*udsGRPCBasedUDF, error) {
-	c, err := client.New()
+	c, err := client.New() // Can we pass this as a parameter to the function?
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
 	return &udsGRPCBasedUDF{c}, nil
+}
+
+// NewUdsGRPCBasedUDFWithClient need this for testing
+func NewUdsGRPCBasedUDFWithClient(client functionsdk.Client) *udsGRPCBasedUDF {
+	return &udsGRPCBasedUDF{client: client}
 }
 
 // CloseConn closes the gRPC client connection.
@@ -108,6 +113,7 @@ func (u *udsGRPCBasedUDF) Reduce(ctx context.Context, messageStream <-chan *isb.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		// TODO handle this error here itself
 		result, err = u.client.ReduceFn(ctx, datumCh)
 	}()
 

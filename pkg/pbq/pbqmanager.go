@@ -63,7 +63,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID string) (ReadWri
 	case dfv1.InMemoryType:
 		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.storeOptions)
 		if err != nil {
-			m.log.Errorw("Error while creating persistent store", zap.Any("partitionID", partitionID), zap.Any("storeType", m.storeOptions.PbqStoreType()), zap.Error(err))
+			m.log.Errorw("Error while creating persistent store", zap.Any("PartitionID", partitionID), zap.Any("storeType", m.storeOptions.PbqStoreType()), zap.Error(err))
 			return nil, err
 		}
 	case dfv1.FileSystemType:
@@ -75,7 +75,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID string) (ReadWri
 		store:       persistentStore,
 		output:      make(chan *isb.Message, m.pbqOptions.channelBufferSize),
 		cob:         false,
-		partitionID: partitionID,
+		PartitionID: partitionID,
 		options:     m.pbqOptions,
 		manager:     m,
 		log:         logging.FromContext(ctx).With("PBQ", partitionID),
@@ -100,7 +100,7 @@ func (m *Manager) ListPartitions() []*PBQ {
 	return pbqList
 }
 
-// GetPBQ returns pbq for the given partitionID
+// GetPBQ returns pbq for the given PartitionID
 func (m *Manager) GetPBQ(partitionID string) ReadWriteCloser {
 	m.RLock()
 	defer m.RUnlock()
@@ -152,14 +152,14 @@ func (m *Manager) ShutDown(ctx context.Context) {
 				closeErr = q.Close()
 				if closeErr != nil {
 					attempt += 1
-					m.log.Warnw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", q.partitionID), zap.Error(closeErr))
+					m.log.Warnw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("PartitionID", q.PartitionID), zap.Error(closeErr))
 					// exponential backoff will return if err is not nil
 					return false, nil
 				}
 				return true, nil
 			})
 			if closeErr != nil {
-				m.log.Errorw("Failed to close pbq, no retries left", zap.Any("partitionID", q.partitionID), zap.Error(closeErr))
+				m.log.Errorw("Failed to close pbq, no retries left", zap.Any("PartitionID", q.PartitionID), zap.Error(closeErr))
 			}
 		}(v)
 	}
@@ -191,7 +191,7 @@ func (m *Manager) Replay(ctx context.Context) {
 
 	for _, val := range m.pbqMap {
 		wg.Add(1)
-		m.log.Info("Replaying records from store", zap.Any("PBQ", val.partitionID))
+		m.log.Info("Replaying records from store", zap.Any("PBQ", val.PartitionID))
 		go func(ctx context.Context, p *PBQ) {
 			defer wg.Done()
 			p.replayRecordsFromStore(ctx)

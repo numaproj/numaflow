@@ -1,0 +1,137 @@
+package readloop
+
+import (
+	"container/list"
+	"context"
+	"fmt"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/pbq"
+	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/udf/reducer"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
+	"github.com/stretchr/testify/assert"
+	"testing"
+	"time"
+)
+
+func TestOrderedProcessing(t *testing.T) {
+
+	// Test Reducer returns the messages as is
+	identityReducer := reducer.ReduceFunc(func(ctx context.Context, input <-chan *isb.Message) ([]*isb.Message, error) {
+		messages := make([]*isb.Message, 0)
+		for msg := range input {
+			messages = append(messages, msg)
+		}
+		return messages, nil
+	})
+
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		partitions     []keyed.PartitionId
+		reduceOrder    []keyed.PartitionId
+		expectedBefore int
+		expectedAfter  []keyed.PartitionId
+	}{
+		{
+			name:           "single-task-finished",
+			partitions:     partitions(1),
+			expectedBefore: 1,
+			reduceOrder:    partitionsFor([]int{0}),
+			expectedAfter:  []keyed.PartitionId{},
+		},
+		{
+			name:           "middle-task-finished-in-multiple-tasks",
+			partitions:     partitions(4),
+			expectedBefore: 4,
+			reduceOrder:    partitionsFor([]int{2}),
+			expectedAfter:  partitionsFor([]int{0, 1, 2, 3}),
+		},
+		{
+			name:           "tasks-in-order",
+			partitions:     partitions(4),
+			expectedBefore: 4,
+			reduceOrder:    partitionsFor([]int{0, 1, 2, 3}),
+			expectedAfter:  partitionsFor([]int{}),
+		},
+		{
+			name:           "first-task-multiple-tasks",
+			partitions:     partitions(4),
+			expectedBefore: 4,
+			reduceOrder:    partitionsFor([]int{0}),
+			expectedAfter:  partitionsFor([]int{1, 2, 3}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// clean out the task queue before we start a run
+			op := NewOrderedProcessor()
+			op.StartUp(ctx)
+			// although this could be declared outside, since we are using common naming scheme for partitions,
+			// things will go haywire.
+			pbqManager, _ := pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(int64(100)), store.WithPbqStoreType(dfv1.InMemoryType)),
+				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+			cCtx, _ := context.WithCancel(ctx)
+			for _, partition := range tt.partitions {
+				p, _ := pbqManager.CreateNewPBQ(ctx, string(partition))
+				op.process(cCtx, identityReducer, p, partition)
+			}
+			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
+			count := 0
+			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
+				pfTask := e.Value.(*task)
+				partitionKey := pfTask.pf.Key
+				assert.Equal(t, fmt.Sprintf("partition-%d", count), partitionKey)
+				count = count + 1
+			}
+
+			for _, id := range tt.reduceOrder {
+				p := pbqManager.GetPBQ(string(id))
+				p.CloseOfBook()
+				// wait for reduce operation to be done.
+				pfTask := taskForPartition(op.taskQueue, string(id))
+				<-pfTask.doneCh
+			}
+
+			if len(tt.expectedAfter) == 0 {
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			for _, partitionId := range tt.expectedAfter {
+				pfTask := taskForPartition(op.taskQueue, string(partitionId))
+				assert.NotNil(t, pfTask)
+			}
+
+		})
+	}
+
+}
+
+func partitions(count int) []keyed.PartitionId {
+	partitions := make([]keyed.PartitionId, count)
+	for i := 0; i < count; i++ {
+		partitions[i] = keyed.PartitionId(fmt.Sprintf("partition-%d", i))
+	}
+	return partitions
+}
+
+func partitionsFor(partitionIdx []int) []keyed.PartitionId {
+	partitions := make([]keyed.PartitionId, len(partitionIdx))
+	for i, idx := range partitionIdx {
+		partitions[i] = keyed.PartitionId(fmt.Sprintf("partition-%d", idx))
+	}
+	return partitions
+}
+
+func taskForPartition(taskList *list.List, partitionId string) *task {
+	for e := taskList.Front(); e != nil; e = e.Next() {
+		pfTask := e.Value.(*task)
+		partitionKey := pfTask.pf.Key
+		if partitionKey == partitionId {
+			return pfTask
+		}
+	}
+	return nil
+}
