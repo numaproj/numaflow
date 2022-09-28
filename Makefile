@@ -164,10 +164,10 @@ set-qemu:
 .PHONY: swagger
 swagger:
 	./hack/swagger-gen.sh ${VERSION}
-	$(MAKE) api/jsonschema/schema.json
+	$(MAKE) api/json-schema/schema.json
 
-api/jsonschema/schema.json: api/openapi-spec/swagger.json hack/jsonschema/main.go
-	go run ./hack/jsonschema
+api/json-schema/schema.json: api/openapi-spec/swagger.json hack/json-schema/main.go
+	go run ./hack/json-schema
 
 .PHONY: codegen
 codegen:

@@ -59,7 +59,7 @@ func main() {
 			"oneOf":       oneOf,
 			"definitions": definitions,
 		}
-		f, err := os.Create("api/jsonschema/schema.json")
+		f, err := os.Create("api/json-schema/schema.json")
 		if err != nil {
 			panic(err)
 		}
