@@ -161,10 +161,20 @@ set-qemu:
 	docker pull tonistiigi/binfmt:latest
 	docker run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
 
+.PHONY: swagger
+swagger:
+	./hack/swagger-gen.sh ${VERSION}
+	$(MAKE) api/jsonschema/schema.json
+
+api/jsonschema/schema.json: api/openapi-spec/swagger.json hack/jsonschema/main.go
+	go run ./hack/jsonschema
+
 .PHONY: codegen
 codegen:
 	./hack/generate-proto.sh
 	./hack/update-codegen.sh
+	./hack/openapi-gen.sh
+	$(MAKE) swagger
 	./hack/update-api-docs.sh
 	$(MAKE) manifests
 	rm -rf ./vendor

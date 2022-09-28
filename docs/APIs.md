@@ -216,6 +216,7 @@ ServiceAccountName to apply to the StatefulSet
 \[\]Kubernetes core/v1.Volume </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
 </td>
 </tr>
 <tr>
