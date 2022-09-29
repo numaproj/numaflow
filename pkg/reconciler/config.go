@@ -1,4 +1,4 @@
-package controllers
+package reconciler
 
 import (
 	"fmt"
@@ -7,16 +7,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+// GlobalConfig is the configuration for the controllers, it is
+// supposed to be populated from the configmap attached to the
+// controller manager.
 type GlobalConfig struct {
 	ISBSvc *ISBSvcConfig `json:"isbsvc"`
-}
-
-type UDFConfig struct {
-	ContentType string `json:"contentType"`
-}
-
-type SinkConfig struct {
-	ContentType string `json:"contentType"`
 }
 
 type ISBSvcConfig struct {

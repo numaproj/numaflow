@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/numaproj/numaflow/controllers"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
@@ -45,10 +45,10 @@ var (
 		},
 	}
 
-	fakeConfig = &controllers.GlobalConfig{
-		ISBSvc: &controllers.ISBSvcConfig{
-			Redis: &controllers.RedisConfig{
-				Versions: []controllers.RedisVersion{
+	fakeConfig = &reconciler.GlobalConfig{
+		ISBSvc: &reconciler.ISBSvcConfig{
+			Redis: &reconciler.RedisConfig{
+				Versions: []reconciler.RedisVersion{
 					{
 						Version:            testVersion,
 						RedisImage:         testImage,
@@ -57,8 +57,8 @@ var (
 					},
 				},
 			},
-			JetStream: &controllers.JetStreamConfig{
-				Versions: []controllers.JetStreamVersion{
+			JetStream: &reconciler.JetStreamConfig{
+				Versions: []reconciler.JetStreamVersion{
 					{
 						Version:              testVersion,
 						NatsImage:            testJSImage,
