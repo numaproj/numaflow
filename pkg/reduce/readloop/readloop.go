@@ -10,6 +10,8 @@ package readloop
 
 import (
 	"context"
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/udf/function"
@@ -17,7 +19,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"time"
 )
 
 var retryDelay time.Duration = time.Duration(1 * time.Second)
@@ -54,7 +55,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 	for _, partition := range partitions {
 		// create process and forward
 		// invoke process and forward with partition
-		rl.processPartition(ctx, keyed.PartitionId(partition.PartitionID))
+		rl.processPartition(ctx, keyed.PartitionID(partition.PartitionID))
 	}
 	rl.pbqManager.Replay(ctx)
 }
@@ -65,9 +66,14 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		windows := rl.upsertWindowsAndKeys(m)
 		for _, kw := range windows {
 			// identify partition for message
-			partitionId := keyed.Partition(kw.IntervalWindow, m.Key)
+			partitionID := keyed.PartitionID{
+				Start: kw.IntervalWindow.Start,
+				End:   kw.IntervalWindow.End,
+				Key:   m.Key,
+			}
+			//(kw.IntervalWindow, m.Key)
 
-			pbq := rl.processPartition(ctx, partitionId)
+			pbq := rl.processPartition(ctx, partitionID)
 			// write the message to PBQ
 			pbq.Write(ctx, &m.Message)
 		}
@@ -82,15 +88,15 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	}
 }
 
-func (rl *ReadLoop) processPartition(ctx context.Context, partitionId keyed.PartitionId) pbq.ReadWriteCloser {
+func (rl *ReadLoop) processPartition(ctx context.Context, partitionId keyed.PartitionID) pbq.ReadWriteCloser {
 	var pbq pbq.ReadWriteCloser
 	// create or get existing pbq
-	pbq = rl.pbqManager.GetPBQ(string(partitionId))
+	pbq = rl.pbqManager.GetPBQ(partitionId.String())
 
 	if pbq == nil {
 		var pbqErr error
 		for {
-			pbq, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, string(partitionId))
+			pbq, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionId)
 			if pbqErr == nil {
 				break
 			}
@@ -135,7 +141,7 @@ func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
 	return processor.Watermark(message.EventTime)
 }
 
-func (rl *ReadLoop) closePartitions(partitions []keyed.PartitionId) {
+func (rl *ReadLoop) closePartitions(partitions []keyed.PartitionID) {
 	for _, partition := range partitions {
 		pbq := rl.pbqManager.GetPBQ(string(partition))
 		pbq.CloseOfBook()

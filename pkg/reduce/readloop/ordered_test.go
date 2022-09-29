@@ -4,6 +4,9 @@ import (
 	"container/list"
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -11,8 +14,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/udf/reducer"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestOrderedProcessing(t *testing.T) {
@@ -30,17 +31,17 @@ func TestOrderedProcessing(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		partitions     []keyed.PartitionId
-		reduceOrder    []keyed.PartitionId
+		partitions     []keyed.PartitionID
+		reduceOrder    []keyed.PartitionID
 		expectedBefore int
-		expectedAfter  []keyed.PartitionId
+		expectedAfter  []keyed.PartitionID
 	}{
 		{
 			name:           "single-task-finished",
 			partitions:     partitions(1),
 			expectedBefore: 1,
 			reduceOrder:    partitionsFor([]int{0}),
-			expectedAfter:  []keyed.PartitionId{},
+			expectedAfter:  []keyed.PartitionID{},
 		},
 		{
 			name:           "middle-task-finished-in-multiple-tasks",
@@ -109,18 +110,18 @@ func TestOrderedProcessing(t *testing.T) {
 
 }
 
-func partitions(count int) []keyed.PartitionId {
-	partitions := make([]keyed.PartitionId, count)
+func partitions(count int) []keyed.PartitionID {
+	partitions := make([]keyed.PartitionID, count)
 	for i := 0; i < count; i++ {
-		partitions[i] = keyed.PartitionId(fmt.Sprintf("partition-%d", i))
+		partitions[i] = keyed.PartitionID(fmt.Sprintf("partition-%d", i))
 	}
 	return partitions
 }
 
-func partitionsFor(partitionIdx []int) []keyed.PartitionId {
-	partitions := make([]keyed.PartitionId, len(partitionIdx))
+func partitionsFor(partitionIdx []int) []keyed.PartitionID {
+	partitions := make([]keyed.PartitionID, len(partitionIdx))
 	for i, idx := range partitionIdx {
-		partitions[i] = keyed.PartitionId(fmt.Sprintf("partition-%d", idx))
+		partitions[i] = keyed.PartitionID(fmt.Sprintf("partition-%d", idx))
 	}
 	return partitions
 }
