@@ -1,0 +1,11 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: InterStepBufferService
+metadata:
+  name: default
+spec:
+  redis:
+    external:
+      # helm repo add bitnami https://charts.bitnami.com/bitnami
+      # helm install numaflow-redis-cluster --set usePassword=false bitnami/redis-cluster
+      url: "numaflow-redis-cluster:6379"
+      user: "default"
