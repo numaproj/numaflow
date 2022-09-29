@@ -371,9 +371,10 @@ type AbstractVertex struct {
 	// ServiceAccountName to apply to the StatefulSet
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,15,opt,name=serviceAccountName"`
+	// +optional
 	// +patchStrategy=merge
 	// +patchMergeKey=name
-	Volumes []corev1.Volume `json:"volumes,omitempty" protobuf:"bytes,16,rep,name=volumes"`
+	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,16,rep,name=volumes"`
 	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings
 	// +optional
 	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,17,opt,name=limits"`

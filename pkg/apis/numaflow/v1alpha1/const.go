@@ -71,8 +71,6 @@ const (
 	EnvPipelineObject              = "NUMAFLOW_PIPELINE_OBJECT"
 	EnvImage                       = "NUMAFLOW_IMAGE"
 	EnvImagePullPolicy             = "NUMAFLOW_IMAGE_PULL_POLICY"
-	EnvUDFContentType              = "NUMAFLOW_UDF_CONTENT_TYPE"
-	EnvUDSinkContentType           = "NUMAFLOW_UDSINK_CONTENT_TYPE" // Content-Type for the user defined sinks
 	EnvISBSvcRedisSentinelURL      = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_URL"
 	EnvISBSvcSentinelMaster        = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_MASTER"
 	EnvISBSvcRedisURL              = "NUMAFLOW_ISBSVC_REDIS_URL"
@@ -101,8 +99,6 @@ const (
 
 	DefaultBufferLength     = 50000
 	DefaultBufferUsageLimit = 0.8
-
-	UDFApplierMessageKey = "x-numa-message-key" // The key in the UDF function HTTP header used to pass the map-reduce key
 
 	// Auto scaling
 	DefaultLookbackSeconds         = 180 // Default lookback seconds for calculating avg rate and pending
@@ -145,13 +141,6 @@ const (
 	InMemoryType   StoreType = "in-memory"
 	FileSystemType StoreType = "file-system"
 	NoOpType       StoreType = "no-op"
-)
-
-type ContentType string
-
-const (
-	JsonType    ContentType = "application/json"
-	MsgPackType ContentType = "application/msgpack"
 )
 
 var (

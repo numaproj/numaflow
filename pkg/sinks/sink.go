@@ -99,6 +99,9 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	if x, ok := reader.(isb.Ratable); ok {
 		metricsOpts = append(metricsOpts, metrics.WithRater(x))
 	}
+	if x, ok := sinker.(*udsink.UserDefinedSink); ok {
+		metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(x.IsHealthy))
+	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -117,7 +120,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 // getSinker takes in the logger from the parent context
 func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
-	// TODO: add watermark
 	if x := sink.Log; x != nil {
 		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {

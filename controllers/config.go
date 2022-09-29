@@ -4,13 +4,10 @@ import (
 	"fmt"
 
 	"github.com/fsnotify/fsnotify"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/spf13/viper"
 )
 
 type GlobalConfig struct {
-	UDF    *UDFConfig    `json:"udf"`
-	Sink   *SinkConfig   `json:"sink"`
 	ISBSvc *ISBSvcConfig `json:"isbsvc"`
 }
 
@@ -59,36 +56,6 @@ type JetStreamVersion struct {
 	MetricsExporterImage string `json:"metricsExporterImage"`
 	ConfigReloaderImage  string `json:"configReloaderImage"`
 	StartCommand         string `json:"startCommand"`
-}
-
-func (g *GlobalConfig) GetUDFContentType() dfv1.ContentType {
-	if g.UDF == nil || g.UDF.ContentType == "" {
-		// Defaults to application/msgpack
-		return dfv1.MsgPackType
-	}
-	switch dfv1.ContentType(g.UDF.ContentType) {
-	case dfv1.JsonType:
-		return dfv1.JsonType
-	case dfv1.MsgPackType:
-		return dfv1.MsgPackType
-	default:
-		panic(fmt.Sprintf("Unsupported UDF encoding %q", g.UDF.ContentType))
-	}
-}
-
-func (g *GlobalConfig) GetUDSinkContentType() dfv1.ContentType {
-	if g.Sink == nil || g.Sink.ContentType == "" {
-		// Defaults to application/msgpack
-		return dfv1.MsgPackType
-	}
-	switch dfv1.ContentType(g.Sink.ContentType) {
-	case dfv1.JsonType:
-		return dfv1.JsonType
-	case dfv1.MsgPackType:
-		return dfv1.MsgPackType
-	default:
-		panic(fmt.Sprintf("Unsupported UDSink encoding %q", g.UDF.ContentType))
-	}
 }
 
 func (g *GlobalConfig) GetRedisVersion(version string) (*RedisVersion, error) {
