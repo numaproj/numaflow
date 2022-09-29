@@ -31,9 +31,9 @@ func (op *orderedProcessor) StartUp(ctx context.Context) {
 	go op.forward(ctx)
 }
 
-func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, key keyed.PartitionID) {
+func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, partitionID keyed.PartitionID) {
 
-	pf := pandf.NewProcessAndForward(string(key), udf, pbq)
+	pf := pandf.NewProcessAndForward(partitionID, udf, pbq)
 	doneCh := make(chan struct{})
 	t := &task{
 		doneCh: doneCh,

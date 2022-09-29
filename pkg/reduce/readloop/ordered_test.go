@@ -76,7 +76,7 @@ func TestOrderedProcessing(t *testing.T) {
 				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 			cCtx, _ := context.WithCancel(ctx)
 			for _, partition := range tt.partitions {
-				p, _ := pbqManager.CreateNewPBQ(ctx, string(partition))
+				p, _ := pbqManager.CreateNewPBQ(ctx, partition)
 				op.process(cCtx, identityReducer, p, partition)
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
@@ -84,15 +84,15 @@ func TestOrderedProcessing(t *testing.T) {
 			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
 				pfTask := e.Value.(*task)
 				partitionKey := pfTask.pf.Key
-				assert.Equal(t, fmt.Sprintf("partition-%d", count), partitionKey)
+				assert.Equal(t, keyed.PartitionID{Key: fmt.Sprintf("partition-%d", count)}, partitionKey)
 				count = count + 1
 			}
 
 			for _, id := range tt.reduceOrder {
-				p := pbqManager.GetPBQ(string(id))
+				p := pbqManager.GetPBQ(id)
 				p.CloseOfBook()
 				// wait for reduce operation to be done.
-				pfTask := taskForPartition(op.taskQueue, string(id))
+				pfTask := taskForPartition(op.taskQueue, id)
 				<-pfTask.doneCh
 			}
 
@@ -101,7 +101,7 @@ func TestOrderedProcessing(t *testing.T) {
 			}
 
 			for _, partitionId := range tt.expectedAfter {
-				pfTask := taskForPartition(op.taskQueue, string(partitionId))
+				pfTask := taskForPartition(op.taskQueue, partitionId)
 				assert.NotNil(t, pfTask)
 			}
 
@@ -113,7 +113,7 @@ func TestOrderedProcessing(t *testing.T) {
 func partitions(count int) []keyed.PartitionID {
 	partitions := make([]keyed.PartitionID, count)
 	for i := 0; i < count; i++ {
-		partitions[i] = keyed.PartitionID(fmt.Sprintf("partition-%d", i))
+		partitions[i] = keyed.PartitionID{Key: fmt.Sprintf("partition-%d", i)}
 	}
 	return partitions
 }
@@ -121,12 +121,12 @@ func partitions(count int) []keyed.PartitionID {
 func partitionsFor(partitionIdx []int) []keyed.PartitionID {
 	partitions := make([]keyed.PartitionID, len(partitionIdx))
 	for i, idx := range partitionIdx {
-		partitions[i] = keyed.PartitionID(fmt.Sprintf("partition-%d", idx))
+		partitions[i] = keyed.PartitionID{Key: fmt.Sprintf("partition-%d", idx)}
 	}
 	return partitions
 }
 
-func taskForPartition(taskList *list.List, partitionId string) *task {
+func taskForPartition(taskList *list.List, partitionId keyed.PartitionID) *task {
 	for e := taskList.Front(); e != nil; e = e.Next() {
 		pfTask := e.Value.(*task)
 		partitionKey := pfTask.pf.Key

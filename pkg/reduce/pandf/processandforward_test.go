@@ -11,6 +11,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	udfcall "github.com/numaproj/numaflow/pkg/udf/function"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -33,7 +34,11 @@ func TestProcessAndForward_Process(t *testing.T) {
 	}()
 
 	size := 100
-	key := "test-pf-key"
+	testPartition := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "partition-1",
+	}
 	var err error
 	var pbqManager *pbq.Manager
 
@@ -43,7 +48,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 
 	// create a pbq for a partition
 	var simplePbq pbq.ReadWriteCloser
-	simplePbq, err = pbqManager.CreateNewPBQ(ctx, key)
+	simplePbq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 
 	// write messages to pbq
@@ -82,7 +87,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create pf using key and reducer
-	prfd := NewProcessAndForward(key, client, simplePbq)
+	prfd := NewProcessAndForward(testPartition, client, simplePbq)
 
 	err = prfd.Process(ctx)
 	assert.NoError(t, err)

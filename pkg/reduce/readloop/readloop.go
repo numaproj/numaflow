@@ -91,7 +91,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 func (rl *ReadLoop) processPartition(ctx context.Context, partitionId keyed.PartitionID) pbq.ReadWriteCloser {
 	var pbq pbq.ReadWriteCloser
 	// create or get existing pbq
-	pbq = rl.pbqManager.GetPBQ(partitionId.String())
+	pbq = rl.pbqManager.GetPBQ(partitionId)
 
 	if pbq == nil {
 		var pbqErr error
@@ -143,7 +143,7 @@ func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
 
 func (rl *ReadLoop) closePartitions(partitions []keyed.PartitionID) {
 	for _, partition := range partitions {
-		pbq := rl.pbqManager.GetPBQ(string(partition))
+		pbq := rl.pbqManager.GetPBQ(partition)
 		pbq.CloseOfBook()
 	}
 }
