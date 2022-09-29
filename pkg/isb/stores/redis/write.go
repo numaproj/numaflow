@@ -66,7 +66,7 @@ func NewBufferWrite(ctx context.Context, client *redisclient.RedisClient, name s
 	// check whether the script exists, if not then load
 	rqw := &BufferWrite{
 		Name:   name,
-		Stream: name,
+		Stream: fmt.Sprintf("{%s}", name),
 		Group:  group,
 		BufferWriteInfo: &BufferWriteInfo{
 			isFull:           atomic.NewBool(true),
@@ -84,7 +84,7 @@ func NewBufferWrite(ctx context.Context, client *redisclient.RedisClient, name s
 
 	rqw.log = logging.FromContext(ctx).With("bufferWriter", rqw.GetName())
 
-	//setWriteInfo is used to update isFull flag and minId once
+	// setWriteInfo is used to update isFull flag and minId once
 	rqw.setWriteInfo(ctx)
 
 	if rqw.options.refreshBufferWriteInfo {
@@ -108,8 +108,8 @@ func (bw *BufferWrite) refreshWriteInfo(ctx context.Context) {
 			bw.setWriteInfo(ctx)
 
 			if bw.isFull.Load() {
-				//execute XTRIM with MINID to avoid the deadlock since default queue purging happens on XADD and
-				//whenever a buffer is full XADD is never invoked
+				// execute XTRIM with MINID to avoid the deadlock since default queue purging happens on XADD and
+				// whenever a buffer is full XADD is never invoked
 				bw.trim(ctx)
 			}
 		}

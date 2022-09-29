@@ -29,7 +29,7 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer,
 		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		stream := s.Name
+		stream := fmt.Sprintf("{%s}", s.Name)
 		group := fmt.Sprintf("%s-group", stream)
 		err := r.client.CreateStreamGroup(ctx, stream, group, redisclient.ReadFromEarliest)
 		if err != nil {
