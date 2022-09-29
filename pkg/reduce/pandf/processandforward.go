@@ -5,8 +5,8 @@ import (
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	udfreducer "github.com/numaproj/numaflow/pkg/udf/reducer"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"google.golang.org/grpc/metadata"
 	"sync"
 )
@@ -14,14 +14,14 @@ import (
 // ProcessAndForward reads messages from pbq and invokes udf using grpc
 // and forwards the results to ISB
 type ProcessAndForward struct {
-	Key       keyed.PartitionID
+	Key       partition.ID
 	UDF       udfreducer.Reducer
 	result    []*isb.Message
 	pbqReader pbq.Reader
 }
 
 // NewProcessAndForward will return a new ProcessAndForward instance
-func NewProcessAndForward(partitionID keyed.PartitionID, udf udfreducer.Reducer, pbqReader pbq.Reader) *ProcessAndForward {
+func NewProcessAndForward(partitionID partition.ID, udf udfreducer.Reducer, pbqReader pbq.Reader) *ProcessAndForward {
 	return &ProcessAndForward{
 		Key:       partitionID,
 		UDF:       udf,
