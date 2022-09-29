@@ -1,7 +1,6 @@
 package readloop
 
 import (
-	"container/list"
 	"context"
 	"fmt"
 	"testing"
@@ -92,7 +91,7 @@ func TestOrderedProcessing(t *testing.T) {
 				p := pbqManager.GetPBQ(id)
 				p.CloseOfBook()
 				// wait for reduce operation to be done.
-				pfTask := taskForPartition(op.taskQueue, id)
+				pfTask := taskForPartition(op, id)
 				<-pfTask.doneCh
 			}
 
@@ -101,7 +100,7 @@ func TestOrderedProcessing(t *testing.T) {
 			}
 
 			for _, partitionId := range tt.expectedAfter {
-				pfTask := taskForPartition(op.taskQueue, partitionId)
+				pfTask := taskForPartition(op, partitionId)
 				assert.NotNil(t, pfTask)
 			}
 
@@ -126,8 +125,10 @@ func partitionsFor(partitionIdx []int) []keyed.PartitionID {
 	return partitions
 }
 
-func taskForPartition(taskList *list.List, partitionId keyed.PartitionID) *task {
-	for e := taskList.Front(); e != nil; e = e.Next() {
+func taskForPartition(op *orderedProcessor, partitionId keyed.PartitionID) *task {
+	op.RLock()
+	defer op.RUnlock()
+	for e := op.taskQueue.Front(); e != nil; e = e.Next() {
 		pfTask := e.Value.(*task)
 		partitionKey := pfTask.pf.Key
 		if partitionKey == partitionId {
