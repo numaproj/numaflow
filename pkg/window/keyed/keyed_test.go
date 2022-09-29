@@ -56,21 +56,29 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 		name     string
 		given    *KeyedWindow
 		input    string
-		expected []string
+		expected []PartitionID
 	}{
 		{
 			name:     "no_keys",
 			given:    &KeyedWindow{},
-			expected: []string{},
+			expected: []PartitionID{},
 		},
 		{
 			name: "with_some_existing_keys",
 			given: &KeyedWindow{
 				Keys: []string{"key2", "key3"},
 			},
-			expected: []string{
-				"60-120-key2",
-				"60-120-key3",
+			expected: []PartitionID{
+				{
+					Key:   "key2",
+					Start: time.Unix(60, 0),
+					End:   time.Unix(120, 0),
+				},
+				{
+					Key:   "key3",
+					Start: time.Unix(60, 0),
+					End:   time.Unix(120, 0),
+				},
 			},
 		},
 	}

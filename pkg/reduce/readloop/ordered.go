@@ -3,12 +3,13 @@ package readloop
 import (
 	"container/list"
 	"context"
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pandf"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfreducer "github.com/numaproj/numaflow/pkg/udf/reducer"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"time"
 )
 
 type task struct {
@@ -30,9 +31,9 @@ func (op *orderedProcessor) StartUp(ctx context.Context) {
 	go op.forward(ctx)
 }
 
-func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, key keyed.PartitionId) {
+func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, partitionID keyed.PartitionID) {
 
-	pf := pandf.NewProcessAndForward(string(key), udf, pbq)
+	pf := pandf.NewProcessAndForward(partitionID, udf, pbq)
 	doneCh := make(chan struct{})
 	t := &task{
 		doneCh: doneCh,

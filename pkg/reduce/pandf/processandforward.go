@@ -6,6 +6,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	udfreducer "github.com/numaproj/numaflow/pkg/udf/reducer"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"google.golang.org/grpc/metadata"
 	"sync"
 )
@@ -13,16 +14,16 @@ import (
 // ProcessAndForward reads messages from pbq and invokes udf using grpc
 // and forwards the results to ISB
 type ProcessAndForward struct {
-	Key       string
+	Key       keyed.PartitionID
 	UDF       udfreducer.Reducer
 	result    []*isb.Message
 	pbqReader pbq.Reader
 }
 
 // NewProcessAndForward will return a new ProcessAndForward instance
-func NewProcessAndForward(key string, udf udfreducer.Reducer, pbqReader pbq.Reader) *ProcessAndForward {
+func NewProcessAndForward(partitionID keyed.PartitionID, udf udfreducer.Reducer, pbqReader pbq.Reader) *ProcessAndForward {
 	return &ProcessAndForward{
-		Key:       key,
+		Key:       partitionID,
 		UDF:       udf,
 		pbqReader: pbqReader,
 	}
@@ -38,7 +39,7 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: p.Key}))
+		ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: p.Key.String()}))
 		p.result, err = p.UDF.Reduce(ctx, p.pbqReader.ReadCh())
 	}()
 

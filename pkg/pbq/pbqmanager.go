@@ -13,6 +13,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/pbq/store/noop"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -52,7 +53,7 @@ func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
 }
 
 // CreateNewPBQ creates new pbq for a partition
-func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID string) (ReadWriteCloser, error) {
+func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID keyed.PartitionID) (ReadWriteCloser, error) {
 
 	var persistentStore store.Store
 	var err error
@@ -101,11 +102,11 @@ func (m *Manager) ListPartitions() []*PBQ {
 }
 
 // GetPBQ returns pbq for the given PartitionID
-func (m *Manager) GetPBQ(partitionID string) ReadWriteCloser {
+func (m *Manager) GetPBQ(partitionID keyed.PartitionID) ReadWriteCloser {
 	m.RLock()
 	defer m.RUnlock()
 
-	if pbqInstance, ok := m.pbqMap[partitionID]; ok {
+	if pbqInstance, ok := m.pbqMap[partitionID.String()]; ok {
 		return pbqInstance
 	}
 
@@ -168,21 +169,21 @@ func (m *Manager) ShutDown(ctx context.Context) {
 }
 
 // register is intended to be used by PBQ to register itself with the manager.
-func (m *Manager) register(partitionID string, p *PBQ) {
+func (m *Manager) register(partitionID keyed.PartitionID, p *PBQ) {
 	m.Lock()
 	defer m.Unlock()
 
-	if _, ok := m.pbqMap[partitionID]; !ok {
-		m.pbqMap[partitionID] = p
+	if _, ok := m.pbqMap[partitionID.String()]; !ok {
+		m.pbqMap[partitionID.String()] = p
 	}
 }
 
 // deregister is intended to be used by PBQ to deregister itself after GC is called.
-func (m *Manager) deregister(partitionID string) {
+func (m *Manager) deregister(partitionID keyed.PartitionID) {
 	m.Lock()
 	defer m.Unlock()
 
-	delete(m.pbqMap, partitionID)
+	delete(m.pbqMap, partitionID.String())
 }
 
 // Replay replays messages which are persisted in pbq store

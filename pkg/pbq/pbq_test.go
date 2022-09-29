@@ -2,6 +2,7 @@ package pbq
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"sync"
 	"testing"
 	"time"
@@ -31,7 +32,13 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	pq, err := qManager.CreateNewPBQ(ctx, "partition-13")
+	partitionID := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "new-partition",
+	}
+
+	pq, err := qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
 	var readMessages []*isb.Message
@@ -89,8 +96,13 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
+	partitionID := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "new-partition",
+	}
 	var pq ReadWriteCloser
-	pq, err = qManager.CreateNewPBQ(ctx, "partition-14")
+	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
 	var readMessages []*isb.Message
@@ -149,9 +161,14 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	msgCount := 101
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	partitionID := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "new-partition",
+	}
 
 	var pq ReadWriteCloser
-	pq, err = qManager.CreateNewPBQ(ctx, "partition-10")
+	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
