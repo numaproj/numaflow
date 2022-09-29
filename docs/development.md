@@ -16,7 +16,7 @@ This doc explains how to set up a development environment for Numaflow.
 
 ```shell
 # Create a cluster with default name k3s-default
-k3d cluster create -i rancher/k3s:k3s:v1.24.4-k3s1
+k3d cluster create -i rancher/k3s:v1.24.4-k3s1
 
 # Get kubeconfig for the cluster
 k3d kubeconfig get k3s-default
