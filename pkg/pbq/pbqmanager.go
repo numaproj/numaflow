@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"sync"
 	"time"
 
@@ -24,7 +23,6 @@ type Manager struct {
 	pbqOptions   *options
 	pbqMap       map[string]*PBQ
 	log          *zap.SugaredLogger
-	pStore       partition.Stores
 	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
@@ -54,22 +52,24 @@ func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
 }
 
 // CreateNewPBQ creates new pbq for a partition
-func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
+func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID ID) (ReadWriteCloser, error) {
 
 	var persistentStore store.Store
 	var err error
 
-	switch m.storeOptions.PbqStoreType() {
+	switch m.storeOptions.PBQStoreType() {
 	case dfv1.NoOpType:
 		persistentStore, _ = noop.NewPBQNoOpStore()
 	case dfv1.InMemoryType:
 		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.storeOptions)
 		if err != nil {
-			m.log.Errorw("Error while creating persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PbqStoreType()), zap.Error(err))
+			m.log.Errorw("Error while creating persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PBQStoreType()), zap.Error(err))
 			return nil, err
 		}
 	case dfv1.FileSystemType:
-		return nil, errors.New("not implemented")
+		return nil, fmt.Errorf("not implemented, %s", dfv1.FileSystemType)
+	default:
+		return nil, errors.New("not implemented (default)")
 	}
 
 	// output channel is buffered to support bulk reads
@@ -85,6 +85,20 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 
 	m.register(partitionID, p)
 	return p, nil
+}
+
+// discoverPartitions discovers partitions.
+func (m *Manager) discoverPartitions(ctx context.Context) ([]ID, error) {
+	switch m.storeOptions.PBQStoreType() {
+	case dfv1.NoOpType:
+		return noop.DiscoverPartitions(ctx, m.storeOptions)
+	case dfv1.InMemoryType:
+		return memory.DiscoverPartitions(ctx, m.storeOptions)
+	case dfv1.FileSystemType:
+		return nil, fmt.Errorf("not implemented, %s", dfv1.FileSystemType)
+	default:
+		return nil, errors.New("not implemented (default)")
+	}
 }
 
 // ListPartitions returns all the pbq instances
@@ -103,7 +117,7 @@ func (m *Manager) ListPartitions() []*PBQ {
 }
 
 // GetPBQ returns pbq for the given ID
-func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
+func (m *Manager) GetPBQ(partitionID ID) ReadWriteCloser {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -114,20 +128,36 @@ func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
 	return nil
 }
 
-// StartUp restores the state of the pbqManager
-func (m *Manager) StartUp(_ context.Context) error {
-
-	switch m.storeOptions.PbqStoreType() {
-	case dfv1.NoOpType:
-		return nil
-	case dfv1.InMemoryType:
-		return nil
-	case dfv1.FileSystemType:
-		return fmt.Errorf("not implemented store type %s", m.storeOptions.PbqStoreType())
-	default:
-		return fmt.Errorf("unknown store type %s", m.storeOptions.PbqStoreType())
+// StartUp restores the state of the pbqManager. It reads from the PBQs store to get the persisted partitions
+// and builds the PBQ Map.
+func (m *Manager) StartUp(ctx context.Context) {
+	var err error
+	var partitionIDs []ID
+	// TODO(Yashash): use exponential backoff
+	for {
+		partitionIDs, err = m.discoverPartitions(ctx)
+		if err == nil {
+			break
+		} else {
+			m.log.Errorw("discoverPartitions failed", zap.Error(err))
+			time.Sleep(1 * time.Second)
+		}
 	}
 
+	for _, partitionID := range partitionIDs {
+		// TODO(Yashash): use exponential backoff
+		for {
+			_, err = m.CreateNewPBQ(ctx, partitionID)
+			if err == nil {
+				break
+			} else {
+				m.log.Errorw("CreateNewPBQ failed", zap.Error(err))
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}
+
+	return
 }
 
 // ShutDown for clean shut down, flushes pending messages to store and closes the store
@@ -170,7 +200,7 @@ func (m *Manager) ShutDown(ctx context.Context) {
 }
 
 // register is intended to be used by PBQ to register itself with the manager.
-func (m *Manager) register(partitionID partition.ID, p *PBQ) {
+func (m *Manager) register(partitionID ID, p *PBQ) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -180,7 +210,7 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 }
 
 // deregister is intended to be used by PBQ to deregister itself after GC is called.
-func (m *Manager) deregister(partitionID partition.ID) {
+func (m *Manager) deregister(partitionID ID) {
 	m.Lock()
 	defer m.Unlock()
 

@@ -1,9 +1,10 @@
 package keyed
 
 import (
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/window"
 	"sync"
+
+	"github.com/numaproj/numaflow/pkg/pbq"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // KeyedWindow maintains association between keys and a window.
@@ -32,13 +33,13 @@ func (kw *KeyedWindow) AddKey(key string) {
 }
 
 // Partitions returns an array of partitions for a window
-func (kw *KeyedWindow) Partitions() []partition.ID {
+func (kw *KeyedWindow) Partitions() []pbq.ID {
 	kw.lock.RLock()
 	defer kw.lock.RUnlock()
 
-	partitions := make([]partition.ID, len(kw.Keys))
+	partitions := make([]pbq.ID, len(kw.Keys))
 	for i, key := range kw.Keys {
-		partitions[i] = partition.ID{Start: kw.IntervalWindow.Start, End: kw.IntervalWindow.End, Key: key}
+		partitions[i] = pbq.ID{Start: kw.IntervalWindow.Start, End: kw.IntervalWindow.End, Key: key}
 	}
 
 	return partitions

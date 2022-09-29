@@ -3,7 +3,6 @@ package readloop
 import (
 	"container/list"
 	"context"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"sync"
 	"time"
 
@@ -33,7 +32,7 @@ func (op *orderedProcessor) StartUp(ctx context.Context) {
 	go op.forward(ctx)
 }
 
-func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, partitionID partition.ID) {
+func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, partitionID pbq.ID) {
 	pf := pandf.NewProcessAndForward(partitionID, udf, pbq)
 	doneCh := make(chan struct{})
 	t := &task{

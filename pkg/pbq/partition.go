@@ -1,8 +1,7 @@
-package partition
+package pbq
 
 import (
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"time"
 )
 
@@ -15,9 +14,4 @@ type ID struct {
 
 func (p ID) String() string {
 	return fmt.Sprintf("%v-%v-%s", p.Start.Unix(), p.End.Unix(), p.Key)
-}
-
-type Stores interface {
-	Load() []ID
-	Create(id ID) store.Store
 }

@@ -10,7 +10,6 @@ package readloop
 
 import (
 	"context"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -67,7 +66,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		windows := rl.upsertWindowsAndKeys(m)
 		for _, kw := range windows {
 			// identify partition for message
-			partitionID := partition.ID{
+			partitionID := pbq.ID{
 				Start: kw.IntervalWindow.Start,
 				End:   kw.IntervalWindow.End,
 				Key:   m.Key,
@@ -89,7 +88,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	}
 }
 
-func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
+func (rl *ReadLoop) processPartition(ctx context.Context, partitionID pbq.ID) pbq.ReadWriteCloser {
 	var q pbq.ReadWriteCloser
 	// create or get existing pbq
 	q = rl.pbqManager.GetPBQ(partitionID)
@@ -142,7 +141,7 @@ func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
 	return processor.Watermark(message.EventTime)
 }
 
-func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
+func (rl *ReadLoop) closePartitions(partitions []pbq.ID) {
 	for _, p := range partitions {
 		q := rl.pbqManager.GetPBQ(p)
 		q.CloseOfBook()
