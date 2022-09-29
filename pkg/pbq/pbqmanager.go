@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"sync"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/pbq/store/noop"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -24,6 +24,7 @@ type Manager struct {
 	pbqOptions   *options
 	pbqMap       map[string]*PBQ
 	log          *zap.SugaredLogger
+	pStore       partition.Stores
 	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
@@ -53,7 +54,7 @@ func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
 }
 
 // CreateNewPBQ creates new pbq for a partition
-func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID keyed.PartitionID) (ReadWriteCloser, error) {
+func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
 
 	var persistentStore store.Store
 	var err error
@@ -64,7 +65,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID keyed.PartitionI
 	case dfv1.InMemoryType:
 		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.storeOptions)
 		if err != nil {
-			m.log.Errorw("Error while creating persistent store", zap.Any("PartitionID", partitionID), zap.Any("storeType", m.storeOptions.PbqStoreType()), zap.Error(err))
+			m.log.Errorw("Error while creating persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PbqStoreType()), zap.Error(err))
 			return nil, err
 		}
 	case dfv1.FileSystemType:
@@ -101,8 +102,8 @@ func (m *Manager) ListPartitions() []*PBQ {
 	return pbqList
 }
 
-// GetPBQ returns pbq for the given PartitionID
-func (m *Manager) GetPBQ(partitionID keyed.PartitionID) ReadWriteCloser {
+// GetPBQ returns pbq for the given ID
+func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -153,14 +154,14 @@ func (m *Manager) ShutDown(ctx context.Context) {
 				closeErr = q.Close()
 				if closeErr != nil {
 					attempt += 1
-					m.log.Warnw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("PartitionID", q.PartitionID), zap.Error(closeErr))
+					m.log.Warnw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("ID", q.PartitionID), zap.Error(closeErr))
 					// exponential backoff will return if err is not nil
 					return false, nil
 				}
 				return true, nil
 			})
 			if closeErr != nil {
-				m.log.Errorw("Failed to close pbq, no retries left", zap.Any("PartitionID", q.PartitionID), zap.Error(closeErr))
+				m.log.Errorw("Failed to close pbq, no retries left", zap.Any("ID", q.PartitionID), zap.Error(closeErr))
 			}
 		}(v)
 	}
@@ -169,7 +170,7 @@ func (m *Manager) ShutDown(ctx context.Context) {
 }
 
 // register is intended to be used by PBQ to register itself with the manager.
-func (m *Manager) register(partitionID keyed.PartitionID, p *PBQ) {
+func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -179,7 +180,7 @@ func (m *Manager) register(partitionID keyed.PartitionID, p *PBQ) {
 }
 
 // deregister is intended to be used by PBQ to deregister itself after GC is called.
-func (m *Manager) deregister(partitionID keyed.PartitionID) {
+func (m *Manager) deregister(partitionID partition.ID) {
 	m.Lock()
 	defer m.Unlock()
 

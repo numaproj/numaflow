@@ -10,6 +10,7 @@ package readloop
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -52,10 +53,10 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 	rl.pbqManager.StartUp(ctx)
 	// replay the partitions
 	partitions := rl.pbqManager.ListPartitions()
-	for _, partition := range partitions {
+	for _, p := range partitions {
 		// create process and forward
 		// invoke process and forward with partition
-		rl.processPartition(ctx, keyed.PartitionID(partition.PartitionID))
+		rl.processPartition(ctx, p.PartitionID)
 	}
 	rl.pbqManager.Replay(ctx)
 }
@@ -66,16 +67,16 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		windows := rl.upsertWindowsAndKeys(m)
 		for _, kw := range windows {
 			// identify partition for message
-			partitionID := keyed.PartitionID{
+			partitionID := partition.ID{
 				Start: kw.IntervalWindow.Start,
 				End:   kw.IntervalWindow.End,
 				Key:   m.Key,
 			}
 			//(kw.IntervalWindow, m.Key)
 
-			pbq := rl.processPartition(ctx, partitionID)
+			q := rl.processPartition(ctx, partitionID)
 			// write the message to PBQ
-			pbq.Write(ctx, &m.Message)
+			q.Write(ctx, &m.Message)
 		}
 		// close any windows that need to be closed.
 		wm := rl.waterMark(m)
@@ -88,15 +89,15 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	}
 }
 
-func (rl *ReadLoop) processPartition(ctx context.Context, partitionId keyed.PartitionID) pbq.ReadWriteCloser {
-	var pbq pbq.ReadWriteCloser
+func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
+	var q pbq.ReadWriteCloser
 	// create or get existing pbq
-	pbq = rl.pbqManager.GetPBQ(partitionId)
+	q = rl.pbqManager.GetPBQ(partitionID)
 
-	if pbq == nil {
+	if q == nil {
 		var pbqErr error
 		for {
-			pbq, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionId)
+			q, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID)
 			if pbqErr == nil {
 				break
 			}
@@ -108,14 +109,14 @@ func (rl *ReadLoop) processPartition(ctx context.Context, partitionId keyed.Part
 		for {
 			udf, err := function.NewUDSGRPCBasedUDF()
 			if err == nil {
-				rl.op.process(ctx, udf, pbq, partitionId)
+				rl.op.process(ctx, udf, q, partitionID)
 				break
 			}
 			time.Sleep(retryDelay)
 		}
 
 	}
-	return pbq
+	return q
 }
 
 func (rl *ReadLoop) ShutDown(ctx context.Context) {
@@ -141,9 +142,9 @@ func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
 	return processor.Watermark(message.EventTime)
 }
 
-func (rl *ReadLoop) closePartitions(partitions []keyed.PartitionID) {
-	for _, partition := range partitions {
-		pbq := rl.pbqManager.GetPBQ(partition)
-		pbq.CloseOfBook()
+func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
+	for _, p := range partitions {
+		q := rl.pbqManager.GetPBQ(p)
+		q.CloseOfBook()
 	}
 }

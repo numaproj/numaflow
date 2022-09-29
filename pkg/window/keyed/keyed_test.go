@@ -1,6 +1,7 @@
 package keyed
 
 import (
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"testing"
 	"time"
 
@@ -56,19 +57,19 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 		name     string
 		given    *KeyedWindow
 		input    string
-		expected []PartitionID
+		expected []partition.ID
 	}{
 		{
 			name:     "no_keys",
 			given:    &KeyedWindow{},
-			expected: []PartitionID{},
+			expected: []partition.ID{},
 		},
 		{
 			name: "with_some_existing_keys",
 			given: &KeyedWindow{
 				Keys: []string{"key2", "key3"},
 			},
-			expected: []PartitionID{
+			expected: []partition.ID{
 				{
 					Key:   "key2",
 					Start: time.Unix(60, 0),

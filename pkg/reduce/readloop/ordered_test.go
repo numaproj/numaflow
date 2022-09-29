@@ -3,6 +3,7 @@ package readloop
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/udf/reducer"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,17 +30,17 @@ func TestOrderedProcessing(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		partitions     []keyed.PartitionID
-		reduceOrder    []keyed.PartitionID
+		partitions     []partition.ID
+		reduceOrder    []partition.ID
 		expectedBefore int
-		expectedAfter  []keyed.PartitionID
+		expectedAfter  []partition.ID
 	}{
 		{
 			name:           "single-task-finished",
 			partitions:     partitions(1),
 			expectedBefore: 1,
 			reduceOrder:    partitionsFor([]int{0}),
-			expectedAfter:  []keyed.PartitionID{},
+			expectedAfter:  []partition.ID{},
 		},
 		{
 			name:           "middle-task-finished-in-multiple-tasks",
@@ -83,7 +83,7 @@ func TestOrderedProcessing(t *testing.T) {
 			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
 				pfTask := e.Value.(*task)
 				partitionKey := pfTask.pf.Key
-				assert.Equal(t, keyed.PartitionID{Key: fmt.Sprintf("partition-%d", count)}, partitionKey)
+				assert.Equal(t, partition.ID{Key: fmt.Sprintf("partition-%d", count)}, partitionKey)
 				count = count + 1
 			}
 
@@ -109,23 +109,23 @@ func TestOrderedProcessing(t *testing.T) {
 
 }
 
-func partitions(count int) []keyed.PartitionID {
-	partitions := make([]keyed.PartitionID, count)
+func partitions(count int) []partition.ID {
+	partitions := make([]partition.ID, count)
 	for i := 0; i < count; i++ {
-		partitions[i] = keyed.PartitionID{Key: fmt.Sprintf("partition-%d", i)}
+		partitions[i] = partition.ID{Key: fmt.Sprintf("partition-%d", i)}
 	}
 	return partitions
 }
 
-func partitionsFor(partitionIdx []int) []keyed.PartitionID {
-	partitions := make([]keyed.PartitionID, len(partitionIdx))
+func partitionsFor(partitionIdx []int) []partition.ID {
+	partitions := make([]partition.ID, len(partitionIdx))
 	for i, idx := range partitionIdx {
-		partitions[i] = keyed.PartitionID{Key: fmt.Sprintf("partition-%d", idx)}
+		partitions[i] = partition.ID{Key: fmt.Sprintf("partition-%d", idx)}
 	}
 	return partitions
 }
 
-func taskForPartition(op *orderedProcessor, partitionId keyed.PartitionID) *task {
+func taskForPartition(op *orderedProcessor, partitionId partition.ID) *task {
 	op.RLock()
 	defer op.RUnlock()
 	for e := op.taskQueue.Front(); e != nil; e = e.Next() {
