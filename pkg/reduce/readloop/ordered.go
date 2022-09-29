@@ -3,6 +3,7 @@ package readloop
 import (
 	"container/list"
 	"context"
+	"sync"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -18,6 +19,7 @@ type task struct {
 }
 
 type orderedProcessor struct {
+	sync.RWMutex
 	taskQueue *list.List
 }
 
@@ -32,13 +34,14 @@ func (op *orderedProcessor) StartUp(ctx context.Context) {
 }
 
 func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, partitionID keyed.PartitionID) {
-
 	pf := pandf.NewProcessAndForward(partitionID, udf, pbq)
 	doneCh := make(chan struct{})
 	t := &task{
 		doneCh: doneCh,
 		pf:     pf,
 	}
+	op.Lock()
+	defer op.Unlock()
 	op.taskQueue.PushBack(t)
 	go op.reduceOp(ctx, t)
 }
@@ -61,11 +64,16 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 	var currElement *list.Element
 	var t *task
 	for {
-		if op.taskQueue.Len() == 0 {
+		op.RLock()
+		isEmpty := op.taskQueue.Len() == 0
+		op.RUnlock()
+		if isEmpty {
 			continue
 		}
 		if currElement == nil {
+			op.RLock()
 			currElement = op.taskQueue.Front()
+			op.RUnlock()
 		}
 		t = currElement.Value.(*task)
 		select {
@@ -80,9 +88,11 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 					break
 				}
 			}
+			op.Lock()
 			rm := currElement
 			currElement = currElement.Next()
 			op.taskQueue.Remove(rm)
+			op.Unlock()
 			break
 		case <-ctx.Done():
 			return
