@@ -3,12 +3,21 @@ package keyed
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// PartitionId uniquely identifies a partition
-type PartitionId string
+// PartitionID uniquely identifies a partition
+type PartitionID struct {
+	Start time.Time
+	End   time.Time
+	Key   string
+}
+
+func (p PartitionID) String() string {
+	return fmt.Sprintf("%v-%v-%s", p.Start.Unix(), p.End.Unix(), p.Key)
+}
 
 // KeyedWindow maintains association between keys and a window.
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
@@ -36,19 +45,14 @@ func (kw *KeyedWindow) AddKey(key string) {
 }
 
 // Partitions returns an array of partitions for a window
-func (kw *KeyedWindow) Partitions() []PartitionId {
+func (kw *KeyedWindow) Partitions() []PartitionID {
 	kw.lock.RLock()
 	defer kw.lock.RUnlock()
 
-	partitions := make([]PartitionId, len(kw.Keys))
+	partitions := make([]PartitionID, len(kw.Keys))
 	for i, key := range kw.Keys {
-		partitions[i] = Partition(kw.IntervalWindow, key)
+		partitions[i] = PartitionID{Start: kw.IntervalWindow.Start, End: kw.IntervalWindow.End, Key: key}
 	}
 
 	return partitions
-}
-
-// Partition returns the partitionId for a given window and a key
-func Partition(window *window.IntervalWindow, key string) PartitionId {
-	return PartitionId(fmt.Sprintf("%v-%v-%s", window.Start.Unix(), window.End.Unix(), key))
 }

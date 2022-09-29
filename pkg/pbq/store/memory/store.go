@@ -6,6 +6,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/pbq/util"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"go.uber.org/zap"
 )
 
@@ -17,11 +18,11 @@ type memoryStore struct {
 	storage     []*isb.Message
 	options     *store.StoreOptions
 	log         *zap.SugaredLogger
-	partitionID string
+	partitionID keyed.PartitionID
 }
 
 // NewMemoryStore returns new memory store
-func NewMemoryStore(ctx context.Context, partitionID string, options *store.StoreOptions) (store.Store, error) {
+func NewMemoryStore(ctx context.Context, partitionID keyed.PartitionID, options *store.StoreOptions) (store.Store, error) {
 
 	memStore := &memoryStore{
 		writePos:    0,

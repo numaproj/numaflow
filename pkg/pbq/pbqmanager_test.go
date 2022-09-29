@@ -2,6 +2,7 @@ package pbq
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"sync"
 	"testing"
 	"time"
@@ -24,11 +25,21 @@ func TestManager_ListPartitions(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create a new pbq using pbq manager
+	testPartition := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "partition-1",
+	}
+	partitionTwo := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "partition-2",
+	}
 	var pq1, pq2 ReadWriteCloser
-	pq1, err = pbqManager.CreateNewPBQ(ctx, "partition-1")
+	pq1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 
-	pq2, err = pbqManager.CreateNewPBQ(ctx, "partition-2")
+	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo)
 	assert.NoError(t, err)
 
 	assert.Len(t, pbqManager.ListPartitions(), 2)
@@ -52,11 +63,16 @@ func TestManager_GetPBQ(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create a new pbq using CreateNewPBQ PBQ
-	pb1, err = pbqManager.CreateNewPBQ(ctx, "partition-3")
+	testPartition := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "partition-1",
+	}
+	pb1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 
 	// get the created pbq
-	pb2 = pbqManager.GetPBQ("partition-3")
+	pb2 = pbqManager.GetPBQ(testPartition)
 
 	assert.Equal(t, pb1, pb2)
 }
@@ -69,9 +85,14 @@ func TestPBQFlow(t *testing.T) {
 	pbqManager, err := NewManager(ctx, WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
+	testPartition := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "partition-1",
+	}
 
 	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, "partition-4")
+	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 
 	msgsCount := 5
@@ -125,10 +146,15 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 	pbqManager, err := NewManager(ctx, WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.NoOpType)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
+	testPartition := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "partition-1",
+	}
 
 	// create a pbq backed with no op store
 	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, "partition-6")
+	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	msgsCount := 50
 	var wg sync.WaitGroup
 
@@ -178,9 +204,14 @@ func TestManager_Replay(t *testing.T) {
 	pbqManager, err := NewManager(ctx, WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
 	assert.NoError(t, err)
+	testPartition := keyed.PartitionID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "partition-1",
+	}
 
 	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, "partition-5")
+	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 	var wg sync.WaitGroup
 	wg.Add(1)
