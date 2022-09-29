@@ -71,7 +71,7 @@ func NewISBSvcBufferCreateCommand() *cobra.Command {
 				bfs = append(bfs, v1alpha1.Buffer{Name: k, Type: v1alpha1.BufferType(v)})
 			}
 			if err = isbsClient.CreateBuffers(ctx, bfs, opts...); err != nil {
-				logger.Errorw("Failed buffer creation.", zap.Error(err))
+				logger.Errorw("Failed to create buffers.", zap.Error(err))
 				return err
 			}
 			logger.Info("Created buffers successfully")

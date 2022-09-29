@@ -29,8 +29,8 @@ func NewRedisClient(options *redis.UniversalOptions) *RedisClient {
 	return client
 }
 
-// NewInClusterRedisClient returns a new Redis Client, it assums it's in a vertex pod,
-// where those requied environment variables are available.
+// NewInClusterRedisClient returns a new Redis Client, it assumes it's in a vertex pod,
+// where those required environment variables are available.
 func NewInClusterRedisClient() *RedisClient {
 	opts := &redis.UniversalOptions{
 		Username:   os.Getenv(v1alpha1.EnvISBSvcRedisUser),
@@ -83,7 +83,7 @@ func (cl *RedisClient) IsStreamExists(ctx context.Context, streamKey string) boo
 	return err == nil
 }
 
-// IsStreamExists check the redis keys exists
+// PendingMsgCount check the redis keys exists
 func (cl *RedisClient) PendingMsgCount(ctx context.Context, streamKey, consumerGroup string) (int64, error) {
 	cmd := cl.Client.XPending(ctx, streamKey, consumerGroup)
 	pending, err := cmd.Result()

@@ -37,7 +37,7 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer,
 				log.Warnw("Stream already exists.", zap.String("group", group), zap.String("stream", stream))
 			} else {
 				failToCreate = true
-				log.Errorw("Failed to Redis Stream and Group creation.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
+				log.Errorw("Failed to create Redis Stream and Group.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
 			}
 		} else {
 			log.Infow("Redis StreamGroup created", zap.String("group", group), zap.String("stream", stream))
