@@ -29,8 +29,8 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer,
 		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		stream := fmt.Sprintf("{%s}", s.Name)
-		group := fmt.Sprintf("%s-group", stream)
+		stream := GetRedisStreamName(s.Name)
+		group := fmt.Sprintf("%s-group", s.Name)
 		err := r.client.CreateStreamGroup(ctx, stream, group, redisclient.ReadFromEarliest)
 		if err != nil {
 			if redisclient.IsAlreadyExistError(err) {
@@ -53,14 +53,14 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer,
 func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
 	log := logging.FromContext(ctx)
 	failToDelete := false
-	streamNames := []string{}
+	var streamNames []string
 	for _, s := range buffers {
 		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		stream := s.Name
+		stream := GetRedisStreamName(s.Name)
 		streamNames = append(streamNames, stream)
-		group := fmt.Sprintf("%s-group", stream)
+		group := fmt.Sprintf("%s-group", s.Name)
 		if err := r.client.DeleteStreamGroup(ctx, stream, group); err != nil {
 			if redisclient.NotFoundError(err) {
 				log.Warnw("Redis Streams group is not found.", zap.String("group", group), zap.String("stream", stream))
@@ -90,15 +90,16 @@ func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer)
 
 // ValidateBuffers is used to validate inter-step redis buffers to see if the stream/stream group exist
 func (r *isbsRedisSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
-	for _, stream := range buffers {
-		if stream.Type != dfv1.EdgeBuffer {
+	for _, s := range buffers {
+		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		if !r.client.IsStreamExists(ctx, stream.Name) {
-			return fmt.Errorf("stream %s not existing", stream.Name)
+		var stream = GetRedisStreamName(s.Name)
+		if !r.client.IsStreamExists(ctx, stream) {
+			return fmt.Errorf("s %s not existing", stream)
 		}
-		group := fmt.Sprintf("%s-group", stream.Name)
-		if !r.client.IsStreamGroupExists(ctx, stream.Name, group) {
+		group := fmt.Sprintf("%s-group", s.Name)
+		if !r.client.IsStreamGroupExists(ctx, stream, group) {
 			return fmt.Errorf("group %s not existing", group)
 		}
 	}
@@ -122,4 +123,8 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*
 	}
 
 	return bufferInfo, nil
+}
+
+func GetRedisStreamName(s string) string {
+	return fmt.Sprintf("{%s}", s)
 }

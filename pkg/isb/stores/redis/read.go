@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -52,7 +53,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 
 	rqr := &BufferRead{
 		Name:        name,
-		Stream:      fmt.Sprintf("{%s}", name),
+		Stream:      isbsvc.GetRedisStreamName(name),
 		Group:       group,
 		Consumer:    consumer,
 		RedisClient: client,
