@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/numaproj/numaflow/controllers"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -19,7 +19,7 @@ type Installer interface {
 }
 
 // Install function installs the ISBS
-func Install(ctx context.Context, isbsvc *dfv1.InterStepBufferService, client client.Client, config *controllers.GlobalConfig, logger *zap.SugaredLogger) error {
+func Install(ctx context.Context, isbsvc *dfv1.InterStepBufferService, client client.Client, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) error {
 	installer, err := getInstaller(isbsvc, client, config, logger)
 	if err != nil {
 		logger.Errorw("failed to get an installer", zap.Error(err))
@@ -35,7 +35,7 @@ func Install(ctx context.Context, isbsvc *dfv1.InterStepBufferService, client cl
 }
 
 // GetInstaller returns Installer implementation
-func getInstaller(isbsvc *dfv1.InterStepBufferService, client client.Client, config *controllers.GlobalConfig, logger *zap.SugaredLogger) (Installer, error) {
+func getInstaller(isbsvc *dfv1.InterStepBufferService, client client.Client, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) (Installer, error) {
 	labels := map[string]string{
 		dfv1.KeyPartOf:     dfv1.Project,
 		dfv1.KeyManagedBy:  dfv1.ControllerISBSvc,
@@ -64,7 +64,7 @@ func getInstaller(isbsvc *dfv1.InterStepBufferService, client client.Client, con
 // separately.
 //
 // It could also be used to check if the ISB Service object can be safely deleted.
-func Uninstall(ctx context.Context, isbsvc *dfv1.InterStepBufferService, client client.Client, config *controllers.GlobalConfig, logger *zap.SugaredLogger) error {
+func Uninstall(ctx context.Context, isbsvc *dfv1.InterStepBufferService, client client.Client, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) error {
 	installer, err := getInstaller(isbsvc, client, config, logger)
 	if err != nil {
 		logger.Errorw("Failed to get an installer", zap.Error(err))

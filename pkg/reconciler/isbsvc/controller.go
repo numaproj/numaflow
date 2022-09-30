@@ -3,9 +3,9 @@ package isbsvc
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/controllers"
-	"github.com/numaproj/numaflow/controllers/isbsvc/installer"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
+	"github.com/numaproj/numaflow/pkg/reconciler/isbsvc/installer"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -25,11 +25,11 @@ type interStepBufferServiceReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 
-	config *controllers.GlobalConfig
+	config *reconciler.GlobalConfig
 	logger *zap.SugaredLogger
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *controllers.GlobalConfig, logger *zap.SugaredLogger) reconcile.Reconciler {
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) reconcile.Reconciler {
 	return &interStepBufferServiceReconciler{client: client, scheme: scheme, config: config, logger: logger}
 }
 

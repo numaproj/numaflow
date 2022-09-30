@@ -23,9 +23,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/numaproj/numaflow/controllers"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
+	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -39,12 +39,12 @@ type pipelineReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 
-	config *controllers.GlobalConfig
+	config *reconciler.GlobalConfig
 	image  string
 	logger *zap.SugaredLogger
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *controllers.GlobalConfig, image string, logger *zap.SugaredLogger) reconcile.Reconciler {
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, logger *zap.SugaredLogger) reconcile.Reconciler {
 	return &pipelineReconciler{client: client, scheme: scheme, config: config, image: image, logger: logger}
 }
 

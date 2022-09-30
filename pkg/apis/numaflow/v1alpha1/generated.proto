@@ -100,6 +100,7 @@ message AbstractVertex {
   // +optional
   optional string serviceAccountName = 15;
 
+  // +optional
   // +patchStrategy=merge
   // +patchMergeKey=name
   repeated k8s.io.api.core.v1.Volume volumes = 16;
@@ -717,8 +718,6 @@ message PipelineSpec {
   repeated Edge edges = 3;
 
   // Lifecycle define the Lifecycle properties
-  // +patchStrategy=merge
-  // +patchMergeKey=name
   // +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running}
   // +optional
   optional Lifecycle lifecycle = 4;

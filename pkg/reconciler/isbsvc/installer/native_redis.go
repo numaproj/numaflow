@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/numaproj/numaflow/controllers"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
@@ -38,12 +38,12 @@ var (
 type redisInstaller struct {
 	client client.Client
 	isbs   *dfv1.InterStepBufferService
-	config *controllers.GlobalConfig
+	config *reconciler.GlobalConfig
 	labels map[string]string
 	logger *zap.SugaredLogger
 }
 
-func NewNativeRedisInstaller(client client.Client, isbs *dfv1.InterStepBufferService, config *controllers.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
+func NewNativeRedisInstaller(client client.Client, isbs *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
 	return &redisInstaller{
 		client: client,
 		isbs:   isbs,

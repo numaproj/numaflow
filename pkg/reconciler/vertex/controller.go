@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/numaproj/numaflow/controllers"
-	"github.com/numaproj/numaflow/controllers/vertex/scaling"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
+	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"go.uber.org/zap"
@@ -30,14 +30,14 @@ type vertexReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 
-	config *controllers.GlobalConfig
+	config *reconciler.GlobalConfig
 	image  string
 	logger *zap.SugaredLogger
 
 	scaler *scaling.Scaler
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *controllers.GlobalConfig, image string, scaler *scaling.Scaler, logger *zap.SugaredLogger) reconcile.Reconciler {
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, scaler *scaling.Scaler, logger *zap.SugaredLogger) reconcile.Reconciler {
 	return &vertexReconciler{client: client, scheme: scheme, config: config, image: image, scaler: scaler, logger: logger}
 }
 
