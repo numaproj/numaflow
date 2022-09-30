@@ -1,4 +1,4 @@
-package pbq
+package partition
 
 import (
 	"fmt"

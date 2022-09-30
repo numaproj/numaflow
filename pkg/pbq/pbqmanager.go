@@ -9,6 +9,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/pbq/store/noop"
@@ -52,7 +53,7 @@ func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
 }
 
 // CreateNewPBQ creates new pbq for a partition
-func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID ID) (ReadWriteCloser, error) {
+func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
 
 	var persistentStore store.Store
 	var err error
@@ -88,7 +89,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID ID) (ReadWriteCl
 }
 
 // discoverPartitions discovers partitions.
-func (m *Manager) discoverPartitions(ctx context.Context) ([]ID, error) {
+func (m *Manager) discoverPartitions(ctx context.Context) ([]partition.ID, error) {
 	switch m.storeOptions.PBQStoreType() {
 	case dfv1.NoOpType:
 		return noop.DiscoverPartitions(ctx, m.storeOptions)
@@ -117,7 +118,7 @@ func (m *Manager) ListPartitions() []*PBQ {
 }
 
 // GetPBQ returns pbq for the given ID
-func (m *Manager) GetPBQ(partitionID ID) ReadWriteCloser {
+func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -132,7 +133,7 @@ func (m *Manager) GetPBQ(partitionID ID) ReadWriteCloser {
 // and builds the PBQ Map.
 func (m *Manager) StartUp(ctx context.Context) {
 	var err error
-	var partitionIDs []ID
+	var partitionIDs []partition.ID
 	// TODO(Yashash): use exponential backoff
 	for {
 		partitionIDs, err = m.discoverPartitions(ctx)
@@ -200,7 +201,7 @@ func (m *Manager) ShutDown(ctx context.Context) {
 }
 
 // register is intended to be used by PBQ to register itself with the manager.
-func (m *Manager) register(partitionID ID, p *PBQ) {
+func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -210,7 +211,7 @@ func (m *Manager) register(partitionID ID, p *PBQ) {
 }
 
 // deregister is intended to be used by PBQ to deregister itself after GC is called.
-func (m *Manager) deregister(partitionID ID) {
+func (m *Manager) deregister(partitionID partition.ID) {
 	m.Lock()
 	defer m.Unlock()
 

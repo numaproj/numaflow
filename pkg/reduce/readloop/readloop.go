@@ -14,6 +14,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/window"
@@ -66,7 +67,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		windows := rl.upsertWindowsAndKeys(m)
 		for _, kw := range windows {
 			// identify partition for message
-			partitionID := pbq.ID{
+			partitionID := partition.ID{
 				Start: kw.IntervalWindow.Start,
 				End:   kw.IntervalWindow.End,
 				Key:   m.Key,
@@ -88,7 +89,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	}
 }
 
-func (rl *ReadLoop) processPartition(ctx context.Context, partitionID pbq.ID) pbq.ReadWriteCloser {
+func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
 	var q pbq.ReadWriteCloser
 	// create or get existing pbq
 	q = rl.pbqManager.GetPBQ(partitionID)
@@ -141,7 +142,7 @@ func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
 	return processor.Watermark(message.EventTime)
 }
 
-func (rl *ReadLoop) closePartitions(partitions []pbq.ID) {
+func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
 	for _, p := range partitions {
 		q := rl.pbqManager.GetPBQ(p)
 		q.CloseOfBook()
