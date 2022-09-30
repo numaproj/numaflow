@@ -5,7 +5,11 @@ metadata:
 spec:
   redis:
     external:
-      # helm repo add bitnami https://charts.bitnami.com/bitnami
-      # helm install numaflow-redis-cluster --set image.tag=6.2 --set usePassword=false bitnami/redis-cluster --version 8.1.1
+      # deploy the redis cluster on k8s:
+      #     helm repo add bitnami https://charts.bitnami.com/bitnami
+      #     helm install numaflow-redis-cluster --set image.tag=6.2 --set usePassword=false bitnami/redis-cluster --version 8.1.1
+      # note:
+      #     Need to provide at least 2 addresses because we use the universal client in the shared redis client code.
+      #     Use CLUSTER NODES (https://redis.io/commands/cluster-nodes/) command to get the ip address info.
       url: "10.42.0.218:6379,10.42.0.219:6379"
       user: "default"
