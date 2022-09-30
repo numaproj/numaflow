@@ -12,6 +12,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	udfcall "github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	}()
 
 	size := 100
-	testPartition := pbq.ID{
+	testPartition := partition.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "partition-1",

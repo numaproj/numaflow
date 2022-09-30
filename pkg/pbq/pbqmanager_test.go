@@ -9,6 +9,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/stretchr/testify/assert"
 )
@@ -24,12 +25,12 @@ func TestManager_ListPartitions(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create a new pbq using pbq manager
-	testPartition := ID{
+	testPartition := partition.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "partition-1",
 	}
-	partitionTwo := ID{
+	partitionTwo := partition.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "partition-2",
@@ -62,7 +63,7 @@ func TestManager_GetPBQ(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create a new pbq using CreateNewPBQ PBQ
-	testPartition := ID{
+	testPartition := partition.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "partition-1",
@@ -84,7 +85,7 @@ func TestPBQFlow(t *testing.T) {
 	pbqManager, err := NewManager(ctx, WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
-	testPartition := ID{
+	testPartition := partition.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "partition-1",
@@ -145,7 +146,7 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 	pbqManager, err := NewManager(ctx, WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.NoOpType)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
-	testPartition := ID{
+	testPartition := partition.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "partition-1",
@@ -203,7 +204,7 @@ func TestManager_Replay(t *testing.T) {
 	pbqManager, err := NewManager(ctx, WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
 	assert.NoError(t, err)
-	testPartition := ID{
+	testPartition := partition.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "partition-1",

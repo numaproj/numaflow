@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"go.uber.org/zap"
 )
@@ -17,7 +18,7 @@ type PBQ struct {
 	store       store.Store
 	output      chan *isb.Message
 	cob         bool // cob to avoid panic in case writes happen after close of book
-	PartitionID ID
+	PartitionID partition.ID
 	options     *options
 	manager     *Manager
 	log         *zap.SugaredLogger

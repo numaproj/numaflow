@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/pbq"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pandf"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfreducer "github.com/numaproj/numaflow/pkg/udf/reducer"
@@ -32,7 +33,7 @@ func (op *orderedProcessor) StartUp(ctx context.Context) {
 	go op.forward(ctx)
 }
 
-func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, partitionID pbq.ID) {
+func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, partitionID partition.ID) {
 	pf := pandf.NewProcessAndForward(partitionID, udf, pbq)
 	doneCh := make(chan struct{})
 	t := &task{
