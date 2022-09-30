@@ -22,6 +22,13 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 ```
 
+Port forward the UI to https://localhost:8443/
+```shell
+kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
+```
+
+Keep the current terminal running, open a new terminal tab to run the following example pipelines.
+
 ## A Simple Pipeline
 
 Create a `simple pipeline`, which contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages.
@@ -53,9 +60,9 @@ kubectl logs -f simple-pipeline-out-0-xxxx main
 2022/08/25 23:59:39 (out) {"Data":"mkwnN/a7Dhc=","Createdts":1661471978707963034}
 2022/08/25 23:59:39 (out) {"Data":"jk4nN/a7Dhc=","Createdts":1661471978707963534}
 
-# Port forward the UI to https://localhost:8443/
-kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 ```
+
+View the UI for the simple pipeline at https://localhost:8443/
 ![Numaflow UI](assets/numaflow-ui-simple-pipeline.png)
 
 The pipeline can be deleted by
@@ -89,7 +96,7 @@ isbsvc-default-js-2                3/3     Running   0          10m
 # Port-forward the HTTP endpoint so we can post data from the laptop
 kubectl port-forward even-odd-in-0-xxxx 8444:8443
 
-# Post data to the HTTP endpoint
+# Open a new terminal tab to post data to the HTTP endpoint
 curl -kq -X POST -d "101" https://localhost:8444/vertices/in
 curl -kq -X POST -d "102" https://localhost:8444/vertices/in 
 curl -kq -X POST -d "103" https://localhost:8444/vertices/in
@@ -106,7 +113,7 @@ kubectl logs -f even-odd-odd-sink-0-a6p0n main
 2022/09/07 22:30:19 (odd-sink) 103
 ```
 
-View the UI for the advanced pipleline at https://localhost:8443/
+View the UI for the advanced pipeline at https://localhost:8443/
 ![Numaflow UI](assets/numaflow-ui-advanced-pipeline.png)
 
 The source code of the `even-odd` [User Defined Function](./user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd). You also can replace the [Log](./sinks/log.md) Sink with some other sinks like [Kafka](./sinks/kafka.md) to forward the data to Kafka topics.
@@ -114,6 +121,13 @@ The source code of the `even-odd` [User Defined Function](./user-defined-functio
 The pipeline can be deleted by
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+```
+
+## Clean up
+
+Close the port forwarding by releasing 8443 port
+```shell
+lsof -ti:8443 | xargs kill -9
 ```
 
 ## What's Next
