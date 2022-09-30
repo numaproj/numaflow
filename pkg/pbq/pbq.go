@@ -81,7 +81,7 @@ func (p *PBQ) replayRecordsFromStore(ctx context.Context) {
 	size := p.options.readBatchSize
 readLoop:
 	for {
-		readMessages, eof, err := p.store.Read(int64(size))
+		readMessages, eof, err := p.store.Read(size)
 		if err != nil {
 			p.log.Errorw("error while replaying records from store", zap.Any("ID", p.PartitionID), zap.Error(err))
 		}
