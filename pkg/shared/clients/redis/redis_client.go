@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/go-redis/redis/v8"
@@ -33,9 +34,10 @@ func NewRedisClient(options *redis.UniversalOptions) *RedisClient {
 // where those required environment variables are available.
 func NewInClusterRedisClient() *RedisClient {
 	opts := &redis.UniversalOptions{
-		Username:   os.Getenv(v1alpha1.EnvISBSvcRedisUser),
-		Password:   os.Getenv(v1alpha1.EnvISBSvcRedisPassword),
-		MasterName: os.Getenv(v1alpha1.EnvISBSvcSentinelMaster),
+		Username:     os.Getenv(v1alpha1.EnvISBSvcRedisUser),
+		Password:     os.Getenv(v1alpha1.EnvISBSvcRedisPassword),
+		MasterName:   os.Getenv(v1alpha1.EnvISBSvcSentinelMaster),
+		MaxRedirects: 3,
 	}
 	if opts.MasterName != "" {
 		urls := os.Getenv(v1alpha1.EnvISBSvcRedisSentinelURL)
@@ -49,6 +51,10 @@ func NewInClusterRedisClient() *RedisClient {
 			opts.Addrs = strings.Split(urls, ",")
 		}
 	}
+	if i, e := strconv.Atoi(os.Getenv(v1alpha1.EnvISBSvcRedisClusterMaxRedirects)); e == nil {
+		opts.MaxRedirects = i
+	}
+
 	return NewRedisClient(opts)
 }
 

@@ -7,5 +7,5 @@ spec:
     external:
       # helm repo add bitnami https://charts.bitnami.com/bitnami
       # helm install numaflow-redis-cluster --set image.tag=6.2 --set usePassword=false bitnami/redis-cluster --version 8.1.1
-      url: "numaflow-redis-cluster:6379"
+      url: "10.42.0.218:6379,10.42.0.219:6379"
       user: "default"
