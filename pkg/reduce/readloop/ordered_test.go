@@ -3,7 +3,6 @@ package readloop
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"testing"
 	"time"
 
@@ -30,17 +29,17 @@ func TestOrderedProcessing(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		partitions     []partition.ID
-		reduceOrder    []partition.ID
+		partitions     []pbq.ID
+		reduceOrder    []pbq.ID
 		expectedBefore int
-		expectedAfter  []partition.ID
+		expectedAfter  []pbq.ID
 	}{
 		{
 			name:           "single-task-finished",
 			partitions:     partitions(1),
 			expectedBefore: 1,
 			reduceOrder:    partitionsFor([]int{0}),
-			expectedAfter:  []partition.ID{},
+			expectedAfter:  []pbq.ID{},
 		},
 		{
 			name:           "middle-task-finished-in-multiple-tasks",
@@ -83,7 +82,7 @@ func TestOrderedProcessing(t *testing.T) {
 			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
 				pfTask := e.Value.(*task)
 				partitionKey := pfTask.pf.Key
-				assert.Equal(t, partition.ID{Key: fmt.Sprintf("partition-%d", count)}, partitionKey)
+				assert.Equal(t, pbq.ID{Key: fmt.Sprintf("partition-%d", count)}, partitionKey)
 				count = count + 1
 			}
 
@@ -109,23 +108,23 @@ func TestOrderedProcessing(t *testing.T) {
 
 }
 
-func partitions(count int) []partition.ID {
-	partitions := make([]partition.ID, count)
+func partitions(count int) []pbq.ID {
+	partitions := make([]pbq.ID, count)
 	for i := 0; i < count; i++ {
-		partitions[i] = partition.ID{Key: fmt.Sprintf("partition-%d", i)}
+		partitions[i] = pbq.ID{Key: fmt.Sprintf("partition-%d", i)}
 	}
 	return partitions
 }
 
-func partitionsFor(partitionIdx []int) []partition.ID {
-	partitions := make([]partition.ID, len(partitionIdx))
+func partitionsFor(partitionIdx []int) []pbq.ID {
+	partitions := make([]pbq.ID, len(partitionIdx))
 	for i, idx := range partitionIdx {
-		partitions[i] = partition.ID{Key: fmt.Sprintf("partition-%d", idx)}
+		partitions[i] = pbq.ID{Key: fmt.Sprintf("partition-%d", idx)}
 	}
 	return partitions
 }
 
-func taskForPartition(op *orderedProcessor, partitionId partition.ID) *task {
+func taskForPartition(op *orderedProcessor, partitionId pbq.ID) *task {
 	op.RLock()
 	defer op.RUnlock()
 	for e := op.taskQueue.Front(); e != nil; e = e.Next() {

@@ -2,14 +2,15 @@ package memory
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestMemoryStore_WriteToStore(t *testing.T) {
@@ -20,7 +21,7 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
-	partitionID := partition.ID{
+	partitionID := pbq.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "new-partition",
@@ -48,7 +49,7 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
-	partitionID := partition.ID{
+	partitionID := pbq.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "new-partition",
@@ -80,7 +81,7 @@ func TestEmptyStore_Read(t *testing.T) {
 	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	ctx := context.Background()
 
-	partitionID := partition.ID{
+	partitionID := pbq.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "new-partition",
@@ -104,7 +105,7 @@ func TestFullStore_Write(t *testing.T) {
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
-	partitionID := partition.ID{
+	partitionID := pbq.ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "new-partition",
