@@ -278,7 +278,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		messages := testutils.BuildTestWriteMessages(10, time.Now())
 
 		go func() {
-			for index, _ := range messages {
+			for index := range messages {
 				messageCh <- &messages[index]
 			}
 			close(messageCh)
@@ -323,7 +323,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		messages := testutils.BuildTestWriteMessages(10, time.Now())
 
 		go func() {
-			for index, _ := range messages {
+			for index := range messages {
 				messageCh <- &messages[index]
 			}
 			close(messageCh)

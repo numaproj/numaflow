@@ -73,7 +73,8 @@ func TestOrderedProcessing(t *testing.T) {
 			// things will go haywire.
 			pbqManager, _ := pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(int64(100)), store.WithPbqStoreType(dfv1.InMemoryType)),
 				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
-			cCtx, _ := context.WithCancel(ctx)
+			cCtx, cancelFn := context.WithCancel(ctx)
+			defer cancelFn()
 			for _, partition := range tt.partitions {
 				p, _ := pbqManager.CreateNewPBQ(ctx, partition)
 				op.process(cCtx, identityReducer, p, partition)

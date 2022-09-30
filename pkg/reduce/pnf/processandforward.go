@@ -2,6 +2,8 @@ package pnf
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"go.uber.org/zap"
 	"sync"
 
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
@@ -19,14 +21,16 @@ type ProcessAndForward struct {
 	UDF       udfreducer.Reducer
 	result    []*isb.Message
 	pbqReader pbq.Reader
+	log       *zap.SugaredLogger
 }
 
 // NewProcessAndForward will return a new ProcessAndForward instance
-func NewProcessAndForward(partitionID partition.ID, udf udfreducer.Reducer, pbqReader pbq.Reader) *ProcessAndForward {
+func NewProcessAndForward(ctx context.Context, partitionID partition.ID, udf udfreducer.Reducer, pbqReader pbq.Reader) *ProcessAndForward {
 	return &ProcessAndForward{
 		Key:       partitionID,
 		UDF:       udf,
 		pbqReader: pbqReader,
+		log:       logging.FromContext(ctx),
 	}
 }
 

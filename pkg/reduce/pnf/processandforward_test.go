@@ -55,7 +55,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	// write messages to pbq
 	go func() {
 		writeMessages := testutils.BuildTestWriteMessages(10, time.Now())
-		for index, _ := range writeMessages {
+		for index := range writeMessages {
 			err := simplePbq.Write(ctx, &writeMessages[index])
 			assert.NoError(t, err)
 		}
@@ -88,7 +88,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create pf using key and reducer
-	prfd := NewProcessAndForward(testPartition, client, simplePbq)
+	prfd := NewProcessAndForward(ctx, testPartition, client, simplePbq)
 
 	err = prfd.Process(ctx)
 	assert.NoError(t, err)

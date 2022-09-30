@@ -10,6 +10,11 @@ package readloop
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/udf/reducer"
+	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"math"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -29,6 +34,7 @@ type ReadLoop struct {
 	windowingStrategy window.Windower
 	aw                *fixed.ActiveWindows
 	op                *orderedProcessor
+	log               *zap.SugaredLogger
 }
 
 // NewReadLoop initializes ReadLoop struct
@@ -42,6 +48,7 @@ func NewReadLoop(ctx context.Context, pbqManager *pbq.Manager, windowingStrategy
 		aw:         fixed.NewWindows(),
 		pbqManager: pbqManager,
 		op:         op,
+		log:        logging.FromContext(ctx),
 	}
 	op.StartUp(ctx)
 	return rl
@@ -62,8 +69,18 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 }
 
 func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
+
+	var pbqWriteBackoff = wait.Backoff{
+		Steps:    math.MaxInt64,
+		Duration: 1 * time.Second,
+		Factor:   1.5,
+		Jitter:   0.1,
+	}
+
 	for _, m := range messages {
 		// identify and add window for the message
+		var attempt int
+		var writeErr error
 		windows := rl.upsertWindowsAndKeys(m)
 		for _, kw := range windows {
 			// identify partition for message
@@ -76,7 +93,19 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
 			q := rl.processPartition(ctx, partitionID)
 			// write the message to PBQ
-			q.Write(ctx, &m.Message)
+			writeErr = wait.ExponentialBackoffWithContext(ctx, pbqWriteBackoff, func() (done bool, err error) {
+				writeErr = q.Write(ctx, &m.Message)
+				attempt += 1
+				if err != nil {
+					rl.log.Warnw("Failed to write message to pbq", zap.Any("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(writeErr))
+					return false, nil
+				}
+				return true, nil
+			})
+
+			if writeErr != nil {
+				rl.log.Errorw("Failed to write message to pbq", zap.Any("partitionID", partitionID.String()), zap.Error(writeErr))
+			}
 		}
 		// close any windows that need to be closed.
 		wm := rl.waterMark(m)
@@ -94,27 +123,44 @@ func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.
 	// create or get existing pbq
 	q = rl.pbqManager.GetPBQ(partitionID)
 
+	var infiniteBackoff = wait.Backoff{
+		Steps:    math.MaxInt64,
+		Duration: 1 * time.Second,
+		Factor:   1.5,
+		Jitter:   0.1,
+	}
+
 	if q == nil {
 		var pbqErr error
-		for {
-			q, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID)
-			if pbqErr == nil {
-				break
+		pbqErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func() (done bool, err error) {
+			var attempt int
+			_, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID)
+
+			if pbqErr != nil {
+				attempt += 1
+				rl.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", partitionID.String()), zap.Error(pbqErr))
+				return false, nil
 			}
-			time.Sleep(retryDelay)
-		}
+			return true, nil
+		})
 		// if we did create a brand new PBQ it means this is a new partition
 		// we should attach the read side of the loop to the partition
 		// start process and forward loop here
-		for {
-			udf, err := function.NewUDSGRPCBasedUDF()
-			if err == nil {
-				rl.op.process(ctx, udf, q, partitionID)
-				break
+		var udfErr error
+		var udf reducer.Reducer
+		udfErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func() (done bool, err error) {
+			var attempt int
+			udf, udfErr = function.NewUDSGRPCBasedUDF()
+			if udfErr != nil {
+				attempt += 1
+				rl.log.Warnw("Failed to create udf reducer, retrying", zap.Any("attempt", attempt), zap.Error(udfErr))
+				return false, nil
 			}
-			time.Sleep(retryDelay)
+			return true, nil
+		})
+		if udfErr == nil {
+			rl.op.process(ctx, udf, q, partitionID)
 		}
-
 	}
 	return q
 }
