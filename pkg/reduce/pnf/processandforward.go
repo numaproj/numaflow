@@ -33,7 +33,7 @@ func NewProcessAndForward(partitionID partition.ID, udf udfreducer.Reducer, pbqR
 // Process method reads messages from the supplied pbqReader, invokes UDF to reduce the result
 // and finally indicates the
 func (p *ProcessAndForward) Process(ctx context.Context) error {
-	// TODO get the stream for reduce
+
 	var wg sync.WaitGroup
 	var err error
 
