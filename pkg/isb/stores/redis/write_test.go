@@ -318,7 +318,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 
 	// toStep, we also have to create a toStepRead here to read from the toStep
 	to1Read, _ := NewBufferRead(ctx, client, toStream, toGroup, consumer).(*BufferRead)
-	_ = client.CreateStreamGroup(ctx, toStream, toGroup, redisclient.ReadFromEarliest)
+	_ = client.CreateStreamGroup(ctx, to1Read.GetStreamName(), toGroup, redisclient.ReadFromEarliest)
 	to1, _ := NewBufferWrite(ctx, client, toStream, toGroup, WithLagDuration(1*time.Millisecond), WithInfoRefreshInterval(2*time.Second), WithMaxLength(17)).(*BufferWrite)
 	defer func() { _ = client.DeleteKeys(ctx, to1.GetStreamName()) }()
 	defer func() { _ = client.DeleteKeys(ctx, to1.GetStreamName()) }()
@@ -531,7 +531,7 @@ func forwardDataAndVerify(ctx context.Context, t *testing.T, fromStepWrite *Buff
 	_, errs = fromStepWrite.Write(ctx, writeMessages[15:17])
 
 	// give some time to assert, forwarding will take couple few cycles
-	//and the best way is to wait till a buffer becomes full
+	// and the best way is to wait till a buffer becomes full
 	for !to1.IsFull() {
 		select {
 		case <-ctx.Done():

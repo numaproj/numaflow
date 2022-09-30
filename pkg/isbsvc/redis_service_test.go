@@ -38,7 +38,7 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	// Add 10 messages
 	for _, msg := range messages {
 		err := redisClient.Client.XAdd(ctx, &goredis.XAddArgs{
-			Stream: "isbsRedisSvcBuffer",
+			Stream: redisclient.GetRedisStreamName(buffer),
 			Values: []interface{}{msg.Header, msg.Body},
 		}).Err()
 		assert.NoError(t, err)
