@@ -22,6 +22,7 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 		Addrs: []string{":6379"},
 	}
 	buffer := "isbsRedisSvcBuffer"
+	stream := redisclient.GetRedisStreamName(buffer)
 	group := buffer + "-group"
 	buffers := []dfv1.Buffer{{Name: buffer, Type: dfv1.EdgeBuffer}}
 	redisClient := redisclient.NewRedisClient(redisOptions)
@@ -38,7 +39,7 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	// Add 10 messages
 	for _, msg := range messages {
 		err := redisClient.Client.XAdd(ctx, &goredis.XAddArgs{
-			Stream: redisclient.GetRedisStreamName(buffer),
+			Stream: stream,
 			Values: []interface{}{msg.Header, msg.Body},
 		}).Err()
 		assert.NoError(t, err)
@@ -52,13 +53,13 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	// ACK just 1 message, which leaves a pending count of 9
 	var readOffsets = make([]string, 1)
 	readOffsets[0] = readMessages[0].ReadOffset.String()
-	_ = redisClient.Client.XAck(redisclient.RedisContext, buffer, group, readOffsets...).Err()
+	_ = redisClient.Client.XAck(redisclient.RedisContext, stream, group, readOffsets...).Err()
 
 	// test GetBufferInfo
 	for _, buffer := range buffers {
 		bufferInfo, err := isbsRedisSvc.GetBufferInfo(ctx, buffer)
 		assert.NoError(t, err)
-		assert.Equal(t, bufferInfo.PendingCount, int64(9))
+		assert.Equal(t, int64(9), bufferInfo.PendingCount)
 	}
 
 	// delete buffer
