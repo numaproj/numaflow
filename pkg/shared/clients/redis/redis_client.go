@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -122,4 +123,8 @@ func IsAlreadyExistError(err error) bool {
 
 func NotFoundError(err error) bool {
 	return strings.Contains(err.Error(), "requires the key to exist")
+}
+
+func GetRedisStreamName(s string) string {
+	return fmt.Sprintf("{%s}", s)
 }

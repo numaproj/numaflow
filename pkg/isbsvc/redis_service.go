@@ -29,7 +29,7 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer,
 		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		stream := GetRedisStreamName(s.Name)
+		stream := redisclient.GetRedisStreamName(s.Name)
 		group := fmt.Sprintf("%s-group", s.Name)
 		err := r.client.CreateStreamGroup(ctx, stream, group, redisclient.ReadFromEarliest)
 		if err != nil {
@@ -58,7 +58,7 @@ func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer)
 		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		stream := GetRedisStreamName(s.Name)
+		stream := redisclient.GetRedisStreamName(s.Name)
 		streamNames = append(streamNames, stream)
 		group := fmt.Sprintf("%s-group", s.Name)
 		if err := r.client.DeleteStreamGroup(ctx, stream, group); err != nil {
@@ -94,7 +94,7 @@ func (r *isbsRedisSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffe
 		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		var stream = GetRedisStreamName(s.Name)
+		var stream = redisclient.GetRedisStreamName(s.Name)
 		if !r.client.IsStreamExists(ctx, stream) {
 			return fmt.Errorf("s %s not existing", stream)
 		}
@@ -123,8 +123,4 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*
 	}
 
 	return bufferInfo, nil
-}
-
-func GetRedisStreamName(s string) string {
-	return fmt.Sprintf("{%s}", s)
 }

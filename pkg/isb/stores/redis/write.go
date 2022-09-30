@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -67,7 +66,7 @@ func NewBufferWrite(ctx context.Context, client *redisclient.RedisClient, name s
 	// check whether the script exists, if not then load
 	rqw := &BufferWrite{
 		Name:   name,
-		Stream: isbsvc.GetRedisStreamName(name),
+		Stream: redisclient.GetRedisStreamName(name),
 		Group:  group,
 		BufferWriteInfo: &BufferWriteInfo{
 			isFull:           atomic.NewBool(true),
