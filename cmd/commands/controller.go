@@ -1,7 +1,7 @@
 package commands
 
 import (
-	ctrlcmd "github.com/numaproj/numaflow/controllers/cmd"
+	ctrlcmd "github.com/numaproj/numaflow/pkg/reconciler/cmd"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/spf13/cobra"
 )

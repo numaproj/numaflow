@@ -10,8 +10,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/numaproj/numaflow/controllers"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/spf13/viper"
@@ -41,12 +41,12 @@ var (
 type jetStreamInstaller struct {
 	client client.Client
 	isbs   *dfv1.InterStepBufferService
-	config *controllers.GlobalConfig
+	config *reconciler.GlobalConfig
 	labels map[string]string
 	logger *zap.SugaredLogger
 }
 
-func NewJetStreamInstaller(client client.Client, isbs *dfv1.InterStepBufferService, config *controllers.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
+func NewJetStreamInstaller(client client.Client, isbs *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
 	return &jetStreamInstaller{
 		client: client,
 		isbs:   isbs,

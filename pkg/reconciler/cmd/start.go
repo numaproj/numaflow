@@ -20,12 +20,12 @@ import (
 	"reflect"
 
 	numaflow "github.com/numaproj/numaflow"
-	"github.com/numaproj/numaflow/controllers"
-	isbsvcctrl "github.com/numaproj/numaflow/controllers/isbsvc"
-	plctrl "github.com/numaproj/numaflow/controllers/pipeline"
-	vertexctrl "github.com/numaproj/numaflow/controllers/vertex"
-	"github.com/numaproj/numaflow/controllers/vertex/scaling"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
+	isbsvcctrl "github.com/numaproj/numaflow/pkg/reconciler/isbsvc"
+	plctrl "github.com/numaproj/numaflow/pkg/reconciler/pipeline"
+	vertexctrl "github.com/numaproj/numaflow/pkg/reconciler/vertex"
+	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
 	logging "github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"go.uber.org/zap"
@@ -42,7 +42,7 @@ import (
 
 func Start(namespaced bool, managedNamespace string) {
 	logger := logging.NewLogger().Named("controller-manager")
-	config, err := controllers.LoadConfig(func(err error) {
+	config, err := reconciler.LoadConfig(func(err error) {
 		logger.Errorf("Failed to reload global configuration file", zap.Error(err))
 	})
 	if err != nil {
