@@ -7,6 +7,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 )
 
-func DiscoverPartitions(ctx context.Context, options ...*store.StoreOptions) ([]partition.ID, error) {
+func DiscoverPartitions(_ context.Context, _ ...*store.StoreOptions) ([]partition.ID, error) {
 	return []partition.ID{}, nil
 }

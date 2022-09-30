@@ -157,8 +157,6 @@ func (m *Manager) StartUp(ctx context.Context) {
 			}
 		}
 	}
-
-	return
 }
 
 // ShutDown for clean shut down, flushes pending messages to store and closes the store
