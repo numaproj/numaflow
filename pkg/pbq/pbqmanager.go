@@ -134,27 +134,53 @@ func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
 func (m *Manager) StartUp(ctx context.Context) {
 	var err error
 	var partitionIDs []partition.ID
-	// TODO(Yashash): use exponential backoff
-	for {
+
+	var discoverPartitionsBackoff = wait.Backoff{
+		Steps:    5,
+		Duration: 1 * time.Second,
+		Factor:   1.5,
+		Jitter:   0.1,
+		Cap:      5 * time.Second,
+	}
+
+	err = wait.ExponentialBackoffWithContext(ctx, discoverPartitionsBackoff, func() (done bool, err error) {
+		var attempt int
+
 		partitionIDs, err = m.discoverPartitions(ctx)
-		if err == nil {
-			break
-		} else {
-			m.log.Errorw("discoverPartitions failed", zap.Error(err))
-			time.Sleep(1 * time.Second)
+		if err != nil {
+			attempt += 1
+			m.log.Warnw("Failed to discover partitions during startup, retrying", zap.Any("attempt", attempt), zap.Error(err))
+			return false, nil
 		}
+		return true, nil
+	})
+	if err != nil {
+		m.log.Errorw("Failed to discover partitions, no retries left", zap.Error(err))
+		return
+	}
+
+	var createPBQBackoff = wait.Backoff{
+		Steps:    5,
+		Duration: 1 * time.Second,
+		Factor:   1.5,
+		Jitter:   0.1,
+		Cap:      5 * time.Second,
 	}
 
 	for _, partitionID := range partitionIDs {
-		// TODO(Yashash): use exponential backoff
-		for {
+		err = wait.ExponentialBackoffWithContext(ctx, createPBQBackoff, func() (done bool, err error) {
+			var attempt int
 			_, err = m.CreateNewPBQ(ctx, partitionID)
-			if err == nil {
-				break
-			} else {
-				m.log.Errorw("CreateNewPBQ failed", zap.Error(err))
-				time.Sleep(1 * time.Second)
+			
+			if err != nil {
+				attempt += 1
+				m.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", partitionID.String()), zap.Error(err))
+				return false, nil
 			}
+			return true, nil
+		})
+		if err != nil {
+			m.log.Errorw("Failed to create pbq during startup, no retries left", zap.Any("partitionID", partitionID.String()), zap.Error(err))
 		}
 	}
 }
