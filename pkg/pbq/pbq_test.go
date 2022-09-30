@@ -2,7 +2,6 @@ package pbq
 
 import (
 	"context"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"sync"
 	"testing"
 	"time"
@@ -32,7 +31,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	partitionID := partition.ID{
+	partitionID := ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "new-partition",
@@ -96,7 +95,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
-	partitionID := partition.ID{
+	partitionID := ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "new-partition",
@@ -161,7 +160,7 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	msgCount := 101
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
-	partitionID := partition.ID{
+	partitionID := ID{
 		Start: time.Now(),
 		End:   time.Now(),
 		Key:   "new-partition",
