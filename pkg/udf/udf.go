@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -19,9 +17,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/function"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"go.uber.org/zap"
 )
 
 type UDFProcessor struct {
@@ -40,8 +38,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	writers := make(map[string]isb.BufferWriter)
 
 	// watermark variables
-	var fetchWatermark fetch.Fetcher = nil
-	var publishWatermark map[string]publish.Publisher = nil
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
