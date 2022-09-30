@@ -6,6 +6,6 @@ spec:
   redis:
     external:
       # helm repo add bitnami https://charts.bitnami.com/bitnami
-      # helm install numaflow-redis-cluster --set usePassword=false bitnami/redis-cluster
+      # helm install numaflow-redis-cluster --set image.tag=6.2 --set usePassword=false bitnami/redis-cluster --version 8.1.1
       url: "numaflow-redis-cluster:6379"
       user: "default"
