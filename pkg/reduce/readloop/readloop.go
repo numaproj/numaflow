@@ -10,6 +10,7 @@ package readloop
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/reducer"
 	"go.uber.org/zap"
@@ -35,20 +36,28 @@ type ReadLoop struct {
 	aw                *fixed.ActiveWindows
 	op                *orderedProcessor
 	log               *zap.SugaredLogger
+	toBuffers         map[string]isb.BufferWriter
+	whereToDecider    forward.ToWhichStepDecider
 }
 
 // NewReadLoop initializes ReadLoop struct
-func NewReadLoop(ctx context.Context, pbqManager *pbq.Manager, windowingStrategy window.Windower) *ReadLoop {
+func NewReadLoop(ctx context.Context,
+	pbqManager *pbq.Manager,
+	windowingStrategy window.Windower,
+	toBuffers map[string]isb.BufferWriter,
+	whereToDecider forward.ToWhichStepDecider) *ReadLoop {
 
 	op := NewOrderedProcessor()
 
 	rl := &ReadLoop{
 		windowingStrategy: windowingStrategy,
 		// TODO pass window type
-		aw:         fixed.NewWindows(),
-		pbqManager: pbqManager,
-		op:         op,
-		log:        logging.FromContext(ctx),
+		aw:             fixed.NewWindows(),
+		pbqManager:     pbqManager,
+		op:             op,
+		log:            logging.FromContext(ctx),
+		toBuffers:      toBuffers,
+		whereToDecider: whereToDecider,
 	}
 	op.StartUp(ctx)
 	return rl
@@ -159,7 +168,7 @@ func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.
 			return true, nil
 		})
 		if udfErr == nil {
-			rl.op.process(ctx, udf, q, partitionID)
+			rl.op.process(ctx, udf, q, partitionID, rl.toBuffers, rl.whereToDecider)
 		}
 	}
 	return q

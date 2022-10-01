@@ -2,6 +2,7 @@ package pnf
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"testing"
 	"time"
 
@@ -17,6 +18,17 @@ import (
 	udfcall "github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/stretchr/testify/assert"
 )
+
+type myForwardTest struct {
+}
+
+func (f myForwardTest) WhereTo(_ string) ([]string, error) {
+	return []string{"to1"}, nil
+}
+
+func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+	return testutils.CopyUDFTestApply(ctx, message)
+}
 
 func TestProcessAndForward_Process(t *testing.T) {
 	// 1. create a pbq which has to be passed to the process method
@@ -88,7 +100,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create pf using key and reducer
-	prfd := NewProcessAndForward(ctx, testPartition, client, simplePbq)
+	prfd := NewProcessAndForward(ctx, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{})
 
 	err = prfd.Process(ctx)
 	assert.NoError(t, err)
