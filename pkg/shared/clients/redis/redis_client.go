@@ -90,7 +90,7 @@ func (cl *RedisClient) IsStreamExists(ctx context.Context, streamKey string) boo
 	return err == nil
 }
 
-// PendingMsgCount check the redis keys exists
+// PendingMsgCount returns how many messages are pending.
 func (cl *RedisClient) PendingMsgCount(ctx context.Context, streamKey, consumerGroup string) (int64, error) {
 	cmd := cl.Client.XPending(ctx, streamKey, consumerGroup)
 	pending, err := cmd.Result()
