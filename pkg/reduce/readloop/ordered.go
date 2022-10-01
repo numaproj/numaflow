@@ -3,6 +3,8 @@ package readloop
 import (
 	"container/list"
 	"context"
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"sync"
 	"time"
 
@@ -33,8 +35,14 @@ func (op *orderedProcessor) StartUp(ctx context.Context) {
 	go op.forward(ctx)
 }
 
-func (op *orderedProcessor) process(ctx context.Context, udf udfreducer.Reducer, pbq pbq.Reader, partitionID partition.ID) {
-	pf := pnf.NewProcessAndForward(ctx, partitionID, udf, pbq)
+func (op *orderedProcessor) process(ctx context.Context,
+	udf udfreducer.Reducer,
+	pbq pbq.Reader,
+	partitionID partition.ID,
+	toBuffers map[string]isb.BufferWriter,
+	whereToDecider forward.ToWhichStepDecider) {
+
+	pf := pnf.NewProcessAndForward(ctx, partitionID, udf, pbq, toBuffers, whereToDecider)
 	doneCh := make(chan struct{})
 	t := &task{
 		doneCh: doneCh,
@@ -79,8 +87,7 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 		select {
 		case <-t.doneCh:
 			for {
-				// TODO implement forward with WhereTo and toStep Buffers
-				err := t.pf.Forward()
+				err := t.pf.Forward(ctx)
 				if err != nil {
 					logging.FromContext(ctx).Error(err)
 					time.Sleep(retryDelay)

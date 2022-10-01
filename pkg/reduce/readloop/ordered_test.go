@@ -3,6 +3,8 @@ package readloop
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"testing"
 	"time"
 
@@ -15,6 +17,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type myForwardTest struct {
+}
+
+func (f myForwardTest) WhereTo(_ string) ([]string, error) {
+	return []string{dfv1.MessageKeyDrop}, nil
+}
+
+func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+	return testutils.CopyUDFTestApply(ctx, message)
+}
+
 func TestOrderedProcessing(t *testing.T) {
 
 	// Test Reducer returns the messages as is
@@ -25,6 +38,10 @@ func TestOrderedProcessing(t *testing.T) {
 		}
 		return messages, nil
 	})
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 100)
+	toSteps := map[string]isb.BufferWriter{
+		"to1": to1,
+	}
 
 	ctx := context.Background()
 
@@ -77,7 +94,7 @@ func TestOrderedProcessing(t *testing.T) {
 			defer cancelFn()
 			for _, partition := range tt.partitions {
 				p, _ := pbqManager.CreateNewPBQ(ctx, partition)
-				op.process(cCtx, identityReducer, p, partition)
+				op.process(cCtx, identityReducer, p, partition, toSteps, myForwardTest{})
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
 			count := 0
