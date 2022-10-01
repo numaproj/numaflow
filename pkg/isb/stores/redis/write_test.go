@@ -401,9 +401,9 @@ func TestXTrimOnIsFull(t *testing.T) {
 
 	client := redisclient.NewRedisClient(redisOptions)
 	group := "trim-group"
-	stream := "trim"
+	buffer := "trim"
 
-	rqw, _ := NewBufferWrite(ctx, client, stream, group, WithLagDuration(1*time.Millisecond), WithInfoRefreshInterval(2*time.Millisecond), WithMaxLength(10)).(*BufferWrite)
+	rqw, _ := NewBufferWrite(ctx, client, buffer, group, WithLagDuration(1*time.Millisecond), WithInfoRefreshInterval(2*time.Millisecond), WithMaxLength(10)).(*BufferWrite)
 	err := client.CreateStreamGroup(ctx, rqw.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
@@ -435,11 +435,11 @@ func TestXTrimOnIsFull(t *testing.T) {
 	// Buffer is full at this point so write will fail with errors because of usage limit
 	_, errs := rqw.Write(ctx, messages)
 	for _, err := range errs {
-		assert.Equal(t, err, isb.BufferWriteErr{Name: stream, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.BufferWriteErr{Name: buffer, Full: true, Message: "Buffer full!"})
 	}
 
 	// Read all the messages.
-	rqr, _ := NewBufferRead(ctx, client, stream, group, "consumer").(*BufferRead)
+	rqr, _ := NewBufferRead(ctx, client, buffer, group, "consumer").(*BufferRead)
 
 	defer func() { _ = client.DeleteKeys(ctx, rqr.GetStreamName()) }()
 
@@ -449,7 +449,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 	for idx, readMessage := range readMessages {
 		readOffsets[idx] = readMessage.ReadOffset.String()
 	}
-	err = client.Client.XAck(redisclient.RedisContext, stream, group, readOffsets...).Err()
+	err = client.Client.XAck(redisclient.RedisContext, rqr.GetStreamName(), group, readOffsets...).Err()
 	assert.NoError(t, err)
 
 	// XTRIM should kick in and MINID is set to the last successfully processed message and should delete everything before that
@@ -466,9 +466,9 @@ func TestSetWriteInfo(t *testing.T) {
 
 	client := redisclient.NewRedisClient(redisOptions)
 	group := "setWriteInfo-group"
-	stream := "setWriteInfo"
+	buffer := "setWriteInfo"
 
-	rqw, _ := NewBufferWrite(ctx, client, stream, group, WithLagDuration(1*time.Millisecond), WithInfoRefreshInterval(2*time.Millisecond), WithRefreshBufferWriteInfo(false)).(*BufferWrite)
+	rqw, _ := NewBufferWrite(ctx, client, buffer, group, WithLagDuration(1*time.Millisecond), WithInfoRefreshInterval(2*time.Millisecond), WithRefreshBufferWriteInfo(false)).(*BufferWrite)
 	err := client.CreateStreamGroup(ctx, rqw.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
@@ -488,7 +488,7 @@ func TestSetWriteInfo(t *testing.T) {
 	}
 
 	// Read all the messages.
-	rqr, _ := NewBufferRead(ctx, client, stream, group, "consumer").(*BufferRead)
+	rqr, _ := NewBufferRead(ctx, client, buffer, group, "consumer").(*BufferRead)
 
 	defer func() { _ = client.DeleteKeys(ctx, rqr.GetStreamName()) }()
 
@@ -498,7 +498,7 @@ func TestSetWriteInfo(t *testing.T) {
 
 	// ACK 1 message
 	readOffsets[0] = readMessages[0].ReadOffset.String()
-	err = client.Client.XAck(redisclient.RedisContext, stream, group, readOffsets...).Err()
+	err = client.Client.XAck(redisclient.RedisContext, rqr.GetStreamName(), group, readOffsets...).Err()
 	assert.NoError(t, err)
 
 	rqw.setWriteInfo(ctx)
