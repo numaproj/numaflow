@@ -35,9 +35,13 @@ func NewRedisClient(options *redis.UniversalOptions) *RedisClient {
 // where those required environment variables are available.
 func NewInClusterRedisClient() *RedisClient {
 	opts := &redis.UniversalOptions{
-		Username:     os.Getenv(v1alpha1.EnvISBSvcRedisUser),
-		Password:     os.Getenv(v1alpha1.EnvISBSvcRedisPassword),
-		MasterName:   os.Getenv(v1alpha1.EnvISBSvcSentinelMaster),
+		Username:   os.Getenv(v1alpha1.EnvISBSvcRedisUser),
+		Password:   os.Getenv(v1alpha1.EnvISBSvcRedisPassword),
+		MasterName: os.Getenv(v1alpha1.EnvISBSvcSentinelMaster),
+		// MaxRedirects is an option for redis cluster mode.
+		// The default value is set 3 to allow redirections when using redis cluster mode.
+		// ref: if we use redis cluster client directly instead of redis universal client, the default value is 3
+		//      https://github.com/go-redis/redis/blob/f6a8adc50cdaec30527f50d06468f9176ee674fe/cluster.go#L33-L36
 		MaxRedirects: 3,
 	}
 	if opts.MasterName != "" {
