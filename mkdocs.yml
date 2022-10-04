@@ -52,12 +52,12 @@ nav:
           - sinks/kafka.md
           - sinks/log.md
           - User Defined Sinks: "sinks/user-defined-sinks.md"
-      - Functions:
-          - Builtin Functions:
+      - User Defined Functions:
+          - Overview: "user-defined-functions.md"
+          - Built-in UDFs:
               - Overview: "builtin-functions/README.md"
               - Cat: "builtin-functions/cat.md"
               - Filter: "builtin-functions/filter.md"
-          - User Defined Functions: "user-defined-functions.md"
       - pipeline-tuning.md
       - conditional-forwarding.md
       - autoscaling.md
