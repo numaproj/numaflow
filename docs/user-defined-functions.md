@@ -2,13 +2,13 @@
 
 A `Pipleline` consists of multiple vertices, `Source`, `Sink` and `UDF(User Defined Functions)`.
 
-UDF runs as a container in a Vertex Pod, processes the received data.
+UDF runs as a sidecar container in a Vertex Pod, processes the received data. The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.
 
 Data processing in the UDF is supposed to be idempotent.
 
 ## Builtin UDF
 
-There are some `Builtin Functions` that can be used directly.
+There are some [Built-in Functions](./builtin-functions/README.md) that can be used directly.
 
 ## Build Your Own UDF
 
@@ -25,7 +25,7 @@ import (
 )
 
 func mapHandle(_ context.Context, key string, d functionsdk.Datum) functionsdk.Messages {
-	// directly forward the input to the output
+	// Directly forward the input to the output
 	return functionsdk.MessagesBuilder().Append(functionsdk.MessageToAll(d.Value()))
 }
 

@@ -62,7 +62,7 @@ func (in UDF) getUDFContainer(req getContainerReq) corev1.Container {
 			c = c.args(x.Args...)
 		}
 		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources)
-	} else { // builtin
+	} else { // built-in
 		args := []string{"builtin-udf", "--name=" + in.Builtin.Name}
 		for _, a := range in.Builtin.Args {
 			args = append(args, "--args="+base64.StdEncoding.EncodeToString([]byte(a)))
