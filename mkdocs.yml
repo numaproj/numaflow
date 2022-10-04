@@ -64,6 +64,7 @@ nav:
       - container-resources.md
       - volumes.md
       - environment-variables.md
+      - watermarks.md
       - APIs.md
   - Operator Manual:
       - Releases ⧉: "releases.md"
