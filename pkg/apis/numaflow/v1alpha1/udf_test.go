@@ -52,7 +52,7 @@ func Test_getUDFContainer(t *testing.T) {
 		assert.Contains(t, c.Args, "my-arg")
 	})
 
-	t.Run("with builtin functions", func(t *testing.T) {
+	t.Run("with built-in functions", func(t *testing.T) {
 		x := UDF{
 			Container: &Container{
 				Env: []corev1.EnvVar{

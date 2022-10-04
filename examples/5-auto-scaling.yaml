@@ -16,7 +16,7 @@ spec:
         max: 4 # Maximum replicas
       udf:
         builtin:
-          name: cat # A builtin UDF which simply cats the message
+          name: cat # A built-in UDF which simply cats the message
     - name: out
       scale:
         min: 3 # Minimum replicas

@@ -1,6 +1,6 @@
-# Builtin Functions
+# Built-in Functions
 
-Numaflow provides some builtin functions that can be used directly.
+Numaflow provides some built-in functions that can be used directly.
 
 **Cat**
 
@@ -17,7 +17,7 @@ spec:
 
 **Filter**
 
-A `filter` builtin UDF does filter the message based on expression. `payload` keyword represents message object.
+A `filter` built-in UDF does filter the message based on expression. `payload` keyword represents message object.
 see documentation for expression [here](filter.md#expression)
 
 ```yaml

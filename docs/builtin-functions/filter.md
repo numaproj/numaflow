@@ -1,6 +1,6 @@
 # Filter
 
-A `filter` is a special-purpose builtin function. It is used to evaluate on each message in a pipeline and
+A `filter` is a special-purpose built-in function. It is used to evaluate on each message in a pipeline and
 is often used to filter the number of messages that are passed to next vertices.
 
 Filter function supports comprehensive expression language which extend flexibility write complex expressions.
