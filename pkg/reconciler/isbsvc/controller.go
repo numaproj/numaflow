@@ -42,7 +42,7 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 		r.logger.Errorw("Unable to get ISBS", zap.Any("request", req), zap.Error(err))
 		return ctrl.Result{}, err
 	}
-	log := r.logger.With("namespace", isbs.Namespace).With("isbs", isbs.Name)
+	log := r.logger.With("namespace", isbs.Namespace).With("isbsvc", isbs.Name)
 	isbsCopy := isbs.DeepCopy()
 	reconcileErr := r.reconcile(ctx, isbsCopy)
 	if reconcileErr != nil {
