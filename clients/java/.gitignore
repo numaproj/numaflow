@@ -1,0 +1,11 @@
+/client/.openapi-generator/
+/client/api/
+/client/.gitignore
+/client/.openapi-generator-ignore
+/client/build.*
+/client/gradle*
+/client/settings*
+/client/swagger.*
+/client/target/
+/client/git_push.sh
+/client/.travis.yml
