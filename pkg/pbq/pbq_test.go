@@ -33,8 +33,8 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
 	partitionID := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "new-partition",
 	}
 
@@ -97,8 +97,8 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 
 	partitionID := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "new-partition",
 	}
 	var pq ReadWriteCloser
@@ -162,8 +162,8 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	startTime := time.Now()
 	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
 	partitionID := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "new-partition",
 	}
 

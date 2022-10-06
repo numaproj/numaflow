@@ -22,8 +22,8 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 	ctx := context.Background()
 
 	partitionID := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "new-partition",
 	}
 
@@ -50,8 +50,8 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	ctx := context.Background()
 
 	partitionID := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "new-partition",
 	}
 
@@ -82,8 +82,8 @@ func TestEmptyStore_Read(t *testing.T) {
 	ctx := context.Background()
 
 	partitionID := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "new-partition",
 	}
 
@@ -106,8 +106,8 @@ func TestFullStore_Write(t *testing.T) {
 	ctx := context.Background()
 
 	partitionID := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "new-partition",
 	}
 

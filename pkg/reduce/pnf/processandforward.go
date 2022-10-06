@@ -73,7 +73,7 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 // Forward writes messages to ToBuffers
 func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	// splits the partitionId to get the message key
-	// example 123-456-temp-hl -> temp-hl
+	// example 123-456-key-hl -> key-hl
 	messageKey := strings.SplitAfterN(p.Key.String(), "-", 3)[2]
 	to, err := p.whereToDecider.WhereTo(messageKey)
 
@@ -94,7 +94,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		for bufferID := range p.toBuffers {
 			messagesToStep[bufferID] = writeMessages
 		}
-	case sharedutil.StringSliceContains(to, dfv1.MessageKeyAll):
+	case sharedutil.StringSliceContains(to, dfv1.MessageKeyDrop):
 	default:
 		for _, bufferID := range to {
 			messagesToStep[bufferID] = writeMessages
@@ -116,7 +116,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	success := true
 	for key, messages := range messagesToStep {
 		bufferID := key
-		if messages == nil || len(messages) == 0 {
+		if len(messages) == 0 {
 			continue
 		}
 		wg.Add(1)
@@ -143,7 +143,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		}()
 	}
 	// even if one write go routines fails, don't ack just return
-	if success == false {
+	if !success {
 		return errors.New("failed to forward the messages to isb")
 	}
 	// wait until all the writer go routines return

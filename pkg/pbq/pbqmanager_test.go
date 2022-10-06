@@ -26,13 +26,13 @@ func TestManager_ListPartitions(t *testing.T) {
 
 	// create a new pbq using pbq manager
 	testPartition := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "partition-1",
 	}
 	partitionTwo := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "partition-2",
 	}
 	var pq1, pq2 ReadWriteCloser
@@ -64,8 +64,8 @@ func TestManager_GetPBQ(t *testing.T) {
 
 	// create a new pbq using CreateNewPBQ PBQ
 	testPartition := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "partition-1",
 	}
 	pb1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
@@ -86,8 +86,8 @@ func TestPBQFlow(t *testing.T) {
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 	testPartition := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "partition-1",
 	}
 
@@ -147,8 +147,8 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 	testPartition := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "partition-1",
 	}
 
@@ -205,8 +205,8 @@ func TestManager_Replay(t *testing.T) {
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
 	assert.NoError(t, err)
 	testPartition := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "partition-1",
 	}
 
