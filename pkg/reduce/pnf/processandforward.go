@@ -88,7 +88,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		writeMessages[idx] = *msg
 	}
 
-	// if a message is mapped to a isb, all the messages will be mapped to same isb (key is same)
+	// if a message is mapped to an isb, all the messages will be mapped to same isb (key is same)
 	switch {
 	case sharedutil.StringSliceContains(to, dfv1.MessageKeyAll):
 		for bufferID := range p.toBuffers {

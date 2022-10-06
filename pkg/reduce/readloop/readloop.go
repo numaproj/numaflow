@@ -30,6 +30,9 @@ import (
 
 var retryDelay time.Duration = time.Duration(1 * time.Second)
 
+var ackErrMsg = "failed to Ack Message"
+var writeErrMsg = "failed to Write Message"
+
 type ReadLoop struct {
 	pbqManager        *pbq.Manager
 	windowingStrategy window.Windower
@@ -79,6 +82,8 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 
 func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
+	// There is no Cap on backoff because setting a Cap will result in
+	// backoff stopped once the duration exceeds the Cap
 	var pbqWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt64,
 		Duration: 1 * time.Second,
@@ -88,8 +93,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
 	for _, m := range messages {
 		// identify and add window for the message
-		var attempt int
-		var writeErr error
+		var ctxClosedErr error
 		windows := rl.upsertWindowsAndKeys(m)
 		for _, kw := range windows {
 			// identify partition for message
@@ -101,20 +105,28 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 			//(kw.IntervalWindow, m.Key)
 
 			q := rl.processPartition(ctx, partitionID)
-			// write the message to PBQ
-			writeErr = wait.ExponentialBackoffWithContext(ctx, pbqWriteBackoff, func() (done bool, err error) {
-				writeErr = q.Write(ctx, &m.Message)
-				attempt += 1
-				if err != nil {
-					rl.log.Warnw("Failed to write message to pbq", zap.Any("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(writeErr))
-					return false, nil
-				}
-				return true, nil
-			})
 
-			if writeErr != nil {
-				rl.log.Errorw("Failed to write message to pbq", zap.Any("partitionID", partitionID.String()), zap.Error(writeErr))
+			writeFn := func(ctx context.Context, m *isb.ReadMessage) error {
+				return q.Write(ctx, &m.Message)
 			}
+
+			// write the message to PBQ
+			ctxClosedErr = rl.executeWithBackOff(ctx, writeFn, writeErrMsg, pbqWriteBackoff, m, partitionID)
+			if ctxClosedErr != nil {
+				rl.log.Errorw("Context closed while waiting to write the message to PBQ")
+				return
+			}
+
+			ackFn := func(_ context.Context, m *isb.ReadMessage) error {
+				return m.ReadOffset.AckIt()
+			}
+			// Ack the message to ISB
+			ctxClosedErr = rl.executeWithBackOff(ctx, ackFn, ackErrMsg, pbqWriteBackoff, m, partitionID)
+			if ctxClosedErr != nil {
+				rl.log.Errorw("Context closed while Acknowledging the message")
+				return
+			}
+
 		}
 		// close any windows that need to be closed.
 		wm := rl.waterMark(m)
@@ -125,6 +137,21 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 			rl.closePartitions(partitions)
 		}
 	}
+}
+
+func (rl *ReadLoop) executeWithBackOff(ctx context.Context, retryableFn func(ctx context.Context, message *isb.ReadMessage) error, errMsg string, pbqWriteBackoff wait.Backoff, m *isb.ReadMessage, partitionID partition.ID) error {
+	attempt := 0
+	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, pbqWriteBackoff, func() (done bool, err error) {
+		rErr := retryableFn(ctx, m)
+		attempt += 1
+		if rErr != nil {
+			rl.log.Errorw(errMsg, zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
+			return false, nil
+		}
+		return true, nil
+	})
+
+	return ctxClosedErr
 }
 
 func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
