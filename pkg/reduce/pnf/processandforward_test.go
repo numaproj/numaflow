@@ -2,7 +2,10 @@ package pnf
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,20 +25,29 @@ import (
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WhereTo(_ string) ([]string, error) {
-	return []string{"to1"}, nil
+func (f myForwardTest) WhereTo(key string) ([]string, error) {
+	if strings.Compare(key, "test-forward-one") == 0 {
+		return []string{"buffer1"}, nil
+	} else if strings.Compare(key, "test-forward-all") == 0 {
+		return []string{dfv1.MessageKeyAll}, nil
+	}
+	return []string{dfv1.MessageKeyDrop}, nil
 }
 
 func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
+type PayloadForTest struct {
+	Key   string
+	Value int64
+}
+
 func TestProcessAndForward_Process(t *testing.T) {
 	// 1. create a pbq which has to be passed to the process method
-	// 2. pass the pbqReader interface and create a new p and f instance
+	// 2. pass the pbqReader interface and create a new ProcessAndForward instance
 	// 3. mock the grpc client methods
 	// 4. assert to check if the process method is returning the result
-	// 5. assert to check if the persisted messages is deleted from the store
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
@@ -48,8 +60,8 @@ func TestProcessAndForward_Process(t *testing.T) {
 
 	size := 100
 	testPartition := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
 		Key:   "partition-1",
 	}
 	var err error
@@ -105,4 +117,130 @@ func TestProcessAndForward_Process(t *testing.T) {
 	err = prfd.Process(ctx)
 	assert.NoError(t, err)
 	assert.Len(t, prfd.result, 1)
+}
+
+func TestProcessAndForward_Forward(t *testing.T) {
+	ctx := context.Background()
+
+	var pbqManager *pbq.Manager
+
+	pbqManager, _ = pbq.NewManager(ctx)
+
+	test1Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
+	test1Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
+
+	toBuffers1 := map[string]isb.BufferWriter{
+		"buffer1": test1Buffer1,
+		"buffer2": test1Buffer2,
+	}
+
+	test2Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
+	test2Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
+
+	toBuffers2 := map[string]isb.BufferWriter{
+		"buffer1": test2Buffer1,
+		"buffer2": test2Buffer2,
+	}
+
+	test3Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
+	test3Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
+
+	toBuffers3 := map[string]isb.BufferWriter{
+		"buffer1": test3Buffer1,
+		"buffer2": test3Buffer2,
+	}
+
+	tests := []struct {
+		name     string
+		id       partition.ID
+		buffers  []*simplebuffer.InMemoryBuffer
+		pf       ProcessAndForward
+		expected []bool
+	}{
+		{
+			name: "test-forward-one",
+			id: partition.ID{
+				Start: time.Unix(60, 0),
+				End:   time.Unix(120, 0),
+				Key:   "test-forward-one",
+			},
+			buffers:  []*simplebuffer.InMemoryBuffer{test1Buffer1, test1Buffer2},
+			pf:       createProcessAndForward(ctx, "test-forward-one", pbqManager, toBuffers1),
+			expected: []bool{false, true},
+		},
+		{
+			name: "test-forward-all",
+			id: partition.ID{
+				Start: time.Unix(60, 0),
+				End:   time.Unix(120, 0),
+				Key:   "test-forward-all",
+			},
+			buffers:  []*simplebuffer.InMemoryBuffer{test2Buffer1, test2Buffer2},
+			pf:       createProcessAndForward(ctx, "test-forward-all", pbqManager, toBuffers2),
+			expected: []bool{false, false},
+		},
+		{
+			name: "test-drop-all",
+			id: partition.ID{
+				Start: time.Unix(60, 0),
+				End:   time.Unix(120, 0),
+				Key:   "test-drop-all",
+			},
+			buffers:  []*simplebuffer.InMemoryBuffer{test3Buffer1, test3Buffer2},
+			pf:       createProcessAndForward(ctx, "test-drop-all", pbqManager, toBuffers3),
+			expected: []bool{true, true},
+		},
+	}
+
+	for _, value := range tests {
+		t.Run(value.name, func(t *testing.T) {
+			err := value.pf.Forward(ctx)
+			assert.NoError(t, err)
+			assert.Equal(t, []bool{value.buffers[0].IsEmpty(), value.buffers[1].IsEmpty()}, value.expected)
+			assert.Equal(t, pbqManager.GetPBQ(value.id), nil)
+		})
+	}
+}
+
+func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string]isb.BufferWriter) ProcessAndForward {
+
+	testPartition := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Key:   key,
+	}
+
+	// create a pbq for a partition
+
+	var simplePbq pbq.Reader
+	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition)
+
+	resultPayload, _ := json.Marshal(PayloadForTest{
+		Key:   "result_payload",
+		Value: 100,
+	})
+
+	var result = []*isb.Message{
+		&isb.Message{
+			Header: isb.Header{
+				PaneInfo: isb.PaneInfo{
+					EventTime: time.Unix(60, 0),
+				},
+				ID: "1",
+			},
+			Body: isb.Body{Payload: resultPayload},
+		},
+	}
+
+	pf := ProcessAndForward{
+		Key:            testPartition,
+		UDF:            nil,
+		result:         result,
+		pbqReader:      simplePbq,
+		log:            nil,
+		toBuffers:      toBuffers,
+		whereToDecider: myForwardTest{},
+	}
+
+	return pf
 }

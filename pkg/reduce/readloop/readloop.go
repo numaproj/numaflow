@@ -128,9 +128,8 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 }
 
 func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
-	var q pbq.ReadWriteCloser
 	// create or get existing pbq
-	q = rl.pbqManager.GetPBQ(partitionID)
+	q := rl.pbqManager.GetPBQ(partitionID)
 
 	var infiniteBackoff = wait.Backoff{
 		Steps:    math.MaxInt64,
