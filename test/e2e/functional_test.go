@@ -162,31 +162,6 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	w.Expect().VertexPodLogNotContains("number-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
 }
 
-func (s *FunctionalSuite) TestFlatmapUDF() {
-	w := s.Given().Pipeline("@testdata/flatmap.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-
-	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
-		VertexPodLogContains("out", LogSinkVertexStarted)
-
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("hello,hello")).
-		Expect().
-		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("hello")).
-		Expect().
-		Status(204)
-
-	w.Expect().VertexPodLogContains("out", "hello", PodLogCheckOptionWithCount(3))
-}
-
 func (s *FunctionalSuite) TestWatermarkEnabled() {
 	w := s.Given().Pipeline("@testdata/watermark.yaml").
 		When().

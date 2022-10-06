@@ -1,0 +1,46 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: flatmap
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: go-split
+      udf:
+        container:
+          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/flatmap
+          image: quay.io/numaio/flatmap-example:go
+    - name: go-udsink
+      sink:
+        udsink:
+          container:
+            # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/udsink_log
+            image: quay.io/numaio/simplesink-example:go
+    - name: python-split
+      udf:
+        container:
+          args:
+            - python
+            - example.py
+          # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/function/flatmap
+          image: quay.io/numaio/flatmap-example:python
+    - name: python-udsink
+      sink:
+        udsink:
+          container:
+            args:
+            - python
+            - example.py
+            # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/simplesink
+            image: quay.io/numaio/simplesink-example:python
+  edges:
+    - from: in
+      to: go-split
+    - from: go-split
+      to: go-udsink
+    - from: in
+      to: python-split
+    - from: python-split
+      to: python-udsink

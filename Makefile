@@ -105,6 +105,7 @@ test-code:
 test-e2e:
 test-kafka-e2e:
 test-http-e2e:
+test-sdks-e2e:
 test-%: 
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
@@ -127,6 +128,7 @@ cleanup-e2e:
 
 # To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
 Test%:
+	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
