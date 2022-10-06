@@ -22,7 +22,7 @@ spec:
           duration: 1s
     - name: cat
       udf: # A user defined function
-        builtin: # Use a builtin function as the udf
+        builtin: # Use a built-in function as the udf
           name: cat # cats the message
     - name: out
       sink:
@@ -50,19 +50,17 @@ spec:
       source:
         http:
           # Whether to create a ClusterIP Service, defaults to false
-	  # xxx Needd example of how to send data to the endpoint
           service: true
           # Optional bearer token auth
-	  # xxx This is a k8s secret? How is this token used?
-#         auth:
-#           # A secret selector pointing to the secret contains token
-#           token:
-#             name: my-secret
-#             key: my-key
+    #         auth:
+    #           # A secret selector pointing to the secret contains token
+    #           token:
+    #             name: my-secret
+    #             key: my-key
     - name: cat
       udf:
         builtin:
-          name: cat # A builtin UDF which simply cats the message
+          name: cat # A built-in UDF which simply cats the message
     - name: out
       sink:
         # A simple log printing sink

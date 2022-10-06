@@ -19,9 +19,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 var log = logging.NewLogger()
@@ -120,7 +120,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	msgSize int32,
 	timeunit time.Duration,
 	writers []isb.BufferWriter,
-	fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores *generic.PublishWMStores, // watermarks
+	fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, // watermarks
 	opts ...Option) (*memgen, error) {
 	gensrc := &memgen{
 		rpu:            rpu,

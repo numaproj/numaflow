@@ -2,13 +2,13 @@
 
 A `Pipleline` consists of multiple vertices, `Source`, `Sink` and `UDF(User Defined Functions)`.
 
-UDF runs as a container in a Vertex Pod, processes the received data.
+UDF runs as a sidecar container in a Vertex Pod, processes the received data. The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.
 
 Data processing in the UDF is supposed to be idempotent.
 
 ## Builtin UDF
 
-There are some `Builtin Functions` that can be used directly.
+There are some [Built-in Functions](./builtin-functions/README.md) that can be used directly.
 
 ## Build Your Own UDF
 
@@ -20,23 +20,24 @@ package main
 import (
 	"context"
 
-	funcsdk "github.com/numaproj/numaflow-go/function"
+	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
+	"github.com/numaproj/numaflow-go/pkg/function/server"
 )
 
-// Simply return the same msg
-func handle(ctx context.Context, key, msg []byte) (funcsdk.Messages, error) {
-	return funcsdk.MessagesBuilder().Append(funcsdk.MessageToAll(msg)), nil
+func mapHandle(_ context.Context, key string, d functionsdk.Datum) functionsdk.Messages {
+	// Directly forward the input to the output
+	return functionsdk.MessagesBuilder().Append(functionsdk.MessageToAll(d.Value()))
 }
 
 func main() {
-	funcsdk.Start(context.Background(), handle)
+	server.New().RegisterMapper(functionsdk.MapFunc(mapHandle)).Start(context.Background())
 }
 ```
 
 Check the links below to see the UDF examples for different languages.
 
 - [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/function)
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/function)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples)
 
 After building a docker image for the written UDF, specify the image as below in the vertex spec.
 

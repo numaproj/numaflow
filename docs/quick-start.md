@@ -5,11 +5,13 @@ Install Numaflow and run a couple of example pipelines.
 ## Prerequisites
 
 A Kubernetes cluster is needed to try out Numaflow. A simple way to create a local cluster is using Docker Desktop.
-* https://www.docker.com/
-* https://www.docker.com/blog/how-kubernetes-works-under-the-hood-with-docker-desktop/
+
+- [Docker](https://www.docker.com)
+- [Docker Desktop](https://www.docker.com/blog/how-kubernetes-works-under-the-hood-with-docker-desktop)
 
 You will also need `kubectl` to manage the cluster.
-* [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+
+- [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 
 ## Installation
 
@@ -107,7 +109,7 @@ kubectl logs -f even-odd-odd-sink-0-a6p0n main
 View the UI for the advanced pipleline at https://localhost:8443/
 ![Numaflow UI](assets/numaflow-ui-advanced-pipeline.png)
 
-The source code of the `even-odd` [User Defined Function](./user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/examples/function/evenodd). You also can replace the [Log](./sinks/log.md) Sink with some other sinks like [Kafka](./sinks/kafka.md) to forward the data to Kafka topics.
+The source code of the `even-odd` [User Defined Function](./user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd). You also can replace the [Log](./sinks/log.md) Sink with some other sinks like [Kafka](./sinks/kafka.md) to forward the data to Kafka topics.
 
 The pipeline can be deleted by
 ```shell

@@ -178,11 +178,10 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// TODO: make it async (concurrent and wait later)
 	// let's track only the last element's watermark
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
-	if isdf.opts.isFromSourceVertex { // Set late data at source level
-		for _, m := range readMessages {
-			if processorWM.After(m.EventTime) {
-				m.IsLate = true
-			}
+	for _, m := range readMessages {
+		m.Watermark = time.Time(processorWM)
+		if isdf.opts.isFromSourceVertex && processorWM.After(m.EventTime) { // Set late data at source level
+			m.IsLate = true
 		}
 	}
 
@@ -252,10 +251,12 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
 	// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)?
-	for edgeName, offsets := range writeOffsets {
-		if len(offsets) > 0 {
-			if publisher, ok := isdf.publishWatermark[edgeName]; ok {
+	for bufferName, offsets := range writeOffsets {
+		if publisher, ok := isdf.publishWatermark[bufferName]; ok {
+			if len(offsets) > 0 {
 				publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
+			} else { // This only happens on sink vertex, and it does not care about the offset during watermark publishing
+				publisher.PublishWatermark(processorWM, nil)
 			}
 		}
 	}
@@ -410,7 +411,6 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
 func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, messageToStep map[string][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-
 	to, err := isdf.FSD.WhereTo(writeMessage.Key)
 
 	if err != nil {

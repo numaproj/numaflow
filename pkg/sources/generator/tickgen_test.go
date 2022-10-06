@@ -7,6 +7,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -28,7 +29,7 @@ func TestRead(t *testing.T) {
 		Replica:  0,
 	}
 
-	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	toSteps := map[string]isb.BufferWriter{
 		"writer": dest,
 	}
@@ -61,7 +62,7 @@ func TestStop(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	publishWMStore := generic.BuildPublishWMStores(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	toSteps := map[string]isb.BufferWriter{
 		"writer": dest,
 	}

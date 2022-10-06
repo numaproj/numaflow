@@ -276,12 +276,10 @@ type PipelineSpec struct {
 	InterStepBufferServiceName string `json:"interStepBufferServiceName,omitempty" protobuf:"bytes,1,opt,name=interStepBufferServiceName"`
 	// +patchStrategy=merge
 	// +patchMergeKey=name
-	Vertices []AbstractVertex `json:"vertices,omitempty" protobuf:"bytes,2,rep,name=vertices"`
+	Vertices []AbstractVertex `json:"vertices,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,2,rep,name=vertices"`
 	// Edges define the relationships between vertices
 	Edges []Edge `json:"edges,omitempty" protobuf:"bytes,3,rep,name=edges"`
 	// Lifecycle define the Lifecycle properties
-	// +patchStrategy=merge
-	// +patchMergeKey=name
 	// +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running}
 	// +optional
 	Lifecycle Lifecycle `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`

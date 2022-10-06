@@ -4,14 +4,6 @@ metadata:
   name: numaflow-controller-config
 data:
   controller-config.yaml: |
-    udf:
-      # UDF responds the messages in what Content-Type. Available options: application/msgpack, application/json.
-      # Defaults to application/msgpack
-      contentType: application/msgpack
-    sink:
-      # UDSink accepts and responds the messages in what Content-Type. Available options: application/msgpack, application/json.
-      # Defaults to application/msgpack
-      contentType: application/msgpack
     isbsvc:
       redis:
         # Default Redis settings, could be overridden by InterStepBufferService specs
@@ -104,3 +96,8 @@ data:
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: nats-server
+        - version: 2.9.1
+          natsImage: nats:2.9.1
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server

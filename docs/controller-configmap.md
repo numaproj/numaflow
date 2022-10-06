@@ -15,14 +15,9 @@ metadata:
   name: numaflow-controller-config
 data:
   controller-config.yaml: |
-    udf:
-      # UDF responds the messages in what Content-Type. Available options: application/msgpack, application/json.
-      # Defaults to application/msgpack
-      contentType: application/msgpack
-    sink:
-      # UDSink accepts and responds the messages in what Content-Type. Available options: application/msgpack, application/json.
-      # Defaults to application/msgpack
-      contentType: application/msgpack
+    isbsvc:
+      jetstream:
+        ...
 ```
 
 ### ISB Service Configuration
