@@ -77,7 +77,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 	// output channel is buffered to support bulk reads
 	p := &PBQ{
 		store:       persistentStore,
-		output:      make(chan *isb.Message, m.pbqOptions.channelBufferSize),
+		output:      make(chan *isb.ReadMessage, m.pbqOptions.channelBufferSize),
 		cob:         false,
 		PartitionID: partitionID,
 		options:     m.pbqOptions,

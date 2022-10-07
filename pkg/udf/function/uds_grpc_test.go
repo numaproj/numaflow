@@ -261,7 +261,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			},
 		}, nil)
 
-		messageCh := make(chan *isb.Message)
+		messageCh := make(chan *isb.ReadMessage)
 
 		mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
@@ -275,7 +275,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		messages := testutils.BuildTestWriteMessages(10, time.Now())
+		messages := testutils.BuildTestReadMessages(10, time.Now())
 
 		go func() {
 			for index := range messages {
@@ -319,8 +319,8 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
 
-		messageCh := make(chan *isb.Message)
-		messages := testutils.BuildTestWriteMessages(10, time.Now())
+		messageCh := make(chan *isb.ReadMessage)
+		messages := testutils.BuildTestReadMessages(10, time.Now())
 
 		go func() {
 			for index := range messages {
@@ -364,7 +364,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
 
-		messageCh := make(chan *isb.Message)
+		messageCh := make(chan *isb.ReadMessage)
 
 		_, err := u.Reduce(ctx, messageCh)
 
@@ -386,12 +386,12 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	messageCh := make(chan *isb.Message, 10)
+	messageCh := make(chan *isb.ReadMessage, 10)
 	datumStreamCh := make(chan *functionpb.Datum, 10)
-	messages := testutils.BuildTestWriteMessages(10, time.Now())
+	messages := testutils.BuildTestReadMessages(10, time.Now())
 
 	go func() {
-		for index := range messages {
+		for index, _ := range messages {
 			messageCh <- &messages[index]
 			datumStreamCh <- createDatum(&messages[index])
 		}

@@ -33,7 +33,7 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 	//write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
 	for _, msg := range writeMessages {
 		err := memStore.Write(&msg)
@@ -61,13 +61,13 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	//write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
 	for _, msg := range writeMessages {
 		err := memStore.Write(&msg)
 		assert.NoError(t, err)
 	}
-	var readMessages []*isb.Message
+	var readMessages []*isb.ReadMessage
 	readMessages, _, err = memStore.Read(int64(msgCount))
 	assert.NoError(t, err)
 	// number of read messages should be equal to msgCount
@@ -117,7 +117,7 @@ func TestFullStore_Write(t *testing.T) {
 	//write 100 isb messages to persisted store
 	msgCount := 100
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
 	for _, msg := range writeMessages {
 		err := memStore.Write(&msg)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"strings"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 
 	// write messages to pbq
 	go func() {
-		writeMessages := testutils.BuildTestWriteMessages(10, time.Now())
+		writeMessages := testutils.BuildTestReadMessages(10, time.Now())
 		for index := range writeMessages {
 			err := simplePbq.Write(ctx, &writeMessages[index])
 			assert.NoError(t, err)
@@ -110,9 +111,9 @@ func TestProcessAndForward_Process(t *testing.T) {
 	client := udfcall.NewUdsGRPCBasedUDFWithClient(c)
 
 	assert.NoError(t, err)
-
+	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
 	// create pf using key and reducer
-	prfd := NewProcessAndForward(ctx, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{})
+	prfd := NewProcessAndForward(ctx, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{}, publishWatermark)
 
 	err = prfd.Process(ctx)
 	assert.NoError(t, err)
@@ -211,7 +212,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 	}
 
 	// create a pbq for a partition
-
+	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
 	var simplePbq pbq.Reader
 	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition)
 
@@ -233,13 +234,14 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 	}
 
 	pf := ProcessAndForward{
-		Key:            testPartition,
-		UDF:            nil,
-		result:         result,
-		pbqReader:      simplePbq,
-		log:            nil,
-		toBuffers:      toBuffers,
-		whereToDecider: myForwardTest{},
+		Key:              testPartition,
+		UDF:              nil,
+		result:           result,
+		pbqReader:        simplePbq,
+		log:              nil,
+		toBuffers:        toBuffers,
+		whereToDecider:   myForwardTest{},
+		publishWatermark: pw,
 	}
 
 	return pf

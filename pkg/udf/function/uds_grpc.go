@@ -103,7 +103,7 @@ func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 // should we pass metadata information ?
 
 // Reduce accepts a channel of isbMessages and returns the aggregated result
-func (u *udsGRPCBasedUDF) Reduce(ctx context.Context, messageStream <-chan *isb.Message) ([]*isb.Message, error) {
+func (u *udsGRPCBasedUDF) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	datumCh := make(chan *functionpb.Datum)
 	var wg sync.WaitGroup
 	var result []*functionpb.Datum
@@ -169,7 +169,7 @@ readLoop:
 	return writeMessages, nil
 }
 
-func createDatum(readMessage *isb.Message) *functionpb.Datum {
+func createDatum(readMessage *isb.ReadMessage) *functionpb.Datum {
 	key := readMessage.Key
 	payload := readMessage.Body.Payload
 	parentPaneInfo := readMessage.PaneInfo
@@ -178,7 +178,7 @@ func createDatum(readMessage *isb.Message) *functionpb.Datum {
 		Key:       key,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
-		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
+		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
 	}
 	return d
 }
