@@ -45,13 +45,14 @@
 }
 
 .node-icon {
-    width: 1em;
-    height: 1em;
+    width: 1.1em;
+    height: 1.1em;
     display: inline-block;
     vertical-align: middle;
     position: relative;
-    margin-left: 2px;
-    margin-right: 3px;
+    margin-left: 1px;
+    margin-right: 1px;
+    padding-bottom: 0.5px;
 }
 
 .node-podnum {
