@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -29,15 +30,15 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer,
 		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		stream := s.Name
-		group := fmt.Sprintf("%s-group", stream)
+		stream := redisclient.GetRedisStreamName(s.Name)
+		group := fmt.Sprintf("%s-group", s.Name)
 		err := r.client.CreateStreamGroup(ctx, stream, group, redisclient.ReadFromEarliest)
 		if err != nil {
 			if redisclient.IsAlreadyExistError(err) {
 				log.Warnw("Stream already exists.", zap.String("group", group), zap.String("stream", stream))
 			} else {
 				failToCreate = true
-				log.Errorw("Failed to Redis Stream and Group creation.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
+				log.Errorw("Failed to create Redis Stream and Group.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
 			}
 		} else {
 			log.Infow("Redis StreamGroup created", zap.String("group", group), zap.String("stream", stream))
@@ -51,54 +52,52 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer,
 
 // DeleteBuffers is used to delete the inter-step redis buffers.
 func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
+	// FIXME: delete the keys created by the lua script
 	log := logging.FromContext(ctx)
-	failToDelete := false
-	streamNames := []string{}
+	var errList error
 	for _, s := range buffers {
 		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		stream := s.Name
-		streamNames = append(streamNames, stream)
-		group := fmt.Sprintf("%s-group", stream)
+		stream := redisclient.GetRedisStreamName(s.Name)
+		group := fmt.Sprintf("%s-group", s.Name)
 		if err := r.client.DeleteStreamGroup(ctx, stream, group); err != nil {
 			if redisclient.NotFoundError(err) {
-				log.Warnw("Redis Streams group is not found.", zap.String("group", group), zap.String("stream", stream))
+				log.Warnw("Redis StreamGroup is not found.", zap.String("group", group), zap.String("stream", stream))
 			} else {
-				failToDelete = true
-				log.Errorw("Failed Redis StreamGroup deletion.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
+				errList = multierr.Append(errList, err)
+				log.Errorw("Failed to delete Redis StreamGroup.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
 			}
 		} else {
 			log.Infow("Redis StreamGroup deleted", zap.String("group", group), zap.String("stream", stream))
 		}
-	}
-	if !failToDelete {
-		log.Infow("Deleted Redis Streams groups successfully")
-	}
 
-	err := r.client.DeleteKeys(ctx, streamNames...)
-	if err != nil {
-		return err
+		if err := r.client.DeleteKeys(ctx, stream); err != nil {
+			errList = multierr.Append(errList, err)
+			log.Errorw("Failed to delete Redis keys.", zap.String("stream", stream), zap.Error(err))
+		} else {
+			log.Infow("Redis keys deleted", zap.String("stream", stream))
+		}
 	}
-	log.Infow("Deleted Redis Streams successfully")
-
-	if failToDelete {
-		return fmt.Errorf("failed all or some Stream group deletion")
+	if errList != nil {
+		return fmt.Errorf("failed to delete all or some Redis StreamGroups and keys")
 	}
+	log.Infow("Deleted Redis StreamGroups and keys successfully")
 	return nil
 }
 
 // ValidateBuffers is used to validate inter-step redis buffers to see if the stream/stream group exist
 func (r *isbsRedisSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
-	for _, stream := range buffers {
-		if stream.Type != dfv1.EdgeBuffer {
+	for _, s := range buffers {
+		if s.Type != dfv1.EdgeBuffer {
 			continue
 		}
-		if !r.client.IsStreamExists(ctx, stream.Name) {
-			return fmt.Errorf("stream %s not existing", stream.Name)
+		var stream = redisclient.GetRedisStreamName(s.Name)
+		if !r.client.IsStreamExists(ctx, stream) {
+			return fmt.Errorf("s %s not existing", stream)
 		}
-		group := fmt.Sprintf("%s-group", stream.Name)
-		if !r.client.IsStreamGroupExists(ctx, stream.Name, group) {
+		group := fmt.Sprintf("%s-group", s.Name)
+		if !r.client.IsStreamGroupExists(ctx, stream, group) {
 			return fmt.Errorf("group %s not existing", group)
 		}
 	}

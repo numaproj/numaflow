@@ -2,7 +2,9 @@ package redis
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/go-redis/redis/v8"
@@ -29,13 +31,18 @@ func NewRedisClient(options *redis.UniversalOptions) *RedisClient {
 	return client
 }
 
-// NewInClusterRedisClient returns a new Redis Client, it assums it's in a vertex pod,
-// where those requied environment variables are available.
+// NewInClusterRedisClient returns a new Redis Client, it assumes it's in a vertex pod,
+// where those required environment variables are available.
 func NewInClusterRedisClient() *RedisClient {
 	opts := &redis.UniversalOptions{
 		Username:   os.Getenv(v1alpha1.EnvISBSvcRedisUser),
 		Password:   os.Getenv(v1alpha1.EnvISBSvcRedisPassword),
 		MasterName: os.Getenv(v1alpha1.EnvISBSvcSentinelMaster),
+		// MaxRedirects is an option for redis cluster mode.
+		// The default value is set 3 to allow redirections when using redis cluster mode.
+		// ref: if we use redis cluster client directly instead of redis universal client, the default value is 3
+		//      https://github.com/go-redis/redis/blob/f6a8adc50cdaec30527f50d06468f9176ee674fe/cluster.go#L33-L36
+		MaxRedirects: 3,
 	}
 	if opts.MasterName != "" {
 		urls := os.Getenv(v1alpha1.EnvISBSvcRedisSentinelURL)
@@ -49,6 +56,10 @@ func NewInClusterRedisClient() *RedisClient {
 			opts.Addrs = strings.Split(urls, ",")
 		}
 	}
+	if i, e := strconv.Atoi(os.Getenv(v1alpha1.EnvISBSvcRedisClusterMaxRedirects)); e == nil {
+		opts.MaxRedirects = i
+	}
+
 	return NewRedisClient(opts)
 }
 
@@ -83,7 +94,7 @@ func (cl *RedisClient) IsStreamExists(ctx context.Context, streamKey string) boo
 	return err == nil
 }
 
-// IsStreamExists check the redis keys exists
+// PendingMsgCount returns how many messages are pending.
 func (cl *RedisClient) PendingMsgCount(ctx context.Context, streamKey, consumerGroup string) (int64, error) {
 	cmd := cl.Client.XPending(ctx, streamKey, consumerGroup)
 	pending, err := cmd.Result()
@@ -116,4 +127,8 @@ func IsAlreadyExistError(err error) bool {
 
 func NotFoundError(err error) bool {
 	return strings.Contains(err.Error(), "requires the key to exist")
+}
+
+func GetRedisStreamName(s string) string {
+	return fmt.Sprintf("{%s}", s)
 }
