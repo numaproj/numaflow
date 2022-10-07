@@ -1545,19 +1545,31 @@
 <tr>
 <td><code>forwarder_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt; <br> <code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Provides the total number of messages read by a given Vertex from an Inter-Step Buffer</td>
+</tr>
+<tr>
+<td><code>forwarder_read_bytes_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td>Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer</td>
 </tr>
 <tr>
 <td><code>forwarder_write_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt; <br> <code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Provides the total number of messages written to Inter-Step Buffer by a given Vertex</td>
+</tr>
+<tr>
+<td><code>forwarder_write_bytes_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td>Provides the total number of bytes written to Inter-Step Buffer by a given Vertex</td>
 </tr>
 <tr>
 <td><code>forwarder_ack_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt; <br> <code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer</td>
 </tr>
 </tbody>
@@ -1576,13 +1588,13 @@
 <tr>
 <td><code>kafka_source_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Provides the number of messages read by the Kafka Source Vertex/Processor.</td>
 </tr>
 <tr>
 <td><code>kafka_source_ack_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Provides the number of messages acknowledged by the Kafka Source Vertex/Processor</td>
 </tr>
 </tbody>
@@ -1601,7 +1613,7 @@
 <tr>
 <td><code>tickgen_source_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Provides the number of messages read by the Generator Source Vertex/Processor.</td>
 </tr>
 </tbody>
@@ -1620,7 +1632,7 @@
 <tr>
 <td><code>http_source_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Provides the number of messages read by the HTTP Source Vertex/Processor.</td>
 </tr>
 </tbody>
@@ -1639,7 +1651,7 @@
 <tr>
 <td><code>kafka_sink_write_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Provides the number of messages written by the Kafka Sink Vertex/Processor</td>
 </tr>
 </tbody>
@@ -1658,7 +1670,7 @@
 <tr>
 <td><code>log_sink_write_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Provides the number of messages written by the Log Sink Vertex/Processor</td>
 </tr>
 </tbody>
@@ -1678,13 +1690,13 @@
 <tr>
 <td><code>forwarder_udf_processing_time</code></td>
 <td>Histogram</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt; <br> <code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Provides a histogram distribution of the processing times of User Defined Functions. (UDF's)</td>
 </tr>
 <tr>
 <td><code>forwarder_forward_chunk_processing_time</code></td>
 <td>Histogram</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt; <br> <code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Provides a histogram distribution of the processing times of the forwarder function as a whole</td>
 </tr>
 </tbody>
@@ -1704,67 +1716,67 @@
 <tr>
 <td><code>forwarder_platform_error</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt; <br> <code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates any internal errors which could stop pipeline processing</td>
 </tr>
 <tr>
 <td><code>forwarder_read_error</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt; <br> <code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates any errors while reading messages by the forwarder</td>
 </tr>
 <tr>
 <td><code>forwarder_write_error</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt; <br> <code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates any errors while writing messages by the forwarder</td>
 </tr>
 <tr>
 <td><code>forwarder_ack_error</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt; <br> <code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates any errors while acknowledging messages by the forwarder</td>
 </tr>
 <tr>
 <td><code>kafka_source_offset_ack_errors</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Indicates any kafka acknowledgement errors</td>
 </tr>
 <tr>
 <td><code>kafka_sink_write_error_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Provides the number of errors while writing to the Kafka sink</td>
 </tr>
 <tr>
 <td><code>kafka_sink_write_timeout_total</code></td>
 <td>Counter</td>
-<td><code>vertex</code>=&lt;vertex-name&gt; <br> <code>pipeline</code>=&lt;pipeline-name&gt;</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Provides the write timeouts while writing to the Kafka sink</td>
 </tr>
 <tr>
 <td><code>isb_jetstream_read_error_total</code></td>
 <td>Counter</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates any read errors with NATS Jetstream ISB</td>
 </tr>
 <tr>
 <td><code>isb_jetstream_write_error_total</code></td>
 <td>Counter</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates any write errors with NATS Jetstream ISB</td>
 </tr>
 <tr>
 <td><code>isb_redis_read_error_total</code></td>
 <td>Counter</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates any read errors with Redis ISB</td>
 </tr>
 <tr>
 <td><code>isb_redis_write_error_total</code></td>
 <td>Counter</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates any write errors with Redis ISB</td>
 </tr>
 </tbody>
@@ -1784,31 +1796,31 @@
 <tr>
 <td><code>isb_jetstream_isFull_total</code></td>
 <td>Counter</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates if the ISB is full. Continual increase of this counter metric indicates a potential backpressure that can be built on the pipeline</td>
 </tr>
 <tr>
 <td><code>isb_jetstream_buffer_soft_usage</code></td>
 <td>Gauge</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates the usage/utilization of a NATS Jetstream ISB</td>
 </tr>
 <tr>
 <td><code>isb_jetstream_buffer_solid_usage</code></td>
 <td>Gauge</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates the solid usage of a NATS Jetstream ISB</td>
 </tr>
 <tr>
 <td><code>isb_jetstream_buffer_pending</code></td>
 <td>Gauge</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicate the number of pending messages at a given point in time.</td>
 </tr>
 <tr>
 <td><code>isb_jetstream_buffer_ack_pending</code></td>
 <td>Gauge</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates the number of messages pending acknowledge at a given point in time</td>
 </tr>
 </tbody>
@@ -1827,19 +1839,19 @@
 <tr>
 <td><code>isb_redis_isFull_total</code></td>
 <td>Counter</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates if the ISB is full. Continual increase of this counter metric indicates a potential backpressure that can be built on the pipeline</td>
 </tr>
 <tr>
 <td><code>isb_redis_buffer_usage</code></td>
 <td>Gauge</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates the usage/utilization of a Redis ISB</td>
 </tr>
 <tr>
 <td><code>isb_redis_consumer_lag</code></td>
 <td>Gauge</td>
-<td><code>buffer</code>=&lt;buffer-name&gt;</td>
+<td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates the the consumer lag of a Redis ISB</td>
 </tr>
 </tbody>
