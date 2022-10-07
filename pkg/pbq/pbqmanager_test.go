@@ -100,7 +100,7 @@ func TestPBQFlow(t *testing.T) {
 	wg.Add(1)
 
 	// read messages from pbq
-	var readMessages []*isb.Message
+	var readMessages []*isb.ReadMessage
 
 	go func() {
 	readLoop:
@@ -121,7 +121,7 @@ func TestPBQFlow(t *testing.T) {
 	}()
 
 	// write messages to pbq
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgsCount), time.Now())
+	writeMessages := testutils.BuildTestReadMessages(int64(msgsCount), time.Now())
 	for _, msg := range writeMessages {
 		err := pq.Write(ctx, &msg)
 		assert.NoError(t, err)
@@ -158,7 +158,7 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 	msgsCount := 50
 	var wg sync.WaitGroup
 
-	var readMessages []*isb.Message
+	var readMessages []*isb.ReadMessage
 
 	// read messages from pbq(with no op store)
 	wg.Add(1)
@@ -181,7 +181,7 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 	}()
 
 	// write messages to pbq
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgsCount), time.Now())
+	writeMessages := testutils.BuildTestReadMessages(int64(msgsCount), time.Now())
 	for _, msg := range writeMessages {
 		err := pq.Write(ctx, &msg)
 		assert.NoError(t, err)
@@ -216,7 +216,7 @@ func TestManager_Replay(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	var readMessages []*isb.Message
+	var readMessages []*isb.ReadMessage
 	// go routine which reads the messages from pbq
 	go func() {
 	readLoop:
@@ -238,7 +238,7 @@ func TestManager_Replay(t *testing.T) {
 
 	// write 50 messages to pbq
 	msgsCount := 50
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgsCount), time.Now())
+	writeMessages := testutils.BuildTestReadMessages(int64(msgsCount), time.Now())
 
 	for _, msg := range writeMessages {
 		err := pq.Write(ctx, &msg)

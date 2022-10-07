@@ -16,7 +16,7 @@ var COBErr error = errors.New("error while writing to pbq, pbq is closed")
 // will have a PBQ associated with it
 type PBQ struct {
 	store       store.Store
-	output      chan *isb.Message
+	output      chan *isb.ReadMessage
 	cob         bool // cob to avoid panic in case writes happen after close of book
 	PartitionID partition.ID
 	options     *options
@@ -27,7 +27,7 @@ type PBQ struct {
 var _ ReadWriteCloser = (*PBQ)(nil)
 
 // Write writes message to pbq and persistent store
-func (p *PBQ) Write(ctx context.Context, message *isb.Message) error {
+func (p *PBQ) Write(ctx context.Context, message *isb.ReadMessage) error {
 	// if cob we should return
 	if p.cob {
 		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.Header))
@@ -63,7 +63,7 @@ func (p *PBQ) Close() error {
 
 // ReadCh exposes read channel to read messages from PBQ
 // close on read channel indicates COB
-func (p *PBQ) ReadCh() <-chan *isb.Message {
+func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
 	return p.output
 }
 

@@ -7,9 +7,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,13 +28,14 @@ import (
 // ProcessAndForward reads messages from pbq and invokes udf using grpc
 // and forwards the results to ISB
 type ProcessAndForward struct {
-	Key            partition.ID
-	UDF            udfreducer.Reducer
-	result         []*isb.Message
-	pbqReader      pbq.Reader
-	log            *zap.SugaredLogger
-	toBuffers      map[string]isb.BufferWriter
-	whereToDecider forward.ToWhichStepDecider
+	Key              partition.ID
+	UDF              udfreducer.Reducer
+	result           []*isb.Message
+	pbqReader        pbq.Reader
+	log              *zap.SugaredLogger
+	toBuffers        map[string]isb.BufferWriter
+	whereToDecider   forward.ToWhichStepDecider
+	publishWatermark map[string]publish.Publisher
 }
 
 // NewProcessAndForward will return a new ProcessAndForward instance
@@ -40,14 +44,15 @@ func NewProcessAndForward(ctx context.Context,
 	udf udfreducer.Reducer,
 	pbqReader pbq.Reader,
 	toBuffers map[string]isb.BufferWriter,
-	whereToDecider forward.ToWhichStepDecider) *ProcessAndForward {
+	whereToDecider forward.ToWhichStepDecider, pw map[string]publish.Publisher) *ProcessAndForward {
 	return &ProcessAndForward{
-		Key:            partitionID,
-		UDF:            udf,
-		pbqReader:      pbqReader,
-		log:            logging.FromContext(ctx),
-		toBuffers:      toBuffers,
-		whereToDecider: whereToDecider,
+		Key:              partitionID,
+		UDF:              udf,
+		pbqReader:        pbqReader,
+		log:              logging.FromContext(ctx),
+		toBuffers:        toBuffers,
+		whereToDecider:   whereToDecider,
+		publishWatermark: pw,
 	}
 }
 
@@ -74,13 +79,62 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	// splits the partitionId to get the message key
 	// example 123-456-key-hl -> key-hl
-	messageKey := strings.SplitAfterN(p.Key.String(), "-", 3)[2]
-	to, err := p.whereToDecider.WhereTo(messageKey)
+	strArr := strings.SplitAfterN(p.Key.String(), "-", 3)
+	messageKey := strArr[2]
 
+	// extract window end time from the partitionID, which will be used for watermark
+	winEndTimestamp, _ := strconv.ParseInt(strArr[1], 0, 64)
+	processorWM := processor.Watermark(time.Unix(winEndTimestamp, 0))
+
+	to, err := p.whereToDecider.WhereTo(messageKey)
 	if err != nil {
 		return err
 	}
+	messagesToStep := p.whereToStep(to)
+	// keep retrying until shutdown is triggered
+	writeOffsets := make(map[string][]isb.Offset)
+	// write to isb
+	// parallel writes to isb
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	success := true
+	for key, messages := range messagesToStep {
+		bufferID := key
+		if len(messages) == 0 {
+			continue
+		}
+		wg.Add(1)
+		resultMessages := messages
+		go func() {
+			defer wg.Done()
+			offsets, writeErr := p.writeToBuffer(ctx, bufferID, resultMessages)
+			if writeErr != nil {
+				success = false
+				return
+			}
+			mu.Lock()
+			writeOffsets[bufferID] = offsets
+			mu.Unlock()
+		}()
+	}
 
+	// wait until all the writer go routines return
+	wg.Wait()
+	// even if one write go routines fails, don't ack just return
+	if !success {
+		return errors.New("failed to forward the messages to isb")
+	}
+
+	p.publishWM(processorWM, writeOffsets)
+	// delete the persisted messages
+	err = p.pbqReader.GC()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][]isb.Message)
 	writeMessages := make([]isb.Message, len(p.result))
@@ -101,8 +155,10 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		}
 
 	}
+	return messagesToStep
+}
 
-	// keep retrying until shutdown is triggered
+func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var ISBWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt64,
 		Duration: 1 * time.Second,
@@ -110,49 +166,33 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		Jitter:   0.1,
 	}
 
-	// write to isb
-	// parallel writes to isb
-	var wg sync.WaitGroup
-	success := true
-	for key, messages := range messagesToStep {
-		bufferID := key
-		if len(messages) == 0 {
-			continue
-		}
-		wg.Add(1)
-		resultMessages := messages
-		go func() {
-			defer wg.Done()
-			var failedMessages []isb.Message
-			writeErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
-				_, writeErrs := p.toBuffers[bufferID].Write(ctx, resultMessages)
-				for i, message := range resultMessages {
-					if writeErrs[i] != nil {
-						failedMessages = append(failedMessages, message)
-					}
-				}
-				if len(failedMessages) > 0 {
-					resultMessages = failedMessages
-					return false, nil
-				}
-				return true, nil
-			})
-			if writeErr != nil {
-				success = false
+	// write to isb with infinite exponential backoff (till shutdown is triggered)
+	var failedMessages []isb.Message
+	var offsets []isb.Offset
+	writeErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
+		var writeErrs []error
+		offsets, writeErrs = p.toBuffers[bufferID].Write(ctx, resultMessages)
+		for i, message := range resultMessages {
+			if writeErrs[i] != nil {
+				failedMessages = append(failedMessages, message)
 			}
-		}()
+		}
+		// retry only the failed messages
+		if len(failedMessages) > 0 {
+			resultMessages = failedMessages
+			return false, nil
+		}
+		return true, nil
+	})
+	return offsets, writeErr
+}
+
+func (p *ProcessAndForward) publishWM(wm processor.Watermark, writeOffsets map[string][]isb.Offset) {
+	for bufferName, offsets := range writeOffsets {
+		if publisher, ok := p.publishWatermark[bufferName]; ok {
+			if len(offsets) > 0 {
+				publisher.PublishWatermark(wm, offsets[len(offsets)-1])
+			}
+		}
 	}
-	// even if one write go routines fails, don't ack just return
-	if !success {
-		return errors.New("failed to forward the messages to isb")
-	}
-	// wait until all the writer go routines return
-	wg.Wait()
-	// TODO publish watermark using offsets
-	// delete the persisted messages
-	err = p.pbqReader.GC()
-	if err != nil {
-		return err
-	}
-	return nil
 }

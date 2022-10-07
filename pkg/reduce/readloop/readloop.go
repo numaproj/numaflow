@@ -13,6 +13,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/reducer"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"math"
@@ -41,6 +42,7 @@ type ReadLoop struct {
 	log               *zap.SugaredLogger
 	toBuffers         map[string]isb.BufferWriter
 	whereToDecider    forward.ToWhichStepDecider
+	publishWatermark  map[string]publish.Publisher
 }
 
 // NewReadLoop initializes ReadLoop struct
@@ -48,19 +50,21 @@ func NewReadLoop(ctx context.Context,
 	pbqManager *pbq.Manager,
 	windowingStrategy window.Windower,
 	toBuffers map[string]isb.BufferWriter,
-	whereToDecider forward.ToWhichStepDecider) *ReadLoop {
+	whereToDecider forward.ToWhichStepDecider,
+	pw map[string]publish.Publisher) *ReadLoop {
 
 	op := NewOrderedProcessor()
 
 	rl := &ReadLoop{
 		windowingStrategy: windowingStrategy,
 		// TODO pass window type
-		aw:             fixed.NewWindows(),
-		pbqManager:     pbqManager,
-		op:             op,
-		log:            logging.FromContext(ctx),
-		toBuffers:      toBuffers,
-		whereToDecider: whereToDecider,
+		aw:               fixed.NewWindows(),
+		pbqManager:       pbqManager,
+		op:               op,
+		log:              logging.FromContext(ctx),
+		toBuffers:        toBuffers,
+		whereToDecider:   whereToDecider,
+		publishWatermark: pw,
 	}
 	op.StartUp(ctx)
 	return rl
@@ -107,7 +111,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 			q := rl.processPartition(ctx, partitionID)
 
 			writeFn := func(ctx context.Context, m *isb.ReadMessage) error {
-				return q.Write(ctx, &m.Message)
+				return q.Write(ctx, m)
 			}
 
 			// write the message to PBQ
@@ -169,7 +173,7 @@ func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.
 		var pbqErr error
 		pbqErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func() (done bool, err error) {
 			var attempt int
-			_, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID)
+			q, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID)
 
 			if pbqErr != nil {
 				attempt += 1
@@ -194,7 +198,7 @@ func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.
 			return true, nil
 		})
 		if udfErr == nil {
-			rl.op.process(ctx, udf, q, partitionID, rl.toBuffers, rl.whereToDecider)
+			rl.op.process(ctx, udf, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
 		}
 	}
 	return q

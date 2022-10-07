@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"sync"
 	"time"
 
@@ -40,9 +41,10 @@ func (op *orderedProcessor) process(ctx context.Context,
 	pbq pbq.Reader,
 	partitionID partition.ID,
 	toBuffers map[string]isb.BufferWriter,
-	whereToDecider forward.ToWhichStepDecider) {
+	whereToDecider forward.ToWhichStepDecider,
+	pw map[string]publish.Publisher) {
 
-	pf := pnf.NewProcessAndForward(ctx, partitionID, udf, pbq, toBuffers, whereToDecider)
+	pf := pnf.NewProcessAndForward(ctx, partitionID, udf, pbq, toBuffers, whereToDecider, pw)
 	doneCh := make(chan struct{})
 	t := &task{
 		doneCh: doneCh,

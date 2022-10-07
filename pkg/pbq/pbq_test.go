@@ -30,7 +30,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	// write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
@@ -41,7 +41,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	pq, err := qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
-	var readMessages []*isb.Message
+	var readMessages []*isb.ReadMessage
 	// run a parallel go routine which reads from pbq
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -94,7 +94,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	//write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
@@ -105,7 +105,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
-	var readMessages []*isb.Message
+	var readMessages []*isb.ReadMessage
 	// run a parallel go routine which reads from pbq
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -160,7 +160,7 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	// write 101 isb messages to pbq, but the store size is 100, we should get store is full error
 	msgCount := 101
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),

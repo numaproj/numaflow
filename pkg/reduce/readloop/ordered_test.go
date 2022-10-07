@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"testing"
 	"time"
 
@@ -31,10 +32,10 @@ func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*
 func TestOrderedProcessing(t *testing.T) {
 
 	// Test Reducer returns the messages as is
-	identityReducer := reducer.ReduceFunc(func(ctx context.Context, input <-chan *isb.Message) ([]*isb.Message, error) {
+	identityReducer := reducer.ReduceFunc(func(ctx context.Context, input <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 		messages := make([]*isb.Message, 0)
 		for msg := range input {
-			messages = append(messages, msg)
+			messages = append(messages, &msg.Message)
 		}
 		return messages, nil
 	})
@@ -42,6 +43,7 @@ func TestOrderedProcessing(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
 
 	ctx := context.Background()
 
@@ -94,7 +96,7 @@ func TestOrderedProcessing(t *testing.T) {
 			defer cancelFn()
 			for _, partition := range tt.partitions {
 				p, _ := pbqManager.CreateNewPBQ(ctx, partition)
-				op.process(cCtx, identityReducer, p, partition, toSteps, myForwardTest{})
+				op.process(cCtx, identityReducer, p, partition, toSteps, myForwardTest{}, pw)
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
 			count := 0
