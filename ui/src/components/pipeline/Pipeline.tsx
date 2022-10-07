@@ -164,18 +164,10 @@ export function Pipeline() {
       vertexWatermark
     ) {
       pipeline.spec.vertices.map((vertex) => {
-        const podsLength = vertexPods.has(vertex.name)
-          ? vertexPods.get(vertex.name)
-          : 0;
         const newNode = {} as Node;
         newNode.id = vertex.name;
-        let label;
-        if (podsLength === 1) {
-          label = `${vertex.name} - ${podsLength} pod`;
-        } else {
-          label = `${vertex.name} - ${podsLength} pods`;
-        }
-        newNode.data = { label: label };
+        newNode.data = { name: vertex.name};
+        newNode.data.podnum = vertexPods.has(vertex.name) ? vertexPods.get(vertex.name) : 0;
         newNode.position = { x: 0, y: 0 };
         // change this in the future if you would like to make it draggable
         newNode.draggable = false;

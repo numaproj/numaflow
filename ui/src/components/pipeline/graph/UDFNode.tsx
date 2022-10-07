@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Handle, NodeProps, Position } from "react-flow-renderer";
 import { Tooltip } from "@mui/material";
 import "./Node.css";
+import { GetNodeInfoValueComponent } from "./NodeUtil"
 
 const UDFNode = ({
   data,
@@ -60,7 +61,7 @@ const UDFNode = ({
           position={targetPosition}
           isConnectable={isConnectable}
         />
-        {data?.label}
+        {GetNodeInfoValueComponent(data)}
         <Handle
           type="source"
           position={sourcePosition}
