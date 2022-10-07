@@ -38,3 +38,22 @@
 .node-watermark-tooltip {
     text-align: center;
 }
+
+.node-info {
+    white-space: nowrap;
+    font-size: 1.3em;
+}
+
+.node-icon {
+    width: 1em;
+    height: 1em;
+    display: inline-block;
+    vertical-align: middle;
+    position: relative;
+    margin-left: 2px;
+    margin-right: 3px;
+}
+
+.node-podnum {
+    font-weight: bold;
+}
