@@ -179,6 +179,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// let's track only the last element's watermark
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
 	for _, m := range readMessages {
+		readBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
 		m.Watermark = time.Time(processorWM)
 		if isdf.opts.isFromSourceVertex && processorWM.After(m.EventTime) { // Set late data at source level
 			m.IsLate = true
@@ -318,6 +319,10 @@ func (isdf *InterStepDataForward) writeToBuffers(ctx context.Context, messageToS
 
 // writeToBuffer forwards an array of messages to a single buffer and is a blocking call or until shutdown has been initiated.
 func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBuffer isb.BufferWriter, messages []isb.Message) (writeOffsets []isb.Offset, err error) {
+	var totalBytes float64
+	for _, m := range messages {
+		totalBytes += float64(len(m.Payload))
+	}
 	writeOffsets = make([]isb.Offset, 0, len(messages))
 retry:
 	needRetry := false
@@ -360,7 +365,7 @@ retry:
 	}
 
 	writeMessagesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(float64(len(messages)))
-
+	writeBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(totalBytes)
 	return writeOffsets, nil
 }
 

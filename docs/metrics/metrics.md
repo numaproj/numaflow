@@ -12,11 +12,13 @@ These metrics can be used to determine throughput of your pipeline.
 
 #### Data-forward
 
-| Metric name             | Metric type | Labels                                                                                               | Description                                                                                    |
-| ----------------------- | ----------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `forwarder_read_total`  | Counter     | `vertex`=&lt;vertex-name&gt; <br> `pipeline`=&lt;pipeline-name&gt; <br> `buffer`=&lt;buffer-name&gt; | Provides the total number of messages read by a given Vertex from an Inter-Step Buffer         |
-| `forwarder_write_total` | Counter     | `vertex`=&lt;vertex-name&gt; <br> `pipeline`=&lt;pipeline-name&gt; <br> `buffer`=&lt;buffer-name&gt; | Provides the total number of messages written to Inter-Step Buffer by a given Vertex           |
-| `forwarder_ack_total`   | Counter     | `vertex`=&lt;vertex-name&gt; <br> `pipeline`=&lt;pipeline-name&gt; <br> `buffer`=&lt;buffer-name&gt; | Provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer |
+| Metric name                   | Metric type | Labels                                                                                               | Description                                                                                    |
+| ----------------------------- | ----------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | --- |
+| `forwarder_read_total`        | Counter     | `vertex`=&lt;vertex-name&gt; <br> `pipeline`=&lt;pipeline-name&gt; <br> `buffer`=&lt;buffer-name&gt; | Provides the total number of messages read by a given Vertex from an Inter-Step Buffer         |
+| `forwarder_read_bytes_total`  | Counter     | `vertex`=&lt;vertex-name&gt; <br> `pipeline`=&lt;pipeline-name&gt; <br> `buffer`=&lt;buffer-name&gt; | Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer            | `   |
+| `forwarder_write_total`       | Counter     | `vertex`=&lt;vertex-name&gt; <br> `pipeline`=&lt;pipeline-name&gt; <br> `buffer`=&lt;buffer-name&gt; | Provides the total number of messages written to Inter-Step Buffer by a given Vertex           |
+| `forwarder_write_bytes_total` | Counter     | `vertex`=&lt;vertex-name&gt; <br> `pipeline`=&lt;pipeline-name&gt; <br> `buffer`=&lt;buffer-name&gt; | Provides the total number of bytes written to Inter-Step Buffer by a given Vertex              |
+| `forwarder_ack_total`         | Counter     | `vertex`=&lt;vertex-name&gt; <br> `pipeline`=&lt;pipeline-name&gt; <br> `buffer`=&lt;buffer-name&gt; | Provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer |
 
 #### Kafka Source
 
