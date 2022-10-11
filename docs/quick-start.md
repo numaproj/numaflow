@@ -54,7 +54,6 @@ kubectl logs -f simple-pipeline-out-0-xxxx main
 2022/08/25 23:59:39 (out) {"Data":"jk4nN/a7Dhc=","Createdts":1661471978707963534}
 
 ```
-
 View the UI for the simple pipeline at https://localhost:8443/
 ![Numaflow UI](assets/numaflow-ui-simple-pipeline.png)
 
