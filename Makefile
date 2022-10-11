@@ -41,14 +41,13 @@ ifndef PYTHON
 $(error "Python is not available, please install.")
 endif
 
-# Choose local KB8
+# Choose local Kubernetes
 LOCAL_KB8 ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo 'k3d' || echo '')
 ifndef LOCAL_KB8
 	LOCAL_KB8 ?=  $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v minikube`" != '' ] && [[ "`kubectl config current-context`" =~ minikube-* ]] && echo 'minikube' || echo '')
 endif
 
 # Choose local containers like Docker,podman etc...
-
 CONTAINER_WORK_TYPE ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v docker`" != '' ] && [[ "`kubectl config current-context`" =~ docker-* ]] && echo 'docker' || echo '')
 ifndef CONTAINER_WORK_TYPE
 	CONTAINER_WORK_TYPE ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v podman`" != '' ] && [[ "`kubectl config current-context`" =~ podman-* ]] && echo 'podman' || echo '')
