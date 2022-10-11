@@ -41,7 +41,18 @@ ifndef PYTHON
 $(error "Python is not available, please install.")
 endif
 
-K3D ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo true || echo false)
+# Choose local KB8
+LOCAL_KB8 ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo 'k3d' || echo '')
+ifndef LOCAL_KB8
+	LOCAL_KB8 ?=  $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v minikube`" != '' ] && [[ "`kubectl config current-context`" =~ minikube-* ]] && echo 'minikube' || echo '')
+endif
+
+# Choose local containers like Docker,podman etc...
+
+CONTAINER_WORK_TYPE ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v docker`" != '' ] && [[ "`kubectl config current-context`" =~ docker-* ]] && echo 'docker' || echo '')
+ifndef CONTAINER_WORK_TYPE
+	CONTAINER_WORK_TYPE ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v podman`" != '' ] && [[ "`kubectl config current-context`" =~ podman-* ]] && echo 'podman' || echo '')
+endif
 
 .PHONY: build
 build: dist/$(BINARY_NAME)-linux-amd64.gz dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-arm.gz dist/$(BINARY_NAME)-linux-ppc64le.gz dist/$(BINARY_NAME)-linux-s390x.gz dist/e2eapi
@@ -146,22 +157,53 @@ ui-test: ui-build
 
 .PHONY: image
 image: clean ui-build dist/$(BINARY_NAME)-linux-amd64
+ifeq ($(CONTAINER_WORK_TYPE),'docker')
 	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=amd64" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
-	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
-ifeq ($(K3D),true)
-	k3d image import $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
+    @if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
+endif
+ifeq ($(CONTAINER_WORK_TYPE),'podman')
+	DOCKER_BUILDKIT=1 podman build --build-arg "ARCH=amd64" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
+    @if [ "$(DOCKER_PUSH)" = "true" ]; then podman push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 endif
 
+
+ifeq ($(LOCAL_KB8),'k3d')
+	k3d image import $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
+endif
+ifeq ($(LOCAL_KB8),'minikube')
+	minikube image load $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
+endif
+
+
 image-linux-%: dist/$(BINARY_NAME)-linux-$*
+ifeq ($(CONTAINER_WORK_TYPE),'docker')
 	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=$*" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$* --platform "linux/$*" --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$*; fi
+endif
+ifeq ($(CONTAINER_WORK_TYPE),'podman')
+	DOCKER_BUILDKIT=1 podman build --build-arg "ARCH=$*" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$* --platform "linux/$*" --target $(BINARY_NAME) -f $(DOCKERFILE) .
+	@if [ "$(DOCKER_PUSH)" = "true" ]; then podman push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$*; fi
+endif
 
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
+ifeq ($(CONTAINER_WORK_TYPE),'docker')
 	docker buildx build --tag $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file ./Dockerfile ${PUSH_OPTION} .
+endif
+ifeq ($(CONTAINER_WORK_TYPE),'podman')
+	podman buildx build --tag $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file ./Dockerfile ${PUSH_OPTION} .
+endif
+
 
 set-qemu:
+ifeq ($(CONTAINER_WORK_TYPE),'docker')
 	docker pull tonistiigi/binfmt:latest
-	docker run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
+    docker run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
+endif
+ifeq ($(CONTAINER_WORK_TYPE),'podman')
+	podman pull tonistiigi/binfmt:latest
+    podman run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
+endif
+
 
 .PHONY: swagger
 swagger:
@@ -213,11 +255,23 @@ start: image
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
+ifeq ($(CONTAINER_WORK_TYPE),'docker')
 	DOCKER_BUILDKIT=1 docker build . --build-arg "ARCH=amd64" --platform=linux/amd64 --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
-	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
-ifeq ($(K3D),true)
-	k3d image import $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
+    @if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
 endif
+ifeq ($(CONTAINER_WORK_TYPE),'podman')
+	DOCKER_BUILDKIT=1 podman build . --build-arg "ARCH=amd64" --platform=linux/amd64 --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
+    @if [ "$(DOCKER_PUSH)" = "true" ]; then podman push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
+endif
+
+
+ifeq ($(LOCAL_KB8),'k3d')
+	k3d image import $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
+endif
+ifeq ($(LOCAL_KB8),'minikube')
+	minikube image load $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
+endif
+
 
 /usr/local/bin/mkdocs:
 	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9
