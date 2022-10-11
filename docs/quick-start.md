@@ -22,13 +22,6 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 ```
 
-Port forward the UI to https://localhost:8443/
-```shell
-kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
-```
-
-Keep the current terminal running, open a new terminal tab to run the following example pipelines.
-
 ## A Simple Pipeline
 
 Create a `simple pipeline`, which contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages.
@@ -96,7 +89,7 @@ isbsvc-default-js-2                3/3     Running   0          10m
 # Port-forward the HTTP endpoint so we can post data from the laptop
 kubectl port-forward even-odd-in-0-xxxx 8444:8443
 
-# Open a new terminal tab to post data to the HTTP endpoint
+# Post data to the HTTP endpoint
 curl -kq -X POST -d "101" https://localhost:8444/vertices/in
 curl -kq -X POST -d "102" https://localhost:8444/vertices/in 
 curl -kq -X POST -d "103" https://localhost:8444/vertices/in
@@ -121,13 +114,6 @@ The source code of the `even-odd` [User Defined Function](./user-defined-functio
 The pipeline can be deleted by
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
-```
-
-## Clean up
-
-Close the port forwarding by releasing 8443 port
-```shell
-lsof -ti:8443 | xargs kill -9
 ```
 
 ## What's Next
