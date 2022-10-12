@@ -3768,6 +3768,12 @@ means no delay.
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.WindowType">
+WindowType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+</p>
 <hr/>
 <p>
 <em> Generated with <code>gen-crd-api-reference-docs</code>. </em>
