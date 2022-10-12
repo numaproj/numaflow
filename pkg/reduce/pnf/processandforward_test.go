@@ -113,11 +113,11 @@ func TestProcessAndForward_Process(t *testing.T) {
 	assert.NoError(t, err)
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
 	// create pf using key and reducer
-	prfd := NewProcessAndForward(ctx, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{}, publishWatermark)
+	pf := NewProcessAndForward(ctx, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{}, publishWatermark)
 
-	err = prfd.Process(ctx)
+	err = pf.Process(ctx)
 	assert.NoError(t, err)
-	assert.Len(t, prfd.result, 1)
+	assert.Len(t, pf.result, 1)
 }
 
 func TestProcessAndForward_Forward(t *testing.T) {

@@ -91,7 +91,8 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		return err
 	}
 	messagesToStep := p.whereToStep(to)
-	// keep retrying until shutdown is triggered
+
+	//store write offsets to publish watermark
 	writeOffsets := make(map[string][]isb.Offset)
 	// write to isb
 	// parallel writes to isb

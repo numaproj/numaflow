@@ -391,7 +391,7 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 	messages := testutils.BuildTestReadMessages(10, time.Now())
 
 	go func() {
-		for index, _ := range messages {
+		for index := range messages {
 			messageCh <- &messages[index]
 			datumStreamCh <- createDatum(&messages[index])
 		}

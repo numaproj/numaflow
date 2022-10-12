@@ -12,7 +12,7 @@ import (
 	"context"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/udf/reducer"
+	udfReducer "github.com/numaproj/numaflow/pkg/udf/reducer"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -22,7 +22,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
@@ -35,6 +34,7 @@ var ackErrMsg = "failed to Ack Message"
 var writeErrMsg = "failed to Write Message"
 
 type ReadLoop struct {
+	UDF               udfReducer.Reducer
 	pbqManager        *pbq.Manager
 	windowingStrategy window.Windower
 	aw                *fixed.ActiveWindows
@@ -47,15 +47,17 @@ type ReadLoop struct {
 
 // NewReadLoop initializes ReadLoop struct
 func NewReadLoop(ctx context.Context,
+	udf udfReducer.Reducer,
 	pbqManager *pbq.Manager,
 	windowingStrategy window.Windower,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
-	pw map[string]publish.Publisher) *ReadLoop {
+	pw map[string]publish.Publisher, opts *window.Options) *ReadLoop {
 
 	op := NewOrderedProcessor()
 
 	rl := &ReadLoop{
+		UDF:               udf,
 		windowingStrategy: windowingStrategy,
 		// TODO pass window type
 		aw:               fixed.NewWindows(),
@@ -185,21 +187,7 @@ func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.
 		// if we did create a brand new PBQ it means this is a new partition
 		// we should attach the read side of the loop to the partition
 		// start process and forward loop here
-		var udfErr error
-		var udf reducer.Reducer
-		udfErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func() (done bool, err error) {
-			var attempt int
-			udf, udfErr = function.NewUDSGRPCBasedUDF()
-			if udfErr != nil {
-				attempt += 1
-				rl.log.Warnw("Failed to create udf reducer, retrying", zap.Any("attempt", attempt), zap.Error(udfErr))
-				return false, nil
-			}
-			return true, nil
-		})
-		if udfErr == nil {
-			rl.op.process(ctx, udf, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
-		}
+		rl.op.process(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
 	}
 	return q
 }

@@ -121,9 +121,21 @@ const (
 	DefaultStoreSize          = 1000000         // Default persistent store size
 	DefaultStoreMaxBufferSize = 100000          // Default buffer size for pbq in bytes
 
+	// Default window options
+	DefaultWindowType     = FixedType
+	DefaultWindowDuration = 0
+
+	// Default reduce forward options
+	DefaultReadBatchSize = 100
 )
 
 type StoreType string
+
+const (
+	InMemoryType   StoreType = "in-memory"
+	FileSystemType StoreType = "file-system"
+	NoOpType       StoreType = "no-op"
+)
 
 func (st StoreType) String() string {
 	switch st {
@@ -138,11 +150,26 @@ func (st StoreType) String() string {
 	}
 }
 
+type WindowType string
+
 const (
-	InMemoryType   StoreType = "in-memory"
-	FileSystemType StoreType = "file-system"
-	NoOpType       StoreType = "no-op"
+	FixedType   WindowType = "fixed"
+	SlidingType WindowType = "sliding"
+	SessionType WindowType = "session"
 )
+
+func (wt WindowType) String() string {
+	switch wt {
+	case FixedType:
+		return string(FixedType)
+	case SlidingType:
+		return string(SlidingType)
+	case SessionType:
+		return string(SessionType)
+	default:
+		return "unknownWindowType"
+	}
+}
 
 var (
 	MessageKeyDrop = fmt.Sprintf("%U__DROP__", '\\') // U+005C__DROP__
