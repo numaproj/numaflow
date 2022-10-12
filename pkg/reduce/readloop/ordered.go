@@ -3,11 +3,12 @@ package readloop
 import (
 	"container/list"
 	"context"
+	"sync"
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"sync"
-	"time"
 
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
@@ -21,18 +22,20 @@ type task struct {
 	pf     *pnf.ProcessAndForward
 }
 
+// orderedProcessor orders the execution of the tasks, even though the tasks itself are run concurrently.
 type orderedProcessor struct {
 	sync.RWMutex
 	taskQueue *list.List
 }
 
-func NewOrderedProcessor() *orderedProcessor {
+// newOrderedProcessor returns an orderedProcessor.
+func newOrderedProcessor() *orderedProcessor {
 	return &orderedProcessor{
 		taskQueue: list.New(),
 	}
 }
 
-func (op *orderedProcessor) StartUp(ctx context.Context) {
+func (op *orderedProcessor) startUp(ctx context.Context) {
 	go op.forward(ctx)
 }
 
@@ -50,21 +53,26 @@ func (op *orderedProcessor) process(ctx context.Context,
 		doneCh: doneCh,
 		pf:     pf,
 	}
+
 	op.Lock()
 	defer op.Unlock()
 	op.taskQueue.PushBack(t)
+
+	// invoke the reduce function
 	go op.reduceOp(ctx, t)
 }
 
+// reduceOp invokes the reduce function. The reducer is a long running function since we stream in the data and it has
+// to wait for the close-of-book on the PBQ to materialize the result.
 func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 	for {
 		err := t.pf.Process(ctx)
-		if err == ctx.Err() || err == nil {
+		if err == nil || err == ctx.Err() {
 			break
 		}
+
 		logging.FromContext(ctx).Error(err)
 		time.Sleep(retryDelay)
-
 	}
 	// after retrying indicate that we are done with processing the package. the processing can move on
 	close(t.doneCh)

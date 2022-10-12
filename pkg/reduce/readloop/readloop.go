@@ -55,7 +55,7 @@ func NewReadLoop(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher, _ *window.Options) *ReadLoop {
 
-	op := NewOrderedProcessor()
+	op := newOrderedProcessor()
 
 	rl := &ReadLoop{
 		UDF:               udf,
@@ -69,7 +69,7 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:   whereToDecider,
 		publishWatermark: pw,
 	}
-	op.StartUp(ctx)
+	op.startUp(ctx)
 	return rl
 }
 

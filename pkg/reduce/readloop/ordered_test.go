@@ -87,8 +87,8 @@ func TestOrderedProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// clean out the task queue before we start a run
-			op := NewOrderedProcessor()
-			op.StartUp(ctx)
+			op := newOrderedProcessor()
+			op.startUp(ctx)
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.
 			pbqManager, _ := pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(int64(100)), store.WithPbqStoreType(dfv1.InMemoryType)),
