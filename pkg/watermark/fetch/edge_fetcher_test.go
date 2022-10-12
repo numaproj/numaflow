@@ -1,5 +1,3 @@
-//go:build isb_jetstream
-
 package fetch
 
 import (
@@ -8,55 +6,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
-
-func createAndLaterDeleteBucket(js *jsclient.JetStreamContext, kvConfig *nats.KeyValueConfig) (func(), error) {
-	kv, err := js.CreateKeyValue(kvConfig)
-	if err != nil {
-		return nil, err
-	}
-	return func() {
-		// ignore error as this will be executed only via defer
-		_ = js.DeleteKeyValue(kv.Bucket())
-		return
-	}, nil
-}
 
 func TestBuffer_GetWatermark(t *testing.T) {
 	var ctx = context.Background()
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
-	conn, err := defaultJetStreamClient.Connect(ctx)
-	assert.NoError(t, err)
-	js, err := conn.JetStream()
-	assert.NoError(t, err)
 
-	var publisherHBBucketName = "fetchTest_PROCESSORS"
-	deleteFn, err := createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherHBBucketName})
-	assert.NoError(t, err)
-	defer deleteFn()
-
-	var publisherOTBucketName = "fetchTest_OT"
-	deleteFn, err = createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: publisherOTBucketName})
-	assert.NoError(t, err)
-	defer deleteFn()
-
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherHBBucketName, defaultJetStreamClient)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", publisherOTBucketName, defaultJetStreamClient)
-	processorManager := NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
+	// We don't need real watcher because we manually call the put function and the addProcessor function (see below).
+	processorManager := NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(nil, nil))
 	var (
-		// TODO: watcher should not be nil
-		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, otWatcher)
-		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, otWatcher)
-		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, otWatcher)
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, nil)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, nil)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, nil)
 		pod0Timeline = []OffsetWatermark{
 			{watermark: 11, offset: 9},
 			{watermark: 12, offset: 20},
@@ -78,6 +44,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 		}
 	)
 
+	// We don't need real watcher because we manually call the put function and the addProcessor function.
 	for _, watermark := range pod0Timeline {
 		testPod0.offsetTimeline.Put(watermark)
 	}
@@ -125,7 +92,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 			want:             10,
 		},
 		{
-			name:             "offset_22",
+			name:             "offset_23",
 			processorManager: processorManager,
 			args:             args{23},
 			want:             10,
@@ -137,7 +104,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 			want:             14,
 		},
 		{
-			name:             "offset_28",
+			name:             "offset_29",
 			processorManager: processorManager,
 			args:             args{29},
 			want:             17,
