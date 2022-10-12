@@ -11,11 +11,11 @@ This doc explains how to set up a development environment for Numaflow.
 1. [`Node.js®`](https://nodejs.org/en/) for running the UI
 1. [`yarn`](https://classic.yarnpkg.com/en/)
 1. Local Kubernetes System - 
-you need one of the following options as your local Kubernetes system: `k3d` or `minikube`
-    1. [`k3d`](https://k3d.io/) for local development, if needed
-    1. [`minikube`](https://minikube.sigs.k8s.io/docs/start/) for local development, if needed
+you need one of the following options as your local Kubernetes system for development usage : `k3d` or `minikube`
+    1. [`k3d`](https://k3d.io/) - k3d is a lightweight wrapper to run k3s (Rancher Lab's minimal Kubernetes distribution
+    1. [`minikube`](https://minikube.sigs.k8s.io/docs/start/) minikube is local Kubernetes, focusing on making it easy to learn and develop for Kubernetes. All you need is Docker (or similarly compatible) 
 1. Local Container System
-you need one of the following options as your local Containr system to load images: `Docker` or `podman`
+you need one of the following options as your local Containr system to load images for development usage : `Docker` or `podman`
   1. [`docker`](https://www.docker.com/) 
   1. [`podman`](https://podman.io/) 
 
