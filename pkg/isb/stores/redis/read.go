@@ -52,7 +52,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 
 	rqr := &BufferRead{
 		Name:        name,
-		Stream:      name,
+		Stream:      redisclient.GetRedisStreamName(name),
 		Group:       group,
 		Consumer:    consumer,
 		RedisClient: client,
@@ -66,7 +66,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 		// checkBackLog is set to true as on start up we need to start from the beginning
 	}
 	rqr.log = logging.FromContext(ctx).With("BufferReader", rqr.GetName())
-	//updateIsEmptyFlag is used to update isEmpty flag once
+	// updateIsEmptyFlag is used to update isEmpty flag once
 	rqr.updateIsEmptyFlag(ctx)
 
 	// refresh IsEmpty Flag  at a periodic interval
@@ -171,7 +171,7 @@ func (br *BufferRead) updateIsEmptyFlag(_ context.Context) {
 
 	// Set the refresh empty error to 0
 	br.BufferReadInfo.refreshEmptyError.Store(0)
-	//obtain current lag
+	// obtain current lag
 	currentLag := time.UnixMilli(lastGeneratedId).Sub(time.UnixMilli(lastDeliveredId))
 	// Get Previous lag and set the current lag
 	previousLag := br.GetLag()

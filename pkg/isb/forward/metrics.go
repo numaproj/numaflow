@@ -14,6 +14,13 @@ var readMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of Messages Read",
 }, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, "buffer"})
 
+// readBytesCount is to indicate the number of bytes read
+var readBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "forwarder",
+	Name:      "read_bytes_total",
+	Help:      "Total number of bytes read",
+}, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, "buffer"})
+
 // readMessagesError is used to indicate the number of errors messages read
 var readMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "forwarder",
@@ -26,6 +33,13 @@ var writeMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "forwarder",
 	Name:      "write_total",
 	Help:      "Total number of Messages Written",
+}, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, "buffer"})
+
+// writeBytesCount is to indicate the number of bytes written
+var writeBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "forwarder",
+	Name:      "write_bytes_total",
+	Help:      "Total number of bytes written",
 }, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, "buffer"})
 
 // writeMessagesError is used to indicate the number of errors messages written
