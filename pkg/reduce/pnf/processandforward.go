@@ -1,3 +1,6 @@
+// Package pnf processes and forwards messages belonging to a window. It reads the data from PBQ (which is populated by the `readloop`),
+// calls the UDF reduce function, and then forwards to the next ISB. After a successful forwards, it invokes `GC` to clean up the PBQ.
+// Since pnf is a reducer, it mutates the watermark. The watermark after the pnf will be the end time of the window.
 package pnf
 
 import (
@@ -55,17 +58,16 @@ func NewProcessAndForward(ctx context.Context,
 	}
 }
 
-// Process method reads messages from the supplied pbqReader, invokes UDF to reduce the result
-// and finally indicates the
+// Process method reads messages from the supplied PBQ, invokes UDF to reduce the result.
 func (p *ProcessAndForward) Process(ctx context.Context) error {
-
 	var wg sync.WaitGroup
 	var err error
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: p.PartitionID.String()}))
+		// FIXME: we need to fix https://github.com/numaproj/numaflow-go/blob/main/pkg/function/service.go#L101
+		ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: p.PartitionID.Key}))
 		p.result, err = p.UDF.Reduce(ctx, p.pbqReader.ReadCh())
 	}()
 
@@ -74,14 +76,12 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 	return err
 }
 
-// Forward writes messages to ToBuffers
+// Forward writes messages to the ISBs, publishes watermark, and invokes GC.
 func (p *ProcessAndForward) Forward(ctx context.Context) error {
-	messageKey := p.PartitionID.Key
-
 	// extract window end time from the partitionID, which will be used for watermark
 	processorWM := processor.Watermark(p.PartitionID.End)
 
-	to, err := p.whereToDecider.WhereTo(messageKey)
+	to, err := p.whereToDecider.WhereTo(p.PartitionID.Key)
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 
 	//store write offsets to publish watermark
 	writeOffsets := make(map[string][]isb.Offset)
-	// write to isb
+
 	// parallel writes to isb
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -103,6 +103,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		resultMessages := messages
 		go func() {
 			defer wg.Done()
+			// FIXME: capture this error and log it. Or should we handle error?
 			offsets, writeErr := p.writeToBuffer(ctx, bufferID, resultMessages)
 			if writeErr != nil {
 				success = false
@@ -130,6 +131,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	return nil
 }
 
+// whereToStep assigns a message to the ISBs based on the Message.Key.
 func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][]isb.Message)
@@ -154,6 +156,7 @@ func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 	return messagesToStep
 }
 
+// writeToBuffer writes to the ISBs.
 func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var ISBWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt64,
@@ -165,6 +168,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 	// write to isb with infinite exponential backoff (till shutdown is triggered)
 	var failedMessages []isb.Message
 	var offsets []isb.Offset
+	// FIXME: remove return of error and make it an infinite loop. Please make sure it does not exceed 1 second of wait.
 	writeErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
 		var writeErrs []error
 		offsets, writeErrs = p.toBuffers[bufferID].Write(ctx, resultMessages)
@@ -180,6 +184,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		}
 		return true, nil
 	})
+	// FIXME: don't return the error, just log it.
 	return offsets, writeErr
 }
 
