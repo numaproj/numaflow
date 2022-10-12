@@ -6,6 +6,7 @@ package inmem
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
 	"go.uber.org/zap"
@@ -88,6 +89,9 @@ func (kv *inMemStore) GetAllKeys(_ context.Context) ([]string, error) {
 	for key, _ := range kv.kv {
 		keys = append(keys, key)
 	}
+	sort.Slice(keys, func(i int, j int) bool {
+		return keys[i] < keys[j]
+	})
 	return keys, nil
 }
 
