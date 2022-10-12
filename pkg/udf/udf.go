@@ -6,9 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"go.uber.org/zap"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -19,13 +16,11 @@ import (
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-<<<<<<< HEAD
-	"github.com/numaproj/numaflow/pkg/udf/applier"
-=======
+
 	"github.com/numaproj/numaflow/pkg/udf/function"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
->>>>>>> 03c295a (adding tests for reduce)
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"go.uber.org/zap"
 )
 
 type UDFProcessor struct {
