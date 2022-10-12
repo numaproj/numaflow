@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Handle, NodeProps, Position } from "react-flow-renderer";
 import { Tooltip } from "@mui/material";
 import "./Node.css";
+import { GetNodeInfoValueComponent } from "./NodeUtil"
 
 const SourceNode = ({
   data,
@@ -54,8 +55,7 @@ const SourceNode = ({
             {data?.vertexMetrics?.ratePerMin}/sec
           </div>
         </Tooltip>
-
-        {data?.label}
+        {GetNodeInfoValueComponent(data)}
         <Handle
           type="source"
           position={sourcePosition}
