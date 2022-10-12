@@ -3,6 +3,10 @@ package pnf
 import (
 	"context"
 	"errors"
+	"math"
+	"sync"
+	"time"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -11,11 +15,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"math"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -28,7 +27,7 @@ import (
 // ProcessAndForward reads messages from pbq and invokes udf using grpc
 // and forwards the results to ISB
 type ProcessAndForward struct {
-	Key              partition.ID
+	PartitionID      partition.ID
 	UDF              udfreducer.Reducer
 	result           []*isb.Message
 	pbqReader        pbq.Reader
@@ -46,7 +45,7 @@ func NewProcessAndForward(ctx context.Context,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider, pw map[string]publish.Publisher) *ProcessAndForward {
 	return &ProcessAndForward{
-		Key:              partitionID,
+		PartitionID:      partitionID,
 		UDF:              udf,
 		pbqReader:        pbqReader,
 		log:              logging.FromContext(ctx),
@@ -66,7 +65,7 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: p.Key.String()}))
+		ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: p.PartitionID.String()}))
 		p.result, err = p.UDF.Reduce(ctx, p.pbqReader.ReadCh())
 	}()
 
@@ -77,14 +76,10 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 
 // Forward writes messages to ToBuffers
 func (p *ProcessAndForward) Forward(ctx context.Context) error {
-	// splits the partitionId to get the message key
-	// example 123-456-key-hl -> key-hl
-	strArr := strings.SplitAfterN(p.Key.String(), "-", 3)
-	messageKey := strArr[2]
+	messageKey := p.PartitionID.Key
 
 	// extract window end time from the partitionID, which will be used for watermark
-	winEndTimestamp, _ := strconv.ParseInt(strArr[1], 0, 64)
-	processorWM := processor.Watermark(time.Unix(winEndTimestamp, 0))
+	processorWM := processor.Watermark(p.PartitionID.End)
 
 	to, err := p.whereToDecider.WhereTo(messageKey)
 	if err != nil {

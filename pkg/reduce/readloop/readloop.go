@@ -10,14 +10,15 @@ package readloop
 
 import (
 	"context"
+	"math"
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfReducer "github.com/numaproj/numaflow/pkg/udf/reducer"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"math"
-	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -52,7 +53,7 @@ func NewReadLoop(ctx context.Context,
 	windowingStrategy window.Windower,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
-	pw map[string]publish.Publisher, opts *window.Options) *ReadLoop {
+	pw map[string]publish.Publisher, _ *window.Options) *ReadLoop {
 
 	op := NewOrderedProcessor()
 
@@ -108,7 +109,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 				End:   kw.IntervalWindow.End,
 				Key:   m.Key,
 			}
-			//(kw.IntervalWindow, m.Key)
+			//(kw.IntervalWindow, m.PartitionID)
 
 			q := rl.processPartition(ctx, partitionID)
 

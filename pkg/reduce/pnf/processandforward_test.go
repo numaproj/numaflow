@@ -3,12 +3,13 @@ package pnf
 import (
 	"context"
 	"encoding/json"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
@@ -222,7 +223,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 	})
 
 	var result = []*isb.Message{
-		&isb.Message{
+		{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{
 					EventTime: time.Unix(60, 0),
@@ -234,7 +235,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 	}
 
 	pf := ProcessAndForward{
-		Key:              testPartition,
+		PartitionID:      testPartition,
 		UDF:              nil,
 		result:           result,
 		pbqReader:        simplePbq,

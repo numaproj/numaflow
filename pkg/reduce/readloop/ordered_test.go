@@ -3,11 +3,12 @@ package readloop
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"testing"
-	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -94,15 +95,15 @@ func TestOrderedProcessing(t *testing.T) {
 				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 			cCtx, cancelFn := context.WithCancel(ctx)
 			defer cancelFn()
-			for _, partition := range tt.partitions {
-				p, _ := pbqManager.CreateNewPBQ(ctx, partition)
-				op.process(cCtx, identityReducer, p, partition, toSteps, myForwardTest{}, pw)
+			for _, _partition := range tt.partitions {
+				p, _ := pbqManager.CreateNewPBQ(ctx, _partition)
+				op.process(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
 			count := 0
 			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
 				pfTask := e.Value.(*task)
-				partitionKey := pfTask.pf.Key
+				partitionKey := pfTask.pf.PartitionID
 				assert.Equal(t, partition.ID{Key: fmt.Sprintf("partition-%d", count)}, partitionKey)
 				count = count + 1
 			}
@@ -150,7 +151,7 @@ func taskForPartition(op *orderedProcessor, partitionId partition.ID) *task {
 	defer op.RUnlock()
 	for e := op.taskQueue.Front(); e != nil; e = e.Next() {
 		pfTask := e.Value.(*task)
-		partitionKey := pfTask.pf.Key
+		partitionKey := pfTask.pf.PartitionID
 		if partitionKey == partitionId {
 			return pfTask
 		}

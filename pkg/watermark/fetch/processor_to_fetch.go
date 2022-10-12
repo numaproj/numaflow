@@ -112,7 +112,7 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 			case store.KVPut:
 				epoch, skip, err := p.entity.ParseOTWatcherKey(value.Key())
 				if err != nil {
-					p.log.Errorw("Unable to convert value.Key() to int64", zap.String("received", value.Key()), zap.Error(err))
+					p.log.Errorw("Unable to convert value.PartitionID() to int64", zap.String("received", value.Key()), zap.Error(err))
 					continue
 				}
 				// if skip is set to true, it means the key update we received is for a different processor (sharing of bucket)
