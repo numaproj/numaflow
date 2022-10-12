@@ -19,6 +19,28 @@ var (
 	bucketsLock sync.RWMutex
 )
 
+// kvEntry is each key-value entry in the store and the operation associated with the kv pair.
+type kvEntry struct {
+	key   string
+	value []byte
+	op    store.KVWatchOp
+}
+
+// Key returns the key
+func (k kvEntry) Key() string {
+	return k.key
+}
+
+// Value returns the value.
+func (k kvEntry) Value() []byte {
+	return k.value
+}
+
+// Operation returns the operation on that key-value pair.
+func (k kvEntry) Operation() store.KVWatchOp {
+	return k.op
+}
+
 // inMemStore implements the watermark's KV store backed up by in mem store.
 type inMemStore struct {
 	pipelineName string
@@ -38,7 +60,7 @@ func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName stri
 		pipelineName: pipelineName,
 		bucketName:   bucketName,
 		kv:           make(map[string][]byte),
-		kvEntryCh:    make(chan store.WatermarkKVEntry),
+		kvEntryCh:    make(chan store.WatermarkKVEntry, 10),
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 
@@ -71,8 +93,8 @@ func (kv *inMemStore) GetAllKeys(_ context.Context) ([]string, error) {
 
 // GetValue returns the value for a given key.
 func (kv *inMemStore) GetValue(_ context.Context, k string) ([]byte, error) {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
+	kv.kvLock.RLock()
+	defer kv.kvLock.RUnlock()
 	if val, ok := kv.kv[k]; ok {
 		return val, nil
 	} else {
@@ -85,23 +107,40 @@ func (kv *inMemStore) GetStoreName() string {
 	return kv.bucketName
 }
 
-// DeleteKey deletes the key from the JS key-value store.
+// DeleteKey deletes the key from the in mem key-value store.
 func (kv *inMemStore) DeleteKey(_ context.Context, k string) error {
 	kv.kvLock.Lock()
 	defer kv.kvLock.Unlock()
-	delete(kv.kv, k)
-	return nil
+	if val, ok := kv.kv[k]; ok {
+		delete(kv.kv, k)
+		kv.kvEntryCh <- kvEntry{
+			key:   k,
+			value: val,
+			op:    store.KVDelete,
+		}
+		return nil
+	} else {
+		return fmt.Errorf("key %s not found", k)
+	}
 }
 
-// PutKV puts an element to the JS key-value store.
+// PutKV puts an element to the in mem key-value store.
 func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 	kv.kvLock.Lock()
 	defer kv.kvLock.Unlock()
 	kv.kv[k] = v
+	kv.kvEntryCh <- kvEntry{
+		key:   k,
+		value: v,
+		op:    store.KVPut,
+	}
 	return nil
 }
 
 // Close closes the channel connection.
 func (kv *inMemStore) Close() {
+	bucketsLock.Lock()
+	delete(buckets, kv.bucketName)
+	bucketsLock.Unlock()
 	close(kv.kvEntryCh)
 }
