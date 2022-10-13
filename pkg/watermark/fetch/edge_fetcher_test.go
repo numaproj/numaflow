@@ -17,7 +17,7 @@ import (
 func TestBuffer_GetWatermark(t *testing.T) {
 	var ctx = context.Background()
 
-	// We don't need real watcher because we manually call the put function and the addProcessor function (see below).
+	// We don't need real watcher because we manually call the `Put` function and the `addProcessor` function (see below).
 	processorManager := NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(nil, nil))
 	var (
 		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, nil)
@@ -44,7 +44,6 @@ func TestBuffer_GetWatermark(t *testing.T) {
 		}
 	)
 
-	// We don't need real watcher because we manually call the put function and the addProcessor function.
 	for _, watermark := range pod0Timeline {
 		testPod0.offsetTimeline.Put(watermark)
 	}
