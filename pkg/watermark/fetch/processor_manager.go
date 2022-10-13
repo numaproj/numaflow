@@ -151,8 +151,9 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				var entity = processor.NewProcessorEntity(value.Key(), processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
-				if p == nil { // if no, create a new processor
-					// A fromProcessor need to be added to v.processors
+				if p == nil {
+					// if p is nil, create a new processor
+					// A fromProcessor needs to be added to v.processors
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
 					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.otWatcher)
