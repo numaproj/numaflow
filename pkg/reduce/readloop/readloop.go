@@ -80,6 +80,17 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 	// replay the partitions
 	partitions := rl.pbqManager.ListPartitions()
 	for _, p := range partitions {
+		// Create keyed window for a given partition
+		// so that the window can be closed when the watermark
+		// crosses the window.
+		id := p.PartitionID
+		intervalWindow := &window.IntervalWindow{
+			Start: id.Start,
+			End:   id.End,
+		}
+		// These windows do not exist yet. so we create it here.
+		rl.aw.CreateKeyedWindow(intervalWindow)
+
 		// create process and forward
 		// invoke process and forward with partition
 		rl.processPartition(ctx, p.PartitionID)
@@ -109,7 +120,6 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 				End:   kw.IntervalWindow.End,
 				Key:   m.Key,
 			}
-			//(kw.IntervalWindow, m.PartitionID)
 
 			q := rl.processPartition(ctx, partitionID)
 
