@@ -1,4 +1,4 @@
-// //go:build isb_jetstream
+//go:build isb_jetstream
 
 package fetch
 
@@ -309,7 +309,9 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	assert.NoError(t, err)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	assert.NoError(t, err)
 	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
 	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
 

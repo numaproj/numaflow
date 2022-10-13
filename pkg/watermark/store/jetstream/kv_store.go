@@ -48,6 +48,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 
+	// for JetStream KeyValue store, the bucket should have been created in advance
 	j.kv, err = j.js.KeyValue(bucketName)
 	if err != nil {
 		return nil, err

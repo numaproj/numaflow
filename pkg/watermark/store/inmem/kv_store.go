@@ -55,8 +55,7 @@ type inMemStore struct {
 var _ store.WatermarkKVStorer = (*inMemStore)(nil)
 
 // NewKVInMemKVStore returns inMemStore.
-func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName string, opts ...InMemStoreOption) (store.WatermarkKVStorer, chan store.WatermarkKVEntry, error) {
-
+func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName string) (store.WatermarkKVStorer, chan store.WatermarkKVEntry, error) {
 	s := &inMemStore{
 		pipelineName: pipelineName,
 		bucketName:   bucketName,
@@ -64,22 +63,11 @@ func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName stri
 		kvEntryCh:    make(chan store.WatermarkKVEntry, 10),
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
-
 	bucketsLock.Lock()
 	buckets[bucketName] = s
 	bucketsLock.Unlock()
-
-	// options if any
-	for _, o := range opts {
-		if err := o(s); err != nil {
-			return nil, nil, err
-		}
-	}
 	return s, s.kvEntryCh, nil
 }
-
-// InMemStoreOption is to pass in the options.
-type InMemStoreOption func(*inMemStore) error
 
 // GetAllKeys returns all the keys in the key-value store.
 func (kv *inMemStore) GetAllKeys(_ context.Context) ([]string, error) {
@@ -143,10 +131,10 @@ func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 	return nil
 }
 
-// Close closes the channel connection.
+// Close closes the channel connection and clean up the bucket.
 func (kv *inMemStore) Close() {
+	close(kv.kvEntryCh)
 	bucketsLock.Lock()
 	delete(buckets, kv.bucketName)
 	bucketsLock.Unlock()
-	close(kv.kvEntryCh)
 }

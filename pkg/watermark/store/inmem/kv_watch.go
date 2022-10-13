@@ -26,8 +26,7 @@ type inMemWatch struct {
 var _ store.WatermarkKVWatcher = (*inMemWatch)(nil)
 
 // NewInMemWatch returns inMemWatch which implements the WatermarkKVWatcher interface.
-func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, kvEntryCh <-chan store.WatermarkKVEntry, opts ...inMemStoreWatcherOption) (store.WatermarkKVWatcher, error) {
-
+func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, kvEntryCh <-chan store.WatermarkKVEntry) (store.WatermarkKVWatcher, error) {
 	k := &inMemWatch{
 		pipelineName:  pipelineName,
 		bucketName:    bucketName,
@@ -37,18 +36,8 @@ func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, 
 		stopCh:        make(chan struct{}),
 		log:           logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
-
-	// options if any
-	for _, o := range opts {
-		if err := o(k); err != nil {
-			return nil, err
-		}
-	}
 	return k, nil
 }
-
-// inMemStoreWatcherOption is to pass in options.
-type inMemStoreWatcherOption func(*inMemWatch) error
 
 // Watch watches the key-value store.
 func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
@@ -97,5 +86,4 @@ func (k *inMemWatch) GetKVName() string {
 
 // Close closes the connection.
 func (k *inMemWatch) Close() {
-	return
 }
