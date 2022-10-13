@@ -60,17 +60,26 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		Placement:    nil,
 	})
 	defer func() { _ = js.DeleteKeyValue(keyspace + "_OT") }()
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(testOffset))
-	_, err = ot.Put(fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
-	assert.NoError(t, err)
-
-	epoch += 60
-	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
-	_, err = ot.Put(fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
-	assert.NoError(t, err)
 
 	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
+
+	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(testOffset))
+	otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
+	epoch += 60
+	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
+	otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
+
+	// b := make([]byte, 8)
+	// binary.LittleEndian.PutUint64(b, uint64(testOffset))
+	// _, err = ot.Put(fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
+	// assert.NoError(t, err)
+	//
+	// epoch += 60
+	// binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
+	// _, err = ot.Put(fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
+	// assert.NoError(t, err)
 
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
@@ -135,10 +144,9 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" should be deleted after this GetWatermark offset=101
-	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
 	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	// we don't delete inactive processors, so the length should still be 2
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
 	assert.False(t, allProcessors["p1"].IsActive())
@@ -157,10 +165,10 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	// wait until p1 becomes active
 	time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 	allProcessors = testBuffer.processorManager.GetAllProcessors()
-	for len(allProcessors) != 2 {
+	for !allProcessors["p1"].IsActive() {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
+			t.Fatalf("expected p1 to be active: %s", ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
 			allProcessors = testBuffer.processorManager.GetAllProcessors()
@@ -177,7 +185,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.True(t, newP1.IsActive())
 	assert.NotNil(t, newP1.offsetTimeline)
 
-	//Wait till the offsetTimeline has been populated
+	// Wait till the offsetTimeline has been populated
 	newP1head := newP1.offsetTimeline.GetHeadOffset()
 	for newP1head == -1 {
 		select {
@@ -240,7 +248,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	//   Maybe we should not support seperate OT because controller does not support it
 	t.Skip()
 	// uncomment to debug
-	//os.Setenv("NUMAFLOW_DEBUG", "true")
+	// os.Setenv("NUMAFLOW_DEBUG", "true")
 
 	var ctx = context.Background()
 
@@ -312,7 +320,7 @@ func TestFetcherWithSeparateOTBucket(t *testing.T) {
 	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
 	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
 
-	//var location, _ = time.LoadLocation("UTC")
+	// var location, _ = time.LoadLocation("UTC")
 	go func() {
 		var err error
 		for i := 0; i < 3; i++ {

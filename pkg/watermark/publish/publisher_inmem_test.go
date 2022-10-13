@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/stretchr/testify/assert"
 
@@ -24,9 +23,9 @@ func TestPublisherWithSeparateOTBuckets_InMem(t *testing.T) {
 	// this test uses separate OT buckets, so it is an OT bucket per processor
 	var publisherOTKeyspace = "publisherTest_OT_publisherTestPod1"
 
-	heartbeatKV, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", publisherHBKeyspace)
+	heartbeatKV, _, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", publisherHBKeyspace)
 	assert.NoError(t, err)
-	otKV, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", publisherOTKeyspace)
+	otKV, _, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", publisherOTKeyspace)
 	assert.NoError(t, err)
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
@@ -65,9 +64,9 @@ func TestPublisherWithSharedOTBucket_InMem(t *testing.T) {
 	var keyspace = "publisherTest"
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1", processor.WithSeparateOTBuckets(true))
-	heartbeatKV, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", keyspace+"_PROCESSORS")
+	heartbeatKV, _, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", keyspace+"_PROCESSORS")
 	assert.NoError(t, err)
-	otKV, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", keyspace+"_OT")
+	otKV, _, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", keyspace+"_OT")
 	assert.NoError(t, err)
 
 	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
@@ -94,5 +93,5 @@ func TestPublisherWithSharedOTBucket_InMem(t *testing.T) {
 	p.StopPublisher()
 
 	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
-	assert.Equal(t, nats.ErrKeyNotFound, err)
+	assert.ErrorContains(t, err, "key publisherTestPod1 not found")
 }

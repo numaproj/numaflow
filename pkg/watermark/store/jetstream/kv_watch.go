@@ -16,6 +16,7 @@ import (
 // jetStreamWatch implements the watermark's KV store backed up by Jetstream.
 type jetStreamWatch struct {
 	pipelineName string
+	kvBucketName string
 	conn         *jsclient.NatsConn
 	kv           nats.KeyValue
 	js           *jsclient.JetStreamContext
@@ -41,6 +42,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 
 	j := &jetStreamWatch{
 		pipelineName: pipelineName,
+		kvBucketName: kvBucketName,
 		conn:         conn,
 		js:           js,
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("kvBucketName", kvBucketName),
@@ -109,6 +111,9 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 				// if channel is closed, nil could come in
 				if value == nil {
 					continue
+				}
+				if k.kvBucketName == "fetcherTest_OT" {
+					fmt.Println("Watch chanel:", value.Key(), value.Value(), value.Operation())
 				}
 				k.log.Debug(value.Key(), value.Value(), value.Operation())
 				switch value.Operation() {

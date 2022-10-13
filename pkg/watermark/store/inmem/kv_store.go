@@ -55,7 +55,7 @@ type inMemStore struct {
 var _ store.WatermarkKVStorer = (*inMemStore)(nil)
 
 // NewKVInMemKVStore returns inMemStore.
-func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName string, opts ...InMemStoreOption) (store.WatermarkKVStorer, error) {
+func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName string, opts ...InMemStoreOption) (store.WatermarkKVStorer, chan store.WatermarkKVEntry, error) {
 
 	s := &inMemStore{
 		pipelineName: pipelineName,
@@ -72,10 +72,10 @@ func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName stri
 	// options if any
 	for _, o := range opts {
 		if err := o(s); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return s, nil
+	return s, s.kvEntryCh, nil
 }
 
 // InMemStoreOption is to pass in the options.
@@ -132,12 +132,15 @@ func (kv *inMemStore) DeleteKey(_ context.Context, k string) error {
 func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 	kv.kvLock.Lock()
 	defer kv.kvLock.Unlock()
-	kv.kv[k] = v
+	var val = make([]byte, len(v))
+	copy(val, v)
+	kv.kv[k] = val
 	kv.kvEntryCh <- kvEntry{
 		key:   k,
-		value: v,
+		value: val,
 		op:    store.KVPut,
 	}
+	fmt.Println("CALLED for", k)
 	return nil
 }
 

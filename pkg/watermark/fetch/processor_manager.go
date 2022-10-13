@@ -77,6 +77,7 @@ func (v *ProcessorManager) GetProcessor(processor string) *ProcessorToFetch {
 }
 
 // DeleteProcessor deletes a processor.
+// Note: This operation is not used anywhere ATM.
 func (v *ProcessorManager) DeleteProcessor(processor string) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
