@@ -151,6 +151,10 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Debug("Cooldown period, skip scaling.")
 		return nil
 	}
+	if vertex.Status.Phase != dfv1.VertexPhaseRunning {
+		log.Debug("Vertex not in Running phase.")
+		return nil
+	}
 	pl := &dfv1.Pipeline{}
 	if err := s.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: vertex.Spec.PipelineName}, pl); err != nil {
 		if apierrors.IsNotFound(err) {
