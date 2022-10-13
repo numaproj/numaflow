@@ -86,7 +86,7 @@ func (kv *inMemStore) GetAllKeys(_ context.Context) ([]string, error) {
 	kv.kvLock.Lock()
 	defer kv.kvLock.Unlock()
 	var keys []string
-	for key, _ := range kv.kv {
+	for key := range kv.kv {
 		keys = append(keys, key)
 	}
 	sort.Slice(keys, func(i int, j int) bool {
@@ -140,7 +140,6 @@ func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 		value: val,
 		op:    store.KVPut,
 	}
-	fmt.Println("CALLED for", k)
 	return nil
 }
 

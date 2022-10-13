@@ -97,7 +97,6 @@ func (kv *jetStreamStore) DeleteKey(_ context.Context, k string) error {
 // PutKV puts an element to the JS key-value store.
 func (kv *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
 	_, err := kv.kv.Put(k, v)
-	fmt.Println("CALLED for", k)
 	return err
 }
 

@@ -2,20 +2,25 @@ package inmem
 
 import (
 	"context"
-
-	"go.uber.org/zap"
+	"fmt"
+	"sync"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"go.uber.org/zap"
 )
 
 // inMemWatch implements the watermark's KV store backed up by in memory store.
 type inMemWatch struct {
-	pipelineName string
-	bucketName   string
-	kvEntryCh    <-chan store.WatermarkKVEntry
-	stopCh       chan struct{}
-	log          *zap.SugaredLogger
+	pipelineName  string
+	bucketName    string
+	kvEntryCh     <-chan store.WatermarkKVEntry
+	kvHistory     []store.WatermarkKVEntry
+	kvHistoryLock sync.RWMutex
+	updatesChList []chan store.WatermarkKVEntry
+	updatesChLock sync.Mutex
+	stopCh        chan struct{}
+	log           *zap.SugaredLogger
 }
 
 var _ store.WatermarkKVWatcher = (*inMemWatch)(nil)
@@ -23,20 +28,23 @@ var _ store.WatermarkKVWatcher = (*inMemWatch)(nil)
 // NewInMemWatch returns inMemWatch which implements the WatermarkKVWatcher interface.
 func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, kvEntryCh <-chan store.WatermarkKVEntry, opts ...inMemStoreWatcherOption) (store.WatermarkKVWatcher, error) {
 
-	j := &inMemWatch{
-		pipelineName: pipelineName,
-		bucketName:   bucketName,
-		kvEntryCh:    kvEntryCh,
-		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
+	k := &inMemWatch{
+		pipelineName:  pipelineName,
+		bucketName:    bucketName,
+		kvEntryCh:     kvEntryCh,
+		kvHistory:     []store.WatermarkKVEntry{},
+		updatesChList: []chan store.WatermarkKVEntry{},
+		stopCh:        make(chan struct{}),
+		log:           logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 
 	// options if any
 	for _, o := range opts {
-		if err := o(j); err != nil {
+		if err := o(k); err != nil {
 			return nil, err
 		}
 	}
-	return j, nil
+	return k, nil
 }
 
 // inMemStoreWatcherOption is to pass in options.
@@ -44,7 +52,18 @@ type inMemStoreWatcherOption func(*inMemWatch) error
 
 // Watch watches the key-value store.
 func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
-	var updates = make(chan store.WatermarkKVEntry)
+	var updates = make(chan store.WatermarkKVEntry, 100)
+	k.updatesChLock.Lock()
+	k.updatesChList = append(k.updatesChList, updates)
+	k.kvHistoryLock.RLock()
+	for _, value := range k.kvHistory {
+		updates <- value
+		if k.bucketName == "fetcherTest_OT" {
+			fmt.Println("Watch chanel:", value.Key(), value.Value(), value.Operation())
+		}
+	}
+	k.kvHistoryLock.RUnlock()
+	k.updatesChLock.Unlock()
 	go func() {
 		for {
 			select {
@@ -54,7 +73,17 @@ func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 				return
 			case value := <-k.kvEntryCh:
 				k.log.Debug(value.Key(), value.Value(), value.Operation())
-				updates <- value
+				k.kvHistoryLock.Lock()
+				k.kvHistory = append(k.kvHistory, value)
+				k.kvHistoryLock.Unlock()
+				k.updatesChLock.Lock()
+				for _, ch := range k.updatesChList {
+					ch <- value
+					if k.bucketName == "fetcherTest_OT" {
+						fmt.Println("Watch chanel:", value.Key(), value.Value(), value.Operation())
+					}
+				}
+				k.updatesChLock.Unlock()
 			}
 		}
 	}()

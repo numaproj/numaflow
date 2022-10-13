@@ -112,9 +112,6 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 				if value == nil {
 					continue
 				}
-				if k.kvBucketName == "fetcherTest_OT" {
-					fmt.Println("Watch chanel:", value.Key(), value.Value(), value.Operation())
-				}
 				k.log.Debug(value.Key(), value.Value(), value.Operation())
 				switch value.Operation() {
 				case nats.KeyValuePut:
