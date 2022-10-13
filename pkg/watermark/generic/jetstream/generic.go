@@ -17,6 +17,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
 
 // BuildWatermarkProgressors is used to populate fetchWatermark, and a map of publishWatermark with edge name as the key.
@@ -86,6 +87,9 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (store.WatermarkStorer, error) {
 	if !vertexInstance.Vertex.IsASource() {
 		return nil, fmt.Errorf("not a source vertex")
+	}
+	if !sharedutil.IsWatermarkEnabled() {
+		return store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore()), nil
 	}
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 	sourceBufferName := vertexInstance.Vertex.GetFromBuffers()[0].Name
