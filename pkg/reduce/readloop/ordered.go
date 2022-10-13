@@ -25,12 +25,14 @@ type task struct {
 // orderedProcessor orders the execution of the tasks, even though the tasks itself are run concurrently.
 type orderedProcessor struct {
 	sync.RWMutex
+	hasWork   chan struct{}
 	taskQueue *list.List
 }
 
 // newOrderedProcessor returns an orderedProcessor.
 func newOrderedProcessor() *orderedProcessor {
 	return &orderedProcessor{
+		hasWork:   make(chan struct{}),
 		taskQueue: list.New(),
 	}
 }
@@ -67,8 +69,10 @@ func (op *orderedProcessor) process(ctx context.Context,
 func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 	for {
 		err := t.pf.Process(ctx)
-		if err == nil || err == ctx.Err() {
+		if err == nil {
 			break
+		} else if err == ctx.Err() {
+			return
 		}
 
 		logging.FromContext(ctx).Error(err)
@@ -76,43 +80,65 @@ func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 	}
 	// after retrying indicate that we are done with processing the package. the processing can move on
 	close(t.doneCh)
+
+	// notify that some work has been completed
+	select {
+	case op.hasWork <- struct{}{}:
+	case <-ctx.Done():
+		return
+	}
+
 }
 
 func (op *orderedProcessor) forward(ctx context.Context) {
 	var currElement *list.Element
 	var t *task
 	for {
-		op.RLock()
-		isEmpty := op.taskQueue.Len() == 0
-		op.RUnlock()
-		if isEmpty {
-			continue
-		}
-		if currElement == nil {
-			op.RLock()
-			currElement = op.taskQueue.Front()
-			op.RUnlock()
-		}
-		t = currElement.Value.(*task)
+		// block till we have some work
 		select {
-		case <-t.doneCh:
-			for {
-				err := t.pf.Forward(ctx)
-				if err != nil {
-					logging.FromContext(ctx).Error(err)
-					time.Sleep(retryDelay)
-				} else {
-					break
-				}
-			}
-			op.Lock()
-			rm := currElement
-			currElement = currElement.Next()
-			op.taskQueue.Remove(rm)
-			op.Unlock()
-			break
+		case <-op.hasWork:
 		case <-ctx.Done():
 			return
+		}
+
+		// a signal does not mean we have pending work to be done because
+		// for every signal we try to empty out the task-queue.
+		op.RLock()
+		n := op.taskQueue.Len()
+		op.RUnlock()
+		// n could we 0 because we have emptied the queue
+		if n == 0 {
+			continue
+		}
+
+		// now that we know there is at least an element, let's start from the front.
+		op.RLock()
+		currElement = op.taskQueue.Front()
+		op.RUnlock()
+
+		// empty out the entire task-queue everytime there has been some work done
+		for i := 0; i < n; i++ {
+			t = currElement.Value.(*task)
+			select {
+			case <-t.doneCh:
+				for {
+					err := t.pf.Forward(ctx)
+					if err != nil {
+						logging.FromContext(ctx).Error(err)
+						time.Sleep(retryDelay)
+					} else {
+						break
+					}
+				}
+				op.Lock()
+				rm := currElement
+				currElement = currElement.Next()
+				op.taskQueue.Remove(rm)
+				op.Unlock()
+				break
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
 }
