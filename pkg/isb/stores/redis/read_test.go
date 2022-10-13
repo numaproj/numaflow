@@ -54,7 +54,7 @@ func TestRedisQRead_Read(t *testing.T) {
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
 			Stream: rqr.GetStreamName(),
-			Values: []interface{}{msg.Header, msg.Body},
+			Values: []interface{}{msg.Header, msg.Body.Payload},
 		}).Err()
 		assert.NoError(t, err)
 	}
@@ -86,7 +86,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
 			Stream: rqr.GetStreamName(),
-			Values: []interface{}{msg.Header, msg.Body},
+			Values: []interface{}{msg.Header, msg.Body.Payload},
 		}).Err()
 		assert.NoError(t, err)
 	}
@@ -455,7 +455,7 @@ func writeTestMessages(ctx context.Context, client *redisclient.RedisClient, mes
 		for _, message := range messages {
 			client.Client.XAdd(ctx, &redis.XAddArgs{
 				Stream: streamName,
-				Values: []interface{}{message.Header, message.Body},
+				Values: []interface{}{message.Header, message.Body.Payload},
 			})
 		}
 	}()
