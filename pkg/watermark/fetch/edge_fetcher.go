@@ -73,8 +73,6 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var epoch int64 = math.MaxInt64
 	var allProcessors = e.processorManager.GetAllProcessors()
 	for _, p := range allProcessors {
-		s := fmt.Sprintf("[Processor: %v] \n", p)
-		fmt.Println(s)
 		if !p.IsActive() {
 			continue
 		}

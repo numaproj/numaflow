@@ -16,7 +16,6 @@ import (
 // jetStreamWatch implements the watermark's KV store backed up by Jetstream.
 type jetStreamWatch struct {
 	pipelineName string
-	kvBucketName string
 	conn         *jsclient.NatsConn
 	kv           nats.KeyValue
 	js           *jsclient.JetStreamContext
@@ -42,7 +41,6 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 
 	j := &jetStreamWatch{
 		pipelineName: pipelineName,
-		kvBucketName: kvBucketName,
 		conn:         conn,
 		js:           js,
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("kvBucketName", kvBucketName),
