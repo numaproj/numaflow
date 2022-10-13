@@ -113,6 +113,11 @@ func TestOrderedProcessing(t *testing.T) {
 				p.CloseOfBook()
 				// wait for reduce operation to be done.
 				pfTask := taskForPartition(op, id)
+				// it might so happen that this task got processed and removed
+				// before we could even inspect it.
+				if pfTask == nil {
+					continue
+				}
 				<-pfTask.doneCh
 			}
 
