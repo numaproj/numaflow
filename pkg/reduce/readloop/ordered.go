@@ -68,6 +68,8 @@ func (op *orderedProcessor) process(ctx context.Context,
 // to wait for the close-of-book on the PBQ to materialize the result.
 func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 	for {
+		// FIXME: this error handling won't work with streams. We cannot do infinite retries
+		//  because whatever is written to the stream is lost between retries.
 		err := t.pf.Process(ctx)
 		if err == nil {
 			break
@@ -135,7 +137,6 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 				currElement = currElement.Next()
 				op.taskQueue.Remove(rm)
 				op.Unlock()
-				break
 			case <-ctx.Done():
 				return
 			}
