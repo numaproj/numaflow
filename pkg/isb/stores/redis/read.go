@@ -325,11 +325,7 @@ func getHeaderAndBody(field string, value interface{}) (msg isb.Message, err err
 		return msg, fmt.Errorf("header unmarshal error %w", err)
 	}
 
-	err = msg.Body.UnmarshalBinary([]byte(value.(string)))
-	if err != nil {
-		return msg, fmt.Errorf("body unmarshal error (%v) %w", []byte(value.(string)), err)
-	}
-
+	msg.Body.Payload = []byte(value.(string))
 	return msg, nil
 }
 
