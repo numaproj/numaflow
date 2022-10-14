@@ -55,7 +55,7 @@ func NewReadLoop(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher, _ *window.Options) *ReadLoop {
 
-	op := newOrderedProcessor()
+	op := newOrderedProcessor(ctx)
 
 	rl := &ReadLoop{
 		UDF:               udf,
@@ -148,6 +148,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		// close any windows that need to be closed.
 		wm := rl.waterMark(m)
 		closedWindows := rl.aw.RemoveWindow(time.Time(wm))
+		rl.log.Debugw("closing windows ", zap.Int("length", len(closedWindows)))
 
 		for _, cw := range closedWindows {
 			partitions := cw.Partitions()
@@ -221,7 +222,6 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindo
 }
 
 func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
-	// TODO: change this to lookup watermark based on offset.
 	return processor.Watermark(message.Watermark)
 }
 

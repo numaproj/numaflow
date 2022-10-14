@@ -20,30 +20,35 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 		name         string
 		given        *KeyedWindow
 		input        string
-		expectedKeys []string
+		expectedKeys map[string]string
 	}{
 		{
 			name:         "no_keys",
 			given:        &KeyedWindow{},
 			input:        "key1",
-			expectedKeys: []string{"key1"},
+			expectedKeys: map[string]string{"key1": "key1"},
 		},
 		{
 			name: "with_some_existing_keys",
 			given: &KeyedWindow{
-				Keys: []string{"key2", "key3"},
+				Keys: map[string]string{"key2": "key2", "key3": "key3"},
 			},
 			input:        "key4",
-			expectedKeys: []string{"key2", "key3", "key4"},
+			expectedKeys: map[string]string{"key2": "key2", "key3": "key3", "key4": "key4"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			kw = NewKeyedWindow(iw)
-			kw.Keys = append(kw.Keys, tt.given.Keys...)
+			for k := range tt.given.Keys {
+				kw.AddKey(k)
+			}
 			kw.AddKey(tt.input)
-			assert.ElementsMatch(t, kw.Keys, tt.expectedKeys)
+			for k := range tt.expectedKeys {
+				_, ok := kw.Keys[k]
+				assert.True(t, ok)
+			}
 		})
 	}
 }
@@ -68,7 +73,7 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 		{
 			name: "with_some_existing_keys",
 			given: &KeyedWindow{
-				Keys: []string{"key2", "key3"},
+				Keys: map[string]string{"key2": "key2", "key3": "key3"},
 			},
 			expected: []partition.ID{
 				{

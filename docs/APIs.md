@@ -3217,6 +3217,9 @@ StoreType (<code>string</code> alias)
 </p>
 </h3>
 <p>
+<p>
+PBQ store’s backend type.
+</p>
 </p>
 <h3 id="numaflow.numaproj.io/v1alpha1.TLS">
 TLS

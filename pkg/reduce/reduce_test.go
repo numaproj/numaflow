@@ -19,10 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type EventTypeWMProgressor struct {
-	eventTime time.Time
-	duration  time.Duration
-}
+type EventTypeWMProgressor struct{}
 
 func (e EventTypeWMProgressor) PublishWatermark(watermark processor.Watermark, offset isb.Offset) {
 
@@ -84,8 +81,9 @@ func (f forwardReduceTest) WhereTo(s string) ([]string, error) {
 // mock reduce op to return result
 // assert to check if the result is forwarded to toBuffers
 func TestDataForward_Start(t *testing.T) {
+	windowTime := 2 * time.Second
 	parentCtx := context.Background()
-	child, cancelFn := context.WithTimeout(parentCtx, time.Duration(11*time.Second))
+	child, cancelFn := context.WithTimeout(parentCtx, windowTime*2)
 	defer cancelFn()
 	fromBufferSize := int64(1000)
 	toBufferSize := int64(10)
@@ -112,23 +110,37 @@ func TestDataForward_Start(t *testing.T) {
 	}
 
 	// window of 10 seconds, so that all the messages fall in the same window
-	window := fixed.NewFixed(10 * time.Second)
+	window := fixed.NewFixed(windowTime)
 
 	var reduceDataForwarder *DataForward
 	reduceDataForwarder, err = NewDataForward(child, forwardReduceTest{}, fromBuffer, toBuffer, pbqManager, forwardReduceTest{}, EventTypeWMProgressor{}, publisher, window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
-	reduceDataForwarder.Start(child)
-	assert.False(t, to.IsEmpty())
-	msgs, readErr := to.Read(parentCtx, 1)
+	go reduceDataForwarder.Start(child)
+
+	for to.IsEmpty() {
+		select {
+		case <-child.Done():
+			assert.Fail(t, child.Err().Error())
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	// we are reading only one message here but the count should be equal to
+	// the number of keyed windows that closed
+	msgs, readErr := to.Read(child, 1)
+
 	assert.Nil(t, readErr)
 	assert.Len(t, msgs, 1)
 
 	// assert the output of reduce (count of messages)
 	var readMessagePayload PayloadForTest
 	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
+	// here the count will always be equal to the number of messages written per key
 	assert.Equal(t, 10, readMessagePayload.Value)
 	assert.Equal(t, "count", readMessagePayload.Key)
+
 }
 
 func writeMessages(ctx context.Context, count int, key string, fromBuffer *simplebuffer.InMemoryBuffer) {
@@ -142,6 +154,7 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 			messages := buildMessagesForReduce(count, key+strconv.Itoa(i))
 			i++
 
+			// TODO use watermark in memory store when its ready to synthesize offsets
 			// write the messages to fromBuffer, so that it will be available for consuming
 			fromBuffer.Write(ctx, messages)
 		case <-ctx.Done():

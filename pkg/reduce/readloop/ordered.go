@@ -3,6 +3,7 @@ package readloop
 import (
 	"container/list"
 	"context"
+	"go.uber.org/zap"
 	"sync"
 	"time"
 
@@ -27,13 +28,15 @@ type orderedProcessor struct {
 	sync.RWMutex
 	hasWork   chan struct{}
 	taskQueue *list.List
+	ctx       context.Context
 }
 
 // newOrderedProcessor returns an orderedProcessor.
-func newOrderedProcessor() *orderedProcessor {
+func newOrderedProcessor(ctx context.Context) *orderedProcessor {
 	return &orderedProcessor{
 		hasWork:   make(chan struct{}),
 		taskQueue: list.New(),
+		ctx:       ctx,
 	}
 }
 
@@ -67,6 +70,7 @@ func (op *orderedProcessor) process(ctx context.Context,
 // reduceOp invokes the reduce function. The reducer is a long running function since we stream in the data and it has
 // to wait for the close-of-book on the PBQ to materialize the result.
 func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
+	start := time.Now()
 	for {
 		// FIXME: this error handling won't work with streams. We cannot do infinite retries
 		//  because whatever is written to the stream is lost between retries.
@@ -74,6 +78,7 @@ func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 		if err == nil {
 			break
 		} else if err == ctx.Err() {
+			logging.FromContext(ctx).Infow("ReduceOp returning early", zap.Error(ctx.Err()))
 			return
 		}
 
@@ -82,7 +87,7 @@ func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 	}
 	// after retrying indicate that we are done with processing the package. the processing can move on
 	close(t.doneCh)
-
+	logging.FromContext(op.ctx).Debugw("Process->Reduce call took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 	// notify that some work has been completed
 	select {
 	case op.hasWork <- struct{}{}:
@@ -90,18 +95,23 @@ func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 		return
 	}
 
+	logging.FromContext(op.ctx).Debugw("Post Reduce chan push took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 }
 
 func (op *orderedProcessor) forward(ctx context.Context) {
+
 	var currElement *list.Element
 	var t *task
 	for {
+		start := time.Now()
 		// block till we have some work
 		select {
 		case <-op.hasWork:
 		case <-ctx.Done():
+			logging.FromContext(ctx).Infow("forward returning early", zap.Error(ctx.Err()))
 			return
 		}
+		logging.FromContext(op.ctx).Debugw("waited for dequeuing tasks ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 
 		// a signal does not mean we have pending work to be done because
 		// for every signal we try to empty out the task-queue.
@@ -120,6 +130,7 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 
 		// empty out the entire task-queue everytime there has been some work done
 		for i := 0; i < n; i++ {
+			startLoop := time.Now()
 			t = currElement.Value.(*task)
 			select {
 			case <-t.doneCh:
@@ -138,8 +149,11 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 				op.taskQueue.Remove(rm)
 				op.Unlock()
 			case <-ctx.Done():
+				logging.FromContext(ctx).Debugw("forward returning early", zap.Error(ctx.Err()))
 				return
 			}
+			logging.FromContext(op.ctx).Debugw("one iteration of ordered loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()))
+
 		}
 	}
 }

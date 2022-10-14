@@ -87,7 +87,7 @@ func TestOrderedProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// clean out the task queue before we start a run
-			op := newOrderedProcessor()
+			op := newOrderedProcessor(ctx)
 			op.startUp(ctx)
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.

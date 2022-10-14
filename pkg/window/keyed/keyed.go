@@ -41,7 +41,7 @@ func (kw *KeyedWindow) Partitions() []partition.ID {
 
 	partitions := make([]partition.ID, len(kw.Keys))
 	idx := 0
-	for k, _ := range kw.Keys {
+	for k := range kw.Keys {
 		partitions[idx] = partition.ID{Start: kw.IntervalWindow.Start, End: kw.IntervalWindow.End, Key: k}
 		idx++
 	}
