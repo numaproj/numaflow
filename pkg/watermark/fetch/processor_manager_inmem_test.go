@@ -18,7 +18,6 @@ import (
 func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	var (
 		err          error
-		ctx                = context.Background()
 		pipelineName       = "testFetch"
 		keyspace           = "fetcherTest"
 		hbBucketName       = keyspace + "_PROCESSORS"

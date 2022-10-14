@@ -21,7 +21,6 @@ import (
 
 func TestFetcherWithSameOTBucket(t *testing.T) {
 	var (
-		ctx              = context.Background()
 		keyspace         = "fetcherTest"
 		epoch      int64 = 1651161600
 		testOffset int64 = 100
