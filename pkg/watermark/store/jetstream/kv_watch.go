@@ -113,7 +113,7 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 				// call jetstream watch stop
 				err = kvWatcher.Stop()
 				if err != nil {
-					k.log.Errorw("stopping WatchAll", zap.String("watcher", k.GetKVName()), zap.Error(err))
+					k.log.Errorw("failed to stop", zap.String("watcher", k.GetKVName()), zap.Error(err))
 				} else {
 					k.log.Infow("WatchAll successfully stopped", zap.String("watcher", k.GetKVName()))
 				}

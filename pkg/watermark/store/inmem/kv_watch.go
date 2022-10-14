@@ -70,7 +70,7 @@ func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 		for {
 			select {
 			case <-ctx.Done():
-				k.log.Errorw("stopping watching", zap.String("watcher", k.GetKVName()))
+				k.log.Infow("stopping watching", zap.String("watcher", k.GetKVName()))
 				k.lock.Lock()
 				delete(k.updatesChMap, id)
 				close(updates)
