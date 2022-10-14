@@ -254,3 +254,16 @@ func TestManager_Replay(t *testing.T) {
 	// since we replayed the messages which are persisted in store
 	assert.Len(t, readMessages, 2*msgsCount)
 }
+
+func TestManager_StartUp(t *testing.T) {
+	size := 100
+
+	ctx := context.Background()
+	pbqManager, err := NewManager(ctx, WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType)),
+		WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
+	assert.NoError(t, err)
+
+	pbqManager.StartUp(ctx)
+	// nothing to list for pbq backed with in-memory store
+	assert.Len(t, pbqManager.ListPartitions(), 0)
+}

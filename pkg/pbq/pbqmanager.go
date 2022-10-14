@@ -133,53 +133,53 @@ func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
 // StartUp restores the state of the pbqManager. It reads from the PBQs store to get the persisted partitions
 // and builds the PBQ Map.
 func (m *Manager) StartUp(ctx context.Context) {
-	var err error
+	var ctxClosedErr error
 	var partitionIDs []partition.ID
 
 	var discoverPartitionsBackoff = wait.Backoff{
 		Steps:    math.MaxInt64,
-		Duration: 1 * time.Second,
-		Factor:   1.5,
+		Duration: 100 * time.Millisecond,
+		Factor:   1,
 		Jitter:   0.1,
 	}
 
-	err = wait.ExponentialBackoffWithContext(ctx, discoverPartitionsBackoff, func() (done bool, err error) {
+	ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, discoverPartitionsBackoff, func() (done bool, err error) {
 		var attempt int
 
 		partitionIDs, err = m.discoverPartitions(ctx)
 		if err != nil {
 			attempt += 1
-			m.log.Warnw("Failed to discover partitions during startup, retrying", zap.Any("attempt", attempt), zap.Error(err))
+			m.log.Errorw("Failed to discover partitions during startup, retrying", zap.Any("attempt", attempt), zap.Error(err))
 			return false, nil
 		}
 		return true, nil
 	})
-	if err != nil {
-		m.log.Errorw("Failed to discover partitions, no retries left", zap.Error(err))
+	if ctxClosedErr != nil {
+		m.log.Errorw("Context closed while discovering partitions", zap.Error(ctxClosedErr))
 		return
 	}
 
 	var createPBQBackoff = wait.Backoff{
 		Steps:    math.MaxInt64,
-		Duration: 1 * time.Second,
-		Factor:   1.5,
+		Duration: 100 * time.Millisecond,
+		Factor:   1,
 		Jitter:   0.1,
 	}
 
 	for _, partitionID := range partitionIDs {
-		err = wait.ExponentialBackoffWithContext(ctx, createPBQBackoff, func() (done bool, err error) {
+		ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, createPBQBackoff, func() (done bool, err error) {
 			var attempt int
 			_, err = m.CreateNewPBQ(ctx, partitionID)
 
 			if err != nil {
 				attempt += 1
-				m.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", partitionID.String()), zap.Error(err))
+				m.log.Errorw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", partitionID.String()), zap.Error(err))
 				return false, nil
 			}
 			return true, nil
 		})
-		if err != nil {
-			m.log.Errorw("Failed to create pbq during startup, no retries left", zap.Any("partitionID", partitionID.String()), zap.Error(err))
+		if ctxClosedErr != nil {
+			m.log.Errorw("Context closed while creating new pbq", zap.Any("partitionID", partitionID.String()), zap.Error(ctxClosedErr))
 		}
 	}
 }
@@ -191,31 +191,30 @@ func (m *Manager) ShutDown(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	var PBQCloseBackOff = wait.Backoff{
-		Steps:    5,
-		Duration: 1 * time.Second,
-		Factor:   1.5,
+		Steps:    math.MaxInt64,
+		Duration: 100 * time.Millisecond,
+		Factor:   1,
 		Jitter:   0.1,
-		Cap:      5 * time.Second,
 	}
 
 	for _, v := range m.pbqMap {
 		wg.Add(1)
 		go func(q *PBQ) {
 			defer wg.Done()
-			var closeErr error
+			var ctxClosedErr error
 			var attempt int
-			closeErr = wait.ExponentialBackoffWithContext(ctx, PBQCloseBackOff, func() (done bool, err error) {
-				closeErr = q.Close()
+			ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, PBQCloseBackOff, func() (done bool, err error) {
+				closeErr := q.Close()
 				if closeErr != nil {
 					attempt += 1
-					m.log.Warnw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("ID", q.PartitionID), zap.Error(closeErr))
+					m.log.Errorw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("ID", q.PartitionID), zap.Error(closeErr))
 					// exponential backoff will return if err is not nil
 					return false, nil
 				}
 				return true, nil
 			})
-			if closeErr != nil {
-				m.log.Errorw("Failed to close pbq, no retries left", zap.Any("ID", q.PartitionID), zap.Error(closeErr))
+			if ctxClosedErr != nil {
+				m.log.Errorw("Context closed while closing pbq", zap.Any("ID", q.PartitionID), zap.Error(ctxClosedErr))
 			}
 		}(v)
 	}

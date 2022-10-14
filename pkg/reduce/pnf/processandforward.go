@@ -103,10 +103,10 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		resultMessages := messages
 		go func() {
 			defer wg.Done()
-			// FIXME: capture this error and log it. Or should we handle error?
-			offsets, writeErr := p.writeToBuffer(ctx, bufferID, resultMessages)
-			if writeErr != nil {
+			offsets, ctxClosedErr := p.writeToBuffer(ctx, bufferID, resultMessages)
+			if ctxClosedErr != nil {
 				success = false
+				p.log.Errorw("Context closed while waiting to write the message to ISB", zap.Error(ctxClosedErr), zap.Any("partitionID", p.PartitionID))
 				return
 			}
 			mu.Lock()
@@ -117,7 +117,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 
 	// wait until all the writer go routines return
 	wg.Wait()
-	// even if one write go routines fails, don't ack just return
+	// even if one write go routines fails, don't GC just return
 	if !success {
 		return errors.New("failed to forward the messages to isb")
 	}
@@ -160,16 +160,15 @@ func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var ISBWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt64,
-		Duration: 1 * time.Second,
-		Factor:   1.5,
+		Duration: 100 * time.Millisecond,
+		Factor:   1,
 		Jitter:   0.1,
 	}
 
-	// write to isb with infinite exponential backoff (till shutdown is triggered)
+	// write to isb with infinite exponential backoff (until shutdown is triggered)
 	var failedMessages []isb.Message
 	var offsets []isb.Offset
-	// FIXME: remove return of error and make it an infinite loop. Please make sure it does not exceed 1 second of wait.
-	writeErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
+	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
 		var writeErrs []error
 		offsets, writeErrs = p.toBuffers[bufferID].Write(ctx, resultMessages)
 		for i, message := range resultMessages {
@@ -184,8 +183,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		}
 		return true, nil
 	})
-	// FIXME: don't return the error, just log it.
-	return offsets, writeErr
+	return offsets, ctxClosedErr
 }
 
 func (p *ProcessAndForward) publishWM(wm processor.Watermark, writeOffsets map[string][]isb.Offset) {

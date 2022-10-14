@@ -129,6 +129,7 @@ const (
 	DefaultReadBatchSize = 100
 )
 
+// PBQ store's backend type.
 type StoreType string
 
 const (

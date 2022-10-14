@@ -1,7 +1,12 @@
+// Package reduce reads messages from isb
+// attaches watermark to read messages
+// invoke the read-loop with the read messages
 package reduce
 
 import (
 	"context"
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -12,13 +17,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/window"
 	"go.uber.org/zap"
-	"time"
 )
 
-// read from the isb
-// attach watermark to read messages
-// invoke the read-loop with the read messages
-
+// DataForward reads data from isb and forwards them to readloop
 type DataForward struct {
 	fromBuffer        isb.BufferReader
 	readloop          *readloop.ReadLoop
@@ -56,6 +57,7 @@ func NewDataForward(ctx context.Context,
 		opts:              options}, nil
 }
 
+// Start starts forwarding messages to readloop
 func (d *DataForward) Start(ctx context.Context) {
 	d.readloop.Startup(ctx)
 	for {
@@ -68,6 +70,8 @@ func (d *DataForward) Start(ctx context.Context) {
 	}
 }
 
+// forwardAChunk reads a chunk of messages from isb and assigns watermark to messages
+// and forwards the messages to readloop
 func (d *DataForward) forwardAChunk(ctx context.Context) {
 	readMessages, err := d.fromBuffer.Read(ctx, d.opts.readBatchSize)
 

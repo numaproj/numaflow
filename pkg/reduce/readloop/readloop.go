@@ -130,7 +130,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 			// write the message to PBQ
 			ctxClosedErr = rl.executeWithBackOff(ctx, writeFn, writeErrMsg, pbqWriteBackoff, m, partitionID)
 			if ctxClosedErr != nil {
-				rl.log.Errorw("Context closed while waiting to write the message to PBQ")
+				rl.log.Errorw("Context closed while waiting to write the message to PBQ", zap.Error(ctxClosedErr))
 				return
 			}
 
@@ -140,7 +140,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 			// Ack the message to ISB
 			ctxClosedErr = rl.executeWithBackOff(ctx, ackFn, ackErrMsg, pbqWriteBackoff, m, partitionID)
 			if ctxClosedErr != nil {
-				rl.log.Errorw("Context closed while Acknowledging the message")
+				rl.log.Errorw("Context closed while Acknowledging the message", zap.Error(ctxClosedErr))
 				return
 			}
 
@@ -223,7 +223,7 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindo
 
 func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
 	// TODO: change this to lookup watermark based on offset.
-	return processor.Watermark(message.EventTime)
+	return processor.Watermark(message.Watermark)
 }
 
 func (rl *ReadLoop) closePartitions(partitions []partition.ID) {

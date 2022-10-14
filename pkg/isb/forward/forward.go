@@ -6,7 +6,6 @@ package forward
 import (
 	"context"
 	"fmt"
-	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
 	"sync"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
 )
 
 // InterStepDataForward forwards the data from previous step to the current step via inter-step buffer.
