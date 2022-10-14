@@ -95,6 +95,6 @@ func (k *inMemWatch) GetKVName() string {
 	return k.bucketName
 }
 
-// Close closes the connection.
+// Close does nothing here because the udpates channel has already been closed when exiting the Watch.
 func (k *inMemWatch) Close() {
 }

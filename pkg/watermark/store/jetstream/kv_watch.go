@@ -31,11 +31,15 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nats connection, %w", err)
 	}
+	increase(1)
 
 	// do we need to specify any opts? if yes, send it via options.
 	js, err := conn.JetStream(nats.PublishAsyncMaxPending(256))
 	if err != nil {
-		conn.Close()
+		if !conn.IsClosed() {
+			conn.Close()
+			decrease(1)
+		}
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
 	}
 
@@ -48,6 +52,10 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 
 	j.kv, err = j.js.KeyValue(kvBucketName)
 	if err != nil {
+		if !conn.IsClosed() {
+			conn.Close()
+			decrease(1)
+		}
 		return nil, err
 	}
 
@@ -56,6 +64,10 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 	// options if any
 	for _, o := range opts {
 		if err := o(j); err != nil {
+			if !conn.IsClosed() {
+				conn.Close()
+				decrease(1)
+			}
 			return nil, err
 		}
 	}
@@ -142,5 +154,6 @@ func (k *jetStreamWatch) GetKVName() string {
 func (k *jetStreamWatch) Close() {
 	if !k.conn.IsClosed() {
 		k.conn.Close()
+		decrease(1)
 	}
 }

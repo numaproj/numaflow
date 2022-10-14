@@ -37,7 +37,9 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 	// do we need to specify any opts? if yes, send it via options.
 	js, err := conn.JetStream(nats.PublishAsyncMaxPending(256))
 	if err != nil {
-		conn.Close()
+		if !conn.IsClosed() {
+			conn.Close()
+		}
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
 	}
 
@@ -51,11 +53,17 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 	// for JetStream KeyValue store, the bucket should have been created in advance
 	j.kv, err = j.js.KeyValue(bucketName)
 	if err != nil {
+		if !conn.IsClosed() {
+			conn.Close()
+		}
 		return nil, err
 	}
 	// options if any
 	for _, o := range opts {
 		if err := o(j); err != nil {
+			if !conn.IsClosed() {
+				conn.Close()
+			}
 			return nil, err
 		}
 	}
