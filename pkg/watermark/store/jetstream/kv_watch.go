@@ -109,9 +109,14 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 		for {
 			select {
 			case <-ctx.Done():
-				k.log.Errorw("stopping WatchAll", zap.String("watcher", k.GetKVName()))
+				k.log.Infow("stopping WatchAll", zap.String("watcher", k.GetKVName()))
 				// call jetstream watch stop
-				_ = kvWatcher.Stop()
+				err = kvWatcher.Stop()
+				if err != nil {
+					k.log.Errorw("stopping WatchAll", zap.String("watcher", k.GetKVName()), zap.Error(err))
+				} else {
+					k.log.Infow("WatchAll successfully stopped", zap.String("watcher", k.GetKVName()))
+				}
 				close(updates)
 				return
 			case value := <-kvWatcher.Updates():
