@@ -29,8 +29,7 @@ func ExampleWatermark_String() {
 }
 
 func TestExampleWatermarkUnix(t *testing.T) {
-	location, _ := time.LoadLocation("UTC")
-	wm := Watermark(time.Unix(1651129200, 0).In(location))
+	wm := Watermark(time.Unix(1651129200, 0))
 	assert.Equal(t, int64(1651129200), wm.Unix())
 }
 

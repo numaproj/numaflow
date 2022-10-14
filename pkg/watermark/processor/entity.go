@@ -22,9 +22,7 @@ func (w Watermark) String() string {
 }
 
 func (w Watermark) Unix() int64 {
-	var location, _ = time.LoadLocation("UTC")
-	var t = time.Time(w).In(location)
-	return t.Unix()
+	return time.Time(w).Unix()
 }
 
 func (w Watermark) After(t time.Time) bool {

@@ -59,7 +59,10 @@ func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntit
 		log:            logging.FromContext(ctx),
 	}
 
-	go p.startTimeLineWatcher()
+	if watcher != nil {
+		go p.startTimeLineWatcher()
+	}
+
 	return p
 }
 
@@ -97,9 +100,6 @@ func (p *ProcessorToFetch) IsDeleted() bool {
 }
 
 func (p *ProcessorToFetch) startTimeLineWatcher() {
-	if p.otWatcher == nil {
-		return
-	}
 	watchCh := p.otWatcher.Watch(p.ctx)
 	for {
 		select {

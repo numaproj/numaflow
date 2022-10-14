@@ -120,7 +120,7 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	}
 
 	vertexWatermark := vertexFetcher.GetHeadWatermark().Unix()
-	log.Infof("Head watermark retrieved for vertex %s is %d.", vertexName, vertexWatermark)
+	log.Debugf("Head watermark retrieved for vertex %s is %d.", vertexName, vertexWatermark)
 
 	v := &daemon.VertexWatermark{
 		Pipeline:           &ps.pipeline.Name,
