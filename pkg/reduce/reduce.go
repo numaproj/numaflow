@@ -32,8 +32,8 @@ type DataForward struct {
 func NewDataForward(ctx context.Context,
 	udf udfReducer.Reducer,
 	fromBuffer isb.BufferReader,
-	pbqManager *pbq.Manager,
 	toBuffers map[string]isb.BufferWriter,
+	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	fw fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
@@ -78,6 +78,7 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	if err != nil {
 		d.log.Errorw("failed to read from isb", zap.Error(err))
 	}
+
 	if len(readMessages) == 0 {
 		return
 	}

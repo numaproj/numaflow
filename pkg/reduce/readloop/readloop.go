@@ -187,7 +187,6 @@ func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.
 		pbqErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func() (done bool, err error) {
 			var attempt int
 			q, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID)
-
 			if pbqErr != nil {
 				attempt += 1
 				rl.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", partitionID.String()), zap.Error(pbqErr))
