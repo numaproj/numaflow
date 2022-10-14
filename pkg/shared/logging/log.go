@@ -5,6 +5,7 @@ import (
 	"os"
 
 	zap "go.uber.org/zap"
+	zapcore "go.uber.org/zap/zapcore"
 )
 
 // NewLogger returns a new zap.SugaredLogger
@@ -18,6 +19,7 @@ func NewLogger() *zap.SugaredLogger {
 	}
 	// Config customization goes here if any
 	config.OutputPaths = []string{"stdout"}
+	config.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339)
 	logger, err := config.Build()
 	if err != nil {
 		panic(err)
