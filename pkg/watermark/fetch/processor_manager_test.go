@@ -258,7 +258,6 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	wg.Wait()
 	cancel()
-
 }
 
 func TestFetcherWithSeparateOTBucket(t *testing.T) {

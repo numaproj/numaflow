@@ -100,11 +100,13 @@ func (kv *jetStreamStore) GetStoreName() string {
 
 // DeleteKey deletes the key from the JS key-value store.
 func (kv *jetStreamStore) DeleteKey(_ context.Context, k string) error {
+	// will return error if nats connection is closed
 	return kv.kv.Delete(k)
 }
 
 // PutKV puts an element to the JS key-value store.
 func (kv *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
+	// will return error if nats connection is closed
 	_, err := kv.kv.Put(k, v)
 	return err
 }

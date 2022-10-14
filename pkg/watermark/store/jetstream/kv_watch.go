@@ -112,6 +112,7 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 				k.log.Errorw("stopping WatchAll", zap.String("watcher", k.GetKVName()))
 				// call jetstream watch stop
 				_ = kvWatcher.Stop()
+				close(updates)
 				return
 			case value := <-kvWatcher.Updates():
 				// if channel is closed, nil could come in
@@ -148,6 +149,8 @@ func (k *jetStreamWatch) GetKVName() string {
 
 // Close closes the connection.
 func (k *jetStreamWatch) Close() {
+	// need to cancel the `Watch` ctx before calling Close()
+	// otherwise `kvWatcher.Stop()` will raise the nats connection is closed error
 	if !k.conn.IsClosed() {
 		k.conn.Close()
 	}
