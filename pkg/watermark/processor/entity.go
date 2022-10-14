@@ -21,6 +21,12 @@ func (w Watermark) String() string {
 	return t.Format(time.RFC3339)
 }
 
+func (w Watermark) Unix() int64 {
+	var location, _ = time.LoadLocation("UTC")
+	var t = time.Time(w).In(location)
+	return t.Unix()
+}
+
 func (w Watermark) After(t time.Time) bool {
 	return time.Time(w).After(t)
 }
@@ -92,9 +98,9 @@ func (p *ProcessorEntity) IsOTBucketShared() bool {
 // BuildOTWatcherKey builds the offset-timeline key name
 func (p *ProcessorEntity) BuildOTWatcherKey(watermark Watermark) string {
 	if p.opts.separateOTBucket {
-		return fmt.Sprintf("%d", time.Time(watermark).Unix())
+		return fmt.Sprintf("%d", watermark.Unix())
 	} else {
-		return fmt.Sprintf("%s%s%d", p.GetID(), p.opts.keySeparator, time.Time(watermark).Unix())
+		return fmt.Sprintf("%s%s%d", p.GetID(), p.opts.keySeparator, watermark.Unix())
 	}
 }
 

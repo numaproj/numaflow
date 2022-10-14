@@ -33,10 +33,11 @@ func NewEdgeFetcher(ctx context.Context, edgeName string, processorManager *Proc
 	}
 }
 
-// GetHeadWatermark returns the watermark using the HeadOffset (latest offset). This
+// GetHeadWatermark returns the watermark using the HeadOffset (the latest offset among all processors). This
 // can be used in showing the watermark progression for a vertex when not consuming the messages
 // directly (eg. UX, tests,)
 func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
+	e.log.Infof("Fetching head watermark for edge %s...", e.edgeName)
 	var debugString strings.Builder
 	var headOffset int64 = math.MinInt64
 	var epoch int64 = math.MaxInt64
@@ -56,9 +57,11 @@ func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
 	}
 	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
 	if epoch == math.MaxInt64 {
-		return processor.Watermark(time.Time{})
+		e.log.Infof("Didn't find any existing head watermarks across all processors, using default watermark %d...", int64(-1))
+		return processor.Watermark(time.Unix(-1, 0))
 	}
 
+	e.log.Infof("Found head watermark epoch %d.", epoch)
 	return processor.Watermark(time.Unix(epoch, 0))
 }
 

@@ -118,7 +118,10 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 		log.Errorf("watermark fetcher not available for vertex %s in the fetcher map", vertexName)
 		return nil, fmt.Errorf("watermark not available for given vertex, %s", vertexName)
 	}
-	vertexWatermark := time.Time(vertexFetcher.GetHeadWatermark()).Unix()
+
+	vertexWatermark := vertexFetcher.GetHeadWatermark().Unix()
+	log.Infof("Head watermark retrieved for vertex %s is %d.", vertexName, vertexWatermark)
+
 	v := &daemon.VertexWatermark{
 		Pipeline:           &ps.pipeline.Name,
 		Vertex:             request.Vertex,

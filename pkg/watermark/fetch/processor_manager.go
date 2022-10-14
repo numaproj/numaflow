@@ -16,8 +16,7 @@ import (
 )
 
 // ProcessorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor). The code is running on Vn vertex.
-// It has the mapping of all the processors which in turn has all the information about each processor
-// timelines.
+// It has the mapping of all the processors which in turn has all the information about each processor timelines.
 type ProcessorManager struct {
 	ctx        context.Context
 	hbWatcher  store.WatermarkKVWatcher
@@ -147,13 +146,13 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
-				var entity = processor.NewProcessorEntity(value.Key(), processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
 				if p == nil { // if no, create a new processor
 					// A fromProcessor need to be added to v.processors
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
+					var entity = processor.NewProcessorEntity(value.Key(), processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
 					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.otWatcher)
 					v.addProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
