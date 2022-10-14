@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 
@@ -17,12 +18,15 @@ import (
 func TestBuffer_GetWatermark(t *testing.T) {
 	var ctx = context.Background()
 
-	// We don't need real watcher because we manually call the `Put` function and the `addProcessor` function (see below).
-	processorManager := NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(nil, nil))
+	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
+	// so use no op watcher for testing
+	hbWatcher := noop.NewKVOpWatch()
+	otWatcher := noop.NewKVOpWatch()
+	processorManager := NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
 	var (
-		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, nil)
-		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, nil)
-		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, nil)
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, otWatcher)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, otWatcher)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, otWatcher)
 		pod0Timeline = []OffsetWatermark{
 			{watermark: 11, offset: 9},
 			{watermark: 12, offset: 20},
