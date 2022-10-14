@@ -11,7 +11,7 @@ import (
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
 type KeyedWindow struct {
 	*window.IntervalWindow
-	Keys []string
+	Keys map[string]string
 	lock sync.RWMutex
 }
 
@@ -19,7 +19,7 @@ type KeyedWindow struct {
 func NewKeyedWindow(window *window.IntervalWindow) *KeyedWindow {
 	kw := &KeyedWindow{
 		IntervalWindow: window,
-		Keys:           make([]string, 0),
+		Keys:           make(map[string]string),
 		lock:           sync.RWMutex{},
 	}
 	return kw
@@ -29,7 +29,9 @@ func NewKeyedWindow(window *window.IntervalWindow) *KeyedWindow {
 func (kw *KeyedWindow) AddKey(key string) {
 	kw.lock.Lock()
 	defer kw.lock.Unlock()
-	kw.Keys = append(kw.Keys, key)
+	if _, ok := kw.Keys[key]; !ok {
+		kw.Keys[key] = key
+	}
 }
 
 // Partitions returns an array of partitions for a window
@@ -38,8 +40,10 @@ func (kw *KeyedWindow) Partitions() []partition.ID {
 	defer kw.lock.RUnlock()
 
 	partitions := make([]partition.ID, len(kw.Keys))
-	for i, key := range kw.Keys {
-		partitions[i] = partition.ID{Start: kw.IntervalWindow.Start, End: kw.IntervalWindow.End, Key: key}
+	idx := 0
+	for k, _ := range kw.Keys {
+		partitions[idx] = partition.ID{Start: kw.IntervalWindow.Start, End: kw.IntervalWindow.End, Key: k}
+		idx++
 	}
 
 	return partitions

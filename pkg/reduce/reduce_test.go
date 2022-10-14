@@ -45,7 +45,7 @@ func (e EventTypeWMProgressor) GetHeadWatermark() processor.Watermark {
 // PayloadForTest is a dummy payload for testing.
 type PayloadForTest struct {
 	Key   string
-	Value int64
+	Value int
 }
 
 type forwardReduceTest struct {
@@ -53,13 +53,25 @@ type forwardReduceTest struct {
 
 // Reduce returns a result, with last message's event time
 func (f forwardReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
-	var t time.Time
-	for msg := range messageStream {
-		t = msg.EventTime
+	count := 0
+	for range messageStream {
+		count += 1
 	}
-	msg := buildMessagesForReduce(1, t, "result")
+
+	payload := PayloadForTest{Key: "count", Value: count}
+	b, _ := json.Marshal(payload)
+	ret := &isb.Message{
+		Header: isb.Header{
+			PaneInfo: isb.PaneInfo{
+				EventTime: time.Now(),
+			},
+			ID:  "msgID",
+			Key: "result",
+		},
+		Body: isb.Body{Payload: b},
+	}
 	return []*isb.Message{
-		&msg[0],
+		ret,
 	}, nil
 }
 
@@ -71,17 +83,14 @@ func (f forwardReduceTest) WhereTo(s string) ([]string, error) {
 // mock reduce op to return result
 // assert to check if the result is forwarded to toBuffers
 func TestDataForward_Start(t *testing.T) {
-	ctx := context.Background()
-	fromBuffer := simplebuffer.NewInMemoryBuffer("from", 10)
+	parentCtx := context.Background()
+	child, _ := context.WithTimeout(parentCtx, time.Duration(3*time.Second))
+
+	fromBuffer := simplebuffer.NewInMemoryBuffer("from", 1000)
 	to := simplebuffer.NewInMemoryBuffer("to", 10)
 
-	startTime := time.Now()
-
-	// build 10 messages from the start time, time difference between the messages is 1 second
-	messages := buildMessagesForReduce(10, startTime, "test-1")
-
-	// write the messages to fromBuffer, so that it will be available for consuming
-	fromBuffer.Write(ctx, messages)
+	// keep on writing <count> messages every 1 second for the supplied key
+	go writeMessages(child, 10, "test-1", fromBuffer)
 
 	toBuffer := map[string]isb.BufferWriter{
 		"to": to,
@@ -91,7 +100,7 @@ func TestDataForward_Start(t *testing.T) {
 	var pbqManager *pbq.Manager
 
 	// create pbqManager
-	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(100), store.WithPbqStoreType(dfv1.InMemoryType)),
+	pbqManager, err = pbq.NewManager(child, pbq.WithPBQStoreOptions(store.WithStoreSize(100), store.WithPbqStoreType(dfv1.InMemoryType)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -99,21 +108,48 @@ func TestDataForward_Start(t *testing.T) {
 		"to": EventTypeWMProgressor{},
 	}
 
-	// window of 60 seconds, so that all the messages fall in the same window
-	window := fixed.NewFixed(60 * time.Second)
+	// window of 10 seconds, so that all the messages fall in the same window
+	window := fixed.NewFixed(2 * time.Second)
 
 	var reduceDataForwarder *DataForward
-	reduceDataForwarder, err = NewDataForward(ctx, forwardReduceTest{}, fromBuffer, toBuffer, pbqManager, forwardReduceTest{}, EventTypeWMProgressor{}, publisher, window, WithReadBatchSize(10))
+	reduceDataForwarder, err = NewDataForward(child, forwardReduceTest{}, fromBuffer, toBuffer, pbqManager, forwardReduceTest{}, EventTypeWMProgressor{}, publisher, window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
-	reduceDataForwarder.Start(ctx)
+	reduceDataForwarder.Start(child)
+
+	assert.False(t, to.IsEmpty())
+	msgs, readErr := to.Read(parentCtx, 1)
+	assert.Nil(t, readErr)
+	assert.Len(t, msgs, 1)
+
+	// TODO assert the output of reduce (count of messages)
+
+}
+
+func writeMessages(ctx context.Context, count int, key string, fromBuffer *simplebuffer.InMemoryBuffer) {
+
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			// build 10 messages from the start time, time difference between the messages is 1 second
+			messages := buildMessagesForReduce(count, key)
+
+			// write the messages to fromBuffer, so that it will be available for consuming
+			fromBuffer.Write(ctx, messages)
+		case <-ctx.Done():
+			ticker.Stop()
+			return
+		}
+	}
+
 }
 
 // buildMessagesForReduce builds test isb.Message which can be used for testing reduce.
-func buildMessagesForReduce(count int64, startTime time.Time, key string) []isb.Message {
+func buildMessagesForReduce(count int, key string) []isb.Message {
 	var messages = make([]isb.Message, 0, count)
-	for i := int64(0); i < count; i++ {
-		tmpTime := startTime.Add(time.Duration(i) * time.Second)
+	for i := 0; i < count; i++ {
+		tmpTime := time.Now().Truncate(10 * time.Second)
 		result, _ := json.Marshal(PayloadForTest{
 			Key:   key,
 			Value: i,
