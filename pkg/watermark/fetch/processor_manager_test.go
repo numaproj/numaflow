@@ -26,6 +26,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		epoch      int64 = 1651161600
 		testOffset int64 = 100
 	)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 
 	// connect to NATS
 	nc, err := jsclient.NewDefaultJetStreamClient(nats.DefaultURL).Connect(context.TODO())
@@ -112,9 +114,6 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}
 	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 
 	allProcessors := testBuffer.processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
