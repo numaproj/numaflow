@@ -26,6 +26,8 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		epoch        int64 = 1651161600
 		testOffset   int64 = 100
 	)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	hb, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
 	assert.NoError(t, err)
 	ot, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
@@ -71,9 +73,6 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}
 	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 
 	allProcessors := testBuffer.processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
