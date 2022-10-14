@@ -52,16 +52,19 @@ func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 	// create a new updates channel and fill in the history
 	rand.Seed(time.Now().UnixNano())
 	var id = randSeq(10)
-	var updates = make(chan store.WatermarkKVEntry, 100)
+	var updates = make(chan store.WatermarkKVEntry)
 
-	k.lock.Lock()
-	for _, value := range k.kvHistory {
-		updates <- value
-	}
-	// add the new updates channel to the map before unlock kvHistory
-	// so the new updates channel won't miss new kv operations
-	k.updatesChMap[id] = updates
-	k.lock.Unlock()
+	// for new updates channel initialization
+	go func() {
+		k.lock.Lock()
+		for _, value := range k.kvHistory {
+			updates <- value
+		}
+		// add the new updates channel to the map before unlock
+		// so the new updates channel won't miss new kv operations
+		k.updatesChMap[id] = updates
+		k.lock.Unlock()
+	}()
 
 	go func() {
 		for {
@@ -70,8 +73,8 @@ func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 				k.log.Errorw("stopping watching", zap.String("watcher", k.GetKVName()))
 				k.lock.Lock()
 				delete(k.updatesChMap, id)
-				k.lock.Unlock()
 				close(updates)
+				k.lock.Unlock()
 				return
 			case value := <-k.kvEntryCh:
 				k.log.Debug(value.Key(), value.Value(), value.Operation())
