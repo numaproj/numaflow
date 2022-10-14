@@ -11,6 +11,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -262,8 +263,24 @@ func TestManager_StartUp(t *testing.T) {
 	pbqManager, err := NewManager(ctx, WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
 	assert.NoError(t, err)
+	pID1 := partition.ID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "test-partition-1",
+	}
 
+	pID2 := partition.ID{
+		Start: time.Now(),
+		End:   time.Now(),
+		Key:   "test-partition-2",
+	}
+	dp := func(storeOptions *store.StoreOptions) ([]partition.ID, error) {
+		return []partition.ID{pID1,
+			pID2}, nil
+	}
+	memory.SetDiscoverer(dp)
 	pbqManager.StartUp(ctx)
-	// nothing to list for pbq backed with in-memory store
-	assert.Len(t, pbqManager.ListPartitions(), 0)
+	assert.Len(t, pbqManager.ListPartitions(), 2)
+	assert.NotNil(t, pbqManager.GetPBQ(pID1))
+	assert.NotNil(t, pbqManager.GetPBQ(pID2))
 }

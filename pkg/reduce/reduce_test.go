@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -84,10 +85,12 @@ func (f forwardReduceTest) WhereTo(s string) ([]string, error) {
 // assert to check if the result is forwarded to toBuffers
 func TestDataForward_Start(t *testing.T) {
 	parentCtx := context.Background()
-	child, _ := context.WithTimeout(parentCtx, time.Duration(3*time.Second))
-
-	fromBuffer := simplebuffer.NewInMemoryBuffer("from", 1000)
-	to := simplebuffer.NewInMemoryBuffer("to", 10)
+	child, cancelFn := context.WithTimeout(parentCtx, time.Duration(11*time.Second))
+	defer cancelFn()
+	fromBufferSize := int64(1000)
+	toBufferSize := int64(10)
+	fromBuffer := simplebuffer.NewInMemoryBuffer("from", fromBufferSize)
+	to := simplebuffer.NewInMemoryBuffer("to", toBufferSize)
 
 	// keep on writing <count> messages every 1 second for the supplied key
 	go writeMessages(child, 10, "test-1", fromBuffer)
@@ -109,31 +112,35 @@ func TestDataForward_Start(t *testing.T) {
 	}
 
 	// window of 10 seconds, so that all the messages fall in the same window
-	window := fixed.NewFixed(2 * time.Second)
+	window := fixed.NewFixed(10 * time.Second)
 
 	var reduceDataForwarder *DataForward
 	reduceDataForwarder, err = NewDataForward(child, forwardReduceTest{}, fromBuffer, toBuffer, pbqManager, forwardReduceTest{}, EventTypeWMProgressor{}, publisher, window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	reduceDataForwarder.Start(child)
-
 	assert.False(t, to.IsEmpty())
 	msgs, readErr := to.Read(parentCtx, 1)
 	assert.Nil(t, readErr)
 	assert.Len(t, msgs, 1)
 
-	// TODO assert the output of reduce (count of messages)
-
+	// assert the output of reduce (count of messages)
+	var readMessagePayload PayloadForTest
+	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
+	assert.Equal(t, 10, readMessagePayload.Value)
+	assert.Equal(t, "count", readMessagePayload.Key)
 }
 
 func writeMessages(ctx context.Context, count int, key string, fromBuffer *simplebuffer.InMemoryBuffer) {
-
-	ticker := time.NewTicker(1 * time.Second)
+	generateTime := 1 * time.Second
+	ticker := time.NewTicker(generateTime)
+	i := 1
 	for {
 		select {
 		case <-ticker.C:
 			// build 10 messages from the start time, time difference between the messages is 1 second
-			messages := buildMessagesForReduce(count, key)
+			messages := buildMessagesForReduce(count, key+strconv.Itoa(i))
+			i++
 
 			// write the messages to fromBuffer, so that it will be available for consuming
 			fromBuffer.Write(ctx, messages)
@@ -149,7 +156,7 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 func buildMessagesForReduce(count int, key string) []isb.Message {
 	var messages = make([]isb.Message, 0, count)
 	for i := 0; i < count; i++ {
-		tmpTime := time.Now().Truncate(10 * time.Second)
+		tmpTime := time.Now()
 		result, _ := json.Marshal(PayloadForTest{
 			Key:   key,
 			Value: i,
