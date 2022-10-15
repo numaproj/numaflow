@@ -77,6 +77,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 		if buffer.Type == v1alpha1.SinkBuffer {
 			opts = append(opts, publish.IsSink())
 		}
+		publishWatermark[buffer.Name].StopPublisher()
 		publishWatermark[buffer.Name] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), opts...)
 	}
 

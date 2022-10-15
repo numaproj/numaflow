@@ -262,6 +262,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	// wait for all the ctx.Done() is completed
 	// we don't have wg on the Watch functions go routine..
+	// TODO: opened an issue https://github.com/numaproj/numaflow/issues/224
+	//   fix tests after we revisit the watermark store and watcher closing logic
 	time.Sleep(3 * time.Second)
 }
 
