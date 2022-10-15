@@ -2,11 +2,10 @@ package inmem
 
 import (
 	"context"
-	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"go.uber.org/zap"
 )
@@ -37,21 +36,10 @@ func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, 
 	return k, nil
 }
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func randSeq(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
-}
-
 // Watch watches the key-value store.
 func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 	// create a new updates channel and fill in the history
-	rand.Seed(time.Now().UnixNano())
-	var id = randSeq(10)
+	var id = util.RandomString(10)
 	var updates = make(chan store.WatermarkKVEntry)
 
 	// for new updates channel initialization
