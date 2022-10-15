@@ -417,7 +417,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
 			Stream: rqw.GetStreamName(),
-			Values: []interface{}{msg.Header, msg.Body},
+			Values: []interface{}{msg.Header, msg.Body.Payload},
 		}).Err()
 		assert.NoError(t, err)
 	}
@@ -482,7 +482,7 @@ func TestSetWriteInfo(t *testing.T) {
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
 			Stream: rqw.GetStreamName(),
-			Values: []interface{}{msg.Header, msg.Body},
+			Values: []interface{}{msg.Header, msg.Body.Payload},
 		}).Err()
 		assert.NoError(t, err)
 	}
@@ -550,7 +550,7 @@ func forwardDataAndVerify(ctx context.Context, t *testing.T, fromStepWrite *Buff
 	// Read messages and validate the content
 	assert.Len(t, readMessages, 17)
 	assert.Equal(t, []interface{}{writeMessages[0].Header.PaneInfo, writeMessages[1].Header.PaneInfo, writeMessages[2].Header.PaneInfo, writeMessages[3].Header.PaneInfo, writeMessages[4].Header.PaneInfo}, []interface{}{readMessages[0].Header.PaneInfo, readMessages[1].Header.PaneInfo, readMessages[2].Header.PaneInfo, readMessages[3].Header.PaneInfo, readMessages[4].Header.PaneInfo})
-	assert.Equal(t, []interface{}{writeMessages[0].Body, writeMessages[1].Body, writeMessages[2].Body, writeMessages[3].Body, writeMessages[4].Body}, []interface{}{readMessages[0].Body, readMessages[1].Body, readMessages[2].Body, readMessages[3].Body, readMessages[4].Body})
+	assert.Equal(t, []interface{}{writeMessages[0].Body.Payload, writeMessages[1].Body.Payload, writeMessages[2].Body.Payload, writeMessages[3].Body.Payload, writeMessages[4].Body.Payload}, []interface{}{readMessages[0].Body.Payload, readMessages[1].Body.Payload, readMessages[2].Body.Payload, readMessages[3].Body.Payload, readMessages[4].Body.Payload})
 
 	_, _ = fromStepWrite.Write(ctx, writeMessages[18:20])
 

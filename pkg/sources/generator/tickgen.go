@@ -193,6 +193,7 @@ func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, er
 	msgs := make([]*isb.ReadMessage, 0, count)
 	// timeout should not be re-triggered for every run of the for loop. it is for the entire Read() call.
 	timeout := time.After(mg.readTimeout)
+loop:
 	for i := int64(0); i < count; i++ {
 		// since the Read call is blocking, and runs in an infinite loop
 		// we implement Read With Wait semantics
@@ -200,21 +201,21 @@ func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, er
 		case r := <-mg.srcchan:
 			tickgenSourceReadCount.With(map[string]string{metricspkg.LabelVertex: mg.name, metricspkg.LabelPipeline: mg.pipelineName}).Inc()
 			msgs = append(msgs, newreadmessage(r.data, r.offset))
-			// publish the last message's offset with watermark, this is an optimization to avoid too many insert calls
-			// into the offset timeline store.
-			// Please note that we are inserting the watermark before the data has been persisted into ISB by the forwarder.
-			o := msgs[len(msgs)-1].ReadOffset
-			nanos, _ := o.Sequence()
-			// remove the nanosecond precision
-			mg.sourcePublishWM.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
-
 		case <-timeout:
 			mg.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
-			return msgs, nil
+			break loop
 		}
 	}
+	if len(msgs) > 0 {
+		// publish the last message's offset with watermark, this is an optimization to avoid too many insert calls
+		// into the offset timeline store.
+		// Please note that we are inserting the watermark before the data has been persisted into ISB by the forwarder.
+		o := msgs[len(msgs)-1].ReadOffset
+		nanos, _ := o.Sequence()
+		// remove the nanosecond precision
+		mg.sourcePublishWM.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
+	}
 	return msgs, nil
-
 }
 
 // Ack acknowledges an array of offset.

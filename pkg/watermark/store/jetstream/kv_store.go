@@ -37,7 +37,9 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 	// do we need to specify any opts? if yes, send it via options.
 	js, err := conn.JetStream(nats.PublishAsyncMaxPending(256))
 	if err != nil {
-		conn.Close()
+		if !conn.IsClosed() {
+			conn.Close()
+		}
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
 	}
 
@@ -48,13 +50,20 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 
+	// for JetStream KeyValue store, the bucket should have been created in advance
 	j.kv, err = j.js.KeyValue(bucketName)
 	if err != nil {
+		if !conn.IsClosed() {
+			conn.Close()
+		}
 		return nil, err
 	}
 	// options if any
 	for _, o := range opts {
 		if err := o(j); err != nil {
+			if !conn.IsClosed() {
+				conn.Close()
+			}
 			return nil, err
 		}
 	}
@@ -91,11 +100,13 @@ func (kv *jetStreamStore) GetStoreName() string {
 
 // DeleteKey deletes the key from the JS key-value store.
 func (kv *jetStreamStore) DeleteKey(_ context.Context, k string) error {
+	// will return error if nats connection is closed
 	return kv.kv.Delete(k)
 }
 
 // PutKV puts an element to the JS key-value store.
 func (kv *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
+	// will return error if nats connection is closed
 	_, err := kv.kv.Put(k, v)
 	return err
 }
