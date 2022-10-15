@@ -3,9 +3,10 @@ package readloop
 import (
 	"container/list"
 	"context"
-	"go.uber.org/zap"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -28,7 +29,7 @@ type orderedProcessor struct {
 	sync.RWMutex
 	hasWork   chan struct{}
 	taskQueue *list.List
-	ctx       context.Context
+	log       *zap.SugaredLogger
 }
 
 // newOrderedProcessor returns an orderedProcessor.
@@ -36,7 +37,7 @@ func newOrderedProcessor(ctx context.Context) *orderedProcessor {
 	return &orderedProcessor{
 		hasWork:   make(chan struct{}),
 		taskQueue: list.New(),
-		ctx:       ctx,
+		log:       logging.FromContext(ctx),
 	}
 }
 
@@ -82,12 +83,12 @@ func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 			return
 		}
 
-		logging.FromContext(ctx).Error(err)
+		op.log.Error(err)
 		time.Sleep(retryDelay)
 	}
 	// after retrying indicate that we are done with processing the package. the processing can move on
 	close(t.doneCh)
-	logging.FromContext(op.ctx).Debugw("Process->Reduce call took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+	op.log.Debugw("Process->Reduce call took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 	// notify that some work has been completed
 	select {
 	case op.hasWork <- struct{}{}:
@@ -95,7 +96,7 @@ func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 		return
 	}
 
-	logging.FromContext(op.ctx).Debugw("Post Reduce chan push took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+	op.log.Debugw("Post Reduce chan push took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 }
 
 func (op *orderedProcessor) forward(ctx context.Context) {
@@ -108,10 +109,10 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 		select {
 		case <-op.hasWork:
 		case <-ctx.Done():
-			logging.FromContext(ctx).Infow("forward returning early", zap.Error(ctx.Err()))
+			op.log.Infow("forward returning early", zap.Error(ctx.Err()))
 			return
 		}
-		logging.FromContext(op.ctx).Debugw("waited for dequeuing tasks ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+		op.log.Debugw("waited for dequeuing tasks ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 
 		// a signal does not mean we have pending work to be done because
 		// for every signal we try to empty out the task-queue.
@@ -152,7 +153,7 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 				logging.FromContext(ctx).Debugw("forward returning early", zap.Error(ctx.Err()))
 				return
 			}
-			logging.FromContext(op.ctx).Debugw("one iteration of ordered loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()))
+			op.log.Debugw("one iteration of ordered loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()))
 
 		}
 	}

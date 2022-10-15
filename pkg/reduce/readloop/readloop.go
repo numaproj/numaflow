@@ -16,6 +16,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfReducer "github.com/numaproj/numaflow/pkg/udf/reducer"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -44,6 +45,7 @@ type ReadLoop struct {
 	toBuffers         map[string]isb.BufferWriter
 	whereToDecider    forward.ToWhichStepDecider
 	publishWatermark  map[string]publish.Publisher
+	fetchWatermark    fetch.Fetcher
 }
 
 // NewReadLoop initializes ReadLoop struct
@@ -53,7 +55,8 @@ func NewReadLoop(ctx context.Context,
 	windowingStrategy window.Windower,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
-	pw map[string]publish.Publisher, _ *window.Options) *ReadLoop {
+	pw map[string]publish.Publisher,
+	fw fetch.Fetcher, _ *window.Options) *ReadLoop {
 
 	op := newOrderedProcessor(ctx)
 
@@ -68,6 +71,7 @@ func NewReadLoop(ctx context.Context,
 		toBuffers:        toBuffers,
 		whereToDecider:   whereToDecider,
 		publishWatermark: pw,
+		fetchWatermark:   fw,
 	}
 	op.startUp(ctx)
 	return rl
@@ -222,7 +226,7 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindo
 }
 
 func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
-	return processor.Watermark(message.Watermark)
+	return rl.fetchWatermark.GetWatermark(message.ReadOffset)
 }
 
 func (rl *ReadLoop) closePartitions(partitions []partition.ID) {

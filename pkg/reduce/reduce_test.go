@@ -109,7 +109,7 @@ func TestDataForward_Start(t *testing.T) {
 		"to": EventTypeWMProgressor{},
 	}
 
-	// window of 10 seconds, so that all the messages fall in the same window
+	// create new fixed window of (windowTime)
 	window := fixed.NewFixed(windowTime)
 
 	var reduceDataForwarder *DataForward
@@ -154,7 +154,7 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 			messages := buildMessagesForReduce(count, key+strconv.Itoa(i))
 			i++
 
-			// TODO use watermark in memory store when its ready to synthesize offsets
+			// TODO use watermark in memory store when it is ready to synthesize offsets
 			// write the messages to fromBuffer, so that it will be available for consuming
 			fromBuffer.Write(ctx, messages)
 		case <-ctx.Done():
