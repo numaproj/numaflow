@@ -21,9 +21,9 @@ import (
 
 var retryDelay = 1 * time.Second
 
-// task wraps the `ProcessAndForward` task.
+// task wraps the `ProcessAndForward`.
 type task struct {
-	// doneCh is used to notify that the task has been completed.
+	// doneCh is used to notify when the task has been completed.
 	doneCh chan struct{}
 	pf     *pnf.ProcessAndForward
 }

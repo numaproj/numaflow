@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var COBErr error = errors.New("error while writing to pbq, pbq is closed")
+var COBErr = errors.New("error while writing to pbq, pbq is closed")
 
 // PBQ Buffer queue which is backed with a persisted store, each partition
 // will have a PBQ associated with it
@@ -67,8 +67,8 @@ func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
 	return p.output
 }
 
-// GC is invoked after the Reader (ProcessAndForward) has finished
-// forwarding the output to ISB.
+// GC cleans up the PBQ and also the store associated with it. GC is invoked after the Reader (ProcessAndForward) has
+// finished forwarding the output to ISB.
 func (p *PBQ) GC() error {
 	err := p.store.GC()
 	p.store = nil
@@ -77,7 +77,7 @@ func (p *PBQ) GC() error {
 }
 
 // replayRecordsFromStore replays store messages when replay flag is set during start up time. It replays by reading from
-// the disk and writing to the PBQ channel.
+// the store and writing to the PBQ channel.
 func (p *PBQ) replayRecordsFromStore(ctx context.Context) {
 	size := p.options.readBatchSize
 readLoop:
