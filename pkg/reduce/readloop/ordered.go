@@ -21,23 +21,25 @@ import (
 
 var retryDelay = 1 * time.Second
 
+// task wraps the `ProcessAndForward` task.
 type task struct {
+	// doneCh is used to notify that the task has been completed.
 	doneCh chan struct{}
 	pf     *pnf.ProcessAndForward
 }
 
-// orderedProcessor orders the result of the execution of the tasks, even though the tasks itself are run concurrently
-// in an out of ordered fashion.
-type orderedProcessor struct {
+// orderedForwarder orders the forwarding of the result of the execution of the tasks, even though the tasks itself are
+// run concurrently in an out of ordered fashion.
+type orderedForwarder struct {
 	sync.RWMutex
 	taskDone  chan struct{}
 	taskQueue *list.List
 	log       *zap.SugaredLogger
 }
 
-// newOrderedProcessor returns an orderedProcessor.
-func newOrderedProcessor(ctx context.Context) *orderedProcessor {
-	return &orderedProcessor{
+// newOrderedForwarder returns an orderedForwarder.
+func newOrderedForwarder(ctx context.Context) *orderedForwarder {
+	return &orderedForwarder{
 		taskDone:  make(chan struct{}),
 		taskQueue: list.New(),
 		log:       logging.FromContext(ctx),
@@ -45,12 +47,12 @@ func newOrderedProcessor(ctx context.Context) *orderedProcessor {
 }
 
 // startUp starts forwarder.
-func (op *orderedProcessor) startUp(ctx context.Context) {
-	go op.forward(ctx)
+func (of *orderedForwarder) startUp(ctx context.Context) {
+	go of.forward(ctx)
 }
 
 // schedulePnF creates and schedules the PnF routine.
-func (op *orderedProcessor) schedulePnF(ctx context.Context,
+func (of *orderedForwarder) schedulePnF(ctx context.Context,
 	udf udfreducer.Reducer,
 	pbq pbq.Reader,
 	partitionID partition.ID,
@@ -65,17 +67,17 @@ func (op *orderedProcessor) schedulePnF(ctx context.Context,
 		pf:     pf,
 	}
 
-	op.Lock()
-	defer op.Unlock()
-	op.taskQueue.PushBack(t)
+	of.Lock()
+	defer of.Unlock()
+	of.taskQueue.PushBack(t)
 
 	// invoke the reduce function
-	go op.reduceOp(ctx, t)
+	go of.reduceOp(ctx, t)
 }
 
 // reduceOp invokes the reduce function. The reducer is a long running function since we stream in the data and it has
 // to wait for the close-of-book on the PBQ to materialize the result.
-func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
+func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 	// TODO: better logging with partitionID?
 	start := time.Now()
 	for {
@@ -85,29 +87,29 @@ func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 		if err == nil {
 			break
 		} else if err == ctx.Err() {
-			op.log.Infow("ReduceOp exiting", zap.Error(ctx.Err()))
+			of.log.Infow("ReduceOp exiting", zap.Error(ctx.Err()))
 			return
 		}
-		op.log.Errorw("Process failed", zap.Error(err))
+		of.log.Errorw("Process failed", zap.Error(err))
 		time.Sleep(retryDelay)
 	}
 	// after retrying indicate that we are done with processing the package. the processing can move on
 	close(t.doneCh)
-	op.log.Debugw("Process->Reduce call took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+	of.log.Debugw("Process->Reduce call took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 	// notify that some work has been completed
 	select {
-	case op.taskDone <- struct{}{}:
+	case of.taskDone <- struct{}{}:
 	case <-ctx.Done():
 		return
 	}
 
 	// TODO: remove this?
-	op.log.Debugw("Post to task done chan took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+	of.log.Debugw("Post to task done chan took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 }
 
 // forward monitors the task queue, as soon as the task at the head of the queue has been completed, the result is
 // forwarded to the next ISB. It keeps doing this for forever or until ctx.Done() happens.
-func (op *orderedProcessor) forward(ctx context.Context) {
+func (of *orderedForwarder) forward(ctx context.Context) {
 	var currElement *list.Element
 	var t *task
 
@@ -115,27 +117,27 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 		start := time.Now()
 		// block till we have some work
 		select {
-		case <-op.taskDone:
+		case <-of.taskDone:
 		case <-ctx.Done():
-			op.log.Infow("Forward exiting while waiting for task completion event", zap.Error(ctx.Err()))
+			of.log.Infow("Forward exiting while waiting for task completion event", zap.Error(ctx.Err()))
 			return
 		}
-		op.log.Debugw("Time waited for a completion event to happen ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+		of.log.Debugw("Time waited for a completion event to happen ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 
 		// a signal does not mean that we have any pending work to be done because
 		// for every signal, we try to empty out the task-queue.
-		op.RLock()
-		n := op.taskQueue.Len()
-		op.RUnlock()
+		of.RLock()
+		n := of.taskQueue.Len()
+		of.RUnlock()
 		// n could be 0 because we have emptied the queue
 		if n == 0 {
 			continue
 		}
 
 		// now that we know there is at least an element, let's start from the front.
-		op.RLock()
-		currElement = op.taskQueue.Front()
-		op.RUnlock()
+		of.RLock()
+		currElement = of.taskQueue.Front()
+		of.RUnlock()
 
 		// empty out the entire task-queue everytime there has been some work done
 		startLoop := time.Now()
@@ -152,16 +154,16 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 						break
 					}
 				}
-				op.Lock()
+				of.Lock()
 				rm := currElement
 				currElement = currElement.Next()
-				op.taskQueue.Remove(rm)
-				op.Unlock()
+				of.taskQueue.Remove(rm)
+				of.Unlock()
 			case <-ctx.Done():
-				op.log.Infow("Forward exiting while waiting on the head of the queue task", zap.Error(ctx.Err()))
+				of.log.Infow("Forward exiting while waiting on the head of the queue task", zap.Error(ctx.Err()))
 				return
 			}
 		}
-		op.log.Debugw("One iteration of the ordered tasks queue loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()), zap.Int("elements", n))
+		of.log.Debugw("One iteration of the ordered tasks queue loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()), zap.Int("elements", n))
 	}
 }

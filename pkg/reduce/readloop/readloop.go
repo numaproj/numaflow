@@ -39,7 +39,7 @@ type ReadLoop struct {
 	pbqManager        *pbq.Manager
 	windowingStrategy window.Windower
 	aw                *fixed.ActiveWindows
-	op                *orderedProcessor
+	op                *orderedForwarder
 	log               *zap.SugaredLogger
 	toBuffers         map[string]isb.BufferWriter
 	whereToDecider    forward.ToWhichStepDecider
@@ -57,7 +57,7 @@ func NewReadLoop(ctx context.Context,
 	pw map[string]publish.Publisher,
 	fw fetch.Fetcher, _ *window.Options) *ReadLoop {
 
-	op := newOrderedProcessor(ctx)
+	op := newOrderedForwarder(ctx)
 
 	rl := &ReadLoop{
 		UDF:               udf,
