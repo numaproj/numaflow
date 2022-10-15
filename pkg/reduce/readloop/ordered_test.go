@@ -97,7 +97,7 @@ func TestOrderedProcessing(t *testing.T) {
 			defer cancelFn()
 			for _, _partition := range tt.partitions {
 				p, _ := pbqManager.CreateNewPBQ(ctx, _partition)
-				op.process(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
+				op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
 			count := 0

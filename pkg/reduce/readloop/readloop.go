@@ -1,10 +1,13 @@
-// Package readloop contains partitioning logic. A partition identifies a set of elements with a common key and
-// are bucketed in to a common window. A partition is uniquely identified using a tuple {window, key}. Type of window
-// does not matter.
-// partitioner is responsible for managing the persistence and processing of each partition.
-// It uses PBQ for durable persistence of elements that belong to a partition and orchestrates the processing of
-// elements using ProcessAndForward function.
-// partitioner tracks active partitions, closes the partitions based on watermark progression and co-ordinates the
+// Package readloop is responsible for the first part of reduce subsystem. It is responsible for feeding in the data
+// to the second part of the reduce subsystem called ProcessAndForward. `readloop` processes the read data from the ISB,
+// writes to the outbound channel called PBQ so the message can be asynchronously processed by `ProcessAndForward`, and
+// then closes the partition if possible based on watermark progression. To write to the outbound channel (PBQ),
+// `readloop` has to partition the message first. Hence, `readloop` also contains partitioning logic.
+// Partitioner identifies a set of elements with a common key and time, and buckets them in to a common window. A
+// partition is uniquely identified using a tuple {window, key}. Type of window does not matter. Partitioner is
+// responsible for managing the persistence and processing of each partition. It uses PBQ for durable persistence of
+// elements that belong to a partition and orchestrates the processing of elements using ProcessAndForward function.
+// Partitioner tracks active partitions, closes the partitions based on watermark progression and co-ordinates the
 // materialization and forwarding the results to the next vertex in the pipeline.
 package readloop
 
@@ -30,11 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
 
-var retryDelay time.Duration = time.Duration(1 * time.Second)
-
-var ackErrMsg = "failed to Ack Message"
-var writeErrMsg = "failed to Write Message"
-
+// ReadLoop is responsible for reading and forwarding the message from ISB to PBQ.
 type ReadLoop struct {
 	UDF               udfReducer.Reducer
 	pbqManager        *pbq.Manager
@@ -48,7 +47,7 @@ type ReadLoop struct {
 	fetchWatermark    fetch.Fetcher
 }
 
-// NewReadLoop initializes ReadLoop struct
+// NewReadLoop initializes  and returns ReadLoop.
 func NewReadLoop(ctx context.Context,
 	udf udfReducer.Reducer,
 	pbqManager *pbq.Manager,
@@ -63,7 +62,7 @@ func NewReadLoop(ctx context.Context,
 	rl := &ReadLoop{
 		UDF:               udf,
 		windowingStrategy: windowingStrategy,
-		// TODO pass window type
+		// TODO: pass window type
 		aw:               fixed.NewWindows(),
 		pbqManager:       pbqManager,
 		op:               op,
@@ -77,12 +76,14 @@ func NewReadLoop(ctx context.Context,
 	return rl
 }
 
+// Startup starts up the read-loop, because during boot up, it has to replay the data from the persistent store of
+// PBQ before it can start reading from ISB. Startup will return only after the replay has been completed.
 func (rl *ReadLoop) Startup(ctx context.Context) {
-	// at this point, it is assumed that pbq manager has been initialized
-	// and that it is ready for use so start it up.
+	// start the PBQManager which discovers and builds the state from persistent store of the PBQ.
 	rl.pbqManager.StartUp(ctx)
-	// replay the partitions
+	// gets the partitions from the state
 	partitions := rl.pbqManager.ListPartitions()
+
 	for _, p := range partitions {
 		// Create keyed window for a given partition
 		// so that the window can be closed when the watermark
@@ -92,16 +93,18 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 			Start: id.Start,
 			End:   id.End,
 		}
-		// These windows do not exist yet. so we create it here.
+		// These windows have to be recreated as they are completely in-memory
 		rl.aw.CreateKeyedWindow(intervalWindow)
 
-		// create process and forward
-		// invoke process and forward with partition
-		rl.processPartition(ctx, p.PartitionID)
+		// create and invoke process and forward for the partition
+		rl.associatePBQAndPnF(ctx, p.PartitionID)
 	}
+
+	// replays the data (replay internally writes the data from persistent store on to the PBQ)
 	rl.pbqManager.Replay(ctx)
 }
 
+// Process is one iteration of the read loop.
 func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
 	// There is no Cap on backoff because setting a Cap will result in
@@ -117,6 +120,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		// identify and add window for the message
 		var ctxClosedErr error
 		windows := rl.upsertWindowsAndKeys(m)
+		// for each window we will have a PBQ. A message could belong to multiple windows (e.g., sliding).
 		for _, kw := range windows {
 			// identify partition for message
 			partitionID := partition.ID{
@@ -125,34 +129,34 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 				Key:   m.Key,
 			}
 
-			q := rl.processPartition(ctx, partitionID)
+			q := rl.associatePBQAndPnF(ctx, partitionID)
 
+			// write the message to PBQ
 			writeFn := func(ctx context.Context, m *isb.ReadMessage) error {
 				return q.Write(ctx, m)
 			}
-
-			// write the message to PBQ
-			ctxClosedErr = rl.executeWithBackOff(ctx, writeFn, writeErrMsg, pbqWriteBackoff, m, partitionID)
+			ctxClosedErr = rl.executeWithBackOff(ctx, writeFn, "failed to Write Message", pbqWriteBackoff, m, partitionID)
 			if ctxClosedErr != nil {
-				rl.log.Errorw("Context closed while waiting to write the message to PBQ", zap.Error(ctxClosedErr))
+				rl.log.Errorw("Error while writing the message to PBQ", zap.Error(ctxClosedErr))
 				return
 			}
 
+			// Ack the message to ISB
 			ackFn := func(_ context.Context, m *isb.ReadMessage) error {
 				return m.ReadOffset.AckIt()
 			}
-			// Ack the message to ISB
-			ctxClosedErr = rl.executeWithBackOff(ctx, ackFn, ackErrMsg, pbqWriteBackoff, m, partitionID)
+			ctxClosedErr = rl.executeWithBackOff(ctx, ackFn, "failed to Ack Message", pbqWriteBackoff, m, partitionID)
 			if ctxClosedErr != nil {
-				rl.log.Errorw("Context closed while Acknowledging the message", zap.Error(ctxClosedErr))
+				rl.log.Errorw("Error while acknowledging the message", zap.Error(ctxClosedErr))
 				return
 			}
-
 		}
+
 		// close any windows that need to be closed.
+		// FIXME(p0): why are we re-reading the watermark? isb.ReadMessage contains watermark.
 		wm := rl.waterMark(m)
 		closedWindows := rl.aw.RemoveWindow(time.Time(wm))
-		rl.log.Debugw("closing windows ", zap.Int("length", len(closedWindows)))
+		rl.log.Debugw("closing windows", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
 
 		for _, cw := range closedWindows {
 			partitions := cw.Partitions()
@@ -161,6 +165,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	}
 }
 
+// executeWithBackOff executes a function infinitely until it succeeds using ExponentialBackoffWithContext.
 func (rl *ReadLoop) executeWithBackOff(ctx context.Context, retryableFn func(ctx context.Context, message *isb.ReadMessage) error, errMsg string, pbqWriteBackoff wait.Backoff, m *isb.ReadMessage, partitionID partition.ID) error {
 	attempt := 0
 	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, pbqWriteBackoff, func() (done bool, err error) {
@@ -176,19 +181,21 @@ func (rl *ReadLoop) executeWithBackOff(ctx context.Context, retryableFn func(ctx
 	return ctxClosedErr
 }
 
-func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
-	// create or get existing pbq
+// associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
+// it to the partition.
+func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
+	// look for existing pbq
 	q := rl.pbqManager.GetPBQ(partitionID)
 
-	var infiniteBackoff = wait.Backoff{
-		Steps:    math.MaxInt64,
-		Duration: 1 * time.Second,
-		Factor:   1.5,
-		Jitter:   0.1,
-	}
-
+	// if we do not have already created PBQ, we have to create a new one.
 	if q == nil {
 		var pbqErr error
+		var infiniteBackoff = wait.Backoff{
+			Steps:    math.MaxInt64,
+			Duration: 1 * time.Second,
+			Factor:   1.5,
+			Jitter:   0.1,
+		}
 		pbqErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func() (done bool, err error) {
 			var attempt int
 			q, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID)
@@ -199,18 +206,21 @@ func (rl *ReadLoop) processPartition(ctx context.Context, partitionID partition.
 			}
 			return true, nil
 		})
-		// if we did create a brand new PBQ it means this is a new partition
-		// we should attach the read side of the loop to the partition
-		// start process and forward loop here
-		rl.op.process(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
+		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
+		// we should create and attach the read side of the loop (PnF) to the partition and then
+		// start process-and-forward (pnf) loop
+		rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
 	}
 	return q
 }
 
+// ShutDown shutdowns the read-loop.
 func (rl *ReadLoop) ShutDown(ctx context.Context) {
 	rl.pbqManager.ShutDown(ctx)
 }
 
+// upsertWindowsAndKeys will create or assigns (if already present) a window to the message. It is an upsert operation
+// because windows are created out of order, but they will be closed in-order.
 func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindow {
 	processingWindows := rl.windowingStrategy.AssignWindow(m.EventTime)
 	var kWindows []*keyed.KeyedWindow
@@ -219,16 +229,19 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindo
 		if kw == nil {
 			kw = rl.aw.CreateKeyedWindow(win)
 		}
+		// track the key to window relationship
 		kw.AddKey(m.Key)
 		kWindows = append(kWindows, kw)
 	}
 	return kWindows
 }
 
+// FIXME: this shouldn't be required.
 func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
 	return rl.fetchWatermark.GetWatermark(message.ReadOffset)
 }
 
+// closePartitions closes the partitions by invoking close-of-book (COB).
 func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
 	for _, p := range partitions {
 		q := rl.pbqManager.GetPBQ(p)

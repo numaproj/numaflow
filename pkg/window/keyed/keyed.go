@@ -1,3 +1,5 @@
+// Package keyed ....
+// TODO: document
 package keyed
 
 import (
@@ -11,6 +13,7 @@ import (
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
 type KeyedWindow struct {
 	*window.IntervalWindow
+	// TODO: can this be map[string]struct{} ?
 	Keys map[string]string
 	lock sync.RWMutex
 }

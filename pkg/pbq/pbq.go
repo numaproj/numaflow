@@ -76,7 +76,8 @@ func (p *PBQ) GC() error {
 	return err
 }
 
-// replayRecordsFromStore replays store messages when replay flag is set during start up time
+// replayRecordsFromStore replays store messages when replay flag is set during start up time. It replays by reading from
+// the disk and writing to the PBQ channel.
 func (p *PBQ) replayRecordsFromStore(ctx context.Context) {
 	size := p.options.readBatchSize
 readLoop:

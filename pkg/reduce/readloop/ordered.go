@@ -19,15 +19,18 @@ import (
 	udfreducer "github.com/numaproj/numaflow/pkg/udf/reducer"
 )
 
+var retryDelay = 1 * time.Second
+
 type task struct {
 	doneCh chan struct{}
 	pf     *pnf.ProcessAndForward
 }
 
-// orderedProcessor orders the execution of the tasks, even though the tasks itself are run concurrently.
+// orderedProcessor orders the result of the execution of the tasks, even though the tasks itself are run concurrently
+// in an out of ordered fashion.
 type orderedProcessor struct {
 	sync.RWMutex
-	hasWork   chan struct{}
+	taskDone  chan struct{}
 	taskQueue *list.List
 	log       *zap.SugaredLogger
 }
@@ -35,17 +38,19 @@ type orderedProcessor struct {
 // newOrderedProcessor returns an orderedProcessor.
 func newOrderedProcessor(ctx context.Context) *orderedProcessor {
 	return &orderedProcessor{
-		hasWork:   make(chan struct{}),
+		taskDone:  make(chan struct{}),
 		taskQueue: list.New(),
 		log:       logging.FromContext(ctx),
 	}
 }
 
+// startUp starts forwarder.
 func (op *orderedProcessor) startUp(ctx context.Context) {
 	go op.forward(ctx)
 }
 
-func (op *orderedProcessor) process(ctx context.Context,
+// schedulePnF creates and schedules the PnF routine.
+func (op *orderedProcessor) schedulePnF(ctx context.Context,
 	udf udfreducer.Reducer,
 	pbq pbq.Reader,
 	partitionID partition.ID,
@@ -71,6 +76,7 @@ func (op *orderedProcessor) process(ctx context.Context,
 // reduceOp invokes the reduce function. The reducer is a long running function since we stream in the data and it has
 // to wait for the close-of-book on the PBQ to materialize the result.
 func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
+	// TODO: better logging with partitionID?
 	start := time.Now()
 	for {
 		// FIXME: this error handling won't work with streams. We cannot do infinite retries
@@ -79,11 +85,10 @@ func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 		if err == nil {
 			break
 		} else if err == ctx.Err() {
-			logging.FromContext(ctx).Infow("ReduceOp returning early", zap.Error(ctx.Err()))
+			op.log.Infow("ReduceOp exiting", zap.Error(ctx.Err()))
 			return
 		}
-
-		op.log.Error(err)
+		op.log.Errorw("Process failed", zap.Error(err))
 		time.Sleep(retryDelay)
 	}
 	// after retrying indicate that we are done with processing the package. the processing can move on
@@ -91,35 +96,38 @@ func (op *orderedProcessor) reduceOp(ctx context.Context, t *task) {
 	op.log.Debugw("Process->Reduce call took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 	// notify that some work has been completed
 	select {
-	case op.hasWork <- struct{}{}:
+	case op.taskDone <- struct{}{}:
 	case <-ctx.Done():
 		return
 	}
 
-	op.log.Debugw("Post Reduce chan push took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+	// TODO: remove this?
+	op.log.Debugw("Post to task done chan took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 }
 
+// forward monitors the task queue, as soon as the task at the head of the queue has been completed, the result is
+// forwarded to the next ISB. It keeps doing this for forever or until ctx.Done() happens.
 func (op *orderedProcessor) forward(ctx context.Context) {
-
 	var currElement *list.Element
 	var t *task
+
 	for {
 		start := time.Now()
 		// block till we have some work
 		select {
-		case <-op.hasWork:
+		case <-op.taskDone:
 		case <-ctx.Done():
-			op.log.Infow("forward returning early", zap.Error(ctx.Err()))
+			op.log.Infow("Forward exiting while waiting for task completion event", zap.Error(ctx.Err()))
 			return
 		}
-		op.log.Debugw("waited for dequeuing tasks ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+		op.log.Debugw("Time waited for a completion event to happen ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 
-		// a signal does not mean we have pending work to be done because
-		// for every signal we try to empty out the task-queue.
+		// a signal does not mean that we have any pending work to be done because
+		// for every signal, we try to empty out the task-queue.
 		op.RLock()
 		n := op.taskQueue.Len()
 		op.RUnlock()
-		// n could we 0 because we have emptied the queue
+		// n could be 0 because we have emptied the queue
 		if n == 0 {
 			continue
 		}
@@ -130,8 +138,8 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 		op.RUnlock()
 
 		// empty out the entire task-queue everytime there has been some work done
+		startLoop := time.Now()
 		for i := 0; i < n; i++ {
-			startLoop := time.Now()
 			t = currElement.Value.(*task)
 			select {
 			case <-t.doneCh:
@@ -150,11 +158,10 @@ func (op *orderedProcessor) forward(ctx context.Context) {
 				op.taskQueue.Remove(rm)
 				op.Unlock()
 			case <-ctx.Done():
-				logging.FromContext(ctx).Debugw("forward returning early", zap.Error(ctx.Err()))
+				op.log.Infow("Forward exiting while waiting on the head of the queue task", zap.Error(ctx.Err()))
 				return
 			}
-			op.log.Debugw("one iteration of ordered loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()))
-
 		}
+		op.log.Debugw("One iteration of the ordered tasks queue loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()), zap.Int("elements", n))
 	}
 }

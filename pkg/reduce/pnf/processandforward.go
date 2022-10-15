@@ -1,6 +1,7 @@
-// Package pnf processes and forwards messages belonging to a window. It reads the data from PBQ (which is populated by the `readloop`),
-// calls the UDF reduce function, and then forwards to the next ISB. After a successful forwards, it invokes `GC` to clean up the PBQ.
-// Since pnf is a reducer, it mutates the watermark. The watermark after the pnf will be the end time of the window.
+// Package pnf processes and then forwards messages belonging to a window. It reads the data from PBQ (which is populated
+// by the `readloop`), calls the UDF reduce function, and then forwards to the next ISB. After a successful forward, it
+// invokes `GC` to clean up the PBQ. Since pnf is a reducer, it mutates the watermark. The watermark after the pnf will
+// be the end time of the window.
 package pnf
 
 import (
@@ -27,8 +28,8 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// ProcessAndForward reads messages from pbq and invokes udf using grpc
-// and forwards the results to ISB
+// ProcessAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
+// the watermark for that partition.
 type ProcessAndForward struct {
 	PartitionID      partition.ID
 	UDF              udfreducer.Reducer
@@ -76,11 +77,12 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 	return err
 }
 
-// Forward writes messages to the ISBs, publishes watermark, and invokes GC.
+// Forward writes messages to the ISBs, publishes watermark, and invokes GC on PBQ.
 func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	// extract window end time from the partitionID, which will be used for watermark
 	processorWM := processor.Watermark(p.PartitionID.End)
 
+	// decide which ISB to write to
 	to, err := p.whereToDecider.WhereTo(p.PartitionID.Key)
 	if err != nil {
 		return err
@@ -90,7 +92,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	//store write offsets to publish watermark
 	writeOffsets := make(map[string][]isb.Offset)
 
-	// parallel writes to isb
+	// parallel writes to each isb
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	success := true
@@ -110,6 +112,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 				return
 			}
 			mu.Lock()
+			// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
 			writeOffsets[bufferID] = offsets
 			mu.Unlock()
 		}()
@@ -132,6 +135,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Key.
+// TODO: we have to introduce support for shuffle, output of a reducer can be input to the next reducer.
 func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][]isb.Message)
@@ -157,6 +161,7 @@ func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 }
 
 // writeToBuffer writes to the ISBs.
+// TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
 func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var ISBWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt64,
@@ -186,6 +191,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 	return offsets, ctxClosedErr
 }
 
+// publishWM publishes the watermark to each edge.
 func (p *ProcessAndForward) publishWM(wm processor.Watermark, writeOffsets map[string][]isb.Offset) {
 	for bufferName, offsets := range writeOffsets {
 		if publisher, ok := p.publishWatermark[bufferName]; ok {
