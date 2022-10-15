@@ -33,7 +33,9 @@ func NewNatsConn(conn *nats.Conn) *NatsConn {
 
 // Close function closes the underlying Nats connection.
 func (nc *NatsConn) Close() {
-	nc.Conn.Close()
+	if !nc.Conn.IsClosed() {
+		nc.Conn.Close()
+	}
 }
 
 // JetStream function invokes same function of underlying Nats connection for returning,
