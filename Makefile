@@ -42,9 +42,9 @@ $(error "Python is not available, please install.")
 endif
 
 # Choose local Kubernetes
-LOCAL_KB8 ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo 'k3d' || echo '')
-ifndef LOCAL_KB8
-	LOCAL_KB8 ?=  $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v minikube`" != '' ] && [[ "`kubectl config current-context`" =~ minikube-* ]] && echo 'minikube' || echo '')
+LOAD_IMAGE ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo 'k3d' || echo '')
+ifndef LOAD_IMAGE
+	LOAD_IMAGE ?=  $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v minikube`" != '' ] && [[ "`kubectl config current-context`" =~ minikube-* ]] && echo 'minikube' || echo '')
 endif
 
 # Choose local containers like Docker,podman etc...
@@ -166,10 +166,10 @@ ifeq ($(CONTAINER_WORK_TYPE),'podman')
 endif
 
 
-ifeq ($(LOCAL_KB8),'k3d')
+ifeq ($(LOAD_IMAGE),'k3d')
 	k3d image import $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
-ifeq ($(LOCAL_KB8),'minikube')
+ifeq ($(LOAD_IMAGE),'minikube')
 	minikube image load $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
 
@@ -264,10 +264,10 @@ ifeq ($(CONTAINER_WORK_TYPE),'podman')
 endif
 
 
-ifeq ($(LOCAL_KB8),'k3d')
+ifeq ($(LOAD_IMAGE),'k3d')
 	k3d image import $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
-ifeq ($(LOCAL_KB8),'minikube')
+ifeq ($(LOAD_IMAGE),'minikube')
 	minikube image load $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
 
