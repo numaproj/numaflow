@@ -35,6 +35,7 @@ const (
 	// KVDelete represents a delete.
 	KVDelete
 	// KVPurge is when the kv bucket is purged.
+	// This value is only for JetStream.
 	KVPurge
 )
 
