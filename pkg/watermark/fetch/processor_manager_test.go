@@ -33,6 +33,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	// connect to NATS
 	nc, err := jsclient.NewDefaultJetStreamClient(nats.DefaultURL).Connect(context.TODO())
 	assert.NoError(t, err)
+	defer nc.Close()
 
 	// create JetStream Context
 	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
@@ -258,6 +259,10 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	wg.Wait()
 	cancel()
+
+	// wait for all the ctx.Done() is completed
+	// we don't have wg on the Watch functions go routine..
+	time.Sleep(3 * time.Second)
 }
 
 func TestFetcherWithSeparateOTBucket(t *testing.T) {
