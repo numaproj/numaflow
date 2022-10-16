@@ -87,7 +87,7 @@ func TestOrderedProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// clean out the task queue before we start a run
-			op := newOrderedProcessor(ctx)
+			op := newOrderedForwarder(ctx)
 			op.startUp(ctx)
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.
@@ -97,7 +97,7 @@ func TestOrderedProcessing(t *testing.T) {
 			defer cancelFn()
 			for _, _partition := range tt.partitions {
 				p, _ := pbqManager.CreateNewPBQ(ctx, _partition)
-				op.process(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
+				op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
 			count := 0
@@ -151,7 +151,7 @@ func partitionsFor(partitionIdx []int) []partition.ID {
 	return partitions
 }
 
-func taskForPartition(op *orderedProcessor, partitionId partition.ID) *task {
+func taskForPartition(op *orderedForwarder, partitionId partition.ID) *task {
 	op.RLock()
 	defer op.RUnlock()
 	for e := op.taskQueue.Front(); e != nil; e = e.Next() {

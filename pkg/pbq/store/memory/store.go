@@ -2,11 +2,11 @@ package memory
 
 import (
 	"context"
+	"math"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
-	"github.com/numaproj/numaflow/pkg/pbq/util"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"go.uber.org/zap"
 )
@@ -48,7 +48,7 @@ func (m *memoryStore) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 
 	// if size is greater than the number of messages in the store
 	// we will assign size with the number of messages in the store
-	size = util.Min(size, m.writePos-m.readPos)
+	size = int64(math.Min(float64(size), float64(m.writePos-m.readPos)))
 	readMessages := m.storage[m.readPos : m.readPos+size]
 	m.readPos += size
 	return readMessages, false, nil

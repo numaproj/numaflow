@@ -240,7 +240,7 @@ func (m *Manager) deregister(partitionID partition.ID) {
 	delete(m.pbqMap, partitionID.String())
 }
 
-// Replay replays messages which are persisted in pbq store
+// Replay replays messages which are persisted in pbq store.
 func (m *Manager) Replay(ctx context.Context) {
 	var wg sync.WaitGroup
 
