@@ -47,7 +47,7 @@ func NewDataForward(ctx context.Context,
 		}
 	}
 
-	rl := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, publishWatermark, fw, options.windowOpts)
+	rl := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, publishWatermark, options.windowOpts)
 	return &DataForward{
 		fromBuffer:        fromBuffer,
 		readloop:          rl,
