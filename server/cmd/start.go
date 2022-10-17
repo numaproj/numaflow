@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	"github.com/numaproj/numaflow/server/routes"
 )
@@ -18,24 +20,38 @@ var (
 	}
 )
 
-func Start() {
+func Start(insecure bool) {
+	logger := logging.NewLogger().Named("server")
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.RedirectTrailingSlash = true
 	router.Use(static.Serve("/", static.LocalFile("./ui/build", true)))
 	routes.Routes(router)
 	router.Use(UrlRewrite(router))
-	cert, err := sharedtls.GenerateX509KeyPair()
-	if err != nil {
-		panic(err)
-	}
 	server := http.Server{
-		Addr:      ":8443",
-		Handler:   router,
-		TLSConfig: &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12},
+		Handler: router,
 	}
-	if err := server.ListenAndServeTLS("", ""); err != nil {
-		panic(err)
+
+	if insecure {
+		server.Addr = fmt.Sprintf(":%d", 8080)
+
+		logger.Infof("Starting server (TLS disabled) on %s", server.Addr)
+		if err := server.ListenAndServe(); err != nil {
+			panic(err)
+		}
+	} else {
+		cert, err := sharedtls.GenerateX509KeyPair()
+		if err != nil {
+			panic(err)
+		}
+
+		server.Addr = fmt.Sprintf(":%d", 8443)
+		server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12}
+
+		logger.Infof("Starting server on %s", server.Addr)
+		if err := server.ListenAndServeTLS("", ""); err != nil {
+			panic(err)
+		}
 	}
 }
 
