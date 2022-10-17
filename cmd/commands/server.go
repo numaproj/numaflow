@@ -6,8 +6,10 @@ import (
 )
 
 func NewServerCommand() *cobra.Command {
-	var insecure bool
-	var port int
+	var (
+		insecure bool
+		port     int
+	)
 
 	command := &cobra.Command{
 		Use:   "server",
