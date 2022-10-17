@@ -21,7 +21,7 @@ func NewServerCommand() *cobra.Command {
 			svrcmd.Start(insecure, port)
 		},
 	}
-	command.Flags().BoolVar(&insecure, "insecure", false, "Whether to disable on TLS, defaults to false.")
+	command.Flags().BoolVar(&insecure, "insecure", false, "Whether to disable TLS, defaults to false.")
 	command.Flags().IntVarP(&port, "port", "p", 8443, "Port to listen on, defaults to 8443 or 8080 if insecure is set")
 	return command
 }
