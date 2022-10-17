@@ -37,7 +37,6 @@ func NewEdgeFetcher(ctx context.Context, edgeName string, processorManager *Proc
 // can be used in showing the watermark progression for a vertex when not consuming the messages
 // directly (eg. UX, tests,)
 func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
-	e.log.Debugf("Fetching head watermark for edge %s...", e.edgeName)
 	var debugString strings.Builder
 	var headOffset int64 = math.MinInt64
 	var epoch int64 = math.MaxInt64
@@ -57,11 +56,9 @@ func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
 	}
 	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
 	if epoch == math.MaxInt64 {
-		e.log.Debugf("Didn't find any existing head watermarks across all processors, using default watermark %d...", int64(-1))
+		// Use -1 as default watermark value to indicate there is no valid watermark yet.
 		return processor.Watermark(time.Unix(-1, 0))
 	}
-
-	e.log.Debugf("Found head watermark epoch %d.", epoch)
 	return processor.Watermark(time.Unix(epoch, 0))
 }
 

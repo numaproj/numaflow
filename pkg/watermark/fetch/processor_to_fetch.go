@@ -62,7 +62,6 @@ func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntit
 	if watcher != nil {
 		go p.startTimeLineWatcher()
 	}
-
 	return p
 }
 
