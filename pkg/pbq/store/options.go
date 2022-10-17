@@ -1,8 +1,9 @@
 package store
 
 import (
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"time"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 type StoreOptions struct {
@@ -20,7 +21,7 @@ func (o *StoreOptions) StoreSize() int64 {
 	return o.storeSize
 }
 
-func (o *StoreOptions) PbqStoreType() dfv1.StoreType {
+func (o *StoreOptions) PBQStoreType() dfv1.StoreType {
 	return o.pbqStoreType
 }
 

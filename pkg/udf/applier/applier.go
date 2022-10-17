@@ -12,7 +12,7 @@ type Applier interface {
 	Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error)
 }
 
-// ApplyFunc untility function used to create a Applier implementation
+// ApplyFunc utility function used to create an Applier implementation
 type ApplyFunc func(context.Context, *isb.ReadMessage) ([]*isb.Message, error)
 
 func (a ApplyFunc) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {

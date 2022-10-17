@@ -2,13 +2,15 @@ package memory
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestMemoryStore_WriteToStore(t *testing.T) {
@@ -19,13 +21,19 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
-	memStore, err := NewMemoryStore(ctx, "new-partition", options)
+	partitionID := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Key:   "new-partition",
+	}
+
+	memStore, err := NewMemoryStore(ctx, partitionID, options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
 	for _, msg := range writeMessages {
 		err := memStore.Write(&msg)
@@ -41,19 +49,25 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
-	memStore, err := NewMemoryStore(ctx, "new-partition-2", options)
+	partitionID := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Key:   "new-partition",
+	}
+
+	memStore, err := NewMemoryStore(ctx, partitionID, options)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
 	for _, msg := range writeMessages {
 		err := memStore.Write(&msg)
 		assert.NoError(t, err)
 	}
-	var readMessages []*isb.Message
+	var readMessages []*isb.ReadMessage
 	readMessages, _, err = memStore.Read(int64(msgCount))
 	assert.NoError(t, err)
 	// number of read messages should be equal to msgCount
@@ -67,7 +81,13 @@ func TestEmptyStore_Read(t *testing.T) {
 	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
 	ctx := context.Background()
 
-	memStore, err := NewMemoryStore(ctx, "new-partition-3", options)
+	partitionID := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Key:   "new-partition",
+	}
+
+	memStore, err := NewMemoryStore(ctx, partitionID, options)
 	assert.NoError(t, err)
 	var eof bool
 	_, eof, err = memStore.Read(int64(storeSize))
@@ -85,13 +105,19 @@ func TestFullStore_Write(t *testing.T) {
 	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
-	memStore, err := NewMemoryStore(ctx, "new-partition-4", options)
+	partitionID := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Key:   "new-partition",
+	}
+
+	memStore, err := NewMemoryStore(ctx, partitionID, options)
 	assert.NoError(t, err)
 
 	//write 100 isb messages to persisted store
 	msgCount := 100
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
 	for _, msg := range writeMessages {
 		err := memStore.Write(&msg)

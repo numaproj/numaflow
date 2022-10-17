@@ -17,7 +17,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
+	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/stretchr/testify/assert"
 )
 
