@@ -1335,7 +1335,7 @@
 
 
 <h1 id="user-defined-functions">User Defined Functions<a class="headerlink" href="#user-defined-functions" title="Permanent link">&para;</a></h1>
-<p>A <code>Pipleline</code> consists of multiple vertices, <code>Source</code>, <code>Sink</code> and <code>UDF(User Defined Functions)</code>.</p>
+<p>A <code>Pipeline</code> consists of multiple vertices, <code>Source</code>, <code>Sink</code> and <code>UDF(User Defined Functions)</code>.</p>
 <p>UDF runs as a sidecar container in a Vertex Pod, processes the received data. The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.</p>
 <p>Data processing in the UDF is supposed to be idempotent.</p>
 <h2 id="builtin-udf">Builtin UDF<a class="headerlink" href="#builtin-udf" title="Permanent link">&para;</a></h2>
