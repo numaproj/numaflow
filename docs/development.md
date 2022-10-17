@@ -10,7 +10,7 @@ This doc explains how to set up a development environment for Numaflow.
 1. [`protoc`](https://github.com/protocolbuffers/protobuf) for compiling protocol buffers
 1. [`Node.js®`](https://nodejs.org/en/) for running the UI
 1. [`yarn`](https://classic.yarnpkg.com/en/)
-1. Local Kubernetes System - 
+1. Local Kubernetes cluster - 
 you need one of the following options as your local Kubernetes system for development usage : 
     1. [`k3d`](https://k3d.io/) 
     1. [`minikube`](https://minikube.sigs.k8s.io/docs/start/)
