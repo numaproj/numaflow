@@ -15,7 +15,6 @@ you need one of the following options as your local Kubernetes system for develo
     1. [`k3d`](https://k3d.io/) 
     1. [`minikube`](https://minikube.sigs.k8s.io/docs/start/)
 1. Local Container System
-you need one of the following options as your local Containr system to load images for development usage : 
     1. [`Docker`](https://www.docker.com/) 
     1. [`podman`](https://podman.io/) 
 
