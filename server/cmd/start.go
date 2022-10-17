@@ -20,7 +20,7 @@ var (
 	}
 )
 
-func Start(insecure bool) {
+func Start(insecure bool, port int) {
 	logger := logging.NewLogger().Named("server")
 	router := gin.New()
 	router.Use(gin.Logger())
@@ -29,12 +29,11 @@ func Start(insecure bool) {
 	routes.Routes(router)
 	router.Use(UrlRewrite(router))
 	server := http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
 		Handler: router,
 	}
 
 	if insecure {
-		server.Addr = fmt.Sprintf(":%d", 8080)
-
 		logger.Infof("Starting server (TLS disabled) on %s", server.Addr)
 		if err := server.ListenAndServe(); err != nil {
 			panic(err)
@@ -44,8 +43,6 @@ func Start(insecure bool) {
 		if err != nil {
 			panic(err)
 		}
-
-		server.Addr = fmt.Sprintf(":%d", 8443)
 		server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12}
 
 		logger.Infof("Starting server on %s", server.Addr)
