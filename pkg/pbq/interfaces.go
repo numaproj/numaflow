@@ -15,7 +15,7 @@ type ReadWriteCloser interface {
 // Reader provides methods to read from PBQ.
 type Reader interface {
 	// ReadCh exposes channel to read from PBQ
-	ReadCh() <-chan *isb.Message
+	ReadCh() <-chan *isb.ReadMessage
 	// GC does garbage collection, it deletes all the persisted data from the store
 	GC() error
 }
@@ -24,7 +24,7 @@ type Reader interface {
 // No data can be written to PBQ after cob.
 type WriteCloser interface {
 	// Write writes message to PBQ
-	Write(ctx context.Context, msg *isb.Message) error
+	Write(ctx context.Context, msg *isb.ReadMessage) error
 	// CloseOfBook (cob) closes PBQ, no writes will be accepted after cob
 	CloseOfBook()
 	// Close to handle context close on writer

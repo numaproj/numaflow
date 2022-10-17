@@ -76,6 +76,7 @@ func (v *ProcessorManager) GetProcessor(processor string) *ProcessorToFetch {
 }
 
 // DeleteProcessor deletes a processor.
+// Note: This operation is not used anywhere ATM.
 func (v *ProcessorManager) DeleteProcessor(processor string) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -148,8 +149,9 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 			case store.KVPut:
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
-				if p == nil { // if no, create a new processor
-					// A fromProcessor need to be added to v.processors
+				if p == nil {
+					// if p is nil, create a new processor
+					// A fromProcessor needs to be added to v.processors
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
 					var entity = processor.NewProcessorEntity(value.Key(), processor.WithSeparateOTBuckets(v.opts.separateOTBucket))

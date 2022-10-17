@@ -5,19 +5,20 @@ import (
 	"errors"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"go.uber.org/zap"
 )
 
-var COBErr error = errors.New("error while writing to pbq, pbq is closed")
+var COBErr = errors.New("error while writing to pbq, pbq is closed")
 
 // PBQ Buffer queue which is backed with a persisted store, each partition
 // will have a PBQ associated with it
 type PBQ struct {
 	store       store.Store
-	output      chan *isb.Message
+	output      chan *isb.ReadMessage
 	cob         bool // cob to avoid panic in case writes happen after close of book
-	partitionID string
+	PartitionID partition.ID
 	options     *options
 	manager     *Manager
 	log         *zap.SugaredLogger
@@ -26,10 +27,10 @@ type PBQ struct {
 var _ ReadWriteCloser = (*PBQ)(nil)
 
 // Write writes message to pbq and persistent store
-func (p *PBQ) Write(ctx context.Context, message *isb.Message) error {
+func (p *PBQ) Write(ctx context.Context, message *isb.ReadMessage) error {
 	// if cob we should return
 	if p.cob {
-		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("partitionID", p.partitionID), zap.Any("header", message.Header))
+		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.Header))
 		return COBErr
 	}
 	var writeErr error
@@ -62,27 +63,28 @@ func (p *PBQ) Close() error {
 
 // ReadCh exposes read channel to read messages from PBQ
 // close on read channel indicates COB
-func (p *PBQ) ReadCh() <-chan *isb.Message {
+func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
 	return p.output
 }
 
-// GC is invoked after the Reader (ProcessAndForward) has finished
-// forwarding the output to ISB.
+// GC cleans up the PBQ and also the store associated with it. GC is invoked after the Reader (ProcessAndForward) has
+// finished forwarding the output to ISB.
 func (p *PBQ) GC() error {
 	err := p.store.GC()
 	p.store = nil
-	p.manager.deregister(p.partitionID)
+	p.manager.deregister(p.PartitionID)
 	return err
 }
 
-// replayRecordsFromStore replays store messages when replay flag is set during start up time
+// replayRecordsFromStore replays store messages when replay flag is set during start up time. It replays by reading from
+// the store and writing to the PBQ channel.
 func (p *PBQ) replayRecordsFromStore(ctx context.Context) {
 	size := p.options.readBatchSize
 readLoop:
 	for {
-		readMessages, eof, err := p.store.Read(int64(size))
+		readMessages, eof, err := p.store.Read(size)
 		if err != nil {
-			p.log.Errorw("error while replaying records from store", zap.Any("partitionID", p.partitionID), zap.Error(err))
+			p.log.Errorw("error while replaying records from store", zap.Any("ID", p.PartitionID), zap.Error(err))
 		}
 		for _, msg := range readMessages {
 			// select to avoid infinite blocking while writing to output channel

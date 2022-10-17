@@ -35,7 +35,9 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 	// do we need to specify any opts? if yes, send it via options.
 	js, err := conn.JetStream(nats.PublishAsyncMaxPending(256))
 	if err != nil {
-		conn.Close()
+		if !conn.IsClosed() {
+			conn.Close()
+		}
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
 	}
 
@@ -48,6 +50,9 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 
 	j.kv, err = j.js.KeyValue(kvBucketName)
 	if err != nil {
+		if !conn.IsClosed() {
+			conn.Close()
+		}
 		return nil, err
 	}
 
@@ -56,6 +61,9 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 	// options if any
 	for _, o := range opts {
 		if err := o(j); err != nil {
+			if !conn.IsClosed() {
+				conn.Close()
+			}
 			return nil, err
 		}
 	}
@@ -101,9 +109,15 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 		for {
 			select {
 			case <-ctx.Done():
-				k.log.Errorw("stopping WatchAll", zap.String("watcher", k.GetKVName()))
+				k.log.Infow("stopping WatchAll", zap.String("watcher", k.GetKVName()))
 				// call jetstream watch stop
-				_ = kvWatcher.Stop()
+				err = kvWatcher.Stop()
+				if err != nil {
+					k.log.Errorw("failed to stop", zap.String("watcher", k.GetKVName()), zap.Error(err))
+				} else {
+					k.log.Infow("WatchAll successfully stopped", zap.String("watcher", k.GetKVName()))
+				}
+				close(updates)
 				return
 			case value := <-kvWatcher.Updates():
 				// if channel is closed, nil could come in
@@ -140,6 +154,8 @@ func (k *jetStreamWatch) GetKVName() string {
 
 // Close closes the connection.
 func (k *jetStreamWatch) Close() {
+	// need to cancel the `Watch` ctx before calling Close()
+	// otherwise `kvWatcher.Stop()` will raise the nats connection is closed error
 	if !k.conn.IsClosed() {
 		k.conn.Close()
 	}

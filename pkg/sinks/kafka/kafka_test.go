@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"testing"
 
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -16,7 +17,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 )
 
 func TestWriteSuccessToKafka(t *testing.T) {
