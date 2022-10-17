@@ -15,11 +15,11 @@ func NewPBQNoOpStore() (*PBQNoOpStore, error) {
 	return &PBQNoOpStore{}, nil
 }
 
-func (p *PBQNoOpStore) Read(size int64) ([]*isb.Message, bool, error) {
-	return []*isb.Message{}, true, nil
+func (p *PBQNoOpStore) Read(size int64) ([]*isb.ReadMessage, bool, error) {
+	return []*isb.ReadMessage{}, true, nil
 }
 
-func (p *PBQNoOpStore) Write(msg *isb.Message) error {
+func (p *PBQNoOpStore) Write(msg *isb.ReadMessage) error {
 	return nil
 }
 

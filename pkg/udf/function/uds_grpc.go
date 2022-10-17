@@ -1,8 +1,10 @@
-package applier
+package function
 
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"sync"
 	"time"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
@@ -19,15 +21,20 @@ type udsGRPCBasedUDF struct {
 	client functionsdk.Client
 }
 
-var _ Applier = (*udsGRPCBasedUDF)(nil)
+var _ applier.Applier = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
 func NewUDSGRPCBasedUDF() (*udsGRPCBasedUDF, error) {
-	c, err := client.New()
+	c, err := client.New() // Can we pass this as a parameter to the function?
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
 	return &udsGRPCBasedUDF{c}, nil
+}
+
+// NewUdsGRPCBasedUDFWithClient need this for testing
+func NewUdsGRPCBasedUDFWithClient(client functionsdk.Client) *udsGRPCBasedUDF {
+	return &udsGRPCBasedUDF{client: client}
 }
 
 // CloseConn closes the gRPC client connection.
@@ -91,4 +98,87 @@ func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 		writeMessages = append(writeMessages, writeMessage)
 	}
 	return writeMessages, nil
+}
+
+// should we pass metadata information ?
+
+// Reduce accepts a channel of isbMessages and returns the aggregated result
+func (u *udsGRPCBasedUDF) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+	datumCh := make(chan *functionpb.Datum)
+	var wg sync.WaitGroup
+	var result []*functionpb.Datum
+	var err error
+
+	// invoke the reduceFn method with datumCh channel
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// TODO handle this error here itself
+		result, err = u.client.ReduceFn(ctx, datumCh)
+	}()
+
+readLoop:
+	for {
+		select {
+		case msg, ok := <-messageStream:
+			if msg != nil {
+				d := createDatum(msg)
+				select {
+				case datumCh <- d:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+			if !ok {
+				break readLoop
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	// close the datumCh, let the reduceFn know that there are no more messages
+	close(datumCh)
+
+	wg.Wait()
+
+	if err != nil {
+		return nil, ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		}
+	}
+
+	writeMessages := make([]*isb.Message, 0)
+	for _, datum := range result {
+		key := datum.Key
+		writeMessage := &isb.Message{
+			Header: isb.Header{
+				Key: key,
+			},
+			Body: isb.Body{
+				Payload: datum.Value,
+			},
+		}
+		writeMessages = append(writeMessages, writeMessage)
+	}
+	return writeMessages, nil
+}
+
+func createDatum(readMessage *isb.ReadMessage) *functionpb.Datum {
+	key := readMessage.Key
+	payload := readMessage.Body.Payload
+	parentPaneInfo := readMessage.PaneInfo
+
+	var d = &functionpb.Datum{
+		Key:       key,
+		Value:     payload,
+		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
+		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
+	}
+	return d
 }
