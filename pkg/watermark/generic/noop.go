@@ -9,7 +9,7 @@ import (
 )
 
 // NoOpWMProgressor is a no-op watermark progressor. As the name suggests, it does not do anything, no watermark is
-// progressed.
+// progressed. NoOpWMProgressor is used when watermarking is disabled.
 type NoOpWMProgressor struct {
 }
 

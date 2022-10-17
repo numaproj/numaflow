@@ -28,6 +28,11 @@ func ExampleWatermark_String() {
 	// 2022-04-28T07:00:00Z
 }
 
+func TestExampleWatermarkUnix(t *testing.T) {
+	wm := Watermark(time.Unix(1651129200, 0))
+	assert.Equal(t, int64(1651129200), wm.Unix())
+}
+
 func TestProcessorEntity_ParseOTWatcherKey(t *testing.T) {
 	tests := []struct {
 		name      string
