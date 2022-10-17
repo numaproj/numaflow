@@ -24,7 +24,7 @@ type jetStreamWatch struct {
 
 var _ store.WatermarkKVWatcher = (*jetStreamWatch)(nil)
 
-// NewKVJetStreamKVWatch returns KVJetStreamWatch specific to Jetsteam which implements the WatermarkKVWatcher interface.
+// NewKVJetStreamKVWatch returns KVJetStreamWatch specific to Jetstream which implements the WatermarkKVWatcher interface.
 func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketName string, client jsclient.JetStreamClient, opts ...JSKVWatcherOption) (store.WatermarkKVWatcher, error) {
 	var err error
 	conn, err := client.Connect(ctx)
