@@ -8,7 +8,7 @@ import (
 )
 
 // NewGenericEdgeFetch returns a Fetcher, where bufferName is the from buffer of the vertex that is currently processing.
-// fetcher is a struct for retrieving both the heartbeat and the offset watermark timeline (Vn-1 vertex).
+// fetcher is an interface for retrieving both the heartbeat and the offset watermark timeline (Vn-1 vertex).
 func NewGenericEdgeFetch(ctx context.Context, bufferName string, storeWatcher store.WatermarkStoreWatcher) fetch.Fetcher {
 	processorManager := fetch.NewProcessorManager(ctx, storeWatcher)
 	return fetch.NewEdgeFetcher(ctx, bufferName, processorManager)
