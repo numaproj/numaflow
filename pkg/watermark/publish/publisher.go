@@ -82,7 +82,7 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 		wm = processor.Watermark(time.Time(wm).Add(-p.opts.delay))
 	}
 	// update p.headWatermark only if wm > p.headWatermark
-	if time.Time(wm).After(time.Time(p.headWatermark)) {
+	if wm.After(time.Time(p.headWatermark)) {
 		p.headWatermark = wm
 	} else {
 		p.log.Infow("New watermark is ignored because it's older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
@@ -95,7 +95,7 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	// build value (offset)
 	value := make([]byte, 8)
 	var seq int64
-	if p.opts.isSource || p.opts.isSink { // For source and sink publisher, we dont' care about the offset, also the sequence of the offset might not be integer.
+	if p.opts.isSource || p.opts.isSink { // For source and sink publisher, we don't care about the offset, also the sequence of the offset might not be integer.
 		seq = time.Now().UnixNano()
 	} else {
 		seq, _ = offset.Sequence()

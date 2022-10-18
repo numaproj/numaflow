@@ -1,6 +1,6 @@
 # User Defined Functions
 
-A `Pipleline` consists of multiple vertices, `Source`, `Sink` and `UDF(User Defined Functions)`.
+A `Pipeline` consists of multiple vertices, `Source`, `Sink` and `UDF(User Defined Functions)`.
 
 UDF runs as a sidecar container in a Vertex Pod, processes the received data. The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.
 

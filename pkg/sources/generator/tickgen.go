@@ -19,6 +19,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -155,7 +156,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.FromSourceVertex(), forward.WithLogger(gensrc.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(gensrc.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))

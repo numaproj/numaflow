@@ -35,6 +35,14 @@ const (
 	VertexPhaseFailed    VertexPhase = "Failed"
 )
 
+type VertexType string
+
+const (
+	VertexTypeSource VertexType = "Source"
+	VertexTypeSink   VertexType = "Sink"
+	VertexTypeUDF    VertexType = "UDF"
+)
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=vtx
