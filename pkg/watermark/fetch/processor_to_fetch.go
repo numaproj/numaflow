@@ -33,7 +33,7 @@ func (s status) String() string {
 	return "unknown"
 }
 
-// ProcessorToFetch is the smallest unit of entity (from we which we fetch data) that does inorder processing or contains inorder data.
+// ProcessorToFetch is the smallest unit of entity (from which we fetch data) that does inorder processing or contains inorder data.
 type ProcessorToFetch struct {
 	ctx            context.Context
 	entity         processor.ProcessorEntitier
@@ -58,6 +58,7 @@ func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntit
 		otWatcher:      watcher,
 		log:            logging.FromContext(ctx),
 	}
+
 	if watcher != nil {
 		go p.startTimeLineWatcher()
 	}

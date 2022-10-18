@@ -42,7 +42,8 @@ func (e *sourceFetcher) GetHeadWatermark() processor.Watermark {
 		}
 	}
 	if epoch == math.MinInt64 {
-		return processor.Watermark(time.Time{})
+		// Use -1 as default watermark value to indicate there is no valid watermark yet.
+		return processor.Watermark(time.Unix(-1, 0))
 	}
 	return processor.Watermark(time.Unix(epoch, 0))
 }
