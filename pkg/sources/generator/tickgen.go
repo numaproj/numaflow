@@ -6,10 +6,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	"go.uber.org/zap"
 
@@ -105,7 +106,7 @@ func WithReadTimeOut(timeout time.Duration) Option {
 	}
 }
 
-// NewMemGen fuction creates an instance of generator.
+// NewMemGen function creates an instance of generator.
 // ctx  - context passed by the cmd/start.go a new context with cancel
 //
 //	is created for use by this vertex.

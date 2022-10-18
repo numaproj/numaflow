@@ -50,6 +50,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 
 	var fetchWatermark fetch.Fetcher
 	if fromBuffer.Type == v1alpha1.SourceBuffer {
+		// TODO: does it use a non-nil hbWatch?
 		fetchWatermark = generic.NewGenericSourceFetch(ctx, fromBuffer.Name, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
 	} else {
 		fetchWatermark = generic.NewGenericEdgeFetch(ctx, fromBuffer.Name, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))

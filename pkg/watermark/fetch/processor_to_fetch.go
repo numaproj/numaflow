@@ -102,6 +102,7 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 	for {
 		select {
 		case <-p.ctx.Done():
+			p.otWatcher.Close()
 			return
 		case value := <-watchCh:
 			// TODO: why will value will be nil?

@@ -141,6 +141,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 	for {
 		select {
 		case <-v.ctx.Done():
+			v.hbWatcher.Close()
 			return
 		case value := <-watchCh:
 			if value == nil {

@@ -178,6 +178,9 @@ func (p *publish) StopPublisher() {
 	if err != nil {
 		p.log.Errorw("Failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetID()), zap.Error(err))
 	}
+
+	p.otStore.Close()
+	p.heartbeatStore.Close()
 }
 
 func (p *publish) getAllOTKeysFromBucket() []string {
