@@ -4,11 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -175,7 +176,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.FromSourceVertex(), forward.WithLogger(h.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(h.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))

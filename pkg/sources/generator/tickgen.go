@@ -6,10 +6,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	"go.uber.org/zap"
 
@@ -154,7 +155,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.FromSourceVertex(), forward.WithLogger(gensrc.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(gensrc.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))

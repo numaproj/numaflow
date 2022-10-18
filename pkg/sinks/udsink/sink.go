@@ -3,8 +3,9 @@ package udsink
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -49,7 +50,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchW
 		s.logger = logging.NewLogger()
 	}
 
-	forwardOpts := []forward.Option{forward.WithLogger(s.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSink), forward.WithLogger(s.logger)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
