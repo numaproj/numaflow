@@ -51,10 +51,7 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 		opts:       opts,
 	}
 	go v.startRefreshingProcessors()
-	// we do not care about heartbeat watcher if this is a source vertex
-	if v.hbWatcher != nil {
-		go v.startHeatBeatWatcher()
-	}
+	go v.startHeatBeatWatcher()
 	return v
 }
 
