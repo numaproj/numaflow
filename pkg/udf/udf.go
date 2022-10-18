@@ -138,7 +138,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	}()
 	log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
 
-	opts := []forward.Option{forward.WithLogger(log)}
+	opts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeUDF), forward.WithLogger(log)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
