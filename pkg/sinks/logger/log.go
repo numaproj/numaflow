@@ -2,10 +2,11 @@ package logger
 
 import (
 	"context"
+	"log"
+
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"log"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 
@@ -50,7 +51,7 @@ func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark f
 		toLog.logger = logging.NewLogger()
 	}
 
-	forwardOpts := []forward.Option{forward.WithLogger(toLog.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSink), forward.WithLogger(toLog.logger)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))

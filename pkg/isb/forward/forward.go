@@ -181,18 +181,18 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	for _, m := range readMessages {
 		readBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
 		m.Watermark = time.Time(processorWM)
-		if isdf.opts.isFromSourceVertex && processorWM.After(m.EventTime) { // Set late data at source level
+		if isdf.opts.vertexType == dfv1.VertexTypeSource && processorWM.After(m.EventTime) { // Set late data at source level
 			m.IsLate = true
 		}
 	}
 
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][]isb.Message)
-	var toBuffers string
-	for step := range isdf.toBuffers {
+	var toBuffers string // logging purpose
+	for buffer := range isdf.toBuffers {
 		// over allocating to have a predictable pattern
-		messageToStep[step] = make([]isb.Message, 0, len(readMessages))
-		toBuffers += step
+		messageToStep[buffer] = make([]isb.Message, 0, len(readMessages))
+		toBuffers += buffer + ","
 	}
 
 	// udf concurrent processing request channel
@@ -251,12 +251,15 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
-	// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)?
 	for bufferName, offsets := range writeOffsets {
 		if publisher, ok := isdf.publishWatermark[bufferName]; ok {
-			if len(offsets) > 0 {
-				publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
-			} else { // This only happens on sink vertex, and it does not care about the offset during watermark publishing
+			if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeUDF {
+				if len(offsets) > 0 {
+					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
+				}
+				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
+				// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)
+			} else { // For Sink vertex, and it does not care about the offset during watermark publishing
 				publisher.PublishWatermark(processorWM, nil)
 			}
 		}
@@ -305,15 +308,15 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 // writeToBuffers is a blocking call until all the messages have be forwarded to all the toBuffers, or a shutdown
 // has been initiated while we are stuck looping on an InternalError.
 func (isdf *InterStepDataForward) writeToBuffers(ctx context.Context, messageToStep map[string][]isb.Message) (writeOffsetsEdge map[string][]isb.Offset, err error) {
+	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
+	// So writeOffsetsEdge also contains all the to buffers, but the returned offsets might be empty.
 	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
-	// TODO: rename key to edgeName
-	for key, toBuffer := range isdf.toBuffers {
-		writeOffsetsEdge[key], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[key])
+	for bufferName, toBuffer := range isdf.toBuffers {
+		writeOffsetsEdge[bufferName], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[bufferName])
 		if err != nil {
-			return writeOffsetsEdge, err
+			return nil, err
 		}
 	}
-
 	return writeOffsetsEdge, nil
 }
 

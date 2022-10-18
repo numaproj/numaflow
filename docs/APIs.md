@@ -3723,6 +3723,12 @@ Kubernetes meta/v1.Time </a> </em>
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.VertexType">
+VertexType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Watermark">
 Watermark
 </h3>
