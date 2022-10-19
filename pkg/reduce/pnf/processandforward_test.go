@@ -222,7 +222,6 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			index := 0
 			for k, v := range value.pf.publishWatermark {
 				// expected watermark should be equal to window end time
-				println(k)
 				assert.Equal(t, v.GetLatestWatermark().Unix(), value.wmExpected[k])
 				index += 1
 			}
