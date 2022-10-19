@@ -81,7 +81,7 @@ func TestPublisherWithSeparateOTBuckets(t *testing.T) {
 	p.StopPublisher()
 
 	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
-	assert.Equal(t, nats.ErrKeyNotFound, err)
+	assert.Equal(t, nats.ErrConnectionClosed, err)
 
 }
 
@@ -133,5 +133,5 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	p.StopPublisher()
 
 	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
-	assert.Equal(t, nats.ErrKeyNotFound, err)
+	assert.Equal(t, nats.ErrConnectionClosed, err)
 }

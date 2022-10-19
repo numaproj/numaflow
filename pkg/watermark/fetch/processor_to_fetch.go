@@ -58,10 +58,7 @@ func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntit
 		otWatcher:      watcher,
 		log:            logging.FromContext(ctx),
 	}
-
-	if watcher != nil {
-		go p.startTimeLineWatcher()
-	}
+	go p.startTimeLineWatcher()
 	return p
 }
 
@@ -103,6 +100,7 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 	for {
 		select {
 		case <-p.ctx.Done():
+			p.otWatcher.Close()
 			return
 		case value := <-watchCh:
 			// TODO: why will value will be nil?

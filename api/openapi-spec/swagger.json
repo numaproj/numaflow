@@ -1391,8 +1391,7 @@
       "description": "StatefulSetStatus represents the current state of a StatefulSet.",
       "type": "object",
       "required": [
-        "replicas",
-        "availableReplicas"
+        "replicas"
       ],
       "properties": {
         "availableReplicas": {

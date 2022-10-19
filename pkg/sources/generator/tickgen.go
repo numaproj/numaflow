@@ -105,7 +105,7 @@ func WithReadTimeOut(timeout time.Duration) Option {
 	}
 }
 
-// NewMemGen fuction creates an instance of generator.
+// NewMemGen function creates an instance of generator.
 // ctx  - context passed by the cmd/start.go a new context with cancel
 //
 //	is created for use by this vertex.
