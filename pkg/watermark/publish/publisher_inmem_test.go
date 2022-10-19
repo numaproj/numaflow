@@ -15,7 +15,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-func TestPublisherWithSeparateOTBuckets_InMem(t *testing.T) {
+func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 	var ctx = context.Background()
 
 	var publisherHBKeyspace = "publisherTest_PROCESSORS"
@@ -58,7 +58,7 @@ func TestPublisherWithSeparateOTBuckets_InMem(t *testing.T) {
 
 }
 
-func TestPublisherWithSharedOTBucket_InMem(t *testing.T) {
+func TestPublisherWithSeparateOTBucket_InMem(t *testing.T) {
 	var ctx = context.Background()
 
 	var keyspace = "publisherTest"

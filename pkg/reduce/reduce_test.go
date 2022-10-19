@@ -13,8 +13,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 	"github.com/stretchr/testify/assert"
 )
@@ -80,7 +83,7 @@ func (f forwardReduceTest) WhereTo(s string) ([]string, error) {
 // read from simple buffer
 // mock reduce op to return result
 // assert to check if the result is forwarded to toBuffers
-func TestDataForward_Start(t *testing.T) {
+func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	windowTime := 2 * time.Second
 	parentCtx := context.Background()
 	child, cancelFn := context.WithTimeout(parentCtx, windowTime*2)
@@ -91,7 +94,7 @@ func TestDataForward_Start(t *testing.T) {
 	to := simplebuffer.NewInMemoryBuffer("to", toBufferSize)
 
 	// keep on writing <count> messages every 1 second for the supplied key
-	go writeMessages(child, 10, "test-1", fromBuffer)
+	go writeMessages(child, 10, "test-1", fromBuffer, EventTypeWMProgressor{})
 
 	toBuffer := map[string]isb.BufferWriter{
 		"to": to,
@@ -143,26 +146,106 @@ func TestDataForward_Start(t *testing.T) {
 
 }
 
-func writeMessages(ctx context.Context, count int, key string, fromBuffer *simplebuffer.InMemoryBuffer) {
-	generateTime := 1 * time.Second
-	ticker := time.NewTicker(generateTime)
-	i := 1
-	for {
-		select {
-		case <-ticker.C:
-			// build 10 messages from the start time, time difference between the messages is 1 second
-			messages := buildMessagesForReduce(count, key+strconv.Itoa(i))
-			i++
+func TestDataForward_StartWithInMemoryWMStore(t *testing.T) {
+	windowTime := 2 * time.Second
+	parentCtx := context.Background()
+	child, cancelFn := context.WithTimeout(parentCtx, windowTime*3)
+	defer cancelFn()
+	fromBufferSize := int64(1000)
+	toBufferSize := int64(10)
+	fromBuffer := simplebuffer.NewInMemoryBuffer("from", fromBufferSize)
+	to := simplebuffer.NewInMemoryBuffer("to", toBufferSize)
 
-			// TODO use watermark in memory store when it is ready to synthesize offsets
-			// write the messages to fromBuffer, so that it will be available for consuming
-			fromBuffer.Write(ctx, messages)
-		case <-ctx.Done():
-			ticker.Stop()
-			return
+	toBuffer := map[string]isb.BufferWriter{
+		"to": to,
+	}
+
+	f, p := FetcherAndPublisher(toBuffer)
+
+	// keep on writing <count> messages every 1 second for the supplied key
+	go writeMessages(child, 10, "test-1", fromBuffer, p["from"])
+
+	var err error
+	var pbqManager *pbq.Manager
+
+	// create pbqManager
+	pbqManager, err = pbq.NewManager(child, pbq.WithPBQStoreOptions(store.WithStoreSize(100), store.WithPbqStoreType(dfv1.InMemoryType)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+	assert.NoError(t, err)
+
+	// create new fixed window of (windowTime)
+	window := fixed.NewFixed(windowTime)
+
+	var reduceDataForwarder *DataForward
+	reduceDataForwarder, err = NewDataForward(child, forwardReduceTest{}, fromBuffer, toBuffer, pbqManager, forwardReduceTest{}, f, p, window, WithReadBatchSize(10))
+	assert.NoError(t, err)
+
+	go reduceDataForwarder.Start(child)
+
+	for to.IsEmpty() {
+		select {
+		case <-child.Done():
+			assert.Fail(t, child.Err().Error())
+		default:
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 
+	// we are reading only one message here but the count should be equal to
+	// the number of keyed windows that closed
+	msgs, readErr := to.Read(child, 1)
+
+	assert.Nil(t, readErr)
+	assert.Len(t, msgs, 1)
+
+	// assert the output of reduce (count of messages)
+	var readMessagePayload PayloadForTest
+	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
+	// here the count will always be equal to the number of messages written per key
+	assert.Equal(t, 10, readMessagePayload.Value)
+	assert.Equal(t, "count", readMessagePayload.Key)
+
+}
+
+func FetcherAndPublisher(toBuffers map[string]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
+
+	var (
+		ctx          = context.Background()
+		keyspace     = "reduce"
+		pipelineName = "testPipeline"
+		hbBucketName = keyspace + "_PROCESSORS"
+		otBucketName = keyspace + "_OT"
+	)
+
+	publishEntity := processor.NewProcessorEntity("reduceProcessor")
+	sourcePublishEntity := processor.NewProcessorEntity("sourceProcessor")
+	hb, hbWatcherCh, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	ot, otWatcherCh, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+
+	publishers := make(map[string]publish.Publisher)
+
+	p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+
+	go func() {
+		for {
+			_ = hb.PutKV(ctx, "sourceProcessor", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			_ = hb.PutKV(ctx, "reduceProcessor", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			time.Sleep(time.Duration(1) * time.Second)
+		}
+	}()
+
+	publishers["from"] = sourcePublisher
+	for key := range toBuffers {
+		publishers[key] = p
+	}
+
+	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_PROCESSORS", hbWatcherCh)
+	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
+
+	var pm = fetch.NewProcessorManager(ctx, wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), fetch.WithPodHeartbeatRate(1), fetch.WithRefreshingProcessorsRate(1), fetch.WithSeparateOTBuckets(false))
+	var f = fetch.NewEdgeFetcher(ctx, "from", pm)
+	return f, publishers
 }
 
 // buildMessagesForReduce builds test isb.Message which can be used for testing reduce.
@@ -189,4 +272,28 @@ func buildMessagesForReduce(count int, key string) []isb.Message {
 	}
 
 	return messages
+}
+
+func writeMessages(ctx context.Context, count int, key string, fromBuffer *simplebuffer.InMemoryBuffer, publish publish.Publisher) {
+	generateTime := 1 * time.Second
+	ticker := time.NewTicker(generateTime)
+	i := 1
+	for {
+		select {
+		case <-ticker.C:
+			// build  messages with eventTime time.Now()
+			publishTime := time.Now()
+			messages := buildMessagesForReduce(count, key+strconv.Itoa(i))
+			i++
+
+			// write the messages to fromBuffer, so that it will be available for consuming
+			offsets, _ := fromBuffer.Write(ctx, messages)
+			if len(offsets) > 0 {
+				publish.PublishWatermark(processor.Watermark(publishTime), offsets[len(offsets)-1])
+			}
+		case <-ctx.Done():
+			ticker.Stop()
+			return
+		}
+	}
 }
