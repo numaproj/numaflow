@@ -53,14 +53,15 @@ func BuildNoOpWatermarkProgressorsFromEdgeList(bufferList []string) (fetch.Fetch
 	return fetchWatermark, publishWatermark
 }
 
-func BuildNoOpWatermarkProgressorsFromBufferMap(bufferList map[string]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
+func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
-	for buffName := range bufferList {
+	for buffName := range bufferMap {
 		publishWatermark[buffName] = NewNoOpWMProgressor()
 	}
 	return fetchWatermark, publishWatermark
 }
+
 func GetBufferNameList(bufferList []v1alpha1.Buffer) []string {
 	bufferName := make([]string, len(bufferList))
 	for idx, buffer := range bufferList {

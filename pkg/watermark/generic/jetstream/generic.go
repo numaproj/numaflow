@@ -32,9 +32,10 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 		return fetchWatermark, publishWatermark, nil
 	}
 
-	publishWatermark := make(map[string]publish.Publisher)
-	// Fetcher creation
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
+
+	// Fetcher creation, we have only 1 in buffer ATM
+	var fetchWatermark fetch.Fetcher
 	fromBuffer := vertexInstance.Vertex.GetFromBuffers()[0]
 	hbBucketName := isbsvc.JetStreamProcessorBucket(pipelineName, fromBuffer.Name)
 	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
@@ -48,14 +49,14 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 		return nil, nil, fmt.Errorf("failed at new OT KVJetStreamKVWatch, OTBucket: %s, %w", otBucketName, err)
 	}
 
-	var fetchWatermark fetch.Fetcher
 	if fromBuffer.Type == v1alpha1.SourceBuffer {
 		fetchWatermark = generic.NewGenericSourceFetch(ctx, fromBuffer.Name, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
 	} else {
 		fetchWatermark = generic.NewGenericEdgeFetch(ctx, fromBuffer.Name, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
 	}
 
-	// Publisher map creation, we need a publisher per edge.
+	// Publisher map creation, we need a publisher per out edge.
+	var publishWatermark = make(map[string]publish.Publisher)
 	for _, buffer := range vertexInstance.Vertex.GetToBuffers() {
 		hbPublisherBucketName := isbsvc.JetStreamProcessorBucket(pipelineName, buffer.Name)
 		// We create a separate Heartbeat bucket for each edge though it can be reused. We can reuse because heartbeat is at

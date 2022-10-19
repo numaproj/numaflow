@@ -16,7 +16,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	fmt "fmt"
+	"fmt"
 	"os"
 
 	corev1 "k8s.io/api/core/v1"
@@ -283,6 +283,8 @@ func (v Vertex) GetFromBuffers() []Buffer {
 	if v.IsASource() {
 		r = append(r, Buffer{GenerateSourceBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SourceBuffer})
 	} else {
+		// TODO: current design always has len(v.Spec.FromEdges) equals 1
+		//   need to update once we support multiple fromEdges
 		for _, vt := range v.Spec.FromEdges {
 			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, vt.From, v.Spec.Name), EdgeBuffer})
 		}
