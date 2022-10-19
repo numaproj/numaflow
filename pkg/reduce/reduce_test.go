@@ -160,7 +160,7 @@ func TestDataForward_StartWithInMemoryWMStore(t *testing.T) {
 		"to": to,
 	}
 
-	f, p := FetcherAndPublisher(toBuffer)
+	f, p := fetcherAndPublisher(toBuffer)
 
 	// keep on writing <count> messages every 1 second for the supplied key
 	go writeMessages(child, 10, "test-1", fromBuffer, p["from"])
@@ -207,7 +207,8 @@ func TestDataForward_StartWithInMemoryWMStore(t *testing.T) {
 
 }
 
-func FetcherAndPublisher(toBuffers map[string]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
+// fetcherAndPublisher creates watermark fetcher and publishers for toBuffers, and keeps the processors alive by sending heartbeats
+func fetcherAndPublisher(toBuffers map[string]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
 
 	var (
 		ctx          = context.Background()
@@ -274,6 +275,7 @@ func buildMessagesForReduce(count int, key string) []isb.Message {
 	return messages
 }
 
+// writeMessages writes message to simple buffer and publishes the watermark using write offsets
 func writeMessages(ctx context.Context, count int, key string, fromBuffer *simplebuffer.InMemoryBuffer, publish publish.Publisher) {
 	generateTime := 1 * time.Second
 	ticker := time.NewTicker(generateTime)

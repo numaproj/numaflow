@@ -163,7 +163,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		buffers    []*simplebuffer.InMemoryBuffer
 		pf         ProcessAndForward
 		expected   []bool
-		wmExpected []int64
+		wmExpected map[string]int64
 	}{
 		{
 			name: "test-forward-one",
@@ -172,10 +172,13 @@ func TestProcessAndForward_Forward(t *testing.T) {
 				End:   time.Unix(120, 0),
 				Key:   "test-forward-one",
 			},
-			buffers:    []*simplebuffer.InMemoryBuffer{test1Buffer1, test1Buffer2},
-			pf:         createProcessAndForward(ctx, "test-forward-one", pbqManager, toBuffers1),
-			expected:   []bool{false, true},
-			wmExpected: []int64{120, math.MinInt64},
+			buffers:  []*simplebuffer.InMemoryBuffer{test1Buffer1, test1Buffer2},
+			pf:       createProcessAndForward(ctx, "test-forward-one", pbqManager, toBuffers1),
+			expected: []bool{false, true},
+			wmExpected: map[string]int64{
+				"buffer1": 120,
+				"buffer2": math.MinInt64,
+			},
 		},
 		{
 			name: "test-forward-all",
@@ -184,10 +187,13 @@ func TestProcessAndForward_Forward(t *testing.T) {
 				End:   time.Unix(120, 0),
 				Key:   "test-forward-all",
 			},
-			buffers:    []*simplebuffer.InMemoryBuffer{test2Buffer1, test2Buffer2},
-			pf:         createProcessAndForward(ctx, "test-forward-all", pbqManager, toBuffers2),
-			expected:   []bool{false, false},
-			wmExpected: []int64{120, 120},
+			buffers:  []*simplebuffer.InMemoryBuffer{test2Buffer1, test2Buffer2},
+			pf:       createProcessAndForward(ctx, "test-forward-all", pbqManager, toBuffers2),
+			expected: []bool{false, false},
+			wmExpected: map[string]int64{
+				"buffer1": 120,
+				"buffer2": 120,
+			},
 		},
 		{
 			name: "test-drop-all",
@@ -196,10 +202,13 @@ func TestProcessAndForward_Forward(t *testing.T) {
 				End:   time.Unix(120, 0),
 				Key:   "test-drop-all",
 			},
-			buffers:    []*simplebuffer.InMemoryBuffer{test3Buffer1, test3Buffer2},
-			pf:         createProcessAndForward(ctx, "test-drop-all", pbqManager, toBuffers3),
-			expected:   []bool{true, true},
-			wmExpected: []int64{math.MinInt64, math.MinInt64},
+			buffers:  []*simplebuffer.InMemoryBuffer{test3Buffer1, test3Buffer2},
+			pf:       createProcessAndForward(ctx, "test-drop-all", pbqManager, toBuffers3),
+			expected: []bool{true, true},
+			wmExpected: map[string]int64{
+				"buffer1": math.MinInt64,
+				"buffer2": math.MinInt64,
+			},
 		},
 	}
 
@@ -208,10 +217,13 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			err := value.pf.Forward(ctx)
 			assert.NoError(t, err)
 			assert.Equal(t, []bool{value.buffers[0].IsEmpty(), value.buffers[1].IsEmpty()}, value.expected)
+			// pbq entry from the manager will be removed after forwarding
 			assert.Equal(t, pbqManager.GetPBQ(value.id), nil)
 			index := 0
-			for _, v := range value.pf.publishWatermark {
-				assert.Equal(t, v.GetLatestWatermark().Unix(), value.wmExpected[index])
+			for k, v := range value.pf.publishWatermark {
+				// expected watermark should be equal to window end time
+				println(k)
+				assert.Equal(t, v.GetLatestWatermark().Unix(), value.wmExpected[k])
 				index += 1
 			}
 		})
@@ -262,6 +274,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 	return pf
 }
 
+// buildPublisherMap builds publisher for each toBuffer
 func buildPublisherMap(toBuffers map[string]isb.BufferWriter) map[string]publish.Publisher {
 	var ctx = context.Background()
 
