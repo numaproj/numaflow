@@ -11,12 +11,9 @@ This doc explains how to set up a development environment for Numaflow.
 1. [`Node.js®`](https://nodejs.org/en/) for running the UI
 1. [`yarn`](https://classic.yarnpkg.com/en/)
 1. Local Kubernetes cluster - 
-you need one of the following options as your local Kubernetes system for development usage : 
+you need one of the following options as your local Kubernetes cluster for development usage : 
     1. [`k3d`](https://k3d.io/) 
     1. [`minikube`](https://minikube.sigs.k8s.io/docs/start/)
-1. Local Container System
-    1. [`Docker`](https://www.docker.com/) 
-    1. [`podman`](https://podman.io/) 
 
 ### Create a k8s cluster with k3d if needed
 
@@ -40,7 +37,7 @@ k3d kubeconfig get k3s-default
   Run unit tests.
 
 - `make image`
-  Build container image, and import it to `k3d` cluster if corresponding `kubeconfig` is sourced.
+  Build container image, and import it to `k3d` or `minikube` cluster if corresponding `kubeconfig` is sourced.
 
 - `make start`
   Build the source code, image, and install the Numa controller in the `numaflow-system` namespace.
