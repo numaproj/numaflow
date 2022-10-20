@@ -17,27 +17,19 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
-// TODO: This is not right, pending fix.
-
 // watermarkFetchers used to store watermark metadata for propagation
 type watermarkFetchers struct {
-	fetchMap           map[string]fetch.Fetcher
-	isWatermarkEnabled bool
+	fetchMap map[string]fetch.Fetcher
 }
 
 // newVertexWatermarkFetcher creates a new instance of watermarkFetchers. This is used to populate a map of vertices to
-// corresponding fetchers. These fetchers are tied to the incoming edge buffer of the current vertex (Vn), and read the
-// watermark propagated by the vertex (Vn-1). As each vertex has one incoming edge, for the input vertex we read the source
-// data buffer.
+// corresponding fetchers. The fetchers are to retrieve vertex level watermarks.
 func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers, error) {
-
-	// TODO: Return err instead of logging (https://github.com/numaproj/numaflow/pull/120#discussion_r927271677)
 	ctx := context.Background()
 	var wmFetcher = new(watermarkFetchers)
 	var toBufferName string
 
-	wmFetcher.isWatermarkEnabled = !pipeline.Spec.Watermark.Disabled
-	if !wmFetcher.isWatermarkEnabled {
+	if pipeline.Spec.Watermark.Disabled {
 		return wmFetcher, nil
 	}
 
@@ -52,12 +44,10 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 			if err != nil {
 				return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 			}
-			// sinkVertex := vertex.Name + "_SINK"
-			// vertexWmMap[sinkVertex] = fetchWatermark
-			// Keran TODO - how is this sinkVertex key getting used?
 			vertexWmMap[vertex.Name] = fetchWatermark
 		} else {
-			// Keran Step 1 - just evaluate one of the out edges. (to simplify the problem)
+			// For a single vertex, watermarks are published to all of its out edges. Although saved in separate offset timeline stores, the watermark data are identical.
+			// Therefore, to fetch watermark, we use the first out edge and fetch from the corresponding OT Store.
 			edge := pipeline.GetToEdges(vertex.Name)[0]
 			toBufferName = v1alpha1.GenerateEdgeBufferName(pipeline.Namespace, pipelineName, edge.From, edge.To)
 			fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName)
@@ -74,13 +64,13 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 
 // Create a watermark fetcher to fetch watermark from a buffer.
 func createWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
-	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, bufferName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, jsclient.NewInClusterJetStreamClient())
+	hbBucketName := isbsvc.JetStreamProcessorBucket(pipelineName, bufferName)
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, err
 	}
-	otBucket := isbsvc.JetStreamOTBucket(pipelineName, bufferName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucket, jsclient.NewInClusterJetStreamClient())
+	otBucketName := isbsvc.JetStreamOTBucket(pipelineName, bufferName)
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucketName, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +87,7 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	retTrue := true
 
 	// If watermark is not enabled, return time zero
-	if !ps.vertexWatermark.isWatermarkEnabled {
+	if ps.pipeline.Spec.Watermark.Disabled {
 		timeZero := time.Unix(0, 0).Unix()
 		v := &daemon.VertexWatermark{
 			Pipeline:           &ps.pipeline.Name,

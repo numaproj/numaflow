@@ -46,9 +46,9 @@ func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		e.log.Debugf("Processor: %v (headoffset:%d)", p, p.offsetTimeline.GetHeadOffset())
-		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headoffset:%d) \n", p, p.offsetTimeline.GetHeadOffset()))
 		var o = p.offsetTimeline.GetHeadOffset()
+		e.log.Debugf("Processor: %v (headoffset:%d)", p, o)
+		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headoffset:%d) \n", p, o))
 		if o != -1 && o > headOffset {
 			headOffset = o
 			epoch = p.offsetTimeline.GetEventtimeFromInt64(o)
