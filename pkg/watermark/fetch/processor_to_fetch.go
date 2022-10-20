@@ -96,12 +96,23 @@ func (p *ProcessorToFetch) IsDeleted() bool {
 }
 
 func (p *ProcessorToFetch) startTimeLineWatcher() {
-	watchCh := p.otWatcher.Watch(p.ctx)
+	ctx, cancel := context.WithCancel(p.ctx)
+	watchCh := p.otWatcher.Watch(ctx)
+
+	go func() {
+		for {
+			if p.IsDeleted() {
+				cancel()
+				return
+			}
+		}
+	}()
 
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.otWatcher.Close()
+		case <-ctx.Done():
+			// no need to close ot watcher here because the ot watcher is shared for the given vertex
+			// the parent ctx will close the ot watcher
 			return
 		case value := <-watchCh:
 			// TODO: why will value will be nil?
@@ -130,11 +141,6 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 				// naturally trim the KV store.
 			case store.KVPurge:
 				// skip
-			}
-		default:
-			if p.IsDeleted() {
-				p.otWatcher.Close()
-				return
 			}
 		}
 	}

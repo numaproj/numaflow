@@ -98,6 +98,7 @@ func (v *ProcessorManager) startRefreshingProcessors() {
 	for {
 		select {
 		case <-v.ctx.Done():
+
 			return
 		case <-ticker.C:
 			v.refreshingProcessors()
@@ -136,6 +137,9 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 	for {
 		select {
 		case <-v.ctx.Done():
+			// main process exit
+			// close both watcher
+			v.otWatcher.Close()
 			v.hbWatcher.Close()
 			return
 		case value := <-watchCh:
