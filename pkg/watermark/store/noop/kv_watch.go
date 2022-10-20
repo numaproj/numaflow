@@ -23,7 +23,6 @@ func (no noOpWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <
 		<-ctx.Done()
 		close(retChan)
 		close(stopped)
-		return
 	}()
 	return retChan, stopped
 }
