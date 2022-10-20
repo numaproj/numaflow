@@ -96,23 +96,10 @@ func (p *ProcessorToFetch) IsDeleted() bool {
 }
 
 func (p *ProcessorToFetch) startTimeLineWatcher() {
-	var stopCh = make(chan struct{})
 	watchCh := p.otWatcher.Watch(p.ctx)
-
-	go func() {
-		for {
-			if p.IsDeleted() {
-				close(stopCh)
-				break
-			}
-		}
-	}()
 
 	for {
 		select {
-		case <-stopCh:
-			p.otWatcher.Close()
-			return
 		case <-p.ctx.Done():
 			p.otWatcher.Close()
 			return
@@ -144,7 +131,11 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 			case store.KVPurge:
 				// skip
 			}
+		default:
+			if p.IsDeleted() {
+				p.otWatcher.Close()
+				return
+			}
 		}
-
 	}
 }
