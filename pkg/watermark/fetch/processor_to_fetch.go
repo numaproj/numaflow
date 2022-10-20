@@ -100,8 +100,11 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 	watchCh := p.otWatcher.Watch(p.ctx)
 
 	go func() {
-		if p.IsDeleted() {
-			close(stopCh)
+		for {
+			if p.IsDeleted() {
+				close(stopCh)
+				break
+			}
 		}
 	}()
 
