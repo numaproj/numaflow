@@ -149,7 +149,7 @@ func (p *publish) GetLatestWatermark() processor.Watermark {
 func (p *publish) publishHeartbeat() {
 	ticker := time.NewTicker(time.Second * time.Duration(p.opts.podHeartbeatRate))
 	defer ticker.Stop()
-	p.log.Infow("Refreshing ActiveProcessors ticker started")
+	p.log.Infow("Publishing Heartbeat ticker started")
 	for {
 		select {
 		case <-p.ctx.Done():

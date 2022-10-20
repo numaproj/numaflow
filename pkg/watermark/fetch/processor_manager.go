@@ -98,7 +98,6 @@ func (v *ProcessorManager) startRefreshingProcessors() {
 	for {
 		select {
 		case <-v.ctx.Done():
-
 			return
 		case <-ticker.C:
 			v.refreshingProcessors()
