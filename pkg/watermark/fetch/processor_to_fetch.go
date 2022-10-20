@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -105,6 +106,7 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 				cancel()
 				return
 			}
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
