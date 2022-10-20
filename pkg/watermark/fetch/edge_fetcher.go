@@ -73,13 +73,15 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var epoch int64 = math.MaxInt64
 	var allProcessors = e.processorManager.GetAllProcessors()
 	for _, p := range allProcessors {
-		if !p.IsActive() {
-			continue
-		}
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
 		var t = p.offsetTimeline.GetEventTime(inputOffset)
 		if t != -1 && t < epoch {
 			epoch = t
+		}
+		// TODO: can we delete an inactive processor?
+		if p.IsDeleted() && (offset > p.offsetTimeline.GetHeadOffset()) {
+			// if the pod is not active and the current offset is ahead of all offsets in Timeline
+			e.processorManager.DeleteProcessor(p.entity.GetID())
 		}
 	}
 	// if the offset is smaller than every offset in the timeline, set the value to be -1

@@ -96,9 +96,20 @@ func (p *ProcessorToFetch) IsDeleted() bool {
 }
 
 func (p *ProcessorToFetch) startTimeLineWatcher() {
+	var stopCh = make(chan struct{})
 	watchCh := p.otWatcher.Watch(p.ctx)
+
+	go func() {
+		if p.IsDeleted() {
+			close(stopCh)
+		}
+	}()
+
 	for {
 		select {
+		case <-stopCh:
+			p.otWatcher.Close()
+			return
 		case <-p.ctx.Done():
 			p.otWatcher.Close()
 			return

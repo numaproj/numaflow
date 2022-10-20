@@ -166,12 +166,12 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
+	// "p1" should be deleted after this GetWatermark offset=101
+	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
 	allProcessors = testBuffer.processorManager.GetAllProcessors()
-	// we don't delete inactive processors, so the length should still be 2
-	assert.Equal(t, 2, len(allProcessors))
+	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
-	assert.False(t, allProcessors["p1"].IsActive())
 
 	time.Sleep(time.Second)
 	// resume after one second
@@ -203,12 +203,25 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" status is back to active, the offset timeline should be preserved
+	// "p1" has been deleted from vertex.Processors
+	// so "p1" will be considered as a new processors and a new offsetTimeline watcher for "p1" will be created
 	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
 	p1 := testBuffer.processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
 	assert.NotNil(t, p1.offsetTimeline)
+	// wait till the offsetTimeline has been populated
+	newP1head := p1.offsetTimeline.GetHeadOffset()
+	for newP1head == -1 {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("expected head offset to not be equal to -1, %s", ctx.Err())
+		default:
+			time.Sleep(1 * time.Millisecond)
+			newP1head = p1.offsetTimeline.GetHeadOffset()
+		}
+	}
+	// because the bucket hasn't been cleaned up, the new watcher will read all the history data to create this new offsetTimeline
 	assert.Equal(t, int64(100), p1.offsetTimeline.GetHeadOffset())
 
 	// publish a new watermark 101
