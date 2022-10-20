@@ -228,4 +228,5 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	// added 101 in the previous steps for p1, so the head should be 101 after resume
 	assert.Equal(t, int64(101), p1.offsetTimeline.GetHeadOffset())
 	wg.Wait()
+	cancel()
 }
