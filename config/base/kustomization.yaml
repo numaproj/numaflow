@@ -3,8 +3,6 @@ kind: Kustomization
 
 resources:
   - crds/full
-  - numaflow-sa.yaml
-  - numaflow-server-sa.yaml
   - controller-manager
   - numaflow-server
 
