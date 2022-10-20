@@ -332,7 +332,6 @@ func TestDataForward_StartWithInMemoryWMStore(t *testing.T) {
 			_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
 			assert.Equal(t, value.expectedValue, int64(readMessagePayload.Value))
 			assert.Equal(t, value.expectedKey, readMessagePayload.Key)
-			return
 		})
 	}
 
@@ -422,9 +421,6 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 			// build  messages with eventTime time.Now()
 			publishTime = publishTime.Add(intervalDuration)
 			messages := buildMessagesForReduce(count, key+strconv.Itoa(i), publishTime)
-			if interval == time.Second*1 {
-				println(key + strconv.Itoa(i))
-			}
 			i++
 
 			// write the messages to fromBuffer, so that it will be available for consuming
