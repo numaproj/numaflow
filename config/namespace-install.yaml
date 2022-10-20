@@ -12549,19 +12549,16 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: numaflow-sa
-  namespace: numaflow-system
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: numaflow-server-sa
-  namespace: numaflow-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: numaflow-role
-  namespace: numaflow-system
 rules:
 - apiGroups:
   - numaflow.numaproj.io
@@ -12632,7 +12629,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: numaflow-server-role
-  namespace: numaflow-system
 rules:
 - apiGroups:
   - numaflow.numaproj.io
@@ -12686,7 +12682,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: numaflow-role-binding
-  namespace: numaflow-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -12694,13 +12689,11 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: numaflow-sa
-  namespace: numaflow-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: numaflow-server-binding
-  namespace: numaflow-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -12708,7 +12701,6 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: numaflow-server-sa
-  namespace: numaflow-system
 ---
 apiVersion: v1
 data:
@@ -12818,13 +12810,11 @@ data:
 kind: ConfigMap
 metadata:
   name: numaflow-controller-config
-  namespace: numaflow-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: numaflow-server
-  namespace: numaflow-system
 spec:
   ports:
   - port: 8443
@@ -12838,7 +12828,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: numaflow-controller
-  namespace: numaflow-system
 spec:
   replicas: 1
   selector:
@@ -12900,7 +12889,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: numaflow-server
-  namespace: numaflow-system
 spec:
   replicas: 1
   selector:

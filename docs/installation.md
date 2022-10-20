@@ -57,8 +57,6 @@ resources:
 namespace: numaflow-system
 ```
 
-**Note**: Currently namespace scoped installaion only applies to the controller deployment, the `numaflow-server` (User Interface) deployment still remains cluster scoped installation.
-
 ## Managed Namespace Scope
 
 A managed namespace installation watches and executes pipelines in a specific namespace.
