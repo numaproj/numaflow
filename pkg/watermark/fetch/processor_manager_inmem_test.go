@@ -50,10 +50,8 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 
 	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
 	assert.NoError(t, err)
-	defer hbWatcher.Close()
 	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
 	assert.NoError(t, err)
-	defer otWatcher.Close()
 	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
 	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
 
@@ -230,5 +228,4 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	// added 101 in the previous steps for p1, so the head should be 101 after resume
 	assert.Equal(t, int64(101), p1.offsetTimeline.GetHeadOffset())
 	wg.Wait()
-	cancel()
 }

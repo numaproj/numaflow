@@ -97,7 +97,7 @@ func (p *ProcessorToFetch) IsDeleted() bool {
 
 func (p *ProcessorToFetch) startTimeLineWatcher() {
 	ctx, cancel := context.WithCancel(p.ctx)
-	watchCh := p.otWatcher.Watch(ctx)
+	watchCh, stopped := p.otWatcher.Watch(ctx)
 
 	go func() {
 		for {
@@ -113,6 +113,7 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 		case <-ctx.Done():
 			// no need to close ot watcher here because the ot watcher is shared for the given vertex
 			// the parent ctx will close the ot watcher
+			<-stopped
 			return
 		case value := <-watchCh:
 			// TODO: why will value will be nil?

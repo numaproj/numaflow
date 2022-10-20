@@ -95,10 +95,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	// create watchers for heartbeat and offset timeline
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
-	defer hbWatcher.Close()
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
-	defer otWatcher.Close()
 	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
 	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
 
@@ -272,12 +270,6 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	wg.Wait()
 	cancel()
-
-	// wait for all the ctx.Done() is completed
-	// we don't have wg on the Watch functions go routine..
-	// TODO: opened an issue https://github.com/numaproj/numaflow/issues/224
-	//   fix tests after we revisit the watermark store and watcher closing logic
-	time.Sleep(3 * time.Second)
 }
 
 func TestFetcherWithSeparateOTBucket(t *testing.T) {

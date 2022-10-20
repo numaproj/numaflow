@@ -133,10 +133,11 @@ func (v *ProcessorManager) refreshingProcessors() {
 // startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
 func (v *ProcessorManager) startHeatBeatWatcher() {
-	watchCh := v.hbWatcher.Watch(v.ctx)
+	watchCh, stopped := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {
 		case <-v.ctx.Done():
+			<-stopped
 			// main process exit
 			// close both watcher
 			v.otWatcher.Close()
