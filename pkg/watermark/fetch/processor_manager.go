@@ -120,7 +120,10 @@ func (v *ProcessorManager) refreshingProcessors() {
 		if time.Now().Unix()-pTime > v.opts.podHeartbeatRate {
 			// if the pod's last heartbeat is greater than podHeartbeatRate
 			// then the pod is not considered as live
+			v.log.Infow("The processor becomes inactive", zap.String("key", pName), zap.String(pName, p.String()))
 			p.setStatus(_inactive)
+			p.stopTimeLineWatcher()
+			v.heartbeat.Delete(pName)
 		} else {
 			p.setStatus(_active)
 			debugStr.WriteString(fmt.Sprintf("[%s] ", pName))
