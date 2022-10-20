@@ -46,6 +46,7 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 				kw.AddKey(k)
 			}
 			kw.AddKey(tt.input)
+			assert.Equal(t, len(tt.expectedKeys), len(kw.Keys))
 			for k := range tt.expectedKeys {
 				_, ok := kw.Keys[k]
 				assert.True(t, ok)
