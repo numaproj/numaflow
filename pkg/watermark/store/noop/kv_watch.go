@@ -20,14 +20,10 @@ func (no noOpWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <
 	retChan := make(chan store.WatermarkKVEntry)
 	stopped := make(chan struct{})
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				close(retChan)
-				close(stopped)
-				return
-			}
-		}
+		<-ctx.Done()
+		close(retChan)
+		close(stopped)
+		return
 	}()
 	return retChan, stopped
 }
