@@ -9,8 +9,6 @@ resources:
   - ../../base/controller-manager
   - ../../namespace-install/rbac/controller-manager
 
-namespace: numaflow-system
-
 images:
   - name: quay.io/numaproj/numaflow
     newTag: latest
