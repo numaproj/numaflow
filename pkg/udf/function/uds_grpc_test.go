@@ -284,7 +284,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			close(messageCh)
 		}()
 
-		got, err := u.Reduce(ctx, messageCh)
+		got, err := u.Reduce(ctx, nil, messageCh)
 
 		assert.Len(t, got, 1)
 		assert.NoError(t, err)
@@ -329,7 +329,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			close(messageCh)
 		}()
 
-		_, err := u.Reduce(ctx, messageCh)
+		_, err := u.Reduce(ctx, nil, messageCh)
 
 		assert.ErrorIs(t, err, ApplyUDFErr{
 			UserUDFErr: false,
@@ -366,7 +366,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		messageCh := make(chan *isb.ReadMessage)
 
-		_, err := u.Reduce(ctx, messageCh)
+		_, err := u.Reduce(ctx, nil, messageCh)
 
 		assert.Error(t, err, ctx.Err())
 	})
@@ -430,7 +430,7 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 
 	u := NewMockUDSGRPCBasedUDF(mockClient)
 
-	result, err := u.Reduce(ctx, messageCh)
+	result, err := u.Reduce(ctx, nil, messageCh)
 
 	var resultPayload testutils.PayloadForTest
 	_ = json.Unmarshal(result[0].Payload, &resultPayload)

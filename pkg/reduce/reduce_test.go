@@ -13,6 +13,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/pbq"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -54,7 +55,7 @@ type CounterReduceTest struct {
 }
 
 // Reduce returns a result with the count of messages
-func (f CounterReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (f CounterReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	count := 0
 	for range messageStream {
 		count += 1
@@ -84,7 +85,7 @@ func (f CounterReduceTest) WhereTo(s string) ([]string, error) {
 type SumReduceTest struct {
 }
 
-func (s SumReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s SumReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	sum := 0
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -112,7 +113,7 @@ func (s SumReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.Rea
 type MaxReduceTest struct {
 }
 
-func (m MaxReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (m MaxReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	mx := math.MinInt64
 	for msg := range messageStream {
 		var payload PayloadForTest

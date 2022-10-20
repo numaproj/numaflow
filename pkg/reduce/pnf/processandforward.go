@@ -69,7 +69,7 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 		defer wg.Done()
 		// FIXME: we need to fix https://github.com/numaproj/numaflow-go/blob/main/pkg/function/service.go#L101
 		ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: p.PartitionID.Key}))
-		p.result, err = p.UDF.Reduce(ctx, p.pbqReader.ReadCh())
+		p.result, err = p.UDF.Reduce(ctx, nil, p.pbqReader.ReadCh())
 	}()
 
 	// wait for the reduce method to return
