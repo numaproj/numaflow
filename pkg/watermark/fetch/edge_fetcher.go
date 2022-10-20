@@ -67,7 +67,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("unable to get offset from isb.Offset.Sequence()", zap.Error(err))
-		return processor.Watermark(time.Time{})
+		return processor.Watermark(time.Unix(-1, 0))
 	}
 	var debugString strings.Builder
 	var epoch int64 = math.MaxInt64
@@ -87,9 +87,6 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 		epoch = -1
 	}
 	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.edgeName, offset, epoch)
-	if epoch == -1 {
-		return processor.Watermark(time.Time{})
-	}
 
 	return processor.Watermark(time.Unix(epoch, 0))
 }

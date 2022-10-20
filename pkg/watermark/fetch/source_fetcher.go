@@ -61,7 +61,7 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) processor.Watermark {
 		}
 	}
 	if epoch == math.MaxInt64 {
-		return processor.Watermark(time.Time{})
+		epoch = -1
 	}
 	return processor.Watermark(time.Unix(epoch, 0))
 }
