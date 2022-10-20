@@ -117,13 +117,19 @@ func (v *ProcessorManager) refreshingProcessors() {
 		}
 		// default heartbeat rate is every 5 seconds
 		// TODO: tolerance?
-		if time.Now().Unix()-pTime > v.opts.podHeartbeatRate {
-			// if the pod's last heartbeat is greater than podHeartbeatRate
-			// then the pod is not considered as live
-			v.log.Infow("The processor becomes inactive", zap.String("key", pName), zap.String(pName, p.String()))
-			p.setStatus(_inactive)
+		if time.Now().Unix()-pTime > 10*v.opts.podHeartbeatRate {
+			// if the pod doesn't come back after 10 heartbeats,
+			// it's possible the pod has exited unexpectedly, so we need to delete the pod
+			// NOTE: the pod entry still remains in the heartbeat store (bucket)
+			// TODO: how to delete the pod from the heartbeat store?
+			v.log.Infow("Deleting", zap.String("key", pName), zap.String(pName, p.String()))
+			p.setStatus(_deleted)
 			p.stopTimeLineWatcher()
 			v.heartbeat.Delete(pName)
+		} else if time.Now().Unix()-pTime > v.opts.podHeartbeatRate {
+			// if the pod's last heartbeat is greater than podHeartbeatRate
+			// then the pod is not considered as live
+			p.setStatus(_inactive)
 		} else {
 			p.setStatus(_active)
 			debugStr.WriteString(fmt.Sprintf("[%s] ", pName))
