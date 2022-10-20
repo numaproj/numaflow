@@ -179,6 +179,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				} else {
 					v.log.Infow("Deleting", zap.String("key", value.Key()), zap.String(value.Key(), p.String()))
 					p.setStatus(_deleted)
+					p.stopTimeLineWatcher()
 					v.heartbeat.Delete(value.Key())
 				}
 			case store.KVPurge:
