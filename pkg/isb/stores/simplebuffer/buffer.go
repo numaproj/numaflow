@@ -95,6 +95,7 @@ func (b *InMemoryBuffer) IsEmpty() bool {
 
 func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	var errs = make([]error, len(messages))
+	writeOffsets := make([]isb.Offset, len(messages))
 	for idx, message := range messages {
 		if !b.IsFull() {
 			var err1 error
@@ -111,14 +112,16 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			errs[idx] = nil
 			b.buffer[currentIdx].dirty = true
 			b.writeIdx = (currentIdx + 1) % b.size
-
+			writeOffsets = append(writeOffsets, isb.SimpleOffset(func() string {
+				return fmt.Sprintf("%d", currentIdx)
+			}))
 			// access buffer via lock
 			b.rwlock.Unlock()
 		} else {
 			errs[idx] = isb.BufferWriteErr{Name: b.name, Full: true, Message: "Buffer full!"}
 		}
 	}
-	return nil, errs
+	return writeOffsets, errs
 }
 
 func (b *InMemoryBuffer) blockIfEmpty(ctx context.Context) error {

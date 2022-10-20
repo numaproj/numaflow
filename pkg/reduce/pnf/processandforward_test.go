@@ -3,6 +3,7 @@ package pnf
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
@@ -21,6 +25,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	udfcall "github.com/numaproj/numaflow/pkg/udf/function"
+	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -153,11 +158,12 @@ func TestProcessAndForward_Forward(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		id       partition.ID
-		buffers  []*simplebuffer.InMemoryBuffer
-		pf       ProcessAndForward
-		expected []bool
+		name       string
+		id         partition.ID
+		buffers    []*simplebuffer.InMemoryBuffer
+		pf         ProcessAndForward
+		expected   []bool
+		wmExpected map[string]int64
 	}{
 		{
 			name: "test-forward-one",
@@ -169,6 +175,10 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			buffers:  []*simplebuffer.InMemoryBuffer{test1Buffer1, test1Buffer2},
 			pf:       createProcessAndForward(ctx, "test-forward-one", pbqManager, toBuffers1),
 			expected: []bool{false, true},
+			wmExpected: map[string]int64{
+				"buffer1": 120,
+				"buffer2": math.MinInt64,
+			},
 		},
 		{
 			name: "test-forward-all",
@@ -180,6 +190,10 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			buffers:  []*simplebuffer.InMemoryBuffer{test2Buffer1, test2Buffer2},
 			pf:       createProcessAndForward(ctx, "test-forward-all", pbqManager, toBuffers2),
 			expected: []bool{false, false},
+			wmExpected: map[string]int64{
+				"buffer1": 120,
+				"buffer2": 120,
+			},
 		},
 		{
 			name: "test-drop-all",
@@ -191,6 +205,10 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			buffers:  []*simplebuffer.InMemoryBuffer{test3Buffer1, test3Buffer2},
 			pf:       createProcessAndForward(ctx, "test-drop-all", pbqManager, toBuffers3),
 			expected: []bool{true, true},
+			wmExpected: map[string]int64{
+				"buffer1": math.MinInt64,
+				"buffer2": math.MinInt64,
+			},
 		},
 	}
 
@@ -199,7 +217,14 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			err := value.pf.Forward(ctx)
 			assert.NoError(t, err)
 			assert.Equal(t, []bool{value.buffers[0].IsEmpty(), value.buffers[1].IsEmpty()}, value.expected)
+			// pbq entry from the manager will be removed after forwarding
 			assert.Equal(t, pbqManager.GetPBQ(value.id), nil)
+			index := 0
+			for k, v := range value.pf.publishWatermark {
+				// expected watermark should be equal to window end time
+				assert.Equal(t, v.GetLatestWatermark().Unix(), value.wmExpected[k])
+				index += 1
+			}
 		})
 	}
 }
@@ -213,7 +238,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 	}
 
 	// create a pbq for a partition
-	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
+	pw := buildPublisherMap(toBuffers)
 	var simplePbq pbq.Reader
 	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition)
 
@@ -246,4 +271,24 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 	}
 
 	return pf
+}
+
+// buildPublisherMap builds publisher for each toBuffer
+func buildPublisherMap(toBuffers map[string]isb.BufferWriter) map[string]publish.Publisher {
+	var ctx = context.Background()
+
+	var publisherHBKeyspace = "publisherTest_PROCESSORS"
+
+	var publisherOTKeyspace = "publisherTest_OT_publisherTestPod1"
+
+	heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, "testPublisher", publisherHBKeyspace)
+	otKV, _, _ := inmem.NewKVInMemKVStore(ctx, "testPublisher", publisherOTKeyspace)
+
+	publishers := make(map[string]publish.Publisher)
+	for key := range toBuffers {
+		publishEntity := processor.NewProcessorEntity(key)
+		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		publishers[key] = p
+	}
+	return publishers
 }
