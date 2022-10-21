@@ -33,7 +33,7 @@ func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*
 func TestOrderedProcessing(t *testing.T) {
 
 	// Test Reducer returns the messages as is
-	identityReducer := reducer.ReduceFunc(func(ctx context.Context, input <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+	identityReducer := reducer.ReduceFunc(func(ctx context.Context, partitionID *partition.ID, input <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 		messages := make([]*isb.Message, 0)
 		for msg := range input {
 			messages = append(messages, &msg.Message)

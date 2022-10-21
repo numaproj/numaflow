@@ -3,9 +3,11 @@ package function
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"sync"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
@@ -103,11 +105,13 @@ func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 // should we pass metadata information ?
 
 // Reduce accepts a channel of isbMessages and returns the aggregated result
-func (u *udsGRPCBasedUDF) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (u *udsGRPCBasedUDF) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	datumCh := make(chan *functionpb.Datum)
 	var wg sync.WaitGroup
 	var result []*functionpb.Datum
 	var err error
+
+	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: partitionID.Key}))
 
 	// invoke the reduceFn method with datumCh channel
 	wg.Add(1)
@@ -158,6 +162,12 @@ readLoop:
 		key := datum.Key
 		writeMessage := &isb.Message{
 			Header: isb.Header{
+				PaneInfo: isb.PaneInfo{
+					EventTime: partitionID.End,
+					StartTime: partitionID.Start,
+					EndTime:   partitionID.End,
+					IsLate:    false,
+				},
 				Key: key,
 			},
 			Body: isb.Body{
