@@ -20,12 +20,10 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	udfreducer "github.com/numaproj/numaflow/pkg/udf/reducer"
-	"google.golang.org/grpc/metadata"
 )
 
 // ProcessAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
@@ -61,19 +59,11 @@ func NewProcessAndForward(ctx context.Context,
 
 // Process method reads messages from the supplied PBQ, invokes UDF to reduce the result.
 func (p *ProcessAndForward) Process(ctx context.Context) error {
-	var wg sync.WaitGroup
 	var err error
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// FIXME: we need to fix https://github.com/numaproj/numaflow-go/blob/main/pkg/function/service.go#L101
-		ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: p.PartitionID.Key}))
-		p.result, err = p.UDF.Reduce(ctx, p.pbqReader.ReadCh())
-	}()
-
-	// wait for the reduce method to return
-	wg.Wait()
+	// FIXME: we need to fix https://github.com/numaproj/numaflow-go/blob/main/pkg/function/service.go#L101
+	// blocking call, only returns the result after it has read all the messages from pbq
+	p.result, err = p.UDF.Reduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 	return err
 }
 

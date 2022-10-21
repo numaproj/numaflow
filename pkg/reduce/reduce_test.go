@@ -13,6 +13,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/pbq"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -54,7 +55,7 @@ type CounterReduceTest struct {
 }
 
 // Reduce returns a result with the count of messages
-func (f CounterReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (f CounterReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	count := 0
 	for range messageStream {
 		count += 1
@@ -65,7 +66,9 @@ func (f CounterReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb
 	ret := &isb.Message{
 		Header: isb.Header{
 			PaneInfo: isb.PaneInfo{
-				EventTime: time.Now(),
+				StartTime: partitionID.Start,
+				EndTime:   partitionID.End,
+				EventTime: partitionID.End,
 			},
 			ID:  "msgID",
 			Key: "result",
@@ -84,7 +87,7 @@ func (f CounterReduceTest) WhereTo(s string) ([]string, error) {
 type SumReduceTest struct {
 }
 
-func (s SumReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s SumReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	sum := 0
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -97,7 +100,9 @@ func (s SumReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.Rea
 	ret := &isb.Message{
 		Header: isb.Header{
 			PaneInfo: isb.PaneInfo{
-				EventTime: time.Now(),
+				StartTime: partitionID.Start,
+				EndTime:   partitionID.End,
+				EventTime: partitionID.End,
 			},
 			ID:  "msgID",
 			Key: "result",
@@ -112,7 +117,7 @@ func (s SumReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.Rea
 type MaxReduceTest struct {
 }
 
-func (m MaxReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (m MaxReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	mx := math.MinInt64
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -127,7 +132,9 @@ func (m MaxReduceTest) Reduce(ctx context.Context, messageStream <-chan *isb.Rea
 	ret := &isb.Message{
 		Header: isb.Header{
 			PaneInfo: isb.PaneInfo{
-				EventTime: time.Now(),
+				StartTime: partitionID.Start,
+				EndTime:   partitionID.End,
+				EventTime: partitionID.End,
 			},
 			ID:  "msgID",
 			Key: "result",
@@ -379,7 +386,7 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 
 	var pm = fetch.NewProcessorManager(ctx, wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), fetch.WithPodHeartbeatRate(1), fetch.WithRefreshingProcessorsRate(1), fetch.WithSeparateOTBuckets(false))
-	var f = fetch.NewEdgeFetcher(ctx, "from", pm)
+	var f = fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), pm)
 	return f, publishers
 }
 
