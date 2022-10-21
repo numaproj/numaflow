@@ -12904,6 +12904,7 @@ spec:
       containers:
       - args:
         - server
+        - --namespaced
         env:
         - name: NAMESPACE
           valueFrom:
