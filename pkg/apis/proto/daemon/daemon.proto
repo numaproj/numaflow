@@ -92,7 +92,7 @@ service DaemonService {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/metrics";
   };
 
-  // GetVertexWatermark return the watermark of the given vertex based on the incoming edge buffer
+  // GetVertexWatermark return the watermark of the given vertex.
   rpc GetVertexWatermark (GetVertexWatermarkRequest) returns (GetVertexWatermarkResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/watermark";
   };

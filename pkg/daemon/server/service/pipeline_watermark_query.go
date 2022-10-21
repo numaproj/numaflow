@@ -17,76 +17,70 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
-// TODO: This is not right, pending fix.
+// TODO - Write Unit Tests for this file
 
 // watermarkFetchers used to store watermark metadata for propagation
 type watermarkFetchers struct {
-	fetchMap           map[string]fetch.Fetcher
-	isWatermarkEnabled bool
+	// A map used to query watermark for vertices
+	// Key: vertex name
+	// Value: a list of watermark fetchers, each fetcher represents one of the out edges for the vertex
+	fetcherMap map[string][]fetch.Fetcher
 }
 
 // newVertexWatermarkFetcher creates a new instance of watermarkFetchers. This is used to populate a map of vertices to
-// corresponding fetchers. These fetchers are tied to the incoming edge buffer of the current vertex (Vn), and read the
-// watermark propagated by the vertex (Vn-1). As each vertex has one incoming edge, for the input vertex we read the source
-// data buffer.
+// corresponding fetchers. The fetchers are to retrieve vertex level watermarks.
 func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers, error) {
-
-	// TODO: Return err instead of logging (https://github.com/numaproj/numaflow/pull/120#discussion_r927271677)
 	ctx := context.Background()
 	var wmFetcher = new(watermarkFetchers)
-	var fromBufferName string
+	var toBufferName string
 
-	wmFetcher.isWatermarkEnabled = !pipeline.Spec.Watermark.Disabled
-	if !wmFetcher.isWatermarkEnabled {
+	if pipeline.Spec.Watermark.Disabled {
 		return wmFetcher, nil
 	}
 
-	vertexWmMap := make(map[string]fetch.Fetcher)
+	vertexToFetchersMap := make(map[string][]fetch.Fetcher)
 	pipelineName := pipeline.Name
 
 	// TODO: https://github.com/numaproj/numaflow/pull/120#discussion_r927316015
 	for _, vertex := range pipeline.Spec.Vertices {
-		// TODO: Checking if Vertex is source
-		if vertex.Source != nil {
-			fromBufferName = v1alpha1.GenerateSourceBufferName(pipeline.Namespace, pipelineName, vertex.Name)
-		} else {
-			// Currently we support only one incoming edge
-			edge := pipeline.GetFromEdges(vertex.Name)[0]
-			fromBufferName = v1alpha1.GenerateEdgeBufferName(pipeline.Namespace, pipelineName, edge.From, edge.To)
-		}
-		// Adding an extra entry for the sink vertex to check the watermark value progressed out of the vertex.
-		// Can be checked by querying sinkName_SINK in the service
 		if vertex.Sink != nil {
 			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipelineName, vertex.Name)
-			fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName, vertex.Name)
+			fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 			}
-			sinkVertex := vertex.Name + "_SINK"
-			vertexWmMap[sinkVertex] = fetchWatermark
+			vertexToFetchersMap[vertex.Name] = []fetch.Fetcher{fetchWatermark}
+		} else {
+			// If the vertex is not a sink, to fetch the watermark, we consult all out edges and grab the latest watermark among them.
+			var wmFetcherList []fetch.Fetcher
+			for _, edge := range pipeline.GetToEdges(vertex.Name) {
+				toBufferName = v1alpha1.GenerateEdgeBufferName(pipeline.Namespace, pipelineName, edge.From, edge.To)
+				fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
+				}
+				wmFetcherList = append(wmFetcherList, fetchWatermark)
+			}
+			vertexToFetchersMap[vertex.Name] = wmFetcherList
 		}
-		fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, fromBufferName, vertex.Name)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
-		}
-		vertexWmMap[vertex.Name] = fetchWatermark
 	}
-	wmFetcher.fetchMap = vertexWmMap
+	wmFetcher.fetcherMap = vertexToFetchersMap
 	return wmFetcher, nil
 }
 
-func createWatermarkFetcher(ctx context.Context, pipelineName string, fromBufferName string, vertexName string) (fetch.Fetcher, error) {
-	hbBucket := isbsvc.JetStreamProcessorBucket(pipelineName, fromBufferName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucket, jsclient.NewInClusterJetStreamClient())
+// Create a watermark fetcher to fetch watermark from a buffer.
+func createWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
+	hbBucketName := isbsvc.JetStreamProcessorBucket(pipelineName, bufferName)
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, err
 	}
-	otBucket := isbsvc.JetStreamOTBucket(pipelineName, fromBufferName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucket, jsclient.NewInClusterJetStreamClient())
+	otBucketName := isbsvc.JetStreamOTBucket(pipelineName, bufferName)
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucketName, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, err
 	}
-	fetchWatermark := generic.NewGenericEdgeFetch(ctx, vertexName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+	fetchWatermark := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
 	return fetchWatermark, nil
 }
 
@@ -99,7 +93,7 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	retTrue := true
 
 	// If watermark is not enabled, return time zero
-	if !ps.vertexWatermark.isWatermarkEnabled {
+	if ps.pipeline.Spec.Watermark.Disabled {
 		timeZero := time.Unix(0, 0).Unix()
 		v := &daemon.VertexWatermark{
 			Pipeline:           &ps.pipeline.Name,
@@ -112,19 +106,26 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	}
 
 	// Watermark is enabled
-	vertexFetcher, ok := ps.vertexWatermark.fetchMap[vertexName]
+	vertexFetchers, ok := ps.vertexWatermark.fetcherMap[vertexName]
+
 	// Vertex not found
 	if !ok {
-		log.Errorf("watermark fetcher not available for vertex %s in the fetcher map", vertexName)
+		log.Errorf("watermark fetchers not available for vertex %s in the fetcher map", vertexName)
 		return nil, fmt.Errorf("watermark not available for given vertex, %s", vertexName)
 	}
 
-	vertexWatermark := vertexFetcher.GetHeadWatermark().Unix()
+	var latestWatermark = int64(-1)
+	for _, fetcher := range vertexFetchers {
+		watermark := fetcher.GetHeadWatermark().Unix()
+		if watermark > latestWatermark {
+			latestWatermark = watermark
+		}
+	}
 
 	v := &daemon.VertexWatermark{
 		Pipeline:           &ps.pipeline.Name,
 		Vertex:             request.Vertex,
-		Watermark:          &vertexWatermark,
+		Watermark:          &latestWatermark,
 		IsWatermarkEnabled: &retTrue,
 	}
 	resp.VertexWatermark = v

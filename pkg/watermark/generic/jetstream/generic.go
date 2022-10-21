@@ -102,10 +102,10 @@ func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.Ve
 	}
 
 	// OT
-	otStoreBucket := isbsvc.JetStreamOTBucket(pipelineName, sourceBufferName)
-	otKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucket, jsclient.NewInClusterJetStreamClient())
+	otStoreBucketName := isbsvc.JetStreamOTBucket(pipelineName, sourceBufferName)
+	otKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucketName, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
-		return nil, fmt.Errorf("failed at new OT KVJetStreamKVStore for source, OTBucket: %s, %w", otStoreBucket, err)
+		return nil, fmt.Errorf("failed at new OT KVJetStreamKVStore for source, OTBucket: %s, %w", otStoreBucketName, err)
 	}
 	sourcePublishStores := store.BuildWatermarkStore(hbKVStore, otKVStore)
 	return sourcePublishStores, nil

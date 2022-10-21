@@ -7,8 +7,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// NewGenericEdgeFetch returns a Fetcher, where bufferName is the from buffer of the vertex that is currently processing.
-// fetcher is an interface for retrieving both the heartbeat and the offset watermark timeline (Vn-1 vertex).
+// NewGenericEdgeFetch returns a Fetcher, which fetches watermarks from bufferName by consulting the corresponding storeWatcher
 func NewGenericEdgeFetch(ctx context.Context, bufferName string, storeWatcher store.WatermarkStoreWatcher) fetch.Fetcher {
 	processorManager := fetch.NewProcessorManager(ctx, storeWatcher)
 	return fetch.NewEdgeFetcher(ctx, bufferName, processorManager)
