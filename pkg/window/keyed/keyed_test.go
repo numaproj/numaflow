@@ -1,6 +1,7 @@
 package keyed
 
 import (
+	"sort"
 	"testing"
 	"time"
 
@@ -45,6 +46,7 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 				kw.AddKey(k)
 			}
 			kw.AddKey(tt.input)
+			assert.Equal(t, len(tt.expectedKeys), len(kw.Keys))
 			for k := range tt.expectedKeys {
 				_, ok := kw.Keys[k]
 				assert.True(t, ok)
@@ -73,7 +75,7 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 		{
 			name: "with_some_existing_keys",
 			given: &KeyedWindow{
-				Keys: map[string]string{"key2": "key2", "key3": "key3"},
+				Keys: map[string]string{"key2": "key2", "key3": "key3", "key4": "key4"},
 			},
 			expected: []partition.ID{
 				{
@@ -86,6 +88,11 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 					Start: time.Unix(60, 0),
 					End:   time.Unix(120, 0),
 				},
+				{
+					Key:   "key4",
+					Start: time.Unix(60, 0),
+					End:   time.Unix(120, 0),
+				},
 			},
 		},
 	}
@@ -94,6 +101,11 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			kw.Keys = tt.given.Keys
 			ret := kw.Partitions()
+			// the kw.Keys is a map so the order of the output is random
+			// use sort to sort the ret array by key
+			sort.Slice(ret, func(i int, j int) bool {
+				return ret[i].Key < ret[j].Key
+			})
 			for idx, s := range tt.expected {
 				assert.EqualValues(t, ret[idx], s)
 			}

@@ -64,7 +64,8 @@ type WatermarkKVEntry interface {
 
 // WatermarkKVWatcher watches the KV bucket for watermark progression.
 type WatermarkKVWatcher interface {
-	Watch(context.Context) <-chan WatermarkKVEntry
+	// Watch starts the watermark kv watcher and returns a kv updates channel and a watcher stopped channel.
+	Watch(context.Context) (<-chan WatermarkKVEntry, <-chan struct{})
 	GetKVName() string
 	Close()
 }
