@@ -36,6 +36,7 @@ func (s status) String() string {
 // ProcessorToFetch is the smallest unit of entity (from which we fetch data) that does inorder processing or contains inorder data.
 type ProcessorToFetch struct {
 	ctx            context.Context
+	cancel         context.CancelFunc
 	entity         processor.ProcessorEntitier
 	status         status
 	offsetTimeline *OffsetTimeline
@@ -50,8 +51,10 @@ func (p *ProcessorToFetch) String() string {
 
 // NewProcessorToFetch creates ProcessorToFetch.
 func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntitier, capacity int, watcher store.WatermarkKVWatcher) *ProcessorToFetch {
+	ctx, cancel := context.WithCancel(ctx)
 	p := &ProcessorToFetch{
 		ctx:            ctx,
+		cancel:         cancel,
 		entity:         processor,
 		status:         _active,
 		offsetTimeline: NewOffsetTimeline(ctx, capacity),
@@ -95,12 +98,18 @@ func (p *ProcessorToFetch) IsDeleted() bool {
 	return p.status == _deleted
 }
 
+func (p *ProcessorToFetch) stopTimeLineWatcher() {
+	p.cancel()
+}
+
 func (p *ProcessorToFetch) startTimeLineWatcher() {
-	watchCh := p.otWatcher.Watch(p.ctx)
+	watchCh, stopped := p.otWatcher.Watch(p.ctx)
+
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.otWatcher.Close()
+		case <-stopped:
+			// no need to close ot watcher here because the ot watcher is shared for the given vertex
+			// the parent ctx will close the ot watcher
 			return
 		case value := <-watchCh:
 			// TODO: why will value will be nil?
@@ -131,6 +140,5 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 				// skip
 			}
 		}
-
 	}
 }
