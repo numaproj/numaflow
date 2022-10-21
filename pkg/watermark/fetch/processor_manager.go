@@ -18,10 +18,13 @@ import (
 // ProcessorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor). The code is running on Vn vertex.
 // It has the mapping of all the processors which in turn has all the information about each processor timelines.
 type ProcessorManager struct {
-	ctx        context.Context
-	hbWatcher  store.WatermarkKVWatcher
-	otWatcher  store.WatermarkKVWatcher
-	heartbeat  *ProcessorHeartbeat
+	ctx       context.Context
+	hbWatcher store.WatermarkKVWatcher
+	otWatcher store.WatermarkKVWatcher
+	// heartbeat just tracks the heartbeat of each processing unit. we use it to mark a processing unit's status (e.g, inactive)
+	heartbeat *ProcessorHeartbeat
+	// processors has reference to the actual processing unit (ProcessorEntity) which includes offset timeline which is
+	// used for tracking watermark.
 	processors map[string]*ProcessorToFetch
 	lock       sync.RWMutex
 	log        *zap.SugaredLogger
@@ -73,7 +76,6 @@ func (v *ProcessorManager) GetProcessor(processor string) *ProcessorToFetch {
 }
 
 // DeleteProcessor deletes a processor.
-// Note: This operation is not used anywhere ATM.
 func (v *ProcessorManager) DeleteProcessor(processor string) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -118,7 +120,16 @@ func (v *ProcessorManager) refreshingProcessors() {
 		}
 		// default heartbeat rate is every 5 seconds
 		// TODO: tolerance?
-		if time.Now().Unix()-pTime > v.opts.podHeartbeatRate {
+		if time.Now().Unix()-pTime > 10*v.opts.podHeartbeatRate {
+			// if the pod doesn't come back after 10 heartbeats,
+			// it's possible the pod has exited unexpectedly, so we need to delete the pod
+			// NOTE: the pod entry still remains in the heartbeat store (bucket)
+			// TODO: how to delete the pod from the heartbeat store?
+			v.log.Infow("Processor has been inactive for 10 heartbeats, deleting...", zap.String("key", pName), zap.String(pName, p.String()))
+			p.setStatus(_deleted)
+			p.stopTimeLineWatcher()
+			v.heartbeat.Delete(pName)
+		} else if time.Now().Unix()-pTime > v.opts.podHeartbeatRate {
 			// if the pod's last heartbeat is greater than podHeartbeatRate
 			// then the pod is not considered as live
 			p.setStatus(_inactive)
@@ -133,10 +144,13 @@ func (v *ProcessorManager) refreshingProcessors() {
 // startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
 func (v *ProcessorManager) startHeatBeatWatcher() {
-	watchCh := v.hbWatcher.Watch(v.ctx)
+	watchCh, stopped := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {
-		case <-v.ctx.Done():
+		case <-stopped:
+			// main process exit
+			// close both watcher
+			v.otWatcher.Close()
 			v.hbWatcher.Close()
 			return
 		case value := <-watchCh:
@@ -176,6 +190,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				} else {
 					v.log.Infow("Deleting", zap.String("key", value.Key()), zap.String(value.Key(), p.String()))
 					p.setStatus(_deleted)
+					p.stopTimeLineWatcher()
 					v.heartbeat.Delete(value.Key())
 				}
 			case store.KVPurge:

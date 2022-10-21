@@ -37,10 +37,11 @@ func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, 
 }
 
 // Watch watches the key-value store.
-func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
+func (k *inMemWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
 	// create a new updates channel and fill in the history
 	var id = util.RandomString(10)
 	var updates = make(chan store.WatermarkKVEntry)
+	var stopped = make(chan struct{})
 
 	// for new updates channel initialization
 	go func() {
@@ -63,6 +64,7 @@ func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 				delete(k.updatesChMap, id)
 				close(updates)
 				k.lock.Unlock()
+				close(stopped)
 				return
 			case value := <-k.kvEntryCh:
 				k.log.Debug(value.Key(), value.Value(), value.Operation())
@@ -75,7 +77,7 @@ func (k *inMemWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
 			}
 		}
 	}()
-	return updates
+	return updates, stopped
 }
 
 // GetKVName returns the KV store (bucket) name.

@@ -16,9 +16,15 @@ func NewKVOpWatch() store.WatermarkKVWatcher {
 }
 
 // Watch returns a blocking channel.
-func (no noOpWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
+func (no noOpWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
 	retChan := make(chan store.WatermarkKVEntry)
-	return retChan
+	stopped := make(chan struct{})
+	go func() {
+		<-ctx.Done()
+		close(retChan)
+		close(stopped)
+	}()
+	return retChan, stopped
 }
 
 func (no noOpWatch) GetKVName() string {
