@@ -111,6 +111,8 @@ func (u *udsGRPCBasedUDF) Reduce(ctx context.Context, partitionID *partition.ID,
 	var result []*functionpb.Datum
 	var err error
 
+	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: partitionID.Key}))
+
 	// invoke the reduceFn method with datumCh channel
 	wg.Add(1)
 	go func() {
