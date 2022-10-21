@@ -62,6 +62,7 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 	var err error
 
 	// FIXME: we need to fix https://github.com/numaproj/numaflow-go/blob/main/pkg/function/service.go#L101
+	// blocking call, only returns the result after it has read all the messages from pbq
 	p.result, err = p.UDF.Reduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 	return err
 }

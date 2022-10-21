@@ -386,7 +386,7 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 
 	var pm = fetch.NewProcessorManager(ctx, wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), fetch.WithPodHeartbeatRate(1), fetch.WithRefreshingProcessorsRate(1), fetch.WithSeparateOTBuckets(false))
-	var f = fetch.NewEdgeFetcher(ctx, "from", pm)
+	var f = fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), pm)
 	return f, publishers
 }
 
