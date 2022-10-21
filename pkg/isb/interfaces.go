@@ -88,7 +88,7 @@ func (so SimpleStringOffset) AckIt() error {
 	return nil
 }
 
-// SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a string.
+// SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
 type SimpleIntOffset func() int64
 
 func (si SimpleIntOffset) String() string {
