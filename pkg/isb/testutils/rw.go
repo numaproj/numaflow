@@ -50,7 +50,7 @@ func BuildTestReadMessages(count int64, startTime time.Time) []isb.ReadMessage {
 	for idx, writeMessage := range writeMessages {
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
-			ReadOffset: isb.SimpleOffset(func() string { return fmt.Sprintf("read_%s", writeMessage.Header.ID) }),
+			ReadOffset: isb.SimpleStringOffset(func() string { return fmt.Sprintf("read_%s", writeMessage.Header.ID) }),
 		}
 	}
 
