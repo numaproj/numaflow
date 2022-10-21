@@ -251,13 +251,14 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
-	for _, offsets := range writeOffsets {
-		for _, publisher := range isdf.publishWatermark {
+	for bufferName, offsets := range writeOffsets {
+		if publisher, ok := isdf.publishWatermark[bufferName]; ok {
 			if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeUDF {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
+				// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)
 			} else { // For Sink vertex, and it does not care about the offset during watermark publishing
 				publisher.PublishWatermark(processorWM, nil)
 			}
