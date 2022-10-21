@@ -147,8 +147,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 	watchCh, stopped := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {
-		case <-v.ctx.Done():
-			<-stopped
+		case <-stopped:
 			// main process exit
 			// close both watcher
 			v.otWatcher.Close()

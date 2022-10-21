@@ -107,10 +107,9 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 
 	for {
 		select {
-		case <-p.ctx.Done():
+		case <-stopped:
 			// no need to close ot watcher here because the ot watcher is shared for the given vertex
 			// the parent ctx will close the ot watcher
-			<-stopped
 			return
 		case value := <-watchCh:
 			// TODO: why will value will be nil?
