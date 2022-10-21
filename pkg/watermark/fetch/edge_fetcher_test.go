@@ -74,7 +74,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 			name:             "offset_9",
 			processorManager: processorManager,
 			args:             args{9},
-			want:             time.Time{}.Unix(),
+			want:             -1,
 		},
 		{
 			name:             "offset_15",

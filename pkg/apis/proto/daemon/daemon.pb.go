@@ -796,7 +796,7 @@ type DaemonServiceClient interface {
 	ListBuffers(ctx context.Context, in *ListBuffersRequest, opts ...grpc.CallOption) (*ListBuffersResponse, error)
 	GetBuffer(ctx context.Context, in *GetBufferRequest, opts ...grpc.CallOption) (*GetBufferResponse, error)
 	GetVertexMetrics(ctx context.Context, in *GetVertexMetricsRequest, opts ...grpc.CallOption) (*GetVertexMetricsResponse, error)
-	// GetVertexWatermark return the watermark of the given vertex based on the incoming edge buffer
+	// GetVertexWatermark return the watermark of the given vertex.
 	GetVertexWatermark(ctx context.Context, in *GetVertexWatermarkRequest, opts ...grpc.CallOption) (*GetVertexWatermarkResponse, error)
 }
 
@@ -849,7 +849,7 @@ type DaemonServiceServer interface {
 	ListBuffers(context.Context, *ListBuffersRequest) (*ListBuffersResponse, error)
 	GetBuffer(context.Context, *GetBufferRequest) (*GetBufferResponse, error)
 	GetVertexMetrics(context.Context, *GetVertexMetricsRequest) (*GetVertexMetricsResponse, error)
-	// GetVertexWatermark return the watermark of the given vertex based on the incoming edge buffer
+	// GetVertexWatermark return the watermark of the given vertex.
 	GetVertexWatermark(context.Context, *GetVertexWatermarkRequest) (*GetVertexWatermarkResponse, error)
 }
 
