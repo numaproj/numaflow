@@ -96,7 +96,7 @@ func (k kvEntry) Operation() store.KVWatchOp {
 }
 
 // Watch watches the key-value store (aka bucket).
-func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
+func (k *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
 	kvWatcher, err := k.kv.WatchAll()
 	for err != nil {
 		k.log.Errorw("WatchAll failed", zap.String("watcher", k.GetKVName()), zap.Error(err))
@@ -105,6 +105,7 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 	}
 
 	var updates = make(chan store.WatermarkKVEntry)
+	var stopped = make(chan struct{})
 	go func() {
 		for {
 			select {
@@ -118,6 +119,7 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 					k.log.Infow("WatchAll successfully stopped", zap.String("watcher", k.GetKVName()))
 				}
 				close(updates)
+				close(stopped)
 				return
 			case value := <-kvWatcher.Updates():
 				// if channel is closed, nil could come in
@@ -144,7 +146,7 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 			}
 		}
 	}()
-	return updates
+	return updates, stopped
 }
 
 // GetKVName returns the KV store (bucket) name.

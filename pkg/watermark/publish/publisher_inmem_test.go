@@ -35,12 +35,12 @@ func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 	var epoch int64 = 1651161600
 	var location, _ = time.LoadLocation("UTC")
 	for i := 0; i < 3; i++ {
-		p.PublishWatermark(processor.Watermark(time.Unix(epoch, 0).In(location)), isb.SimpleOffset(func() string { return strconv.Itoa(i) }))
+		p.PublishWatermark(processor.Watermark(time.Unix(epoch, 0).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
 		epoch += 60
 		time.Sleep(time.Millisecond)
 	}
 	// publish a stale watermark (offset doesn't matter)
-	p.PublishWatermark(processor.Watermark(time.Unix(epoch-120, 0).In(location)), isb.SimpleOffset(func() string { return strconv.Itoa(0) }))
+	p.PublishWatermark(processor.Watermark(time.Unix(epoch-120, 0).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
 
 	keys := p.getAllOTKeysFromBucket()
 	assert.Equal(t, []string{"publisherTestPod1_1651161600", "publisherTestPod1_1651161660", "publisherTestPod1_1651161720"}, keys)
@@ -74,12 +74,12 @@ func TestPublisherWithSeparateOTBucket_InMem(t *testing.T) {
 	var epoch int64 = 1651161600
 	var location, _ = time.LoadLocation("UTC")
 	for i := 0; i < 3; i++ {
-		p.PublishWatermark(processor.Watermark(time.Unix(epoch, 0).In(location)), isb.SimpleOffset(func() string { return strconv.Itoa(i) }))
+		p.PublishWatermark(processor.Watermark(time.Unix(epoch, 0).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
 		epoch += 60
 		time.Sleep(time.Millisecond)
 	}
 	// publish a stale watermark (offset doesn't matter)
-	p.PublishWatermark(processor.Watermark(time.Unix(epoch-120, 0).In(location)), isb.SimpleOffset(func() string { return strconv.Itoa(0) }))
+	p.PublishWatermark(processor.Watermark(time.Unix(epoch-120, 0).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
 
 	keys := p.getAllOTKeysFromBucket()
 	assert.Equal(t, []string{"1651161600", "1651161660", "1651161720"}, keys)
