@@ -13,3 +13,10 @@ patches:
     target:
       kind: Deployment
       name: numaflow-controller
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --namespaced
+    target:
+      kind: Deployment
+      name: numaflow-server

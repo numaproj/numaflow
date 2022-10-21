@@ -20,12 +20,15 @@ var (
 	}
 )
 
-func Start(insecure bool, port int) {
+func Start(insecure bool, port int, namespaced bool, managedNamespace string) {
 	logger := logging.NewLogger().Named("server")
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.RedirectTrailingSlash = true
 	router.Use(static.Serve("/", static.LocalFile("./ui/build", true)))
+	if namespaced {
+		router.Use(Namespace(managedNamespace))
+	}
 	routes.Routes(router)
 	router.Use(UrlRewrite(router))
 	server := http.Server{
@@ -67,6 +70,13 @@ func UrlRewrite(r *gin.Engine) gin.HandlerFunc {
 			c.Request.URL.Path = "/"
 			r.HandleContext(c)
 		}
+		c.Next()
+	}
+}
+
+func Namespace(ns string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set("namespace", ns)
 		c.Next()
 	}
 }

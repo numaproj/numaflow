@@ -85,7 +85,8 @@ func (h *handler) GetPipeline(c *gin.Context) {
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
-	l, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
+	ns := c.GetString("namespace")
+	l, err := h.numaflowClient.Pipelines(ns).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
