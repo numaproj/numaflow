@@ -18,10 +18,13 @@ import (
 // ProcessorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor). The code is running on Vn vertex.
 // It has the mapping of all the processors which in turn has all the information about each processor timelines.
 type ProcessorManager struct {
-	ctx        context.Context
-	hbWatcher  store.WatermarkKVWatcher
-	otWatcher  store.WatermarkKVWatcher
-	heartbeat  *ProcessorHeartbeat
+	ctx       context.Context
+	hbWatcher store.WatermarkKVWatcher
+	otWatcher store.WatermarkKVWatcher
+	// heartbeat just tracks the heartbeat of each processing unit. we use it to mark a processing unit's status (e.g, inactive)
+	heartbeat *ProcessorHeartbeat
+	// processors has reference to the actual processing unit (ProcessorEntity) which includes offset timeline which is
+	// used for tracking watermark.
 	processors map[string]*ProcessorToFetch
 	lock       sync.RWMutex
 	log        *zap.SugaredLogger
