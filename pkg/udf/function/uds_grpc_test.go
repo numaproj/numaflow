@@ -14,6 +14,7 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
@@ -284,7 +285,13 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			close(messageCh)
 		}()
 
-		got, err := u.Reduce(ctx, nil, messageCh)
+		partitionID := &partition.ID{
+			Start: time.Unix(60, 0),
+			End:   time.Unix(120, 0),
+			Key:   "test",
+		}
+
+		got, err := u.Reduce(ctx, partitionID, messageCh)
 
 		assert.Len(t, got, 1)
 		assert.NoError(t, err)
@@ -329,7 +336,13 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			close(messageCh)
 		}()
 
-		_, err := u.Reduce(ctx, nil, messageCh)
+		partitionID := &partition.ID{
+			Start: time.Unix(60, 0),
+			End:   time.Unix(120, 0),
+			Key:   "test",
+		}
+
+		_, err := u.Reduce(ctx, partitionID, messageCh)
 
 		assert.ErrorIs(t, err, ApplyUDFErr{
 			UserUDFErr: false,
@@ -366,7 +379,12 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		messageCh := make(chan *isb.ReadMessage)
 
-		_, err := u.Reduce(ctx, nil, messageCh)
+		partitionID := &partition.ID{
+			Start: time.Unix(60, 0),
+			End:   time.Unix(120, 0),
+			Key:   "test",
+		}
+		_, err := u.Reduce(ctx, partitionID, messageCh)
 
 		assert.Error(t, err, ctx.Err())
 	})
@@ -430,7 +448,13 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 
 	u := NewMockUDSGRPCBasedUDF(mockClient)
 
-	result, err := u.Reduce(ctx, nil, messageCh)
+	partitionID := &partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Key:   "test",
+	}
+
+	result, err := u.Reduce(ctx, partitionID, messageCh)
 
 	var resultPayload testutils.PayloadForTest
 	_ = json.Unmarshal(result[0].Payload, &resultPayload)
