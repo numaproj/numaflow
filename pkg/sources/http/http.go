@@ -147,7 +147,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 					Payload: msg,
 				},
 			},
-			ReadOffset: isb.SimpleOffset(func() string { return id }),
+			ReadOffset: isb.SimpleStringOffset(func() string { return id }),
 		}
 		h.messages <- m
 		w.WriteHeader(http.StatusNoContent)

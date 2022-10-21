@@ -101,7 +101,7 @@ func TestTimeline_GetEventTime(t1 *testing.T) {
 	}
 	for _, tt := range tests {
 		t1.Run(tt.name, func(t1 *testing.T) {
-			if got := tt.args.timeline.GetEventTime(isb.SimpleOffset(func() string { return strconv.FormatInt(tt.args.inputOffset, 10) })); got != tt.want {
+			if got := tt.args.timeline.GetEventTime(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.inputOffset, 10) })); got != tt.want {
 				t1.Errorf("GetEventTime() = %v, want %v", got, tt.want)
 			}
 		})
