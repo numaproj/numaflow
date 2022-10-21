@@ -326,8 +326,11 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 	if j.ContainerTemplate != nil {
 		spec.Template.Spec.Containers[0].Resources = j.ContainerTemplate.Resources
 	}
+	if j.ReloaderContainerTemplate != nil {
+		spec.Template.Spec.Containers[1].Resources = j.ReloaderContainerTemplate.Resources
+	}
 	if j.MetricsContainerTemplate != nil {
-		spec.Template.Spec.Containers[1].Resources = j.MetricsContainerTemplate.Resources
+		spec.Template.Spec.Containers[2].Resources = j.MetricsContainerTemplate.Resources
 	}
 	if j.Persistence != nil {
 		volMode := corev1.PersistentVolumeFilesystem

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestJetStreamGetStatefulSetSpec(t *testing.T) {
@@ -67,6 +68,23 @@ func TestJetStreamGetStatefulSetSpec(t *testing.T) {
 		spec := s.GetStatefulSetSpec(req)
 		assert.Equal(t, "config-volume", spec.Template.Spec.Volumes[1].Name)
 		assert.Equal(t, 7, len(spec.Template.Spec.Volumes[1].VolumeSource.Projected.Sources[1].Secret.Items))
+	})
+
+	t.Run("with container resources", func(t *testing.T) {
+		r := corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		}
+		s := &JetStreamBufferService{
+			ContainerTemplate:         &ContainerTemplate{Resources: r},
+			ReloaderContainerTemplate: &ContainerTemplate{Resources: r},
+			MetricsContainerTemplate:  &ContainerTemplate{Resources: r},
+		}
+		spec := s.GetStatefulSetSpec(req)
+		for _, c := range spec.Template.Spec.Containers {
+			assert.Equal(t, c.Resources, r)
+		}
 	})
 }
 
