@@ -297,7 +297,7 @@ func newreadmessage(payload []byte, offset int64) *isb.ReadMessage {
 	}
 
 	return &isb.ReadMessage{
-		ReadOffset: isb.SimpleOffset(func() string { return strconv.FormatInt(offset, 10) }),
+		ReadOffset: isb.SimpleIntOffset(func() int64 { return offset }),
 		Message:    msg,
 	}
 }

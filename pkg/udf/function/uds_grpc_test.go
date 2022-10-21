@@ -107,7 +107,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 					Payload: []byte(`forward_message`),
 				},
 			},
-			ReadOffset: isb.SimpleOffset(func() string { return "0" }),
+			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
 		assert.NoError(t, err)
@@ -151,7 +151,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 					Payload: []byte(`forward_message`),
 				},
 			},
-			ReadOffset: isb.SimpleOffset(func() string { return "0" }),
+			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
 		assert.ErrorIs(t, err, ApplyUDFErr{

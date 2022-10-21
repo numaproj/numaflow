@@ -73,17 +73,32 @@ type Offset interface {
 	AckIt() error
 }
 
-// SimpleOffset is an Offset convenient function for implementations without needing AckIt()
-type SimpleOffset func() string
+// SimpleStringOffset is an Offset convenient function for implementations without needing AckIt() when offset is a string.
+type SimpleStringOffset func() string
 
-func (so SimpleOffset) String() string {
+func (so SimpleStringOffset) String() string {
 	return so()
 }
 
-func (so SimpleOffset) Sequence() (int64, error) {
+func (so SimpleStringOffset) Sequence() (int64, error) {
 	return strconv.ParseInt(so(), 10, 64)
 }
 
-func (so SimpleOffset) AckIt() error {
+func (so SimpleStringOffset) AckIt() error {
+	return nil
+}
+
+// SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
+type SimpleIntOffset func() int64
+
+func (si SimpleIntOffset) String() string {
+	return strconv.FormatInt(si(), 10)
+}
+
+func (si SimpleIntOffset) Sequence() (int64, error) {
+	return si(), nil
+}
+
+func (si SimpleIntOffset) AckIt() error {
 	return nil
 }
