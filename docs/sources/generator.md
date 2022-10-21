@@ -9,7 +9,7 @@ metadata:
   name: simple-pipeline
 spec:
   vertices:
-    - name: input
+    - name: in
       source:
         generator:
           # How many messages to generate in the duration.
@@ -21,12 +21,12 @@ spec:
       udf:
         builtin:
           name: cat
-    - name: output
+    - name: out
       sink:
         log: {}
   edges:
-    - from: input
+    - from: in
       to: p1
     - from: p1
-      to: output
+      to: out
 ```
