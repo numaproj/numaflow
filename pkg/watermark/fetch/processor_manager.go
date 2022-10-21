@@ -125,7 +125,7 @@ func (v *ProcessorManager) refreshingProcessors() {
 			// it's possible the pod has exited unexpectedly, so we need to delete the pod
 			// NOTE: the pod entry still remains in the heartbeat store (bucket)
 			// TODO: how to delete the pod from the heartbeat store?
-			v.log.Infow("Deleting", zap.String("key", pName), zap.String(pName, p.String()))
+			v.log.Infow("Processor has been inactive for 10 heartbeats, deleting...", zap.String("key", pName), zap.String(pName, p.String()))
 			p.setStatus(_deleted)
 			p.stopTimeLineWatcher()
 			v.heartbeat.Delete(pName)
