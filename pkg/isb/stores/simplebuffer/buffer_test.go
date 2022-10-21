@@ -38,9 +38,9 @@ func TestNewSimpleBuffer(t *testing.T) {
 	// still full as we did not ack
 	assert.Equal(t, true, sb.IsFull())
 
-	err = sb.Ack(ctx, []isb.Offset{isb.SimpleOffset(func() string { return "not_a_number" })})[0]
+	err = sb.Ack(ctx, []isb.Offset{isb.SimpleStringOffset(func() string { return "not_a_number" })})[0]
 	assert.Error(t, err)
-	err = sb.Ack(ctx, []isb.Offset{isb.SimpleOffset(func() string { return "1000" })})[0]
+	err = sb.Ack(ctx, []isb.Offset{isb.SimpleStringOffset(func() string { return "1000" })})[0]
 	assert.Error(t, err)
 
 	errs := sb.Ack(ctx, []isb.Offset{readMessages[0].ReadOffset, readMessages[1].ReadOffset})

@@ -367,7 +367,7 @@ func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
 	}
 
 	return &isb.ReadMessage{
-		ReadOffset: isb.SimpleOffset(func() string { return offset }),
+		ReadOffset: isb.SimpleStringOffset(func() string { return offset }),
 		Message:    msg,
 	}
 }

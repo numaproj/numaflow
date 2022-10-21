@@ -112,8 +112,8 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			errs[idx] = nil
 			b.buffer[currentIdx].dirty = true
 			b.writeIdx = (currentIdx + 1) % b.size
-			writeOffsets = append(writeOffsets, isb.SimpleOffset(func() string {
-				return fmt.Sprintf("%d", currentIdx)
+			writeOffsets = append(writeOffsets, isb.SimpleIntOffset(func() int64 {
+				return currentIdx
 			}))
 			// access buffer via lock
 			b.rwlock.Unlock()
@@ -176,7 +176,7 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 			}
 		}
 
-		readMessage := isb.ReadMessage{Message: msg, ReadOffset: isb.SimpleOffset(func() string { return strconv.Itoa(int(currentIdx)) })}
+		readMessage := isb.ReadMessage{Message: msg, ReadOffset: isb.SimpleIntOffset(func() int64 { return currentIdx })}
 
 		readMessages = append(readMessages, &readMessage)
 	}

@@ -299,7 +299,7 @@ func (br *BufferRead) convertXStreamToMessages(xstreams []redis.XStream, message
 				}
 				readMessage := isb.ReadMessage{
 					Message:    msg,
-					ReadOffset: isb.SimpleOffset(func() string { return readOffset }),
+					ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
 				}
 				messages = append(messages, &readMessage)
 			}
