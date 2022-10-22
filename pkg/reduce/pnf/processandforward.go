@@ -161,10 +161,10 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 	}
 
 	// write to isb with infinite exponential backoff (until shutdown is triggered)
-	var failedMessages []isb.Message
 	var offsets []isb.Offset
 	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
 		var writeErrs []error
+		var failedMessages []isb.Message
 		offsets, writeErrs = p.toBuffers[bufferID].Write(ctx, resultMessages)
 		for i, message := range resultMessages {
 			if writeErrs[i] != nil {
@@ -173,6 +173,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		}
 		// retry only the failed messages
 		if len(failedMessages) > 0 {
+			p.log.Warnw("Failed to write messages to isb inside pnf", zap.Errors("errors", writeErrs))
 			resultMessages = failedMessages
 			return false, nil
 		}
