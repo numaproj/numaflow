@@ -21,8 +21,8 @@ func (w Watermark) String() string {
 	return t.Format(time.RFC3339)
 }
 
-func (w Watermark) Unix() int64 {
-	return time.Time(w).Unix()
+func (w Watermark) UnixMilli() int64 {
+	return time.Time(w).UnixMilli()
 }
 
 func (w Watermark) After(t time.Time) bool {
@@ -96,9 +96,9 @@ func (p *ProcessorEntity) IsOTBucketShared() bool {
 // BuildOTWatcherKey builds the offset-timeline key name
 func (p *ProcessorEntity) BuildOTWatcherKey(watermark Watermark) string {
 	if p.opts.separateOTBucket {
-		return fmt.Sprintf("%d", watermark.Unix())
+		return fmt.Sprintf("%d", watermark.UnixMilli())
 	} else {
-		return fmt.Sprintf("%s%s%d", p.GetID(), p.opts.keySeparator, watermark.Unix())
+		return fmt.Sprintf("%s%s%d", p.GetID(), p.opts.keySeparator, watermark.UnixMilli())
 	}
 }
 

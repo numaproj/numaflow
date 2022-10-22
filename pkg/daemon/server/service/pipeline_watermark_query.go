@@ -116,7 +116,7 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 
 	var latestWatermark = int64(-1)
 	for _, fetcher := range vertexFetchers {
-		watermark := fetcher.GetHeadWatermark().Unix()
+		watermark := fetcher.GetHeadWatermark().UnixMilli()
 		if watermark > latestWatermark {
 			latestWatermark = watermark
 		}

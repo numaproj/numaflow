@@ -23,7 +23,7 @@ import (
 func TestFetcherWithSameOTBucket(t *testing.T) {
 	var (
 		keyspace         = "fetcherTest"
-		epoch      int64 = 1651161600
+		epoch      int64 = 1651161600000
 		testOffset int64 = 100
 		wg         sync.WaitGroup
 	)
@@ -87,7 +87,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	binary.LittleEndian.PutUint64(b, uint64(testOffset))
 	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
 	assert.NoError(t, err)
-	epoch += 60
+	epoch += 60000
 	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
 	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
 	assert.NoError(t, err)

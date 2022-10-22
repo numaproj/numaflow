@@ -28,13 +28,15 @@ type Publisher interface {
 
 // publish publishes the watermark for a processor entity.
 type publish struct {
-	ctx            context.Context
-	entity         processor.ProcessorEntitier
+	ctx    context.Context
+	entity processor.ProcessorEntitier
+	// heartbeatStore uses second as the time unit for the value
 	heartbeatStore store.WatermarkKVStorer
-	otStore        store.WatermarkKVStorer
-	log            *zap.SugaredLogger
-	headWatermark  processor.Watermark
-	opts           *publishOptions
+	// osStore uses millisecond as the time unit for the value
+	otStore       store.WatermarkKVStorer
+	log           *zap.SugaredLogger
+	headWatermark processor.Watermark
+	opts          *publishOptions
 }
 
 // NewPublish returns `Publish`.

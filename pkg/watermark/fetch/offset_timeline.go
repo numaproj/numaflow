@@ -147,10 +147,10 @@ func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
 func (t *OffsetTimeline) GetEventTime(inputOffset isb.Offset) int64 {
 	// TODO: handle err?
 	inputOffsetInt64, _ := inputOffset.Sequence()
-	return t.GetEventtimeFromInt64(inputOffsetInt64)
+	return t.GetEventTimeFromInt64(inputOffsetInt64)
 }
 
-func (t *OffsetTimeline) GetEventtimeFromInt64(inputOffsetInt64 int64) int64 {
+func (t *OffsetTimeline) GetEventTimeFromInt64(inputOffsetInt64 int64) int64 {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 

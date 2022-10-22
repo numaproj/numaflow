@@ -43,9 +43,9 @@ func (e *sourceFetcher) GetHeadWatermark() processor.Watermark {
 	}
 	if epoch == math.MinInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return processor.Watermark(time.Unix(-1, 0))
+		return processor.Watermark(time.UnixMilli(-1))
 	}
-	return processor.Watermark(time.Unix(epoch, 0))
+	return processor.Watermark(time.UnixMilli(epoch))
 }
 
 // GetWatermark returns the lowest of the latest watermark of all the processors,
@@ -63,5 +63,5 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) processor.Watermark {
 	if epoch == math.MaxInt64 {
 		epoch = -1
 	}
-	return processor.Watermark(time.Unix(epoch, 0))
+	return processor.Watermark(time.UnixMilli(epoch))
 }

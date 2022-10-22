@@ -1,7 +1,9 @@
 package fetch
 
 type processorManagerOptions struct {
-	podHeartbeatRate         int64
+	// podHeartbeatRate uses second as time unit
+	podHeartbeatRate int64
+	// refreshingProcessorsRate uses second as time unit
 	refreshingProcessorsRate int64
 	separateOTBucket         bool
 }

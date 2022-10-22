@@ -18,7 +18,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// udsGRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
+// udsGRPCBasedUDF applies user defined function over gRPC (over UnixMilli Domain Socket) client/server where server is the UDF.
 type udsGRPCBasedUDF struct {
 	client functionsdk.Client
 }
