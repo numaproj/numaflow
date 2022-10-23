@@ -295,8 +295,9 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 		Steps:    math.MaxInt64,
 		Duration: time.Millisecond * 10,
 	}
+	var ackOffsets = offsets
 	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ackRetryBackOff, func() (done bool, err error) {
-		errs := isdf.fromBuffer.Ack(ctx, offsets)
+		errs := isdf.fromBuffer.Ack(ctx, ackOffsets)
 		summarizedErr := errorArrayToMap(errs)
 		var failedOffsets []isb.Offset
 
@@ -304,12 +305,12 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 			isdf.opts.logger.Errorw("failed to ack from buffer", zap.Any("errors", summarizedErr))
 
 			// retry only the failed offsets
-			for i, offset := range offsets {
+			for i, offset := range ackOffsets {
 				if errs[i] != nil {
 					failedOffsets = append(failedOffsets, offset)
 				}
 			}
-			offsets = failedOffsets
+			ackOffsets = failedOffsets
 			if ok, _ := isdf.IsShuttingDown(); ok {
 				ackErr := fmt.Errorf("ackFromBuffer, Stop called while stuck on an internal error, %v", summarizedErr)
 				return false, ackErr
