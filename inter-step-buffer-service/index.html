@@ -619,6 +619,20 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#external-redis" class="md-nav__link">
+    External Redis
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cluster-mode" class="md-nav__link">
+    Cluster Mode
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#version_1" class="md-nav__link">
     Version
   </a>
@@ -1457,6 +1471,20 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#external-redis" class="md-nav__link">
+    External Redis
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cluster-mode" class="md-nav__link">
+    Cluster Mode
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#version_1" class="md-nav__link">
     Version
   </a>
@@ -1614,7 +1642,27 @@ max_file_store: 1TB
 <h3 id="other-configuration">Other Configuration<a class="headerlink" href="#other-configuration" title="Permanent link">&para;</a></h3>
 <p>Check <a href="../APIs/#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">here</a> for the full spec of <code>spec.jetstream</code>.</p>
 <h2 id="redis">Redis<a class="headerlink" href="#redis" title="Permanent link">&para;</a></h2>
-<p><code>Redis</code> is supported as an <code>Inter-Step Buffer Service</code> implementation. A keyword <code>native</code> under <code>spec.redis</code> means several Redis nodes with a <a href="https://redis.io/topics/replication">Master-Replicas</a> topology will be created in the namespace.</p>
+<p><strong>NOTE</strong> Today when using Redis, the pipeline will stall if Redis has any data loss, especially during failovers.</p>
+<p><code>Redis</code> is supported as an <code>Inter-Step Buffer Service</code> implementation. A keyword <code>native</code> under <code>spec.redis</code> means several Redis nodes with a <a href="https://redis.io/topics/replication">Master-Replicas</a> topology will be created in the namespace.
+We also support external redis.</p>
+<h4 id="external-redis">External Redis<a class="headerlink" href="#external-redis" title="Permanent link">&para;</a></h4>
+<p>If you have a managed Redis, say in AWS, etc., we can make that Redis your ISB. All you need to do is provide the external Redis endpoint name.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span><span class="w"></span>
+<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span><span class="w"></span>
+<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">redis</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="nt">external</span><span class="p">:</span><span class="w"></span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;external</span><span class="nv"> </span><span class="s">redis&gt;&quot;</span><span class="w"></span>
+<span class="w">      </span><span class="nt">user</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;default&quot;</span><span class="w"></span>
+</code></pre></div>
+<h3 id="cluster-mode">Cluster Mode<a class="headerlink" href="#cluster-mode" title="Permanent link">&para;</a></h3>
+<p>We support <a href="https://redis.io/docs/reference/cluster-spec/">cluster mode</a>, only if the Redis is an external managed Redis. 
+You will have to enter the <code>url</code> twice to indicate that the mode is cluster. This is because we use <code>Universal Client</code> which 
+requires more than one address to indicate the Redis is in cluster mode.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;numaflow-redis-cluster-0.numaflow-redis-cluster-headless:6379,numaflow-redis-cluster-1.numaflow-redis-cluster-headless:6379&quot;</span><span class="w"></span>
+</code></pre></div>
 <h3 id="version_1">Version<a class="headerlink" href="#version_1" title="Permanent link">&para;</a></h3>
 <p>Property <code>spec.redis.native.version</code> is required for a <code>native</code> Redis <code>InterStepBufferService</code>. Supported versions can be found from the ConfigMap <code>numaflow-controller-config</code> in the control plane namespace.</p>
 <h3 id="replicas_1">Replicas<a class="headerlink" href="#replicas_1" title="Permanent link">&para;</a></h3>
