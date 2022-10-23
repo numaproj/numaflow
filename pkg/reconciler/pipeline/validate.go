@@ -133,5 +133,29 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if min > max {
 		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
 	}
+	if v.Source != nil && v.Source.Generator != nil {
+		if err := validateGenerator(v.Source.Generator); err != nil {
+			return fmt.Errorf("vertex %q: %s", v.Name, err.Error())
+		}
+	}
+	return nil
+}
+
+func validateGenerator(g *dfv1.GeneratorSource) error {
+	if g.RPU == nil {
+		return fmt.Errorf("generator rpu is not set")
+	} else if *g.RPU <= 0 {
+		return fmt.Errorf("generator rpu should not be smaller than 0")
+	}
+
+	if g.MsgSize == nil {
+		return fmt.Errorf("generator msgSize is not set")
+	} else if *g.MsgSize <= 0 {
+		return fmt.Errorf("generator msgSize should not be smaller than 0")
+	}
+
+	if g.Duration == nil {
+		return fmt.Errorf("generator duration is not set")
+	}
 	return nil
 }
