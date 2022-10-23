@@ -1,4 +1,4 @@
-// //go:build isb_jetstream
+//go:build isb_jetstream
 
 package fetch
 
