@@ -144,13 +144,13 @@ func validateVertex(v dfv1.AbstractVertex) error {
 func validateGenerator(g *dfv1.GeneratorSource) error {
 	if g.RPU == nil {
 		return fmt.Errorf("generator rpu is not set")
-	} else if *g.RPU <= 0 {
+	} else if *g.RPU < 0 {
 		return fmt.Errorf("generator rpu should not be smaller than 0")
 	}
 
 	if g.MsgSize == nil {
 		return fmt.Errorf("generator msgSize is not set")
-	} else if *g.MsgSize <= 0 {
+	} else if *g.MsgSize < 0 {
 		return fmt.Errorf("generator msgSize should not be smaller than 0")
 	}
 
