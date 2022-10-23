@@ -39,7 +39,6 @@ If there are multiple namespace scoped installations in one cluster, potentially
 
 *Be aware that the minimal CRD does not contain any default values that are present in the full CRD. Resources in the `examples` directory generally assume the full CRD is installed and therefore may not contain all fields necessary for clusters with the minimal CRD installed.*
 
-
 ```shell
 # Minimal CRD
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/config/advanced-install/minimal-crds.yaml
