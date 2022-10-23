@@ -136,6 +136,17 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 	src := sp.VertexInstance.Vertex.Spec.Source
 
 	if x := src.Generator; x != nil {
+		// generator fields can be nil if using minimal CRD that doesn't provide defaults
+		if x.RPU == nil {
+			return nil, fmt.Errorf("generator rpu is not set")
+		}
+		if x.MsgSize == nil {
+			return nil, fmt.Errorf("generator msgsize is not set")
+		}
+		if x.Duration == nil {
+			return nil, fmt.Errorf("generator duration is not set")
+		}
+
 		readOptions := []generator.Option{
 			generator.WithLogger(logger),
 		}

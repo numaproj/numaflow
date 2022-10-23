@@ -28,7 +28,7 @@ namespace: numaflow-system
 
 A namespace installation only watches and executes pipelines in the namespace it is installed (typically `numaflow-system`).
 
-Add an argument `--namespaced` to the `numaflow-controller` deployment to achieve namespace scope installation.
+Add an argument `--namespaced` to the `numaflow-controller` and `numaflow-server` deployments to achieve namespace scope installation.
 
 ```
       - args:
@@ -36,6 +36,9 @@ Add an argument `--namespaced` to the `numaflow-controller` deployment to achiev
 ```
 
 If there are multiple namespace scoped installations in one cluster, potentially there will be backward compatibility issue when any of the installation gets upgraded to a new version that has new CRD definition. To avoid this issue, we suggest to use minimal CRD definition for namespaced installation, which does not have detailed property definitions, thus no CRD changes between different versions.
+
+*Be aware that the minimal CRD does not contain any default values that are present in the full CRD. Resources in the `examples` directory generally assume the full CRD is installed and therefore may not contain all fields necessary for clusters with the minimal CRD installed.*
+
 
 ```shell
 # Minimal CRD
@@ -61,7 +64,7 @@ namespace: numaflow-system
 
 A managed namespace installation watches and executes pipelines in a specific namespace.
 
-To do managed namespace installation, besides `--namespaced`, add `--managed-namespace` and the specific namespace to the `numaflow-controller` deployment arguments.
+To do managed namespace installation, besides `--namespaced`, add `--managed-namespace` and the specific namespace to the `numaflow-controller` and `numaflow-server` deployment arguments.
 
 ```
       - args:
