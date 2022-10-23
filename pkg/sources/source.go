@@ -141,7 +141,7 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 			return nil, fmt.Errorf("generator rpu is not set")
 		}
 		if x.MsgSize == nil {
-			return nil, fmt.Errorf("generator msgsize is not set")
+			return nil, fmt.Errorf("generator msgSize is not set")
 		}
 		if x.Duration == nil {
 			return nil, fmt.Errorf("generator duration is not set")
