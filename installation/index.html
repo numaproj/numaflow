@@ -1338,7 +1338,7 @@
 </code></pre></div>
 <h2 id="namespace-scope">Namespace Scope<a class="headerlink" href="#namespace-scope" title="Permanent link">&para;</a></h2>
 <p>A namespace installation only watches and executes pipelines in the namespace it is installed (typically <code>numaflow-system</code>).</p>
-<p>Add an argument <code>--namespaced</code> to the <code>numaflow-controller</code> deployment to achieve namespace scope installation.</p>
+<p>Add an argument <code>--namespaced</code> to the <code>numaflow-controller</code> and <code>numaflow-server</code> deployments to achieve namespace scope installation.</p>
 <div class="highlight"><pre><span></span><code>      - args:
         - --namespaced
 </code></pre></div>
@@ -1360,7 +1360,7 @@ kubectl apply -n numaflow-system -f https://github.com/numaproj/numaflow/blob/ma
 </code></pre></div>
 <h2 id="managed-namespace-scope">Managed Namespace Scope<a class="headerlink" href="#managed-namespace-scope" title="Permanent link">&para;</a></h2>
 <p>A managed namespace installation watches and executes pipelines in a specific namespace.</p>
-<p>To do managed namespace installation, besides <code>--namespaced</code>, add <code>--managed-namespace</code> and the specific namespace to the <code>numaflow-controller</code> deployment arguments.</p>
+<p>To do managed namespace installation, besides <code>--namespaced</code>, add <code>--managed-namespace</code> and the specific namespace to the <code>numaflow-controller</code> and <code>numaflow-server</code> deployment arguments.</p>
 <div class="highlight"><pre><span></span><code>      - args:
         - --namespaced
         - --managed-namespace
