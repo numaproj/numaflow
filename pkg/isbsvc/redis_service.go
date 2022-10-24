@@ -3,8 +3,10 @@ package isbsvc
 import (
 	"context"
 	"fmt"
-
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
@@ -19,8 +21,11 @@ type isbsRedisSvc struct {
 }
 
 func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
-	// Watermark fetching is not supported for Redis ATM.
-	return nil, nil
+	// Watermark fetching is not supported for Redis ATM. Using no-op watchers.
+	hbWatcher := noop.NewKVOpWatch()
+	otWatcher := noop.NewKVOpWatch()
+	fetchWatermark := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
+	return fetchWatermark, nil
 }
 
 // NewISBRedisSvc is used to return a new object of type isbsRedisSvc
