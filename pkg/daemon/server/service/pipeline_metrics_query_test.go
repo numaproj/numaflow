@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"io"
 	"net/http"
 	"testing"
@@ -14,6 +13,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 type mockGetType func(url string) (*http.Response, error)

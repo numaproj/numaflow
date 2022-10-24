@@ -28,10 +28,9 @@ type metricsHttpClient interface {
 
 // pipelineMetadataQuery has the metadata required for the pipeline queries
 type pipelineMetadataQuery struct {
-	isbSvcClient isbsvc.ISBService
-	pipeline     *v1alpha1.Pipeline
-	httpClient   metricsHttpClient
-	// TODO - move vertexWatermark fetching to isbSvc implementation.
+	isbSvcClient    isbsvc.ISBService
+	pipeline        *v1alpha1.Pipeline
+	httpClient      metricsHttpClient
 	vertexWatermark *watermarkFetchers
 }
 

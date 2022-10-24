@@ -2,9 +2,9 @@ package isbsvc
 
 import (
 	"context"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 // ISBService is an interface used to do the operations on ISBSvc

@@ -19,8 +19,8 @@ type isbsRedisSvc struct {
 }
 
 func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
-	// Watermarking is not supported for Redis ATM.
-	panic("implement me")
+	// Watermark fetching is not supported for Redis ATM.
+	return nil, nil
 }
 
 // NewISBRedisSvc is used to return a new object of type isbsRedisSvc
