@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 )
 
 var (
@@ -27,6 +28,25 @@ var (
 		},
 	}
 )
+
+func Test_ListAllEdges(t *testing.T) {
+	es := testPipeline.ListAllEdges()
+	assert.Equal(t, 2, len(es))
+	assert.Nil(t, es[0].Parallelism)
+	assert.Nil(t, es[1].Parallelism)
+	pl := testPipeline.DeepCopy()
+	pl.Spec.Vertices[1].UDF.GroupBy = &GroupBy{}
+	es = pl.ListAllEdges()
+	assert.Equal(t, 2, len(es))
+	assert.NotNil(t, es[0].Parallelism)
+	assert.Equal(t, int32(1), *es[0].Parallelism)
+	assert.Nil(t, es[1].Parallelism)
+	pl.Spec.Edges[0].Parallelism = pointer.Int32(3)
+	es = pl.ListAllEdges()
+	assert.Equal(t, 2, len(es))
+	assert.NotNil(t, es[0].Parallelism)
+	assert.Equal(t, int32(3), *es[0].Parallelism)
+}
 
 func Test_GetToEdges(t *testing.T) {
 	es := testPipeline.GetToEdges("p1")
@@ -196,6 +216,13 @@ func Test_GetDownstreamEdges(t *testing.T) {
 			Namespace: "test-ns",
 		},
 		Spec: PipelineSpec{
+			Vertices: []AbstractVertex{
+				{Name: "input"},
+				{Name: "p1"},
+				{Name: "p2"},
+				{Name: "p11"},
+				{Name: "output"},
+			},
 			Edges: []Edge{
 				{From: "input", To: "p1"},
 				{From: "p1", To: "p11"},

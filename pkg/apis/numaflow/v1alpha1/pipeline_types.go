@@ -77,15 +77,18 @@ func (p Pipeline) GetVertex(vertexName string) *AbstractVertex {
 	return nil
 }
 
-// ListAllEdges returns a copy of all the edges
+// ListAllEdges returns a copy of all the edges.
 func (p Pipeline) ListAllEdges() []Edge {
 	edges := []Edge{}
 	for _, e := range p.Spec.Edges {
 		edgeCopy := e.DeepCopy()
 		toVertex := p.GetVertex(e.To)
 		if toVertex.UDF == nil || toVertex.UDF.GroupBy == nil {
-			// Clean up parallelism if downstream vertex is not a reduce UDF
+			// Clean up parallelism if downstream vertex is not a reduce UDF.
 			edgeCopy.Parallelism = nil
+		} else if edgeCopy.Parallelism == nil || *edgeCopy.Parallelism < 1 {
+			// Set parallelism = 1 if it's not set.
+			edgeCopy.Parallelism = pointer.Int32(1)
 		}
 		edges = append(edges, *edgeCopy)
 	}
