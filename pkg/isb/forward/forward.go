@@ -6,12 +6,14 @@ package forward
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -285,24 +287,45 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 }
 
 // ackFromBuffer acknowledges an array of offsets back to fromBuffer and is a blocking call or until shutdown has been initiated.
-func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) (err error) {
-	for {
-		errs := isdf.fromBuffer.Ack(ctx, offsets)
+func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) error {
+
+	var ackRetryBackOff = wait.Backoff{
+		Factor:   1,
+		Jitter:   0.1,
+		Steps:    math.MaxInt64,
+		Duration: time.Millisecond * 10,
+	}
+	var ackOffsets = offsets
+	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ackRetryBackOff, func() (done bool, err error) {
+		errs := isdf.fromBuffer.Ack(ctx, ackOffsets)
 		summarizedErr := errorArrayToMap(errs)
+		var failedOffsets []isb.Offset
+
 		if len(summarizedErr) > 0 {
 			isdf.opts.logger.Errorw("failed to ack from buffer", zap.Any("errors", summarizedErr))
-			// TODO: implement retry with backoff etc.
-			time.Sleep(isdf.opts.retryInterval)
-			if ok, _ := isdf.IsShuttingDown(); ok {
-				err := fmt.Errorf("ackFromBuffer, Stop called while stuck on an internal error, %v", summarizedErr)
-				return err
+
+			// retry only the failed offsets
+			for i, offset := range ackOffsets {
+				if errs[i] != nil {
+					failedOffsets = append(failedOffsets, offset)
+				}
 			}
-			// TODO: only retry failed ones.
+			ackOffsets = failedOffsets
+			if ok, _ := isdf.IsShuttingDown(); ok {
+				ackErr := fmt.Errorf("ackFromBuffer, Stop called while stuck on an internal error, %v", summarizedErr)
+				return false, ackErr
+			}
+			return false, nil
 		} else {
-			break
+			return true, nil
 		}
+	})
+
+	if ctxClosedErr != nil {
+		isdf.opts.logger.Errorw("Context closed while waiting to ack messages inside forward", zap.Error(ctxClosedErr))
 	}
-	return err
+
+	return ctxClosedErr
 }
 
 // writeToBuffers is a blocking call until all the messages have be forwarded to all the toBuffers, or a shutdown
