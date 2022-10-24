@@ -255,7 +255,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// TODO: sort and get the highest value
 	for bufferName, offsets := range writeOffsets {
 		if publisher, ok := isdf.publishWatermark[bufferName]; ok {
-			if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeUDF {
+			if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
+				isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
 				}
@@ -292,7 +293,7 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 	var ackRetryBackOff = wait.Backoff{
 		Factor:   1,
 		Jitter:   0.1,
-		Steps:    math.MaxInt64,
+		Steps:    math.MaxInt,
 		Duration: time.Millisecond * 10,
 	}
 	var ackOffsets = offsets

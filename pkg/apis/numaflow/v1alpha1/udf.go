@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Container struct {
@@ -36,7 +37,9 @@ type UDF struct {
 	// +optional
 	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
 	// +optional
-	Builtin *Function `json:"builtin" protobuf:"bytes,12,opt,name=builtin"`
+	Builtin *Function `json:"builtin" protobuf:"bytes,2,opt,name=builtin"`
+	// +optional
+	GroupBy *GroupBy `json:"groupBy" protobuf:"bytes,3,opt,name=groupBy"`
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, error) {
@@ -44,8 +47,12 @@ func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, error) {
 }
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
+	if in.GroupBy == nil {
+		return containerBuilder{}.
+			init(req).args("processor", "--type="+string(VertexTypeMapUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
+	}
 	return containerBuilder{}.
-		init(req).args("processor", "--type=udf", "--isbsvc-type="+string(req.isbSvcType)).build()
+		init(req).args("processor", "--type="+string(VertexTypeReduceUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
 func (in UDF) getUDFContainer(req getContainerReq) corev1.Container {
@@ -81,4 +88,22 @@ func (in UDF) getUDFContainer(req getContainerReq) corev1.Container {
 		}
 	}
 	return c.build()
+}
+
+// GroupBy indicates it is a reducer UDF
+type GroupBy struct {
+	Window Window `json:"window" protobuf:"bytes,1,opt,name=window"`
+	// +optional
+	Keyed bool `json:"keyed" protobuf:"bytes,2,opt,name=keyed"`
+}
+
+// Window describes windowing strategy
+type Window struct {
+	// +optional
+	Fixed *FixedWindow `json:"fixed" protobuf:"bytes,1,opt,name=fixed"`
+}
+
+// FixedWindow describes a fixed window
+type FixedWindow struct {
+	Length *metav1.Duration `json:"length,omitempty" protobuf:"bytes,1,opt,name=length"`
 }

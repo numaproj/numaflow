@@ -38,9 +38,10 @@ const (
 type VertexType string
 
 const (
-	VertexTypeSource VertexType = "Source"
-	VertexTypeSink   VertexType = "Sink"
-	VertexTypeUDF    VertexType = "UDF"
+	VertexTypeSource    VertexType = "Source"
+	VertexTypeSink      VertexType = "Sink"
+	VertexTypeMapUDF    VertexType = "MapUDF"
+	VertexTypeReduceUDF VertexType = "ReduceUDF"
 )
 
 // +genclient
@@ -72,15 +73,19 @@ func (v Vertex) IsASink() bool {
 	return v.Spec.Sink != nil
 }
 
-func (v Vertex) IsUDF() bool {
-	return v.Spec.Sink == nil && v.Spec.Source == nil
+func (v Vertex) IsMapUDF() bool {
+	return v.Spec.UDF != nil && v.Spec.UDF.GroupBy == nil
+}
+
+func (v Vertex) IsReduceUDF() bool {
+	return v.Spec.UDF != nil && v.Spec.UDF.GroupBy != nil
 }
 
 func (v Vertex) Scalable() bool {
-	if v.Spec.Scale.Disabled {
+	if v.Spec.Scale.Disabled || v.IsReduceUDF() {
 		return false
 	}
-	if v.IsASink() || v.IsUDF() {
+	if v.IsASink() || v.IsMapUDF() {
 		return true
 	}
 	if v.IsASource() {
@@ -283,10 +288,10 @@ func (v Vertex) GetFromBuffers() []Buffer {
 	if v.IsASource() {
 		r = append(r, Buffer{GenerateSourceBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SourceBuffer})
 	} else {
-		// TODO: current design always has len(v.Spec.FromEdges) equals 1
-		//   need to update once we support multiple fromEdges
 		for _, vt := range v.Spec.FromEdges {
-			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, vt.From, v.Spec.Name), EdgeBuffer})
+			for _, b := range GenerateEdgeBufferNames(v.Namespace, v.Spec.PipelineName, vt) {
+				r = append(r, Buffer{b, EdgeBuffer})
+			}
 		}
 	}
 	return r
@@ -298,7 +303,9 @@ func (v Vertex) GetToBuffers() []Buffer {
 		r = append(r, Buffer{GenerateSinkBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SinkBuffer})
 	} else {
 		for _, vt := range v.Spec.ToEdges {
-			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, vt.To), EdgeBuffer})
+			for _, b := range GenerateEdgeBufferNames(v.Namespace, v.Spec.PipelineName, vt) {
+				r = append(r, Buffer{b, EdgeBuffer})
+			}
 		}
 	}
 	return r
@@ -541,9 +548,17 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-// GenerateEdgeBufferName generates buffer name
-func GenerateEdgeBufferName(namespace, pipelineName, fromVetex, toVertex string) string {
-	return fmt.Sprintf("%s-%s-%s-%s", namespace, pipelineName, fromVetex, toVertex)
+// GenerateEdgeBufferNames generates buffer names for an edge
+func GenerateEdgeBufferNames(namespace, pipelineName string, edge Edge) []string {
+	buffers := []string{}
+	if edge.Parallelism == nil {
+		buffers = append(buffers, fmt.Sprintf("%s-%s-%s-%s", namespace, pipelineName, edge.From, edge.To))
+		return buffers
+	}
+	for i := int32(0); i < *edge.Parallelism; i++ {
+		buffers = append(buffers, fmt.Sprintf("%s-%s-%s-%s-%d", namespace, pipelineName, edge.From, edge.To, i))
+	}
+	return buffers
 }
 
 func GenerateSourceBufferName(namespace, pipelineName, vertex string) string {

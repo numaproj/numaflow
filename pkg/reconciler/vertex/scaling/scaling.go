@@ -366,24 +366,27 @@ func (s *Scaler) Start(ctx context.Context) {
 func (s *Scaler) hasBackPressure(pl dfv1.Pipeline, vertex dfv1.Vertex) (bool, bool) {
 	downstreamEdges := pl.GetDownstreamEdges(vertex.Spec.Name)
 	directPressure, downstreamPressure := false, false
+loop:
 	for _, e := range downstreamEdges {
 		vertexKey := pl.Namespace + "/" + pl.Name + "-" + e.To
-		bufferName := dfv1.GenerateEdgeBufferName(pl.Namespace, pl.Name, e.From, e.To)
-		pendingVal, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
-		if !ok { // Vertex key has not been cached, skip it.
-			continue
-		}
-		pending := pendingVal.(int64)
-		bufferLengthVal, ok := s.vertexMetricsCache.Get(bufferName + "/length")
-		if !ok { // Buffer length has not been cached, skip it.
-			continue
-		}
-		length := bufferLengthVal.(int64)
-		if float64(pending)/float64(length) >= s.options.backPressureThreshold {
-			downstreamPressure = true
-			if e.From == vertex.Spec.Name {
-				directPressure = true
-				break
+		bufferNames := dfv1.GenerateEdgeBufferNames(pl.Namespace, pl.Name, e)
+		for _, bufferName := range bufferNames {
+			pendingVal, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
+			if !ok { // Vertex key has not been cached, skip it.
+				continue
+			}
+			pending := pendingVal.(int64)
+			bufferLengthVal, ok := s.vertexMetricsCache.Get(bufferName + "/length")
+			if !ok { // Buffer length has not been cached, skip it.
+				continue
+			}
+			length := bufferLengthVal.(int64)
+			if float64(pending)/float64(length) >= s.options.backPressureThreshold {
+				downstreamPressure = true
+				if e.From == vertex.Spec.Name {
+					directPressure = true
+					break loop
+				}
 			}
 		}
 	}

@@ -60,32 +60,34 @@ func (ps *pipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.Li
 	resp := new(daemon.ListBuffersResponse)
 
 	buffers := []*daemon.BufferInfo{}
-	for _, edge := range ps.pipeline.Spec.Edges {
-		buffer := v1alpha1.GenerateEdgeBufferName(ps.pipeline.Namespace, ps.pipeline.Name, edge.From, edge.To)
-		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
+	for _, edge := range ps.pipeline.ListAllEdges() {
+		bs := v1alpha1.GenerateEdgeBufferNames(ps.pipeline.Namespace, ps.pipeline.Name, edge)
+		for _, buffer := range bs {
+			bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
+			if err != nil {
+				return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
+			}
+			log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
+			bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, edge)
+			usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
+			if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
+				usage = x
+			}
+			b := &daemon.BufferInfo{
+				Pipeline:         &ps.pipeline.Name,
+				FromVertex:       pointer.String(fmt.Sprintf("%v", edge.From)),
+				ToVertex:         pointer.String(fmt.Sprintf("%v", edge.To)),
+				BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
+				PendingCount:     &bufferInfo.PendingCount,
+				AckPendingCount:  &bufferInfo.AckPendingCount,
+				TotalMessages:    &bufferInfo.TotalMessages,
+				BufferLength:     &bufferLength,
+				BufferUsageLimit: &bufferUsageLimit,
+				BufferUsage:      &usage,
+				IsFull:           pointer.Bool(usage >= bufferUsageLimit),
+			}
+			buffers = append(buffers, b)
 		}
-		log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
-		bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, edge)
-		usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
-		if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
-			usage = x
-		}
-		b := &daemon.BufferInfo{
-			Pipeline:         &ps.pipeline.Name,
-			FromVertex:       pointer.String(fmt.Sprintf("%v", edge.From)),
-			ToVertex:         pointer.String(fmt.Sprintf("%v", edge.To)),
-			BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
-			PendingCount:     &bufferInfo.PendingCount,
-			AckPendingCount:  &bufferInfo.AckPendingCount,
-			TotalMessages:    &bufferInfo.TotalMessages,
-			BufferLength:     &bufferLength,
-			BufferUsageLimit: &bufferUsageLimit,
-			BufferUsage:      &usage,
-			IsFull:           pointer.Bool(usage >= bufferUsageLimit),
-		}
-		buffers = append(buffers, b)
 	}
 	resp.Buffers = buffers
 	return resp, nil

@@ -566,7 +566,7 @@ ForwardConditions </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-Conditional forwarding, only allowed when “From” is a Sink or UDF
+Conditional forwarding, only allowed when “From” is a Sink or UDF.
 </p>
 </td>
 </tr>
@@ -580,7 +580,19 @@ Conditional forwarding, only allowed when “From” is a Sink or UDF
 <em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for the
-edge, will override pipeline level settings
+edge, will override pipeline level settings.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>parallelism</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Parallelism is generated from “udf.groupBy.parallelism”, nil means no
+parallelism.
 </p>
 </td>
 </tr>
@@ -630,6 +642,41 @@ BufferUsageLimit is used to define the pencentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. It
 overrides the settings from pipeline limits.
 </p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.FixedWindow">
+FixedWindow
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Window">Window</a>)
+</p>
+<p>
+<p>
+FixedWindow describes a fixed window
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>length</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
 </td>
 </tr>
 </tbody>
@@ -1199,6 +1246,48 @@ Kubernetes core/v1.PullPolicy </a> </em>
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
 <td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.GroupBy">
+GroupBy
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>)
+</p>
+<p>
+<p>
+GroupBy indicates it is a reducer UDF
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>window</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Window"> Window </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>keyed</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>
@@ -3331,6 +3420,15 @@ Description
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>groupBy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.GroupBy"> GroupBy </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.UDSink">
@@ -3773,6 +3871,42 @@ Kubernetes meta/v1.Duration </a> </em>
 Maximum delay allowed for watermark calculation, defaults to “0s”, which
 means no delay.
 </p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Window">
+Window
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.GroupBy">GroupBy</a>)
+</p>
+<p>
+<p>
+Window describes windowing strategy
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>fixed</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.FixedWindow"> FixedWindow </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>

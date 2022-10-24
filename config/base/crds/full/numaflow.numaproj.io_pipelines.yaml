@@ -48,7 +48,7 @@ spec:
                   properties:
                     conditions:
                       description: Conditional forwarding, only allowed when "From"
-                        is a Sink or UDF
+                        is a Sink or UDF.
                       properties:
                         keyIn:
                           items:
@@ -61,7 +61,7 @@ spec:
                       type: string
                     limits:
                       description: Limits define the limitations such as buffer read
-                        batch size for the edge, will override pipeline level settings
+                        batch size for the edge, will override pipeline level settings.
                       properties:
                         bufferMaxLength:
                           description: BufferMaxLength is used to define the max length
@@ -76,6 +76,11 @@ spec:
                           format: int32
                           type: integer
                       type: object
+                    parallelism:
+                      description: Parallelism is generated from "udf.groupBy.parallelism",
+                        nil means no parallelism.
+                      format: int32
+                      type: integer
                     to:
                       type: string
                   required:
@@ -2365,6 +2370,24 @@ spec:
                                 - name
                                 type: object
                               type: array
+                          type: object
+                        groupBy:
+                          description: GroupBy indicates it is a reducer UDF
+                          properties:
+                            keyed:
+                              type: boolean
+                            window:
+                              description: Window describes windowing strategy
+                              properties:
+                                fixed:
+                                  description: FixedWindow describes a fixed window
+                                  properties:
+                                    length:
+                                      type: string
+                                  type: object
+                              type: object
+                          required:
+                          - window
                           type: object
                       type: object
                     volumes:

@@ -32,7 +32,6 @@ type watermarkFetchers struct {
 func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers, error) {
 	ctx := context.Background()
 	var wmFetcher = new(watermarkFetchers)
-	var toBufferName string
 
 	if pipeline.Spec.Watermark.Disabled {
 		return wmFetcher, nil
@@ -54,12 +53,14 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 			// If the vertex is not a sink, to fetch the watermark, we consult all out edges and grab the latest watermark among them.
 			var wmFetcherList []fetch.Fetcher
 			for _, edge := range pipeline.GetToEdges(vertex.Name) {
-				toBufferName = v1alpha1.GenerateEdgeBufferName(pipeline.Namespace, pipelineName, edge.From, edge.To)
-				fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName)
-				if err != nil {
-					return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
+				toBufferNames := v1alpha1.GenerateEdgeBufferNames(pipeline.Namespace, pipelineName, edge)
+				for _, toBufferName := range toBufferNames {
+					fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName)
+					if err != nil {
+						return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
+					}
+					wmFetcherList = append(wmFetcherList, fetchWatermark)
 				}
-				wmFetcherList = append(wmFetcherList, fetchWatermark)
 			}
 			vertexToFetchersMap[vertex.Name] = wmFetcherList
 		}

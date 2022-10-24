@@ -19,12 +19,15 @@ package v1alpha1
 type Edge struct {
 	From string `json:"from" protobuf:"bytes,1,opt,name=from"`
 	To   string `json:"to" protobuf:"bytes,2,opt,name=to"`
-	// Conditional forwarding, only allowed when "From" is a Sink or UDF
+	// Conditional forwarding, only allowed when "From" is a Sink or UDF.
 	// +optional
 	Conditions *ForwardConditions `json:"conditions" protobuf:"bytes,3,opt,name=conditions"`
-	// Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings
+	// Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.
 	// +optional
 	Limits *EdgeLimits `json:"limits,omitempty" protobuf:"bytes,4,opt,name=limits"`
+	// Parallelism is generated from "udf.groupBy.parallelism", nil means no parallelism.
+	// +optional
+	Parallelism *int32 `json:"parallelism" protobuf:"bytes,5,opt,name=parallelism"`
 }
 
 type ForwardConditions struct {

@@ -11,6 +11,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -23,12 +24,12 @@ import (
 	"go.uber.org/zap"
 )
 
-type UDFProcessor struct {
+type MapUDFProcessor struct {
 	ISBSvcType     dfv1.ISBSvcType
 	VertexInstance *dfv1.VertexInstance
 }
 
-func (u *UDFProcessor) Start(ctx context.Context) error {
+func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -60,9 +61,11 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
-			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
-			writers[buffer] = writer
+			buffers := dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e)
+			for _, buffer := range buffers {
+				writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
+				writers[buffer] = writer
+			}
 		}
 	case dfv1.ISBSvcTypeJetStream:
 
@@ -92,13 +95,15 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
-			streamName := fmt.Sprintf("%s-%s", u.VertexInstance.Vertex.Spec.PipelineName, buffer)
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
-			if err != nil {
-				return err
+			buffers := dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e)
+			for _, buffer := range buffers {
+				streamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, buffer)
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
+				if err != nil {
+					return err
+				}
+				writers[buffer] = writer
 			}
-			writers[buffer] = writer
 		}
 	default:
 		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
@@ -115,7 +120,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 			// If returned key is not "ALL" or "DROP", and there's no conditions defined in the edge,
 			// treat it as "ALL"?
 			if to.Conditions == nil || len(to.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(to.Conditions.KeyIn, _key) {
-				result = append(result, dfv1.GenerateEdgeBufferName(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, to.From, to.To))
+				result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, to)...)
 			}
 		}
 		return result, nil
@@ -138,7 +143,7 @@ func (u *UDFProcessor) Start(ctx context.Context) error {
 	}()
 	log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
 
-	opts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeUDF), forward.WithLogger(log)}
+	opts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeMapUDF), forward.WithLogger(log)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))

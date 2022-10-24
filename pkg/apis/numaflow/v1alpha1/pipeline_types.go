@@ -77,11 +77,28 @@ func (p Pipeline) GetVertex(vertexName string) *AbstractVertex {
 	return nil
 }
 
+// ListAllEdges returns a copy of all the edges
+func (p Pipeline) ListAllEdges() []Edge {
+	edges := []Edge{}
+	for _, e := range p.Spec.Edges {
+		edgeCopy := e.DeepCopy()
+		toVertex := p.GetVertex(e.To)
+		if toVertex.UDF == nil || toVertex.UDF.GroupBy == nil {
+			// Clean up parallelism if downstream vertex is not a reduce UDF
+			edgeCopy.Parallelism = nil
+		}
+		edges = append(edges, *edgeCopy)
+	}
+	return edges
+}
+
 // FindEdgeWithBuffer is used to locate the edge of the buffer.
 func (p Pipeline) FindEdgeWithBuffer(buffer string) *Edge {
-	for _, e := range p.Spec.Edges {
-		if buffer == GenerateEdgeBufferName(p.Namespace, p.Name, e.From, e.To) {
-			return &e
+	for _, e := range p.ListAllEdges() {
+		for _, b := range GenerateEdgeBufferNames(p.Namespace, p.Name, e) {
+			if buffer == b {
+				return &e
+			}
 		}
 	}
 	return nil
@@ -89,9 +106,9 @@ func (p Pipeline) FindEdgeWithBuffer(buffer string) *Edge {
 
 func (p Pipeline) GetToEdges(vertexName string) []Edge {
 	edges := []Edge{}
-	for _, e := range p.Spec.Edges {
+	for _, e := range p.ListAllEdges() {
 		if e.From == vertexName {
-			edges = append(edges, e)
+			edges = append(edges, *e.DeepCopy())
 		}
 	}
 	return edges
@@ -99,9 +116,9 @@ func (p Pipeline) GetToEdges(vertexName string) []Edge {
 
 func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 	edges := []Edge{}
-	for _, e := range p.Spec.Edges {
+	for _, e := range p.ListAllEdges() {
 		if e.To == vertexName {
-			edges = append(edges, e)
+			edges = append(edges, *e.DeepCopy())
 		}
 	}
 	return edges
@@ -109,8 +126,10 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 
 func (p Pipeline) GetAllBuffers() []Buffer {
 	r := []Buffer{}
-	for _, e := range p.Spec.Edges {
-		r = append(r, Buffer{GenerateEdgeBufferName(p.Namespace, p.Name, e.From, e.To), EdgeBuffer})
+	for _, e := range p.ListAllEdges() {
+		for _, b := range GenerateEdgeBufferNames(p.Namespace, p.Name, e) {
+			r = append(r, Buffer{b, EdgeBuffer})
+		}
 	}
 	for _, v := range p.Spec.Vertices {
 		if v.Source != nil {
@@ -126,7 +145,7 @@ func (p Pipeline) GetAllBuffers() []Buffer {
 func (p Pipeline) GetDownstreamEdges(vertexName string) []Edge {
 	var f func(vertexName string, edges *[]Edge)
 	f = func(vertexName string, edges *[]Edge) {
-		for _, b := range p.Spec.Edges {
+		for _, b := range p.ListAllEdges() {
 			if b.From == vertexName {
 				*edges = append(*edges, b)
 				f(b.To, edges)
