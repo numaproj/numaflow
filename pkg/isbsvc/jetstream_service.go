@@ -5,11 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 
 	"github.com/nats-io/nats.go"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -19,6 +23,21 @@ type jetStreamSvc struct {
 
 	jsClient jsclient.JetStreamClient
 	js       *jsclient.JetStreamContext
+}
+
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
+	hbBucketName := JetStreamProcessorBucket(pipelineName, bufferName)
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
+	if err != nil {
+		return nil, err
+	}
+	otBucketName := JetStreamOTBucket(pipelineName, bufferName)
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucketName, jsclient.NewInClusterJetStreamClient())
+	if err != nil {
+		return nil, err
+	}
+	fetchWatermark := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+	return fetchWatermark, nil
 }
 
 func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBService, error) {

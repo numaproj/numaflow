@@ -11,10 +11,16 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 type isbsRedisSvc struct {
 	client *redisclient.RedisClient
+}
+
+func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
+	// Watermarking is not supported for Redis ATM.
+	panic("implement me")
 }
 
 // NewISBRedisSvc is used to return a new object of type isbsRedisSvc

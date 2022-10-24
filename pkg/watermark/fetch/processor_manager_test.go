@@ -77,12 +77,12 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 	defer hbStore.Close()
 
-	// create osStore
+	// create otStore
 	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer otStore.Close()
 
-	// put values into osStore
+	// put values into otStore
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(testOffset))
 	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)

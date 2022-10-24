@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"io"
 	"net/http"
 	"testing"
@@ -48,6 +49,10 @@ func (ms *mockIsbSvcClient) DeleteBuffers(ctx context.Context, buffers []v1alpha
 
 func (ms *mockIsbSvcClient) ValidateBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
 	return nil
+}
+
+func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
+	return nil, nil
 }
 
 func TestGetVertexMetrics(t *testing.T) {

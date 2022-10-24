@@ -28,9 +28,10 @@ type metricsHttpClient interface {
 
 // pipelineMetadataQuery has the metadata required for the pipeline queries
 type pipelineMetadataQuery struct {
-	isbSvcClient    isbsvc.ISBService
-	pipeline        *v1alpha1.Pipeline
-	httpClient      metricsHttpClient
+	isbSvcClient isbsvc.ISBService
+	pipeline     *v1alpha1.Pipeline
+	httpClient   metricsHttpClient
+	// TODO - move vertexWatermark fetching to isbSvc implementation.
 	vertexWatermark *watermarkFetchers
 }
 
@@ -47,7 +48,7 @@ func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1
 			Timeout: time.Second * 3,
 		},
 	}
-	ps.vertexWatermark, err = newVertexWatermarkFetcher(pipeline)
+	ps.vertexWatermark, err = newVertexWatermarkFetcher(pipeline, isbSvcClient)
 	if err != nil {
 		return nil, err
 	}

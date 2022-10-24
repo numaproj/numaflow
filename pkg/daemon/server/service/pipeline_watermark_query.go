@@ -9,12 +9,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
 // TODO - Write Unit Tests for this file
@@ -29,7 +25,7 @@ type watermarkFetchers struct {
 
 // newVertexWatermarkFetcher creates a new instance of watermarkFetchers. This is used to populate a map of vertices to
 // corresponding fetchers. The fetchers are to retrieve vertex level watermarks.
-func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers, error) {
+func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (*watermarkFetchers, error) {
 	ctx := context.Background()
 	var wmFetcher = new(watermarkFetchers)
 	var toBufferName string
@@ -45,7 +41,7 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 	for _, vertex := range pipeline.Spec.Vertices {
 		if vertex.Sink != nil {
 			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipelineName, vertex.Name)
-			fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName)
+			fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, pipelineName, toBufferName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 			}
@@ -55,7 +51,7 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 			var wmFetcherList []fetch.Fetcher
 			for _, edge := range pipeline.GetToEdges(vertex.Name) {
 				toBufferName = v1alpha1.GenerateEdgeBufferName(pipeline.Namespace, pipelineName, edge.From, edge.To)
-				fetchWatermark, err := createWatermarkFetcher(ctx, pipelineName, toBufferName)
+				fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, pipelineName, toBufferName)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 				}
@@ -66,22 +62,6 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline) (*watermarkFetchers,
 	}
 	wmFetcher.fetcherMap = vertexToFetchersMap
 	return wmFetcher, nil
-}
-
-// Create a watermark fetcher to fetch watermark from a buffer.
-func createWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
-	hbBucketName := isbsvc.JetStreamProcessorBucket(pipelineName, bufferName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
-	if err != nil {
-		return nil, err
-	}
-	otBucketName := isbsvc.JetStreamOTBucket(pipelineName, bufferName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucketName, jsclient.NewInClusterJetStreamClient())
-	if err != nil {
-		return nil, err
-	}
-	fetchWatermark := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
-	return fetchWatermark, nil
 }
 
 // GetVertexWatermark is used to return the head watermark for a given vertex.
