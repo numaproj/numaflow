@@ -37,8 +37,6 @@ Add an argument `--namespaced` to the `numaflow-controller` and `numaflow-server
 
 If there are multiple namespace scoped installations in one cluster, potentially there will be backward compatibility issue when any of the installation gets upgraded to a new version that has new CRD definition. To avoid this issue, we suggest to use minimal CRD definition for namespaced installation, which does not have detailed property definitions, thus no CRD changes between different versions.
 
-*Be aware that the minimal CRD does not contain any default values that are present in the full CRD. Resources in the `examples` directory generally assume the full CRD is installed and therefore may not contain all fields necessary for clusters with the minimal CRD installed.*
-
 ```shell
 # Minimal CRD
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/config/advanced-install/minimal-crds.yaml

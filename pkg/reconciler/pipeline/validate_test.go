@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"testing"
-	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
@@ -205,28 +204,5 @@ func TestValidateVertex(t *testing.T) {
 		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "or equal to")
-	})
-}
-
-func TestValidateGenerator(t *testing.T) {
-	t.Run("missing rpu", func(t *testing.T) {
-		g := &dfv1.GeneratorSource{
-			Duration: &metav1.Duration{Duration: time.Second},
-			MsgSize:  pointer.Int32Ptr(8),
-		}
-		err := validateGenerator(g)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not set")
-	})
-
-	t.Run("rpu < 0", func(t *testing.T) {
-		g := &dfv1.GeneratorSource{
-			RPU:      pointer.Int64(-5),
-			Duration: &metav1.Duration{Duration: time.Second},
-			MsgSize:  pointer.Int32Ptr(8),
-		}
-		err := validateGenerator(g)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not be smaller than 0")
 	})
 }
