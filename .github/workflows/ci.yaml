@@ -114,8 +114,8 @@ jobs:
 
   build-binaries:
     name: Build Binaries
+    runs-on: ubuntu-latest
     timeout-minutes: 10
-    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
