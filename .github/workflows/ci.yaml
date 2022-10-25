@@ -112,6 +112,20 @@ jobs:
       - name: Test
         run: make test-code
 
+  build-binaries:
+    name: Build Binaries
+    timeout-minutes: 10
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3.1.0
+        with:
+          go-version: 1.19
+      - name: Build binaries
+        run: make build
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
