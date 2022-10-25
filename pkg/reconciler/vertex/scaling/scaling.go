@@ -169,7 +169,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Debug("Corresponding Pipeline being deleted")
 		return nil
 	}
-	if pl.Spec.Lifecycle.DesiredPhase != dfv1.PipelinePhaseRunning {
+	if pl.Spec.Lifecycle.GetDesiredPhase() != dfv1.PipelinePhaseRunning {
 		log.Debug("Corresponding Pipeline not in Running state")
 		return nil
 	}

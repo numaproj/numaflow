@@ -2,10 +2,12 @@ package v1alpha1
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 )
 
 var (
@@ -217,4 +219,51 @@ func Test_GetDownstreamEdges(t *testing.T) {
 
 	edges = pl.GetDownstreamEdges("notexisting")
 	assert.Equal(t, 0, len(edges))
+}
+
+func Test_GetWatermarkMaxDelay(t *testing.T) {
+	wm := Watermark{}
+	assert.Equal(t, "0s", wm.GetMaxDelay().String())
+	wm.MaxDelay = &metav1.Duration{Duration: time.Duration(2 * time.Second)}
+	assert.Equal(t, "2s", wm.GetMaxDelay().String())
+}
+
+func Test_GetDeleteGracePeriodSeconds(t *testing.T) {
+	lc := Lifecycle{}
+	assert.Equal(t, int32(30), lc.GetDeleteGracePeriodSeconds())
+	lc.DeleteGracePeriodSeconds = pointer.Int32(50)
+	assert.Equal(t, int32(50), lc.GetDeleteGracePeriodSeconds())
+}
+
+func Test_GetDesiredPhase(t *testing.T) {
+	lc := Lifecycle{}
+	assert.Equal(t, PipelinePhaseRunning, lc.GetDesiredPhase())
+	lc.DesiredPhase = PipelinePhasePaused
+	assert.Equal(t, PipelinePhasePaused, lc.GetDesiredPhase())
+}
+
+func Test_GetPipelineLimits(t *testing.T) {
+	pl := Pipeline{
+		Spec: PipelineSpec{},
+	}
+	l := pl.GetPipelineLimits()
+	assert.Equal(t, int64(DefaultBufferLength), int64(*l.BufferMaxLength))
+	assert.Equal(t, float64(DefaultBufferUsageLimit), float64(*l.BufferUsageLimit)/100)
+	assert.Equal(t, int64(DefaultReadBatchSize), int64(*l.ReadBatchSize))
+	assert.Equal(t, "1s", l.ReadTimeout.Duration.String())
+
+	length := uint64(2000)
+	usuageLimit := uint32(40)
+	readBatch := uint64(321)
+	pl.Spec.Limits = &PipelineLimits{
+		BufferMaxLength:  &length,
+		BufferUsageLimit: &usuageLimit,
+		ReadBatchSize:    &readBatch,
+		ReadTimeout:      &metav1.Duration{Duration: time.Duration(5 * time.Second)},
+	}
+	l = pl.GetPipelineLimits()
+	assert.Equal(t, length, *l.BufferMaxLength)
+	assert.Equal(t, float64(40)/100, float64(*l.BufferUsageLimit)/100)
+	assert.Equal(t, readBatch, *l.ReadBatchSize)
+	assert.Equal(t, "5s", l.ReadTimeout.Duration.String())
 }
