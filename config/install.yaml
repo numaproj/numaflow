@@ -4847,7 +4847,7 @@ spec:
                   by each vertex's settings
                 properties:
                   bufferMaxLength:
-                    default: 30000
+                    default: 50000
                     description: BufferMaxLength is used to define the max length
                       of a buffer Only applies to UDF and Source vertice as only they
                       do buffer write. It can be overridden by the settings in vertex
