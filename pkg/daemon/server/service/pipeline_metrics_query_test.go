@@ -13,6 +13,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 type mockGetType func(url string) (*http.Response, error)
@@ -48,6 +49,10 @@ func (ms *mockIsbSvcClient) DeleteBuffers(ctx context.Context, buffers []v1alpha
 
 func (ms *mockIsbSvcClient) ValidateBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
 	return nil
+}
+
+func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+	return nil, nil
 }
 
 func TestGetVertexMetrics(t *testing.T) {
