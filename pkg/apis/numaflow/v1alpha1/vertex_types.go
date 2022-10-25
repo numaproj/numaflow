@@ -137,7 +137,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int, servicePortN
 	return svc
 }
 
-func (v Vertex) commonEvns() []corev1.EnvVar {
+func (v Vertex) commonEnvs() []corev1.EnvVar {
 	return []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
@@ -163,7 +163,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	envVars := []corev1.EnvVar{
 		{Name: EnvVertexObject, Value: encodedVertexSpec},
 	}
-	envVars = append(envVars, v.commonEvns()...)
+	envVars = append(envVars, v.commonEnvs()...)
 	envVars = append(envVars, req.Env...)
 	resources := standardResources
 	if v.Spec.ContainerTemplate != nil {
@@ -221,7 +221,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 
 	if len(containers) > 1 { // udf and udsink
-		containers[1].Env = append(containers[1].Env, v.commonEvns()...)
+		containers[1].Env = append(containers[1].Env, v.commonEnvs()...)
 	}
 
 	spec := &corev1.PodSpec{

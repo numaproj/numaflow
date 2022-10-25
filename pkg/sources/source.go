@@ -142,7 +142,7 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, generator.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return generator.NewMemGen(sp.VertexInstance, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, fetchWM, publishWM, publishWMStores, readOptions...)
+		return generator.NewMemGen(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.Kafka; x != nil {
 		readOptions := []kafka.Option{
 			kafka.WithGroupName(x.ConsumerGroupName),
