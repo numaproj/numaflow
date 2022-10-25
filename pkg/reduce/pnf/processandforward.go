@@ -79,7 +79,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	}
 	messagesToStep := p.whereToStep(to)
 
-	//store write offsets to publish watermark
+	// store write offsets to publish watermark
 	writeOffsets := make(map[string][]isb.Offset)
 
 	// parallel writes to each isb
@@ -154,26 +154,29 @@ func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 // TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
 func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var ISBWriteBackoff = wait.Backoff{
-		Steps:    math.MaxInt64,
+		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
 		Factor:   1,
 		Jitter:   0.1,
 	}
 
+	writeMessages := resultMessages
+
 	// write to isb with infinite exponential backoff (until shutdown is triggered)
-	var failedMessages []isb.Message
 	var offsets []isb.Offset
 	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
 		var writeErrs []error
-		offsets, writeErrs = p.toBuffers[bufferID].Write(ctx, resultMessages)
-		for i, message := range resultMessages {
+		var failedMessages []isb.Message
+		offsets, writeErrs = p.toBuffers[bufferID].Write(ctx, writeMessages)
+		for i, message := range writeMessages {
 			if writeErrs[i] != nil {
 				failedMessages = append(failedMessages, message)
 			}
 		}
 		// retry only the failed messages
 		if len(failedMessages) > 0 {
-			resultMessages = failedMessages
+			p.log.Warnw("Failed to write messages to isb inside pnf", zap.Errors("errors", writeErrs))
+			writeMessages = failedMessages
 			return false, nil
 		}
 		return true, nil

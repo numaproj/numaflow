@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestRedisGetStatefulSetSpec(t *testing.T) {
@@ -54,6 +56,23 @@ func TestRedisGetStatefulSetSpec(t *testing.T) {
 		assert.NotNil(t, spec.Template.Spec.Containers[0].SecurityContext)
 		assert.NotNil(t, spec.Template.Spec.Containers[1].SecurityContext)
 		assert.NotNil(t, spec.Template.Spec.SecurityContext.FSGroup)
+	})
+
+	t.Run("with container resources", func(t *testing.T) {
+		r := corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		}
+		s := &NativeRedis{
+			RedisContainerTemplate:    &ContainerTemplate{Resources: r},
+			SentinelContainerTemplate: &ContainerTemplate{Resources: r},
+			MetricsContainerTemplate:  &ContainerTemplate{Resources: r},
+		}
+		spec := s.GetStatefulSetSpec(req)
+		for _, c := range spec.Template.Spec.Containers {
+			assert.Equal(t, c.Resources, r)
+		}
 	})
 }
 

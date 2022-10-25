@@ -26,16 +26,27 @@ func TestWatermark(t *testing.T) {
 	defer func() { _ = os.Unsetenv(dfv1.EnvWatermarkDisabled) }()
 
 	dest := simplebuffer.NewInMemoryBuffer("writer", 1000)
-	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
-		Name: "memgen",
-	}}
+	vertex := &dfv1.Vertex{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "memgen",
+		},
+		Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+				Source: &dfv1.Source{
+					Generator: &dfv1.GeneratorSource{},
+				},
+			},
+		},
+	}
 	m := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "TestRead",
 		Replica:  0,
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	mgen, err := NewMemGen(m, 1, 8, time.Millisecond, []isb.BufferWriter{dest}, nil, nil, publishWMStore)
+	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, nil, nil, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
