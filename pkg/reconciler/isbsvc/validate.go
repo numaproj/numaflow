@@ -8,6 +8,9 @@ import (
 
 // ValidateInterStepBufferService accepts an isbs and performs validation against it
 func ValidateInterStepBufferService(isbs *dfv1.InterStepBufferService) error {
+	if isbs.Spec.Redis != nil && isbs.Spec.JetStream != nil {
+		return fmt.Errorf("invalid spec: \"spec.redis\" and \"spec.jetstream\" can not be defined together")
+	}
 	if isbs.Spec.Redis == nil && isbs.Spec.JetStream == nil {
 		return fmt.Errorf("invalid spec: either \"spec.redis\" or \"spec.jetstream\" needs to be specified")
 	}
