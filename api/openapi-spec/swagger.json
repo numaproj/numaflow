@@ -17454,7 +17454,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.EdgeLimits"
         },
         "parallelism": {
-          "description": "Parallelism is generated from \"udf.groupBy.parallelism\", nil means no parallelism.",
+          "description": "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
           "type": "integer",
           "format": "int32"
         },

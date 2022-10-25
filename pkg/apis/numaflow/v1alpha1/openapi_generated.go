@@ -486,7 +486,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common
 					},
 					"parallelism": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Parallelism is generated from \"udf.groupBy.parallelism\", nil means no parallelism.",
+							Description: "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

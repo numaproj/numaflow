@@ -177,7 +177,9 @@ message Edge {
   // +optional
   optional EdgeLimits limits = 4;
 
-  // Parallelism is generated from "udf.groupBy.parallelism", nil means no parallelism.
+  // Parallelism is only effective when the "to" vertex is a reduce vertex,
+  // if it's provided, the default value is set to "1".
+  // Parallelism is ignored when the "to" vertex is not a reduce vertex.
   // +optional
   optional int32 parallelism = 5;
 }

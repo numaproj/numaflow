@@ -591,8 +591,9 @@ edge, will override pipeline level settings.
 <td>
 <em>(Optional)</em>
 <p>
-Parallelism is generated from “udf.groupBy.parallelism”, nil means no
-parallelism.
+Parallelism is only effective when the “to” vertex is a reduce vertex,
+if it’s provided, the default value is set to “1”. Parallelism is
+ignored when the “to” vertex is not a reduce vertex.
 </p>
 </td>
 </tr>
