@@ -285,10 +285,7 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 		Value: fmt.Sprintf("%t", pl.Spec.Watermark.Disabled),
 	})
 
-	maxDelay := "0s"
-	if x := pl.Spec.Watermark.MaxDelay; x != nil {
-		maxDelay = x.Duration.String()
-	}
+	maxDelay := pl.Spec.Watermark.GetMaxDelay().String()
 	podSpec.Containers[0].Env = append(podSpec.Containers[0].Env, corev1.EnvVar{
 		Name:  dfv1.EnvWatermarkMaxDelay,
 		Value: maxDelay,
