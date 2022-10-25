@@ -107,7 +107,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	// There is no Cap on backoff because setting a Cap will result in
 	// backoff stopped once the duration exceeds the Cap
 	var pbqWriteBackoff = wait.Backoff{
-		Steps:    math.MaxInt64,
+		Steps:    math.MaxInt,
 		Duration: 1 * time.Second,
 		Factor:   1.5,
 		Jitter:   0.1,
@@ -188,7 +188,7 @@ func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partitio
 	if q == nil {
 		var pbqErr error
 		var infiniteBackoff = wait.Backoff{
-			Steps:    math.MaxInt64,
+			Steps:    math.MaxInt,
 			Duration: 1 * time.Second,
 			Factor:   1.5,
 			Jitter:   0.1,

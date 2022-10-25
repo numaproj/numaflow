@@ -137,7 +137,7 @@ func (m *Manager) StartUp(ctx context.Context) {
 	var partitionIDs []partition.ID
 
 	var discoverPartitionsBackoff = wait.Backoff{
-		Steps:    math.MaxInt64,
+		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
 		Factor:   1,
 		Jitter:   0.1,
@@ -160,7 +160,7 @@ func (m *Manager) StartUp(ctx context.Context) {
 	}
 
 	var createPBQBackoff = wait.Backoff{
-		Steps:    math.MaxInt64,
+		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
 		Factor:   1,
 		Jitter:   0.1,
@@ -191,7 +191,7 @@ func (m *Manager) ShutDown(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	var PBQCloseBackOff = wait.Backoff{
-		Steps:    math.MaxInt64,
+		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
 		Factor:   1,
 		Jitter:   0.1,
