@@ -23,13 +23,13 @@ func ValidateInterStepBufferService(isbs *dfv1.InterStepBufferService) error {
 		}
 		if native := isbs.Spec.Redis.Native; native != nil {
 			if native.Version == "" {
-				return fmt.Errorf("invalid spec: \"spec.redis.native.version\" is not defined")
+				return fmt.Errorf(`invalid spec: "spec.redis.native.version" is not defined`)
 			}
 		}
 	}
 	if x := isbs.Spec.JetStream; x != nil {
 		if x.Version == "" {
-			return fmt.Errorf("invalid spec: \"spec.jetstream.version\" is not defined")
+			return fmt.Errorf(`invalid spec: "spec.jetstream.version" is not defined`)
 		}
 	}
 	return nil
