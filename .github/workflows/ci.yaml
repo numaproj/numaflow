@@ -113,7 +113,7 @@ jobs:
         run: make test-code
 
   build-binaries-latest:
-    name: Build Binaries
+    name: Build Binaries latest
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -126,8 +126,8 @@ jobs:
       - name: Build binaries
         run: make build
 
-  build-binaries-20.04:
-    name: Build Binaries
+  build-binaries-20:
+    name: Build Binaries 20
     runs-on: ubuntu-20.04
     timeout-minutes: 10
     steps:
