@@ -20,9 +20,20 @@ import (
 func TestRead(t *testing.T) {
 	dest := simplebuffer.NewInMemoryBuffer("writer", 20)
 	ctx := context.Background()
-	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
-		Name: "memgen",
-	}}
+	vertex := &dfv1.Vertex{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "memgen",
+		},
+		Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+				Source: &dfv1.Source{
+					Generator: &dfv1.GeneratorSource{},
+				},
+			},
+		},
+	}
 	m := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "TestRead",
@@ -34,7 +45,7 @@ func TestRead(t *testing.T) {
 		"writer": dest,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, fetchWatermark, publishWatermark, publishWMStore)
+	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -54,9 +65,20 @@ func TestStop(t *testing.T) {
 	ctx := context.Background()
 
 	dest := simplebuffer.NewInMemoryBuffer("writer", 100)
-	vertex := &dfv1.Vertex{ObjectMeta: v1.ObjectMeta{
-		Name: "memgen",
-	}}
+	vertex := &dfv1.Vertex{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "memgen",
+		},
+		Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+				Source: &dfv1.Source{
+					Generator: &dfv1.GeneratorSource{},
+				},
+			},
+		},
+	}
 	m := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "TestRead",
@@ -67,7 +89,7 @@ func TestStop(t *testing.T) {
 		"writer": dest,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, 5, 8, time.Millisecond, []isb.BufferWriter{dest}, fetchWatermark, publishWatermark, publishWMStore)
+	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

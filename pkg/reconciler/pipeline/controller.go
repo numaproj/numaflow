@@ -83,7 +83,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	if !pl.DeletionTimestamp.IsZero() {
 		log.Info("Deleting pipeline")
 		if controllerutil.ContainsFinalizer(pl, finalizerName) {
-			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.DeleteGracePeriodSeconds) * time.Second)) {
+			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetDeleteGracePeriodSeconds()) * time.Second)) {
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
 					log.Errorw("Failed to check if it's safe to delete the pipeline", zap.Error(err))
@@ -112,7 +112,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		return r.reconcileNonLifecycleChanges(ctx, pl)
 	}
 
-	if oldPhase := pl.Status.Phase; oldPhase != pl.Spec.Lifecycle.DesiredPhase {
+	if oldPhase := pl.Status.Phase; oldPhase != pl.Spec.Lifecycle.GetDesiredPhase() {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			log.Errorw("Updated desired pipeline phase failed", zap.Error(err))
@@ -261,7 +261,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	}
 
 	pl.Status.MarkDeployed()
-	pl.Status.SetPhase(pl.Spec.Lifecycle.DesiredPhase, "")
+	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
 	return ctrl.Result{}, nil
 }
 
@@ -456,34 +456,30 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 }
 
 func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
-	if pl.Spec.Limits == nil {
-		return
-	}
+	plLimits := pl.GetPipelineLimits()
 	if v.Limits == nil {
 		v.Limits = &dfv1.VertexLimits{}
 	}
 	if v.Limits.ReadBatchSize == nil {
-		v.Limits.ReadBatchSize = pl.Spec.Limits.ReadBatchSize
+		v.Limits.ReadBatchSize = plLimits.ReadBatchSize
 	}
 	if v.Limits.ReadTimeout == nil {
-		v.Limits.ReadTimeout = pl.Spec.Limits.ReadTimeout
+		v.Limits.ReadTimeout = plLimits.ReadTimeout
 	}
 }
 
 func copyEdgeLimits(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.Edge {
-	if pl.Spec.Limits == nil {
-		return edges
-	}
+	plLimits := pl.GetPipelineLimits()
 	result := []dfv1.Edge{}
 	for _, e := range edges {
 		if e.Limits == nil {
 			e.Limits = &dfv1.EdgeLimits{}
 		}
 		if e.Limits.BufferMaxLength == nil {
-			e.Limits.BufferMaxLength = pl.Spec.Limits.BufferMaxLength
+			e.Limits.BufferMaxLength = plLimits.BufferMaxLength
 		}
 		if e.Limits.BufferUsageLimit == nil {
-			e.Limits.BufferUsageLimit = pl.Spec.Limits.BufferUsageLimit
+			e.Limits.BufferUsageLimit = plLimits.BufferUsageLimit
 		}
 		result = append(result, e)
 	}
@@ -535,7 +531,7 @@ var allVertexFilter vertexFilterFunc = func(v dfv1.Vertex) bool { return true }
 var sourceVertexFilter vertexFilterFunc = func(v dfv1.Vertex) bool { return v.IsASource() }
 
 func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-	switch pl.Spec.Lifecycle.DesiredPhase {
+	switch pl.Spec.Lifecycle.GetDesiredPhase() {
 	case dfv1.PipelinePhasePaused:
 		return r.pausePipeline(ctx, pl)
 	case dfv1.PipelinePhaseRunning, dfv1.PipelinePhaseUnknown:
