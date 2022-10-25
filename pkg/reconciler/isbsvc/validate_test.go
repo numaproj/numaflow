@@ -42,12 +42,20 @@ func TestValidateInterStepBuffer(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("test both redis and jetstream configured", func(t *testing.T) {
+		isbs := testJetStreamIsbs.DeepCopy()
+		isbs.Spec.Redis = testRedisIsbs.DeepCopy().Spec.Redis
+		err := ValidateInterStepBufferService(isbs)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `spec.redis" and "spec.jetstream" can not be defined together`)
+	})
+
 	t.Run("test missing spec.redis", func(t *testing.T) {
 		isbs := testRedisIsbs.DeepCopy()
 		isbs.Spec.Redis = nil
 		err := ValidateInterStepBufferService(isbs)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "either \"spec.redis\" or \"spec.jetstream\" needs to be specified")
+		assert.Contains(t, err.Error(), `either "spec.redis" or "spec.jetstream" needs to be specified`)
 	})
 
 	t.Run("test missing version", func(t *testing.T) {
@@ -55,7 +63,7 @@ func TestValidateInterStepBuffer(t *testing.T) {
 		isbs.Spec.Redis.Native.Version = ""
 		err := ValidateInterStepBufferService(isbs)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "\"spec.redis.native.version\" is not defined")
+		assert.Contains(t, err.Error(), `"spec.redis.native.version" is not defined`)
 	})
 
 	t.Run("test both native and external configured", func(t *testing.T) {
