@@ -27,12 +27,12 @@ type jetStreamSvc struct {
 
 func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
 	hbBucketName := JetStreamProcessorBucket(jss.pipelineName, bufferName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
 	if err != nil {
 		return nil, err
 	}
 	otBucketName := JetStreamOTBucket(jss.pipelineName, bufferName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jsclient.NewInClusterJetStreamClient())
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jss.jsClient)
 	if err != nil {
 		return nil, err
 	}
