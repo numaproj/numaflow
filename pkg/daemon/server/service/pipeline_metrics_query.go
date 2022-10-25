@@ -47,7 +47,7 @@ func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1
 			Timeout: time.Second * 3,
 		},
 	}
-	ps.vertexWatermark, err = newVertexWatermarkFetcher(pipeline)
+	ps.vertexWatermark, err = newVertexWatermarkFetcher(pipeline, isbSvcClient)
 	if err != nil {
 		return nil, err
 	}
@@ -198,16 +198,9 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 }
 
 func getBufferLimits(pl *v1alpha1.Pipeline, edge v1alpha1.Edge) (bufferLength int64, bufferUsageLimit float64) {
-	bufferLength = int64(v1alpha1.DefaultBufferLength)
-	bufferUsageLimit = v1alpha1.DefaultBufferUsageLimit
-	if x := pl.Spec.Limits; x != nil {
-		if x.BufferMaxLength != nil {
-			bufferLength = int64(*x.BufferMaxLength)
-		}
-		if x.BufferUsageLimit != nil {
-			bufferUsageLimit = float64(*x.BufferUsageLimit) / 100
-		}
-	}
+	plLimits := pl.GetPipelineLimits()
+	bufferLength = int64(*plLimits.BufferMaxLength)
+	bufferUsageLimit = float64(*plLimits.BufferUsageLimit) / 100
 	if x := edge.Limits; x != nil {
 		if x.BufferMaxLength != nil {
 			bufferLength = int64(*x.BufferMaxLength)

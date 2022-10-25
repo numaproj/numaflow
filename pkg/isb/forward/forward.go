@@ -54,8 +54,8 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 
 	options := &options{
 		retryInterval:  time.Millisecond,
-		readBatchSize:  1,
-		udfConcurrency: 1,
+		readBatchSize:  dfv1.DefaultReadBatchSize,
+		udfConcurrency: dfv1.DefaultReadBatchSize,
 		logger:         logging.NewLogger(),
 	}
 	for _, o := range opts {

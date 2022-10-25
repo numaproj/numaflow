@@ -79,7 +79,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	}
 	messagesToStep := p.whereToStep(to)
 
-	//store write offsets to publish watermark
+	// store write offsets to publish watermark
 	writeOffsets := make(map[string][]isb.Offset)
 
 	// parallel writes to each isb

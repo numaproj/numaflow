@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-//tests for pbqManager (store type - in-memory)
+// tests for pbqManager (store type - in-memory)
 
 func TestManager_ListPartitions(t *testing.T) {
 	size := 100
