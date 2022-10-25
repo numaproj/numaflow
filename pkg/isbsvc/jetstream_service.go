@@ -25,21 +25,6 @@ type jetStreamSvc struct {
 	js       *jsclient.JetStreamContext
 }
 
-func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
-	hbBucketName := JetStreamProcessorBucket(jss.pipelineName, bufferName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
-	if err != nil {
-		return nil, err
-	}
-	otBucketName := JetStreamOTBucket(jss.pipelineName, bufferName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jss.jsClient)
-	if err != nil {
-		return nil, err
-	}
-	watermarkFetcher := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
-	return watermarkFetcher, nil
-}
-
 func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBService, error) {
 	j := &jetStreamSvc{pipelineName: pipelineName}
 	for _, o := range opts {
@@ -275,6 +260,21 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) 
 		TotalMessages:   totalMessages,
 	}
 	return bufferInfo, nil
+}
+
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+	hbBucketName := JetStreamProcessorBucket(jss.pipelineName, bufferName)
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
+	if err != nil {
+		return nil, err
+	}
+	otBucketName := JetStreamOTBucket(jss.pipelineName, bufferName)
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jss.jsClient)
+	if err != nil {
+		return nil, err
+	}
+	watermarkFetcher := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+	return watermarkFetcher, nil
 }
 
 func JetStreamName(pipelineName, bufferName string) string {

@@ -20,14 +20,6 @@ type isbsRedisSvc struct {
 	client *redisclient.RedisClient
 }
 
-func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
-	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
-	hbWatcher := noop.NewKVOpWatch()
-	otWatcher := noop.NewKVOpWatch()
-	watermarkFetcher := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
-	return watermarkFetcher, nil
-}
-
 // NewISBRedisSvc is used to return a new object of type isbsRedisSvc
 func NewISBRedisSvc(client *redisclient.RedisClient) ISBService {
 	return &isbsRedisSvc{client: client}
@@ -132,4 +124,12 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*
 	}
 
 	return bufferInfo, nil
+}
+
+func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
+	hbWatcher := noop.NewKVOpWatch()
+	otWatcher := noop.NewKVOpWatch()
+	watermarkFetcher := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
+	return watermarkFetcher, nil
 }
