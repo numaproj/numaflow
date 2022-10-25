@@ -79,7 +79,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	}
 	messagesToStep := p.whereToStep(to)
 
-	//store write offsets to publish watermark
+	// store write offsets to publish watermark
 	writeOffsets := make(map[string][]isb.Offset)
 
 	// parallel writes to each isb
@@ -154,7 +154,7 @@ func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 // TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
 func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var ISBWriteBackoff = wait.Backoff{
-		Steps:    math.MaxInt64,
+		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
 		Factor:   1,
 		Jitter:   0.1,
