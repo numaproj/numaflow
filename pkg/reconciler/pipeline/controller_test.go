@@ -137,7 +137,8 @@ func Test_copyVertexLimits(t *testing.T) {
 	pl := testPipeline.DeepCopy()
 	v := pl.Spec.Vertices[0].DeepCopy()
 	copyVertexLimits(pl, v)
-	assert.Nil(t, v.Limits)
+	assert.NotNil(t, v.Limits)
+	assert.Equal(t, int64(dfv1.DefaultReadBatchSize), int64(*v.Limits.ReadBatchSize))
 	one := uint64(1)
 	limitJson := `{"readTimeout": "2s"}`
 	var pipelineLimit dfv1.PipelineLimits
@@ -145,10 +146,11 @@ func Test_copyVertexLimits(t *testing.T) {
 	assert.NoError(t, err)
 	pipelineLimit.ReadBatchSize = &one
 	pl.Spec.Limits = &pipelineLimit
-	copyVertexLimits(pl, v)
-	assert.NotNil(t, v.Limits)
-	assert.Equal(t, one, *v.Limits.ReadBatchSize)
-	assert.Equal(t, "2s", v.Limits.ReadTimeout.Duration.String())
+	v1 := new(dfv1.AbstractVertex)
+	copyVertexLimits(pl, v1)
+	assert.NotNil(t, v1.Limits)
+	assert.Equal(t, int64(one), int64(*v1.Limits.ReadBatchSize))
+	assert.Equal(t, "2s", v1.Limits.ReadTimeout.Duration.String())
 	two := uint64(2)
 	vertexLimitJson := `{"readTimeout": "3s"}`
 	var vertexLimit dfv1.VertexLimits
@@ -167,7 +169,8 @@ func Test_copyEdgeLimits(t *testing.T) {
 	edges := []dfv1.Edge{{From: "in", To: "out"}}
 	result := copyEdgeLimits(pl, edges)
 	for _, e := range result {
-		assert.Nil(t, e.Limits)
+		assert.NotNil(t, e.Limits)
+		assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*e.Limits.BufferMaxLength))
 	}
 	onethouand := uint64(1000)
 	eighty := uint32(80)
