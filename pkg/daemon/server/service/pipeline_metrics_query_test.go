@@ -51,7 +51,7 @@ func (ms *mockIsbSvcClient) ValidateBuffers(ctx context.Context, buffers []v1alp
 	return nil
 }
 
-func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
+func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
 	return nil, nil
 }
 

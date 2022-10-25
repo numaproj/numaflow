@@ -25,14 +25,14 @@ type jetStreamSvc struct {
 	js       *jsclient.JetStreamContext
 }
 
-func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
-	hbBucketName := JetStreamProcessorBucket(pipelineName, bufferName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+	hbBucketName := JetStreamProcessorBucket(jss.pipelineName, bufferName)
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, err
 	}
-	otBucketName := JetStreamOTBucket(pipelineName, bufferName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otBucketName, jsclient.NewInClusterJetStreamClient())
+	otBucketName := JetStreamOTBucket(jss.pipelineName, bufferName)
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,7 @@ type ISBService interface {
 	DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error
 	ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error
 	GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*BufferInfo, error)
-	CreateWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error)
+	CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error)
 }
 
 // bufferCreateOptions describes the options for creating buffers

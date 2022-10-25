@@ -41,7 +41,7 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.
 	for _, vertex := range pipeline.Spec.Vertices {
 		if vertex.Sink != nil {
 			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipelineName, vertex.Name)
-			fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, pipelineName, toBufferName)
+			fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, toBufferName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 			}
@@ -51,7 +51,7 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.
 			var wmFetcherList []fetch.Fetcher
 			for _, edge := range pipeline.GetToEdges(vertex.Name) {
 				toBufferName = v1alpha1.GenerateEdgeBufferName(pipeline.Namespace, pipelineName, edge.From, edge.To)
-				fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, pipelineName, toBufferName)
+				fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, toBufferName)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 				}
