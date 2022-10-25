@@ -17,7 +17,7 @@ limitations under the License.
 // Package jetstream provides interface and two implementations to connect Nats JetStream.
 //
 // Function NewDefaultJetStreamClient(url string, opts ...nats.Option) returns a client with
-// default implementationwhich, which relies on the input url and other nats connection options.
+// default implementation, which relies on the input url and other nats connection options.
 //
 // Function NewInClusterJetStreamClient() assumes the invoker is in a Kubernetes cluster, and
 // there are several environment variables are available, which are used to connect to the Nats

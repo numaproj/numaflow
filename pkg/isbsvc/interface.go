@@ -4,6 +4,7 @@ import (
 	"context"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 // ISBService is an interface used to do the operations on ISBSvc
@@ -12,11 +13,12 @@ type ISBService interface {
 	DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error
 	ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error
 	GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*BufferInfo, error)
+	CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error)
 }
 
 // bufferCreateOptions describes the options for creating buffers
 type bufferCreateOptions struct {
-	// bufferConfig is configuratiion for the to be created buffer
+	// bufferConfig is configuration for the to be created buffer
 	bufferConfig string
 }
 

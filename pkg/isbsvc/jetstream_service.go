@@ -10,6 +10,10 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -256,6 +260,21 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) 
 		TotalMessages:   totalMessages,
 	}
 	return bufferInfo, nil
+}
+
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+	hbBucketName := JetStreamProcessorBucket(jss.pipelineName, bufferName)
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
+	if err != nil {
+		return nil, err
+	}
+	otBucketName := JetStreamOTBucket(jss.pipelineName, bufferName)
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jss.jsClient)
+	if err != nil {
+		return nil, err
+	}
+	watermarkFetcher := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+	return watermarkFetcher, nil
 }
 
 func JetStreamName(pipelineName, bufferName string) string {

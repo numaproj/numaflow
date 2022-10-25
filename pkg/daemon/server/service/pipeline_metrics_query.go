@@ -47,7 +47,7 @@ func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1
 			Timeout: time.Second * 3,
 		},
 	}
-	ps.vertexWatermark, err = newVertexWatermarkFetcher(pipeline)
+	ps.vertexWatermark, err = newVertexWatermarkFetcher(pipeline, isbSvcClient)
 	if err != nil {
 		return nil, err
 	}
