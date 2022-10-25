@@ -36,8 +36,8 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, pipelineNam
 	if err != nil {
 		return nil, err
 	}
-	fetchWatermark := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
-	return fetchWatermark, nil
+	watermarkFetcher := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+	return watermarkFetcher, nil
 }
 
 func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBService, error) {

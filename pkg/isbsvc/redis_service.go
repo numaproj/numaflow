@@ -21,11 +21,11 @@ type isbsRedisSvc struct {
 }
 
 func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, pipelineName string, bufferName string) (fetch.Fetcher, error) {
-	// Watermark fetching is not supported for Redis ATM. Using no-op watchers.
+	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	hbWatcher := noop.NewKVOpWatch()
 	otWatcher := noop.NewKVOpWatch()
-	fetchWatermark := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
-	return fetchWatermark, nil
+	watermarkFetcher := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
+	return watermarkFetcher, nil
 }
 
 // NewISBRedisSvc is used to return a new object of type isbsRedisSvc
