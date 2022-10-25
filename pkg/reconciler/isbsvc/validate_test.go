@@ -63,7 +63,7 @@ func TestValidateInterStepBuffer(t *testing.T) {
 		isbs.Spec.Redis.Native.Version = ""
 		err := ValidateInterStepBufferService(isbs)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), `spec.redis.native.version" is not defined`)
+		assert.Contains(t, err.Error(), `"spec.redis.native.version" is not defined`)
 	})
 
 	t.Run("test both native and external configured", func(t *testing.T) {
