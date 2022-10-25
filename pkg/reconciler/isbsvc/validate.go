@@ -16,7 +16,7 @@ func ValidateInterStepBufferService(isbs *dfv1.InterStepBufferService) error {
 	}
 	if isbs.Spec.Redis != nil {
 		if isbs.Spec.Redis.Native != nil && isbs.Spec.Redis.External != nil {
-			return fmt.Errorf(`native" and "external" can not be defined together`)
+			return fmt.Errorf(`"native" and "external" can not be defined together`)
 		}
 		if isbs.Spec.Redis.Native == nil && isbs.Spec.Redis.External == nil {
 			return fmt.Errorf(`either "native" or "external" must be defined`)
