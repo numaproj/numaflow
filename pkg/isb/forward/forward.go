@@ -292,7 +292,7 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 	var ackRetryBackOff = wait.Backoff{
 		Factor:   1,
 		Jitter:   0.1,
-		Steps:    math.MaxInt64,
+		Steps:    math.MaxInt,
 		Duration: time.Millisecond * 10,
 	}
 	var ackOffsets = offsets
