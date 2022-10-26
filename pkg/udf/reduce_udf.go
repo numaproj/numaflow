@@ -35,7 +35,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	defer cancel()
 	var windower window.Windower
 	if x := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed; x != nil {
-		// TODO: check if Length is empty
 		windower = fixed.NewFixed(x.Length.Duration)
 	}
 	if windower == nil {
