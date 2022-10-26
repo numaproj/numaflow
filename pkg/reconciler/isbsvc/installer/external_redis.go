@@ -24,6 +24,7 @@ func (eri *externalRedisInstaller) Install(ctx context.Context) (*dfv1.BufferSer
 	if eri.isbs.Spec.Redis == nil || eri.isbs.Spec.Redis.External == nil {
 		return nil, fmt.Errorf("invalid InterStepBufferService spec, no external config")
 	}
+	eri.isbs.Status.SetType(dfv1.ISBSvcTypeRedis)
 	eri.isbs.Status.MarkConfigured()
 	eri.isbs.Status.MarkDeployed()
 	eri.logger.Info("Using external redis config")

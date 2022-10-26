@@ -1264,7 +1264,8 @@ ISBSvcType (<code>string</code> alias)
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.GetDaemonDeploymentReq">GetDaemonDeploymentReq</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">GetVertexPodSpecReq</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">GetVertexPodSpecReq</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBufferServiceStatus">InterStepBufferServiceStatus</a>)
 </p>
 <p>
 </p>
@@ -1432,6 +1433,15 @@ Description
 <code>config</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">
 BufferServiceConfig </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>type</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ISBSvcType"> ISBSvcType </a>
+</em>
 </td>
 <td>
 </td>
