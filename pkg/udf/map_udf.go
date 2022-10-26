@@ -68,8 +68,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}
 	case dfv1.ISBSvcTypeJetStream:
-
-		fromStreamName := fmt.Sprintf("%s-%s", u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
+		fromStreamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
 		readOptions := []jetstreamisb.ReadOption{
 			jetstreamisb.WithUsingAckInfoAsRate(true),
 		}
@@ -106,7 +105,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}
 	default:
-		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
+		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
 	conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
@@ -126,7 +125,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		return result, nil
 	})
 
-	log = log.With("protocol", "uds-grpc-udf")
+	log = log.With("protocol", "uds-grpc-map-udf")
 	udfHandler, err := function.NewUDSGRPCBasedUDF()
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)

@@ -11,6 +11,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -52,7 +53,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readOptions...)
 	case dfv1.ISBSvcTypeJetStream:
-		streamName := fmt.Sprintf("%s-%s", u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
+		streamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
 		readOptions := []jetstreamisb.ReadOption{
 			jetstreamisb.WithUsingAckInfoAsRate(true),
 		}

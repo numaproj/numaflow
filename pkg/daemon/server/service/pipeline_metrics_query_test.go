@@ -113,10 +113,6 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 }
 
 func TestGetBuffer(t *testing.T) {
-	// TODO: fix it.
-	if true {
-		t.SkipNow()
-	}
 	pipelineName := "simple-pipeline"
 	namespace := "numaflow-system"
 	edges := []v1alpha1.Edge{
@@ -154,8 +150,6 @@ func TestGetBuffer(t *testing.T) {
 }
 
 func TestListBuffers(t *testing.T) {
-	// TODO: fix it.
-	t.SkipNow()
 	pipelineName := "simple-pipeline"
 	namespace := "numaflow-system"
 	edges := []v1alpha1.Edge{
