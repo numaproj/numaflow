@@ -169,13 +169,19 @@ message Edge {
 
   optional string to = 2;
 
-  // Conditional forwarding, only allowed when "From" is a Sink or UDF
+  // Conditional forwarding, only allowed when "From" is a Sink or UDF.
   // +optional
   optional ForwardConditions conditions = 3;
 
-  // Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings
+  // Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.
   // +optional
   optional EdgeLimits limits = 4;
+
+  // Parallelism is only effective when the "to" vertex is a reduce vertex,
+  // if it's provided, the default value is set to "1".
+  // Parallelism is ignored when the "to" vertex is not a reduce vertex.
+  // +optional
+  optional int32 parallelism = 5;
 }
 
 message EdgeLimits {
@@ -188,6 +194,11 @@ message EdgeLimits {
   // It overrides the settings from pipeline limits.
   // +optional
   optional uint32 bufferUsageLimit = 2;
+}
+
+// FixedWindow describes a fixed window
+message FixedWindow {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
 }
 
 message ForwardConditions {
@@ -320,6 +331,14 @@ message GetVertexPodSpecReq {
   optional string pullPolicy = 3;
 
   repeated k8s.io.api.core.v1.EnvVar env = 4;
+}
+
+// GroupBy indicates it is a reducer UDF
+message GroupBy {
+  optional Window window = 1;
+
+  // +optional
+  optional bool keyed = 2;
 }
 
 message HTTPSource {
@@ -895,7 +914,10 @@ message UDF {
   optional Container container = 1;
 
   // +optional
-  optional Function builtin = 12;
+  optional Function builtin = 2;
+
+  // +optional
+  optional GroupBy groupBy = 3;
 }
 
 message UDSink {
@@ -995,5 +1017,11 @@ message Watermark {
   // +kubebuilder:default="0s"
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxDelay = 2;
+}
+
+// Window describes windowing strategy
+message Window {
+  // +optional
+  optional FixedWindow fixed = 1;
 }
 

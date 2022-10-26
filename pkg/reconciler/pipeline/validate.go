@@ -133,5 +133,21 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if min > max {
 		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
 	}
+	if v.UDF != nil {
+		return validateUDF(*v.UDF)
+	}
+	return nil
+}
+
+func validateUDF(udf dfv1.UDF) error {
+	if udf.GroupBy != nil {
+		if x := udf.GroupBy.Window.Fixed; x == nil {
+			return fmt.Errorf(`invalid "groupBy.window", no windowing strategy specified`)
+		} else {
+			if x.Length == nil {
+				return fmt.Errorf(`invalid "groupBy.window", "length" is missing`)
+			}
+		}
+	}
 	return nil
 }

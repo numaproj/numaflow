@@ -8,6 +8,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/udf/reducer"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
@@ -24,6 +25,7 @@ type udsGRPCBasedUDF struct {
 }
 
 var _ applier.Applier = (*udsGRPCBasedUDF)(nil)
+var _ reducer.Reducer = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
 func NewUDSGRPCBasedUDF() (*udsGRPCBasedUDF, error) {

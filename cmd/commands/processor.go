@@ -58,21 +58,27 @@ func NewProcessorCommand() *cobra.Command {
 				Replica:  int32(replica),
 			}
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), log)
-			switch processorType {
-			case "source":
+			switch dfv1.VertexType(processorType) {
+			case dfv1.VertexTypeSource:
 				p := &sources.SourceProcessor{
 					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
 					VertexInstance: vertexInstance,
 				}
 				return p.Start(ctx)
-			case "sink":
+			case dfv1.VertexTypeSink:
 				p := &sinks.SinkProcessor{
 					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
 					VertexInstance: vertexInstance,
 				}
 				return p.Start(ctx)
-			case "udf":
-				p := &udf.UDFProcessor{
+			case dfv1.VertexTypeMapUDF:
+				p := &udf.MapUDFProcessor{
+					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
+					VertexInstance: vertexInstance,
+				}
+				return p.Start(ctx)
+			case dfv1.VertexTypeReduceUDF:
+				p := &udf.ReduceUDFProcessor{
 					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
 					VertexInstance: vertexInstance,
 				}
