@@ -92,7 +92,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 
 func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
-	// However, since it is bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
+	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
 	grpc_prometheus.EnableHandlingTimeHistogram()
 

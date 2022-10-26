@@ -167,7 +167,14 @@ func TestListBuffers(t *testing.T) {
 			Name:      pipelineName,
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.PipelineSpec{Edges: edges},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "in"},
+				{Name: "cat"},
+				{Name: "out"},
+			},
+			Edges: edges,
+		},
 	}
 
 	ms := &mockIsbSvcClient{}
