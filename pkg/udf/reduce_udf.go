@@ -3,23 +3,27 @@ package udf
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
+	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
+	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/reduce"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/window"
-	fixWindow "github.com/numaproj/numaflow/pkg/window/strategy/fixed"
+	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 	"go.uber.org/zap"
 )
 
@@ -32,31 +36,70 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	var windower window.Windower
+	if x := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed; x != nil {
+		// TODO: check if Length is empty
+		windower = fixed.NewFixed(x.Length.Duration)
+	}
+	if windower == nil {
+		return fmt.Errorf("invalid window spec")
+	}
 	var reader isb.BufferReader
 	var err error
-	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
-	toBuffers := u.VertexInstance.Vertex.GetToBuffers()
+	fromBuffers := u.VertexInstance.Vertex.GetFromBuffers()
+	var fromBufferName string
+	for _, b := range fromBuffers {
+		if strings.HasSuffix(b.Name, fmt.Sprintf("-%d", u.VertexInstance.Replica)) {
+			fromBufferName = b.Name
+			break
+		}
+	}
+	if len(fromBufferName) == 0 {
+		return fmt.Errorf("can not find from buffer")
+	}
 	writers := make(map[string]isb.BufferWriter)
-
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
-
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		reader, writers = buildRedisBufferIO(ctx, fromBufferName, u.VertexInstance)
+
 	case dfv1.ISBSvcTypeJetStream:
+		fromStreamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
+		readOptions := []jetstreamisb.ReadOption{}
+		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
+			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
+		}
+		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName, readOptions...)
+		if err != nil {
+			return err
+		}
+
 		// build watermark progressors
 		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
 		if err != nil {
 			return err
 		}
-		reader, writers, err = buildJetStreamBufferIO(ctx, fromBufferName, u.VertexInstance)
-		if err != nil {
-			return err
-		}
 
+		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
+			writeOpts := []jetstreamisb.WriteOption{}
+			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
+				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
+			}
+			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
+				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+			}
+			buffers := dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e)
+			for _, buffer := range buffers {
+				streamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, buffer)
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
+				if err != nil {
+					return err
+				}
+				writers[buffer] = writer
+			}
+		}
 	default:
-		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
+		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
 	conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
@@ -91,41 +134,32 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}
 	}()
-	log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
-
-	opts := []reduce.Option{reduce.WithVertexType(dfv1.VertexTypeReduceUDF)}
-	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-
-	var windowStratergy window.Windower
-
-	if fixed := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed; fixed != nil {
-		windowStratergy = fixWindow.NewFixed(fixed.Length.Duration)
-	}
+	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName))
 
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType)))
 
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
-		return err
+		return fmt.Errorf("failed to create pbq manager, %w", err)
 	}
-
-	reduceDataForwarder, err := reduce.NewDataForward(ctx, udfHandler, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windowStratergy, opts...)
+	opts := []reduce.Option{}
+	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
+		if x.ReadBatchSize != nil {
+			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))
+		}
+	}
+	dataforwarder, err := reduce.NewDataForward(ctx, udfHandler, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, opts...)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		reduceDataForwarder.Start(ctx)
+		dataforwarder.Start(ctx)
 		log.Info("Forwarder stopped, exiting reduce udf data processor...")
-		return
 	}()
 
 	metricsOpts := []metrics.Option{

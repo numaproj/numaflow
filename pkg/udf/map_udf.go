@@ -41,8 +41,14 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	case dfv1.ISBSvcTypeRedis:
 		reader, writers = buildRedisBufferIO(ctx, fromBufferName, u.VertexInstance)
 	case dfv1.ISBSvcTypeJetStream:
-		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
+		fromStreamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
+		readOptions := []jetstreamisb.ReadOption{
+			jetstreamisb.WithUsingAckInfoAsRate(true),
+		}
+		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
+			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
+		}
+		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName, readOptions...)
 		if err != nil {
 			return err
 		}
@@ -52,7 +58,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 
 	default:
-		return fmt.Errorf("unrecognized isbs type %q", u.ISBSvcType)
+		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
 	// TODO update this to support shuffle
@@ -74,7 +80,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	})
 
 	log = log.With("protocol", "uds-grpc-map-udf")
-
 	udfHandler, err := function.NewUDSGRPCBasedUDF()
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)

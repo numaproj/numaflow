@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -281,16 +282,59 @@ func (p Pipeline) GetDaemonServiceObj() *corev1.Service {
 	}
 }
 
+// GetPipelineLimits returns the pipeline limits with default values
+func (p Pipeline) GetPipelineLimits() PipelineLimits {
+	defaultReadBatchSize := uint64(DefaultReadBatchSize)
+	defaultBufferMaxLength := uint64(DefaultBufferLength)
+	defaultBufferUsageLimit := uint32(100 * DefaultBufferUsageLimit)
+	defaultReadTimeout := time.Second
+	limits := PipelineLimits{
+		ReadBatchSize:    &defaultReadBatchSize,
+		BufferMaxLength:  &defaultBufferMaxLength,
+		BufferUsageLimit: &defaultBufferUsageLimit,
+		ReadTimeout:      &metav1.Duration{Duration: defaultReadTimeout},
+	}
+	if x := p.Spec.Limits; x != nil {
+		if x.ReadBatchSize != nil {
+			limits.ReadBatchSize = x.ReadBatchSize
+		}
+		if x.BufferMaxLength != nil {
+			limits.BufferMaxLength = x.BufferMaxLength
+		}
+		if x.BufferUsageLimit != nil {
+			limits.BufferUsageLimit = x.BufferUsageLimit
+		}
+		if x.ReadTimeout != nil {
+			limits.ReadTimeout = x.ReadTimeout
+		}
+	}
+	return limits
+}
+
 type Lifecycle struct {
 	// DeleteGracePeriodSeconds used to delete pipeline gracefully
 	// +kubebuilder:default=30
 	// +optional
-	DeleteGracePeriodSeconds int32 `json:"deleteGracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=deleteGracePeriodSeconds"`
-
+	DeleteGracePeriodSeconds *int32 `json:"deleteGracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=deleteGracePeriodSeconds"`
 	// DesiredPhase used to bring the pipeline from current phase to desired phase
 	// +kubebuilder:default=Running
 	// +optional
 	DesiredPhase PipelinePhase `json:"desiredPhase,omitempty" protobuf:"bytes,2,opt,name=desiredPhase"`
+}
+
+// GetDeleteGracePeriodSeconds returns the value DeleteGracePeriodSeconds.
+func (lc Lifecycle) GetDeleteGracePeriodSeconds() int32 {
+	if lc.DeleteGracePeriodSeconds != nil {
+		return *lc.DeleteGracePeriodSeconds
+	}
+	return 30
+}
+
+func (lc Lifecycle) GetDesiredPhase() PipelinePhase {
+	if string(lc.DesiredPhase) != "" {
+		return lc.DesiredPhase
+	}
+	return PipelinePhaseRunning
 }
 
 type PipelineSpec struct {
@@ -328,6 +372,14 @@ type Watermark struct {
 	MaxDelay *metav1.Duration `json:"maxDelay,omitempty" protobuf:"bytes,2,opt,name=maxDelay"`
 }
 
+// GetMaxDelay returns the configured max delay with a default value
+func (wm Watermark) GetMaxDelay() time.Duration {
+	if wm.MaxDelay != nil {
+		return wm.MaxDelay.Duration
+	}
+	return time.Duration(0)
+}
+
 type PipelineLimits struct {
 	// Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings
 	// +kubebuilder:default=500
@@ -336,7 +388,7 @@ type PipelineLimits struct {
 	// BufferMaxLength is used to define the max length of a buffer
 	// Only applies to UDF and Source vertice as only they do buffer write.
 	// It can be overridden by the settings in vertex limits.
-	// +kubebuilder:default=30000
+	// +kubebuilder:default=50000
 	// +optional
 	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,2,opt,name=bufferMaxLength"`
 	// BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.

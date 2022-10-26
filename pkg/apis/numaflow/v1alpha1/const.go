@@ -98,8 +98,10 @@ const (
 
 	DefaultRequeueAfter = 10 * time.Second
 
+	// ISB
 	DefaultBufferLength     = 50000
 	DefaultBufferUsageLimit = 0.8
+	DefaultReadBatchSize    = 500
 
 	// Auto scaling
 	DefaultLookbackSeconds         = 180 // Default lookback seconds for calculating avg rate and pending
@@ -124,9 +126,6 @@ const (
 	// Default window options
 	DefaultWindowType     = FixedType
 	DefaultWindowDuration = 0
-
-	// Default reduce forward options
-	DefaultReadBatchSize = 100
 )
 
 // PBQ store's backend type.
