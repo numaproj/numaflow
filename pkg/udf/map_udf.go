@@ -29,10 +29,10 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var reader isb.BufferReader
+	var writers map[string]isb.BufferWriter
 	var err error
 	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
 	toBuffers := u.VertexInstance.Vertex.GetToBuffers()
-	writers := make(map[string]isb.BufferWriter)
 
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))

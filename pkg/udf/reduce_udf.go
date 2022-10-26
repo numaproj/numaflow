@@ -42,6 +42,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("invalid window spec")
 	}
 	var reader isb.BufferReader
+	var writers map[string]isb.BufferWriter
 	var err error
 	fromBuffers := u.VertexInstance.Vertex.GetFromBuffers()
 	var fromBufferName string
@@ -54,7 +55,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if len(fromBufferName) == 0 {
 		return fmt.Errorf("can not find from buffer")
 	}
-	writers := make(map[string]isb.BufferWriter)
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
 	switch u.ISBSvcType {
