@@ -113,7 +113,6 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 }
 
 func TestGetBuffer(t *testing.T) {
-
 	pipelineName := "simple-pipeline"
 	namespace := "numaflow-system"
 	edges := []v1alpha1.Edge{
@@ -127,7 +126,13 @@ func TestGetBuffer(t *testing.T) {
 			Name:      pipelineName,
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.PipelineSpec{Edges: edges},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "in"},
+				{Name: "cat"},
+			},
+			Edges: edges,
+		},
 	}
 
 	ms := &mockIsbSvcClient{}
@@ -145,7 +150,6 @@ func TestGetBuffer(t *testing.T) {
 }
 
 func TestListBuffers(t *testing.T) {
-
 	pipelineName := "simple-pipeline"
 	namespace := "numaflow-system"
 	edges := []v1alpha1.Edge{
@@ -163,7 +167,14 @@ func TestListBuffers(t *testing.T) {
 			Name:      pipelineName,
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.PipelineSpec{Edges: edges},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "in"},
+				{Name: "cat"},
+				{Name: "out"},
+			},
+			Edges: edges,
+		},
 	}
 
 	ms := &mockIsbSvcClient{}

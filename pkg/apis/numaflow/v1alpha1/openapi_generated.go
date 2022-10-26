@@ -38,6 +38,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":              schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge":                           schema_pkg_apis_numaflow_v1alpha1_Edge(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.EdgeLimits":                     schema_pkg_apis_numaflow_v1alpha1_EdgeLimits(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                    schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions":              schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function":                       schema_pkg_apis_numaflow_v1alpha1_Function(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource":                schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref),
@@ -47,6 +48,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisServiceSpecReq":         schema_pkg_apis_numaflow_v1alpha1_GetRedisServiceSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisStatefulSetSpecReq":     schema_pkg_apis_numaflow_v1alpha1_GetRedisStatefulSetSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetVertexPodSpecReq":            schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy":                        schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource":                     schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferService":         schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceList":     schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceList(ref),
@@ -84,6 +86,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexSpec":                     schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexStatus":                   schema_pkg_apis_numaflow_v1alpha1_VertexStatus(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark":                      schema_pkg_apis_numaflow_v1alpha1_Watermark(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window":                         schema_pkg_apis_numaflow_v1alpha1_Window(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.containerBuilder":               schema_pkg_apis_numaflow_v1alpha1_containerBuilder(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.getContainerReq":                schema_pkg_apis_numaflow_v1alpha1_getContainerReq(ref),
 	}
@@ -471,14 +474,21 @@ func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common
 					},
 					"conditions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Conditional forwarding, only allowed when \"From\" is a Sink or UDF",
+							Description: "Conditional forwarding, only allowed when \"From\" is a Sink or UDF.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
 						},
 					},
 					"limits": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings",
+							Description: "Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.EdgeLimits"),
+						},
+					},
+					"parallelism": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},
@@ -513,6 +523,26 @@ func schema_pkg_apis_numaflow_v1alpha1_EdgeLimits(ref common.ReferenceCallback) 
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "FixedWindow describes a fixed window",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"length": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -1062,6 +1092,35 @@ func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceC
 		},
 		Dependencies: []string{
 			"k8s.io/api/core/v1.EnvVar"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "GroupBy indicates it is a reducer UDF",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"window": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window"),
+						},
+					},
+					"keyed": {
+						SchemaProps: spec.SchemaProps{
+							Default: false,
+							Type:    []string{"boolean"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"window"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window"},
 	}
 }
 
@@ -2482,11 +2541,16 @@ func schema_pkg_apis_numaflow_v1alpha1_UDF(ref common.ReferenceCallback) common.
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function"),
 						},
 					},
+					"groupBy": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy"},
 	}
 }
 
@@ -2951,6 +3015,26 @@ func schema_pkg_apis_numaflow_v1alpha1_Watermark(ref common.ReferenceCallback) c
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_Window(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Window describes windowing strategy",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"fixed": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow"},
 	}
 }
 

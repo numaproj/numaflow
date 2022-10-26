@@ -21,7 +21,7 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, error) {
 }
 
 func (s Sink) getMainContainer(req getContainerReq) corev1.Container {
-	return containerBuilder{}.init(req).args("processor", "--type=sink", "--isbsvc-type="+string(req.isbSvcType)).build()
+	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
 func (s Sink) getUDSinkContainer(req getContainerReq) corev1.Container {

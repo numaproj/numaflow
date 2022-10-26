@@ -15,6 +15,6 @@ type Source struct {
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
 	return []corev1.Container{
-		containerBuilder{}.init(req).args("processor", "--type=source", "--isbsvc-type="+string(req.isbSvcType)).build(),
+		containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType)).build(),
 	}, nil
 }

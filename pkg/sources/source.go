@@ -11,6 +11,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -53,11 +54,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
-			group := buffer + "-group"
-			redisClient := redisclient.NewInClusterRedisClient()
-			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
-			writers = append(writers, writer)
+			buffers := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e)
+			for _, buffer := range buffers {
+				group := buffer + "-group"
+				redisClient := redisclient.NewInClusterRedisClient()
+				writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
+				writers = append(writers, writer)
+			}
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
@@ -79,14 +82,16 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
-			streamName := fmt.Sprintf("%s-%s", sp.VertexInstance.Vertex.Spec.PipelineName, buffer)
-			jetStreamClient := jsclient.NewInClusterJetStreamClient()
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
-			if err != nil {
-				return err
+			buffers := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e)
+			for _, buffer := range buffers {
+				streamName := isbsvc.JetStreamName(sp.VertexInstance.Vertex.Spec.PipelineName, buffer)
+				jetStreamClient := jsclient.NewInClusterJetStreamClient()
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
+				if err != nil {
+					return err
+				}
+				writers = append(writers, writer)
 			}
-			writers = append(writers, writer)
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)

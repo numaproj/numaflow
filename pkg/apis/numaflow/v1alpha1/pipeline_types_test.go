@@ -30,6 +30,25 @@ var (
 	}
 )
 
+func Test_ListAllEdges(t *testing.T) {
+	es := testPipeline.ListAllEdges()
+	assert.Equal(t, 2, len(es))
+	assert.Nil(t, es[0].Parallelism)
+	assert.Nil(t, es[1].Parallelism)
+	pl := testPipeline.DeepCopy()
+	pl.Spec.Vertices[1].UDF.GroupBy = &GroupBy{}
+	es = pl.ListAllEdges()
+	assert.Equal(t, 2, len(es))
+	assert.NotNil(t, es[0].Parallelism)
+	assert.Equal(t, int32(1), *es[0].Parallelism)
+	assert.Nil(t, es[1].Parallelism)
+	pl.Spec.Edges[0].Parallelism = pointer.Int32(3)
+	es = pl.ListAllEdges()
+	assert.Equal(t, 2, len(es))
+	assert.NotNil(t, es[0].Parallelism)
+	assert.Equal(t, int32(3), *es[0].Parallelism)
+}
+
 func Test_GetToEdges(t *testing.T) {
 	es := testPipeline.GetToEdges("p1")
 	assert.Equal(t, 1, len(es))
@@ -198,6 +217,13 @@ func Test_GetDownstreamEdges(t *testing.T) {
 			Namespace: "test-ns",
 		},
 		Spec: PipelineSpec{
+			Vertices: []AbstractVertex{
+				{Name: "input"},
+				{Name: "p1"},
+				{Name: "p2"},
+				{Name: "p11"},
+				{Name: "output"},
+			},
 			Edges: []Edge{
 				{From: "input", To: "p1"},
 				{From: "p1", To: "p11"},
@@ -208,7 +234,7 @@ func Test_GetDownstreamEdges(t *testing.T) {
 	}
 	edges := pl.GetDownstreamEdges("input")
 	assert.Equal(t, 4, len(edges))
-	assert.Equal(t, edges, pl.Spec.Edges)
+	assert.Equal(t, edges, pl.ListAllEdges())
 	assert.Equal(t, edges[2], Edge{From: "p1", To: "p2"})
 
 	edges = pl.GetDownstreamEdges("p1")
