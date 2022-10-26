@@ -23,7 +23,7 @@ type When struct {
 	restConfig     *rest.Config
 	kubeClient     kubernetes.Interface
 
-	portForwarderStopChanels map[string]chan struct{}
+	portForwarderStopChannels map[string]chan struct{}
 }
 
 func (w *When) CreateISBSvc() *When {
@@ -135,10 +135,10 @@ func (w *When) VertexPodPortForward(vertexName string, localPort, remotePort int
 	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
 		w.t.Fatalf("Expected vertex pod port-forward: %v", err)
 	}
-	if w.portForwarderStopChanels == nil {
-		w.portForwarderStopChanels = make(map[string]chan struct{})
+	if w.portForwarderStopChannels == nil {
+		w.portForwarderStopChannels = make(map[string]chan struct{})
 	}
-	w.portForwarderStopChanels[podName] = stopCh
+	w.portForwarderStopChannels[podName] = stopCh
 	return w
 }
 
@@ -157,17 +157,17 @@ func (w *When) DaemonPodPortForward(pipelineName string, localPort, remotePort i
 	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
 		w.t.Fatalf("Expected daemon pod port-forward: %v", err)
 	}
-	if w.portForwarderStopChanels == nil {
-		w.portForwarderStopChanels = make(map[string]chan struct{})
+	if w.portForwarderStopChannels == nil {
+		w.portForwarderStopChannels = make(map[string]chan struct{})
 	}
-	w.portForwarderStopChanels[podName] = stopCh
+	w.portForwarderStopChannels[podName] = stopCh
 	return w
 }
 
 func (w *When) TerminateAllPodPortForwards() *When {
 	w.t.Helper()
-	if len(w.portForwarderStopChanels) > 0 {
-		for k, v := range w.portForwarderStopChanels {
+	if len(w.portForwarderStopChannels) > 0 {
+		for k, v := range w.portForwarderStopChannels {
 			w.t.Logf("Terminating port-forward for POD %s", k)
 			close(v)
 		}
