@@ -14,6 +14,12 @@ func Test_ISBSvcSetPhase(t *testing.T) {
 	assert.Equal(t, ISBSvcPhasePending, s.Phase)
 }
 
+func Test_ISBSvcSetType(t *testing.T) {
+	s := InterStepBufferServiceStatus{}
+	s.SetType(ISBSvcTypeJetStream)
+	assert.Equal(t, ISBSvcTypeJetStream, s.Type)
+}
+
 func Test_ISBSvcInitConditions(t *testing.T) {
 	s := InterStepBufferServiceStatus{}
 	s.InitConditions()
