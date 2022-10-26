@@ -13,7 +13,7 @@ import (
 // Installer is an interface for ISBS installation
 type Installer interface {
 	Install(ctx context.Context) (*dfv1.BufferServiceConfig, error)
-	// Uninsall only needs to handle those resources not cascade deleted.
+	// Uninstall only needs to handle those resources not cascade deleted.
 	// For example, undeleted PVCs not automatically deleted when deleting a StatefulSet
 	Uninstall(ctx context.Context) error
 }

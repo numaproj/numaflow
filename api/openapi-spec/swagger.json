@@ -17904,6 +17904,9 @@
         },
         "phase": {
           "type": "string"
+        },
+        "type": {
+          "type": "string"
         }
       }
     },

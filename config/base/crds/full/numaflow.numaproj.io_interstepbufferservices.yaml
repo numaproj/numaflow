@@ -18,12 +18,18 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .status.type
+      name: Type
+      type: string
     - jsonPath: .status.phase
       name: Phase
       type: string
     - jsonPath: .status.message
       name: Message
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -4710,6 +4716,8 @@ spec:
                 - Pending
                 - Running
                 - Failed
+                type: string
+              type:
                 type: string
             type: object
         required:

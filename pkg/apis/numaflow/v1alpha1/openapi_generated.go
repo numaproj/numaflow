@@ -1315,6 +1315,12 @@ func schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceStatus(ref common.R
 							Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BufferServiceConfig"),
 						},
 					},
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 			},
 		},

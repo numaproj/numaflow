@@ -17908,6 +17908,9 @@
         },
         "phase": {
           "type": "string"
+        },
+        "type": {
+          "type": "string"
         }
       },
       "type": "object"
