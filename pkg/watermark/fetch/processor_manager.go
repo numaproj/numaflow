@@ -58,7 +58,7 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	return v
 }
 
-// addProcessor adds a new processor.
+// addProcessor adds a new processor. If the given processor already exists, the value will be updated.
 func (v *ProcessorManager) addProcessor(processor string, p *ProcessorToFetch) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -161,7 +161,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 			case store.KVPut:
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
-				if p == nil {
+				if p == nil || p.IsDeleted() {
 					// if p is nil, create a new processor
 					// A fromProcessor needs to be added to v.processors
 					// The fromProcessor may have been deleted

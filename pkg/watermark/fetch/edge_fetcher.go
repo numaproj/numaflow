@@ -35,7 +35,11 @@ func NewEdgeFetcher(ctx context.Context, edgeName string, processorManager *Proc
 
 // GetHeadWatermark returns the watermark using the HeadOffset (the latest offset among all processors). This
 // can be used in showing the watermark progression for a vertex when not consuming the messages
-// directly (eg. UX, tests,)
+// directly (eg. UX, tests)
+// NOTE
+//   - We don't use this function in the regular pods in the vertex.
+//   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
+//     Meaning, in the UX (daemon service) we never delete any processor.
 func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
 	var debugString strings.Builder
 	var headOffset int64 = math.MinInt64
