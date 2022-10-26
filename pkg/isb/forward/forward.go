@@ -112,6 +112,7 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 					log.Info("Shutting down...")
 					return
 				}
+				// else ?
 			default:
 				// once context.Done() is called, we still have to try to forwardAChunk because in graceful
 				// shutdown the fromBuffer should be empty.
