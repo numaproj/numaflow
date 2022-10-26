@@ -49,8 +49,10 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=isbsvc
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.status.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type InterStepBufferService struct {
@@ -86,11 +88,16 @@ type InterStepBufferServiceStatus struct {
 	Phase   ISBSvcPhase         `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=ISBSvcPhase"`
 	Message string              `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
 	Config  BufferServiceConfig `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
+	Type    ISBSvcType          `json:"type,omitempty" protobuf:"bytes,5,opt,name=type"`
 }
 
 func (isbsvc *InterStepBufferServiceStatus) SetPhase(phase ISBSvcPhase, msg string) {
 	isbsvc.Phase = phase
 	isbsvc.Message = msg
+}
+
+func (isbsvc *InterStepBufferServiceStatus) SetType(typ ISBSvcType) {
+	isbsvc.Type = typ
 }
 
 // InitConditions sets conditions to Unknown state.

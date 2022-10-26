@@ -60,6 +60,7 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 	if js := r.isbs.Spec.JetStream; js == nil {
 		return nil, fmt.Errorf("invalid jetstream isbs spec")
 	}
+	r.isbs.Status.SetType(dfv1.ISBSvcTypeJetStream)
 	// merge
 	v := viper.New()
 	v.SetConfigType("yaml")
