@@ -10,15 +10,10 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
-	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
-	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
-	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/reduce"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
-	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/function"
@@ -64,63 +59,16 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		redisClient := redisclient.NewInClusterRedisClient()
-		fromGroup := fromBufferName + "-group"
-		readerOpts := []redisisb.Option{}
-		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
-			readerOpts = append(readerOpts, redisisb.WithReadTimeOut(x.ReadTimeout.Duration))
-		}
-		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
-		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readerOpts...)
-		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
-
-			writeOpts := []redisisb.Option{}
-			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
-				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
-			}
-			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
-			}
-			buffers := dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e)
-			for _, buffer := range buffers {
-				writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
-				writers[buffer] = writer
-			}
-		}
+		reader, writers = buildRedisBufferIO(ctx, fromBufferName, u.VertexInstance)
 	case dfv1.ISBSvcTypeJetStream:
-		fromStreamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
-		readOptions := []jetstreamisb.ReadOption{}
-		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
-			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
-		}
-		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName, readOptions...)
-		if err != nil {
-			return err
-		}
-
 		// build watermark progressors
 		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
 		if err != nil {
 			return err
 		}
-
-		for _, e := range u.VertexInstance.Vertex.Spec.ToEdges {
-			writeOpts := []jetstreamisb.WriteOption{}
-			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
-				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
-			}
-			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
-			}
-			buffers := dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, e)
-			for _, buffer := range buffers {
-				streamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, buffer)
-				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
-				if err != nil {
-					return err
-				}
-				writers[buffer] = writer
-			}
+		reader, writers, err = buildJetStreamBufferIO(ctx, fromBufferName, u.VertexInstance)
+		if err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
@@ -167,7 +115,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)
 	}
-	opts := []reduce.Option{}
+	opts := []reduce.Option{reduce.WithVertexType(dfv1.VertexTypeReduceUDF)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))

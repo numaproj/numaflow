@@ -12,10 +12,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"go.uber.org/zap"
 )
 
@@ -35,20 +35,14 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	writers := make(map[string]isb.BufferWriter)
 
 	// watermark variables
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(toBuffers))
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		reader, writers = buildRedisBufferIO(ctx, fromBufferName, u.VertexInstance)
 	case dfv1.ISBSvcTypeJetStream:
-		fromStreamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
-		readOptions := []jetstreamisb.ReadOption{
-			jetstreamisb.WithUsingAckInfoAsRate(true),
-		}
-		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
-			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
-		}
-		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), fromBufferName, fromStreamName, fromStreamName, readOptions...)
+		// build watermark progressors
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
 		if err != nil {
 			return err
 		}
@@ -56,12 +50,10 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
-	// TODO update this to support shuffle
 	conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
 		result := []string{}
 		_key := string(key)
@@ -116,7 +108,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		defer wg.Done()
 		for {
 			<-stopped
-			log.Info("Forwarder stopped, exiting udf map data processor...")
+			log.Info("Forwarder stopped, exiting udf data processor...")
 			return
 		}
 	}()
