@@ -357,12 +357,17 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan bool, errs chan error) error {
 	stream, err := client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
 	if err != nil {
+		fmt.Printf("KeranTest1 - I am here, getting error: %v", err)
 		return err
 	}
-	defer func() { _ = stream.Close() }()
+	defer func() {
+		fmt.Printf("KeranTest2 - I am here, closing the log stream.")
+		_ = stream.Close()
+	}()
 
 	exp, err := regexp.Compile(regex)
 	if err != nil {
+		fmt.Printf("KeranTest3 - I am here: %v, seems can't compile the regex.", err)
 		return err
 	}
 
@@ -370,6 +375,7 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 	for {
 		select {
 		case <-ctx.Done():
+			fmt.Printf("KeranTest4 - I am here, context is done.")
 			return nil
 		default:
 			if !s.Scan() {
