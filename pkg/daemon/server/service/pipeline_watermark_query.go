@@ -74,7 +74,7 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 
 	// If watermark is not enabled, return time zero
 	if ps.pipeline.Spec.Watermark.Disabled {
-		timeZero := time.Unix(0, 0).Unix()
+		timeZero := time.Unix(0, 0).UnixMilli()
 		v := &daemon.VertexWatermark{
 			Pipeline:           &ps.pipeline.Name,
 			Vertex:             request.Vertex,
