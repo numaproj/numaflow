@@ -4,8 +4,9 @@ on:
     branches:
       - "main"
       - "release-*"
+      - "flaky-e2e"
   pull_request:
-    branches: [main]
+    branches: [flaky-e2e, main]
 jobs:
   ui:
     name: UI
