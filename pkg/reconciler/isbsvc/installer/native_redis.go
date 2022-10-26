@@ -57,6 +57,7 @@ func (r *redisInstaller) Install(ctx context.Context) (*dfv1.BufferServiceConfig
 	if redis := r.isbs.Spec.Redis; redis == nil {
 		return nil, fmt.Errorf("invalid native redis isbs spec")
 	}
+	r.isbs.Status.SetType(dfv1.ISBSvcTypeRedis)
 	if err := r.createScriptsConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis scripts ConfigMap", zap.Error(err))
 		r.isbs.Status.MarkDeployFailed("RedisScriptsConfigMapFailed", err.Error())
