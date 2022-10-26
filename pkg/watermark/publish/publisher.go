@@ -140,7 +140,7 @@ func (p *publish) loadLatestFromStore() processor.Watermark {
 			latestWatermark = epoch
 		}
 	}
-	var timeWatermark = time.Unix(latestWatermark, 0)
+	var timeWatermark = time.UnixMilli(latestWatermark)
 	return processor.Watermark(timeWatermark)
 }
 
