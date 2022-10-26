@@ -47,7 +47,7 @@ func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstan
 func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexInstance *dfv1.VertexInstance) (isb.BufferReader, map[string]isb.BufferWriter, error) {
 	writers := make(map[string]isb.BufferWriter)
 
-	fromStreamName := fmt.Sprintf("%s-%s", vertexInstance.Vertex.Spec.PipelineName, fromBufferName)
+	fromStreamName := isbsvc.JetStreamName(vertexInstance.Vertex.Spec.PipelineName, fromBufferName)
 	readOptions := []jetstreamisb.ReadOption{
 		jetstreamisb.WithUsingAckInfoAsRate(true),
 	}

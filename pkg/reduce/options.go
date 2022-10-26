@@ -11,8 +11,6 @@ type Options struct {
 	readBatchSize int64
 	// windowOpts Options for window
 	windowOpts *window.Options
-	// vertexType indicates the type of the vertex
-	vertexType dfv1.VertexType
 }
 
 type Option func(*Options) error
@@ -28,14 +26,6 @@ func DefaultOptions() *Options {
 func WithReadBatchSize(f int64) Option {
 	return func(o *Options) error {
 		o.readBatchSize = f
-		return nil
-	}
-}
-
-// WithVertexType sets the type of the vertex
-func WithVertexType(t dfv1.VertexType) Option {
-	return func(o *Options) error {
-		o.vertexType = t
 		return nil
 	}
 }

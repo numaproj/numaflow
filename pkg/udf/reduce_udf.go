@@ -115,7 +115,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)
 	}
-	opts := []reduce.Option{reduce.WithVertexType(dfv1.VertexTypeReduceUDF)}
+	opts := []reduce.Option{}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))
