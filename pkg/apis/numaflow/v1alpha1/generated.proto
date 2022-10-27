@@ -684,6 +684,11 @@ message PersistenceStrategy {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +kubebuilder:printcolumn:name="Vertices",type=string,JSONPath=`.status.vertexCount`
+// +kubebuilder:printcolumn:name="Sources",type=string,JSONPath=`.status.sourceCount`,priority=10
+// +kubebuilder:printcolumn:name="Sinks",type=string,JSONPath=`.status.sinkCount`,priority=10
+// +kubebuilder:printcolumn:name="Edges",type=string,JSONPath=`.status.edgeCount`,priority=10
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message Pipeline {
@@ -766,6 +771,16 @@ message PipelineStatus {
   optional string message = 3;
 
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 4;
+
+  optional uint32 vertexCount = 5;
+
+  optional uint32 edgeCount = 6;
+
+  optional uint32 sourceCount = 7;
+
+  optional uint32 sinkCount = 8;
+
+  optional uint32 udfCount = 9;
 }
 
 message RedisBuferService {

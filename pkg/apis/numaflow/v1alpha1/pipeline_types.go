@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"os"
 	"strings"
 	"time"
@@ -57,6 +58,11 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +kubebuilder:printcolumn:name="Vertices",type=string,JSONPath=`.status.vertexCount`
+// +kubebuilder:printcolumn:name="Sources",type=string,JSONPath=`.status.sourceCount`,priority=10
+// +kubebuilder:printcolumn:name="Sinks",type=string,JSONPath=`.status.sinkCount`,priority=10
+// +kubebuilder:printcolumn:name="Edges",type=string,JSONPath=`.status.edgeCount`,priority=10
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type Pipeline struct {
@@ -408,6 +414,43 @@ type PipelineStatus struct {
 	Phase       PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
 	Message     string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
 	LastUpdated metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
+	VertexCount *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
+	EdgeCount   *uint32       `json:"edgeCount,omitempty" protobuf:"varint,6,opt,name=edgeCount"`
+	SourceCount *uint32       `json:"sourceCount,omitempty" protobuf:"varint,7,opt,name=sourceCount"`
+	SinkCount   *uint32       `json:"sinkCount,omitempty" protobuf:"varint,8,opt,name=sinkCount"`
+	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,9,opt,name=udfCount"`
+}
+
+func (pls *PipelineStatus) ResetTopologyCounts() {
+	pls.VertexCount = nil
+	pls.EdgeCount = nil
+	pls.SourceCount = nil
+	pls.SinkCount = nil
+	pls.UDFCount = nil
+}
+
+// SetTopologyCounts sets the counts of edges and nodes.
+func (pls *PipelineStatus) SetTopologyCounts(edges []Edge, vertices []AbstractVertex) {
+	var sinkCount uint32
+	var sourceCount uint32
+	var udfCount uint32
+	for _, v := range vertices {
+		if v.Source != nil {
+			sourceCount++
+		}
+		if v.Sink != nil {
+			sinkCount++
+		}
+		if v.UDF != nil {
+			udfCount++
+		}
+	}
+
+	pls.VertexCount = proto.Uint32(uint32(len(vertices)))
+	pls.EdgeCount = proto.Uint32(uint32(len(edges)))
+	pls.SinkCount = &sinkCount
+	pls.SourceCount = &sourceCount
+	pls.UDFCount = &udfCount
 }
 
 func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string) {
@@ -429,6 +472,7 @@ func (pls *PipelineStatus) MarkConfigured() {
 func (pls *PipelineStatus) MarkNotConfigured(reason, message string) {
 	pls.MarkFalse(PipelineConditionConfigured, reason, message)
 	pls.SetPhase(PipelinePhaseFailed, message)
+	pls.ResetTopologyCounts()
 }
 
 // MarkDeployed set the Pipeline has been deployed.

@@ -4758,6 +4758,24 @@ spec:
     - jsonPath: .status.message
       name: Message
       type: string
+    - jsonPath: .status.vertexCount
+      name: Vertices
+      type: string
+    - jsonPath: .status.sourceCount
+      name: Sources
+      priority: 10
+      type: string
+    - jsonPath: .status.sinkCount
+      name: Sinks
+      priority: 10
+      type: string
+    - jsonPath: .status.edgeCount
+      name: Edges
+      priority: 10
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -8783,6 +8801,9 @@ spec:
                   - type
                   type: object
                 type: array
+              edgeCount:
+                format: int32
+                type: integer
               lastUpdated:
                 format: date-time
                 type: string
@@ -8798,6 +8819,18 @@ spec:
                 - Paused
                 - Deleting
                 type: string
+              sinkCount:
+                format: int32
+                type: integer
+              sourceCount:
+                format: int32
+                type: integer
+              udfCount:
+                format: int32
+                type: integer
+              vertexCount:
+                format: int32
+                type: integer
             type: object
         required:
         - spec

@@ -2823,6 +2823,41 @@ Kubernetes meta/v1.Time </a> </em>
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>vertexCount</code></br> <em> uint32 </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>edgeCount</code></br> <em> uint32 </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>sourceCount</code></br> <em> uint32 </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>sinkCount</code></br> <em> uint32 </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>udfCount</code></br> <em> uint32 </em>
+</td>
+<td>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.RedisBuferService">

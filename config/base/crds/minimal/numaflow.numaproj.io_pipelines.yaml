@@ -20,6 +20,24 @@ spec:
     - jsonPath: .status.message
       name: Message
       type: string
+    - jsonPath: .status.vertexCount
+      name: Vertices
+      type: string
+    - jsonPath: .status.sourceCount
+      name: Sources
+      priority: 10
+      type: string
+    - jsonPath: .status.sinkCount
+      name: Sinks
+      priority: 10
+      type: string
+    - jsonPath: .status.edgeCount
+      name: Edges
+      priority: 10
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:

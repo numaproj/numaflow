@@ -148,6 +148,22 @@ func TestGetDaemonDeploy(t *testing.T) {
 	})
 }
 
+func Test_PipelineTopologyCounts(t *testing.T) {
+	s := PipelineStatus{}
+	s.SetTopologyCounts(testPipeline.Spec.Edges, testPipeline.Spec.Vertices)
+	assert.Equal(t, uint32(3), *s.VertexCount)
+	assert.Equal(t, uint32(2), *s.EdgeCount)
+	assert.Equal(t, uint32(1), *s.SourceCount)
+	assert.Equal(t, uint32(1), *s.SinkCount)
+	assert.Equal(t, uint32(1), *s.UDFCount)
+	s.ResetTopologyCounts()
+	assert.Nil(t, s.VertexCount)
+	assert.Nil(t, s.EdgeCount)
+	assert.Nil(t, s.SourceCount)
+	assert.Nil(t, s.SinkCount)
+	assert.Nil(t, s.UDFCount)
+}
+
 func Test_PipelineSetPhase(t *testing.T) {
 	s := PipelineStatus{}
 	s.SetPhase(PipelinePhaseRunning, "message")
