@@ -42,7 +42,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	err = ot.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
 	assert.NoError(t, err)
 
-	epoch += 60000000
+	epoch += 60000
 	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
 	// this key format is meant for non-separate OT watcher
 	err = ot.PutKV(ctx, fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)

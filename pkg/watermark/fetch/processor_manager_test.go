@@ -87,7 +87,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	binary.LittleEndian.PutUint64(b, uint64(testOffset))
 	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
 	assert.NoError(t, err)
-	epoch += 60000000
+	epoch += 60000
 	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
 	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
 	assert.NoError(t, err)
