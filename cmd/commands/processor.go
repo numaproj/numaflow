@@ -78,6 +78,7 @@ func NewProcessorCommand() *cobra.Command {
 				}
 				return p.Start(ctx)
 			case dfv1.VertexTypeReduceUDF:
+				log.Infow("identified reduce udf processor")
 				p := &udf.ReduceUDFProcessor{
 					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
 					VertexInstance: vertexInstance,

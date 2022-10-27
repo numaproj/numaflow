@@ -17,7 +17,7 @@ spec:
         container:
           # compute the sum
           image: quay.io/yhl25/reduce-image
-        groupby:
+        groupBy:
           window:
             fixed:
               length: 60s
