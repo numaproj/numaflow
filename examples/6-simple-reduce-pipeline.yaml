@@ -30,6 +30,10 @@ spec:
       to: even-or-odd
     - from: even-or-odd
       to: reduce-sum
+      conditions:
+        keyIn:
+          - even
+          - odd
       parallelism: 1
     - from: reduce-sum
       to: sink
