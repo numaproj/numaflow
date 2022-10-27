@@ -17443,15 +17443,20 @@
       ],
       "properties": {
         "conditions": {
-          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF",
+          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
         },
         "from": {
           "type": "string"
         },
         "limits": {
-          "description": "Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings",
+          "description": "Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.EdgeLimits"
+        },
+        "parallelism": {
+          "description": "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
+          "type": "integer",
+          "format": "int32"
         },
         "to": {
           "type": "string"
@@ -17470,6 +17475,15 @@
           "description": "BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.FixedWindow": {
+      "description": "FixedWindow describes a fixed window",
+      "type": "object",
+      "properties": {
+        "length": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }
     },
@@ -17777,6 +17791,21 @@
         },
         "PullPolicy": {
           "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.GroupBy": {
+      "description": "GroupBy indicates it is a reducer UDF",
+      "type": "object",
+      "required": [
+        "window"
+      ],
+      "properties": {
+        "keyed": {
+          "type": "boolean"
+        },
+        "window": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Window"
         }
       }
     },
@@ -18512,6 +18541,9 @@
         },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        },
+        "groupBy": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GroupBy"
         }
       }
     },
@@ -18754,6 +18786,15 @@
         "maxDelay": {
           "description": "Maximum delay allowed for watermark calculation, defaults to \"0s\", which means no delay.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.Window": {
+      "description": "Window describes windowing strategy",
+      "type": "object",
+      "properties": {
+        "fixed": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.FixedWindow"
         }
       }
     },

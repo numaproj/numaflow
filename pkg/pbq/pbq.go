@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var COBErr = errors.New("error while writing to pbq, pbq is closed")
+var ErrCOB = errors.New("error while writing to pbq, pbq is closed")
 
 // PBQ Buffer queue which is backed with a persisted store, each partition
 // will have a PBQ associated with it
@@ -31,7 +31,7 @@ func (p *PBQ) Write(ctx context.Context, message *isb.ReadMessage) error {
 	// if cob we should return
 	if p.cob {
 		p.log.Errorw("failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.Header))
-		return COBErr
+		return ErrCOB
 	}
 	var writeErr error
 	// we need context to get out of blocking write

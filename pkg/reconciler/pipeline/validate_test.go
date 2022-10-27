@@ -206,3 +206,29 @@ func TestValidateVertex(t *testing.T) {
 		assert.Contains(t, err.Error(), "or equal to")
 	})
 }
+
+func TestValidateUDF(t *testing.T) {
+	t.Run("bad window", func(t *testing.T) {
+		udf := dfv1.UDF{
+			GroupBy: &dfv1.GroupBy{
+				Window: dfv1.Window{},
+			},
+		}
+		err := validateUDF(udf)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no windowing strategy specified")
+	})
+
+	t.Run("bad window length", func(t *testing.T) {
+		udf := dfv1.UDF{
+			GroupBy: &dfv1.GroupBy{
+				Window: dfv1.Window{
+					Fixed: &dfv1.FixedWindow{},
+				},
+			},
+		}
+		err := validateUDF(udf)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `"length" is missing`)
+	})
+}
