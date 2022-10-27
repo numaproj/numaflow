@@ -17,11 +17,11 @@ spec:
         container:
           # compute the sum
           image: quay.io/yhl25/reduce-image
-      groupBy:
-        window:
-          fixed:
-            length: 60s
-          keyed: true
+        groupby:
+          window:
+            fixed:
+              length: 60s
+            keyed: true
     - name: sink
       sink:
         log: {}
