@@ -18,7 +18,7 @@ type Watermark time.Time
 func (w Watermark) String() string {
 	var location, _ = time.LoadLocation("UTC")
 	var t = time.Time(w).In(location)
-	return t.Format(time.RFC3339)
+	return t.Format(time.RFC3339Nano)
 }
 
 func (w Watermark) UnixMilli() int64 {
