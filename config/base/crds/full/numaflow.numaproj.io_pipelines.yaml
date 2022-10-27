@@ -26,19 +26,23 @@ spec:
       type: string
     - jsonPath: .status.vertexCount
       name: Vertices
-      type: string
+      type: integer
     - jsonPath: .status.sourceCount
       name: Sources
       priority: 10
-      type: string
+      type: integer
     - jsonPath: .status.sinkCount
       name: Sinks
       priority: 10
-      type: string
+      type: integer
+    - jsonPath: .status.udfCount
+      name: UDFs
+      priority: 10
+      type: integer
     - jsonPath: .status.edgeCount
       name: Edges
       priority: 10
-      type: string
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
