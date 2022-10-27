@@ -359,11 +359,13 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 	var stream io.ReadCloser
 	// Streaming logs from file could be rotated by container log manager and as consequence, we receive EOF and need to re-initialize the stream.
 	// To prevent such issue, we apply retry on stream initialization.
-	// 3 attempts with 1 second fixed wait time are tested sufficient for avoiding EOF.
-	err := retryIfError(3, time.Duration(1*time.Second), func() error {
+	// 3 attempts with 1 second fixed wait time are tested sufficient for it.
+	err := retryOnError(3, time.Duration(1*time.Second), func() error {
 		rc, err := client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
 		if err == nil {
 			stream = rc
+		} else {
+			fmt.Printf("Got error %v, retrying.\n", err)
 		}
 		return err
 	})
@@ -430,17 +432,14 @@ func PodLogCheckOptionWithContainer(c string) PodLogCheckOption {
 	}
 }
 
-func retryIfError(attempts int, sleep time.Duration, f func() error) error {
+func retryOnError(attempts int, sleep time.Duration, f func() error) error {
 	var err error
 	for i := 0; i < attempts; i++ {
 		err = f()
 		if err == nil {
 			return nil
 		}
-		if i > 0 {
-			fmt.Printf("retrying after error: %v\n", err)
-		}
 		time.Sleep(sleep)
 	}
-	return fmt.Errorf("after %d attempts, last error: %v", attempts, err)
+	return fmt.Errorf("after %d attempts, the last error is: %v", attempts, err)
 }

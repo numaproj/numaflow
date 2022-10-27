@@ -2,14 +2,14 @@ package fixtures
 
 import (
 	"fmt"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
-
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/transport/spdy"
+	"time"
 )
 
 func PodPortForward(config *rest.Config, namespace, podName string, localPort, remotePort int, stopCh <-chan struct{}) error {
@@ -37,7 +37,17 @@ func PodPortForward(config *rest.Config, namespace, podName string, localPort, r
 	}
 
 	go func() {
-		if err := fw.ForwardPorts(); err != nil {
+		// Port forwarding can fail due to transient "error upgrading connection: error dialing backend: EOF" issue.
+		// To prevent such issue, we apply retry strategy.
+		// 3 attempts with 1 second fixed wait time are tested sufficient for it.
+		err := retryOnError(3, time.Duration(1*time.Second), func() error {
+			err := fw.ForwardPorts()
+			if err != nil {
+				fmt.Printf("Got error %v, retrying.\n", err)
+			}
+			return err
+		})
+		if err != nil {
 			panic(err)
 		}
 	}()
@@ -45,4 +55,5 @@ func PodPortForward(config *rest.Config, namespace, podName string, localPort, r
 	<-readyCh
 
 	return nil
+
 }
