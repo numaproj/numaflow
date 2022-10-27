@@ -34,6 +34,7 @@ spec:
         keyIn:
           - even
           - odd
+      parallelism: 1
     - from: reduce-sum
       to: sink
       conditions:
