@@ -353,51 +353,29 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	}
 }
 
-func retry(attempts int, sleep time.Duration, f func() error) (err error) {
-	for i := 0; i < attempts; i++ {
-		if i > 0 {
-			fmt.Printf("retrying after error: %v", err)
-			time.Sleep(sleep)
-			sleep *= 2
-		}
-		err = f()
-		if err == nil {
-			return nil
-		}
-	}
-	return fmt.Errorf("after %d attempts, last error: %v", attempts, err)
-}
-
 func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan bool) error {
 	fmt.Printf("Watching POD: %s\n", podName)
-	pod, err := client.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
-	if err != nil {
-		fmt.Printf("KeranTest5 - I am here, getting error: %v", err)
-	}
-
-	fmt.Printf("KeranTest6 - I am here, pod seems existing, pod name: %s", pod.Name)
-
 	var stream io.ReadCloser
-	err = retry(3, time.Duration(2*time.Second), func() error {
-		ir, err := client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
+	// Streaming logs from file could be rotated by container log manager and as consequence, we receive EOF and need to re-initialize the stream.
+	// To prevent such issue, we apply retry on stream initialization.
+	// 3 attempts with 1 second fixed wait time are tested sufficient for avoiding EOF.
+	err := retryIfError(3, time.Duration(1*time.Second), func() error {
+		rc, err := client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
 		if err == nil {
-			stream = ir
+			stream = rc
 		}
 		return err
 	})
 
 	if err != nil {
-		fmt.Printf("KeranTest1 - I am here, getting error: %v", err)
 		return err
 	}
 	defer func() {
-		fmt.Printf("KeranTest2 - I am here, closing the log stream.")
 		_ = stream.Close()
 	}()
 
 	exp, err := regexp.Compile(regex)
 	if err != nil {
-		fmt.Printf("KeranTest3 - I am here: %v, seems can't compile the regex.", err)
 		return err
 	}
 
@@ -405,7 +383,6 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Printf("KeranTest4 - I am here, context is done.")
 			return nil
 		default:
 			if !s.Scan() {
@@ -452,4 +429,19 @@ func PodLogCheckOptionWithContainer(c string) PodLogCheckOption {
 	return func(o *podLogCheckOptions) {
 		o.container = c
 	}
+}
+
+func retryIfError(attempts int, sleep time.Duration, f func() error) error {
+	var err error
+	for i := 0; i < attempts; i++ {
+		err = f()
+		if err == nil {
+			return nil
+		}
+		if i > 0 {
+			fmt.Printf("retrying after error: %v\n", err)
+		}
+		time.Sleep(sleep)
+	}
+	return fmt.Errorf("after %d attempts, last error: %v", attempts, err)
 }
