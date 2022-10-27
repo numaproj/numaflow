@@ -29,8 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
-
-	"github.com/gogo/protobuf/proto"
 )
 
 // +kubebuilder:validation:Enum="";Running;Succeeded;Failed;Pausing;Paused;Deleting
@@ -433,6 +431,8 @@ func (pls *PipelineStatus) ResetTopologyCounts() {
 
 // SetTopologyCounts sets the counts of edges and nodes.
 func (pls *PipelineStatus) SetTopologyCounts(edges []Edge, vertices []AbstractVertex) {
+	var vertexCount = uint32(len(vertices))
+	var edgeCount = uint32(len(edges))
 	var sinkCount uint32
 	var sourceCount uint32
 	var udfCount uint32
@@ -448,8 +448,8 @@ func (pls *PipelineStatus) SetTopologyCounts(edges []Edge, vertices []AbstractVe
 		}
 	}
 
-	pls.VertexCount = proto.Uint32(uint32(len(vertices)))
-	pls.EdgeCount = proto.Uint32(uint32(len(edges)))
+	pls.VertexCount = &vertexCount
+	pls.EdgeCount = &edgeCount
 	pls.SinkCount = &sinkCount
 	pls.SourceCount = &sourceCount
 	pls.UDFCount = &udfCount
