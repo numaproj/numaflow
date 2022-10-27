@@ -273,6 +273,7 @@ func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, na
 	resultChan := make(chan bool)
 	for _, p := range podList.Items {
 		go func(podName string) {
+			fmt.Printf("Watching POD: %s\n", podName)
 			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan); err != nil {
 				errChan <- err
 				return
@@ -324,6 +325,7 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	resultChan := make(chan bool)
 	for _, p := range podList.Items {
 		go func(podName string) {
+			fmt.Printf("Watching POD: %s\n", podName)
 			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan); err != nil {
 				errChan <- err
 				return
@@ -354,7 +356,6 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 }
 
 func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan bool) error {
-	fmt.Printf("Watching POD: %s\n", podName)
 	var stream io.ReadCloser
 	// Streaming logs from file could be rotated by container log manager and as consequence, we receive EOF and need to re-initialize the stream.
 	// To prevent such issue, we apply retry on stream initialization.
@@ -370,9 +371,7 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = stream.Close()
-	}()
+	defer func() { _ = stream.Close() }()
 
 	exp, err := regexp.Compile(regex)
 	if err != nil {
