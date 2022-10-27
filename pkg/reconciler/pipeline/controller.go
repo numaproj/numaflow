@@ -92,7 +92,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 				if !safeToDelete {
 					log.Info("Pipeline deletion is waiting to finish the unconsumed messages")
-					//Requeue request to process after 10s
+					// Requeue request to process after 10s
 					return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
 				}
 			}
@@ -369,7 +369,7 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 			if apierrors.IsNotFound(err) { // somehow it doesn't need to clean up
 				return nil
 			}
-			log.Errorw("failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
+			log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 			return err
 		}
 
@@ -625,7 +625,7 @@ func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline
 	if err != nil {
 		return false, err
 	}
-	//Requeue pipeline to take effect the vertex replica changes
+	// Requeue pipeline to take effect the vertex replica changes
 	if vertexPatched {
 		return false, nil
 	}

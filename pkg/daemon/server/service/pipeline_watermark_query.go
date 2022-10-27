@@ -91,7 +91,7 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 
 	// Vertex not found
 	if !ok {
-		log.Errorf("watermark fetchers not available for vertex %s in the fetcher map", vertexName)
+		log.Errorf("Watermark fetchers not available for vertex %s in the fetcher map", vertexName)
 		return nil, fmt.Errorf("watermark not available for given vertex, %s", vertexName)
 	}
 

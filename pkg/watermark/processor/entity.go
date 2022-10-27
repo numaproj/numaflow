@@ -29,6 +29,10 @@ func (w Watermark) After(t time.Time) bool {
 	return time.Time(w).After(t)
 }
 
+func (w Watermark) Before(t time.Time) bool {
+	return time.Time(w).Before(t)
+}
+
 type entityOptions struct {
 	separateOTBucket bool
 	keySeparator     string

@@ -78,7 +78,7 @@ func (t *OffsetTimeline) Put(node OffsetWatermark) {
 				return
 			} else {
 				// TODO put panic: the new input offset should never be smaller than the existing offset
-				t.log.Errorw("the new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
+				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
 					zap.Int64("existing offset", elementNode.offset), zap.Int64("input offset", node.offset))
 				return
 			}

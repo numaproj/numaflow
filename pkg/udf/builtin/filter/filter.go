@@ -26,7 +26,7 @@ func New(args map[string]string) (functionsdk.MapFunc, error) {
 		log := logging.FromContext(ctx)
 		resultMsg, err := f.apply(datum.Value())
 		if err != nil {
-			log.Errorf("filter map function apply got an error: %v", err)
+			log.Errorf("Filter map function apply got an error: %v", err)
 		}
 		return functionsdk.MessagesBuilder().Append(resultMsg)
 	}, nil

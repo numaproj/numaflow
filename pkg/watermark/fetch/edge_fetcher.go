@@ -70,7 +70,7 @@ func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
 func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
-		e.log.Errorw("unable to get offset from isb.Offset.Sequence()", zap.Error(err))
+		e.log.Errorw("Unable to get offset from isb.Offset.Sequence()", zap.Error(err))
 		return processor.Watermark(time.Unix(-1, 0))
 	}
 	var debugString strings.Builder
