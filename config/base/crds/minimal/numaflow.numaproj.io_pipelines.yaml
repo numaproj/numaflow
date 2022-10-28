@@ -35,10 +35,6 @@ spec:
       name: UDFs
       priority: 10
       type: integer
-    - jsonPath: .status.edgeCount
-      name: Edges
-      priority: 10
-      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
