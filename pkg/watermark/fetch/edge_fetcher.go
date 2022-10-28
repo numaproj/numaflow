@@ -55,22 +55,22 @@ func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
 		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headoffset:%d) \n", p, o))
 		if o != -1 && o > headOffset {
 			headOffset = o
-			epoch = p.offsetTimeline.GetEventtimeFromInt64(o)
+			epoch = p.offsetTimeline.GetEventTimeFromInt64(o)
 		}
 	}
 	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
 	if epoch == math.MaxInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return processor.Watermark(time.Unix(-1, 0))
+		return processor.Watermark(time.UnixMilli(-1))
 	}
-	return processor.Watermark(time.Unix(epoch, 0))
+	return processor.Watermark(time.UnixMilli(epoch))
 }
 
 // GetWatermark gets the smallest timestamp for the given offset
 func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
-		e.log.Errorw("unable to get offset from isb.Offset.Sequence()", zap.Error(err))
+		e.log.Errorw("Unable to get offset from isb.Offset.Sequence()", zap.Error(err))
 		return processor.Watermark(time.Unix(-1, 0))
 	}
 	var debugString strings.Builder
@@ -93,5 +93,5 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	}
 	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.edgeName, offset, epoch)
 
-	return processor.Watermark(time.Unix(epoch, 0))
+	return processor.Watermark(time.UnixMilli(epoch))
 }

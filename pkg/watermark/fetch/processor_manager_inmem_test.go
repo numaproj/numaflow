@@ -23,7 +23,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		keyspace           = "fetcherTest"
 		hbBucketName       = keyspace + "_PROCESSORS"
 		otBucketName       = keyspace + "_OT"
-		epoch        int64 = 1651161600
+		epoch        int64 = 1651161600000
 		testOffset   int64 = 100
 		wg           sync.WaitGroup
 	)
@@ -42,7 +42,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	err = ot.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
 	assert.NoError(t, err)
 
-	epoch += 60
+	epoch += 60000
 	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
 	// this key format is meant for non-separate OT watcher
 	err = ot.PutKV(ctx, fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)

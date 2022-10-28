@@ -32,24 +32,24 @@ func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 
 	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
 
-	var epoch int64 = 1651161600
+	var epoch int64 = 1651161600000
 	var location, _ = time.LoadLocation("UTC")
 	for i := 0; i < 3; i++ {
-		p.PublishWatermark(processor.Watermark(time.Unix(epoch, 0).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
-		epoch += 60
+		p.PublishWatermark(processor.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
+		epoch += 60000
 		time.Sleep(time.Millisecond)
 	}
 	// publish a stale watermark (offset doesn't matter)
-	p.PublishWatermark(processor.Watermark(time.Unix(epoch-120, 0).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
+	p.PublishWatermark(processor.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
 
 	keys := p.getAllOTKeysFromBucket()
-	assert.Equal(t, []string{"publisherTestPod1_1651161600", "publisherTestPod1_1651161660", "publisherTestPod1_1651161720"}, keys)
+	assert.Equal(t, []string{"publisherTestPod1_1651161600000", "publisherTestPod1_1651161660000", "publisherTestPod1_1651161720000"}, keys)
 
 	wm := p.loadLatestFromStore()
-	assert.Equal(t, processor.Watermark(time.Unix(epoch-60, 0).In(location)).String(), wm.String())
+	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), wm.String())
 
 	head := p.GetLatestWatermark()
-	assert.Equal(t, processor.Watermark(time.Unix(epoch-60, 0).In(location)).String(), head.String())
+	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
 
 	p.StopPublisher()
 
@@ -71,24 +71,24 @@ func TestPublisherWithSeparateOTBucket_InMem(t *testing.T) {
 
 	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
 
-	var epoch int64 = 1651161600
+	var epoch int64 = 1651161600000
 	var location, _ = time.LoadLocation("UTC")
 	for i := 0; i < 3; i++ {
-		p.PublishWatermark(processor.Watermark(time.Unix(epoch, 0).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
-		epoch += 60
+		p.PublishWatermark(processor.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
+		epoch += 60000
 		time.Sleep(time.Millisecond)
 	}
 	// publish a stale watermark (offset doesn't matter)
-	p.PublishWatermark(processor.Watermark(time.Unix(epoch-120, 0).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
+	p.PublishWatermark(processor.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
 
 	keys := p.getAllOTKeysFromBucket()
-	assert.Equal(t, []string{"1651161600", "1651161660", "1651161720"}, keys)
+	assert.Equal(t, []string{"1651161600000", "1651161660000", "1651161720000"}, keys)
 
 	wm := p.loadLatestFromStore()
-	assert.Equal(t, processor.Watermark(time.Unix(epoch-60, 0).In(location)).String(), wm.String())
+	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), wm.String())
 
 	head := p.GetLatestWatermark()
-	assert.Equal(t, processor.Watermark(time.Unix(epoch-60, 0).In(location)).String(), head.String())
+	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
 
 	p.StopPublisher()
 

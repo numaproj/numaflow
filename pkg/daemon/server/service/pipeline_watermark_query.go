@@ -75,7 +75,7 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 
 	// If watermark is not enabled, return time zero
 	if ps.pipeline.Spec.Watermark.Disabled {
-		timeZero := time.Unix(0, 0).Unix()
+		timeZero := time.Unix(0, 0).UnixMilli()
 		v := &daemon.VertexWatermark{
 			Pipeline:           &ps.pipeline.Name,
 			Vertex:             request.Vertex,
@@ -91,13 +91,13 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 
 	// Vertex not found
 	if !ok {
-		log.Errorf("watermark fetchers not available for vertex %s in the fetcher map", vertexName)
+		log.Errorf("Watermark fetchers not available for vertex %s in the fetcher map", vertexName)
 		return nil, fmt.Errorf("watermark not available for given vertex, %s", vertexName)
 	}
 
 	var latestWatermark = int64(-1)
 	for _, fetcher := range vertexFetchers {
-		watermark := fetcher.GetHeadWatermark().Unix()
+		watermark := fetcher.GetHeadWatermark().UnixMilli()
 		if watermark > latestWatermark {
 			latestWatermark = watermark
 		}

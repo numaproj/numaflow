@@ -93,7 +93,7 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 		c, err := js.ConsumerInfo(jw.stream, jw.stream)
 		if err != nil {
 			isbFullErrors.With(labels).Inc()
-			jw.log.Errorw("failed to get consumer info in the writer", zap.Error(err))
+			jw.log.Errorw("Failed to get consumer info in the writer", zap.Error(err))
 			return
 		}
 		var solidUsage, softUsage float64

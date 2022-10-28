@@ -76,7 +76,7 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	readMessages, err := d.fromBuffer.Read(ctx, d.opts.readBatchSize)
 
 	if err != nil {
-		d.log.Errorw("failed to read from isb", zap.Error(err))
+		d.log.Errorw("Failed to read from isb", zap.Error(err))
 	}
 
 	if len(readMessages) == 0 {

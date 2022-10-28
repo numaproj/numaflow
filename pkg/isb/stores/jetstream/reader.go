@@ -150,7 +150,7 @@ func (jr *jetStreamReader) runAckInfomationChecker(ctx context.Context) {
 	checkAckInfo := func() {
 		c, err := js.ConsumerInfo(jr.stream, jr.stream)
 		if err != nil {
-			jr.log.Errorw("failed to get consumer info in the reader", zap.Error(err))
+			jr.log.Errorw("Failed to get consumer info in the reader", zap.Error(err))
 			return
 		}
 		ts := timestampedSequence{seq: int64(c.AckFloor.Stream), timestamp: time.Now().Unix()}

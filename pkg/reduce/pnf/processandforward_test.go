@@ -67,8 +67,8 @@ func TestProcessAndForward_Process(t *testing.T) {
 
 	size := 100
 	testPartition := partition.ID{
-		Start: time.Unix(60, 0),
-		End:   time.Unix(120, 0),
+		Start: time.UnixMilli(60000),
+		End:   time.UnixMilli(120000),
 		Key:   "partition-1",
 	}
 	var err error
@@ -168,38 +168,38 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		{
 			name: "test-forward-one",
 			id: partition.ID{
-				Start: time.Unix(60, 0),
-				End:   time.Unix(120, 0),
+				Start: time.UnixMilli(60000),
+				End:   time.UnixMilli(120000),
 				Key:   "test-forward-one",
 			},
 			buffers:  []*simplebuffer.InMemoryBuffer{test1Buffer1, test1Buffer2},
 			pf:       createProcessAndForward(ctx, "test-forward-one", pbqManager, toBuffers1),
 			expected: []bool{false, true},
 			wmExpected: map[string]int64{
-				"buffer1": 120,
+				"buffer1": 120000,
 				"buffer2": math.MinInt64,
 			},
 		},
 		{
 			name: "test-forward-all",
 			id: partition.ID{
-				Start: time.Unix(60, 0),
-				End:   time.Unix(120, 0),
+				Start: time.UnixMilli(60000),
+				End:   time.UnixMilli(120000),
 				Key:   "test-forward-all",
 			},
 			buffers:  []*simplebuffer.InMemoryBuffer{test2Buffer1, test2Buffer2},
 			pf:       createProcessAndForward(ctx, "test-forward-all", pbqManager, toBuffers2),
 			expected: []bool{false, false},
 			wmExpected: map[string]int64{
-				"buffer1": 120,
-				"buffer2": 120,
+				"buffer1": 120000,
+				"buffer2": 120000,
 			},
 		},
 		{
 			name: "test-drop-all",
 			id: partition.ID{
-				Start: time.Unix(60, 0),
-				End:   time.Unix(120, 0),
+				Start: time.UnixMilli(60000),
+				End:   time.UnixMilli(120000),
 				Key:   "test-drop-all",
 			},
 			buffers:  []*simplebuffer.InMemoryBuffer{test3Buffer1, test3Buffer2},
@@ -222,7 +222,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			index := 0
 			for k, v := range value.pf.publishWatermark {
 				// expected watermark should be equal to window end time
-				assert.Equal(t, v.GetLatestWatermark().Unix(), value.wmExpected[k])
+				assert.Equal(t, v.GetLatestWatermark().UnixMilli(), value.wmExpected[k])
 				index += 1
 			}
 		})
@@ -232,8 +232,8 @@ func TestProcessAndForward_Forward(t *testing.T) {
 func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string]isb.BufferWriter) ProcessAndForward {
 
 	testPartition := partition.ID{
-		Start: time.Unix(60, 0),
-		End:   time.Unix(120, 0),
+		Start: time.UnixMilli(60000),
+		End:   time.UnixMilli(120000),
 		Key:   key,
 	}
 
@@ -251,7 +251,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 		{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{
-					EventTime: time.Unix(60, 0),
+					EventTime: time.UnixMilli(60000),
 				},
 				ID: "1",
 			},

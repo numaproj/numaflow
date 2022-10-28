@@ -28,13 +28,15 @@ type Publisher interface {
 
 // publish publishes the watermark for a processor entity.
 type publish struct {
-	ctx            context.Context
-	entity         processor.ProcessorEntitier
+	ctx    context.Context
+	entity processor.ProcessorEntitier
+	// heartbeatStore uses second as the time unit for the value
 	heartbeatStore store.WatermarkKVStorer
-	otStore        store.WatermarkKVStorer
-	log            *zap.SugaredLogger
-	headWatermark  processor.Watermark
-	opts           *publishOptions
+	// osStore uses millisecond as the time unit for the value
+	otStore       store.WatermarkKVStorer
+	log           *zap.SugaredLogger
+	headWatermark processor.Watermark
+	opts          *publishOptions
 }
 
 // NewPublish returns `Publish`.
@@ -83,10 +85,13 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	}
 	// update p.headWatermark only if wm > p.headWatermark
 	if wm.After(time.Time(p.headWatermark)) {
-		p.log.Debugw("New watermark updated for head water mark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		p.log.Debugw("New watermark is updated for the head watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
 		p.headWatermark = wm
+	} else if wm.Before(time.Time(p.headWatermark)) {
+		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		return
 	} else {
-		p.log.Infow("New watermark is ignored because it's older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
 		return
 	}
 
@@ -138,7 +143,7 @@ func (p *publish) loadLatestFromStore() processor.Watermark {
 			latestWatermark = epoch
 		}
 	}
-	var timeWatermark = time.Unix(latestWatermark, 0)
+	var timeWatermark = time.UnixMilli(latestWatermark)
 	return processor.Watermark(timeWatermark)
 }
 

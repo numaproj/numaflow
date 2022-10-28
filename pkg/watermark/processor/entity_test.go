@@ -29,8 +29,8 @@ func ExampleWatermark_String() {
 }
 
 func TestExampleWatermarkUnix(t *testing.T) {
-	wm := Watermark(time.Unix(1651129200, 0))
-	assert.Equal(t, int64(1651129200), wm.Unix())
+	wm := Watermark(time.UnixMilli(1651129200000))
+	assert.Equal(t, int64(1651129200000), wm.UnixMilli())
 }
 
 func TestProcessorEntity_ParseOTWatcherKey(t *testing.T) {
