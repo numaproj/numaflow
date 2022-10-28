@@ -421,14 +421,6 @@ type PipelineStatus struct {
 	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,9,opt,name=udfCount"`
 }
 
-func (pls *PipelineStatus) ResetTopologyCounts() {
-	pls.VertexCount = nil
-	pls.EdgeCount = nil
-	pls.SourceCount = nil
-	pls.SinkCount = nil
-	pls.UDFCount = nil
-}
-
 // SetTopologyCounts sets the counts of edges and nodes.
 func (pls *PipelineStatus) SetTopologyCounts(edges []Edge, vertices []AbstractVertex) {
 	var vertexCount = uint32(len(vertices))

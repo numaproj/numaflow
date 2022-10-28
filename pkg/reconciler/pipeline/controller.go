@@ -140,7 +140,6 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	pl.Status.InitConditions()
 	if err := ValidatePipeline(pl); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
-		pl.Status.ResetTopologyCounts()
 		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
 		return ctrl.Result{}, err
 	}

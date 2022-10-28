@@ -156,12 +156,6 @@ func Test_PipelineTopologyCounts(t *testing.T) {
 	assert.Equal(t, uint32(1), *s.SourceCount)
 	assert.Equal(t, uint32(1), *s.SinkCount)
 	assert.Equal(t, uint32(1), *s.UDFCount)
-	s.ResetTopologyCounts()
-	assert.Nil(t, s.VertexCount)
-	assert.Nil(t, s.EdgeCount)
-	assert.Nil(t, s.SourceCount)
-	assert.Nil(t, s.SinkCount)
-	assert.Nil(t, s.UDFCount)
 }
 
 func Test_PipelineSetPhase(t *testing.T) {
