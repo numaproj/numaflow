@@ -78,7 +78,7 @@ func (t *OffsetTimeline) Put(node OffsetWatermark) {
 				return
 			} else {
 				// TODO put panic: the new input offset should never be smaller than the existing offset
-				t.log.Errorw("the new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
+				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
 					zap.Int64("existing offset", elementNode.offset), zap.Int64("input offset", node.offset))
 				return
 			}
@@ -147,10 +147,10 @@ func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
 func (t *OffsetTimeline) GetEventTime(inputOffset isb.Offset) int64 {
 	// TODO: handle err?
 	inputOffsetInt64, _ := inputOffset.Sequence()
-	return t.GetEventtimeFromInt64(inputOffsetInt64)
+	return t.GetEventTimeFromInt64(inputOffsetInt64)
 }
 
-func (t *OffsetTimeline) GetEventtimeFromInt64(inputOffsetInt64 int64) int64 {
+func (t *OffsetTimeline) GetEventTimeFromInt64(inputOffsetInt64 int64) int64 {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 

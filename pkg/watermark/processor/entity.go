@@ -18,15 +18,19 @@ type Watermark time.Time
 func (w Watermark) String() string {
 	var location, _ = time.LoadLocation("UTC")
 	var t = time.Time(w).In(location)
-	return t.Format(time.RFC3339)
+	return t.Format(time.RFC3339Nano)
 }
 
-func (w Watermark) Unix() int64 {
-	return time.Time(w).Unix()
+func (w Watermark) UnixMilli() int64 {
+	return time.Time(w).UnixMilli()
 }
 
 func (w Watermark) After(t time.Time) bool {
 	return time.Time(w).After(t)
+}
+
+func (w Watermark) Before(t time.Time) bool {
+	return time.Time(w).Before(t)
 }
 
 type entityOptions struct {
@@ -96,9 +100,9 @@ func (p *ProcessorEntity) IsOTBucketShared() bool {
 // BuildOTWatcherKey builds the offset-timeline key name
 func (p *ProcessorEntity) BuildOTWatcherKey(watermark Watermark) string {
 	if p.opts.separateOTBucket {
-		return fmt.Sprintf("%d", watermark.Unix())
+		return fmt.Sprintf("%d", watermark.UnixMilli())
 	} else {
-		return fmt.Sprintf("%s%s%d", p.GetID(), p.opts.keySeparator, watermark.Unix())
+		return fmt.Sprintf("%s%s%d", p.GetID(), p.opts.keySeparator, watermark.UnixMilli())
 	}
 }
 

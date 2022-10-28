@@ -138,7 +138,7 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if pending, err := ms.lagReader.Pending(ctx); err != nil {
-				log.Errorw("failed to get pending messages", zap.Error(err))
+				log.Errorw("Failed to get pending messages", zap.Error(err))
 			} else {
 				if pending != isb.PendingNotAvailable {
 					ts := timestampedPending{pending: pending, timestamp: time.Now().Unix()}
@@ -167,7 +167,7 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 			if ms.rater != nil {
 				for n, i := range lookbackSecondsMap {
 					if r, err := ms.rater.Rate(ctx, i); err != nil {
-						log.Errorw("failed to get processing rate in the past seconds", zap.Int64("seconds", i), zap.Error(err))
+						log.Errorw("Failed to get processing rate in the past seconds", zap.Int64("seconds", i), zap.Error(err))
 					} else {
 						if r != isb.RateNotAvailable {
 							processingRate.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(r)

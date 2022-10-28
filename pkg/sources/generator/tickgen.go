@@ -49,7 +49,7 @@ var recordGenerator = func(size int32) []byte {
 	r := payload{Data: b, Createdts: nano}
 	data, err := json.Marshal(r)
 	if err != nil {
-		log.Errorf("error marshalling the record [%v]", r)
+		log.Errorf("Error marshalling the record [%v]", r)
 	}
 	return data
 }
