@@ -18355,6 +18355,22 @@
         },
         "phase": {
           "type": "string"
+        },
+        "sinkCount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "sourceCount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "udfCount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "vertexCount": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     },

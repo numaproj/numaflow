@@ -57,6 +57,11 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +kubebuilder:printcolumn:name="Vertices",type=integer,JSONPath=`.status.vertexCount`
+// +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
+// +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
+// +kubebuilder:printcolumn:name="UDFs",type=integer,JSONPath=`.status.udfCount`,priority=10
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type Pipeline struct {
@@ -408,6 +413,34 @@ type PipelineStatus struct {
 	Phase       PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
 	Message     string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
 	LastUpdated metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
+	VertexCount *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
+	SourceCount *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
+	SinkCount   *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
+	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
+}
+
+// SetVertexCounts sets the counts of vertices.
+func (pls *PipelineStatus) SetVertexCounts(vertices []AbstractVertex) {
+	var vertexCount = uint32(len(vertices))
+	var sinkCount uint32
+	var sourceCount uint32
+	var udfCount uint32
+	for _, v := range vertices {
+		if v.Source != nil {
+			sourceCount++
+		}
+		if v.Sink != nil {
+			sinkCount++
+		}
+		if v.UDF != nil {
+			udfCount++
+		}
+	}
+
+	pls.VertexCount = &vertexCount
+	pls.SinkCount = &sinkCount
+	pls.SourceCount = &sourceCount
+	pls.UDFCount = &udfCount
 }
 
 func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string) {
