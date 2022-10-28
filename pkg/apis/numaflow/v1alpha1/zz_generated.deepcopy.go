@@ -1203,6 +1203,26 @@ func (in *PipelineStatus) DeepCopyInto(out *PipelineStatus) {
 	*out = *in
 	in.Status.DeepCopyInto(&out.Status)
 	in.LastUpdated.DeepCopyInto(&out.LastUpdated)
+	if in.VertexCount != nil {
+		in, out := &in.VertexCount, &out.VertexCount
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.SourceCount != nil {
+		in, out := &in.SourceCount, &out.SourceCount
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.SinkCount != nil {
+		in, out := &in.SinkCount, &out.SinkCount
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.UDFCount != nil {
+		in, out := &in.UDFCount, &out.UDFCount
+		*out = new(uint32)
+		**out = **in
+	}
 	return
 }
 
