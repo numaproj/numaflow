@@ -104,7 +104,7 @@ jobs:
           curl -L https://github.com/nats-io/nats-server/releases/download/v$JS_VERSION/nats-server-v$JS_VERSION-linux-amd64.zip -o nats-server.zip
           sudo unzip nats-server.zip -d nats-server
           nats-server/nats-server-v$JS_VERSION-linux-amd64/nats-server -js &
-      - name: Insall Redis
+      - name: Install Redis
         uses: shogo82148/actions-setup-redis@v1
         with:
           redis-version: "6.2"
