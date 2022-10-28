@@ -143,7 +143,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
 		return ctrl.Result{}, err
 	}
-	pl.Status.SetTopologyCounts(pl.Spec.Edges, pl.Spec.Vertices)
+	pl.Status.SetVertexCounts(pl.Spec.Vertices)
 	pl.Status.MarkConfigured()
 
 	isbSvc := &dfv1.InterStepBufferService{}

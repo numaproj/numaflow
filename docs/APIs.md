@@ -2832,13 +2832,6 @@ Kubernetes meta/v1.Time </a> </em>
 </tr>
 <tr>
 <td>
-<code>edgeCount</code></br> <em> uint32 </em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
 <code>sourceCount</code></br> <em> uint32 </em>
 </td>
 <td>

@@ -2197,12 +2197,6 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref common.ReferenceCallba
 							Format: "int64",
 						},
 					},
-					"edgeCount": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
 					"sourceCount": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"integer"},

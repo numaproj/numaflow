@@ -775,13 +775,11 @@ message PipelineStatus {
 
   optional uint32 vertexCount = 5;
 
-  optional uint32 edgeCount = 6;
+  optional uint32 sourceCount = 6;
 
-  optional uint32 sourceCount = 7;
+  optional uint32 sinkCount = 7;
 
-  optional uint32 sinkCount = 8;
-
-  optional uint32 udfCount = 9;
+  optional uint32 udfCount = 8;
 }
 
 message RedisBuferService {

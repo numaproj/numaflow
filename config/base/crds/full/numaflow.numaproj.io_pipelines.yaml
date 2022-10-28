@@ -4071,9 +4071,6 @@ spec:
                   - type
                   type: object
                 type: array
-              edgeCount:
-                format: int32
-                type: integer
               lastUpdated:
                 format: date-time
                 type: string

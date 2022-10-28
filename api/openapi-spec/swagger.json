@@ -18347,10 +18347,6 @@
           "x-kubernetes-patch-merge-key": "type",
           "x-kubernetes-patch-strategy": "merge"
         },
-        "edgeCount": {
-          "type": "integer",
-          "format": "int64"
-        },
         "lastUpdated": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },

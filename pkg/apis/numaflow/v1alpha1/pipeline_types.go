@@ -415,16 +415,14 @@ type PipelineStatus struct {
 	Message     string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
 	LastUpdated metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
 	VertexCount *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
-	EdgeCount   *uint32       `json:"edgeCount,omitempty" protobuf:"varint,6,opt,name=edgeCount"`
-	SourceCount *uint32       `json:"sourceCount,omitempty" protobuf:"varint,7,opt,name=sourceCount"`
-	SinkCount   *uint32       `json:"sinkCount,omitempty" protobuf:"varint,8,opt,name=sinkCount"`
-	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,9,opt,name=udfCount"`
+	SourceCount *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
+	SinkCount   *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
+	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
 }
 
-// SetTopologyCounts sets the counts of edges and nodes.
-func (pls *PipelineStatus) SetTopologyCounts(edges []Edge, vertices []AbstractVertex) {
+// SetVertexCounts sets the counts of vertices.
+func (pls *PipelineStatus) SetVertexCounts(vertices []AbstractVertex) {
 	var vertexCount = uint32(len(vertices))
-	var edgeCount = uint32(len(edges))
 	var sinkCount uint32
 	var sourceCount uint32
 	var udfCount uint32
@@ -441,7 +439,6 @@ func (pls *PipelineStatus) SetTopologyCounts(edges []Edge, vertices []AbstractVe
 	}
 
 	pls.VertexCount = &vertexCount
-	pls.EdgeCount = &edgeCount
 	pls.SinkCount = &sinkCount
 	pls.SourceCount = &sourceCount
 	pls.UDFCount = &udfCount

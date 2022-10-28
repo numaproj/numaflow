@@ -1208,11 +1208,6 @@ func (in *PipelineStatus) DeepCopyInto(out *PipelineStatus) {
 		*out = new(uint32)
 		**out = **in
 	}
-	if in.EdgeCount != nil {
-		in, out := &in.EdgeCount, &out.EdgeCount
-		*out = new(uint32)
-		**out = **in
-	}
 	if in.SourceCount != nil {
 		in, out := &in.SourceCount, &out.SourceCount
 		*out = new(uint32)
