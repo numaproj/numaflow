@@ -474,7 +474,6 @@ func (pls *PipelineStatus) MarkConfigured() {
 func (pls *PipelineStatus) MarkNotConfigured(reason, message string) {
 	pls.MarkFalse(PipelineConditionConfigured, reason, message)
 	pls.SetPhase(PipelinePhaseFailed, message)
-	pls.ResetTopologyCounts()
 }
 
 // MarkDeployed set the Pipeline has been deployed.
