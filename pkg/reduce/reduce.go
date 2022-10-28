@@ -83,10 +83,14 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 		return
 	}
 
+	d.log.Infow("reduce data forwarder read messages")
+
 	// fetch watermark if available
 	// let's track only the last element's watermark
 	processorWM := d.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
 	for _, m := range readMessages {
+		d.log.Infow("read message key - ", m.Key)
+		d.log.Infow("message key - ", m.Message.Key)
 		m.Watermark = time.Time(processorWM)
 	}
 

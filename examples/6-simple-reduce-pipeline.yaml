@@ -16,7 +16,7 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/yhl25/reduce-image
+          image: quay.io/yhl25/reduce-image:master
         groupBy:
           window:
             fixed:
