@@ -80,10 +80,10 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 	ctx := context.Background()
 	contains, err := VertexPodLogContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, vertexName, regex, opts...)
 	if err != nil {
-		t.t.Fatalf("Failed to check vertex pod logs: %v", err)
+		t.t.Fatalf("Failed to check vertex %q pod logs: %v", vertexName, err)
 	}
 	if !contains {
-		t.t.Fatalf("Expected vertex pod log contains %q", regex)
+		t.t.Fatalf("Expected vertex %q pod log contains %q", vertexName, regex)
 	}
 	return t
 }
@@ -96,7 +96,7 @@ func (t *Expect) VertexPodLogNotContains(vertexName, regex string, opts ...PodLo
 		t.t.Fatalf("Failed to check vertex pod logs: %v", err)
 	}
 	if !yes {
-		t.t.Fatalf("Not expected vertex pod log contains %q", regex)
+		t.t.Fatalf("Not expected vertex %q pod log contains %q", vertexName, regex)
 	}
 	return t
 }
