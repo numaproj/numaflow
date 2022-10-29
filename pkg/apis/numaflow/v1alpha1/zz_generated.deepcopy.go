@@ -102,6 +102,13 @@ func (in *AbstractVertex) DeepCopyInto(out *AbstractVertex) {
 		(*in).DeepCopyInto(*out)
 	}
 	in.Scale.DeepCopyInto(&out.Scale)
+	if in.InitContainers != nil {
+		in, out := &in.InitContainers, &out.InitContainers
+		*out = make([]v1.Container, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	return
 }
 
