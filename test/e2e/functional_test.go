@@ -31,7 +31,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	w.Expect().
 		VertexPodsRunning().DaemonPodsRunning().
 		VertexPodLogContains("input", LogSourceVertexStarted).
-		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("output", LogSinkVertexStarted).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
 		VertexPodLogContains("output", `"Data":".*","Createdts":.*`)
@@ -96,7 +96,7 @@ func (s *FunctionalSuite) TestFiltering() {
 	w.Expect().
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("out", LogSinkVertexStarted)
 
 	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
@@ -132,7 +132,7 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	w.Expect().
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("even-or-odd", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("even-or-odd", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("even-sink", LogSinkVertexStarted).
 		VertexPodLogContains("odd-sink", LogSinkVertexStarted).
 		VertexPodLogContains("number-sink", LogSinkVertexStarted)
@@ -175,9 +175,9 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	w.Expect().
 		VertexPodsRunning().DaemonPodsRunning().
 		VertexPodLogContains("input", LogSourceVertexStarted).
-		VertexPodLogContains("cat1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
-		VertexPodLogContains("cat2", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
-		VertexPodLogContains("cat3", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("cat1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("cat2", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("cat3", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("output1", LogSinkVertexStarted).
 		VertexPodLogContains("output2", LogSinkVertexStarted).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
