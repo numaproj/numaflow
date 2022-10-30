@@ -136,7 +136,6 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	for _, ic := range v.InitContainers {
 		if ic.Name == dfv1.CtrInit ||
 			ic.Name == dfv1.CtrMain ||
-			ic.Name == "numa" ||
 			ic.Name == dfv1.CtrUdf ||
 			ic.Name == dfv1.CtrUdsink {
 			return fmt.Errorf("vertex %q: init container name %q is reserved for containers created by numaflow", v.Name, ic.Name)
