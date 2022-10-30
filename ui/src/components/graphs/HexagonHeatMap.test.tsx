@@ -5,12 +5,12 @@ const data = [{
     "name": "simple-pipeline-input-0-rwodz",
     "data": {
         "name": "simple-pipeline-input-0-rwodz",
-        "pod": {"name": "simple-pipeline-input-0-rwodz", "containers": ["main"], "containerSpecMap": {}},
+        "pod": {"name": "simple-pipeline-input-0-rwodz", "containers": ["numa"], "containerSpecMap": {}},
         "details": {"name": "simple-pipeline-input-0-rwodz", "containerMap": {}},
         "maxCPUPerc": 74.295736,
         "maxMemPerc": 14.5172119140625,
         "container": [{
-            "name": "main",
+            "name": "numa",
             "cpu": "74295736n",
             "mem": "19028Ki",
             "cpuPercent": 74.295736,

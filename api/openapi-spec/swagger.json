@@ -17279,6 +17279,13 @@
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "initContainers": {
+          "description": "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
+        },
         "limits": {
           "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
@@ -18682,6 +18689,13 @@
           },
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
+        },
+        "initContainers": {
+          "description": "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
         },
         "interStepBufferServiceName": {
           "type": "string"

@@ -59,3 +59,12 @@ Some environment variables are available in the user defined function Pods, they
 - `NUMAFLOW_REPLICA` - Replica index.
 - `NUMAFLOW_PIPELINE_NAME` - Name of the pipeline.
 - `NUMAFLOW_VERTEX_NAME` - Name of the vertex.
+
+### Configuration
+
+Configuration data can be provided to the UDF container at runtime multiple ways.
+* [`environment variables`](./environment-variables.md)
+* `args`
+* `command`
+* [`volumes`](./volumes.md)
+* [`init containers`](./init-containers.md)

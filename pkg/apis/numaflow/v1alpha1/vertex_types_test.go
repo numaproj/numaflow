@@ -326,7 +326,7 @@ func Test_VertexIsSink(t *testing.T) {
 	assert.True(t, o.IsASink())
 }
 
-func Test_VertexGetInitContainer(t *testing.T) {
+func Test_VertexGetInitContainers(t *testing.T) {
 	req := GetVertexPodSpecReq{
 		ISBSvcType: ISBSvcTypeRedis,
 		Image:      testFlowImage,
@@ -337,13 +337,19 @@ func Test_VertexGetInitContainer(t *testing.T) {
 	}
 	o := testVertex.DeepCopy()
 	o.Spec.Sink = &Sink{}
-	s := o.getInitContainer(req)
-	assert.Equal(t, CtrInit, s.Name)
+	o.Spec.InitContainers = []corev1.Container{
+		{Name: "my-test-init", Image: "my-test-init-image"},
+	}
+	s := o.getInitContainers(req)
+	assert.Len(t, s, 2)
+	assert.Equal(t, CtrInit, s[0].Name)
+	assert.Equal(t, "my-test-init", s[1].Name)
+	assert.Equal(t, "my-test-init-image", s[1].Image)
 	a := []string{}
-	for _, env := range s.Env {
+	for _, env := range s[0].Env {
 		a = append(a, env.Name)
 	}
-	for _, env := range s.Env {
+	for _, env := range s[0].Env {
 		assert.Contains(t, a, env.Name)
 	}
 }

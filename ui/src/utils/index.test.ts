@@ -2,7 +2,7 @@ import { handleCopy, isDev, findSuffix, quantityToScalar, getPodContainerUsePerc
 import {Pod, PodContainerSpec, PodDetail} from "./models/pods";
 
 const podContainerSpec: PodContainerSpec = {
-    name: "main",
+    name: "numa",
     cpuParsed: 34,
     memoryParsed:50
 }
@@ -12,12 +12,12 @@ const containerSpecMap = new Map<string, PodContainerSpec>([
 
 const pod: Pod = {
     name: "simple-pipeline-infer-0-xah5w",
-    containers:["main","udf"],
+    containers:["numa","udf"],
     containerSpecMap: containerSpecMap
 }
 
 const podContainerSpec1: PodContainerSpec = {
-    name: "main",
+    name: "numa",
     cpuParsed: 12,
     memoryParsed:15
 }
@@ -48,6 +48,6 @@ describe("index", () => {
     })
 
     it("getPodContainerUsePercentages", () => {
-        expect(getPodContainerUsePercentages(pod, podDetail, "main")).toEqual({"cpuPercent": undefined, "memoryPercent": undefined})
+        expect(getPodContainerUsePercentages(pod, podDetail, "numa")).toEqual({"cpuPercent": undefined, "memoryPercent": undefined})
     })
 })

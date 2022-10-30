@@ -246,12 +246,26 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale"),
 						},
 					},
+					"initContainers": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Container"),
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"name"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 
@@ -2907,6 +2921,20 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale"),
 						},
 					},
+					"initContainers": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Container"),
+									},
+								},
+							},
+						},
+					},
 					"pipelineName": {
 						SchemaProps: spec.SchemaProps{
 							Default: "",
@@ -2958,7 +2986,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 

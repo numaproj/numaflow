@@ -41,7 +41,7 @@ simple-pipeline-cat-0-kqrhy                  2/2     Running     0          10s
 simple-pipeline-in-0-rhpjm                   1/1     Running     0          11s
 
 # Watch the log for the `output` vertex
-kubectl logs -f simple-pipeline-out-0-xxxx main
+kubectl logs -f simple-pipeline-out-0-xxxx
 2022/08/25 23:59:38 (out) {"Data":"VT+G+/W7Dhc=","Createdts":1661471977707552597}
 2022/08/25 23:59:38 (out) {"Data":"0TaH+/W7Dhc=","Createdts":1661471977707615953}
 2022/08/25 23:59:38 (out) {"Data":"EEGH+/W7Dhc=","Createdts":1661471977707618576}
@@ -96,12 +96,12 @@ curl -kq -X POST -d "103" https://localhost:8444/vertices/in
 curl -kq -X POST -d "104" https://localhost:8444/vertices/in 
 
 # Watch the log for the even vertex
-kubectl logs -f even-odd-even-sink-0-nf2ql main
+kubectl logs -f even-odd-even-sink-0-nf2ql
 2022/09/07 22:29:40 (even-sink) 102
 2022/09/07 22:29:40 (even-sink) 104
 
 # Watch the log for the odd vertex
-kubectl logs -f even-odd-odd-sink-0-a6p0n main
+kubectl logs -f even-odd-odd-sink-0-a6p0n
 2022/09/07 22:30:19 (odd-sink) 101
 2022/09/07 22:30:19 (odd-sink) 103
 ```

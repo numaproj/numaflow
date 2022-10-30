@@ -64,6 +64,7 @@ nav:
       - container-resources.md
       - volumes.md
       - environment-variables.md
+      - init-containers.md
       - watermarks.md
       - APIs.md
   - Operator Manual:

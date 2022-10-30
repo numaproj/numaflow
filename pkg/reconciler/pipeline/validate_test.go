@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"testing"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -204,6 +205,27 @@ func TestValidateVertex(t *testing.T) {
 		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "or equal to")
+	})
+
+	t.Run("good init container", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			InitContainers: []corev1.Container{
+				{Name: "my-test-image", Image: "my-image:latest"},
+			},
+		}
+		err := validateVertex(v)
+		assert.NoError(t, err)
+	})
+
+	t.Run("bad init container name", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			InitContainers: []corev1.Container{
+				{Name: dfv1.CtrInit, Image: "my-image:latest"},
+			},
+		}
+		err := validateVertex(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "is reserved for containers created by numaflow")
 	})
 }
 
