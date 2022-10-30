@@ -10,11 +10,11 @@ Pods management is done by vertex controller.
 
 ![Vertex Controller Reconciliation Loop](../assets/vertex_controller_loop.png)
 
-With `scale` subresource implemented, `vertex` object can be scaled by either horizontal or vetical pod autoscaling.
+With `scale` subresource implemented, `vertex` object can be scaled by either horizontal or vertical pod autoscaling.
 
 ## Numaflow Autoscaling
 
-The out of box Numaflow autoscaling is done by a `scaling` component running in the controller manager, you can find the source code [here](https://github.com/numaproj/numaflow/tree/main/controllers/vertex/scaling). The autoscaling strategy is implemented according to different type of vertices.
+The out of box Numaflow autoscaling is done by a `scaling` component running in the controller manager, you can find the source code [here](https://github.com/numaproj/numaflow/tree/main/pkg/reconciler/vertex/scaling). The autoscaling strategy is implemented according to different type of vertices.
 
 ## Source Vertices
 
@@ -53,13 +53,13 @@ We define a target available buffer length, and then calculate how many replicas
 
 Back pressure is considered during autoscaling (which is only available for Source and UDF vertices).
 
-We measure the back presure by defining a threshold of the buffer usage. For example, the total buffer length is 50000, buffer limit is 80%, and the back pressure threshold is 90%, if in the past period of time, the average pending messages is more than `36000 (50000 * 80% * 90%)`, we consider there's back pressure.
+We measure the back pressure by defining a threshold of the buffer usage. For example, the total buffer length is 50000, buffer limit is 80%, and the back pressure threshold is 90%, if in the past period of time, the average pending messages is more than `36000 (50000 * 80% * 90%)`, we consider there's back pressure.
 
 When the calculated desired replicas is greater than current replicas:
 
-1. For vetices which have back pressure from the directly connected vertices, instead of increasing the replica number, we decrease it by 1;
+1. For vertices which have back pressure from the directly connected vertices, instead of increasing the replica number, we decrease it by 1;
 2. For vertices which have back pressure in any of its downstream vertices, the replica number remains unchanged.
 
 ## Autoscaling Tuning
 
-Numaflow autoscaling can be tuned by updating some paramaters, find the details at the [doc](../autoscaling.md).
+Numaflow autoscaling can be tuned by updating some parameters, find the details at the [doc](../autoscaling.md).

@@ -4,7 +4,7 @@ For a data processing pipeline, each vertex keeps running the cycle of reading d
 
 - `readBatchSize` - How many messages to read for each cycle, defaults to `500`.
 - `bufferMaxLength` - How many unprocessed messages can be existing in the Inter-Step Buffer, defaults to `30000`.
-- `bufferUsageLimit` - The pencentage of the buffer usage limit, a valid number should be less than 100. Default value is `80`, which means `80%`.
+- `bufferUsageLimit` - The percentage of the buffer usage limit, a valid number should be less than 100. Default value is `80`, which means `80%`.
 
 These parameters can be customized under `spec.limits` as below, once defined, they apply to all the vertices and Inter-Step Buffers of the pipeline.
 

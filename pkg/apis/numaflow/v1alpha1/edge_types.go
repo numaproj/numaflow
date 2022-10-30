@@ -41,7 +41,7 @@ type EdgeLimits struct {
 	// It overrides the settings from pipeline limits.
 	// +optional
 	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,1,opt,name=bufferMaxLength"`
-	// BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+	// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
 	// It overrides the settings from pipeline limits.
 	// +optional
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,2,opt,name=bufferUsageLimit"`

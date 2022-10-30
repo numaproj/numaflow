@@ -39,10 +39,10 @@ spec:
 ```
 
 - `disabled` - Whether to disable Numaflow autoscaling, defaults to `false`.
-- `min` - Minimum replicas, valid value could be an interger >= 0. Defaults to `0`, which means it could be scaled down to 0.
-- `max` - Maximum replicas, positive interger which should not be less than `min`, defaults to `50`. if `max` and `min` are the same, that will be the fixed replica number.
+- `min` - Minimum replicas, valid value could be an integer >= 0. Defaults to `0`, which means it could be scaled down to 0.
+- `max` - Maximum replicas, positive integer which should not be less than `min`, defaults to `50`. if `max` and `min` are the same, that will be the fixed replica number.
 - `lookbackSeconds` - How many seconds to lookback for vertex average processing rate (tps) and pending messages calculation, defaults to `180`. Rate and pending messages metrics are critical for autoscaling, you might need to tune this parameter a bit to see better results. For example, your data source only have 1 minute data input in every 5 minutes, and you don't want the vertices to be scaled down to `0`. In this case, you need to increase `lookbackSeconds` to cover all the 5 minutes, so that the calculated average rate and pending messages won't be `0` during the silent period, to prevent scaling down to 0 from happening.
-- `cooldownSeconds` - After a scaling operation, how many seconds to wait before doing another scaling on the same vertex. This is to give some time for a vertex to stablize, defaults to 90 seconds.
+- `cooldownSeconds` - After a scaling operation, how many seconds to wait before doing another scaling on the same vertex. This is to give some time for a vertex to stabilize, defaults to 90 seconds.
 - `zeroReplicaSleepSeconds` - How many seconds it will wait after scaling down to `0`, defaults to `180`. Numaflow autoscaler periodically scales up a vertex pod to "peek" the incoming data, this is the period of time to wait before peeking.
 - `targetProcessingSeconds` - It is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast you want the vertex to process all the pending messages, defaults to `20`. It is only effective for the `Source` vertices which support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.
 - `targetBufferUsage` - Targeted buffer usage percentage, defaults to `50`. It is only effective for `UDF` and `Sink` vertices, it also determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.
@@ -87,7 +87,7 @@ spec:
 
 With the configuration above, Kubernetes HPA controller will keep the target utilization of the pods of the Vertex at 50%.
 
-Kubernetes HPA autoscaling is usful for those Source vertice not able to count pending messages, such as [HTTP](sources/http.md).
+Kubernetes HPA autoscaling is useful for those Source vertices not able to count pending messages, such as [HTTP](sources/http.md).
 
 ### Third Party Autoscaling
 
