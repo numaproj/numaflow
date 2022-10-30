@@ -11,7 +11,7 @@ spec:
           # Whether to create a ClusterIP Service, defaults to false
           service: true
           # Optional bearer token auth
-          # xxx examples should be self-contained and runable by the user
+          # xxx examples should be self-contained and runnable by the user
 #         auth:
 #           # A secret selector pointing to the secret contains token
 #           token:

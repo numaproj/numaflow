@@ -1217,7 +1217,7 @@ spec:
                           format: int64
                           type: integer
                         bufferUsageLimit:
-                          description: BufferUsageLimit is used to define the pencentage
+                          description: BufferUsageLimit is used to define the percentage
                             of the buffer usage limit, a valid value should be less
                             than 100, for example, 85. It overrides the settings from
                             pipeline limits.
@@ -2477,7 +2477,7 @@ spec:
                 type: string
               limits:
                 description: Limits define the limitations such as buffer read batch
-                  size for all the vertices of a pipleine, will override pipeline
+                  size for all the vertices of a pipeline, will override pipeline
                   level settings
                 properties:
                   readBatchSize:
@@ -2561,12 +2561,12 @@ spec:
                     type: integer
                   replicasPerScale:
                     description: ReplicasPerScale defines maximum replicas can be
-                      scaled up or down at once. The is use to prevent too aggresive
+                      scaled up or down at once. The is use to prevent too aggressive
                       scaling operations
                     format: int32
                     type: integer
                   targetBufferUsage:
-                    description: TargetBufferUsage is used to define the target pencentage
+                    description: TargetBufferUsage is used to define the target percentage
                       of usage of the buffer to be read. A valid and meaningful value
                       should be less than the BufferUsageLimit defined in the Edge
                       spec (or Pipeline spec), for example, 50. It only applies to
@@ -3199,7 +3199,7 @@ spec:
                           format: int64
                           type: integer
                         bufferUsageLimit:
-                          description: BufferUsageLimit is used to define the pencentage
+                          description: BufferUsageLimit is used to define the percentage
                             of the buffer usage limit, a valid value should be less
                             than 100, for example, 85. It overrides the settings from
                             pipeline limits.

@@ -229,7 +229,7 @@ ServiceAccountName to apply to the StatefulSet
 <em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for all the
-vertices of a pipleine, will override pipeline level settings
+vertices of a pipeline, will override pipeline level settings
 </p>
 </td>
 </tr>
@@ -653,7 +653,7 @@ overrides the settings from pipeline limits.
 <td>
 <em>(Optional)</em>
 <p>
-BufferUsageLimit is used to define the pencentage of the buffer usage
+BufferUsageLimit is used to define the percentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. It
 overrides the settings from pipeline limits.
 </p>
@@ -1413,8 +1413,8 @@ InterStepBufferServiceSpec </a> </em>
 <tr>
 <td>
 <code>redis</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBuferService">
-RedisBuferService </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">
+RedisBufferService </a> </em>
 </td>
 <td>
 </td>
@@ -1467,8 +1467,8 @@ Description
 <tr>
 <td>
 <code>redis</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBuferService">
-RedisBuferService </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">
+RedisBufferService </a> </em>
 </td>
 <td>
 </td>
@@ -2184,7 +2184,7 @@ NativeRedis
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBuferService">RedisBuferService</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>)
 </p>
 <p>
 </p>
@@ -2565,7 +2565,7 @@ Lifecycle define the Lifecycle properties
 <em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for all the
-vertices of a pipleine, they could be overridden by each vertex’s
+vertices of a pipeline, they could be overridden by each vertex’s
 settings
 </p>
 </td>
@@ -2653,7 +2653,7 @@ be overridden by the settings in vertex limits.
 <td>
 <em>(Optional)</em>
 <p>
-BufferUsageLimit is used to define the pencentage of the buffer usage
+BufferUsageLimit is used to define the percentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. Only
 applies to UDF and Source vertice as only they do buffer write. It will
 be overridden by the settings in vertex limits.
@@ -2758,7 +2758,7 @@ Lifecycle define the Lifecycle properties
 <em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for all the
-vertices of a pipleine, they could be overridden by each vertex’s
+vertices of a pipeline, they could be overridden by each vertex’s
 settings
 </p>
 </td>
@@ -2867,8 +2867,8 @@ Kubernetes meta/v1.Time </a> </em>
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.RedisBuferService">
-RedisBuferService
+<h3 id="numaflow.numaproj.io/v1alpha1.RedisBufferService">
+RedisBufferService
 </h3>
 <p>
 (<em>Appears on:</em>
@@ -2920,7 +2920,7 @@ RedisConfig
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">BufferServiceConfig</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBuferService">RedisBuferService</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>)
 </p>
 <p>
 </p>
@@ -3191,7 +3191,7 @@ only effective for source vertices.
 <td>
 <em>(Optional)</em>
 <p>
-TargetBufferUsage is used to define the target pencentage of usage of
+TargetBufferUsage is used to define the target percentage of usage of
 the buffer to be read. A valid and meaningful value should be less than
 the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
 example, 50. It only applies to UDF and Sink vertices as only they have
@@ -3207,7 +3207,7 @@ buffers to read.
 <em>(Optional)</em>
 <p>
 ReplicasPerScale defines maximum replicas can be scaled up or down at
-once. The is use to prevent too aggresive scaling operations
+once. The is use to prevent too aggressive scaling operations
 </p>
 </td>
 </tr>

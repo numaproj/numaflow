@@ -17287,7 +17287,7 @@
           }
         },
         "limits": {
-          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings",
+          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
         },
         "metadata": {
@@ -17479,7 +17479,7 @@
           "format": "int64"
         },
         "bufferUsageLimit": {
-          "description": "BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
+          "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
           "type": "integer",
           "format": "int64"
         }
@@ -17887,7 +17887,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.JetStreamBufferService"
         },
         "redis": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisBuferService"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisBufferService"
         }
       }
     },
@@ -18267,7 +18267,7 @@
           "format": "int64"
         },
         "bufferUsageLimit": {
-          "description": "BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertice as only they do buffer write. It will be overridden by the settings in vertex limits.",
+          "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertice as only they do buffer write. It will be overridden by the settings in vertex limits.",
           "type": "integer",
           "format": "int64"
         },
@@ -18325,7 +18325,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Lifecycle"
         },
         "limits": {
-          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, they could be overridden by each vertex's settings",
+          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineLimits"
         },
         "vertices": {
@@ -18381,7 +18381,7 @@
         }
       }
     },
-    "io.numaproj.numaflow.v1alpha1.RedisBuferService": {
+    "io.numaproj.numaflow.v1alpha1.RedisBufferService": {
       "type": "object",
       "properties": {
         "external": {
@@ -18472,12 +18472,12 @@
           "format": "int32"
         },
         "replicasPerScale": {
-          "description": "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggresive scaling operations",
+          "description": "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations",
           "type": "integer",
           "format": "int64"
         },
         "targetBufferUsage": {
-          "description": "TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read.",
+          "description": "TargetBufferUsage is used to define the target percentage of usage of the buffer to be read. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read.",
           "type": "integer",
           "format": "int64"
         },
@@ -18701,7 +18701,7 @@
           "type": "string"
         },
         "limits": {
-          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings",
+          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
         },
         "metadata": {
