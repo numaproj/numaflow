@@ -13,7 +13,7 @@
     
     
       
-        <title>Static Code Analysis - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Init Containers - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#static-code-analysis" class="md-skip">
+        <a href="#init-containers" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Static Code Analysis
+              Init Containers
             
           </span>
         </div>
@@ -224,6 +224,8 @@
         
   
   
+    
+  
 
 
   
@@ -235,7 +237,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../pipeline/" class="md-tabs__link">
+      <a href="../pipeline/" class="md-tabs__link md-tabs__link--active">
         User Guide
       </a>
     </li>
@@ -263,15 +265,13 @@
         
   
   
-    
-  
 
 
   
   
   
     <li class="md-tabs__item">
-      <a href="../development/" class="md-tabs__link md-tabs__link--active">
+      <a href="../development/" class="md-tabs__link">
         Developer Guide
       </a>
     </li>
@@ -408,12 +408,14 @@
 
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" checked>
       
       
       
@@ -879,11 +881,21 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../init-containers/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Init Containers
       </a>
+      
     </li>
   
 
@@ -1052,14 +1064,12 @@
 
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5" type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5" type="checkbox" id="__nav_5" >
       
       
       
@@ -1169,21 +1179,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../static-code-analysis/" class="md-nav__link">
         Static Code Analysis
       </a>
-      
     </li>
   
 
@@ -1254,19 +1254,55 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/static-code-analysis.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/init-containers.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="static-code-analysis">Static Code Analysis<a class="headerlink" href="#static-code-analysis" title="Permanent link">&para;</a></h1>
-<p>We use the following static code analysis tools:</p>
-<ul>
-<li><code>golangci-lint</code> for compile time linting.</li>
-<li><a href="https://app.snyk.io/org/numaproj/projects">Snyk</a> for image scanning.</li>
-</ul>
-<p>These are at least run daily or on each pull request.</p>
+<h1 id="init-containers">Init Containers<a class="headerlink" href="#init-containers" title="Permanent link">&para;</a></h1>
+<p><a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">Init Containers</a> can be provided for all the types of vertices.</p>
+<p>The following example shows how to add an init-container to a <code>udf</code> vertex.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
+<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
+<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span><span class="w"></span>
+<span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-init</span><span class="w"></span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">busybox:latest</span><span class="w"></span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;echo</span><span class="nv"> </span><span class="s">\&quot;my-init</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">running!\&quot;</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">sleep</span><span class="nv"> </span><span class="s">60&quot;</span><span class="p p-Indicator">]</span><span class="w"></span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span><span class="w"></span>
+</code></pre></div>
+<p>The following example shows how to use init-containers and <a href="../volumes/"><code>volumes</code></a> together to provide a <code>udf</code> container files on startup.
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
+<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
+<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span><span class="w"></span>
+<span class="w">      </span><span class="nt">volumes</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-data</span><span class="w"></span>
+<span class="w">          </span><span class="nt">emptyDir</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w"></span>
+<span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-init</span><span class="w"></span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">amazon/aws-cli:latest</span><span class="w"></span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;aws</span><span class="nv"> </span><span class="s">s3</span><span class="nv"> </span><span class="s">sync</span><span class="nv"> </span><span class="s">s3://path/to/my-s3-data</span><span class="nv"> </span><span class="s">/path/to/my-init-data&quot;</span><span class="p p-Indicator">]</span><span class="w"></span>
+<span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-init-data</span><span class="w"></span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-data</span><span class="w"></span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span><span class="w"></span>
+<span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-data</span><span class="w"></span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-data</span><span class="w"></span>
+</code></pre></div></p>
 
               
             </article>
@@ -1287,7 +1323,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../debugging/" class="md-footer__link md-footer__link--prev" aria-label="Previous: How To Debug" rel="prev">
+        <a href="../environment-variables/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Environment Variables" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -1296,20 +1332,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              How To Debug
+              Environment Variables
             </div>
           </div>
         </a>
       
       
         
-        <a href="../releasing/" class="md-footer__link md-footer__link--next" aria-label="Next: How To Release" rel="next">
+        <a href="../watermarks/" class="md-footer__link md-footer__link--next" aria-label="Next: Watermarks" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              How To Release
+              Watermarks
             </div>
           </div>
           <div class="md-footer__button md-icon">

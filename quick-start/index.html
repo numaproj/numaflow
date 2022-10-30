@@ -952,6 +952,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../init-containers/" class="md-nav__link">
+        Init Containers
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../watermarks/" class="md-nav__link">
         Watermarks
       </a>
@@ -1383,7 +1397,7 @@ simple-pipeline-cat-0-kqrhy                  <span class="m">2</span>/2     Runn
 simple-pipeline-in-0-rhpjm                   <span class="m">1</span>/1     Running     <span class="m">0</span>          11s
 
 <span class="c1"># Watch the log for the `output` vertex</span>
-kubectl logs -f simple-pipeline-out-0-xxxx main
+kubectl logs -f simple-pipeline-out-0-xxxx
 <span class="m">2022</span>/08/25 <span class="m">23</span>:59:38 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;VT+G+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707552597<span class="o">}</span>
 <span class="m">2022</span>/08/25 <span class="m">23</span>:59:38 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;0TaH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707615953<span class="o">}</span>
 <span class="m">2022</span>/08/25 <span class="m">23</span>:59:38 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;EEGH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707618576<span class="o">}</span>
@@ -1431,12 +1445,12 @@ curl -kq -X POST -d <span class="s2">&quot;103&quot;</span> https://localhost:84
 curl -kq -X POST -d <span class="s2">&quot;104&quot;</span> https://localhost:8444/vertices/in 
 
 <span class="c1"># Watch the log for the even vertex</span>
-kubectl logs -f even-odd-even-sink-0-nf2ql main
+kubectl logs -f even-odd-even-sink-0-nf2ql
 <span class="m">2022</span>/09/07 <span class="m">22</span>:29:40 <span class="o">(</span>even-sink<span class="o">)</span> <span class="m">102</span>
 <span class="m">2022</span>/09/07 <span class="m">22</span>:29:40 <span class="o">(</span>even-sink<span class="o">)</span> <span class="m">104</span>
 
 <span class="c1"># Watch the log for the odd vertex</span>
-kubectl logs -f even-odd-odd-sink-0-a6p0n main
+kubectl logs -f even-odd-odd-sink-0-a6p0n
 <span class="m">2022</span>/09/07 <span class="m">22</span>:30:19 <span class="o">(</span>odd-sink<span class="o">)</span> <span class="m">101</span>
 <span class="m">2022</span>/09/07 <span class="m">22</span>:30:19 <span class="o">(</span>odd-sink<span class="o">)</span> <span class="m">103</span>
 </code></pre></div></p>
