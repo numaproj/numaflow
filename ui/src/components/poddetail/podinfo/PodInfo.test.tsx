@@ -3,7 +3,7 @@ import {render, screen} from "@testing-library/react";
 import {PodContainerSpec} from "../../../utils/models/pods";
 
 const podContainerSpec: PodContainerSpec = {
-    name: "main"
+    name: "numa"
 }
 const containerSpecMap = new Map<string, PodContainerSpec>([
     ["simple-pipeline-infer-0-xah5w", podContainerSpec]
@@ -12,11 +12,11 @@ const containerSpecMap = new Map<string, PodContainerSpec>([
 
 const pod = {
     "name": "simple-pipeline-infer-0-xah5w",
-    "containers": ["main", "udf"],
+    "containers": ["numa", "udf"],
     "containerSpecMap": containerSpecMap
 }
 const podDetail = {"name": "simple-pipeline-infer-0-xah5w", "containerMap": containerSpecMap}
-const containerName = "main"
+const containerName = "numa"
 
 describe("PodInfo screen", () => {
     it("loads screen", () => {

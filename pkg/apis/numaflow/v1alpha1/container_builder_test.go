@@ -27,7 +27,7 @@ func Test_containerBuilder(t *testing.T) {
 			resources: testResources,
 		}).
 		build()
-	assert.Equal(t, "main", c.Name)
+	assert.Equal(t, CtrMain, c.Name)
 	assert.Len(t, c.VolumeMounts, 0)
 	assert.Equal(t, testResources, c.Resources)
 }
