@@ -1637,7 +1637,7 @@ max_file_store: 1TB
 <h3 id="tls">TLS<a class="headerlink" href="#tls" title="Permanent link">&para;</a></h3>
 <p><code>TLS</code> is optional to configure through <code>spec.jetstream.tls: true</code>. Enabling TLS will use a self signed CERT to encrypt the connection from Vertex Pods to JetStream service. By default <code>TLS</code> is not enabled.</p>
 <h3 id="encryption-at-rest">Encryption At Rest<a class="headerlink" href="#encryption-at-rest" title="Permanent link">&para;</a></h3>
-<p>Encryption at rest can be enabled by setting <code>spec.jetstream.encryption: true</code>. Be aware this will impact the performace a bit, see the detail at <a href="https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest">official doc</a>.</p>
+<p>Encryption at rest can be enabled by setting <code>spec.jetstream.encryption: true</code>. Be aware this will impact the performance a bit, see the detail at <a href="https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest">official doc</a>.</p>
 <p>Once a JetStream ISB Service is created, toggling the <code>encryption</code> field will cause problem for the exiting messages, so if you want to change the value, please delete and recreate the ISB Service, and you also need to restart all the Vertex Pods to pick up the new credentials.</p>
 <h3 id="other-configuration">Other Configuration<a class="headerlink" href="#other-configuration" title="Permanent link">&para;</a></h3>
 <p>Check <a href="../APIs/#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">here</a> for the full spec of <code>spec.jetstream</code>.</p>

@@ -1336,7 +1336,7 @@
 <span class="w">        </span><span class="no">...</span><span class="w"></span>
 </code></pre></div>
 <h3 id="isb-service-configuration">ISB Service Configuration<a class="headerlink" href="#isb-service-configuration" title="Permanent link">&para;</a></h3>
-<p>One of the important configuration items in the ConfigMap is about <a href="../inter-step-buffer-service/">ISB Service</a>. We currently use 3rd party technologies such as <code>JetStream</code> to implmement ISB Services, if those applications have new releases, to make them available in Numaflow, the new versions need to be added in the ConfigMap.</p>
+<p>One of the important configuration items in the ConfigMap is about <a href="../inter-step-buffer-service/">ISB Service</a>. We currently use 3rd party technologies such as <code>JetStream</code> to implement ISB Services, if those applications have new releases, to make them available in Numaflow, the new versions need to be added in the ConfigMap.</p>
 <p>For example, there's a new <code>Nats JetStream</code> version <code>x.y.x</code> available, a new version configuration like below needs to be added before it can be referenced in the <code>InterStepBufferService</code> spec.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span><span class="w"></span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span><span class="w"></span>
