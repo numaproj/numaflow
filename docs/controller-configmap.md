@@ -22,7 +22,7 @@ data:
 
 ### ISB Service Configuration
 
-One of the important configuration items in the ConfigMap is about [ISB Service](./inter-step-buffer-service.md). We currently use 3rd party technologies such as `JetStream` to implmement ISB Services, if those applications have new releases, to make them available in Numaflow, the new versions need to be added in the ConfigMap.
+One of the important configuration items in the ConfigMap is about [ISB Service](./inter-step-buffer-service.md). We currently use 3rd party technologies such as `JetStream` to implement ISB Services, if those applications have new releases, to make them available in Numaflow, the new versions need to be added in the ConfigMap.
 
 For example, there's a new `Nats JetStream` version `x.y.x` available, a new version configuration like below needs to be added before it can be referenced in the `InterStepBufferService` spec.
 

@@ -129,7 +129,7 @@ Changing the buffer configuration either in the control plane ConfigMap or in th
 
 ### Encryption At Rest
 
-Encryption at rest can be enabled by setting `spec.jetstream.encryption: true`. Be aware this will impact the performace a bit, see the detail at [official doc](https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest).
+Encryption at rest can be enabled by setting `spec.jetstream.encryption: true`. Be aware this will impact the performance a bit, see the detail at [official doc](https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest).
 
 Once a JetStream ISB Service is created, toggling the `encryption` field will cause problem for the exiting messages, so if you want to change the value, please delete and recreate the ISB Service, and you also need to restart all the Vertex Pods to pick up the new credentials.
 
