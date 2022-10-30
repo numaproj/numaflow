@@ -1837,6 +1837,10 @@ spec:
                         description: Size of each generated message
                         format: int32
                         type: integer
+                      msgValue:
+                        description: Constant message to be generated
+                        format: int64
+                        type: integer
                       rpu:
                         default: 5
                         format: int64

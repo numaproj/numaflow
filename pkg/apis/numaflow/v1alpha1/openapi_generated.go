@@ -646,6 +646,13 @@ func schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref common.ReferenceCallb
 							Format:      "int32",
 						},
 					},
+					"msgValue": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Constant message to be generated",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 			},
 		},

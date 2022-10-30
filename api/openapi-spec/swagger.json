@@ -17535,6 +17535,11 @@
           "type": "integer",
           "format": "int32"
         },
+        "msgValue": {
+          "description": "Constant message to be generated",
+          "type": "integer",
+          "format": "int64"
+        },
         "rpu": {
           "type": "integer",
           "format": "int64"

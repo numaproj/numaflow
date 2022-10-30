@@ -216,7 +216,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	concurrentUDFProcessingStart := time.Now()
 	// send UDF processing work to the channel
 	for idx, readMessage := range readMessages {
-		isdf.opts.logger.Infow("received the message - ", readMessage.Key)
+		isdf.opts.logger.Infow("received the message - " + readMessage.Key)
 		udfResults[idx].readMessage = readMessage
 		udfCh <- &udfResults[idx]
 	}
@@ -239,7 +239,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 		// update toBuffers
 		for _, message := range m.writeMessages {
-			isdf.opts.logger.Infow("message key in udf - ", message.Key)
+			isdf.opts.logger.Infow("message key in udf - " + message.Key)
 			if err := isdf.whereToStep(message, messageToStep, m.readMessage); err != nil {
 				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
 				return

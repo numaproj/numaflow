@@ -41,7 +41,7 @@ type record struct {
 	offset int64
 }
 
-var recordGenerator = func(size int32) []byte {
+var recordGenerator = func(size int32, msg int64) []byte {
 	nano := time.Now().UnixNano()
 	b := make([]byte, size)
 	binary.LittleEndian.PutUint64(b, uint64(nano))
@@ -65,7 +65,7 @@ type memgen struct {
 	// a number of records equal to the number passed to rpu.
 	timeunit time.Duration
 	// genfn function that generates a payload as a byte array
-	genfn func(int32) []byte
+	genfn func(int32, int64) []byte
 	// name is the name of the source node
 	name string
 	// pipelineName is the name of the pipeline
@@ -86,6 +86,8 @@ type memgen struct {
 	sourcePublishWM publish.Publisher
 
 	logger *zap.SugaredLogger
+	// constant message value
+	messageValue int64
 }
 
 type Option func(*memgen) error
@@ -130,6 +132,10 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	if vertexInstance.Vertex.Spec.Source.Generator.Duration != nil {
 		timeunit = vertexInstance.Vertex.Spec.Source.Generator.Duration.Duration
 	}
+	var msgValue int64
+	if vertexInstance.Vertex.Spec.Source.Generator.MsgValue != nil {
+		msgValue = *vertexInstance.Vertex.Spec.Source.Generator.MsgValue
+	}
 
 	gensrc := &memgen{
 		rpu:            rpu,
@@ -141,6 +147,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 		vertexInstance: vertexInstance,
 		srcchan:        make(chan record, rpu*5),
 		readTimeout:    3 * time.Second, // default timeout
+		messageValue:   msgValue,
 	}
 
 	for _, o := range opts {
@@ -278,7 +285,7 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 						atomic.AddInt32(&rcount, 1)
 						defer atomic.AddInt32(&rcount, -1)
 						for i := 0; i < rate; i++ {
-							payload := mg.genfn(mg.msgSize)
+							payload := mg.genfn(mg.msgSize, mg.messageValue)
 							r := record{data: payload, offset: time.Now().UTC().UnixNano()}
 							select {
 							case <-ctx.Done():

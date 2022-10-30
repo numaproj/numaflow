@@ -229,6 +229,9 @@ message GeneratorSource {
   // +kubebuilder:default=8
   // +optional
   optional int32 msgSize = 3;
+
+  // Constant message to be generated
+  optional int64 msgValue = 4;
 }
 
 message GetDaemonDeploymentReq {

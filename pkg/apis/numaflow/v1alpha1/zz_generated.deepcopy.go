@@ -393,6 +393,11 @@ func (in *GeneratorSource) DeepCopyInto(out *GeneratorSource) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.MsgValue != nil {
+		in, out := &in.MsgValue, &out.MsgValue
+		*out = new(int64)
+		**out = **in
+	}
 	return
 }
 

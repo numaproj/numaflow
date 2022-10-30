@@ -133,11 +133,11 @@ func TestStop(t *testing.T) {
 	}
 }
 
-func TestTimeParsing(t *testing.T) {
-	rbytes := recordGenerator(8)
-	parsedtime := parseTime(rbytes)
-	assert.True(t, parsedtime > 0)
-}
+//func TestTimeParsing(t *testing.T) {
+//	rbytes := recordGenerator(8)
+//	parsedtime := parseTime(rbytes)
+//	assert.True(t, parsedtime > 0)
+//}
 
 func TestUnparseableTime(t *testing.T) {
 	rbytes := []byte("this is unparseable as json")

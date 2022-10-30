@@ -808,6 +808,16 @@ Size of each generated message
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>msgValue</code></br> <em> int64 </em>
+</td>
+<td>
+<p>
+Constant message to be generated
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetDaemonDeploymentReq">

@@ -15,4 +15,6 @@ type GeneratorSource struct {
 	// +kubebuilder:default=8
 	// +optional
 	MsgSize *int32 `json:"msgSize,omitempty" protobuf:"bytes,3,opt,name=msgSize"`
+	// Constant message to be generated
+	MsgValue *int64 `json:"msgValue,omitempty" protobuf:"bytes,4,opt,name=msgValue"`
 }
