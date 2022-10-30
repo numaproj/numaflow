@@ -354,7 +354,7 @@ type PipelineSpec struct {
 	// +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running}
 	// +optional
 	Lifecycle Lifecycle `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`
-	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, they could be overridden by each vertex's settings
+	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings
 	// +kubebuilder:default={"readBatchSize": 500, "bufferMaxLength": 30000, "bufferUsageLimit": 80}
 	// +optional
 	Limits *PipelineLimits `json:"limits,omitempty" protobuf:"bytes,5,opt,name=limits"`
@@ -396,7 +396,7 @@ type PipelineLimits struct {
 	// +kubebuilder:default=50000
 	// +optional
 	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,2,opt,name=bufferMaxLength"`
-	// BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+	// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
 	// Only applies to UDF and Source vertice as only they do buffer write.
 	// It will be overridden by the settings in vertex limits.
 	// +kubebuilder:default=80

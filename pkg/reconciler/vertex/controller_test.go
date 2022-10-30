@@ -39,7 +39,7 @@ var (
 			Name:      dfv1.DefaultISBSvcName,
 		},
 		Spec: dfv1.InterStepBufferServiceSpec{
-			Redis: &dfv1.RedisBuferService{
+			Redis: &dfv1.RedisBufferService{
 				Native: &dfv1.NativeRedis{
 					Version: testVersion,
 				},

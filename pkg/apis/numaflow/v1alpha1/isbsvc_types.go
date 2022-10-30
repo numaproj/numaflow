@@ -74,7 +74,7 @@ type InterStepBufferServiceList struct {
 }
 
 type InterStepBufferServiceSpec struct {
-	Redis     *RedisBuferService      `json:"redis,omitempty" protobuf:"bytes,1,opt,name=redis"`
+	Redis     *RedisBufferService     `json:"redis,omitempty" protobuf:"bytes,1,opt,name=redis"`
 	JetStream *JetStreamBufferService `json:"jetstream,omitempty" protobuf:"bytes,2,opt,name=jetstream"`
 }
 

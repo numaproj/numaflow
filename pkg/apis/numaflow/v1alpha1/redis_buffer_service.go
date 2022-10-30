@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type RedisBuferService struct {
+type RedisBufferService struct {
 	// Native brings up a native Redis service
 	Native *NativeRedis `json:"native,omitempty" protobuf:"bytes,1,opt,name=native"`
 	// External holds an External Redis config

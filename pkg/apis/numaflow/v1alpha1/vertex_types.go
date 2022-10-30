@@ -392,7 +392,7 @@ type AbstractVertex struct {
 	// +patchStrategy=merge
 	// +patchMergeKey=name
 	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,16,rep,name=volumes"`
-	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings
+	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
 	// +optional
 	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,17,opt,name=limits"`
 	// Settings for autoscaling
@@ -425,13 +425,13 @@ type Scale struct {
 	// rate, thus less replicas. It's only effective for source vertices.
 	// +optional
 	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
-	// TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read.
+	// TargetBufferUsage is used to define the target percentage of usage of the buffer to be read.
 	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
 	// It only applies to UDF and Sink vertices as only they have buffers to read.
 	// +optional
 	TargetBufferUsage *uint32 `json:"targetBufferUsage,omitempty" protobuf:"varint,8,opt,name=targetBufferUsage"`
 	// ReplicasPerScale defines maximum replicas can be scaled up or down at once.
-	// The is use to prevent too aggresive scaling operations
+	// The is use to prevent too aggressive scaling operations
 	// +optional
 	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
 }
