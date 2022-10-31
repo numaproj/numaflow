@@ -29,7 +29,7 @@ var _ reducer.Reducer = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
 func NewUDSGRPCBasedUDF(inputOptions ...client.Option) (*udsGRPCBasedUDF, error) {
-	c, err := client.New(inputOptions...) // Can we pass this as a parameter to the function?
+	c, err := client.New(inputOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
