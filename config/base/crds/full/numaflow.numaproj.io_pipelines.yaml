@@ -3692,7 +3692,7 @@ spec:
                                   type: object
                               type: object
                             window:
-                              description: Window indicates the windowing strategy.
+                              description: Window describes the windowing strategy.
                               properties:
                                 fixed:
                                   description: FixedWindow describes a fixed window

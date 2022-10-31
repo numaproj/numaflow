@@ -1296,7 +1296,7 @@ Description
 </td>
 <td>
 <p>
-Window indicates the windowing strategy.
+Window describes the windowing strategy.
 </p>
 </td>
 </tr>

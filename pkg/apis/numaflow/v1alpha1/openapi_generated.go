@@ -1119,7 +1119,7 @@ func schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref common.ReferenceCallback) com
 				Properties: map[string]spec.Schema{
 					"window": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Window indicates the windowing strategy.",
+							Description: "Window describes the windowing strategy.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window"),
 						},

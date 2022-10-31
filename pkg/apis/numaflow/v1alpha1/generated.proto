@@ -340,7 +340,7 @@ message GetVertexPodSpecReq {
 
 // GroupBy indicates it is a reducer UDF
 message GroupBy {
-  // Window indicates the windowing strategy.
+  // Window describes the windowing strategy.
   optional Window window = 1;
 
   // +optional

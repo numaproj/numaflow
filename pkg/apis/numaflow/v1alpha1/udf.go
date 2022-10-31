@@ -93,7 +93,7 @@ func (in UDF) getUDFContainer(req getContainerReq) corev1.Container {
 
 // GroupBy indicates it is a reducer UDF
 type GroupBy struct {
-	// Window indicates the windowing strategy.
+	// Window describes the windowing strategy.
 	Window Window `json:"window" protobuf:"bytes,1,opt,name=window"`
 	// +optional
 	Keyed bool `json:"keyed" protobuf:"bytes,2,opt,name=keyed"`

@@ -17809,7 +17809,7 @@
         },
         "window": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Window",
-          "description": "Window indicates the windowing strategy."
+          "description": "Window describes the windowing strategy."
         }
       },
       "required": [

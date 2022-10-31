@@ -17816,7 +17816,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PBQStorage"
         },
         "window": {
-          "description": "Window indicates the windowing strategy.",
+          "description": "Window describes the windowing strategy.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Window"
         }
       }
