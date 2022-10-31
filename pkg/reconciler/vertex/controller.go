@@ -110,7 +110,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			for i := 0; i < desiredReplicas; i++ {
 				newPvc, err := r.buildReduceVertexPVCSpec(vertex, i)
 				if err != nil {
-					log.Errorw("Error build a PVC spec", zap.Error(err))
+					log.Errorw("Error building a PVC spec", zap.Error(err))
 					vertex.Status.MarkPhaseFailed("BuildPVCSpecFailed", err.Error())
 					return ctrl.Result{}, err
 				}
