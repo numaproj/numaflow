@@ -391,7 +391,7 @@ type PipelineSpec struct {
 	// should be recreated.
 	// +kubebuilder:default={"disabled": false}
 	// +optional
-	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"` // DaemonTemplate is used to customize the Daemon Deployment
+	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"`
 	// Templates is used to customize additional kubernetes resources required for the Pipeline
 	// +optional
 	Templates *Templates `json:"templates,omitempty" protobuf:"bytes,7,opt,name=templates"`
