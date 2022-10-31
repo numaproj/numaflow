@@ -77,7 +77,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	log = log.With("protocol", "uds-grpc-map-udf")
 	var udfHandlerOptions []client.Option
 	if i, e := strconv.Atoi(os.Getenv(dfv1.EnvGRPCMaxMessageSize)); e == nil {
-		udfHandlerOptions = append(udfHandlerOptions, client.WithMaxMessageSizeLimit(i))
+		udfHandlerOptions = append(udfHandlerOptions, client.WithMaxMessageSize(i))
 	}
 	udfHandler, err := function.NewUDSGRPCBasedUDF(udfHandlerOptions...)
 	if err != nil {
