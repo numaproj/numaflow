@@ -477,7 +477,7 @@ ContainerTemplate
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.Daemon">Daemon</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
 </p>
@@ -536,12 +536,12 @@ Kubernetes core/v1.SecurityContext </a> </em>
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.Daemon">
-Daemon
+<h3 id="numaflow.numaproj.io/v1alpha1.DaemonTemplate">
+DaemonTemplate
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Templates">Templates</a>)
 </p>
 <p>
 </p>
@@ -2275,7 +2275,7 @@ Metadata
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.Daemon">Daemon</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
 </p>
@@ -2766,13 +2766,14 @@ setting, the pipeline should be recreated.
 </tr>
 <tr>
 <td>
-<code>daemon</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Daemon"> Daemon </a> </em>
+<code>templates</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates"> Templates </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-Daemon is used to customize the Daemon Deployment
+Templates is used to customize additional kubernetes resources required
+for the Pipeline
 </p>
 </td>
 </tr>
@@ -2971,13 +2972,14 @@ setting, the pipeline should be recreated.
 </tr>
 <tr>
 <td>
-<code>daemon</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Daemon"> Daemon </a> </em>
+<code>templates</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates"> Templates </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-Daemon is used to customize the Daemon Deployment
+Templates is used to customize additional kubernetes resources required
+for the Pipeline
 </p>
 </td>
 </tr>
@@ -3632,6 +3634,42 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 <em>(Optional)</em>
 <p>
 KeySecret refers to the secret that contains the key
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Templates">
+Templates
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>daemonTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate"> DaemonTemplate
+</a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+DaemonTemplate is used to customize the Daemon Deployment
 </p>
 </td>
 </tr>

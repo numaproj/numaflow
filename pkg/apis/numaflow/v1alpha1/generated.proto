@@ -169,7 +169,7 @@ message ContainerTemplate {
   repeated k8s.io.api.core.v1.EnvVar env = 4;
 }
 
-message Daemon {
+message DaemonTemplate {
   // +optional
   optional ContainerTemplate containerTemplate = 1;
 
@@ -835,9 +835,9 @@ message PipelineSpec {
   // +optional
   optional Watermark watermark = 6;
 
-  // Daemon is used to customize the Daemon Deployment
+  // Templates is used to customize additional kubernetes resources required for the Pipeline
   // +optional
-  optional Daemon daemon = 7;
+  optional Templates templates = 7;
 }
 
 message PipelineStatus {
@@ -997,6 +997,12 @@ message TLS {
   // KeySecret refers to the secret that contains the key
   // +optional
   optional k8s.io.api.core.v1.SecretKeySelector keySecret = 4;
+}
+
+message Templates {
+  // DaemonTemplate is used to customize the Daemon Deployment
+  // +optional
+  optional DaemonTemplate daemonTemplate = 1;
 }
 
 message UDF {

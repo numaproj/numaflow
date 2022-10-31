@@ -2,9 +2,9 @@ package v1alpha1
 
 import corev1 "k8s.io/api/core/v1"
 
-type Daemon struct {
+type DaemonTemplate struct {
 	// +optional
-	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,1,rep,name=containerTemplate"`
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,1,opt,name=containerTemplate"`
 	// Metadata sets the pods's metadata, i.e. annotations and labels
 	// +optional
 	Metadata *Metadata `json:"metadata,omitempty" protobuf:"bytes,2,opt,name=metadata"`

@@ -161,20 +161,22 @@ func TestGetDaemonDeploy(t *testing.T) {
 			Effect:   "NoSchedule",
 		}
 		pl := testPipeline.DeepCopy()
-		pl.Spec.Daemon = Daemon{
-			ContainerTemplate: &ContainerTemplate{
-				Resources: testResources,
-				Env:       []corev1.EnvVar{env},
+		pl.Spec.Templates = &Templates{
+			DaemonTemplate: &DaemonTemplate{
+				ContainerTemplate: &ContainerTemplate{
+					Resources: testResources,
+					Env:       []corev1.EnvVar{env},
+				},
+				Metadata: &Metadata{
+					Annotations: podAnnotations,
+					Labels:      podLabels,
+				},
+				Replicas:          &replicas,
+				NodeSelector:      nodeSelector,
+				Tolerations:       []corev1.Toleration{toleration},
+				PriorityClassName: "my-priority-class-name",
+				Priority:          &priority,
 			},
-			Metadata: &Metadata{
-				Annotations: podAnnotations,
-				Labels:      podLabels,
-			},
-			Replicas:          &replicas,
-			NodeSelector:      nodeSelector,
-			Tolerations:       []corev1.Toleration{toleration},
-			PriorityClassName: "my-priority-class-name",
-			Priority:          &priority,
 		}
 		s, err := pl.GetDaemonDeploymentObj(req)
 		assert.NoError(t, err)

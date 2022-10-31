@@ -198,31 +198,14 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		{Name: "GODEBUG", Value: os.Getenv("GODEBUG")},
 	}
 	envVars = append(envVars, req.Env...)
-	resources := standardResources
-	if p.Spec.Daemon.ContainerTemplate != nil {
-		resources = p.Spec.Daemon.ContainerTemplate.Resources
-		if len(p.Spec.Daemon.ContainerTemplate.Env) > 0 {
-			envVars = append(envVars, p.Spec.Daemon.ContainerTemplate.Env...)
-		}
-	}
 	c := corev1.Container{
 		Ports:           []corev1.ContainerPort{{ContainerPort: DaemonServicePort}},
 		Name:            CtrMain,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       resources,
+		Resources:       standardResources,
 		Env:             envVars,
 		Args:            []string{"daemon-server", "--isbsvc-type=" + string(req.ISBSvcType)},
-	}
-	podTemplateLabels := map[string]string{}
-	podTemplateAnnotations := map[string]string{}
-	if x := p.Spec.Daemon.Metadata; x != nil {
-		for k, v := range x.Labels {
-			podTemplateLabels[k] = v
-		}
-		for k, v := range x.Annotations {
-			podTemplateAnnotations[k] = v
-		}
 	}
 	labels := map[string]string{
 		KeyPartOf:       Project,
@@ -230,32 +213,48 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		KeyComponent:    ComponentDaemon,
 		KeyPipelineName: p.Name,
 	}
-	for k, v := range labels {
-		podTemplateLabels[k] = v
-	}
 	spec := appv1.DeploymentSpec{
-		Replicas: p.Spec.Daemon.Replicas,
 		Selector: &metav1.LabelSelector{
 			MatchLabels: labels,
 		},
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels:      podTemplateLabels,
-				Annotations: podTemplateAnnotations,
+				Labels:      labels,
+				Annotations: map[string]string{},
 			},
 			Spec: corev1.PodSpec{
-				NodeSelector:       p.Spec.Daemon.NodeSelector,
-				Tolerations:        p.Spec.Daemon.Tolerations,
-				SecurityContext:    p.Spec.Daemon.SecurityContext,
-				ImagePullSecrets:   p.Spec.Daemon.ImagePullSecrets,
-				PriorityClassName:  p.Spec.Daemon.PriorityClassName,
-				Priority:           p.Spec.Daemon.Priority,
-				ServiceAccountName: p.Spec.Daemon.ServiceAccountName,
-				Affinity:           p.Spec.Daemon.Affinity,
-				Containers:         []corev1.Container{c},
-				InitContainers:     []corev1.Container{p.getDaemonPodInitContainer(req)},
+				Containers:     []corev1.Container{c},
+				InitContainers: []corev1.Container{p.getDaemonPodInitContainer(req)},
 			},
 		},
+	}
+	if p.Spec.Templates != nil && p.Spec.Templates.DaemonTemplate != nil {
+		dt := p.Spec.Templates.DaemonTemplate
+		spec.Replicas = dt.Replicas
+		spec.Template.Spec.NodeSelector = dt.NodeSelector
+		spec.Template.Spec.Tolerations = dt.Tolerations
+		spec.Template.Spec.SecurityContext = dt.SecurityContext
+		spec.Template.Spec.ImagePullSecrets = dt.ImagePullSecrets
+		spec.Template.Spec.PriorityClassName = dt.PriorityClassName
+		spec.Template.Spec.Priority = dt.Priority
+		spec.Template.Spec.ServiceAccountName = dt.ServiceAccountName
+		spec.Template.Spec.Affinity = dt.Affinity
+		if md := dt.Metadata; md != nil {
+			for k, v := range md.Labels {
+				if _, ok := spec.Template.Labels[k]; !ok {
+					spec.Template.Labels[k] = v
+				}
+			}
+			for k, v := range md.Annotations {
+				spec.Template.Annotations[k] = v
+			}
+		}
+		if ct := dt.ContainerTemplate; ct != nil {
+			spec.Template.Spec.Containers[0].Resources = ct.Resources
+			if len(ct.Env) > 0 {
+				spec.Template.Spec.Containers[0].Env = append(envVars, ct.Env...)
+			}
+		}
 	}
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -392,10 +391,10 @@ type PipelineSpec struct {
 	// should be recreated.
 	// +kubebuilder:default={"disabled": false}
 	// +optional
-	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"`
-	// Daemon is used to customize the Daemon Deployment
+	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"` // DaemonTemplate is used to customize the Daemon Deployment
+	// Templates is used to customize additional kubernetes resources required for the Pipeline
 	// +optional
-	Daemon Daemon `json:"daemon,omitempty" protobuf:"bytes,7,rep,name=daemon"`
+	Templates *Templates `json:"templates,omitempty" protobuf:"bytes,7,opt,name=templates"`
 }
 
 type Watermark struct {
@@ -415,6 +414,12 @@ func (wm Watermark) GetMaxDelay() time.Duration {
 		return wm.MaxDelay.Duration
 	}
 	return time.Duration(0)
+}
+
+type Templates struct {
+	// DaemonTemplate is used to customize the Daemon Deployment
+	// +optional
+	DaemonTemplate *DaemonTemplate `json:"daemonTemplate,omitempty" protobuf:"bytes,1,opt,name=daemonTemplate"`
 }
 
 type PipelineLimits struct {

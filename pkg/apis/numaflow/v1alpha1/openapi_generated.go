@@ -36,7 +36,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BufferServiceConfig":            schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                      schema_pkg_apis_numaflow_v1alpha1_Container(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":              schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Daemon":                         schema_pkg_apis_numaflow_v1alpha1_Daemon(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate":                 schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge":                           schema_pkg_apis_numaflow_v1alpha1_Edge(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.EdgeLimits":                     schema_pkg_apis_numaflow_v1alpha1_EdgeLimits(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                    schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
@@ -78,6 +78,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source":                         schema_pkg_apis_numaflow_v1alpha1_Source(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Status":                         schema_pkg_apis_numaflow_v1alpha1_Status(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS":                            schema_pkg_apis_numaflow_v1alpha1_TLS(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates":                      schema_pkg_apis_numaflow_v1alpha1_Templates(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF":                            schema_pkg_apis_numaflow_v1alpha1_UDF(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink":                         schema_pkg_apis_numaflow_v1alpha1_UDSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Vertex":                         schema_pkg_apis_numaflow_v1alpha1_Vertex(ref),
@@ -467,7 +468,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref common.ReferenceCal
 	}
 }
 
-func schema_pkg_apis_numaflow_v1alpha1_Daemon(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2269,18 +2270,17 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"),
 						},
 					},
-					"daemon": {
+					"templates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Daemon is used to customize the Daemon Deployment",
-							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Daemon"),
+							Description: "Templates is used to customize additional kubernetes resources required for the Pipeline",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Daemon", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
 	}
 }
 
@@ -2683,6 +2683,26 @@ func schema_pkg_apis_numaflow_v1alpha1_TLS(ref common.ReferenceCallback) common.
 		},
 		Dependencies: []string{
 			"k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_Templates(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"daemonTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DaemonTemplate is used to customize the Daemon Deployment",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate"},
 	}
 }
 

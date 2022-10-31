@@ -17438,7 +17438,7 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.Daemon": {
+    "io.numaproj.numaflow.v1alpha1.DaemonTemplate": {
       "properties": {
         "affinity": {
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity",
@@ -18384,10 +18384,6 @@
     },
     "io.numaproj.numaflow.v1alpha1.PipelineSpec": {
       "properties": {
-        "daemon": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Daemon",
-          "description": "Daemon is used to customize the Daemon Deployment"
-        },
         "edges": {
           "description": "Edges define the relationships between vertices",
           "items": {
@@ -18405,6 +18401,10 @@
         "limits": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineLimits",
           "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings"
+        },
+        "templates": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Templates",
+          "description": "Templates is used to customize additional kubernetes resources required for the Pipeline"
         },
         "vertices": {
           "items": {
@@ -18631,6 +18631,15 @@
         },
         "insecureSkipVerify": {
           "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.Templates": {
+      "properties": {
+        "daemonTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.DaemonTemplate",
+          "description": "DaemonTemplate is used to customize the Daemon Deployment"
         }
       },
       "type": "object"
