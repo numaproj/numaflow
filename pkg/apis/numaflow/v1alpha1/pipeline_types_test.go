@@ -146,6 +146,53 @@ func TestGetDaemonDeploy(t *testing.T) {
 		assert.Equal(t, req.Image, c.Image)
 		assert.Contains(t, c.Args, "isbsvc-buffer-validate")
 	})
+
+	t.Run("test get deployment obj with pipeline overrides", func(t *testing.T) {
+		env := corev1.EnvVar{Name: "my-env-name", Value: "my-env-value"}
+		podLabels := map[string]string{"my-label-name": "my-label-value"}
+		podAnnotations := map[string]string{"my-annotation-name": "my-annotation-value"}
+		replicas := int32(2)
+		nodeSelector := map[string]string{"my-node-selector-name": "my-node-selector-value"}
+		priority := int32(100)
+		toleration := corev1.Toleration{
+			Key:      "my-toleration-key",
+			Operator: "Equal",
+			Value:    "my-toleration-value",
+			Effect:   "NoSchedule",
+		}
+		pl := testPipeline.DeepCopy()
+		pl.Spec.Daemon = Daemon{
+			ContainerTemplate: &ContainerTemplate{
+				Resources: testResources,
+				Env:       []corev1.EnvVar{env},
+			},
+			Metadata: &Metadata{
+				Annotations: podAnnotations,
+				Labels:      podLabels,
+			},
+			Replicas:          &replicas,
+			NodeSelector:      nodeSelector,
+			Tolerations:       []corev1.Toleration{toleration},
+			PriorityClassName: "my-priority-class-name",
+			Priority:          &priority,
+		}
+		s, err := pl.GetDaemonDeploymentObj(req)
+		assert.NoError(t, err)
+		assert.Equal(t, pl.GetDaemonDeploymentName(), s.Name)
+		assert.Equal(t, 1, len(s.Spec.Template.Spec.Containers))
+		assert.Greater(t, len(s.Spec.Template.Spec.Containers[0].Env), 1)
+		assert.Contains(t, s.Spec.Template.Spec.Containers[0].Env, env)
+		assert.Greater(t, len(s.Spec.Template.Labels), len(podLabels))
+		assert.Equal(t, s.Spec.Template.Labels["my-label-name"], podLabels["my-label-name"])
+		assert.Equal(t, s.Spec.Template.Annotations["my-annotation-name"], podAnnotations["my-annotation-name"])
+		assert.NotNil(t, s.Spec.Replicas)
+		assert.Equal(t, *s.Spec.Replicas, replicas)
+		assert.Equal(t, s.Spec.Template.Spec.NodeSelector["my-node-selector-name"], nodeSelector["my-node-selector-name"])
+		assert.NotNil(t, s.Spec.Template.Spec.Priority)
+		assert.Equal(t, *s.Spec.Template.Spec.Priority, priority)
+		assert.Contains(t, s.Spec.Template.Spec.Tolerations, toleration)
+		assert.Equal(t, s.Spec.Template.Spec.PriorityClassName, "my-priority-class-name")
+	})
 }
 
 func Test_PipelineVertexCounts(t *testing.T) {
