@@ -106,7 +106,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 	// Create PVC if needed for reduce vertices
 	if vertex.IsReduceUDF() {
-		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PVC != nil {
+		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PersistentVolumeClaim != nil {
 			for i := 0; i < desiredReplicas; i++ {
 				newPvc, err := r.buildReduceVertexPVCSpec(vertex, i)
 				if err != nil {
@@ -289,11 +289,11 @@ func (r *vertexReconciler) buildReduceVertexPVCSpec(vertex *dfv1.Vertex, replica
 	}
 	if x := vertex.Spec.UDF.GroupBy.Storage; x == nil {
 		return nil, fmt.Errorf("storage is not configured for the reduce UDF")
-	} else if x.PVC == nil {
-		return nil, fmt.Errorf("pvc is not configured for the reduce UDF storge")
+	} else if x.PersistentVolumeClaim == nil {
+		return nil, fmt.Errorf("persistentVolumeClaim is not configured for the reduce UDF storge")
 	}
 	pvcName := dfv1.GeneratePBQStoragePVCName(vertex.Spec.PipelineName, vertex.Spec.Name, replicaIndex)
-	newPvc := vertex.Spec.UDF.GroupBy.Storage.PVC.GetPVCSpec(pvcName)
+	newPvc := vertex.Spec.UDF.GroupBy.Storage.PersistentVolumeClaim.GetPVCSpec(pvcName)
 	newPvc.SetNamespace(vertex.Namespace)
 	newPvc.SetOwnerReferences([]metav1.OwnerReference{*metav1.NewControllerRef(vertex.GetObjectMeta(), dfv1.VertexGroupVersionKind)})
 	newPvc.SetLabels(map[string]string{
@@ -325,7 +325,7 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 
 	if vertex.IsReduceUDF() {
 		// Add pvc for reduce vertex pods
-		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PVC != nil {
+		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PersistentVolumeClaim != nil {
 			volName := "pbq-vol"
 			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
 				Name: volName,

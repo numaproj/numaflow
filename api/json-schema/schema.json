@@ -18228,7 +18228,7 @@
     "io.numaproj.numaflow.v1alpha1.PBQStorage": {
       "description": "PBQStorage defines the persistence configuration for a vertex.",
       "properties": {
-        "pvc": {
+        "persistentVolumeClaim": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PersistenceStrategy"
         }
       },

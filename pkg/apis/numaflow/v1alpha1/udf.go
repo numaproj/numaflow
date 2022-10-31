@@ -115,7 +115,7 @@ type FixedWindow struct {
 
 // PBQStorage defines the persistence configuration for a vertex.
 type PBQStorage struct {
-	PVC *PersistenceStrategy `json:"pvc,omitempty" protobuf:"bytes,1,opt,name=pvc"`
+	PersistentVolumeClaim *PersistenceStrategy `json:"persistentVolumeClaim,omitempty" protobuf:"bytes,1,opt,name=persistentVolumeClaim"`
 }
 
 // GeneratePBQStoragePVCName generates pvc name used by reduce vertex.

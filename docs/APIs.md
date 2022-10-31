@@ -2456,7 +2456,7 @@ Description
 <tbody>
 <tr>
 <td>
-<code>pvc</code></br> <em>
+<code>persistentVolumeClaim</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PersistenceStrategy">
 PersistenceStrategy </a> </em>
 </td>

@@ -322,7 +322,7 @@ func Test_BuildPodSpec(t *testing.T) {
 			},
 			GroupBy: &dfv1.GroupBy{
 				Storage: &dfv1.PBQStorage{
-					PVC: &dfv1.PersistenceStrategy{
+					PersistentVolumeClaim: &dfv1.PersistenceStrategy{
 						VolumeSize: &volSize,
 					},
 				},

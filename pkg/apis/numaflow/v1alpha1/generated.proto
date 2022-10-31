@@ -674,7 +674,7 @@ message NativeRedis {
 
 // PBQStorage defines the persistence configuration for a vertex.
 message PBQStorage {
-  optional PersistenceStrategy pvc = 1;
+  optional PersistenceStrategy persistentVolumeClaim = 1;
 }
 
 // PersistenceStrategy defines the strategy of persistence

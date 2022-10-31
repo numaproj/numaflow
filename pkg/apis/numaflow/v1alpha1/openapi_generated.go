@@ -1932,7 +1932,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref common.ReferenceCallback) 
 				Description: "PBQStorage defines the persistence configuration for a vertex.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"pvc": {
+					"persistentVolumeClaim": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy"),
 						},

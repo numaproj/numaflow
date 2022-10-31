@@ -8404,7 +8404,7 @@ spec:
                               description: Storage is used to define the PBQ storage
                                 for a reduce vertex.
                               properties:
-                                pvc:
+                                persistentVolumeClaim:
                                   description: PersistenceStrategy defines the strategy
                                     of persistence
                                   properties:
@@ -13622,7 +13622,7 @@ spec:
                         description: Storage is used to define the PBQ storage for
                           a reduce vertex.
                         properties:
-                          pvc:
+                          persistentVolumeClaim:
                             description: PersistenceStrategy defines the strategy
                               of persistence
                             properties:
