@@ -18,4 +18,4 @@ Security vulnerabilities will be disclosed via [release notes](https://github.co
 
 ## Vulnerability Scanning
 
-See [static code analysis](docs/STATIC_CODE_ANALYSIS.md).
+See [static code analysis](docs/static-code-analysis.md).
