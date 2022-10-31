@@ -87,7 +87,7 @@ subjects:
 ---
 apiVersion: v1
 data:
-  controller-config.yaml: |
+  controller-config.yaml: |+
     isbsvc:
       redis:
         # Default Redis settings, could be overridden by InterStepBufferService specs
@@ -156,7 +156,7 @@ data:
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.9.0
+          natsImage: nats:2.9.4
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -190,6 +190,12 @@ data:
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: nats-server
+        - version: 2.9.4
+          natsImage: nats:2.9.4
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+
 kind: ConfigMap
 metadata:
   name: numaflow-controller-config

@@ -48,8 +48,9 @@ func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, error) {
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
 	if in.GroupBy == nil {
+		args := []string{"processor", "--type=" + string(VertexTypeMapUDF), "--isbsvc-type=" + string(req.isbSvcType)}
 		return containerBuilder{}.
-			init(req).args("processor", "--type="+string(VertexTypeMapUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
+			init(req).args(args...).build()
 	}
 	return containerBuilder{}.
 		init(req).args("processor", "--type="+string(VertexTypeReduceUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
@@ -92,9 +93,13 @@ func (in UDF) getUDFContainer(req getContainerReq) corev1.Container {
 
 // GroupBy indicates it is a reducer UDF
 type GroupBy struct {
+	// Window describes the windowing strategy.
 	Window Window `json:"window" protobuf:"bytes,1,opt,name=window"`
 	// +optional
 	Keyed bool `json:"keyed" protobuf:"bytes,2,opt,name=keyed"`
+	// Storage is used to define the PBQ storage for a reduce vertex.
+	// +optional
+	Storage *PBQStorage `json:"storage,omitempty" protobuf:"bytes,3,opt,name=storage"`
 }
 
 // Window describes windowing strategy
@@ -106,4 +111,14 @@ type Window struct {
 // FixedWindow describes a fixed window
 type FixedWindow struct {
 	Length *metav1.Duration `json:"length,omitempty" protobuf:"bytes,1,opt,name=length"`
+}
+
+// PBQStorage defines the persistence configuration for a vertex.
+type PBQStorage struct {
+	PersistentVolumeClaim *PersistenceStrategy `json:"persistentVolumeClaim,omitempty" protobuf:"bytes,1,opt,name=persistentVolumeClaim"`
+}
+
+// GeneratePBQStoragePVCName generates pvc name used by reduce vertex.
+func GeneratePBQStoragePVCName(pipelineName, vertex string, index int) string {
+	return fmt.Sprintf("pbq-vol-%s-%s-%d", pipelineName, vertex, index)
 }

@@ -3479,8 +3479,33 @@ spec:
                     properties:
                       keyed:
                         type: boolean
+                      storage:
+                        description: Storage is used to define the PBQ storage for
+                          a reduce vertex.
+                        properties:
+                          persistentVolumeClaim:
+                            description: PersistenceStrategy defines the strategy
+                              of persistence
+                            properties:
+                              accessMode:
+                                description: Available access modes such as ReadWriteOnce,
+                                  ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+                                type: string
+                              storageClassName:
+                                description: 'Name of the StorageClass required by
+                                  the claim. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1'
+                                type: string
+                              volumeSize:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                description: Volume size, e.g. 50Gi
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                            type: object
+                        type: object
                       window:
-                        description: Window describes windowing strategy
+                        description: Window describes the windowing strategy.
                         properties:
                           fixed:
                             description: FixedWindow describes a fixed window

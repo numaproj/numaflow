@@ -173,7 +173,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Debug("Corresponding Pipeline not in Running state")
 		return nil
 	}
-	if int(vertex.Status.Replicas) != vertex.Spec.GetReplicas() {
+	if int(vertex.Status.Replicas) != vertex.GetReplicas() {
 		log.Debugf("Vertex %s might be under processing, replicas mismatch", vertex.Name)
 		return nil
 	}
@@ -228,7 +228,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 			_ = s.vertexMetricsCache.Add(*bInfo.BufferName+"/length", totalBufferLength)
 		}
 	}
-	current := int32(vertex.Spec.GetReplicas())
+	current := int32(vertex.GetReplicas())
 	desired := s.desiredReplicas(ctx, vertex, rate, pending, totalBufferLength, targetAvailableBufferLength)
 	log.Debugf("Calculated desired replica number of vertex %q is: %v", vertex.Name, desired)
 	max := vertex.Spec.Scale.GetMaxReplicas()

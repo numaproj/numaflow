@@ -6,7 +6,6 @@ import (
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
@@ -333,35 +332,8 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 		spec.Template.Spec.Containers[2].Resources = j.MetricsContainerTemplate.Resources
 	}
 	if j.Persistence != nil {
-		volMode := corev1.PersistentVolumeFilesystem
-		// Default volume size
-		volSize := apiresource.MustParse("20Gi")
-		if j.Persistence.VolumeSize != nil {
-			volSize = *j.Persistence.VolumeSize
-		}
-		// Default to ReadWriteOnce
-		accessMode := corev1.ReadWriteOnce
-		if j.Persistence.AccessMode != nil {
-			accessMode = *j.Persistence.AccessMode
-		}
 		spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: req.PvcNameIfNeeded,
-				},
-				Spec: corev1.PersistentVolumeClaimSpec{
-					AccessModes: []corev1.PersistentVolumeAccessMode{
-						accessMode,
-					},
-					VolumeMode:       &volMode,
-					StorageClassName: j.Persistence.StorageClassName,
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceStorage: volSize,
-						},
-					},
-				},
-			},
+			j.Persistence.GetPVCSpec(req.PvcNameIfNeeded),
 		}
 		volumeMounts := spec.Template.Spec.Containers[0].VolumeMounts
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: req.PvcNameIfNeeded, MountPath: "/data/jetstream"})

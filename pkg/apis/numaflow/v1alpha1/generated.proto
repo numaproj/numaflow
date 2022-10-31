@@ -340,10 +340,15 @@ message GetVertexPodSpecReq {
 
 // GroupBy indicates it is a reducer UDF
 message GroupBy {
+  // Window describes the windowing strategy.
   optional Window window = 1;
 
   // +optional
   optional bool keyed = 2;
+
+  // Storage is used to define the PBQ storage for a reduce vertex.
+  // +optional
+  optional PBQStorage storage = 3;
 }
 
 message HTTPSource {
@@ -667,6 +672,11 @@ message NativeRedis {
   optional RedisSettings settings = 16;
 }
 
+// PBQStorage defines the persistence configuration for a vertex.
+message PBQStorage {
+  optional PersistenceStrategy persistentVolumeClaim = 1;
+}
+
 // PersistenceStrategy defines the strategy of persistence
 message PersistenceStrategy {
   // Name of the StorageClass required by the claim.
@@ -838,6 +848,7 @@ message RedisSettings {
   optional string sentinel = 4;
 }
 
+// Scale defines the parameters for autoscaling.
 message Scale {
   // Whether to disable autoscaling.
   // Set to "true" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
