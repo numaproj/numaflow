@@ -101,12 +101,27 @@ func TestWithoutReplicas(t *testing.T) {
 }
 
 func TestGetVertexReplicas(t *testing.T) {
-	s := &VertexSpec{}
-	assert.Equal(t, 1, s.GetReplicas())
-	s.Replicas = pointer.Int32(3)
-	assert.Equal(t, 3, s.GetReplicas())
-	s.Replicas = pointer.Int32(0)
-	assert.Equal(t, 0, s.GetReplicas())
+	v := Vertex{
+		Spec: VertexSpec{
+			AbstractVertex: AbstractVertex{
+				Name: "b",
+			},
+		},
+	}
+	assert.Equal(t, 1, v.GetReplicas())
+	v.Spec.Replicas = pointer.Int32(3)
+	assert.Equal(t, 3, v.GetReplicas())
+	v.Spec.Replicas = pointer.Int32(0)
+	assert.Equal(t, 0, v.GetReplicas())
+	v.Spec.UDF = &UDF{
+		GroupBy: &GroupBy{},
+	}
+	v.Spec.FromEdges = []Edge{
+		{From: "a", To: "b", Parallelism: pointer.Int32(5)},
+	}
+	assert.Equal(t, 0, v.GetReplicas())
+	v.Spec.Replicas = pointer.Int32(1000)
+	assert.Equal(t, 5, v.GetReplicas())
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {

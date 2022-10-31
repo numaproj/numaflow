@@ -127,6 +127,9 @@ const (
 	// Default window options
 	DefaultWindowType     = FixedType
 	DefaultWindowDuration = 0
+
+	// PVC mount path for PBQ
+	PathPBQMount = "/var/numaflow/pbq"
 )
 
 // PBQ store's backend type.
