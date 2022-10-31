@@ -69,6 +69,7 @@ const (
 	EnvReplica                        = "NUMAFLOW_REPLICA"
 	EnvVertexObject                   = "NUMAFLOW_VERTEX_OBJECT"
 	EnvPipelineObject                 = "NUMAFLOW_PIPELINE_OBJECT"
+	EnvGRPCMaxMessageSize             = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE"
 	EnvImage                          = "NUMAFLOW_IMAGE"
 	EnvImagePullPolicy                = "NUMAFLOW_IMAGE_PULL_POLICY"
 	EnvISBSvcRedisSentinelURL         = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_URL"

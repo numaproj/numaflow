@@ -3,10 +3,13 @@ package udf
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow-go/pkg/function/client"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -91,7 +94,11 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	})
 
 	log = log.With("protocol", "uds-grpc-reduce-udf")
-	udfHandler, err := function.NewUDSGRPCBasedUDF()
+	var udfHandlerOptions []client.Option
+	if i, e := strconv.Atoi(os.Getenv(dfv1.EnvGRPCMaxMessageSize)); e == nil {
+		udfHandlerOptions = append(udfHandlerOptions, client.WithMaxMessageSizeLimit(i))
+	}
+	udfHandler, err := function.NewUDSGRPCBasedUDF(udfHandlerOptions...)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)
 	}
