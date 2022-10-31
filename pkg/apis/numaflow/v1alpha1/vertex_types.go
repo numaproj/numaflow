@@ -312,6 +312,21 @@ func (v Vertex) GetToBuffers() []Buffer {
 	return r
 }
 
+func (v Vertex) GetReplicas() int {
+	if v.IsReduceUDF() {
+		// Replica of a reduce vertex is determined by the parallelism.
+		if v.Spec.Replicas != nil && *v.Spec.Replicas == int32(0) {
+			// 0 is also allowed, which is for paused pipeline.
+			return 0
+		}
+		return len(v.GetFromBuffers())
+	}
+	if v.Spec.Replicas == nil {
+		return 1
+	}
+	return int(*v.Spec.Replicas)
+}
+
 type VertexSpec struct {
 	AbstractVertex `json:",inline" protobuf:"bytes,1,opt,name=abstractVertex"`
 	PipelineName   string `json:"pipelineName" protobuf:"bytes,2,opt,name=pipelineName"`
@@ -324,13 +339,6 @@ type VertexSpec struct {
 	FromEdges []Edge `json:"fromEdges,omitempty" protobuf:"bytes,5,rep,name=fromEdges"`
 	// +optional
 	ToEdges []Edge `json:"toEdges,omitempty" protobuf:"bytes,6,rep,name=toEdges"`
-}
-
-func (vs VertexSpec) GetReplicas() int {
-	if vs.Replicas == nil {
-		return 1
-	}
-	return int(*vs.Replicas)
 }
 
 type AbstractVertex struct {
@@ -405,6 +413,7 @@ type AbstractVertex struct {
 	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,19,rep,name=initContainers"`
 }
 
+// Scale defines the parameters for autoscaling.
 type Scale struct {
 	// Whether to disable autoscaling.
 	// Set to "true" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
