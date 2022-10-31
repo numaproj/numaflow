@@ -325,8 +325,8 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 
 	if vertex.IsReduceUDF() {
 		// Add pvc for reduce vertex pods
-		volName := "pbq-vol"
 		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PVC != nil {
+			volName := "pbq-vol"
 			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
 				Name: volName,
 				VolumeSource: corev1.VolumeSource{
