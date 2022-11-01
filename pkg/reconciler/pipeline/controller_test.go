@@ -240,14 +240,16 @@ func Test_buildISBBatchJob(t *testing.T) {
 					Resources: resources,
 					Env:       []corev1.EnvVar{env},
 				},
-				Metadata: &dfv1.Metadata{
-					Annotations: podAnnotations,
-					Labels:      podLabels,
+				AbstractPodTemplate: dfv1.AbstractPodTemplate{
+					Metadata: &dfv1.Metadata{
+						Annotations: podAnnotations,
+						Labels:      podLabels,
+					},
+					NodeSelector:      nodeSelector,
+					Tolerations:       []corev1.Toleration{toleration},
+					PriorityClassName: "my-priority-class-name",
+					Priority:          &priority,
 				},
-				NodeSelector:      nodeSelector,
-				Tolerations:       []corev1.Toleration{toleration},
-				PriorityClassName: "my-priority-class-name",
-				Priority:          &priority,
 			},
 		}
 		j := buildISBBatchJob(pl, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")

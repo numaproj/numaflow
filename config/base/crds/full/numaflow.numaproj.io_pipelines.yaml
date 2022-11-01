@@ -1661,7 +1661,7 @@ spec:
                             type: object
                         type: object
                       serviceAccountName:
-                        description: ServiceAccountName to apply to the Deployment
+                        description: ServiceAccountName applied to the pod
                         type: string
                       tolerations:
                         description: If specified, the pod's tolerations.
@@ -3196,7 +3196,7 @@ spec:
                             type: object
                         type: object
                       serviceAccountName:
-                        description: ServiceAccountName to apply to the Deployment
+                        description: ServiceAccountName applied to the pod
                         type: string
                       tolerations:
                         description: If specified, the pod's tolerations.
@@ -6030,7 +6030,7 @@ spec:
                           type: object
                       type: object
                     serviceAccountName:
-                      description: ServiceAccountName to apply to the StatefulSet
+                      description: ServiceAccountName applied to the pod
                       type: string
                     sink:
                       properties:
