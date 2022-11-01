@@ -175,22 +175,6 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	}
 }
 
-// executeWithBackOff executes a function infinitely until it succeeds using ExponentialBackoffWithContext.
-func (rl *ReadLoop) executeWithBackOff(ctx context.Context, retryableFn func(ctx context.Context, message *isb.ReadMessage) error, errMsg string, pbqWriteBackoff wait.Backoff, m *isb.ReadMessage, partitionID partition.ID) error {
-	attempt := 0
-	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, pbqWriteBackoff, func() (done bool, err error) {
-		rErr := retryableFn(ctx, m)
-		attempt += 1
-		if rErr != nil {
-			rl.log.Errorw(errMsg, zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
-			return false, nil
-		}
-		return true, nil
-	})
-
-	return ctxClosedErr
-}
-
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
 // it to the partition.
 func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
