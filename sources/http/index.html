@@ -1478,8 +1478,8 @@ curl -kq -X POST -d <span class="s2">&quot;hello world&quot;</span> https://loca
 <div class="highlight"><pre><span></span><code>curl -kq -X POST -H <span class="s2">&quot;x-numaflow-id: </span><span class="si">${</span><span class="nv">id</span><span class="si">}</span><span class="s2">&quot;</span> -d <span class="s2">&quot;hello world&quot;</span> <span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 </code></pre></div>
 <h2 id="x-numaflow-event-time">x-numaflow-event-time<a class="headerlink" href="#x-numaflow-event-time" title="Permanent link">&para;</a></h2>
-<p>By default, the time of the date coming to the HTTP source is used as the event time, it could be set by putting an HTTP header <code>x-numaflow-event-time</code> with value of the number of seconds elapsed since January 1, 1970 UTC.</p>
-<div class="highlight"><pre><span></span><code>curl -kq -X POST -H <span class="s2">&quot;x-numaflow-event-time: 1663006726&quot;</span> -d <span class="s2">&quot;hello world&quot;</span> <span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+<p>By default, the time of the date coming to the HTTP source is used as the event time, it could be set by putting an HTTP header <code>x-numaflow-event-time</code> with value of the number of milliseconds elapsed since January 1, 1970 UTC.</p>
+<div class="highlight"><pre><span></span><code>curl -kq -X POST -H <span class="s2">&quot;x-numaflow-event-time: 1663006726000&quot;</span> -d <span class="s2">&quot;hello world&quot;</span> <span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 </code></pre></div>
 <h2 id="auth">Auth<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h2>
 <p>A <code>Bearer</code> token can be configured to prevent the HTTP Source from being accessed by unexpected clients. To do so, a Kubernetes Secret needs to be created to store the token, and the valid clients also need to include the token in its HTTP request header.</p>
