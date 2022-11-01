@@ -125,7 +125,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	}
 
 	// assert toBuffer is full and all messages appear in toBuffer
-	time.Sleep(2 * time.Second) // wait 2 for isFull check.
+	time.Sleep(2 * time.Second) // wait for isFull check.
 	assert.True(t, to1.isFull.Load())
 
 	fromStepJs, err := fromStep.conn.JetStream()
