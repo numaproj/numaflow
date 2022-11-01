@@ -830,9 +830,9 @@ func (in *JobTemplate) DeepCopyInto(out *JobTemplate) {
 		*out = new(ContainerTemplate)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.ActiveDeadlineSeconds != nil {
-		in, out := &in.ActiveDeadlineSeconds, &out.ActiveDeadlineSeconds
-		*out = new(int64)
+	if in.TTLSecondsAfterFinished != nil {
+		in, out := &in.TTLSecondsAfterFinished, &out.TTLSecondsAfterFinished
+		*out = new(int32)
 		**out = **in
 	}
 	if in.BackoffLimit != nil {

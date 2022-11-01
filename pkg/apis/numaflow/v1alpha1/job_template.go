@@ -5,13 +5,15 @@ type JobTemplate struct {
 	AbstractPodTemplate `json:",inline" protobuf:"bytes,1,opt,name=abstractPodTemplate"`
 	// +optional
 	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,2,opt,name=containerTemplate"`
-	// ActiveDeadlineSeconds specifies the duration in seconds relative to the startTime that the job
-	// may be continuously active before the system tries to terminate it; value
-	// must be positive integer.
-	// More info: https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup
-	// Numaflow defaults to 30
+	// ttlSecondsAfterFinished limits the lifetime of a Job that has finished
+	// execution (either Complete or Failed). If this field is set,
+	// ttlSecondsAfterFinished after the Job finishes, it is eligible to be
+	// automatically deleted. When the Job is being deleted, its lifecycle
+	// guarantees (e.g. finalizers) will be honored. If this field is unset,
+	// the Job won't be automatically deleted. If this field is set to zero,
+	// the Job becomes eligible to be deleted immediately after it finishes.
 	// +optional
-	ActiveDeadlineSeconds *int64 `json:"activeDeadlineSeconds,omitempty" protobuf:"varint,3,opt,name=activeDeadlineSeconds"`
+	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty" protobuf:"varint,3,opt,name=ttlSecondsAfterFinished"`
 	// Specifies the number of retries before marking this job failed.
 	// More info: https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-backoff-failure-policy
 	// Numaflow defaults to 20

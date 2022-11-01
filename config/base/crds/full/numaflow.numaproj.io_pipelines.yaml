@@ -750,9 +750,6 @@ spec:
                     type: object
                   job:
                     properties:
-                      activeDeadlineSeconds:
-                        format: int64
-                        type: integer
                       affinity:
                         properties:
                           nodeAffinity:
@@ -1364,6 +1361,9 @@ spec:
                               type: string
                           type: object
                         type: array
+                      ttlSecondsAfterFinished:
+                        format: int32
+                        type: integer
                     type: object
                 type: object
               vertices:

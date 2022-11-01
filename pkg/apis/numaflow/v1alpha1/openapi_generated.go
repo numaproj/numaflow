@@ -1896,11 +1896,11 @@ func schema_pkg_apis_numaflow_v1alpha1_JobTemplate(ref common.ReferenceCallback)
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
-					"activeDeadlineSeconds": {
+					"ttlSecondsAfterFinished": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ActiveDeadlineSeconds specifies the duration in seconds relative to the startTime that the job may be continuously active before the system tries to terminate it; value must be positive integer. More info: https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup Numaflow defaults to 30",
+							Description: "ttlSecondsAfterFinished limits the lifetime of a Job that has finished execution (either Complete or Failed). If this field is set, ttlSecondsAfterFinished after the Job finishes, it is eligible to be automatically deleted. When the Job is being deleted, its lifecycle guarantees (e.g. finalizers) will be honored. If this field is unset, the Job won't be automatically deleted. If this field is set to zero, the Job becomes eligible to be deleted immediately after it finishes.",
 							Type:        []string{"integer"},
-							Format:      "int64",
+							Format:      "int32",
 						},
 					},
 					"backoffLimit": {

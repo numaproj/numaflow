@@ -221,7 +221,7 @@ func Test_buildISBBatchJob(t *testing.T) {
 		env := corev1.EnvVar{Name: "my-env-name", Value: "my-env-value"}
 		podLabels := map[string]string{"my-label-name": "my-label-value"}
 		podAnnotations := map[string]string{"my-annotation-name": "my-annotation-value"}
-		activeDeadlineSeconds := int64(600)
+		ttlSecondsAfterFinished := int32(600)
 		backoffLimit := int32(50)
 		nodeSelector := map[string]string{"my-node-selector-name": "my-node-selector-value"}
 		priority := int32(100)
@@ -234,8 +234,8 @@ func Test_buildISBBatchJob(t *testing.T) {
 		pl := testPipeline.DeepCopy()
 		pl.Spec.Templates = &dfv1.Templates{
 			JobTemplate: &dfv1.JobTemplate{
-				ActiveDeadlineSeconds: &activeDeadlineSeconds,
-				BackoffLimit:          &backoffLimit,
+				TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+				BackoffLimit:            &backoffLimit,
 				ContainerTemplate: &dfv1.ContainerTemplate{
 					Resources: resources,
 					Env:       []corev1.EnvVar{env},
@@ -259,8 +259,8 @@ func Test_buildISBBatchJob(t *testing.T) {
 		assert.Contains(t, j.Spec.Template.Spec.Containers[0].Env, env)
 		assert.Equal(t, j.Spec.Template.Labels["my-label-name"], podLabels["my-label-name"])
 		assert.Equal(t, j.Spec.Template.Annotations["my-annotation-name"], podAnnotations["my-annotation-name"])
-		assert.NotNil(t, j.Spec.ActiveDeadlineSeconds)
-		assert.Equal(t, *j.Spec.ActiveDeadlineSeconds, activeDeadlineSeconds)
+		assert.NotNil(t, j.Spec.TTLSecondsAfterFinished)
+		assert.Equal(t, *j.Spec.TTLSecondsAfterFinished, ttlSecondsAfterFinished)
 		assert.NotNil(t, j.Spec.BackoffLimit)
 		assert.Equal(t, *j.Spec.BackoffLimit, backoffLimit)
 		assert.Equal(t, j.Spec.Template.Spec.NodeSelector["my-node-selector-name"], nodeSelector["my-node-selector-name"])

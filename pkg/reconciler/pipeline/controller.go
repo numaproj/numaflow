@@ -524,8 +524,8 @@ func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferS
 	}
 	if pl.Spec.Templates != nil && pl.Spec.Templates.JobTemplate != nil {
 		jt := pl.Spec.Templates.JobTemplate
-		if jt.ActiveDeadlineSeconds != nil {
-			spec.ActiveDeadlineSeconds = jt.ActiveDeadlineSeconds
+		if jt.TTLSecondsAfterFinished != nil {
+			spec.TTLSecondsAfterFinished = jt.TTLSecondsAfterFinished
 		}
 		if jt.BackoffLimit != nil {
 			spec.BackoffLimit = jt.BackoffLimit

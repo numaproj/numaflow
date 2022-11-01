@@ -18163,11 +18163,6 @@
     },
     "io.numaproj.numaflow.v1alpha1.JobTemplate": {
       "properties": {
-        "activeDeadlineSeconds": {
-          "description": "ActiveDeadlineSeconds specifies the duration in seconds relative to the startTime that the job may be continuously active before the system tries to terminate it; value must be positive integer. More info: https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup Numaflow defaults to 30",
-          "format": "int64",
-          "type": "integer"
-        },
         "affinity": {
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity",
           "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/"
@@ -18223,6 +18218,11 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
           },
           "type": "array"
+        },
+        "ttlSecondsAfterFinished": {
+          "description": "ttlSecondsAfterFinished limits the lifetime of a Job that has finished execution (either Complete or Failed). If this field is set, ttlSecondsAfterFinished after the Job finishes, it is eligible to be automatically deleted. When the Job is being deleted, its lifecycle guarantees (e.g. finalizers) will be honored. If this field is unset, the Job won't be automatically deleted. If this field is set to zero, the Job becomes eligible to be deleted immediately after it finishes.",
+          "format": "int32",
+          "type": "integer"
         }
       },
       "type": "object"
