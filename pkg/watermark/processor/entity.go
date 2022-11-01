@@ -91,9 +91,7 @@ func (p *ProcessorEntity) BuildOTWatcherKey(watermark Watermark) string {
 // whether the record can be skipped and error if any.
 // NOTE: _defaultKeySeparator has constraints, please make sure we will not end up with multiple values
 func (p *ProcessorEntity) ParseOTWatcherKey(key string) (epoch int64, skip bool, err error) {
-	var name string
-	var epochStr = key
-	name, epochStr, err = p.splitKey(key)
+	name, epochStr, err := p.splitKey(key)
 	if err != nil {
 		return 0, false, err
 	}
