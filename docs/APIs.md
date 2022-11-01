@@ -1980,6 +1980,7 @@ automatically deleted. When the Job is being deleted, its lifecycle
 guarantees (e.g. finalizers) will be honored. If this field is unset,
 the Job won’t be automatically deleted. If this field is set to zero,
 the Job becomes eligible to be deleted immediately after it finishes.
+Numaflow defaults to 30
 </p>
 </td>
 </tr>
