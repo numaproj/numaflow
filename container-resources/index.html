@@ -875,8 +875,8 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#main-container" class="md-nav__link">
-    Main Container
+  <a href="#numa-container" class="md-nav__link">
+    Numa Container
   </a>
   
 </li>
@@ -940,6 +940,20 @@
     <li class="md-nav__item">
       <a href="../init-containers/" class="md-nav__link">
         Init Containers
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pipeline-customization/" class="md-nav__link">
+        Pipeline Customization
       </a>
     </li>
   
@@ -1296,8 +1310,8 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#main-container" class="md-nav__link">
-    Main Container
+  <a href="#numa-container" class="md-nav__link">
+    Numa Container
   </a>
   
 </li>
@@ -1336,8 +1350,9 @@
 
 <h1 id="container-resources">Container Resources<a class="headerlink" href="#container-resources" title="Permanent link">&para;</a></h1>
 <p><a href="https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/">Container Resources</a> can be customized for all the types of vertices.</p>
-<h2 id="main-container">Main Container<a class="headerlink" href="#main-container" title="Permanent link">&para;</a></h2>
-<p>To specify <code>resources</code> for the <code>main</code> container of vertex pods:</p>
+<p>For configuring container resources on pods not owned by a vertex, see <a href="../pipeline-customization/">Pipeline Customization</a>.</p>
+<h2 id="numa-container">Numa Container<a class="headerlink" href="#numa-container" title="Permanent link">&para;</a></h2>
+<p>To specify <code>resources</code> for the <code>numa</code> container of vertex pods:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
 <span class="nt">metadata</span><span class="p">:</span><span class="w"></span>

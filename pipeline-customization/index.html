@@ -13,7 +13,7 @@
     
     
       
-        <title>How To Release - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Pipeline Customization - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#how-to-release" class="md-skip">
+        <a href="#pipeline-customization" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              How To Release
+              Pipeline Customization
             
           </span>
         </div>
@@ -224,6 +224,8 @@
         
   
   
+    
+  
 
 
   
@@ -235,7 +237,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../pipeline/" class="md-tabs__link">
+      <a href="../pipeline/" class="md-tabs__link md-tabs__link--active">
         User Guide
       </a>
     </li>
@@ -263,15 +265,13 @@
         
   
   
-    
-  
 
 
   
   
   
     <li class="md-tabs__item">
-      <a href="../development/" class="md-tabs__link md-tabs__link--active">
+      <a href="../development/" class="md-tabs__link">
         Developer Guide
       </a>
     </li>
@@ -408,12 +408,14 @@
 
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" checked>
       
       
       
@@ -893,11 +895,52 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../pipeline-customization/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Pipeline Customization
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Pipeline Customization
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#daemon-deployment" class="md-nav__link">
+    Daemon Deployment
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1066,14 +1109,12 @@
 
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5" type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5" type="checkbox" id="__nav_5" >
       
       
       
@@ -1197,59 +1238,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          How To Release
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
         How To Release
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#release-branch" class="md-nav__link">
-    Release Branch
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#release-steps" class="md-nav__link">
-    Release Steps
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1303,15 +1296,8 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#release-branch" class="md-nav__link">
-    Release Branch
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#release-steps" class="md-nav__link">
-    Release Steps
+  <a href="#daemon-deployment" class="md-nav__link">
+    Daemon Deployment
   </a>
   
 </li>
@@ -1328,26 +1314,69 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/releasing.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/pipeline-customization.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="how-to-release">How To Release<a class="headerlink" href="#how-to-release" title="Permanent link">&para;</a></h1>
-<h2 id="release-branch">Release Branch<a class="headerlink" href="#release-branch" title="Permanent link">&para;</a></h2>
-<p>Always create a release branch for the releases, for example branch <code>release-0.5</code> is for all the v0.5.x versions release. If it's a new release branch, simply create a branch from <code>main</code>.</p>
-<h2 id="release-steps">Release Steps<a class="headerlink" href="#release-steps" title="Permanent link">&para;</a></h2>
-<ol>
-<li>Cherry-pick fixes to the release branch, skip this step if it's the first release in the branch.</li>
-<li>Run <code>make test</code> to make sure all test test cases pass locally.</li>
-<li>Push to remote branch, and make sure all the CI jobs pass.</li>
-<li>Run <code>VERSION=v${x.y.z} make prepare-release</code> to update version in manifests, where <code>x.y.x</code> is the expected new version.</li>
-<li>Follow the output of last step, to confirm if all the changes are expected, and then run <code>VERSION=v${x.y.z} make release</code>.</li>
-<li>Follow the output, push a new tag to the release branch, Github actions will automatically build and publish the new release, this will take around 10 minutes.</li>
-<li>Test the new release, make sure everything is running as expected, and then recreate a <code>stable</code> tag against the latest release.</li>
-<li>Find the new release tag, and edit the release notes.</li>
-</ol>
+<h1 id="pipeline-customization">Pipeline Customization<a class="headerlink" href="#pipeline-customization" title="Permanent link">&para;</a></h1>
+<p>There is an optional <code>.spec.templates</code> field in the <code>Pipeline</code> resource which may be used to customize kubernetes resources owned by the Pipeline.</p>
+<p>Vertex customization is described separately in more detail (i.e. <a href="../environment-variables/">Environment Variables</a>, <a href="../container-resources/">Container Resources</a>, etc.).</p>
+<h2 id="daemon-deployment">Daemon Deployment<a class="headerlink" href="#daemon-deployment" title="Permanent link">&para;</a></h2>
+<p>The following example shows how to configure a Daemon Deployment with all currently supported fields.</p>
+<p>The <code>.spec.templates.daemon</code> field and all fields directly under it are optional.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
+<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
+<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">templates</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="nt">daemon</span><span class="p">:</span><span class="w"></span>
+<span class="w">      </span><span class="c1"># Deployment spec</span><span class="w"></span>
+<span class="w">      </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w"></span>
+<span class="w">      </span><span class="c1"># Pod metadata</span><span class="w"></span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="nt">labels</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="nt">my-label-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-label-value</span><span class="w"></span>
+<span class="w">        </span><span class="nt">annotations</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="nt">my-annotation-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-annotation-value</span><span class="w"></span>
+<span class="w">      </span><span class="c1"># Pod spec</span><span class="w"></span>
+<span class="w">      </span><span class="nt">nodeSelector</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="nt">my-node-label-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-node-label-value</span><span class="w"></span>
+<span class="w">      </span><span class="nt">tolerations</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-example-key&quot;</span><span class="w"></span>
+<span class="w">          </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Exists&quot;</span><span class="w"></span>
+<span class="w">          </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;NoSchedule&quot;</span><span class="w"></span>
+<span class="w">      </span><span class="nt">securityContext</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w"></span>
+<span class="w">      </span><span class="nt">imagePullSecrets</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">regcred</span><span class="w"></span>
+<span class="w">      </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-priority-class-name</span><span class="w"></span>
+<span class="w">      </span><span class="nt">priority</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span><span class="w"></span>
+<span class="w">      </span><span class="nt">serviceAccountName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-service-account</span><span class="w"></span>
+<span class="w">      </span><span class="nt">affinity</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="nt">podAntiAffinity</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="nt">requiredDuringSchedulingIgnoredDuringExecution</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">labelSelector</span><span class="p">:</span><span class="w"></span>
+<span class="w">                </span><span class="nt">matchExpressions</span><span class="p">:</span><span class="w"></span>
+<span class="w">                  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">app.kubernetes.io/component</span><span class="w"></span>
+<span class="w">                    </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">In</span><span class="w"></span>
+<span class="w">                    </span><span class="nt">values</span><span class="p">:</span><span class="w"></span>
+<span class="w">                      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">daemon</span><span class="w"></span>
+<span class="w">                  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/pipeline-name</span><span class="w"></span>
+<span class="w">                    </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">In</span><span class="w"></span>
+<span class="w">                    </span><span class="nt">values</span><span class="p">:</span><span class="w"></span>
+<span class="w">                      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
+<span class="w">              </span><span class="nt">topologyKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kubernetes.io/hostname</span><span class="w"></span>
+<span class="w">      </span><span class="c1"># Container</span><span class="w"></span>
+<span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="nt">env</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MY_ENV_NAME</span><span class="w"></span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-env-value</span><span class="w"></span>
+<span class="w">        </span><span class="nt">resources</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="nt">limits</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500Mi</span><span class="w"></span>
+</code></pre></div>
 
               
             </article>
@@ -1368,7 +1397,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../static-code-analysis/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Static Code Analysis" rel="prev">
+        <a href="../init-containers/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Init Containers" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -1377,11 +1406,26 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Static Code Analysis
+              Init Containers
             </div>
           </div>
         </a>
       
+      
+        
+        <a href="../watermarks/" class="md-footer__link md-footer__link--next" aria-label="Next: Watermarks" rel="next">
+          <div class="md-footer__title">
+            <div class="md-ellipsis">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              Watermarks
+            </div>
+          </div>
+          <div class="md-footer__button md-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4Z"/></svg>
+          </div>
+        </a>
       
     </nav>
   
