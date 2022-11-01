@@ -22,6 +22,7 @@ AbstractPodTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
 </p>
 <p>
@@ -524,6 +525,7 @@ ContainerTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
 </p>
 <p>
@@ -1914,6 +1916,85 @@ JetStream (NATS) URL
 <td>
 <p>
 TLS enabled or not
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.JobTemplate">
+JobTemplate
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates">Templates</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
+</td>
+<td>
+<p>
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
+</p>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>ttlSecondsAfterFinished</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+ttlSecondsAfterFinished limits the lifetime of a Job that has finished
+execution (either Complete or Failed). If this field is set,
+ttlSecondsAfterFinished after the Job finishes, it is eligible to be
+automatically deleted. When the Job is being deleted, its lifecycle
+guarantees (e.g. finalizers) will be honored. If this field is unset,
+the Job won’t be automatically deleted. If this field is set to zero,
+the Job becomes eligible to be deleted immediately after it finishes.
+Numaflow defaults to 30
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>backoffLimit</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Specifies the number of retries before marking this job failed. More
+info:
+<a href="https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-backoff-failure-policy">https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-backoff-failure-policy</a>
+Numaflow defaults to 20
 </p>
 </td>
 </tr>
@@ -3421,6 +3502,19 @@ Description
 <em>(Optional)</em>
 <p>
 DaemonTemplate is used to customize the Daemon Deployment
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>job</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.JobTemplate"> JobTemplate </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+JobTemplate is used to customize Jobs
 </p>
 </td>
 </tr>

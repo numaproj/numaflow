@@ -502,27 +502,69 @@ func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferS
 	if len(randomStr) > 6 {
 		randomStr = strings.ToLower(randomStr[:6])
 	}
+	l := map[string]string{
+		dfv1.KeyPartOf:       dfv1.Project,
+		dfv1.KeyManagedBy:    dfv1.ControllerPipeline,
+		dfv1.KeyComponent:    dfv1.ComponentJob,
+		dfv1.KeyPipelineName: pl.Name,
+	}
+	spec := batchv1.JobSpec{
+		TTLSecondsAfterFinished: pointer.Int32(30),
+		BackoffLimit:            pointer.Int32(20),
+		Template: corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels:      l,
+				Annotations: map[string]string{},
+			},
+			Spec: corev1.PodSpec{
+				RestartPolicy: corev1.RestartPolicyOnFailure,
+				Containers:    []corev1.Container{c},
+			},
+		},
+	}
+	if pl.Spec.Templates != nil && pl.Spec.Templates.JobTemplate != nil {
+		jt := pl.Spec.Templates.JobTemplate
+		if jt.TTLSecondsAfterFinished != nil {
+			spec.TTLSecondsAfterFinished = jt.TTLSecondsAfterFinished
+		}
+		if jt.BackoffLimit != nil {
+			spec.BackoffLimit = jt.BackoffLimit
+		}
+		spec.Template.Spec.NodeSelector = jt.NodeSelector
+		spec.Template.Spec.Tolerations = jt.Tolerations
+		spec.Template.Spec.SecurityContext = jt.SecurityContext
+		spec.Template.Spec.ImagePullSecrets = jt.ImagePullSecrets
+		spec.Template.Spec.PriorityClassName = jt.PriorityClassName
+		spec.Template.Spec.Priority = jt.Priority
+		spec.Template.Spec.ServiceAccountName = jt.ServiceAccountName
+		spec.Template.Spec.Affinity = jt.Affinity
+		if md := jt.Metadata; md != nil {
+			for k, v := range md.Labels {
+				if _, ok := spec.Template.Labels[k]; !ok {
+					spec.Template.Labels[k] = v
+				}
+			}
+			for k, v := range md.Annotations {
+				spec.Template.Annotations[k] = v
+			}
+		}
+		if ct := jt.ContainerTemplate; ct != nil {
+			spec.Template.Spec.Containers[0].Resources = ct.Resources
+			if len(ct.Env) > 0 {
+				spec.Template.Spec.Containers[0].Env = append(envs, ct.Env...)
+			}
+		}
+	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: pl.Namespace,
 			Name:      fmt.Sprintf("%s-buffer-%s-%v", pl.Name, jobType, randomStr),
-			Labels: map[string]string{
-				dfv1.KeyPipelineName: pl.Name,
-			},
+			Labels:    l,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind),
 			},
 		},
-		Spec: batchv1.JobSpec{
-			TTLSecondsAfterFinished: pointer.Int32(30),
-			BackoffLimit:            pointer.Int32(20),
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-					Containers:    []corev1.Container{c},
-				},
-			},
-		},
+		Spec: spec,
 	}
 }
 
