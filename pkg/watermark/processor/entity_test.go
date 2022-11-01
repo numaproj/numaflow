@@ -36,6 +36,14 @@ func TestProcessorEntity_ParseOTWatcherKey(t *testing.T) {
 		wantErr   assert.ErrorAssertionFunc
 	}{
 		{
+			name:      "bad_without_split_butSkip",
+			p:         NewProcessorEntity("test1"),
+			arg:       _defaultKeySeparator + "1234", // name is missing
+			wantEpoch: 1234,
+			wantSkip:  true,
+			wantErr:   assert.NoError,
+		},
+		{
 			name:      "bad_without_split_missing_separator",
 			p:         NewProcessorEntity("test1"),
 			arg:       "1234",
