@@ -54,6 +54,7 @@ const (
 	ComponentISBSvc = "isbsvc"
 	ComponentDaemon = "daemon"
 	ComponentVertex = "vertex"
+	ComponentJob    = "job"
 
 	// controllers
 	ControllerISBSvc   = "isbsvc-controller"

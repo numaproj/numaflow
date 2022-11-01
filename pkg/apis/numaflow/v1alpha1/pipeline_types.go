@@ -420,6 +420,9 @@ type Templates struct {
 	// DaemonTemplate is used to customize the Daemon Deployment
 	// +optional
 	DaemonTemplate *DaemonTemplate `json:"daemon,omitempty" protobuf:"bytes,1,opt,name=daemon"`
+	// JobTemplate is used to customize Jobs
+	// +optional
+	JobTemplate *JobTemplate `json:"job,omitempty" protobuf:"bytes,2,opt,name=job"`
 }
 
 type PipelineLimits struct {
