@@ -234,7 +234,7 @@ message DaemonTemplate {
 
   // ServiceAccountName to apply to the Deployment
   // +optional
-  optional string serviceAccountName = 15;
+  optional string serviceAccountName = 11;
 }
 
 message Edge {
