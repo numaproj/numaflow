@@ -48,7 +48,7 @@ type AbstractPodTemplate struct {
 	// More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
 	// +optional
 	Affinity *corev1.Affinity `json:"affinity,omitempty" protobuf:"bytes,8,opt,name=affinity"`
-	// ServiceAccountName to apply to the StatefulSet
+	// ServiceAccountName applied to the pod
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,9,opt,name=serviceAccountName"`
 }

@@ -187,7 +187,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref common.ReferenceC
 					},
 					"serviceAccountName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ServiceAccountName to apply to the StatefulSet",
+							Description: "ServiceAccountName applied to the pod",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -317,7 +317,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 					},
 					"serviceAccountName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ServiceAccountName to apply to the StatefulSet",
+							Description: "ServiceAccountName applied to the pod",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -664,7 +664,7 @@ func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallba
 					},
 					"serviceAccountName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ServiceAccountName to apply to the StatefulSet",
+							Description: "ServiceAccountName applied to the pod",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -1700,7 +1700,7 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref common.Referen
 					},
 					"serviceAccountName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ServiceAccountName to apply to the StatefulSet",
+							Description: "ServiceAccountName applied to the pod",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2128,7 +2128,7 @@ func schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref common.ReferenceCallback)
 					},
 					"serviceAccountName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ServiceAccountName to apply to the StatefulSet",
+							Description: "ServiceAccountName applied to the pod",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3161,7 +3161,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					},
 					"serviceAccountName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ServiceAccountName to apply to the StatefulSet",
+							Description: "ServiceAccountName applied to the pod",
 							Type:        []string{"string"},
 							Format:      "",
 						},

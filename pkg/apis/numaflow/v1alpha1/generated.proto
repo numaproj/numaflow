@@ -84,7 +84,7 @@ message AbstractPodTemplate {
   // +optional
   optional k8s.io.api.core.v1.Affinity affinity = 8;
 
-  // ServiceAccountName to apply to the StatefulSet
+  // ServiceAccountName applied to the pod
   // +optional
   optional string serviceAccountName = 9;
 }

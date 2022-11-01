@@ -2170,7 +2170,7 @@ spec:
                         type: object
                     type: object
                   serviceAccountName:
-                    description: ServiceAccountName to apply to the StatefulSet
+                    description: ServiceAccountName applied to the pod
                     type: string
                   settings:
                     description: JetStream configuration, if not specified, global
@@ -4457,7 +4457,7 @@ spec:
                             type: object
                         type: object
                       serviceAccountName:
-                        description: ServiceAccountName to apply to the StatefulSet
+                        description: ServiceAccountName applied to the pod
                         type: string
                       settings:
                         description: Redis configuration, if not specified, global

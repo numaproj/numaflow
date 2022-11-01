@@ -17299,7 +17299,7 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "tolerations": {
@@ -17376,7 +17376,7 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "sink": {
@@ -17545,7 +17545,7 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "tolerations": {
@@ -18106,7 +18106,7 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "settings": {
@@ -18315,7 +18315,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "settings": {
@@ -18886,7 +18886,7 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "sink": {

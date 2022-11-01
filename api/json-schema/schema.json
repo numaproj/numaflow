@@ -17294,7 +17294,7 @@
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "tolerations": {
@@ -17368,7 +17368,7 @@
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "sink": {
@@ -17540,7 +17540,7 @@
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "tolerations": {
@@ -18110,7 +18110,7 @@
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "settings": {
@@ -18319,7 +18319,7 @@
           "description": "SentinelContainerTemplate contains customized spec for Redis container"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "settings": {
@@ -18904,7 +18904,7 @@
           "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "sink": {

@@ -168,7 +168,7 @@ The pod’s scheduling constraints More info:
 <td>
 <em>(Optional)</em>
 <p>
-ServiceAccountName to apply to the StatefulSet
+ServiceAccountName applied to the pod
 </p>
 </td>
 </tr>

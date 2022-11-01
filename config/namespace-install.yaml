@@ -2169,7 +2169,7 @@ spec:
                         type: object
                     type: object
                   serviceAccountName:
-                    description: ServiceAccountName to apply to the StatefulSet
+                    description: ServiceAccountName applied to the pod
                     type: string
                   settings:
                     description: JetStream configuration, if not specified, global
@@ -4456,7 +4456,7 @@ spec:
                             type: object
                         type: object
                       serviceAccountName:
-                        description: ServiceAccountName to apply to the StatefulSet
+                        description: ServiceAccountName applied to the pod
                         type: string
                       settings:
                         description: Redis configuration, if not specified, global
@@ -6395,7 +6395,7 @@ spec:
                             type: object
                         type: object
                       serviceAccountName:
-                        description: ServiceAccountName to apply to the StatefulSet
+                        description: ServiceAccountName applied to the pod
                         type: string
                       tolerations:
                         description: If specified, the pod's tolerations.
@@ -9229,7 +9229,7 @@ spec:
                           type: object
                       type: object
                     serviceAccountName:
-                      description: ServiceAccountName to apply to the StatefulSet
+                      description: ServiceAccountName applied to the pod
                       type: string
                     sink:
                       properties:
@@ -14425,7 +14425,7 @@ spec:
                     type: object
                 type: object
               serviceAccountName:
-                description: ServiceAccountName to apply to the StatefulSet
+                description: ServiceAccountName applied to the pod
                 type: string
               sink:
                 properties:
