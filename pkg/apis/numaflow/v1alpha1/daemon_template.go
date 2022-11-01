@@ -57,5 +57,5 @@ type DaemonTemplate struct {
 	Affinity *corev1.Affinity `json:"affinity,omitempty" protobuf:"bytes,10,opt,name=affinity"`
 	// ServiceAccountName to apply to the Deployment
 	// +optional
-	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,15,opt,name=serviceAccountName"`
+	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,11,opt,name=serviceAccountName"`
 }
