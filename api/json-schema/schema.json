@@ -18107,6 +18107,72 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.JobTemplate": {
+      "properties": {
+        "activeDeadlineSeconds": {
+          "description": "ActiveDeadlineSeconds specifies the duration in seconds relative to the startTime that the job may be continuously active before the system tries to terminate it; value must be positive integer. More info: https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup Numaflow defaults to 30",
+          "format": "int64",
+          "type": "integer"
+        },
+        "affinity": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.Affinity",
+          "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/"
+        },
+        "backoffLimit": {
+          "description": "Specifies the number of retries before marking this job failed. More info: https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-backoff-failure-policy Numaflow defaults to 20",
+          "format": "int32",
+          "type": "integer"
+        },
+        "containerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
+        "imagePullSecrets": {
+          "description": "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.LocalObjectReference"
+          },
+          "type": "array",
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "metadata": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Metadata",
+          "description": "Metadata sets the pods's metadata, i.e. annotations and labels"
+        },
+        "nodeSelector": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
+          "type": "object"
+        },
+        "priority": {
+          "description": "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+          "format": "int32",
+          "type": "integer"
+        },
+        "priorityClassName": {
+          "description": "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+          "type": "string"
+        },
+        "securityContext": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext",
+          "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field."
+        },
+        "serviceAccountName": {
+          "description": "ServiceAccountName to apply to the Deployment",
+          "type": "string"
+        },
+        "tolerations": {
+          "description": "If specified, the pod's tolerations.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.KafkaSink": {
       "properties": {
         "brokers": {
@@ -18655,6 +18721,10 @@
         "daemon": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.DaemonTemplate",
           "description": "DaemonTemplate is used to customize the Daemon Deployment"
+        },
+        "job": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.JobTemplate",
+          "description": "JobTemplate is used to customize Jobs"
         }
       },
       "type": "object"

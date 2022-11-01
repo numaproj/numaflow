@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 
 	"github.com/goccy/go-json"
@@ -195,20 +196,77 @@ func Test_copyEdgeLimits(t *testing.T) {
 }
 
 func Test_buildISBBatchJob(t *testing.T) {
-	j := buildISBBatchJob(testPipeline, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
-	assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
-	assert.True(t, len(j.Spec.Template.Spec.Containers[0].Args) > 0)
-	assert.Contains(t, j.Name, testPipeline.Name+"-buffer-test-")
-	envNames := []string{}
-	for _, e := range j.Spec.Template.Spec.Containers[0].Env {
-		envNames = append(envNames, e.Name)
-	}
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisPassword)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelURL)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+	t.Run("test build ISB batch job", func(t *testing.T) {
+		j := buildISBBatchJob(testPipeline, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
+		assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
+		assert.True(t, len(j.Spec.Template.Spec.Containers[0].Args) > 0)
+		assert.Contains(t, j.Name, testPipeline.Name+"-buffer-test-")
+		envNames := []string{}
+		for _, e := range j.Spec.Template.Spec.Containers[0].Env {
+			envNames = append(envNames, e.Name)
+		}
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisPassword)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+	})
+	t.Run("test build ISB batch job with pipeline overrides", func(t *testing.T) {
+		resources := corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				"memory": resource.MustParse("256Mi"),
+			},
+		}
+		env := corev1.EnvVar{Name: "my-env-name", Value: "my-env-value"}
+		podLabels := map[string]string{"my-label-name": "my-label-value"}
+		podAnnotations := map[string]string{"my-annotation-name": "my-annotation-value"}
+		activeDeadlineSeconds := int64(600)
+		backoffLimit := int32(50)
+		nodeSelector := map[string]string{"my-node-selector-name": "my-node-selector-value"}
+		priority := int32(100)
+		toleration := corev1.Toleration{
+			Key:      "my-toleration-key",
+			Operator: "Equal",
+			Value:    "my-toleration-value",
+			Effect:   "NoSchedule",
+		}
+		pl := testPipeline.DeepCopy()
+		pl.Spec.Templates = &dfv1.Templates{
+			JobTemplate: &dfv1.JobTemplate{
+				ActiveDeadlineSeconds: &activeDeadlineSeconds,
+				BackoffLimit:          &backoffLimit,
+				ContainerTemplate: &dfv1.ContainerTemplate{
+					Resources: resources,
+					Env:       []corev1.EnvVar{env},
+				},
+				Metadata: &dfv1.Metadata{
+					Annotations: podAnnotations,
+					Labels:      podLabels,
+				},
+				NodeSelector:      nodeSelector,
+				Tolerations:       []corev1.Toleration{toleration},
+				PriorityClassName: "my-priority-class-name",
+				Priority:          &priority,
+			},
+		}
+		j := buildISBBatchJob(pl, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
+		assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
+		assert.Equal(t, j.Spec.Template.Spec.Containers[0].Resources, resources)
+		assert.Greater(t, len(j.Spec.Template.Spec.Containers[0].Env), 1)
+		assert.Contains(t, j.Spec.Template.Spec.Containers[0].Env, env)
+		assert.Equal(t, j.Spec.Template.Labels["my-label-name"], podLabels["my-label-name"])
+		assert.Equal(t, j.Spec.Template.Annotations["my-annotation-name"], podAnnotations["my-annotation-name"])
+		assert.NotNil(t, j.Spec.ActiveDeadlineSeconds)
+		assert.Equal(t, *j.Spec.ActiveDeadlineSeconds, activeDeadlineSeconds)
+		assert.NotNil(t, j.Spec.BackoffLimit)
+		assert.Equal(t, *j.Spec.BackoffLimit, backoffLimit)
+		assert.Equal(t, j.Spec.Template.Spec.NodeSelector["my-node-selector-name"], nodeSelector["my-node-selector-name"])
+		assert.NotNil(t, j.Spec.Template.Spec.Priority)
+		assert.Equal(t, *j.Spec.Template.Spec.Priority, priority)
+		assert.Contains(t, j.Spec.Template.Spec.Tolerations, toleration)
+		assert.Equal(t, j.Spec.Template.Spec.PriorityClassName, "my-priority-class-name")
+	})
 }
 
 func Test_needsUpdate(t *testing.T) {
