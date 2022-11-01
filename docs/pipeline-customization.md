@@ -78,7 +78,7 @@ spec:
   templates:
     job:
       # Job spec
-      activeDeadlineSeconds: 600 # numaflow defaults to 30
+      ttlSecondsAfterFinished: 600 # numaflow defaults to 30
       backoffLimit: 5 # numaflow defaults to 20
       # Pod metadata
       metadata:
