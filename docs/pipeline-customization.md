@@ -50,7 +50,7 @@ spec:
                   - key: numaflow.numaproj.io/pipeline-name
                     operator: In
                     values:
-                      - my-pipeline-name
+                      - my-pipeline
               topologyKey: kubernetes.io/hostname
       # Container
       containerTemplate:
