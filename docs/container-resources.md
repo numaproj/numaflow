@@ -2,9 +2,11 @@
 
 [Container Resources](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) can be customized for all the types of vertices.
 
-## Main Container
+For configuring container resources on pods not owned by a vertex, see [Pipeline Customization](./pipeline-customization.md).
 
-To specify `resources` for the `main` container of vertex pods:
+## Numa Container
+
+To specify `resources` for the `numa` container of vertex pods:
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
