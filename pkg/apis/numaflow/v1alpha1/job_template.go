@@ -12,6 +12,7 @@ type JobTemplate struct {
 	// guarantees (e.g. finalizers) will be honored. If this field is unset,
 	// the Job won't be automatically deleted. If this field is set to zero,
 	// the Job becomes eligible to be deleted immediately after it finishes.
+	// Numaflow defaults to 30
 	// +optional
 	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty" protobuf:"varint,3,opt,name=ttlSecondsAfterFinished"`
 	// Specifies the number of retries before marking this job failed.
