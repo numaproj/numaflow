@@ -4,7 +4,7 @@
 
 For configuring container resources on pods not owned by a vertex, see [Pipeline Customization](./pipeline-customization.md).
 
-## Main Container
+## Numa Container
 
 To specify `resources` for the `numa` container of vertex pods:
 
