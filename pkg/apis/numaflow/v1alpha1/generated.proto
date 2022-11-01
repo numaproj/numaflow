@@ -30,38 +30,26 @@ import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
 // Package-wide variables from generator "generated".
 option go_package = "v1alpha1";
 
-message AbstractVertex {
-  optional string name = 1;
-
-  // +optional
-  optional Source source = 3;
-
-  // +optional
-  optional Sink sink = 4;
-
-  // +optional
-  optional ContainerTemplate containerTemplate = 5;
-
-  // +optional
-  optional UDF udf = 6;
-
+// AbstractPodTemplate provides a template for pod customization in vertices, daemon deployments and so on.
+message AbstractPodTemplate {
   // Metadata sets the pods's metadata, i.e. annotations and labels
-  optional Metadata metadata = 7;
+  // +optional
+  optional Metadata metadata = 1;
 
   // NodeSelector is a selector which must be true for the pod to fit on a node.
   // Selector which must match a node's labels for the pod to be scheduled on that node.
   // More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
   // +optional
-  map<string, string> nodeSelector = 8;
+  map<string, string> nodeSelector = 2;
 
   // If specified, the pod's tolerations.
   // +optional
-  repeated k8s.io.api.core.v1.Toleration tolerations = 9;
+  repeated k8s.io.api.core.v1.Toleration tolerations = 3;
 
   // SecurityContext holds pod-level security attributes and common container settings.
   // Optional: Defaults to empty.  See type description for default values of each field.
   // +optional
-  optional k8s.io.api.core.v1.PodSecurityContext securityContext = 10;
+  optional k8s.io.api.core.v1.PodSecurityContext securityContext = 4;
 
   // ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
   // If specified, these secrets will be passed to individual puller implementations for them to use. For example,
@@ -70,7 +58,7 @@ message AbstractVertex {
   // +optional
   // +patchMergeKey=name
   // +patchStrategy=merge
-  repeated k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 11;
+  repeated k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 5;
 
   // If specified, indicates the Redis pod's priority. "system-node-critical"
   // and "system-cluster-critical" are two special keywords which indicate the
@@ -80,7 +68,7 @@ message AbstractVertex {
   // default.
   // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
   // +optional
-  optional string priorityClassName = 12;
+  optional string priorityClassName = 6;
 
   // The priority value. Various system components use this field to find the
   // priority of the Redis pod. When Priority Admission Controller is enabled,
@@ -89,34 +77,53 @@ message AbstractVertex {
   // The higher the value, the higher the priority.
   // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
   // +optional
-  optional int32 priority = 13;
+  optional int32 priority = 7;
 
   // The pod's scheduling constraints
   // More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
   // +optional
-  optional k8s.io.api.core.v1.Affinity affinity = 14;
+  optional k8s.io.api.core.v1.Affinity affinity = 8;
 
   // ServiceAccountName to apply to the StatefulSet
   // +optional
-  optional string serviceAccountName = 15;
+  optional string serviceAccountName = 9;
+}
+
+message AbstractVertex {
+  optional string name = 1;
+
+  // +optional
+  optional Source source = 2;
+
+  // +optional
+  optional Sink sink = 3;
+
+  // +optional
+  optional UDF udf = 4;
+
+  // +optional
+  optional ContainerTemplate containerTemplate = 5;
+
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 6;
 
   // +optional
   // +patchStrategy=merge
   // +patchMergeKey=name
-  repeated k8s.io.api.core.v1.Volume volumes = 16;
+  repeated k8s.io.api.core.v1.Volume volumes = 7;
 
   // Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
   // +optional
-  optional VertexLimits limits = 17;
+  optional VertexLimits limits = 8;
 
   // Settings for autoscaling
   // +optional
-  optional Scale scale = 18;
+  optional Scale scale = 9;
 
   // List of init containers belonging to the pod.
   // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
   // +optional
-  repeated k8s.io.api.core.v1.Container initContainers = 19;
+  repeated k8s.io.api.core.v1.Container initContainers = 10;
 }
 
 message Authorization {
@@ -428,71 +435,19 @@ message JetStreamBufferService {
   // +optional
   optional PersistenceStrategy persistence = 6;
 
-  // Metadata sets the pods's metadata, i.e. annotations and labels
-  optional Metadata metadata = 77;
-
-  // NodeSelector is a selector which must be true for the pod to fit on a node.
-  // Selector which must match a node's labels for the pod to be scheduled on that node.
-  // More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
   // +optional
-  map<string, string> nodeSelector = 8;
-
-  // If specified, the pod's tolerations.
-  // +optional
-  repeated k8s.io.api.core.v1.Toleration tolerations = 9;
-
-  // SecurityContext holds pod-level security attributes and common container settings.
-  // Optional: Defaults to empty.  See type description for default values of each field.
-  // +optional
-  optional k8s.io.api.core.v1.PodSecurityContext securityContext = 10;
-
-  // ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
-  // If specified, these secrets will be passed to individual puller implementations for them to use. For example,
-  // in the case of docker, only DockerConfig type secrets are honored.
-  // More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
-  // +optional
-  // +patchMergeKey=name
-  // +patchStrategy=merge
-  repeated k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 11;
-
-  // If specified, indicates the Redis pod's priority. "system-node-critical"
-  // and "system-cluster-critical" are two special keywords which indicate the
-  // highest priorities with the former being the highest priority. Any other
-  // name must be defined by creating a PriorityClass object with that name.
-  // If not specified, the pod priority will be default or zero if there is no
-  // default.
-  // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-  // +optional
-  optional string priorityClassName = 12;
-
-  // The priority value. Various system components use this field to find the
-  // priority of the Redis pod. When Priority Admission Controller is enabled,
-  // it prevents users from setting this field. The admission controller populates
-  // this field from PriorityClassName.
-  // The higher the value, the higher the priority.
-  // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-  // +optional
-  optional int32 priority = 13;
-
-  // The pod's scheduling constraints
-  // More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-  // +optional
-  optional k8s.io.api.core.v1.Affinity affinity = 14;
-
-  // ServiceAccountName to apply to the StatefulSet
-  // +optional
-  optional string serviceAccountName = 15;
+  optional AbstractPodTemplate abstractPodTemplate = 7;
 
   // JetStream configuration, if not specified, global settings in numaflow-controller-config will be used.
   // See https://docs.nats.io/running-a-nats-service/configuration#jetstream.
   // Only configure "max_memory_store" or "max_file_store", do not set "store_dir" as it has been hardcoded.
   // +optional
-  optional string settings = 16;
+  optional string settings = 8;
 
   // Optional arguments to start nats-server. For example, "-D" to enable debugging output, "-DV" to enable debugging and tracing.
   // Check https://docs.nats.io/ for all the available arguments.
   // +optional
-  repeated string startArgs = 17;
+  repeated string startArgs = 9;
 
   // Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config.
   // It accepts a YAML format configuration, it may include 4 sections, "stream", "consumer", "otBucket" and "procBucket".
@@ -501,18 +456,18 @@ message JetStreamBufferService {
   // Available fields under "otBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).
   // Available fields under "procBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).
   // +optional
-  optional string bufferConfig = 18;
+  optional string bufferConfig = 10;
 
   // Whether encrypt the data at rest, defaults to false
   // Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
   // Toggling the value will impact encypting/decrypting existing messages.
   // +optional
-  optional bool encryption = 19;
+  optional bool encryption = 11;
 
   // Whether enable TLS, defaults to false
   // Enabling TLS might impact the performance
   // +optional
-  optional bool tls = 20;
+  optional bool tls = 12;
 }
 
 message JetStreamConfig {
@@ -612,64 +567,12 @@ message NativeRedis {
   // +optional
   optional PersistenceStrategy persistence = 6;
 
-  // Metadata sets the pods's metadata, i.e. annotations and labels
-  optional Metadata metadata = 7;
-
-  // NodeSelector is a selector which must be true for the pod to fit on a node.
-  // Selector which must match a node's labels for the pod to be scheduled on that node.
-  // More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
   // +optional
-  map<string, string> nodeSelector = 8;
-
-  // If specified, the pod's tolerations.
-  // +optional
-  repeated k8s.io.api.core.v1.Toleration tolerations = 9;
-
-  // SecurityContext holds pod-level security attributes and common container settings.
-  // Optional: Defaults to empty.  See type description for default values of each field.
-  // +optional
-  optional k8s.io.api.core.v1.PodSecurityContext securityContext = 10;
-
-  // ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
-  // If specified, these secrets will be passed to individual puller implementations for them to use. For example,
-  // in the case of docker, only DockerConfig type secrets are honored.
-  // More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
-  // +optional
-  // +patchMergeKey=name
-  // +patchStrategy=merge
-  repeated k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 11;
-
-  // If specified, indicates the Redis pod's priority. "system-node-critical"
-  // and "system-cluster-critical" are two special keywords which indicate the
-  // highest priorities with the former being the highest priority. Any other
-  // name must be defined by creating a PriorityClass object with that name.
-  // If not specified, the pod priority will be default or zero if there is no
-  // default.
-  // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-  // +optional
-  optional string priorityClassName = 12;
-
-  // The priority value. Various system components use this field to find the
-  // priority of the Redis pod. When Priority Admission Controller is enabled,
-  // it prevents users from setting this field. The admission controller populates
-  // this field from PriorityClassName.
-  // The higher the value, the higher the priority.
-  // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-  // +optional
-  optional int32 priority = 13;
-
-  // The pod's scheduling constraints
-  // More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-  // +optional
-  optional k8s.io.api.core.v1.Affinity affinity = 14;
-
-  // ServiceAccountName to apply to the StatefulSet
-  // +optional
-  optional string serviceAccountName = 15;
+  optional AbstractPodTemplate abstractPodTemplate = 7;
 
   // Redis configuration, if not specified, global settings in numaflow-controller-config will be used.
   // +optional
-  optional RedisSettings settings = 16;
+  optional RedisSettings settings = 8;
 }
 
 // PBQStorage defines the persistence configuration for a vertex.
