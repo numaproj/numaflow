@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 
 	"github.com/goccy/go-json"
@@ -13,6 +12,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
