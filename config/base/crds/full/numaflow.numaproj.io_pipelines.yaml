@@ -178,7 +178,7 @@ spec:
                 description: Templates is used to customize additional kubernetes
                   resources required for the Pipeline
                 properties:
-                  daemonTemplate:
+                  daemon:
                     description: DaemonTemplate is used to customize the Daemon Deployment
                     properties:
                       affinity:

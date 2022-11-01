@@ -3662,7 +3662,7 @@ Description
 <tbody>
 <tr>
 <td>
-<code>daemonTemplate</code></br> <em>
+<code>daemon</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate"> DaemonTemplate
 </a> </em>
 </td>

@@ -419,7 +419,7 @@ func (wm Watermark) GetMaxDelay() time.Duration {
 type Templates struct {
 	// DaemonTemplate is used to customize the Daemon Deployment
 	// +optional
-	DaemonTemplate *DaemonTemplate `json:"daemonTemplate,omitempty" protobuf:"bytes,1,opt,name=daemonTemplate"`
+	DaemonTemplate *DaemonTemplate `json:"daemon,omitempty" protobuf:"bytes,1,opt,name=daemon"`
 }
 
 type PipelineLimits struct {

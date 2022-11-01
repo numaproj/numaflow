@@ -1002,7 +1002,7 @@ message TLS {
 message Templates {
   // DaemonTemplate is used to customize the Daemon Deployment
   // +optional
-  optional DaemonTemplate daemonTemplate = 1;
+  optional DaemonTemplate daemon = 1;
 }
 
 message UDF {

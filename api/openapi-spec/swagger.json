@@ -18624,7 +18624,7 @@
     "io.numaproj.numaflow.v1alpha1.Templates": {
       "type": "object",
       "properties": {
-        "daemonTemplate": {
+        "daemon": {
           "description": "DaemonTemplate is used to customize the Daemon Deployment",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.DaemonTemplate"
         }

@@ -2692,7 +2692,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Templates(ref common.ReferenceCallback) c
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"daemonTemplate": {
+					"daemon": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DaemonTemplate is used to customize the Daemon Deployment",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate"),
