@@ -20,6 +20,7 @@ AbstractPodTemplate
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
 </p>
@@ -603,24 +604,16 @@ Description
 <tbody>
 <tr>
 <td>
-<code>containerTemplate</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
-ContainerTemplate </a> </em>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
 </td>
 <td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
-<code>metadata</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Metadata"> Metadata </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
 <p>
-Metadata sets the pods’s metadata, i.e. annotations and labels
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
 </p>
+<em>(Optional)</em>
 </td>
 </tr>
 <tr>
@@ -639,120 +632,12 @@ to 1. More info:
 </tr>
 <tr>
 <td>
-<code>nodeSelector</code></br> <em> map\[string\]string </em>
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
-<p>
-NodeSelector is a selector which must be true for the pod to fit on a
-node. Selector which must match a node’s labels for the pod to be
-scheduled on that node. More info:
-<a href="https://kubernetes.io/docs/concepts/configuration/assign-pod-node/">https://kubernetes.io/docs/concepts/configuration/assign-pod-node/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>tolerations</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
-\[\]Kubernetes core/v1.Toleration </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-If specified, the pod’s tolerations.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>securityContext</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podsecuritycontext-v1-core">
-Kubernetes core/v1.PodSecurityContext </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-SecurityContext holds pod-level security attributes and common container
-settings. Optional: Defaults to empty. See type description for default
-values of each field.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>imagePullSecrets</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-\[\]Kubernetes core/v1.LocalObjectReference </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-ImagePullSecrets is an optional list of references to secrets in the
-same namespace to use for pulling any of the images used by this
-PodSpec. If specified, these secrets will be passed to individual puller
-implementations for them to use. For example, in the case of docker,
-only DockerConfig type secrets are honored. More info:
-<a href="https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod">https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>priorityClassName</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-If specified, indicates the Redis pod’s priority. “system-node-critical”
-and “system-cluster-critical” are two special keywords which indicate
-the highest priorities with the former being the highest priority. Any
-other name must be defined by creating a PriorityClass object with that
-name. If not specified, the pod priority will be default or zero if
-there is no default. More info:
-<a href="https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/">https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>priority</code></br> <em> int32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-The priority value. Various system components use this field to find the
-priority of the Redis pod. When Priority Admission Controller is
-enabled, it prevents users from setting this field. The admission
-controller populates this field from PriorityClassName. The higher the
-value, the higher the priority. More info:
-<a href="https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/">https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>affinity</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#affinity-v1-core">
-Kubernetes core/v1.Affinity </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-The pod’s scheduling constraints More info:
-<a href="https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/">https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>serviceAccountName</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-ServiceAccountName to apply to the Deployment
-</p>
 </td>
 </tr>
 </tbody>
@@ -2219,8 +2104,7 @@ Metadata
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">AbstractPodTemplate</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">AbstractPodTemplate</a>)
 </p>
 <p>
 </p>

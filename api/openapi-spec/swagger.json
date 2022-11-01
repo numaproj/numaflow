@@ -17545,7 +17545,7 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the Deployment",
+          "description": "ServiceAccountName to apply to the StatefulSet",
           "type": "string"
         },
         "tolerations": {

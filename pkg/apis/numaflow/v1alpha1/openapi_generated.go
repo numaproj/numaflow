@@ -580,22 +580,10 @@ func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallba
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"containerTemplate": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
-						},
-					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Metadata sets the pods's metadata, i.e. annotations and labels",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata"),
-						},
-					},
-					"replicas": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Replicas is the number of desired replicas of the Deployment. This is a pointer to distinguish between explicit zero and unspecified. Defaults to 1. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller",
-							Type:        []string{"integer"},
-							Format:      "int32",
 						},
 					},
 					"nodeSelector": {
@@ -676,9 +664,21 @@ func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallba
 					},
 					"serviceAccountName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ServiceAccountName to apply to the Deployment",
+							Description: "ServiceAccountName to apply to the StatefulSet",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"replicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Replicas is the number of desired replicas of the Deployment. This is a pointer to distinguish between explicit zero and unspecified. Defaults to 1. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"containerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
 				},

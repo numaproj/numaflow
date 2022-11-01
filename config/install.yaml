@@ -6395,7 +6395,7 @@ spec:
                             type: object
                         type: object
                       serviceAccountName:
-                        description: ServiceAccountName to apply to the Deployment
+                        description: ServiceAccountName to apply to the StatefulSet
                         type: string
                       tolerations:
                         description: If specified, the pod's tolerations.
