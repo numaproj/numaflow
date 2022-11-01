@@ -167,15 +167,17 @@ func TestGetDaemonDeploy(t *testing.T) {
 					Resources: testResources,
 					Env:       []corev1.EnvVar{env},
 				},
-				Metadata: &Metadata{
-					Annotations: podAnnotations,
-					Labels:      podLabels,
+				AbstractPodTemplate: AbstractPodTemplate{
+					Metadata: &Metadata{
+						Annotations: podAnnotations,
+						Labels:      podLabels,
+					},
+					NodeSelector:      nodeSelector,
+					Tolerations:       []corev1.Toleration{toleration},
+					PriorityClassName: "my-priority-class-name",
+					Priority:          &priority,
 				},
-				Replicas:          &replicas,
-				NodeSelector:      nodeSelector,
-				Tolerations:       []corev1.Toleration{toleration},
-				PriorityClassName: "my-priority-class-name",
-				Priority:          &priority,
+				Replicas: &replicas,
 			},
 		}
 		s, err := pl.GetDaemonDeploymentObj(req)
