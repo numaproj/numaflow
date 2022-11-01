@@ -135,7 +135,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 				_, _ = w.Write([]byte(err.Error()))
 				return
 			}
-			eventTime = time.Unix(i, 0)
+			eventTime = time.UnixMilli(i)
 		}
 		m := &isb.ReadMessage{
 			Message: isb.Message{
@@ -199,7 +199,7 @@ func (h *httpSource) GetName() string {
 	return h.name
 }
 
-func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
+func (h *httpSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := []*isb.ReadMessage{}
 	var latest time.Time
 	timeout := time.After(h.readTimeout)
