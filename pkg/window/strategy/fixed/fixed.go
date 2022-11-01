@@ -7,9 +7,12 @@
 package fixed
 
 import (
+	"context"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/window"
+	"go.uber.org/zap"
 )
 
 // Fixed implements Fixed window.
@@ -30,7 +33,7 @@ func NewFixed(length time.Duration) *Fixed {
 // AssignWindow assigns a window for the given eventTime.
 func (f *Fixed) AssignWindow(eventTime time.Time) []*window.IntervalWindow {
 	start := eventTime.Truncate(f.Length)
-
+	logging.FromContext(context.Background()).Infow("Fixed window length", zap.Duration("window duration", f.Length), zap.Time("event time", eventTime))
 	return []*window.IntervalWindow{
 		{
 			Start: start,
