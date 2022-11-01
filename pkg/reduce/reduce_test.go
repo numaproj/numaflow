@@ -219,12 +219,12 @@ func TestDataForward_StartWithInMemoryWMStore(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	//create from buffers for tests
+	// create from buffers for tests
 	fromBuffer1 := simplebuffer.NewInMemoryBuffer("from1", fromBufferSize)
 	fromBuffer2 := simplebuffer.NewInMemoryBuffer("from2", fromBufferSize)
 	fromBuffer3 := simplebuffer.NewInMemoryBuffer("from3", fromBufferSize)
 
-	//create to buffers for tests
+	// create to buffers for tests
 	buffer1 := simplebuffer.NewInMemoryBuffer("to", toBufferSize)
 	buffer2 := simplebuffer.NewInMemoryBuffer("to", toBufferSize)
 	buffer3 := simplebuffer.NewInMemoryBuffer("to", toBufferSize)
@@ -263,12 +263,12 @@ func TestDataForward_StartWithInMemoryWMStore(t *testing.T) {
 	go writeMessages(ctx, 100, "test-2", fromBuffer2, p2["from2"], time.Minute*1)
 	go writeMessages(ctx, 1000, "test-3", fromBuffer3, p3["from3"], time.Minute*10)
 
-	//create window for tests
+	// create window for tests
 	window1 := fixed.NewFixed(2 * time.Second)
 	window2 := fixed.NewFixed(2 * time.Minute)
 	window3 := fixed.NewFixed(20 * time.Minute)
 
-	//create forwarder for tests
+	// create forwarder for tests
 	var reduceDataForwarder1, reduceDataForwarder2, reduceDataForwarder3 *DataForward
 	reduceDataForwarder1, err = NewDataForward(ctx, CounterReduceTest{}, fromBuffer1, toBuffer1, pbqManager1, CounterReduceTest{}, f1, p1, window1, WithReadBatchSize(10))
 	assert.NoError(t, err)
@@ -385,7 +385,7 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_PROCESSORS", hbWatcherCh)
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 
-	var pm = fetch.NewProcessorManager(ctx, wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), fetch.WithPodHeartbeatRate(1), fetch.WithRefreshingProcessorsRate(1), fetch.WithSeparateOTBuckets(false))
+	var pm = fetch.NewProcessorManager(ctx, wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), fetch.WithPodHeartbeatRate(1), fetch.WithRefreshingProcessorsRate(1))
 	var f = fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), pm)
 	return f, publishers
 }

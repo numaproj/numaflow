@@ -5,7 +5,6 @@ type processorManagerOptions struct {
 	podHeartbeatRate int64
 	// refreshingProcessorsRate uses second as time unit
 	refreshingProcessorsRate int64
-	separateOTBucket         bool
 }
 
 // ProcessorManagerOption set options for FromVertex.
@@ -22,12 +21,5 @@ func WithPodHeartbeatRate(rate int64) ProcessorManagerOption {
 func WithRefreshingProcessorsRate(rate int64) ProcessorManagerOption {
 	return func(opts *processorManagerOptions) {
 		opts.refreshingProcessorsRate = rate
-	}
-}
-
-// WithSeparateOTBuckets creates a different bucket for maintaining each processor offset-timeline.
-func WithSeparateOTBuckets(separate bool) ProcessorManagerOption {
-	return func(opts *processorManagerOptions) {
-		opts.separateOTBucket = separate
 	}
 }

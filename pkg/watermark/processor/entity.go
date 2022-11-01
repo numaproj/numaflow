@@ -34,19 +34,11 @@ func (w Watermark) Before(t time.Time) bool {
 }
 
 type entityOptions struct {
-	separateOTBucket bool
-	keySeparator     string
+	keySeparator string
 }
 
 // EntityOption set options for FromVertex.
 type EntityOption func(*entityOptions)
-
-// WithSeparateOTBuckets creates a different bucket for maintaining each processor offset-timeline.
-func WithSeparateOTBuckets(separate bool) EntityOption {
-	return func(opts *entityOptions) {
-		opts.separateOTBucket = separate
-	}
-}
 
 // ProcessorEntitier defines what can be a processor. The Processor is the smallest unit where the watermark will
 // monotonically increase.
@@ -54,7 +46,6 @@ type ProcessorEntitier interface {
 	GetID() string
 	BuildOTWatcherKey(Watermark) string
 	ParseOTWatcherKey(string) (int64, bool, error)
-	IsOTBucketShared() bool
 }
 
 // ProcessorEntity implements ProcessorEntitier.
@@ -66,8 +57,8 @@ type ProcessorEntity struct {
 
 var _ ProcessorEntitier = (*ProcessorEntity)(nil)
 
-// _defaultKeySeparator is the key separate when we have shared OT buckets.
-// NOTE: we can only use `_` as the separator, Jetstream will not let any other special character.
+// _defaultKeySeparator is the key separate used in the offset timeline kv.
+// NOTE: we can only use `_` as the separator, JetStream will not let any other special character.
 //
 //	Perhaps we can encode the key using base64, but it will have a performance hit.
 const _defaultKeySeparator = "_"
@@ -75,8 +66,7 @@ const _defaultKeySeparator = "_"
 // NewProcessorEntity returns a new `ProcessorEntity`.
 func NewProcessorEntity(name string, inputOpts ...EntityOption) *ProcessorEntity {
 	opts := &entityOptions{
-		separateOTBucket: false,
-		keySeparator:     _defaultKeySeparator,
+		keySeparator: _defaultKeySeparator,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
@@ -92,18 +82,9 @@ func (p *ProcessorEntity) GetID() string {
 	return p.name
 }
 
-// IsOTBucketShared returns true if the OT bucket is shared.
-func (p *ProcessorEntity) IsOTBucketShared() bool {
-	return p.opts.separateOTBucket
-}
-
 // BuildOTWatcherKey builds the offset-timeline key name
 func (p *ProcessorEntity) BuildOTWatcherKey(watermark Watermark) string {
-	if p.opts.separateOTBucket {
-		return fmt.Sprintf("%d", watermark.UnixMilli())
-	} else {
-		return fmt.Sprintf("%s%s%d", p.GetID(), p.opts.keySeparator, watermark.UnixMilli())
-	}
+	return fmt.Sprintf("%s%s%d", p.GetID(), p.opts.keySeparator, watermark.UnixMilli())
 }
 
 // ParseOTWatcherKey parses the key of the KeyValue OT watcher and returns the epoch, a boolean to indicate
@@ -112,25 +93,18 @@ func (p *ProcessorEntity) BuildOTWatcherKey(watermark Watermark) string {
 func (p *ProcessorEntity) ParseOTWatcherKey(key string) (epoch int64, skip bool, err error) {
 	var name string
 	var epochStr = key
-	// if not separate bucket, the key will have to be split
-	if !p.opts.separateOTBucket {
-		name, epochStr, err = p.splitKey(key)
-		if err != nil {
-			return 0, false, err
-		}
-		// skip if not this processor
-		skip = name != p.GetID()
+	name, epochStr, err = p.splitKey(key)
+	if err != nil {
+		return 0, false, err
 	}
+	// skip if not this processor
+	skip = name != p.GetID()
 	epoch, err = strconv.ParseInt(epochStr, 10, 64)
 
 	return epoch, skip, err
 }
 
 func (p *ProcessorEntity) splitKey(key string) (string, string, error) {
-	// if there are separate buckets, the name will be not present and the key is the epoch
-	if p.opts.separateOTBucket {
-		return "", key, nil
-	}
 	split := strings.Split(key, p.opts.keySeparator)
 	if len(split) != 2 {
 		return "", "", fmt.Errorf("key=%s when split using %s, did not have 2 outputs=%v", key, p.opts.keySeparator, split)
