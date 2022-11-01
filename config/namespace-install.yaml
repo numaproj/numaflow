@@ -9933,8 +9933,33 @@ spec:
                           properties:
                             keyed:
                               type: boolean
+                            storage:
+                              description: Storage is used to define the PBQ storage
+                                for a reduce vertex.
+                              properties:
+                                persistentVolumeClaim:
+                                  description: PersistenceStrategy defines the strategy
+                                    of persistence
+                                  properties:
+                                    accessMode:
+                                      description: Available access modes such as
+                                        ReadWriteOnce, ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+                                      type: string
+                                    storageClassName:
+                                      description: 'Name of the StorageClass required
+                                        by the claim. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1'
+                                      type: string
+                                    volumeSize:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      description: Volume size, e.g. 50Gi
+                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                      x-kubernetes-int-or-string: true
+                                  type: object
+                              type: object
                             window:
-                              description: Window describes windowing strategy
+                              description: Window describes the windowing strategy.
                               properties:
                                 fixed:
                                   description: FixedWindow describes a fixed window
@@ -15126,8 +15151,33 @@ spec:
                     properties:
                       keyed:
                         type: boolean
+                      storage:
+                        description: Storage is used to define the PBQ storage for
+                          a reduce vertex.
+                        properties:
+                          persistentVolumeClaim:
+                            description: PersistenceStrategy defines the strategy
+                              of persistence
+                            properties:
+                              accessMode:
+                                description: Available access modes such as ReadWriteOnce,
+                                  ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+                                type: string
+                              storageClassName:
+                                description: 'Name of the StorageClass required by
+                                  the claim. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1'
+                                type: string
+                              volumeSize:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                description: Volume size, e.g. 50Gi
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                            type: object
+                        type: object
                       window:
-                        description: Window describes windowing strategy
+                        description: Window describes the windowing strategy.
                         properties:
                           fixed:
                             description: FixedWindow describes a fixed window
@@ -16820,7 +16870,7 @@ subjects:
 ---
 apiVersion: v1
 data:
-  controller-config.yaml: |
+  controller-config.yaml: |+
     isbsvc:
       redis:
         # Default Redis settings, could be overridden by InterStepBufferService specs
@@ -16889,7 +16939,7 @@ data:
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.9.0
+          natsImage: nats:2.9.4
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -16923,6 +16973,12 @@ data:
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: nats-server
+        - version: 2.9.4
+          natsImage: nats:2.9.4
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+
 kind: ConfigMap
 metadata:
   name: numaflow-controller-config

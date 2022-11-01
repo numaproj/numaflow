@@ -17872,7 +17872,12 @@
         "keyed": {
           "type": "boolean"
         },
+        "storage": {
+          "description": "Storage is used to define the PBQ storage for a reduce vertex.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PBQStorage"
+        },
         "window": {
+          "description": "Window describes the windowing strategy.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Window"
         }
       }
@@ -18276,6 +18281,15 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.PBQStorage": {
+      "description": "PBQStorage defines the persistence configuration for a vertex.",
+      "type": "object",
+      "properties": {
+        "persistentVolumeClaim": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PersistenceStrategy"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.PersistenceStrategy": {
       "description": "PersistenceStrategy defines the strategy of persistence",
       "type": "object",
@@ -18510,6 +18524,7 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.Scale": {
+      "description": "Scale defines the parameters for autoscaling.",
       "type": "object",
       "properties": {
         "cooldownSeconds": {

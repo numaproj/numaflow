@@ -64,6 +64,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata":                       schema_pkg_apis_numaflow_v1alpha1_Metadata(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NATSAuth":                       schema_pkg_apis_numaflow_v1alpha1_NATSAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NativeRedis":                    schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage":                     schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy":            schema_pkg_apis_numaflow_v1alpha1_PersistenceStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Pipeline":                       schema_pkg_apis_numaflow_v1alpha1_Pipeline(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits":                 schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref),
@@ -1235,8 +1236,9 @@ func schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref common.ReferenceCallback) com
 				Properties: map[string]spec.Schema{
 					"window": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window"),
+							Description: "Window describes the windowing strategy.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window"),
 						},
 					},
 					"keyed": {
@@ -1246,12 +1248,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref common.ReferenceCallback) com
 							Format:  "",
 						},
 					},
+					"storage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Storage is used to define the PBQ storage for a reduce vertex.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage"),
+						},
+					},
 				},
 				Required: []string{"window"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window"},
 	}
 }
 
@@ -2034,6 +2042,26 @@ func schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref common.ReferenceCallback)
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PBQStorage defines the persistence configuration for a vertex.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"persistentVolumeClaim": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_PersistenceStrategy(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2484,7 +2512,8 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "Scale defines the parameters for autoscaling.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"disabled": {
 						SchemaProps: spec.SchemaProps{

@@ -1473,6 +1473,9 @@ Description
 <a href="#numaflow.numaproj.io/v1alpha1.Window"> Window </a> </em>
 </td>
 <td>
+<p>
+Window describes the windowing strategy.
+</p>
 </td>
 </tr>
 <tr>
@@ -1481,6 +1484,19 @@ Description
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>storage</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PBQStorage"> PBQStorage </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Storage is used to define the PBQ storage for a reduce vertex.
+</p>
 </td>
 </tr>
 </tbody>
@@ -2593,13 +2609,49 @@ numaflow-controller-config will be used.
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
+PBQStorage
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.GroupBy">GroupBy</a>)
+</p>
+<p>
+<p>
+PBQStorage defines the persistence configuration for a vertex.
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>persistentVolumeClaim</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PersistenceStrategy">
+PersistenceStrategy </a> </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.PersistenceStrategy">
 PersistenceStrategy
 </h3>
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.PBQStorage">PBQStorage</a>)
 </p>
 <p>
 <p>
@@ -3292,6 +3344,9 @@ Scale
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>)
 </p>
 <p>
+<p>
+Scale defines the parameters for autoscaling.
+</p>
 </p>
 <table>
 <thead>
