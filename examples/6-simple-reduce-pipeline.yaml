@@ -23,6 +23,9 @@ spec:
               length: 60s
             keyed: true
     - name: sink
+      scale:
+        min: 1
+        max: 5
       sink:
         log: {}
   edges:
