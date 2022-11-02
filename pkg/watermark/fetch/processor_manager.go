@@ -38,7 +38,6 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
-		separateOTBucket:         false,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
@@ -166,7 +165,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					// A fromProcessor needs to be added to v.processors
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
-					var entity = processor.NewProcessorEntity(value.Key(), processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
+					var entity = processor.NewProcessorEntity(value.Key())
 					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.otWatcher)
 					v.addProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
