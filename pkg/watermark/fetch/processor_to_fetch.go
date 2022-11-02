@@ -123,7 +123,7 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 					p.log.Errorw("Unable to convert value.PartitionID() to int64", zap.String("received", value.Key()), zap.Error(err))
 					continue
 				}
-				// if skip is set to true, it means the key update we received is for a different processor (sharing of bucket)
+				// if skip is set to true, it means the key update we received is for a different processor
 				if skip {
 					continue
 				}
