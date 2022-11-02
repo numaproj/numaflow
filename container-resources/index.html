@@ -895,6 +895,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#init-container" class="md-nav__link">
+    Init Container
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1330,6 +1337,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#init-container" class="md-nav__link">
+    Init Container
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1408,6 +1422,25 @@
 <span class="w">                </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="w"></span>
 <span class="w">                </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4Gi</span><span class="w"></span>
 </code></pre></div>
+<h2 id="init-container">Init Container<a class="headerlink" href="#init-container" title="Permanent link">&para;</a></h2>
+<p>To specify <code>resources</code> for the <code>init</code> init-container of vertex pods:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
+<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
+<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span><span class="w"></span>
+<span class="w">      </span><span class="nt">initContainerTemplate</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="nt">resources</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="nt">limits</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3&quot;</span><span class="w"></span>
+<span class="w">            </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6Gi</span><span class="w"></span>
+<span class="w">          </span><span class="nt">requests</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="w"></span>
+<span class="w">            </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4Gi</span><span class="w"></span>
+</code></pre></div>
+<p>Container resources for <a href="../init-containers/">user init-containers</a> are instead specified at <code>.spec.vertices[*].initContainers[*].resources</code>.</p>
 
               
             </article>
