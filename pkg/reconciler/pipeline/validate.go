@@ -19,7 +19,8 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	names := make(map[string]bool)
 	sources := make(map[string]dfv1.AbstractVertex)
 	sinks := make(map[string]dfv1.AbstractVertex)
-	udfs := make(map[string]dfv1.AbstractVertex)
+	mapUdfs := make(map[string]dfv1.AbstractVertex)
+	reduceUdfs := make(map[string]dfv1.AbstractVertex)
 	for _, v := range pl.Spec.Vertices {
 		if names[v.Name] {
 			return fmt.Errorf("duplicate vertex name %q", v.Name)
@@ -45,7 +46,11 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			if v.Source != nil || v.Sink != nil {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
 			}
-			udfs[v.Name] = v
+			if v.UDF.GroupBy != nil {
+				reduceUdfs[v.Name] = v
+			} else {
+				mapUdfs[v.Name] = v
+			}
 		}
 	}
 
@@ -57,7 +62,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("pipeline has no sink, at lease one vertex with 'sink' defined is required")
 	}
 
-	for k, u := range udfs {
+	for k, u := range mapUdfs {
 		if u.UDF.Container != nil {
 			if u.UDF.Container.Image == "" && u.UDF.Builtin == nil {
 				return fmt.Errorf("invalid vertex %q, either specify a builtin function, or a customized image", k)
@@ -67,6 +72,18 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			}
 		} else if u.UDF.Builtin == nil {
 			return fmt.Errorf("invalid vertex %q, either specify a builtin function, or a customized image", k)
+		}
+	}
+
+	for k, u := range reduceUdfs {
+		if u.UDF.Builtin != nil {
+			// No builtin function supported for reduce vertices.
+			return fmt.Errorf("invalid vertex %q, there's no buildin function support in reduce vertices", k)
+		}
+		if u.UDF.Container != nil {
+			if u.UDF.Container.Image == "" {
+				return fmt.Errorf("invalid vertex %q, a customized image is required", k)
+			}
 		}
 	}
 
@@ -92,7 +109,23 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		}
 		if e.Conditions != nil && len(e.Conditions.KeyIn) > 0 {
 			if _, ok := sources[e.From]; ok { // Source vertex should not do conditional forwarding
-				return fmt.Errorf("invalid edge, \"conditions.keysIn\" not allowed for %q", e.From)
+				return fmt.Errorf(`invalid edge, "conditions.keysIn" not allowed for %q`, e.From)
+			}
+		}
+		if e.Parallelism != nil {
+			if _, ok := reduceUdfs[e.To]; !ok {
+				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" is not allowed for an edge leading to a non-reduce vertex`, e.From, e.To)
+			}
+			if *e.Parallelism < 1 {
+				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" is < 1`, e.From, e.To)
+			}
+			if *e.Parallelism > 1 && !reduceUdfs[e.To].UDF.GroupBy.Keyed {
+				// We only support single partition non-keyed windowing.
+				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" should not > 1 for non-keyed windowing`, e.From, e.To)
+			}
+			if _, ok := sources[e.From]; ok && reduceUdfs[e.To].UDF.GroupBy.Keyed {
+				// Source vertex can not lead to a keyed reduce vertex, because the keys coming from sources are undeterminable.
+				return fmt.Errorf(`invalid spec (%s - %s), "keyed" should not be true for a reduce vertex which has data coming from a source vertex`, e.From, e.To)
 			}
 		}
 		namesInEdges[e.From] = true
