@@ -105,6 +105,11 @@ func (in *AbstractVertex) DeepCopyInto(out *AbstractVertex) {
 		*out = new(ContainerTemplate)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.InitContainerTemplate != nil {
+		in, out := &in.InitContainerTemplate, &out.InitContainerTemplate
+		*out = new(ContainerTemplate)
+		(*in).DeepCopyInto(*out)
+	}
 	in.AbstractPodTemplate.DeepCopyInto(&out.AbstractPodTemplate)
 	if in.Volumes != nil {
 		in, out := &in.Volumes, &out.Volumes
@@ -283,6 +288,11 @@ func (in *DaemonTemplate) DeepCopyInto(out *DaemonTemplate) {
 	}
 	if in.ContainerTemplate != nil {
 		in, out := &in.ContainerTemplate, &out.ContainerTemplate
+		*out = new(ContainerTemplate)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.InitContainerTemplate != nil {
+		in, out := &in.InitContainerTemplate, &out.InitContainerTemplate
 		*out = new(ContainerTemplate)
 		(*in).DeepCopyInto(*out)
 	}
@@ -1018,6 +1028,11 @@ func (in *NativeRedis) DeepCopyInto(out *NativeRedis) {
 	}
 	if in.MetricsContainerTemplate != nil {
 		in, out := &in.MetricsContainerTemplate, &out.MetricsContainerTemplate
+		*out = new(ContainerTemplate)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.InitContainerTemplate != nil {
+		in, out := &in.InitContainerTemplate, &out.InitContainerTemplate
 		*out = new(ContainerTemplate)
 		(*in).DeepCopyInto(*out)
 	}

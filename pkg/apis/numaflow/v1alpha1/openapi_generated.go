@@ -234,6 +234,11 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
+					"initContainerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Metadata sets the pods's metadata, i.e. annotations and labels",
@@ -678,6 +683,11 @@ func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallba
 						},
 					},
 					"containerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
+					"initContainerTemplate": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
@@ -2162,6 +2172,11 @@ func schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref common.ReferenceCallback)
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
+					"initContainerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
 					"persistence": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy"),
@@ -3202,6 +3217,11 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 						},
 					},
 					"containerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
+					"initContainerTemplate": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},

@@ -17325,6 +17325,9 @@
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "initContainerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
         "initContainers": {
           "description": "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
           "items": {
@@ -17509,6 +17512,9 @@
           "type": "array",
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
+        },
+        "initContainerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
         },
         "metadata": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Metadata",
@@ -18340,6 +18346,9 @@
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "initContainerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
         "metadata": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Metadata",
           "description": "Metadata sets the pods's metadata, i.e. annotations and labels"
@@ -18920,6 +18929,9 @@
           "type": "array",
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
+        },
+        "initContainerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
         },
         "initContainers": {
           "description": "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
