@@ -75,7 +75,7 @@ spec:
 
 ## Init Container
 
-To specify `resources` for the `init` container of vertex pods:
+To specify `resources` for the `init` init-container of vertex pods:
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -95,4 +95,4 @@ spec:
             memory: 4Gi
 ```
 
-Container resources for [user init-containers](./init-containers.md) are instead set at `.spec.vertices[*].initContainers[*].resources`.
+Container resources for [user init-containers](./init-containers.md) are instead specified at `.spec.vertices[*].initContainers[*].resources`.
