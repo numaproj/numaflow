@@ -105,25 +105,28 @@ message AbstractVertex {
   optional ContainerTemplate containerTemplate = 5;
 
   // +optional
-  optional AbstractPodTemplate abstractPodTemplate = 6;
+  optional ContainerTemplate initContainerTemplate = 6;
+
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 7;
 
   // +optional
   // +patchStrategy=merge
   // +patchMergeKey=name
-  repeated k8s.io.api.core.v1.Volume volumes = 7;
+  repeated k8s.io.api.core.v1.Volume volumes = 8;
 
   // Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
   // +optional
-  optional VertexLimits limits = 8;
+  optional VertexLimits limits = 9;
 
   // Settings for autoscaling
   // +optional
-  optional Scale scale = 9;
+  optional Scale scale = 10;
 
   // List of init containers belonging to the pod.
   // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
   // +optional
-  repeated k8s.io.api.core.v1.Container initContainers = 10;
+  repeated k8s.io.api.core.v1.Container initContainers = 11;
 }
 
 message Authorization {
@@ -189,6 +192,9 @@ message DaemonTemplate {
 
   // +optional
   optional ContainerTemplate containerTemplate = 3;
+
+  // +optional
+  optional ContainerTemplate initContainerTemplate = 4;
 }
 
 message Edge {
@@ -605,14 +611,17 @@ message NativeRedis {
   optional ContainerTemplate metricsContainerTemplate = 5;
 
   // +optional
-  optional PersistenceStrategy persistence = 6;
+  optional ContainerTemplate initContainerTemplate = 6;
 
   // +optional
-  optional AbstractPodTemplate abstractPodTemplate = 7;
+  optional PersistenceStrategy persistence = 7;
+
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 8;
 
   // Redis configuration, if not specified, global settings in numaflow-controller-config will be used.
   // +optional
-  optional RedisSettings settings = 8;
+  optional RedisSettings settings = 9;
 }
 
 // PBQStorage defines the persistence configuration for a vertex.

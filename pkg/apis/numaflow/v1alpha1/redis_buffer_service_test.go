@@ -74,6 +74,21 @@ func TestRedisGetStatefulSetSpec(t *testing.T) {
 			assert.Equal(t, c.Resources, r)
 		}
 	})
+
+	t.Run("with init container resources", func(t *testing.T) {
+		r := corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		}
+		s := &NativeRedis{
+			InitContainerTemplate: &ContainerTemplate{Resources: r},
+		}
+		spec := s.GetStatefulSetSpec(req)
+		for _, c := range spec.Template.Spec.InitContainers {
+			assert.Equal(t, c.Resources, r)
+		}
+	})
 }
 
 func TestRedisGetServiceSpec(t *testing.T) {

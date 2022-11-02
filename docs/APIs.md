@@ -243,6 +243,16 @@ ContainerTemplate </a> </em>
 </tr>
 <tr>
 <td>
+<code>initContainerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
 <code>AbstractPodTemplate</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
@@ -635,6 +645,16 @@ to 1. More info:
 <tr>
 <td>
 <code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>initContainerTemplate</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
 ContainerTemplate </a> </em>
 </td>
@@ -2344,6 +2364,16 @@ ContainerTemplate </a> </em>
 <p>
 MetricsContainerTemplate contains customized spec for metrics container
 </p>
+</td>
+</tr>
+<tr>
+<td>
+<code>initContainerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 <tr>
