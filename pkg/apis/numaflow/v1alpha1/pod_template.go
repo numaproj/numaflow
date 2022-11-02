@@ -52,3 +52,41 @@ type AbstractPodTemplate struct {
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,9,opt,name=serviceAccountName"`
 }
+
+// ApplyToPodSpec updates the PodSpec with the values in the AbstractPodTemplate
+func (apt *AbstractPodTemplate) ApplyToPodSpec(ps *corev1.PodSpec) {
+	ps.NodeSelector = apt.NodeSelector
+	ps.Tolerations = apt.Tolerations
+	ps.SecurityContext = apt.SecurityContext
+	ps.ImagePullSecrets = apt.ImagePullSecrets
+	ps.PriorityClassName = apt.PriorityClassName
+	ps.Priority = apt.Priority
+	ps.Affinity = apt.Affinity
+	ps.ServiceAccountName = apt.ServiceAccountName
+}
+
+// ApplyToPodTemplateSpec updates the PodTemplateSpec with the values in the AbstractPodTemplate
+// Labels and Annotations will be appended, individual labels or annotations in original PodTemplateSpec will not be overridden
+func (apt *AbstractPodTemplate) ApplyToPodTemplateSpec(p *corev1.PodTemplateSpec) {
+	apt.ApplyToPodSpec(&p.Spec)
+	if apt.Metadata != nil && len(apt.Metadata.Labels) > 0 {
+		if p.Labels == nil {
+			p.Labels = map[string]string{}
+		}
+		for k, v := range apt.Metadata.Labels {
+			if _, ok := p.Labels[k]; !ok {
+				p.Labels[k] = v
+			}
+		}
+	}
+	if apt.Metadata != nil && len(apt.Metadata.Annotations) > 0 {
+		if p.Annotations == nil {
+			p.Annotations = map[string]string{}
+		}
+		for k, v := range apt.Metadata.Annotations {
+			if _, ok := p.Annotations[k]; !ok {
+				p.Annotations[k] = v
+			}
+		}
+	}
+}

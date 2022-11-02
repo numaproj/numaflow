@@ -9,3 +9,21 @@ type ContainerTemplate struct {
 	SecurityContext *corev1.SecurityContext     `json:"securityContext,omitempty" protobuf:"bytes,3,opt,name=securityContext"`
 	Env             []corev1.EnvVar             `json:"env,omitempty" protobuf:"bytes,4,rep,name=env"`
 }
+
+// ApplyToContainer updates the Container with the values from the ContainerTemplate
+func (ct *ContainerTemplate) ApplyToContainer(c *corev1.Container) {
+	// currently only doing resources & env, ignoring imagePullPolicy & securityContext
+	c.Resources = ct.Resources
+	if len(ct.Env) > 0 {
+		c.Env = append(c.Env, ct.Env...)
+	}
+}
+
+// ApplyToNumaflowContainers updates any numa or init containers with the values from the ContainerTemplate
+func (ct *ContainerTemplate) ApplyToNumaflowContainers(containers []corev1.Container) {
+	for i := range containers {
+		if containers[i].Name == CtrMain || containers[i].Name == CtrInit {
+			ct.ApplyToContainer(&containers[i])
+		}
+	}
+}

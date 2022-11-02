@@ -530,29 +530,9 @@ func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferS
 		if jt.BackoffLimit != nil {
 			spec.BackoffLimit = jt.BackoffLimit
 		}
-		spec.Template.Spec.NodeSelector = jt.NodeSelector
-		spec.Template.Spec.Tolerations = jt.Tolerations
-		spec.Template.Spec.SecurityContext = jt.SecurityContext
-		spec.Template.Spec.ImagePullSecrets = jt.ImagePullSecrets
-		spec.Template.Spec.PriorityClassName = jt.PriorityClassName
-		spec.Template.Spec.Priority = jt.Priority
-		spec.Template.Spec.ServiceAccountName = jt.ServiceAccountName
-		spec.Template.Spec.Affinity = jt.Affinity
-		if md := jt.Metadata; md != nil {
-			for k, v := range md.Labels {
-				if _, ok := spec.Template.Labels[k]; !ok {
-					spec.Template.Labels[k] = v
-				}
-			}
-			for k, v := range md.Annotations {
-				spec.Template.Annotations[k] = v
-			}
-		}
-		if ct := jt.ContainerTemplate; ct != nil {
-			spec.Template.Spec.Containers[0].Resources = ct.Resources
-			if len(ct.Env) > 0 {
-				spec.Template.Spec.Containers[0].Env = append(envs, ct.Env...)
-			}
+		jt.AbstractPodTemplate.ApplyToPodTemplateSpec(&spec.Template)
+		if jt.ContainerTemplate != nil {
+			jt.ContainerTemplate.ApplyToNumaflowContainers(spec.Template.Spec.Containers)
 		}
 	}
 	return &batchv1.Job{

@@ -11,4 +11,6 @@ type DaemonTemplate struct {
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,2,opt,name=replicas"`
 	// +optional
 	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,3,opt,name=containerTemplate"`
+	// +optional
+	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,4,opt,name=initContainerTemplate"`
 }

@@ -231,7 +231,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 	})
 
-	t.Run("test user defind sink", func(t *testing.T) {
+	t.Run("test user defined sink", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &Sink{
 			UDSink: &UDSink{
@@ -355,11 +355,14 @@ func Test_VertexGetInitContainers(t *testing.T) {
 	o.Spec.InitContainers = []corev1.Container{
 		{Name: "my-test-init", Image: "my-test-init-image"},
 	}
+	o.Spec.InitContainerTemplate = &ContainerTemplate{Resources: testResources}
 	s := o.getInitContainers(req)
 	assert.Len(t, s, 2)
 	assert.Equal(t, CtrInit, s[0].Name)
+	assert.Equal(t, s[0].Resources, testResources)
 	assert.Equal(t, "my-test-init", s[1].Name)
 	assert.Equal(t, "my-test-init-image", s[1].Image)
+	assert.Equal(t, s[1].Resources, corev1.ResourceRequirements{})
 	a := []string{}
 	for _, env := range s[0].Env {
 		a = append(a, env.Name)

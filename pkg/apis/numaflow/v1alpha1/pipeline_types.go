@@ -231,29 +231,9 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 	if p.Spec.Templates != nil && p.Spec.Templates.DaemonTemplate != nil {
 		dt := p.Spec.Templates.DaemonTemplate
 		spec.Replicas = dt.Replicas
-		spec.Template.Spec.NodeSelector = dt.NodeSelector
-		spec.Template.Spec.Tolerations = dt.Tolerations
-		spec.Template.Spec.SecurityContext = dt.SecurityContext
-		spec.Template.Spec.ImagePullSecrets = dt.ImagePullSecrets
-		spec.Template.Spec.PriorityClassName = dt.PriorityClassName
-		spec.Template.Spec.Priority = dt.Priority
-		spec.Template.Spec.ServiceAccountName = dt.ServiceAccountName
-		spec.Template.Spec.Affinity = dt.Affinity
-		if md := dt.Metadata; md != nil {
-			for k, v := range md.Labels {
-				if _, ok := spec.Template.Labels[k]; !ok {
-					spec.Template.Labels[k] = v
-				}
-			}
-			for k, v := range md.Annotations {
-				spec.Template.Annotations[k] = v
-			}
-		}
-		if ct := dt.ContainerTemplate; ct != nil {
-			spec.Template.Spec.Containers[0].Resources = ct.Resources
-			if len(ct.Env) > 0 {
-				spec.Template.Spec.Containers[0].Env = append(envVars, ct.Env...)
-			}
+		dt.AbstractPodTemplate.ApplyToPodTemplateSpec(&spec.Template)
+		if dt.ContainerTemplate != nil {
+			dt.ContainerTemplate.ApplyToNumaflowContainers(spec.Template.Spec.Containers)
 		}
 	}
 	return &appv1.Deployment{
@@ -287,6 +267,9 @@ func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.C
 		bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
 	}
 	c.Args = append(c.Args, "--buffers="+strings.Join(bfs, ","))
+	if p.Spec.Templates != nil && p.Spec.Templates.DaemonTemplate != nil && p.Spec.Templates.DaemonTemplate.InitContainerTemplate != nil {
+		p.Spec.Templates.DaemonTemplate.InitContainerTemplate.ApplyToContainer(&c)
+	}
 	return c
 }
 
