@@ -65,6 +65,7 @@ nav:
       - volumes.md
       - environment-variables.md
       - init-containers.md
+      - pipeline-customization.md
       - watermarks.md
       - APIs.md
   - Operator Manual:

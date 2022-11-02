@@ -20,7 +20,7 @@ spec:
         groupBy:
           window:
             fixed:
-              length: 60s
+              length: 10s
             keyed: true
     - name: sink
       scale:

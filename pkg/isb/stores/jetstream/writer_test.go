@@ -125,6 +125,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	}
 
 	// assert toBuffer is full and all messages appear in toBuffer
+	time.Sleep(2 * time.Second) // wait for isFull check.
 	assert.True(t, to1.isFull.Load())
 
 	fromStepJs, err := fromStep.conn.JetStream()
@@ -132,7 +133,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	fromStepInfo, err := fromStepJs.StreamInfo(streamName)
 	assert.NoError(t, err)
 	// Make sure all messages are cleared up from from buffer as DiscardOldPolicy is false
-	assert.Equal(t, 0, fromStepInfo.State.Msgs)
+	assert.Equal(t, uint64(0), fromStepInfo.State.Msgs)
 
 	// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written
 	f.Stop()
