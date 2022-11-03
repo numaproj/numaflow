@@ -1,8 +1,26 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package pipeline
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	"testing"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
@@ -39,6 +57,64 @@ var (
 			},
 		},
 	}
+
+	testReducePipeline = &dfv1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pl",
+			Namespace: "test-ns",
+		},
+		Spec: dfv1.PipelineSpec{
+			Vertices: []dfv1.AbstractVertex{
+				{
+					Name:   "input",
+					Source: &dfv1.Source{},
+				},
+				{
+					Name: "p1",
+					UDF: &dfv1.UDF{
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
+						GroupBy: &dfv1.GroupBy{
+							Window: dfv1.Window{
+								Fixed: &dfv1.FixedWindow{
+									Length: &metav1.Duration{
+										Duration: time.Duration(60 * time.Second),
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "p2",
+					UDF: &dfv1.UDF{
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
+						GroupBy: &dfv1.GroupBy{
+							Window: dfv1.Window{
+								Fixed: &dfv1.FixedWindow{
+									Length: &metav1.Duration{
+										Duration: time.Duration(60 * time.Second),
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "output",
+					Sink: &dfv1.Sink{},
+				},
+			},
+			Edges: []dfv1.Edge{
+				{From: "input", To: "p1"},
+				{From: "p1", To: "p2"},
+				{From: "p2", To: "output"},
+			},
+		},
+	}
 )
 
 func TestValidatePipeline(t *testing.T) {
@@ -50,6 +126,14 @@ func TestValidatePipeline(t *testing.T) {
 	t.Run("test nil pipeline", func(t *testing.T) {
 		err := ValidatePipeline(nil)
 		assert.Error(t, err)
+	})
+
+	t.Run("parallelism on non-reduce vertex", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Edges[0].Parallelism = pointer.Int32(3)
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `"parallelism" is not allowed for an edge leading to a non-reduce vertex`)
 	})
 
 	t.Run("no type", func(t *testing.T) {
@@ -179,6 +263,48 @@ func TestValidatePipeline(t *testing.T) {
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid edge")
+	})
+}
+
+func TestValidateReducePipeline(t *testing.T) {
+	t.Run("test good reduce pipeline", func(t *testing.T) {
+		err := ValidatePipeline(testReducePipeline)
+		assert.NoError(t, err)
+	})
+
+	t.Run("test builtin and container co-existing", func(t *testing.T) {
+		testObj := testReducePipeline.DeepCopy()
+		testObj.Spec.Vertices[1].UDF.Builtin = &dfv1.Function{
+			Name: "cat",
+		}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no buildin function support in reduce vertices")
+	})
+
+	t.Run("test no image in container", func(t *testing.T) {
+		testObj := testReducePipeline.DeepCopy()
+		testObj.Spec.Vertices[1].UDF.Container.Image = ""
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "a customized image is required")
+	})
+
+	t.Run("test source with keyed", func(t *testing.T) {
+		testObj := testReducePipeline.DeepCopy()
+		testObj.Spec.Edges[0].Parallelism = pointer.Int32(2)
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `"parallelism" should not > 1 for non-keyed windowing`)
+		testObj.Spec.Edges[0].Parallelism = pointer.Int32(-1)
+		err = ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `"parallelism" is < 1`)
+		testObj.Spec.Edges[0].Parallelism = pointer.Int32(1)
+		testObj.Spec.Vertices[1].UDF.GroupBy.Keyed = true
+		err = ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `"keyed" should not be true for a reduce vertex which has data coming from a source vertex`)
 	})
 }
 

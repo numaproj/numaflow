@@ -1,4 +1,6 @@
 /*
+Copyright 2022 The Numaproj Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -515,10 +517,13 @@ type VertexList struct {
 // GenerateEdgeBufferNames generates buffer names for an edge
 func GenerateEdgeBufferNames(namespace, pipelineName string, edge Edge) []string {
 	buffers := []string{}
+	// Pipeline controller makes sure the parallelism is always nil for an edge leading to a non-reduce vertex.
 	if edge.Parallelism == nil {
 		buffers = append(buffers, fmt.Sprintf("%s-%s-%s-%s", namespace, pipelineName, edge.From, edge.To))
 		return buffers
 	}
+	// Pipeline controller makes sure the parallelism is always not nil for an edge leading to a reduce vertex.
+	// It also makes sure parallelism = 1 if it's a non-keyed reduce.
 	for i := int32(0); i < *edge.Parallelism; i++ {
 		buffers = append(buffers, fmt.Sprintf("%s-%s-%s-%s-%d", namespace, pipelineName, edge.From, edge.To, i))
 	}
