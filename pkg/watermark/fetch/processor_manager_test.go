@@ -4,7 +4,6 @@ package fetch
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"strconv"
 	"sync"
@@ -83,13 +82,16 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	defer otStore.Close()
 
 	// put values into otStore
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(testOffset))
-	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
+	otValueByte, err := otValueToBytes(testOffset, epoch)
 	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
 	epoch += 60000
-	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
-	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
+
+	otValueByte, err = otValueToBytes(testOffset+5, epoch)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p2", otValueByte)
 	assert.NoError(t, err)
 
 	// create watchers for heartbeat and offset timeline
@@ -223,8 +225,9 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.Equal(t, int64(100), p1.offsetTimeline.GetHeadOffset())
 
 	// publish a new watermark 101
-	binary.LittleEndian.PutUint64(b, uint64(testOffset+1))
-	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
+	otValueByte, err = otValueToBytes(testOffset+1, epoch)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
 
 	// "p1" becomes inactive after 5 loops
