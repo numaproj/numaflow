@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Watermark is the monotonically increasing watermark. It is tightly coupled with ProcessorEntity as
+// Watermark is the monotonically increasing watermark. It is tightly coupled with ProcessorEntitier as
 // the processor is responsible for monotonically increasing Watermark for that processor.
 // NOTE: today we support only second progression of watermark, we need to support millisecond too.
 type Watermark time.Time
@@ -37,27 +37,27 @@ type ProcessorEntitier interface {
 	BuildOTWatcherKey() string
 }
 
-// ProcessorEntity implements ProcessorEntitier.
-type ProcessorEntity struct {
+// processorEntity implements ProcessorEntitier.
+type processorEntity struct {
 	// name is the name of the entity
 	name string
 }
 
-var _ ProcessorEntitier = (*ProcessorEntity)(nil)
+var _ ProcessorEntitier = (*processorEntity)(nil)
 
-// NewProcessorEntity returns a new `ProcessorEntity`.
-func NewProcessorEntity(name string) *ProcessorEntity {
-	return &ProcessorEntity{
+// NewProcessorEntity returns a new `ProcessorEntitier`.
+func NewProcessorEntity(name string) ProcessorEntitier {
+	return &processorEntity{
 		name: name,
 	}
 }
 
 // GetID returns the ID of the processor.
-func (p *ProcessorEntity) GetID() string {
+func (p *processorEntity) GetID() string {
 	return p.name
 }
 
 // BuildOTWatcherKey builds the offset-timeline key name
-func (p *ProcessorEntity) BuildOTWatcherKey() string {
+func (p *processorEntity) BuildOTWatcherKey() string {
 	return p.GetID()
 }

@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Publisher interface defines how to publish Watermark for a ProcessorEntity.
+// Publisher interface defines how to publish Watermark for a ProcessorEntitier.
 type Publisher interface {
 	// PublishWatermark publishes the watermark.
 	PublishWatermark(processor.Watermark, isb.Offset)
@@ -70,7 +70,7 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 	return p
 }
 
-// initialSetup inserts the default values as the ProcessorEntity starts emitting watermarks.
+// initialSetup inserts the default values as the ProcessorEntitier starts emitting watermarks.
 func (p *publish) initialSetup() {
 	p.headWatermark = p.loadLatestFromStore()
 }
