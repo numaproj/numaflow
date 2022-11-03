@@ -311,6 +311,18 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	// added 103 in the previous steps for p1, so the head should be 103 after resume
 	assert.Equal(t, int64(103), p1.offsetTimeline.GetHeadOffset())
 
+	for allProcessors["p1"].offsetTimeline.Dump() != "[1651161660000:103] -> [1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("expected p1 has the offset timeline [1651161660000:103] -> [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
+		}
+	}
+
 	wg.Wait()
 	cancel()
 }
