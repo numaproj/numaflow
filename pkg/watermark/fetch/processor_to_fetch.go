@@ -123,7 +123,7 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 				}
 				otValue, err := otbucket.DecodeToOTValue(value.Value())
 				if err != nil {
-					p.log.Errorw("Unable to decode the value", zap.String("processor entity", p.entity.GetID()), zap.Error(err))
+					p.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
 					continue
 				}
 				p.offsetTimeline.Put(OffsetWatermark{

@@ -133,12 +133,12 @@ func (p *publish) loadLatestFromStore() processor.Watermark {
 	)
 	byteValue, err := p.otStore.GetValue(p.ctx, key)
 	if err != nil {
-		p.log.Errorw("Unable to load latest watermark from ot store (failed to get value from ot store)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processor entity", p.entity.GetID()), zap.Error(err))
+		p.log.Errorw("Unable to load latest watermark from ot store (failed to get value from ot store)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
 		return processor.Watermark(timeWatermark)
 	}
 	otValue, err := otbucket.DecodeToOTValue(byteValue)
 	if err != nil {
-		p.log.Errorw("Unable to load latest watermark from ot store (failed to decode ot value)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processor entity", p.entity.GetID()), zap.Error(err))
+		p.log.Errorw("Unable to load latest watermark from ot store (failed to decode ot value)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
 		return processor.Watermark(timeWatermark)
 	}
 	timeWatermark = time.UnixMilli(otValue.Watermark)
