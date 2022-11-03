@@ -2,7 +2,7 @@ package otbucket
 
 import (
 	"bytes"
-	"encoding/gob"
+	"encoding/binary"
 )
 
 // OTValue is used in the JetStream offset timeline bucket as the value for the given processor entity key.
@@ -13,9 +13,8 @@ type OTValue struct {
 
 // EncodeToBytes encodes a OTValue object into byte array.
 func (v OTValue) EncodeToBytes() ([]byte, error) {
-	buf := bytes.Buffer{}
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(v)
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, v)
 	if err != nil {
 		return nil, err
 	}
@@ -24,9 +23,9 @@ func (v OTValue) EncodeToBytes() ([]byte, error) {
 
 // DecodeToOTValue decodes the given byte array into a OTValue object.
 func DecodeToOTValue(b []byte) (OTValue, error) {
-	v := OTValue{}
-	dec := gob.NewDecoder(bytes.NewReader(b))
-	err := dec.Decode(&v)
+	buf := bytes.NewReader(b)
+	var v OTValue
+	err := binary.Read(buf, binary.LittleEndian, &v)
 	if err != nil {
 		return OTValue{}, err
 	}
