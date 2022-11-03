@@ -23,8 +23,8 @@ func (v OTValue) EncodeToBytes() ([]byte, error) {
 
 // DecodeToOTValue decodes the given byte array into a OTValue object.
 func DecodeToOTValue(b []byte) (OTValue, error) {
-	buf := bytes.NewReader(b)
 	var v OTValue
+	buf := bytes.NewReader(b)
 	err := binary.Read(buf, binary.LittleEndian, &v)
 	if err != nil {
 		return OTValue{}, err
