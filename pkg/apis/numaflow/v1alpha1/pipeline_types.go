@@ -91,9 +91,11 @@ func (p Pipeline) ListAllEdges() []Edge {
 		toVertex := p.GetVertex(e.To)
 		if toVertex.UDF == nil || toVertex.UDF.GroupBy == nil {
 			// Clean up parallelism if downstream vertex is not a reduce UDF.
+			// This has been validated by the controller, harmless to do it here.
 			edgeCopy.Parallelism = nil
-		} else if edgeCopy.Parallelism == nil || *edgeCopy.Parallelism < 1 {
-			// Set parallelism = 1 if it's not set.
+		} else if edgeCopy.Parallelism == nil || *edgeCopy.Parallelism < 1 || !toVertex.UDF.GroupBy.Keyed {
+			// Set parallelism = 1 if it's not set, or it's a non-keyed reduce.
+			// Already validated by the controller to make sure parallelism is not > 1 if it's not keyed, harmless to check it again.
 			edgeCopy.Parallelism = pointer.Int32(1)
 		}
 		edges = append(edges, *edgeCopy)
