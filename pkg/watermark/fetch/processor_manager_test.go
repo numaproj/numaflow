@@ -74,7 +74,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		Bucket:       keyspace + "_OT",
 		Description:  "",
 		MaxValueSize: 0,
-		History:      0,
+		History:      2,
 		TTL:          0,
 		MaxBytes:     0,
 		Storage:      nats.MemoryStorage,
@@ -98,7 +98,19 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	defer otStore.Close()
 
 	// put values into otStore
-	otValueByte, err := otValueToBytes(testOffset, epoch)
+
+	// this first entry should not be in the offset timeline because we set the ot bucket history to 2
+	otValueByte, err := otValueToBytes(testOffset, epoch+100)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	otValueByte, err = otValueToBytes(testOffset+1, epoch+200)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	otValueByte, err = otValueToBytes(testOffset+2, epoch+300)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
@@ -156,6 +168,18 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}
 
+	for allProcessors["p1"].offsetTimeline.Dump() != "[1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("expected p1 has the offset timeline [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
+		}
+	}
+
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
 
@@ -183,7 +207,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=101
-	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
+	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
 	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
 	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
@@ -228,20 +252,20 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NotNil(t, p1.offsetTimeline)
 	// wait till the offsetTimeline has been populated
 	newP1head := p1.offsetTimeline.GetHeadOffset()
-	for newP1head == -1 {
+	// because the bucket hasn't been cleaned up, the new watcher will read all the history data to create this new offsetTimeline
+	for newP1head != 102 {
+		fmt.Println(p1.offsetTimeline.Dump())
 		select {
 		case <-ctx.Done():
-			t.Fatalf("expected head offset to not be equal to -1, %s", ctx.Err())
+			t.Fatalf("expected head offset to be 102, %s", ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
 			newP1head = p1.offsetTimeline.GetHeadOffset()
 		}
 	}
-	// because the bucket hasn't been cleaned up, the new watcher will read all the history data to create this new offsetTimeline
-	assert.Equal(t, int64(100), p1.offsetTimeline.GetHeadOffset())
 
-	// publish a new watermark 101
-	otValueByte, err = otValueToBytes(testOffset+1, epoch)
+	// publish a new watermark 103
+	otValueByte, err = otValueToBytes(testOffset+3, epoch)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
@@ -284,8 +308,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}
 
-	// added 101 in the previous steps for p1, so the head should be 101 after resume
-	assert.Equal(t, int64(101), p1.offsetTimeline.GetHeadOffset())
+	// added 103 in the previous steps for p1, so the head should be 103 after resume
+	assert.Equal(t, int64(103), p1.offsetTimeline.GetHeadOffset())
 
 	wg.Wait()
 	cancel()
