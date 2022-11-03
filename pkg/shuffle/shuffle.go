@@ -17,9 +17,10 @@ limitations under the License.
 package shuffle
 
 import (
-	"github.com/numaproj/numaflow/pkg/isb"
 	"hash"
 	"hash/fnv"
+
+	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 // Shuffle shuffles messages among ISB
@@ -39,16 +40,21 @@ func NewShuffle(bufferIdentifiers []string) *Shuffle {
 	}
 }
 
-// ShuffleMessages accepts list of isb messages and returns the mapping of isb to messages
-func (s *Shuffle) ShuffleMessages(messages []*isb.Message) map[string][]*isb.Message {
-
+// Shuffle functions returns a shuffled identifier.
+func (s *Shuffle) Shuffle(key string) string {
 	// hash of the message key returns a unique hashValue
 	// mod of hashValue will decide which isb it will belong
+	hashValue := s.generateHash(key)
+	hashValue = hashValue % uint64(s.buffersCount)
+	return s.bufferIdentifiers[hashValue]
+}
+
+// ShuffleMessages accepts list of isb messages and returns the mapping of isb to messages
+func (s *Shuffle) ShuffleMessages(messages []*isb.Message) map[string][]*isb.Message {
 	hashMap := make(map[string][]*isb.Message)
 	for _, message := range messages {
-		hashValue := s.generateHash(message.Key)
-		hashValue = hashValue % uint64(s.buffersCount)
-		hashMap[s.bufferIdentifiers[hashValue]] = append(hashMap[s.bufferIdentifiers[hashValue]], message)
+		identifier := s.Shuffle(message.Key)
+		hashMap[identifier] = append(hashMap[identifier], message)
 	}
 	return hashMap
 }
