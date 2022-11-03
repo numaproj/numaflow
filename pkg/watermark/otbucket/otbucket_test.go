@@ -26,7 +26,7 @@ func TestDecodeToOTValue(t *testing.T) {
 						Watermark: 1667495100000,
 					}
 					buf := new(bytes.Buffer)
-					binary.Write(buf, binary.LittleEndian, v)
+					_ = binary.Write(buf, binary.LittleEndian, v)
 					return buf.Bytes()
 				}(),
 			},
@@ -46,7 +46,7 @@ func TestDecodeToOTValue(t *testing.T) {
 						Test: 100,
 					}
 					buf := new(bytes.Buffer)
-					binary.Write(buf, binary.LittleEndian, v)
+					_ = binary.Write(buf, binary.LittleEndian, v)
 					return buf.Bytes()
 				}(),
 			},
@@ -65,7 +65,7 @@ func TestDecodeToOTValue(t *testing.T) {
 						Test1: 1667495100000,
 					}
 					buf := new(bytes.Buffer)
-					binary.Write(buf, binary.LittleEndian, v)
+					_ = binary.Write(buf, binary.LittleEndian, v)
 					return buf.Bytes()
 				}(),
 			},
@@ -89,7 +89,7 @@ func TestDecodeToOTValue(t *testing.T) {
 						Test2: 200,
 					}
 					buf := new(bytes.Buffer)
-					binary.Write(buf, binary.LittleEndian, v)
+					_ = binary.Write(buf, binary.LittleEndian, v)
 					return buf.Bytes()
 				}(),
 			},
