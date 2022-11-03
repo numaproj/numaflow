@@ -134,7 +134,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 				rErr := q.Write(ctx, m)
 				attempt += 1
 				if rErr != nil {
-					rl.log.Errorw("failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
+					rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
 					return false, nil
 				}
 				return true, nil
@@ -151,7 +151,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 				rErr := m.ReadOffset.AckIt()
 				attempt += 1
 				if rErr != nil {
-					rl.log.Errorw("failed to ack message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("attempt", attempt), zap.Error(rErr))
+					rl.log.Errorw("Failed to ack message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("attempt", attempt), zap.Error(rErr))
 					return false, nil
 				}
 				return true, nil
@@ -218,7 +218,7 @@ func (rl *ReadLoop) ShutDown(ctx context.Context) {
 func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindow {
 	// drop the late messages
 	if m.IsLate {
-		rl.log.Infow("dropping the late message", zap.Time("eventTime", m.EventTime))
+		rl.log.Infow("Dropping the late message", zap.Time("eventTime", m.EventTime))
 		return []*keyed.KeyedWindow{}
 	}
 

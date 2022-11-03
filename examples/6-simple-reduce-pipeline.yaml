@@ -16,16 +16,16 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/yhl25/reduce-image:master
+          image: quay.io/numaio/go-integer-sum-example
         groupBy:
           window:
             fixed:
-              length: 10s
+              length: 60s
             keyed: true
     - name: sink
       scale:
         min: 1
-        max: 5
+        max: 3
       sink:
         log: {}
   edges:
