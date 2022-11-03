@@ -62,6 +62,9 @@ func Test_ListAllEdges(t *testing.T) {
 	es = pl.ListAllEdges()
 	assert.Equal(t, 2, len(es))
 	assert.NotNil(t, es[0].Parallelism)
+	assert.Equal(t, int32(1), *es[0].Parallelism)
+	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
+	es = pl.ListAllEdges()
 	assert.Equal(t, int32(3), *es[0].Parallelism)
 }
 

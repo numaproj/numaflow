@@ -22,17 +22,18 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-
+	"github.com/numaproj/numaflow/pkg/shuffle"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"go.uber.org/zap"
 )
 
 type MapUDFProcessor struct {
@@ -70,18 +71,28 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
+	// Populate shuffle function map
+	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
+	for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
+		if edge.Parallelism != nil && *edge.Parallelism > 1 {
+			s := shuffle.NewShuffle(dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge))
+			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
+		}
+	}
+
 	conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
 		result := []string{}
-		_key := string(key)
-		if _key == dfv1.MessageKeyAll || _key == dfv1.MessageKeyDrop {
-			result = append(result, _key)
+		if key == dfv1.MessageKeyDrop {
 			return result, nil
 		}
-		for _, to := range u.VertexInstance.Vertex.Spec.ToEdges {
-			// If returned key is not "ALL" or "DROP", and there's no conditions defined in the edge,
-			// treat it as "ALL"?
-			if to.Conditions == nil || len(to.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(to.Conditions.KeyIn, _key) {
-				result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, to)...)
+		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
+			// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
+			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key) {
+				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
+				} else {
+					result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+				}
 			}
 		}
 		return result, nil
