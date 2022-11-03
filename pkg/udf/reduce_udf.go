@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -22,7 +24,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"go.uber.org/zap"
 )
 
 type ReduceUDFProcessor struct {

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -13,11 +15,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
-
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"go.uber.org/zap"
 )
 
 type MapUDFProcessor struct {
