@@ -1,3 +1,5 @@
+//go:build tools
+
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -13,8 +15,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
-//go:build tools
 
 // This package contains code generation utilities
 // This package imports things required by build scripts, to force `go mod` to see them as dependencies
