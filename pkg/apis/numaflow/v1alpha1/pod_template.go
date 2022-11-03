@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import corev1 "k8s.io/api/core/v1"
@@ -51,4 +67,42 @@ type AbstractPodTemplate struct {
 	// ServiceAccountName applied to the pod
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,9,opt,name=serviceAccountName"`
+}
+
+// ApplyToPodSpec updates the PodSpec with the values in the AbstractPodTemplate
+func (apt *AbstractPodTemplate) ApplyToPodSpec(ps *corev1.PodSpec) {
+	ps.NodeSelector = apt.NodeSelector
+	ps.Tolerations = apt.Tolerations
+	ps.SecurityContext = apt.SecurityContext
+	ps.ImagePullSecrets = apt.ImagePullSecrets
+	ps.PriorityClassName = apt.PriorityClassName
+	ps.Priority = apt.Priority
+	ps.Affinity = apt.Affinity
+	ps.ServiceAccountName = apt.ServiceAccountName
+}
+
+// ApplyToPodTemplateSpec updates the PodTemplateSpec with the values in the AbstractPodTemplate
+// Labels and Annotations will be appended, individual labels or annotations in original PodTemplateSpec will not be overridden
+func (apt *AbstractPodTemplate) ApplyToPodTemplateSpec(p *corev1.PodTemplateSpec) {
+	apt.ApplyToPodSpec(&p.Spec)
+	if apt.Metadata != nil && len(apt.Metadata.Labels) > 0 {
+		if p.Labels == nil {
+			p.Labels = map[string]string{}
+		}
+		for k, v := range apt.Metadata.Labels {
+			if _, ok := p.Labels[k]; !ok {
+				p.Labels[k] = v
+			}
+		}
+	}
+	if apt.Metadata != nil && len(apt.Metadata.Annotations) > 0 {
+		if p.Annotations == nil {
+			p.Annotations = map[string]string{}
+		}
+		for k, v := range apt.Metadata.Annotations {
+			if _, ok := p.Annotations[k]; !ok {
+				p.Annotations[k] = v
+			}
+		}
+	}
 }

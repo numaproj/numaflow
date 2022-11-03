@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import (
@@ -53,12 +69,14 @@ type NativeRedis struct {
 	// +optional
 	MetricsContainerTemplate *ContainerTemplate `json:"metricsContainerTemplate,omitempty" protobuf:"bytes,5,opt,name=metricsContainerTemplate"`
 	// +optional
-	Persistence *PersistenceStrategy `json:"persistence,omitempty" protobuf:"bytes,6,opt,name=persistence"`
+	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,6,opt,name=initContainerTemplate"`
 	// +optional
-	AbstractPodTemplate `json:",inline" protobuf:"bytes,7,opt,name=abstractPodTemplate"`
+	Persistence *PersistenceStrategy `json:"persistence,omitempty" protobuf:"bytes,7,opt,name=persistence"`
+	// +optional
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,8,opt,name=abstractPodTemplate"`
 	// Redis configuration, if not specified, global settings in numaflow-controller-config will be used.
 	// +optional
-	Settings *RedisSettings `json:"settings,omitempty" protobuf:"bytes,8,opt,name=settings"`
+	Settings *RedisSettings `json:"settings,omitempty" protobuf:"bytes,9,opt,name=settings"`
 }
 
 type RedisSettings struct {
@@ -373,6 +391,9 @@ redis_exporter`},
 				Image:           req.InitContainerImage,
 				Command:         []string{"/bin/bash", "-ec", "chown -R 1001:1001 /data"},
 			},
+		}
+		if nr.InitContainerTemplate != nil {
+			nr.InitContainerTemplate.ApplyToContainer(&spec.Template.Spec.InitContainers[0])
 		}
 		if spec.Template.Spec.SecurityContext == nil {
 			spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{}

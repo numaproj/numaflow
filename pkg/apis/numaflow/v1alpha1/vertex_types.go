@@ -1,4 +1,6 @@
 /*
+Copyright 2022 The Numaproj Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -170,13 +172,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 	envVars = append(envVars, v.commonEnvs()...)
 	envVars = append(envVars, req.Env...)
-	resources := standardResources
-	if v.Spec.ContainerTemplate != nil {
-		resources = v.Spec.ContainerTemplate.Resources
-		if len(v.Spec.ContainerTemplate.Env) > 0 {
-			envVars = append(envVars, v.Spec.ContainerTemplate.Env...)
-		}
-	}
 
 	varVolumeName := "var-run-numaflow"
 	volumes := []corev1.Volume{
@@ -194,7 +189,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		env:             envVars,
 		image:           req.Image,
 		imagePullPolicy: req.PullPolicy,
-		resources:       resources,
+		resources:       standardResources,
 		volumeMounts:    volumeMounts,
 	})
 	if err != nil {
@@ -230,18 +225,14 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 
 	spec := &corev1.PodSpec{
-		Subdomain:          v.GetHeadlessServiceName(),
-		NodeSelector:       v.Spec.NodeSelector,
-		Tolerations:        v.Spec.Tolerations,
-		SecurityContext:    v.Spec.SecurityContext,
-		ImagePullSecrets:   v.Spec.ImagePullSecrets,
-		PriorityClassName:  v.Spec.PriorityClassName,
-		Priority:           v.Spec.Priority,
-		Affinity:           v.Spec.Affinity,
-		ServiceAccountName: v.Spec.ServiceAccountName,
-		Volumes:            append(volumes, v.Spec.Volumes...),
-		InitContainers:     v.getInitContainers(req),
-		Containers:         containers,
+		Subdomain:      v.GetHeadlessServiceName(),
+		Volumes:        append(volumes, v.Spec.Volumes...),
+		InitContainers: v.getInitContainers(req),
+		Containers:     containers,
+	}
+	v.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
+	if v.Spec.ContainerTemplate != nil {
+		v.Spec.ContainerTemplate.ApplyToNumaflowContainers(spec.Containers)
 	}
 	return spec, nil
 }
@@ -261,6 +252,9 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 			Resources:       standardResources,
 			Args:            []string{"isbsvc-buffer-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 		},
+	}
+	if v.Spec.InitContainerTemplate != nil {
+		v.Spec.InitContainerTemplate.ApplyToNumaflowContainers(initContainers)
 	}
 	return append(initContainers, v.Spec.InitContainers...)
 }
@@ -352,21 +346,23 @@ type AbstractVertex struct {
 	// +optional
 	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,5,rep,name=containerTemplate"`
 	// +optional
-	AbstractPodTemplate `json:",inline" protobuf:"bytes,6,opt,name=abstractPodTemplate"`
+	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,6,opt,name=initContainerTemplate"`
+	// +optional
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,7,opt,name=abstractPodTemplate"`
 	// +optional
 	// +patchStrategy=merge
 	// +patchMergeKey=name
-	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,7,rep,name=volumes"`
+	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,8,rep,name=volumes"`
 	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
 	// +optional
-	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,8,opt,name=limits"`
+	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,9,opt,name=limits"`
 	// Settings for autoscaling
 	// +optional
-	Scale Scale `json:"scale,omitempty" protobuf:"bytes,9,opt,name=scale"`
+	Scale Scale `json:"scale,omitempty" protobuf:"bytes,10,opt,name=scale"`
 	// List of init containers belonging to the pod.
 	// More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
 	// +optional
-	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,10,rep,name=initContainers"`
+	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,11,rep,name=initContainers"`
 }
 
 // Scale defines the parameters for autoscaling.
@@ -521,10 +517,13 @@ type VertexList struct {
 // GenerateEdgeBufferNames generates buffer names for an edge
 func GenerateEdgeBufferNames(namespace, pipelineName string, edge Edge) []string {
 	buffers := []string{}
+	// Pipeline controller makes sure the parallelism is always nil for an edge leading to a non-reduce vertex.
 	if edge.Parallelism == nil {
 		buffers = append(buffers, fmt.Sprintf("%s-%s-%s-%s", namespace, pipelineName, edge.From, edge.To))
 		return buffers
 	}
+	// Pipeline controller makes sure the parallelism is always not nil for an edge leading to a reduce vertex.
+	// It also makes sure parallelism = 1 if it's a non-keyed reduce.
 	for i := int32(0); i < *edge.Parallelism; i++ {
 		buffers = append(buffers, fmt.Sprintf("%s-%s-%s-%s-%d", namespace, pipelineName, edge.From, edge.To, i))
 	}

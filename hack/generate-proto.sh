@@ -43,7 +43,7 @@ go install -mod=vendor ./vendor/k8s.io/code-generator/cmd/go-to-protobuf
 export GO111MODULE="off"
 
 ${GOPATH}/bin/go-to-protobuf \
-        --go-header-file=./hack/custom-boilerplate.go.txt \
+        --go-header-file=./hack/boilerplate/boilerplate.go.txt \
         --packages=github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1 \
         --apimachinery-packages=+k8s.io/apimachinery/pkg/util/intstr,+k8s.io/apimachinery/pkg/api/resource,k8s.io/apimachinery/pkg/runtime/schema,+k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/api/core/v1,k8s.io/api/policy/v1beta1 \
         --proto-import ./vendor
