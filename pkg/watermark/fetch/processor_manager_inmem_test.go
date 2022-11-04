@@ -54,23 +54,23 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	hb, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
 	assert.NoError(t, err)
-	defer hb.Close()
-	ot, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	defer hbStore.Close()
+	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
 	assert.NoError(t, err)
-	defer ot.Close()
+	defer otStore.Close()
 
 	otValueByte, err := otValueToBytes(testOffset, epoch)
 	assert.NoError(t, err)
-	err = ot.PutKV(ctx, "p1", otValueByte)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
 
 	epoch += 60000
 
 	otValueByte, err = otValueToBytes(testOffset+5, epoch)
 	assert.NoError(t, err)
-	err = ot.PutKV(ctx, "p2", otValueByte)
+	err = otStore.PutKV(ctx, "p2", otValueByte)
 	assert.NoError(t, err)
 
 	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
@@ -86,11 +86,11 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		defer wg.Done()
 		var err error
 		for i := 0; i < 3; i++ {
-			err = hb.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}
-		err = hb.DeleteKey(ctx, "p1")
+		err = hbStore.DeleteKey(ctx, "p1")
 		assert.NoError(t, err)
 	}()
 
@@ -100,7 +100,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		defer wg.Done()
 		var err error
 		for i := 0; i < 20; i++ {
-			err = hb.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err = hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}
@@ -160,7 +160,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		defer wg.Done()
 		var err error
 		for i := 0; i < 5; i++ {
-			err = hb.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}
@@ -208,7 +208,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	// publish a new watermark 101
 	otValueByte, err = otValueToBytes(testOffset+1, epoch)
 	assert.NoError(t, err)
-	err = ot.PutKV(ctx, "p1", otValueByte)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
 
 	// "p1" becomes inactive after 5 loops
@@ -232,7 +232,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		defer wg.Done()
 		var err error
 		for i := 0; i < 3; i++ {
-			err = hb.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}
