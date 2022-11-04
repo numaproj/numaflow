@@ -19,7 +19,6 @@ package pnf
 import (
 	"context"
 	"encoding/json"
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -193,7 +192,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			expected: []bool{false, true},
 			wmExpected: map[string]int64{
 				"buffer1": 120000,
-				"buffer2": math.MinInt64,
+				"buffer2": -1,
 			},
 		},
 		{
@@ -222,8 +221,8 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			pf:       createProcessAndForward(ctx, "test-drop-all", pbqManager, toBuffers3),
 			expected: []bool{true, true},
 			wmExpected: map[string]int64{
-				"buffer1": math.MinInt64,
-				"buffer2": math.MinInt64,
+				"buffer1": -1,
+				"buffer2": -1,
 			},
 		},
 	}
