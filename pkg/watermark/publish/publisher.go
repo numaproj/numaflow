@@ -19,7 +19,6 @@ package publish
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -144,7 +143,7 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 // TODO: how to repopulate if the processing unit is down for a really long time?
 func (p *publish) loadLatestFromStore() processor.Watermark {
 	var (
-		timeWatermark = time.UnixMilli(math.MinInt64)
+		timeWatermark = time.UnixMilli(-1)
 		key           = p.entity.BuildOTWatcherKey()
 	)
 	byteValue, err := p.otStore.GetValue(p.ctx, key)
