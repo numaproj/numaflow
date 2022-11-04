@@ -6,7 +6,7 @@ This takes precedence over anything specified in the [Controller ConfigMap](./co
 Vertex customization is described separately (i.e. [Environment Variables](./environment-variables.md), [Container Resources](./container-resources.md), etc.)
 and takes precedence over any vertex templates.
 
-## Component customization
+## Component Customization
 
 The following example shows all currently supported fields. The `.spec.templates.<component>` field and all fields directly under it are optional.
 
@@ -69,9 +69,9 @@ spec:
             memory: 500Mi
 ```
 
-## Daemon customization
+## Daemon Customization
 
-In addition to the `Component customization` described above, the Pipeline daemon has the following additional fields available.
+In addition to the `Component Customization` described above, the Pipeline daemon has the following additional fields available.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -84,9 +84,9 @@ spec:
       replicas: 3
 ```
 
-## Job customization
+## Job Customization
 
-In addition to the `Component customization` described above, Pipeline jobs have the following additional fields available.
+In addition to the `Component Customization` described above, Pipeline jobs have the following additional fields available.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -100,6 +100,6 @@ spec:
       backoffLimit: 5 # numaflow defaults to 20
 ```
 
-## Vertex customization
+## Vertex Customization
 
-See `Component customization` described above.
+See `Component Customization` described above.

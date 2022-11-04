@@ -52,7 +52,7 @@ data:
 
 Pipeline Templates are used to customize Pipeline components and can be specified in 2 places:
 * **In the controller ConfigMap** (described here), which affect all pipelines managed by the controller. The
-    logs will show `Successfully loaded pipeline templates file` if it detects pipeline templates.
+    logs will indicate if it detects pipeline templates.
 * **In each Pipeline** (described in [Pipeline customization](./pipeline-customization.md)), which affect that 
     individual pipeline and takes precedence over what is specified in the controller configmap.
 
