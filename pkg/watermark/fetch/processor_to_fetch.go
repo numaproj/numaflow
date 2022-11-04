@@ -18,10 +18,10 @@ package fetch
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -134,21 +134,19 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
-				epoch, skip, err := p.entity.ParseOTWatcherKey(value.Key())
+				if value.Key() != p.entity.BuildOTWatcherKey() {
+					continue
+				}
+				otValue, err := ot.DecodeToOTValue(value.Value())
 				if err != nil {
-					p.log.Errorw("Unable to convert value.PartitionID() to int64", zap.String("received", value.Key()), zap.Error(err))
+					p.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
 					continue
 				}
-				// if skip is set to true, it means the key update we received is for a different processor
-				if skip {
-					continue
-				}
-				uint64Value := binary.LittleEndian.Uint64(value.Value())
 				p.offsetTimeline.Put(OffsetWatermark{
-					watermark: epoch,
-					offset:    int64(uint64Value),
+					watermark: otValue.Watermark,
+					offset:    otValue.Offset,
 				})
-				p.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", p.otWatcher.GetKVName()), zap.Int64("epoch", epoch), zap.Uint64("value", uint64Value))
+				p.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", p.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 			case store.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
 				// naturally trim the KV store.

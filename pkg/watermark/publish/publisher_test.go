@@ -82,8 +82,9 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	// publish a stale watermark (offset doesn't matter)
 	p.PublishWatermark(processor.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
 
-	keys := p.getAllOTKeysFromBucket()
-	assert.Equal(t, []string{"publisherTestPod1_1651161600000", "publisherTestPod1_1651161660000", "publisherTestPod1_1651161720000"}, keys)
+	keys, err := p.otStore.GetAllKeys(p.ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"publisherTestPod1"}, keys)
 
 	wm := p.loadLatestFromStore()
 	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), wm.String())

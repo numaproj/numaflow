@@ -18,21 +18,18 @@ package publish
 
 import (
 	"context"
-	"encoding/binary"
-	"errors"
 	"fmt"
-	"math"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"go.uber.org/zap"
 )
 
-// Publisher interface defines how to publish Watermark for a ProcessorEntity.
+// Publisher interface defines how to publish Watermark for a ProcessorEntitier.
 type Publisher interface {
 	// PublishWatermark publishes the watermark.
 	PublishWatermark(processor.Watermark, isb.Offset)
@@ -88,7 +85,7 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 	return p
 }
 
-// initialSetup inserts the default values as the ProcessorEntity starts emitting watermarks.
+// initialSetup inserts the default values as the ProcessorEntitier starts emitting watermarks.
 func (p *publish) initialSetup() {
 	p.headWatermark = p.loadLatestFromStore()
 }
@@ -111,11 +108,9 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 		return
 	}
 
-	// build key (we may or may not share the same OT bucket)
-	var key = p.entity.BuildOTWatcherKey(wm)
+	var key = p.entity.BuildOTWatcherKey()
 
-	// build value (offset)
-	value := make([]byte, 8)
+	// build value
 	var seq int64
 	if p.opts.isSource || p.opts.isSink {
 		// For source and sink publisher, we don't care about the offset, also the sequence of the offset might not be integer.
@@ -123,7 +118,14 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	} else {
 		seq, _ = offset.Sequence()
 	}
-	binary.LittleEndian.PutUint64(value, uint64(seq))
+	var otValue = ot.Value{
+		Offset:    seq,
+		Watermark: wm.UnixMilli(),
+	}
+	value, err := otValue.EncodeToBytes()
+	if err != nil {
+		p.log.Errorw("Unable to publish watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+	}
 
 	for {
 		err := p.otStore.PutKV(p.ctx, key, value)
@@ -140,26 +142,21 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 // loadLatestFromStore loads the latest watermark stored in the watermark store.
 // TODO: how to repopulate if the processing unit is down for a really long time?
 func (p *publish) loadLatestFromStore() processor.Watermark {
-	// TODO: this is too much.
-	var watermarks = p.getAllOTKeysFromBucket()
-	var latestWatermark int64 = math.MinInt64
-
-	// skip all entries that do not match the prefix if we are sharing bucket
-
-	for _, wm := range watermarks {
-		epoch, skip, err := p.entity.ParseOTWatcherKey(wm)
-		if skip {
-			continue
-		}
-		if err != nil {
-			p.log.Errorw("Invalid epoch time string", zap.Error(err))
-			continue
-		}
-		if latestWatermark < epoch {
-			latestWatermark = epoch
-		}
+	var (
+		timeWatermark = time.UnixMilli(-1)
+		key           = p.entity.BuildOTWatcherKey()
+	)
+	byteValue, err := p.otStore.GetValue(p.ctx, key)
+	if err != nil {
+		p.log.Errorw("Unable to load latest watermark from ot store (failed to get value from ot store)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
+		return processor.Watermark(timeWatermark)
 	}
-	var timeWatermark = time.UnixMilli(latestWatermark)
+	otValue, err := ot.DecodeToOTValue(byteValue)
+	if err != nil {
+		p.log.Errorw("Unable to load latest watermark from ot store (failed to decode ot value)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
+		return processor.Watermark(timeWatermark)
+	}
+	timeWatermark = time.UnixMilli(otValue.Watermark)
 	return processor.Watermark(timeWatermark)
 }
 
@@ -201,12 +198,4 @@ func (p *publish) StopPublisher() {
 
 	p.otStore.Close()
 	p.heartbeatStore.Close()
-}
-
-func (p *publish) getAllOTKeysFromBucket() []string {
-	keys, err := p.otStore.GetAllKeys(p.ctx)
-	if err != nil && !errors.Is(err, nats.ErrNoKeysFound) {
-		p.log.Fatalw("Failed to get the keys", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
-	}
-	return keys
 }

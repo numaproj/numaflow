@@ -113,10 +113,10 @@ func (k kvEntry) Operation() store.KVWatchOp {
 
 // Watch watches the key-value store (aka bucket).
 func (k *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
-	kvWatcher, err := k.kv.WatchAll()
+	kvWatcher, err := k.kv.WatchAll(nats.IncludeHistory())
 	for err != nil {
 		k.log.Errorw("WatchAll failed", zap.String("watcher", k.GetKVName()), zap.Error(err))
-		kvWatcher, err = k.kv.WatchAll()
+		kvWatcher, err = k.kv.WatchAll(nats.IncludeHistory())
 		time.Sleep(100 * time.Millisecond)
 	}
 

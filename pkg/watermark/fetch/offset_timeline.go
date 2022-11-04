@@ -44,20 +44,20 @@ type OffsetTimeline struct {
 func NewOffsetTimeline(ctx context.Context, c int) *OffsetTimeline {
 	// Initialize a new empty watermarks DLL with nil values of the size capacity.
 	// This is to avoid length check: when a new element is added, the tail element will be deleted.
-	ot := OffsetTimeline{
+	offsetTimeline := OffsetTimeline{
 		ctx:      ctx,
 		capacity: c,
 		log:      logging.FromContext(ctx),
 	}
 
 	for i := 0; i < c; i++ {
-		ot.watermarks.PushBack(OffsetWatermark{
+		offsetTimeline.watermarks.PushBack(OffsetWatermark{
 			watermark: -1,
 			offset:    -1,
 		})
 	}
 
-	return &ot
+	return &offsetTimeline
 }
 
 // OffsetWatermark stores the maximum offset for the given event time
