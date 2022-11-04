@@ -1,14 +1,14 @@
 # Pipeline Customization
 
 There is an optional `.spec.templates` field in the `Pipeline` resource which may be used to customize kubernetes resources owned by the Pipeline.
+This takes precedence over anything specified in the [Controller ConfigMap](./controller-configmap.md#pipeline-templates-configuration).
 
-Vertex customization is described separately in more detail (i.e. [Environment Variables](./environment-variables.md), [Container Resources](./container-resources.md), etc.).
+Vertex customization is described separately (i.e. [Environment Variables](./environment-variables.md), [Container Resources](./container-resources.md), etc.)
+and takes precedence over any vertex templates.
 
-## Daemon Deployment
+## Component customization
 
-The following example shows how to configure a Daemon Deployment with all currently supported fields.
-
-The `.spec.templates.daemon` field and all fields directly under it are optional.
+The following example shows all currently supported fields. The `.spec.templates.<component>` field and all fields directly under it are optional.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -17,18 +17,17 @@ metadata:
   name: my-pipeline
 spec:
   templates:
+    # can be "daemon", "job" or "vertex"
     daemon:
-      # Deployment spec
-      replicas: 3
       # Pod metadata
       metadata:
         labels:
-          my-label-name: my-label-value
+          my-label-key: my-label-value
         annotations:
-          my-annotation-name: my-annotation-value
+          my-annotation-key: my-annotation-value
       # Pod spec
       nodeSelector:
-        my-node-label-name: my-node-label-value
+        my-node-label-key: my-node-label-value
       tolerations:
         - key: "my-example-key"
           operator: "Exists"
@@ -70,11 +69,24 @@ spec:
             memory: 500Mi
 ```
 
-## Jobs
+## Daemon customization
 
-The following example shows how to configure kubernetes Jobs owned by a Pipeline with all currently supported fields.
+In addition to the `Component customization` described above, the Pipeline daemon has the following additional fields available.
 
-The `.spec.templates.job` field and all fields directly under it are optional.
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  templates:
+    daemon:
+      replicas: 3
+```
+
+## Job customization
+
+In addition to the `Component customization` described above, Pipeline jobs have the following additional fields available.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -84,35 +96,10 @@ metadata:
 spec:
   templates:
     job:
-      # Job spec
       ttlSecondsAfterFinished: 600 # numaflow defaults to 30
       backoffLimit: 5 # numaflow defaults to 20
-      # Pod metadata
-      metadata:
-        labels:
-          my-label-name: my-label-value
-        annotations:
-          my-annotation-name: my-annotation-value
-      # Pod spec
-      nodeSelector:
-        my-node-label-name: my-node-label-value
-      tolerations:
-        - key: "my-example-key"
-          operator: "Exists"
-          effect: "NoSchedule"
-      securityContext: {}
-      imagePullSecrets:
-        - name: regcred
-      priorityClassName: my-priority-class-name
-      priority: 50
-      serviceAccountName: my-service-account
-      affinity: {}
-      # Container
-      containerTemplate:
-        env:
-          - name: MY_ENV_NAME
-            value: my-env-value
-        resources:
-          limits:
-            memory: 500Mi
 ```
+
+## Vertex customization
+
+See `Component customization` described above.

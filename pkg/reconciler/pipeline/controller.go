@@ -55,13 +55,14 @@ type pipelineReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 
-	config *reconciler.GlobalConfig
-	image  string
-	logger *zap.SugaredLogger
+	config    *reconciler.GlobalConfig
+	templates *dfv1.Templates
+	image     string
+	logger    *zap.SugaredLogger
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &pipelineReconciler{client: client, scheme: scheme, config: config, image: image, logger: logger}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, templates *dfv1.Templates, image string, logger *zap.SugaredLogger) reconcile.Reconciler {
+	return &pipelineReconciler{client: client, scheme: scheme, config: config, templates: templates, image: image, logger: logger}
 }
 
 func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -76,11 +77,16 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log := r.logger.With("namespace", pl.Namespace).With("pipeline", pl.Name)
 	plCopy := pl.DeepCopy()
 	ctx = logging.WithLogger(ctx, log)
+	if err := plCopy.Spec.Templates.UpdateWithDefaultsFrom(r.templates); err != nil {
+		r.logger.Errorw("Unable to create merged pipeline templates", err)
+		return ctrl.Result{}, err
+	}
 
 	result, reconcileErr := r.reconcile(ctx, plCopy)
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
+	plCopy.Spec.Templates = pl.Spec.Templates.DeepCopy()
 	plCopy.Status.LastUpdated = metav1.Now()
 	if needsUpdate(pl, plCopy) {
 		if err := r.client.Update(ctx, plCopy); err != nil {
@@ -207,7 +213,10 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 			newBuffers[b.Name] = b
 		}
 	}
-	newObjs := buildVertices(pl)
+	newObjs, err := buildVertices(pl)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to build vertices, err: %w", err)
+	}
 	for vertexName, newObj := range newObjs {
 		if oldObj, existing := existingObjs[vertexName]; !existing {
 			if err := r.client.Create(ctx, &newObj); err != nil {
@@ -417,7 +426,7 @@ func needsUpdate(old, new *dfv1.Pipeline) bool {
 	return false
 }
 
-func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
+func buildVertices(pl *dfv1.Pipeline) (map[string]dfv1.Vertex, error) {
 	result := make(map[string]dfv1.Vertex)
 	for _, v := range pl.Spec.Vertices {
 		vertexFullName := pl.Name + "-" + v.Name
@@ -442,6 +451,11 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			}
 			if x.Max != nil && *x.Max > 1 && replicas > *x.Max {
 				replicas = *x.Max
+			}
+		}
+		if pl.Spec.Templates != nil && pl.Spec.Templates.VertexTemplate != nil {
+			if err := pl.Spec.Templates.VertexTemplate.ApplyToAbstractVertex(vCopy); err != nil {
+				return nil, err
 			}
 		}
 		spec := dfv1.VertexSpec{
@@ -469,7 +483,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		}
 		result[obj.Name] = obj
 	}
-	return result
+	return result, nil
 }
 
 func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {

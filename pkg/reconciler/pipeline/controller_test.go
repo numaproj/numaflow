@@ -107,7 +107,7 @@ func init() {
 
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
-	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, zaptest.NewLogger(t).Sugar())
+	r := NewReconciler(cl, scheme.Scheme, fakeConfig, nil, testFlowImage, zaptest.NewLogger(t).Sugar())
 	_, ok := r.(*pipelineReconciler)
 	assert.True(t, ok)
 }
@@ -144,10 +144,46 @@ func Test_reconcile(t *testing.T) {
 }
 
 func Test_buildVertices(t *testing.T) {
-	r := buildVertices(testPipeline)
-	assert.Equal(t, 3, len(r))
-	_, existing := r[testPipeline.Name+"-"+testPipeline.Spec.Vertices[0].Name]
-	assert.True(t, existing)
+	t.Run("test build vertices", func(t *testing.T) {
+		r, err := buildVertices(testPipeline)
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(r))
+		_, existing := r[testPipeline.Name+"-"+testPipeline.Spec.Vertices[0].Name]
+		assert.True(t, existing)
+	})
+	t.Run("test build vertices with vertex template", func(t *testing.T) {
+		req := corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				"memory": resource.MustParse("256Mi"),
+			},
+		}
+		pl := testPipeline.DeepCopy()
+		pl.Spec.Vertices[0].ContainerTemplate = &dfv1.ContainerTemplate{
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"cpu": resource.MustParse("100m"),
+				},
+			},
+		}
+		pl.Spec.Templates = &dfv1.Templates{
+			VertexTemplate: &dfv1.VertexTemplate{
+				ContainerTemplate: &dfv1.ContainerTemplate{
+					Resources: req,
+				},
+			},
+		}
+		r, err := buildVertices(pl)
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(r))
+		r0, existing := r[pl.Name+"-"+pl.Spec.Vertices[0].Name]
+		assert.True(t, existing)
+		r1, existing := r[pl.Name+"-"+pl.Spec.Vertices[1].Name]
+		assert.True(t, existing)
+		assert.NotNil(t, r0.Spec.ContainerTemplate)
+		assert.NotNil(t, r1.Spec.ContainerTemplate)
+		assert.NotEqual(t, req, r0.Spec.ContainerTemplate.Resources)
+		assert.Equal(t, req, r1.Spec.ContainerTemplate.Resources)
+	})
 }
 
 func Test_copyVertexLimits(t *testing.T) {

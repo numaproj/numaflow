@@ -43,10 +43,17 @@ import (
 func Start(namespaced bool, managedNamespace string) {
 	logger := logging.NewLogger().Named("controller-manager")
 	config, err := reconciler.LoadConfig(func(err error) {
-		logger.Errorf("Failed to reload global configuration file", zap.Error(err))
+		logger.Errorw("Failed to reload global configuration file", zap.Error(err))
 	})
 	if err != nil {
 		logger.Fatalw("Failed to load global configuration file", zap.Error(err))
+	}
+	pipelineTemplates, err := reconciler.LoadPipelineTemplates()
+	if err != nil {
+		logger.Fatalw("Failed to load pipeline templates file", zap.Error(err))
+	}
+	if pipelineTemplates != nil {
+		logger.Info("Successfully loaded pipeline templates file")
 	}
 
 	image := sharedutil.LookupEnvStringOr(dfv1.EnvImage, "")
@@ -115,7 +122,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Pipeline controller
 	pipelineController, err := controller.New(dfv1.ControllerPipeline, mgr, controller.Options{
-		Reconciler: plctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, logger),
+		Reconciler: plctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, pipelineTemplates, image, logger),
 	})
 	if err != nil {
 		logger.Fatalw("Unable to set up Pipeline controller", zap.Error(err))

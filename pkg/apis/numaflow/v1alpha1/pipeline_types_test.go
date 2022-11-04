@@ -17,11 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 )
@@ -223,6 +225,66 @@ func TestGetDaemonDeploy(t *testing.T) {
 		assert.Equal(t, *s.Spec.Template.Spec.Priority, priority)
 		assert.Contains(t, s.Spec.Template.Spec.Tolerations, toleration)
 		assert.Equal(t, s.Spec.Template.Spec.PriorityClassName, "my-priority-class-name")
+	})
+}
+
+func Test_UpdateWithDefaultsFrom(t *testing.T) {
+	var nilTpl Templates
+	tpl := Templates{
+		DaemonTemplate: &DaemonTemplate{
+			AbstractPodTemplate: AbstractPodTemplate{
+				Metadata: &Metadata{
+					Labels: map[string]string{"k": "v"},
+				},
+			},
+			Replicas: pointer.Int32(3),
+			ContainerTemplate: &ContainerTemplate{
+				Env: []corev1.EnvVar{{Name: "n", Value: "v"}},
+			},
+		},
+	}
+	t.Run("both nil", func(t *testing.T) {
+		t1 := nilTpl.DeepCopy()
+		t2 := nilTpl.DeepCopy()
+		err := t1.UpdateWithDefaultsFrom(t2)
+		assert.NoError(t, err)
+		assert.True(t, reflect.DeepEqual(nilTpl, *t1))
+	})
+	t.Run("nil override", func(t *testing.T) {
+		t1 := nilTpl.DeepCopy()
+		t2 := tpl.DeepCopy()
+		err := t1.UpdateWithDefaultsFrom(t2)
+		assert.NoError(t, err)
+		assert.True(t, equality.Semantic.DeepEqual(tpl, *t1))
+	})
+	t.Run("nil source", func(t *testing.T) {
+		t1 := tpl.DeepCopy()
+		t2 := nilTpl.DeepCopy()
+		err := t1.UpdateWithDefaultsFrom(t2)
+		assert.NoError(t, err)
+		assert.True(t, equality.Semantic.DeepEqual(tpl, *t1))
+	})
+	t.Run("both same", func(t *testing.T) {
+		t1 := tpl.DeepCopy()
+		t2 := tpl.DeepCopy()
+		err := t1.UpdateWithDefaultsFrom(t2)
+		assert.NoError(t, err)
+		assert.True(t, equality.Semantic.DeepEqual(tpl, *t1))
+	})
+	t.Run("override and merge", func(t *testing.T) {
+		t1 := tpl.DeepCopy()
+		t2 := tpl.DeepCopy()
+		t1.DaemonTemplate.Metadata.Annotations = map[string]string{"k2": "v2"}
+		t1.DaemonTemplate.Replicas = pointer.Int32(1)
+		t1.DaemonTemplate.ContainerTemplate.Resources = testResources
+		err := t1.UpdateWithDefaultsFrom(t2)
+		assert.NoError(t, err)
+		assert.Equal(t, testResources, t1.DaemonTemplate.ContainerTemplate.Resources)
+		assert.Len(t, t1.DaemonTemplate.ContainerTemplate.Env, 1)
+		assert.Len(t, t1.DaemonTemplate.Metadata.Labels, 1)
+		assert.Len(t, t1.DaemonTemplate.Metadata.Annotations, 1)
+		assert.NotNil(t, t1.DaemonTemplate.Replicas)
+		assert.Equal(t, int32(1), *t1.DaemonTemplate.Replicas)
 	})
 }
 

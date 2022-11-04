@@ -23,7 +23,8 @@ AbstractPodTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate">VertexTemplate</a>)
 </p>
 <p>
 <p>
@@ -536,7 +537,8 @@ ContainerTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate">VertexTemplate</a>)
 </p>
 <p>
 <p>
@@ -3548,6 +3550,19 @@ JobTemplate is used to customize Jobs
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>vertex</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate"> VertexTemplate
+</a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+VertexTemplate is used to customize Vertices
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.UDF">
@@ -3986,6 +4001,63 @@ Description
 Kubernetes meta/v1.Time </a> </em>
 </td>
 <td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.VertexTemplate">
+VertexTemplate
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates">Templates</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
+</td>
+<td>
+<p>
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
+</p>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>initContainerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>

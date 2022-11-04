@@ -902,6 +902,10 @@ message Templates {
   // JobTemplate is used to customize Jobs
   // +optional
   optional JobTemplate job = 2;
+
+  // VertexTemplate is used to customize Vertices
+  // +optional
+  optional VertexTemplate vertex = 3;
 }
 
 message UDF {
@@ -1000,6 +1004,17 @@ message VertexStatus {
   optional string selector = 5;
 
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 4;
+}
+
+message VertexTemplate {
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 1;
+
+  // +optional
+  optional ContainerTemplate containerTemplate = 2;
+
+  // +optional
+  optional ContainerTemplate initContainerTemplate = 3;
 }
 
 message Watermark {

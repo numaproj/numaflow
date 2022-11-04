@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/utils/pointer"
 )
 
@@ -408,6 +409,37 @@ type Templates struct {
 	// JobTemplate is used to customize Jobs
 	// +optional
 	JobTemplate *JobTemplate `json:"job,omitempty" protobuf:"bytes,2,opt,name=job"`
+	// VertexTemplate is used to customize Vertices
+	// +optional
+	VertexTemplate *VertexTemplate `json:"vertex,omitempty" protobuf:"bytes,3,opt,name=vertex"`
+}
+
+// UpdateWithDefaultsFrom updates the template by doing a strategic merge patch, defaulting to the templates argument
+func (tpl *Templates) UpdateWithDefaultsFrom(defaultTemplate *Templates) error {
+	if defaultTemplate == nil {
+		return nil
+	}
+	if tpl == nil {
+		*tpl = *defaultTemplate.DeepCopy()
+		return nil
+	}
+	tplBytes, err := json.Marshal(tpl)
+	if err != nil {
+		return err
+	}
+	defaultTemplateBytes, err := json.Marshal(defaultTemplate)
+	if err != nil {
+		return err
+	}
+	updatedBytes, err := strategicpatch.StrategicMergePatch(defaultTemplateBytes, tplBytes, Templates{})
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(updatedBytes, tpl)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type PipelineLimits struct {
