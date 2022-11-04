@@ -18,19 +18,28 @@ package fetch
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
+
+func otValueToBytes(offset int64, watermark int64) ([]byte, error) {
+	otValue := ot.Value{
+		Offset:    offset,
+		Watermark: watermark,
+	}
+	otValueByte, err := otValue.EncodeToBytes()
+	return otValueByte, err
+}
 
 func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	var (
@@ -45,23 +54,23 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	hb, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
 	assert.NoError(t, err)
-	defer hb.Close()
-	ot, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	defer hbStore.Close()
+	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
 	assert.NoError(t, err)
-	defer ot.Close()
+	defer otStore.Close()
 
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(testOffset))
-	// this key format is meant for non-separate OT watcher
-	err = ot.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
+	otValueByte, err := otValueToBytes(testOffset, epoch)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
 
 	epoch += 60000
-	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
-	// this key format is meant for non-separate OT watcher
-	err = ot.PutKV(ctx, fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
+
+	otValueByte, err = otValueToBytes(testOffset+5, epoch)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p2", otValueByte)
 	assert.NoError(t, err)
 
 	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
@@ -77,11 +86,11 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		defer wg.Done()
 		var err error
 		for i := 0; i < 3; i++ {
-			err = hb.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}
-		err = hb.DeleteKey(ctx, "p1")
+		err = hbStore.DeleteKey(ctx, "p1")
 		assert.NoError(t, err)
 	}()
 
@@ -91,7 +100,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		defer wg.Done()
 		var err error
 		for i := 0; i < 20; i++ {
-			err = hb.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err = hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}
@@ -151,7 +160,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		defer wg.Done()
 		var err error
 		for i := 0; i < 5; i++ {
-			err = hb.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}
@@ -197,8 +206,9 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.Equal(t, int64(100), p1.offsetTimeline.GetHeadOffset())
 
 	// publish a new watermark 101
-	binary.LittleEndian.PutUint64(b, uint64(testOffset+1))
-	err = ot.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
+	otValueByte, err = otValueToBytes(testOffset+1, epoch)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
 
 	// "p1" becomes inactive after 5 loops
@@ -222,7 +232,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		defer wg.Done()
 		var err error
 		for i := 0; i < 3; i++ {
-			err = hb.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
 			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
 		}

@@ -144,7 +144,7 @@ data:
             maxAckPending: 20000
           otBucket:
             maxValueSize: 0
-            history: 1
+            history: 5
             ttl: 3h
             maxBytes: 0
             replicas: 3

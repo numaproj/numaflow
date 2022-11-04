@@ -39,7 +39,7 @@ type ProcessorManager struct {
 	otWatcher store.WatermarkKVWatcher
 	// heartbeat just tracks the heartbeat of each processing unit. we use it to mark a processing unit's status (e.g, inactive)
 	heartbeat *ProcessorHeartbeat
-	// processors has reference to the actual processing unit (ProcessorEntity) which includes offset timeline which is
+	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
 	// used for tracking watermark.
 	processors map[string]*ProcessorToFetch
 	lock       sync.RWMutex
