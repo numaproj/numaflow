@@ -1,4 +1,4 @@
-// Package ot defines the ot value struct and how to encode to /decode from []byte
+// Package ot represents the offset-timeline pair and its corresponding encoder and decoder.
 package ot
 
 import (
