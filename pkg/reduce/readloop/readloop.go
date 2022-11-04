@@ -145,20 +145,34 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 			q := rl.associatePBQAndPnF(ctx, partitionID)
 
 			// write the message to PBQ
-			writeFn := func(ctx context.Context, m *isb.ReadMessage) error {
-				return q.Write(ctx, m)
-			}
-			ctxClosedErr = rl.executeWithBackOff(ctx, writeFn, "failed to Write Message", pbqWriteBackoff, m, partitionID)
+			attempt := 0
+			ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, pbqWriteBackoff, func() (done bool, err error) {
+				rErr := q.Write(ctx, m)
+				attempt += 1
+				if rErr != nil {
+					rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
+					return false, nil
+				}
+				return true, nil
+			})
+
 			if ctxClosedErr != nil {
 				rl.log.Errorw("Error while writing the message to PBQ", zap.Error(ctxClosedErr))
 				return
 			}
 
 			// Ack the message to ISB
-			ackFn := func(_ context.Context, m *isb.ReadMessage) error {
-				return m.ReadOffset.AckIt()
-			}
-			ctxClosedErr = rl.executeWithBackOff(ctx, ackFn, "failed to Ack Message", pbqWriteBackoff, m, partitionID)
+			attempt = 0
+			ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, pbqWriteBackoff, func() (done bool, err error) {
+				rErr := m.ReadOffset.AckIt()
+				attempt += 1
+				if rErr != nil {
+					rl.log.Errorw("Failed to ack message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("attempt", attempt), zap.Error(rErr))
+					return false, nil
+				}
+				return true, nil
+			})
+
 			if ctxClosedErr != nil {
 				rl.log.Errorw("Error while acknowledging the message", zap.Error(ctxClosedErr))
 				return
@@ -166,7 +180,6 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		}
 
 		// close any windows that need to be closed.
-		// FIXME(p0): why are we re-reading the watermark? isb.ReadMessage contains watermark.
 		wm := rl.waterMark(m)
 		closedWindows := rl.aw.RemoveWindow(time.Time(wm))
 		rl.log.Debugw("closing windows", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
@@ -176,22 +189,6 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 			rl.closePartitions(partitions)
 		}
 	}
-}
-
-// executeWithBackOff executes a function infinitely until it succeeds using ExponentialBackoffWithContext.
-func (rl *ReadLoop) executeWithBackOff(ctx context.Context, retryableFn func(ctx context.Context, message *isb.ReadMessage) error, errMsg string, pbqWriteBackoff wait.Backoff, m *isb.ReadMessage, partitionID partition.ID) error {
-	attempt := 0
-	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, pbqWriteBackoff, func() (done bool, err error) {
-		rErr := retryableFn(ctx, m)
-		attempt += 1
-		if rErr != nil {
-			rl.log.Errorw(errMsg, zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
-			return false, nil
-		}
-		return true, nil
-	})
-
-	return ctxClosedErr
 }
 
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
@@ -235,6 +232,12 @@ func (rl *ReadLoop) ShutDown(ctx context.Context) {
 // upsertWindowsAndKeys will create or assigns (if already present) a window to the message. It is an upsert operation
 // because windows are created out of order, but they will be closed in-order.
 func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindow {
+	// drop the late messages
+	if m.IsLate {
+		rl.log.Infow("Dropping the late message", zap.Time("eventTime", m.EventTime))
+		return []*keyed.KeyedWindow{}
+	}
+
 	processingWindows := rl.windowingStrategy.AssignWindow(m.EventTime)
 	var kWindows []*keyed.KeyedWindow
 	for _, win := range processingWindows {
