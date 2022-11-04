@@ -23,7 +23,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/otbucket"
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"go.uber.org/zap"
@@ -118,7 +118,7 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	} else {
 		seq, _ = offset.Sequence()
 	}
-	var otValue = otbucket.OTValue{
+	var otValue = ot.Value{
 		Offset:    seq,
 		Watermark: wm.UnixMilli(),
 	}
@@ -151,7 +151,7 @@ func (p *publish) loadLatestFromStore() processor.Watermark {
 		p.log.Errorw("Unable to load latest watermark from ot store (failed to get value from ot store)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
 		return processor.Watermark(timeWatermark)
 	}
-	otValue, err := otbucket.DecodeToOTValue(byteValue)
+	otValue, err := ot.DecodeToOTValue(byteValue)
 	if err != nil {
 		p.log.Errorw("Unable to load latest watermark from ot store (failed to decode ot value)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
 		return processor.Watermark(timeWatermark)

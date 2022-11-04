@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/otbucket"
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/stretchr/testify/assert"
 
@@ -33,7 +33,7 @@ import (
 )
 
 func otValueToBytes(offset int64, watermark int64) ([]byte, error) {
-	otValue := otbucket.OTValue{
+	otValue := ot.Value{
 		Offset:    offset,
 		Watermark: watermark,
 	}

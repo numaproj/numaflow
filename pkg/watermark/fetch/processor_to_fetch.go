@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/watermark/otbucket"
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -137,7 +137,7 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 				if value.Key() != p.entity.BuildOTWatcherKey() {
 					continue
 				}
-				otValue, err := otbucket.DecodeToOTValue(value.Value())
+				otValue, err := ot.DecodeToOTValue(value.Value())
 				if err != nil {
 					p.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
 					continue

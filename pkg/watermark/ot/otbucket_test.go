@@ -1,4 +1,4 @@
-package otbucket
+package ot
 
 import (
 	"bytes"
@@ -14,14 +14,14 @@ func TestDecodeToOTValue(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    OTValue
+		want    Value
 		wantErr bool
 	}{
 		{
 			name: "decode_success_using_ot_value",
 			args: args{
 				b: func() []byte {
-					v := OTValue{
+					v := Value{
 						Offset:    100,
 						Watermark: 1667495100000,
 					}
@@ -30,7 +30,7 @@ func TestDecodeToOTValue(t *testing.T) {
 					return buf.Bytes()
 				}(),
 			},
-			want: OTValue{
+			want: Value{
 				Offset:    100,
 				Watermark: 1667495100000,
 			},
@@ -50,7 +50,7 @@ func TestDecodeToOTValue(t *testing.T) {
 					return buf.Bytes()
 				}(),
 			},
-			want:    OTValue{},
+			want:    Value{},
 			wantErr: true,
 		},
 		{
@@ -69,7 +69,7 @@ func TestDecodeToOTValue(t *testing.T) {
 					return buf.Bytes()
 				}(),
 			},
-			want: OTValue{
+			want: Value{
 				Offset:    100,
 				Watermark: 1667495100000,
 			},
@@ -93,7 +93,7 @@ func TestDecodeToOTValue(t *testing.T) {
 					return buf.Bytes()
 				}(),
 			},
-			want: OTValue{
+			want: Value{
 				Offset:    100,
 				Watermark: 1667495100000,
 			},
@@ -138,7 +138,7 @@ func TestOTValue_EncodeToBytes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := OTValue{
+			v := Value{
 				Offset:    tt.fields.Offset,
 				Watermark: tt.fields.Watermark,
 			}
