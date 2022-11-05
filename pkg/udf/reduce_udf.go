@@ -61,29 +61,31 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	var reader isb.BufferReader
 	var writers map[string]isb.BufferWriter
 	var err error
+	var fromBuffer dfv1.Buffer
 	fromBuffers := u.VertexInstance.Vertex.GetFromBuffers()
-	var fromBufferName string
+	// choose the buffer that corresponds to this reduce processor because
+	// reducer's incoming edge can have more than one buffer for parallelism
 	for _, b := range fromBuffers {
 		if strings.HasSuffix(b.Name, fmt.Sprintf("-%d", u.VertexInstance.Replica)) {
-			fromBufferName = b.Name
+			fromBuffer = b
 			break
 		}
 	}
-	if len(fromBufferName) == 0 {
+	if len(fromBuffer.Name) == 0 {
 		return fmt.Errorf("can not find from buffer")
 	}
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		reader, writers = buildRedisBufferIO(ctx, fromBufferName, u.VertexInstance)
+		reader, writers = buildRedisBufferIO(ctx, fromBuffer.Name, u.VertexInstance)
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, fromBuffer)
 		if err != nil {
 			return err
 		}
-		reader, writers, err = buildJetStreamBufferIO(ctx, fromBufferName, u.VertexInstance)
+		reader, writers, err = buildJetStreamBufferIO(ctx, fromBuffer.Name, u.VertexInstance)
 		if err != nil {
 			return err
 		}
@@ -133,7 +135,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}
 	}()
-	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName))
+	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer.Name))
 
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType)))
