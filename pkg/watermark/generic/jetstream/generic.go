@@ -38,10 +38,8 @@ import (
 
 // BuildWatermarkProgressors is used to populate fetchWatermark, and a map of publishWatermark with edge name as the key.
 // These are used as watermark progressors in the pipeline, and is attached to each edge of the vertex.
-// Fetcher has one-to-one relationship, whereas we have multiple publishers as the vertex can read only from one edge,
-// and it can write to many.
 // The function is used only when watermarking is enabled on the pipeline.
-func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetch.Fetcher, map[string]publish.Publisher, error) {
+func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBuffer v1alpha1.Buffer) (fetch.Fetcher, map[string]publish.Publisher, error) {
 	// if watermark is not enabled, use no-op.
 	if !sharedutil.IsWatermarkEnabled() {
 		fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertexInstance.Vertex.GetToBuffers()))
@@ -50,9 +48,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 
-	// Fetcher creation, we have only 1 in buffer ATM
 	var fetchWatermark fetch.Fetcher
-	fromBuffer := vertexInstance.Vertex.GetFromBuffers()[0]
 	hbBucketName := isbsvc.JetStreamProcessorBucket(pipelineName, fromBuffer.Name)
 	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
 	if err != nil {

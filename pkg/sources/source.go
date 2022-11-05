@@ -80,7 +80,9 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, sp.VertexInstance)
+		// we have only 1 in buffer ATM
+		fromBuffer := sp.VertexInstance.Vertex.GetFromBuffers()[0]
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, sp.VertexInstance, fromBuffer)
 		if err != nil {
 			return err
 		}

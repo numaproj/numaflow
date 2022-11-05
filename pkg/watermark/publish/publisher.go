@@ -134,6 +134,7 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
+			p.log.Debugw("New watermark published with offset", zap.Int64("head", p.headWatermark.UnixMilli()), zap.Int64("new", wm.UnixMilli()), zap.Int64("offset", seq))
 			break
 		}
 	}
