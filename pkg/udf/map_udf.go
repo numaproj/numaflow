@@ -59,7 +59,9 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		reader, writers = buildRedisBufferIO(ctx, fromBufferName, u.VertexInstance)
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
+		// we have only 1 in buffer ATM
+		fromBuffer := u.VertexInstance.Vertex.GetFromBuffers()[0]
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, fromBuffer)
 		if err != nil {
 			return err
 		}
