@@ -63,6 +63,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	var err error
 	var fromBuffer dfv1.Buffer
 	fromBuffers := u.VertexInstance.Vertex.GetFromBuffers()
+	// choose the buffer that corresponds to this reduce processor because
+	// reducer's incoming edge can have more than one buffer for parallelism 
 	for _, b := range fromBuffers {
 		if strings.HasSuffix(b.Name, fmt.Sprintf("-%d", u.VertexInstance.Replica)) {
 			fromBuffer = b
