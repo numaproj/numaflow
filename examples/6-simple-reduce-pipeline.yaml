@@ -7,7 +7,7 @@ spec:
     - name: in
       source:
         http: {}
-    - name: even-or-odd
+    - name: atoi
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
@@ -33,14 +33,6 @@ spec:
       to: even-or-odd
     - from: even-or-odd
       to: compute-sum
-      conditions:
-        keyIn:
-          - even
-          - odd
       parallelism: 1
     - from: compute-sum
       to: sink
-      conditions:
-        keyIn:
-          - even
-          - odd
