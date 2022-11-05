@@ -61,7 +61,7 @@ func TestJetStreamGetStatefulSetSpec(t *testing.T) {
 		for _, e := range spec.Template.Spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
-		for _, e := range []string{"POD_NAME", "SERVER_NAME", "POD_NAMESPACE", "CLUSTER_ADVERTISE", "JS_KEY"} {
+		for _, e := range []string{"POD_NAME", "SERVER_NAME", "POD_NAMESPACE", "CLUSTER_ADVERTISE", "GOMEMLIMIT", "JS_KEY"} {
 			assert.Contains(t, envNames, e)
 		}
 	})
