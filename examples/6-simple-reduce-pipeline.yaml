@@ -30,9 +30,9 @@ spec:
         log: {}
   edges:
     - from: in
-      to: even-or-odd
-    - from: even-or-odd
+      to: atoi
+    - from: atoi
       to: compute-sum
-      parallelism: 1
+      parallelism: 2
     - from: compute-sum
       to: sink
