@@ -34,7 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	kafkasink "github.com/numaproj/numaflow/pkg/sinks/kafka"
 	logsink "github.com/numaproj/numaflow/pkg/sinks/logger"
-	udsink "github.com/numaproj/numaflow/pkg/sinks/udsink"
+	"github.com/numaproj/numaflow/pkg/sinks/udsink"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
@@ -77,7 +77,9 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
+		// we have only 1 in buffer ATM
+		fromBuffer := u.VertexInstance.Vertex.GetFromBuffers()[0]
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, fromBuffer)
 		if err != nil {
 			return err
 		}
