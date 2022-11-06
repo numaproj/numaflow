@@ -333,6 +333,10 @@ type VertexSpec struct {
 	FromEdges []Edge `json:"fromEdges,omitempty" protobuf:"bytes,5,rep,name=fromEdges"`
 	// +optional
 	ToEdges []Edge `json:"toEdges,omitempty" protobuf:"bytes,6,rep,name=toEdges"`
+	// Watermark indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.
+	// +kubebuilder:default={"disabled": false}
+	// +optional
+	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,7,opt,name=watermark"`
 }
 
 type AbstractVertex struct {

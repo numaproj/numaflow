@@ -722,9 +722,7 @@ message PipelineSpec {
   // +optional
   optional PipelineLimits limits = 5;
 
-  // Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been
-  // created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline
-  // should be recreated.
+  // Watermark enables watermark progression across the entire pipeline.
   // +kubebuilder:default={"disabled": false}
   // +optional
   optional Watermark watermark = 6;
@@ -986,6 +984,11 @@ message VertexSpec {
 
   // +optional
   repeated Edge toEdges = 6;
+
+  // Watermark indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.
+  // +kubebuilder:default={"disabled": false}
+  // +optional
+  optional Watermark watermark = 7;
 }
 
 message VertexStatus {
