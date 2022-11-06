@@ -85,6 +85,9 @@ jobs:
     services:
       jetstream:
         image: nats:latest
+        ports:
+          # Opens tcp port 4222 on the host and service container
+          - 4222:4222
     steps:
       - name: Set up Go 1.x
         uses: actions/setup-go@v3.1.0
