@@ -82,6 +82,9 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      jetstream:
+        image: nats:latest
     steps:
       - name: Set up Go 1.x
         uses: actions/setup-go@v3.1.0
@@ -97,8 +100,6 @@ jobs:
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
       - name: Get dependencies
         run: go mod download
-      - name: Install JetStream
-        uses: nats-io/jetstream-gh-action@main
       - name: Install Redis
         uses: shogo82148/actions-setup-redis@v1
         with:
