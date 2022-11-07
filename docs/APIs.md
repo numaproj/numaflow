@@ -324,8 +324,7 @@ List of init containers belonging to the pod. More info:
 <td>
 <em>(Optional)</em>
 <p>
-List of sidecar containers belonging to the pod. More info:
-<a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">https://kubernetes.io/docs/concepts/workloads/pods/init-containers/</a>
+List of sidecar containers belonging to the pod.
 </p>
 </td>
 </tr>

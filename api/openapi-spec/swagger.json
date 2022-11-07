@@ -17383,7 +17383,7 @@
           "type": "string"
         },
         "sidecarContainers": {
-          "description": "List of sidecar containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+          "description": "List of sidecar containers belonging to the pod.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
@@ -18979,7 +18979,7 @@
           "type": "string"
         },
         "sidecarContainers": {
-          "description": "List of sidecar containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+          "description": "List of sidecar containers belonging to the pod.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
