@@ -148,6 +148,7 @@ func Test_buildVertices(t *testing.T) {
 	assert.Equal(t, 3, len(r))
 	_, existing := r[testPipeline.Name+"-"+testPipeline.Spec.Vertices[0].Name]
 	assert.True(t, existing)
+	assert.Equal(t, testPipeline.Spec.Watermark.MaxDelay, r[testPipeline.Name+"-"+testPipeline.Spec.Vertices[0].Name].Spec.Watermark.MaxDelay)
 }
 
 func Test_copyVertexLimits(t *testing.T) {
@@ -178,7 +179,6 @@ func Test_copyVertexLimits(t *testing.T) {
 	copyVertexLimits(pl, v)
 	assert.Equal(t, two, *v.Limits.ReadBatchSize)
 	assert.Equal(t, "3s", v.Limits.ReadTimeout.Duration.String())
-
 }
 
 func Test_copyEdgeLimits(t *testing.T) {

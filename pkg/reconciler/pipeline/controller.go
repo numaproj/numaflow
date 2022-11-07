@@ -450,6 +450,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			InterStepBufferServiceName: pl.Spec.InterStepBufferServiceName,
 			FromEdges:                  fromEdges,
 			ToEdges:                    toEdges,
+			Watermark:                  pl.Spec.Watermark,
 			Replicas:                   &replicas,
 		}
 		hash := sharedutil.MustHash(spec.WithOutReplicas())
