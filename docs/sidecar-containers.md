@@ -1,6 +1,6 @@
 # Sidecar Containers
 
-Additional "[sidecar](https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers)" containers can be provided for `udf` and `udsink` vertices.
+Additional "[sidecar](https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers)" containers can be provided for `udf` and `sink` vertices. `source` vertices do not currently support sidecars.
 
 The following example shows how to add a sidecar container to a `udf` vertex.
 
