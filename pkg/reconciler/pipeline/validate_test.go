@@ -365,6 +365,18 @@ func TestValidateVertex(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "is reserved for containers created by numaflow")
 	})
+
+	t.Run("sidecar on source vertex", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			Source: &dfv1.Source{
+				Generator: &dfv1.GeneratorSource{},
+			},
+			Sidecars: goodContainers,
+		}
+		err := validateVertex(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `"sidecars" are not supported for source vertices`)
+	})
 }
 
 func TestValidateUDF(t *testing.T) {

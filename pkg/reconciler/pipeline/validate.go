@@ -71,11 +71,11 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 
 	if len(sources) == 0 {
-		return fmt.Errorf("pipeline has no source, at lease one vertex with 'source' defined is required")
+		return fmt.Errorf("pipeline has no source, at least one vertex with 'source' defined is required")
 	}
 
 	if len(sinks) == 0 {
-		return fmt.Errorf("pipeline has no sink, at lease one vertex with 'sink' defined is required")
+		return fmt.Errorf("pipeline has no sink, at least one vertex with 'sink' defined is required")
 	}
 
 	for k, u := range mapUdfs {
@@ -186,6 +186,9 @@ func validateVertex(v dfv1.AbstractVertex) error {
 		if isReservedContainerName(ic.Name) {
 			return fmt.Errorf("vertex %q: init container name %q is reserved for containers created by numaflow", v.Name, ic.Name)
 		}
+	}
+	if len(v.Sidecars) != 0 && v.Source != nil {
+		return fmt.Errorf(`vertex %q: "sidecars" are not supported for source vertices`, v.Name)
 	}
 	for _, sc := range v.Sidecars {
 		if isReservedContainerName(sc.Name) {

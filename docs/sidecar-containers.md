@@ -1,6 +1,6 @@
 # Sidecar Containers
 
-Additional "[sidecar](https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers)" containers can be provided for all the types of vertices.
+Additional "[sidecar](https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers)" containers can be provided for `udf` and `udsink` vertices.
 
 The following example shows how to add a sidecar container to a `udf` vertex.
 
@@ -24,6 +24,8 @@ spec:
 There are various use-cases for sidecars. One possible use-case is a `udf` container that needs functionality
 from a library written in a different language. The library's functionality could be made available through
 gRPC over Unix Domain Socket. The following example shows how that could be accomplished using a shared [`volume`](./volumes.md).
+
+It is the sidecar owner's responsibility to come up with a protocol that can be used with the UDF. It could be volume, gRPC, TCP, HTTP 1.x, etc.,
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
