@@ -374,6 +374,20 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							},
 						},
 					},
+					"sidecars": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of sidecar containers belonging to the pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Container"),
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"name"},
 			},
@@ -3350,6 +3364,20 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					"initContainers": {
 						SchemaProps: spec.SchemaProps{
 							Description: "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Container"),
+									},
+								},
+							},
+						},
+					},
+					"sidecars": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of sidecar containers belonging to the pod.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

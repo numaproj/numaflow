@@ -228,7 +228,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		Subdomain:      v.GetHeadlessServiceName(),
 		Volumes:        append(volumes, v.Spec.Volumes...),
 		InitContainers: v.getInitContainers(req),
-		Containers:     containers,
+		Containers:     append(containers, v.Spec.Sidecars...),
 	}
 	v.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
 	if v.Spec.ContainerTemplate != nil {
@@ -367,6 +367,9 @@ type AbstractVertex struct {
 	// More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,11,rep,name=initContainers"`
+	// List of sidecar containers belonging to the pod.
+	// +optional
+	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,12,rep,name=sidecars"`
 }
 
 // Scale defines the parameters for autoscaling.

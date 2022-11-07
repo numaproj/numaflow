@@ -313,6 +313,9 @@ func TestValidateReducePipeline(t *testing.T) {
 }
 
 func TestValidateVertex(t *testing.T) {
+	goodContainers := []corev1.Container{{Name: "my-test-image", Image: "my-image:latest"}}
+	badContainers := []corev1.Container{{Name: dfv1.CtrInit, Image: "my-image:latest"}}
+
 	t.Run("bad min", func(t *testing.T) {
 		v := dfv1.AbstractVertex{
 			Scale: dfv1.Scale{
@@ -338,24 +341,41 @@ func TestValidateVertex(t *testing.T) {
 	})
 
 	t.Run("good init container", func(t *testing.T) {
-		v := dfv1.AbstractVertex{
-			InitContainers: []corev1.Container{
-				{Name: "my-test-image", Image: "my-image:latest"},
-			},
-		}
+		v := dfv1.AbstractVertex{InitContainers: goodContainers}
 		err := validateVertex(v)
 		assert.NoError(t, err)
 	})
 
 	t.Run("bad init container name", func(t *testing.T) {
-		v := dfv1.AbstractVertex{
-			InitContainers: []corev1.Container{
-				{Name: dfv1.CtrInit, Image: "my-image:latest"},
-			},
-		}
+		v := dfv1.AbstractVertex{InitContainers: badContainers}
 		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "is reserved for containers created by numaflow")
+	})
+
+	t.Run("good sidecar container", func(t *testing.T) {
+		v := dfv1.AbstractVertex{Sidecars: goodContainers}
+		err := validateVertex(v)
+		assert.NoError(t, err)
+	})
+
+	t.Run("bad sidecar container name", func(t *testing.T) {
+		v := dfv1.AbstractVertex{Sidecars: badContainers}
+		err := validateVertex(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "is reserved for containers created by numaflow")
+	})
+
+	t.Run("sidecar on source vertex", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			Source: &dfv1.Source{
+				Generator: &dfv1.GeneratorSource{},
+			},
+			Sidecars: goodContainers,
+		}
+		err := validateVertex(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `"sidecars" are not supported for source vertices`)
 	})
 }
 
