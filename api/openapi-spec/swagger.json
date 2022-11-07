@@ -17382,6 +17382,13 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
+        "sidecarContainers": {
+          "description": "List of sidecar containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
+        },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"
         },
@@ -18970,6 +18977,13 @@
         "serviceAccountName": {
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
+        },
+        "sidecarContainers": {
+          "description": "List of sidecar containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
         },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"

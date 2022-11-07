@@ -183,11 +183,13 @@ func validateVertex(v dfv1.AbstractVertex) error {
 		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
 	}
 	for _, ic := range v.InitContainers {
-		if ic.Name == dfv1.CtrInit ||
-			ic.Name == dfv1.CtrMain ||
-			ic.Name == dfv1.CtrUdf ||
-			ic.Name == dfv1.CtrUdsink {
+		if isReservedContainerName(ic.Name) {
 			return fmt.Errorf("vertex %q: init container name %q is reserved for containers created by numaflow", v.Name, ic.Name)
+		}
+	}
+	for _, sc := range v.SidecarContainers {
+		if isReservedContainerName(sc.Name) {
+			return fmt.Errorf("vertex %q: sidecar container name %q is reserved for containers created by numaflow", v.Name, sc.Name)
 		}
 	}
 	if v.UDF != nil {
@@ -207,4 +209,11 @@ func validateUDF(udf dfv1.UDF) error {
 		}
 	}
 	return nil
+}
+
+func isReservedContainerName(name string) bool {
+	return name == dfv1.CtrInit ||
+		name == dfv1.CtrMain ||
+		name == dfv1.CtrUdf ||
+		name == dfv1.CtrUdsink
 }

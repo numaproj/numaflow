@@ -315,6 +315,20 @@ List of init containers belonging to the pod. More info:
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>sidecarContainers</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
+\[\]Kubernetes core/v1.Container </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+List of sidecar containers belonging to the pod. More info:
+<a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">https://kubernetes.io/docs/concepts/workloads/pods/init-containers/</a>
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Authorization">
