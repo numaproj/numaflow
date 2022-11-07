@@ -187,7 +187,7 @@ func validateVertex(v dfv1.AbstractVertex) error {
 			return fmt.Errorf("vertex %q: init container name %q is reserved for containers created by numaflow", v.Name, ic.Name)
 		}
 	}
-	for _, sc := range v.SidecarContainers {
+	for _, sc := range v.Sidecars {
 		if isReservedContainerName(sc.Name) {
 			return fmt.Errorf("vertex %q: sidecar container name %q is reserved for containers created by numaflow", v.Name, sc.Name)
 		}

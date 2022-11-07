@@ -354,13 +354,13 @@ func TestValidateVertex(t *testing.T) {
 	})
 
 	t.Run("good sidecar container", func(t *testing.T) {
-		v := dfv1.AbstractVertex{SidecarContainers: goodContainers}
+		v := dfv1.AbstractVertex{Sidecars: goodContainers}
 		err := validateVertex(v)
 		assert.NoError(t, err)
 	})
 
 	t.Run("bad sidecar container name", func(t *testing.T) {
-		v := dfv1.AbstractVertex{SidecarContainers: badContainers}
+		v := dfv1.AbstractVertex{Sidecars: badContainers}
 		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "is reserved for containers created by numaflow")

@@ -374,7 +374,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							},
 						},
 					},
-					"sidecarContainers": {
+					"sidecars": {
 						SchemaProps: spec.SchemaProps{
 							Description: "List of sidecar containers belonging to the pod.",
 							Type:        []string{"array"},
@@ -3375,7 +3375,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							},
 						},
 					},
-					"sidecarContainers": {
+					"sidecars": {
 						SchemaProps: spec.SchemaProps{
 							Description: "List of sidecar containers belonging to the pod.",
 							Type:        []string{"array"},

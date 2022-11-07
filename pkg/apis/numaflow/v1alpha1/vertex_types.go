@@ -228,7 +228,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		Subdomain:      v.GetHeadlessServiceName(),
 		Volumes:        append(volumes, v.Spec.Volumes...),
 		InitContainers: v.getInitContainers(req),
-		Containers:     append(containers, v.Spec.SidecarContainers...),
+		Containers:     append(containers, v.Spec.Sidecars...),
 	}
 	v.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
 	if v.Spec.ContainerTemplate != nil {
@@ -369,7 +369,7 @@ type AbstractVertex struct {
 	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,11,rep,name=initContainers"`
 	// List of sidecar containers belonging to the pod.
 	// +optional
-	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty" protobuf:"bytes,12,rep,name=sidecarContainers"`
+	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,12,rep,name=sidecars"`
 }
 
 // Scale defines the parameters for autoscaling.

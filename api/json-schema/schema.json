@@ -17374,7 +17374,7 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
-        "sidecarContainers": {
+        "sidecars": {
           "description": "List of sidecar containers belonging to the pod.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
@@ -18996,7 +18996,7 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
-        "sidecarContainers": {
+        "sidecars": {
           "description": "List of sidecar containers belonging to the pod.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"

@@ -131,8 +131,8 @@ func (in *AbstractVertex) DeepCopyInto(out *AbstractVertex) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.SidecarContainers != nil {
-		in, out := &in.SidecarContainers, &out.SidecarContainers
+	if in.Sidecars != nil {
+		in, out := &in.Sidecars, &out.Sidecars
 		*out = make([]v1.Container, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])

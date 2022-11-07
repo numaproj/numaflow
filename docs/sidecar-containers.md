@@ -12,7 +12,7 @@ metadata:
 spec:
   vertices:
     - name: my-udf
-      sidecarContainers:
+      sidecars:
         - name: my-sidecar
           image: busybox:latest
           command: ["/bin/sh", "-c", "echo \"my-sidecar is running!\" && tail -f /dev/null"]
@@ -37,7 +37,7 @@ spec:
         - name: my-udf-volume
           emptyDir:
             medium: Memory
-      sidecarContainers:
+      sidecars:
         - name: my-sidecar
           image: alpine:latest
           command: ["/bin/sh", "-c", "apk add socat && socat UNIX-LISTEN:/path/to/my-sidecar-mount-path/my.sock - && tail -f /dev/null"]

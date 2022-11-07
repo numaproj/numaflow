@@ -17382,7 +17382,7 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
-        "sidecarContainers": {
+        "sidecars": {
           "description": "List of sidecar containers belonging to the pod.",
           "type": "array",
           "items": {
@@ -18978,7 +18978,7 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
-        "sidecarContainers": {
+        "sidecars": {
           "description": "List of sidecar containers belonging to the pod.",
           "type": "array",
           "items": {

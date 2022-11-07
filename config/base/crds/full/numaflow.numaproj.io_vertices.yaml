@@ -1449,7 +1449,7 @@ spec:
                 type: object
               serviceAccountName:
                 type: string
-              sidecarContainers:
+              sidecars:
                 items:
                   properties:
                     args:
