@@ -71,11 +71,11 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 
 	if len(sources) == 0 {
-		return fmt.Errorf("pipeline has no source, at lease one vertex with 'source' defined is required")
+		return fmt.Errorf("pipeline has no source, at least one vertex with 'source' defined is required")
 	}
 
 	if len(sinks) == 0 {
-		return fmt.Errorf("pipeline has no sink, at lease one vertex with 'sink' defined is required")
+		return fmt.Errorf("pipeline has no sink, at least one vertex with 'sink' defined is required")
 	}
 
 	for k, u := range mapUdfs {
@@ -183,11 +183,16 @@ func validateVertex(v dfv1.AbstractVertex) error {
 		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
 	}
 	for _, ic := range v.InitContainers {
-		if ic.Name == dfv1.CtrInit ||
-			ic.Name == dfv1.CtrMain ||
-			ic.Name == dfv1.CtrUdf ||
-			ic.Name == dfv1.CtrUdsink {
+		if isReservedContainerName(ic.Name) {
 			return fmt.Errorf("vertex %q: init container name %q is reserved for containers created by numaflow", v.Name, ic.Name)
+		}
+	}
+	if len(v.Sidecars) != 0 && v.Source != nil {
+		return fmt.Errorf(`vertex %q: "sidecars" are not supported for source vertices`, v.Name)
+	}
+	for _, sc := range v.Sidecars {
+		if isReservedContainerName(sc.Name) {
+			return fmt.Errorf("vertex %q: sidecar container name %q is reserved for containers created by numaflow", v.Name, sc.Name)
 		}
 	}
 	if v.UDF != nil {
@@ -207,4 +212,11 @@ func validateUDF(udf dfv1.UDF) error {
 		}
 	}
 	return nil
+}
+
+func isReservedContainerName(name string) bool {
+	return name == dfv1.CtrInit ||
+		name == dfv1.CtrMain ||
+		name == dfv1.CtrUdf ||
+		name == dfv1.CtrUdsink
 }

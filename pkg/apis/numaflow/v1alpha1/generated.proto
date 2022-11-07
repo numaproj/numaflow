@@ -127,6 +127,10 @@ message AbstractVertex {
   // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
   // +optional
   repeated k8s.io.api.core.v1.Container initContainers = 11;
+
+  // List of sidecar containers belonging to the pod.
+  // +optional
+  repeated k8s.io.api.core.v1.Container sidecars = 12;
 }
 
 message Authorization {

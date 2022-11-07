@@ -17374,6 +17374,13 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
+        "sidecars": {
+          "description": "List of sidecar containers belonging to the pod.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          },
+          "type": "array"
+        },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"
         },
@@ -18988,6 +18995,13 @@
         "serviceAccountName": {
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
+        },
+        "sidecars": {
+          "description": "List of sidecar containers belonging to the pod.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          },
+          "type": "array"
         },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"
