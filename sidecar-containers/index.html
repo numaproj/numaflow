@@ -13,7 +13,7 @@
     
     
       
-        <title>Controller Configuration - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Sidecar Containers - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#controller-configmap" class="md-skip">
+        <a href="#sidecar-containers" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Controller Configuration
+              Sidecar Containers
             
           </span>
         </div>
@@ -224,6 +224,8 @@
         
   
   
+    
+  
 
 
   
@@ -235,7 +237,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../pipeline/" class="md-tabs__link">
+      <a href="../pipeline/" class="md-tabs__link md-tabs__link--active">
         User Guide
       </a>
     </li>
@@ -247,15 +249,13 @@
         
   
   
-    
-  
 
 
   
   
   
     <li class="md-tabs__item">
-      <a href="../releases/" class="md-tabs__link md-tabs__link--active">
+      <a href="../releases/" class="md-tabs__link">
         Operator Manual
       </a>
     </li>
@@ -408,12 +408,14 @@
 
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" checked>
       
       
       
@@ -893,11 +895,21 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../sidecar-containers/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Sidecar Containers
       </a>
+      
     </li>
   
 
@@ -957,14 +969,12 @@
 
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4" type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4" type="checkbox" id="__nav_4" >
       
       
       
@@ -1013,14 +1023,12 @@
               
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_3" type="checkbox" id="__nav_4_3" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_3" type="checkbox" id="__nav_4_3" >
       
       
       
@@ -1041,65 +1049,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Controller Configuration
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../controller-configmap/" class="md-nav__link">
         Controller Configuration
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#configuration-structure" class="md-nav__link">
-    Configuration Structure
-  </a>
-  
-    <nav class="md-nav" aria-label="Configuration Structure">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#isb-service-configuration" class="md-nav__link">
-    ISB Service Configuration
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1318,34 +1272,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#configuration-structure" class="md-nav__link">
-    Configuration Structure
-  </a>
-  
-    <nav class="md-nav" aria-label="Configuration Structure">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#isb-service-configuration" class="md-nav__link">
-    ISB Service Configuration
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -1356,44 +1282,59 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/controller-configmap.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/sidecar-containers.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="controller-configmap">Controller ConfigMap<a class="headerlink" href="#controller-configmap" title="Permanent link">&para;</a></h1>
-<p>The controller ConfigMap is used for controller-wide settings.</p>
-<p>For a detailed example, please see <a href="../numaflow-controller-config.yaml"><code>numaflow-controller-config.yaml</code></a>.</p>
-<h2 id="configuration-structure">Configuration Structure<a class="headerlink" href="#configuration-structure" title="Permanent link">&para;</a></h2>
-<p>The configuration should be under <code>controller-config.yaml</code> key in the ConfigMap, as a string in <code>yaml</code> format:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span><span class="w"></span>
+<h1 id="sidecar-containers">Sidecar Containers<a class="headerlink" href="#sidecar-containers" title="Permanent link">&para;</a></h1>
+<p>Additional "<a href="https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers">sidecar</a>" containers can be provided for <code>udf</code> and <code>sink</code> vertices. <code>source</code> vertices do not currently support sidecars.</p>
+<p>The following example shows how to add a sidecar container to a <code>udf</code> vertex.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
 <span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-config</span><span class="w"></span>
-<span class="nt">data</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">controller-config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span><span class="w"></span>
-<span class="w">    </span><span class="no">isbsvc:</span><span class="w"></span>
-<span class="w">      </span><span class="no">jetstream:</span><span class="w"></span>
-<span class="w">        </span><span class="no">...</span><span class="w"></span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
+<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span><span class="w"></span>
+<span class="w">      </span><span class="nt">sidecars</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sidecar</span><span class="w"></span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">busybox:latest</span><span class="w"></span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;echo</span><span class="nv"> </span><span class="s">\&quot;my-sidecar</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">running!\&quot;</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">tail</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">/dev/null&quot;</span><span class="p p-Indicator">]</span><span class="w"></span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span><span class="w"></span>
 </code></pre></div>
-<h3 id="isb-service-configuration">ISB Service Configuration<a class="headerlink" href="#isb-service-configuration" title="Permanent link">&para;</a></h3>
-<p>One of the important configuration items in the ConfigMap is about <a href="../inter-step-buffer-service/">ISB Service</a>. We currently use 3rd party technologies such as <code>JetStream</code> to implement ISB Services, if those applications have new releases, to make them available in Numaflow, the new versions need to be added in the ConfigMap.</p>
-<p>For example, there's a new <code>Nats JetStream</code> version <code>x.y.x</code> available, a new version configuration like below needs to be added before it can be referenced in the <code>InterStepBufferService</code> spec.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span><span class="w"></span>
+<p>There are various use-cases for sidecars. One possible use-case is a <code>udf</code> container that needs functionality
+from a library written in a different language. The library's functionality could be made available through
+gRPC over Unix Domain Socket. The following example shows how that could be accomplished using a shared <a href="../volumes/"><code>volume</code></a>.</p>
+<p>It is the sidecar owner's responsibility to come up with a protocol that can be used with the UDF. It could be volume, gRPC, TCP, HTTP 1.x, etc.,</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
 <span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-config</span><span class="w"></span>
-<span class="nt">data</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">controller-config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span><span class="w"></span>
-<span class="w">    </span><span class="no">isbsvc:</span><span class="w"></span>
-<span class="w">      </span><span class="no">jetstream:</span><span class="w"></span>
-<span class="w">        </span><span class="no">versions:</span><span class="w"></span>
-<span class="w">          </span><span class="no">- version: x.y.x   # Name it whatever you want, it will be referenced in the InterStepBufferService spec.</span><span class="w"></span>
-<span class="w">            </span><span class="no">natsImage: nats:x.y.x</span><span class="w"></span>
-<span class="w">            </span><span class="no">metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1</span><span class="w"></span>
-<span class="w">            </span><span class="no">configReloaderImage: natsio/nats-server-config-reloader:0.7.0</span><span class="w"></span>
-<span class="w">            </span><span class="no">startCommand: /nats-server</span><span class="w"></span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
+<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-vertex</span><span class="w"></span>
+<span class="w">      </span><span class="nt">volumes</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-volume</span><span class="w"></span>
+<span class="w">          </span><span class="nt">emptyDir</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="nt">medium</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Memory</span><span class="w"></span>
+<span class="w">      </span><span class="nt">sidecars</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sidecar</span><span class="w"></span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alpine:latest</span><span class="w"></span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;apk</span><span class="nv"> </span><span class="s">add</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">UNIX-LISTEN:/path/to/my-sidecar-mount-path/my.sock</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">tail</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">/dev/null&quot;</span><span class="p p-Indicator">]</span><span class="w"></span>
+<span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-sidecar-mount-path</span><span class="w"></span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-volume</span><span class="w"></span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alpine:latest</span><span class="w"></span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;apk</span><span class="nv"> </span><span class="s">add</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">echo</span><span class="nv"> </span><span class="s">\&quot;hello\&quot;</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">UNIX-CONNECT:/path/to/my-udf-mount-path/my.sock,forever</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">tail</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">/dev/null&quot;</span><span class="p p-Indicator">]</span><span class="w"></span>
+<span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-udf-mount-path</span><span class="w"></span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-volume</span><span class="w"></span>
 </code></pre></div>
 
               
@@ -1415,7 +1356,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../installation/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Installation" rel="prev">
+        <a href="../init-containers/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Init Containers" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -1424,20 +1365,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Installation
+              Init Containers
             </div>
           </div>
         </a>
       
       
         
-        <a href="../metrics/metrics/" class="md-footer__link md-footer__link--next" aria-label="Next: Metrics" rel="next">
+        <a href="../pipeline-customization/" class="md-footer__link md-footer__link--next" aria-label="Next: Pipeline Customization" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Metrics
+              Pipeline Customization
             </div>
           </div>
           <div class="md-footer__button md-icon">
