@@ -2617,9 +2617,6 @@ settings
 <em>(Optional)</em>
 <p>
 Watermark enables watermark progression across the entire pipeline.
-Updating this after the pipeline has been created will have no impact
-and will be ignored. To make the pipeline honor any changes to the
-setting, the pipeline should be recreated.
 </p>
 </td>
 </tr>
@@ -2823,9 +2820,6 @@ settings
 <em>(Optional)</em>
 <p>
 Watermark enables watermark progression across the entire pipeline.
-Updating this after the pipeline has been created will have no impact
-and will be ignored. To make the pipeline honor any changes to the
-setting, the pipeline should be recreated.
 </p>
 </td>
 </tr>
@@ -3725,6 +3719,19 @@ Refer to the Kubernetes API documentation for the fields of the
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>watermark</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Watermark indicates watermark progression in the vertex, it’s populated
+from the pipeline watermark settings.
+</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -3919,6 +3926,19 @@ Description
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>watermark</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Watermark indicates watermark progression in the vertex, it’s populated
+from the pipeline watermark settings.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.VertexStatus">
@@ -4001,7 +4021,8 @@ Watermark
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
 </p>
 <p>
 </p>

@@ -373,18 +373,6 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 		}
 	}
 	podSpec.InitContainers[0].Args = append(podSpec.InitContainers[0].Args, "--buffers="+strings.Join(bfs, ","))
-
-	podSpec.Containers[0].Env = append(podSpec.Containers[0].Env, corev1.EnvVar{
-		Name:  dfv1.EnvWatermarkDisabled,
-		Value: fmt.Sprintf("%t", pl.Spec.Watermark.Disabled),
-	})
-
-	maxDelay := pl.Spec.Watermark.GetMaxDelay().String()
-	podSpec.Containers[0].Env = append(podSpec.Containers[0].Env, corev1.EnvVar{
-		Name:  dfv1.EnvWatermarkMaxDelay,
-		Value: maxDelay,
-	})
-
 	return podSpec, nil
 }
 

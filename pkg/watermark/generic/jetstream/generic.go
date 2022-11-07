@@ -29,7 +29,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
@@ -41,7 +40,7 @@ import (
 // The function is used only when watermarking is enabled on the pipeline.
 func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBuffer v1alpha1.Buffer) (fetch.Fetcher, map[string]publish.Publisher, error) {
 	// if watermark is not enabled, use no-op.
-	if !sharedutil.IsWatermarkEnabled() {
+	if vertexInstance.Vertex.Spec.Watermark.Disabled {
 		fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertexInstance.Vertex.GetToBuffers()))
 		return fetchWatermark, publishWatermark, nil
 	}
@@ -101,7 +100,7 @@ func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.Ve
 	if !vertexInstance.Vertex.IsASource() {
 		return nil, fmt.Errorf("not a source vertex")
 	}
-	if !sharedutil.IsWatermarkEnabled() {
+	if vertexInstance.Vertex.Spec.Watermark.Disabled {
 		return store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore()), nil
 	}
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName

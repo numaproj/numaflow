@@ -55,6 +55,10 @@ var (
 				{From: "input", To: "p1"},
 				{From: "p1", To: "output"},
 			},
+			Watermark: dfv1.Watermark{
+				Disabled: false,
+				MaxDelay: &metav1.Duration{Duration: 5 * time.Second},
+			},
 		},
 	}
 

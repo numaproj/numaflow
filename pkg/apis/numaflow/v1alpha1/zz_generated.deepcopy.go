@@ -1734,6 +1734,7 @@ func (in *VertexSpec) DeepCopyInto(out *VertexSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	in.Watermark.DeepCopyInto(&out.Watermark)
 	return
 }
 

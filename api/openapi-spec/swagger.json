@@ -18545,7 +18545,7 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "watermark": {
-          "description": "Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline should be recreated.",
+          "description": "Watermark enables watermark progression across the entire pipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Watermark"
         }
       }
@@ -19000,6 +19000,10 @@
           },
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
+        },
+        "watermark": {
+          "description": "Watermark indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Watermark"
         }
       }
     },
