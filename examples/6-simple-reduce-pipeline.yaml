@@ -3,11 +3,16 @@ kind: Pipeline
 metadata:
   name: even-odd-sum
 spec:
+  limits:
+    readBatchSize: 1
   vertices:
     - name: in
       source:
         http: {}
     - name: atoi
+      scale:
+        min: 1
+        max: 3
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
@@ -21,7 +26,7 @@ spec:
           window:
             fixed:
               length: 60s
-            keyed: true
+          keyed: true
     - name: sink
       scale:
         min: 1

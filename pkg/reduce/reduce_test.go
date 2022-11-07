@@ -207,6 +207,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		select {
 		case <-child.Done():
 			assert.Fail(t, child.Err().Error())
+			return
 		default:
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -286,11 +287,11 @@ func TestDataForward_StartWithInMemoryWMStore(t *testing.T) {
 
 	// create forwarder for tests
 	var reduceDataForwarder1, reduceDataForwarder2, reduceDataForwarder3 *DataForward
-	reduceDataForwarder1, err = NewDataForward(ctx, CounterReduceTest{}, fromBuffer1, toBuffer1, pbqManager1, CounterReduceTest{}, f1, p1, window1, WithReadBatchSize(10))
+	reduceDataForwarder1, err = NewDataForward(ctx, CounterReduceTest{}, fromBuffer1, toBuffer1, pbqManager1, CounterReduceTest{}, f1, p1, window1, WithReadBatchSize(1))
 	assert.NoError(t, err)
-	reduceDataForwarder2, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer2, toBuffer2, pbqManager2, CounterReduceTest{}, f2, p2, window2, WithReadBatchSize(10))
+	reduceDataForwarder2, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer2, toBuffer2, pbqManager2, CounterReduceTest{}, f2, p2, window2, WithReadBatchSize(1))
 	assert.NoError(t, err)
-	reduceDataForwarder3, err = NewDataForward(ctx, MaxReduceTest{}, fromBuffer3, toBuffer3, pbqManager3, CounterReduceTest{}, f3, p3, window3, WithReadBatchSize(10))
+	reduceDataForwarder3, err = NewDataForward(ctx, MaxReduceTest{}, fromBuffer3, toBuffer3, pbqManager3, CounterReduceTest{}, f3, p3, window3, WithReadBatchSize(1))
 	assert.NoError(t, err)
 
 	tests := []struct {
@@ -339,6 +340,8 @@ func TestDataForward_StartWithInMemoryWMStore(t *testing.T) {
 			for value.toBuffer.IsEmpty() {
 				select {
 				case <-ctx.Done():
+					assert.Fail(t, ctx.Err().Error())
+					return
 				default:
 					time.Sleep(100 * time.Millisecond)
 				}

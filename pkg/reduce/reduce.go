@@ -79,6 +79,7 @@ func (d *DataForward) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			d.log.Infow("Stopping reduce data forwarder, context was closed")
 			return
 		default:
 			d.forwardAChunk(ctx)
@@ -90,7 +91,6 @@ func (d *DataForward) Start(ctx context.Context) {
 // and forwards the messages to readloop
 func (d *DataForward) forwardAChunk(ctx context.Context) {
 	readMessages, err := d.fromBuffer.Read(ctx, d.opts.readBatchSize)
-
 	if err != nil {
 		d.log.Errorw("Failed to read from isb", zap.Error(err))
 	}

@@ -96,6 +96,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 	rl.pbqManager.StartUp(ctx)
 	// gets the partitions from the state
 	partitions := rl.pbqManager.ListPartitions()
+	println("partitions list len ", len(partitions))
 
 	for _, p := range partitions {
 		// Create keyed window for a given partition
