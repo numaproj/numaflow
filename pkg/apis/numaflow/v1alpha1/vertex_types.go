@@ -368,7 +368,6 @@ type AbstractVertex struct {
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,11,rep,name=initContainers"`
 	// List of sidecar containers belonging to the pod.
-	// More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
 	// +optional
 	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty" protobuf:"bytes,12,rep,name=sidecarContainers"`
 }
