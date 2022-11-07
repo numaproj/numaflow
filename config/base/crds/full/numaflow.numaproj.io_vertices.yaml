@@ -2604,6 +2604,17 @@ spec:
                   - name
                   type: object
                 type: array
+              watermark:
+                default:
+                  disabled: false
+                properties:
+                  disabled:
+                    default: false
+                    type: boolean
+                  maxDelay:
+                    default: 0s
+                    type: string
+                type: object
             required:
             - name
             - pipelineName

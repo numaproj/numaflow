@@ -76,6 +76,8 @@ type KafkaSource struct {
 	saramaClient sarama.Client
 	// source watermark publishers for different partitions
 	sourcePublishWMs map[int32]publish.Publisher
+	// max delay duration of watermark
+	watermarkMaxDelay time.Duration
 	// source watermark publisher stores
 	srcPublishWMStores store.WatermarkStorer
 	lock               *sync.RWMutex
@@ -162,7 +164,7 @@ func (r *KafkaSource) loadSourceWartermarkPublisher(partitionID int32) publish.P
 	}
 	entityName := fmt.Sprintf("%s-%s-%d", r.pipelineName, r.name, partitionID)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, publish.IsSource(), publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
+	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, publish.IsSource(), publish.WithDelay(r.watermarkMaxDelay))
 	r.sourcePublishWMs[partitionID] = sourcePublishWM
 	return sourcePublishWM
 }
@@ -266,6 +268,7 @@ func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWri
 		handlerbuffer:      100,             // default buffer size for kafka reads
 		srcPublishWMStores: publishWMStores,
 		sourcePublishWMs:   make(map[int32]publish.Publisher, 0),
+		watermarkMaxDelay:  vertexInstance.Vertex.Spec.Watermark.GetMaxDelay(),
 		lock:               new(sync.RWMutex),
 		logger:             logging.NewLogger(), // default logger
 	}

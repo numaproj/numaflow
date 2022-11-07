@@ -102,10 +102,6 @@ const (
 	EnvISBSvcConfig                   = "NUMAFLOW_ISBSVC_CONFIG"
 	EnvDebug                          = "NUMAFLOW_DEBUG"
 
-	// Watermark
-	EnvWatermarkDisabled = "NUMAFLOW_WATERMARK_DISABLED"
-	EnvWatermarkMaxDelay = "NUMAFLOW_WATERMARK_MAX_DELAY"
-
 	PathVarRun            = "/var/run/numaflow"
 	VertexMetricsPort     = 2469
 	VertexMetricsPortName = "metrics"
