@@ -3466,6 +3466,8 @@ spec:
                       type: array
                     sink:
                       properties:
+                        blackhole:
+                          type: object
                         kafka:
                           properties:
                             brokers:
