@@ -111,7 +111,7 @@ bufferConfig: |
     maxMsgs: 50000
     maxAge: 168h
     maxBytes: -1
-    # uncomment the next line to use in memory storage
+    # we use file storage by default, uncomment below to use in memory storage
     # memStorage: true
     replicas: 3
     duplicates: 60s
