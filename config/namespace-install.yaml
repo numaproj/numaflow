@@ -10362,7 +10362,7 @@ data:
             maxMsgs: 2000000
             maxAge: 168h
             maxBytes: -1
-            # 0: FileStorage, 1: MemoryStorage
+            # 0: File, 1: Memory
             storage: 0
             replicas: 3
             duplicates: 60s
