@@ -128,7 +128,7 @@ func (r *KafkaSource) GetName() string {
 // at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages.
 func (r *KafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	// It stores latest timestamps for different partitions
-	latestTimestamps := make(map[int32]time.Time)
+	oldestTimestamps := make(map[int32]time.Time)
 	msgs := make([]*isb.ReadMessage, 0, count)
 	timeout := time.After(r.readTimeout)
 loop:
@@ -139,8 +139,8 @@ loop:
 			_m := toReadMessage(m)
 			msgs = append(msgs, _m)
 			// Get latest timestamps for different partitions
-			if t, ok := latestTimestamps[m.Partition]; !ok || m.Timestamp.After(t) {
-				latestTimestamps[m.Partition] = m.Timestamp
+			if t, ok := oldestTimestamps[m.Partition]; !ok || m.Timestamp.Before(t) {
+				oldestTimestamps[m.Partition] = m.Timestamp
 			}
 		case <-timeout:
 			// log that timeout has happened and don't return an error
@@ -148,7 +148,7 @@ loop:
 			break loop
 		}
 	}
-	for p, t := range latestTimestamps {
+	for p, t := range oldestTimestamps {
 		publisher := r.loadSourceWartermarkPublisher(p)
 		publisher.PublishWatermark(processor.Watermark(t), nil) // Source publisher does not care about the offset
 	}
