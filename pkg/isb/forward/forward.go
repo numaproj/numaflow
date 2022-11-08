@@ -195,7 +195,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
-	// let's track only the last element's watermark
+	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
+	// to all the elements in the batch. If we were to assign last element's watermark, we will wronly mark on-time data
+	// as πlate date.
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
 		readBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
