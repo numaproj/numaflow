@@ -17420,6 +17420,10 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.Blackhole": {
+      "description": "Blackhole is a sink to emulate /dev/null",
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.Buffer": {
       "properties": {
         "Name": {
@@ -18725,6 +18729,9 @@
     },
     "io.numaproj.numaflow.v1alpha1.Sink": {
       "properties": {
+        "blackhole": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+        },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
         },

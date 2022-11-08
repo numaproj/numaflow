@@ -71,8 +71,8 @@ func TestBlackhole_Start(t *testing.T) {
 	<-stopped
 }
 
-// TestToLog_ForwardToTwoVertex writes to 2 vertices and have a logger sinks attached to each vertex.
-func TestToLog_ForwardToTwoVertex(t *testing.T) {
+// TestBlackhole_ForwardToTwoVertex writes to 2 vertices and have a blackhole sinks attached to each vertex.
+func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 

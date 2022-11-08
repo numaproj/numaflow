@@ -87,7 +87,7 @@ func (b *Blackhole) GetName() string {
 	return b.name
 }
 
-// IsFull returns whether logging is full, which is never true.
+// IsFull returns whether sink is full, which is never true.
 func (b *Blackhole) IsFull() bool {
 	// printing can never be full
 	return false
@@ -104,7 +104,7 @@ func (b *Blackhole) Close() error {
 	return nil
 }
 
-// Start starts sinking to Log.
+// Start starts the sink.
 func (b *Blackhole) Start() <-chan struct{} {
 	return b.isdf.Start()
 }
