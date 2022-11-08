@@ -136,8 +136,8 @@ data:
             maxMsgs: 2000000
             maxAge: 168h
             maxBytes: -1
-            # we use file storage by default, uncomment below to use in memory storage for stream configuration
-            # memStorage: true
+            # 0: FileStorage, 1: MemoryStorage
+            storage: 0
             replicas: 3
             duplicates: 60s
           # The default consumer properties for the created streams

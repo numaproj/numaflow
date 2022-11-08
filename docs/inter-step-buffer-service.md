@@ -112,7 +112,7 @@ bufferConfig: |
     maxAge: 168h
     maxBytes: -1
     # we use file storage by default, uncomment below to use in memory storage
-    # memStorage: true
+    storage: 0
     replicas: 3
     duplicates: 60s
   # The consumer properties for the created streams

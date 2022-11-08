@@ -92,10 +92,6 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 				if !errors.Is(err, nats.ErrStreamNotFound) {
 					return fmt.Errorf("failed to query information of stream %q during buffer creating, %w", streamName, err)
 				}
-				storage := nats.FileStorage
-				if v.GetBool("stream.memStorage") {
-					storage = nats.MemoryStorage
-				}
 				if _, err := js.AddStream(&nats.StreamConfig{
 					Name:       streamName,
 					Subjects:   []string{streamName}, // Use the stream name as the only subject
@@ -104,7 +100,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 					MaxMsgs:    v.GetInt64("stream.maxMsgs"),
 					MaxAge:     v.GetDuration("stream.maxAge"),
 					MaxBytes:   v.GetInt64("stream.maxBytes"),
-					Storage:    storage,
+					Storage:    nats.StorageType(v.GetInt("stream.storage")),
 					Replicas:   v.GetInt("stream.replicas"),
 					Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period
 				}); err != nil {
