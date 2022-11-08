@@ -244,7 +244,8 @@ loop:
 		// into the offset timeline store.
 		// Please note that we are inserting the watermark before the data has been persisted into ISB by the forwarder.
 		o := msgs[len(msgs)-1].ReadOffset
-		nanos, _ := o.Sequence()
+		// use the first eventime as watermark to make it conservative
+		nanos, _ := msgs[0].ReadOffset.Sequence()
 		// remove the nanosecond precision
 		mg.sourcePublishWM.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
 	}
