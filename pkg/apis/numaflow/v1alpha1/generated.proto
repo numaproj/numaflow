@@ -140,6 +140,10 @@ message Authorization {
   optional k8s.io.api.core.v1.SecretKeySelector token = 1;
 }
 
+// Blackhole is a sink to emulate /dev/null
+message Blackhole {
+}
+
 message Buffer {
   optional string name = 1;
 
@@ -856,7 +860,9 @@ message Sink {
 
   optional KafkaSink kafka = 2;
 
-  optional UDSink udsink = 3;
+  optional Blackhole blackhole = 3;
+
+  optional UDSink udsink = 4;
 }
 
 message Source {

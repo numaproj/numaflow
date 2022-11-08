@@ -51,6 +51,7 @@ nav:
       - Sinks:
           - sinks/kafka.md
           - sinks/log.md
+          - sinks/blackhole.md
           - User Defined Sinks: "sinks/user-defined-sinks.md"
       - User Defined Functions:
           - Overview: "user-defined-functions.md"
