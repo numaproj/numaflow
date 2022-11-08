@@ -133,7 +133,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 				History:      uint8(v.GetUint("otBucket.history")),
 				TTL:          v.GetDuration("otBucket.ttl"),
 				MaxBytes:     v.GetInt64("otBucket.maxBytes"),
-				Storage:      nats.FileStorage,
+				Storage:      nats.StorageType(v.GetInt("otBucket.storage")),
 				Replicas:     v.GetInt("otBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {
@@ -153,7 +153,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 				History:      uint8(v.GetUint("procBucket.history")),
 				TTL:          v.GetDuration("procBucket.ttl"),
 				MaxBytes:     v.GetInt64("procBucket.maxBytes"),
-				Storage:      nats.FileStorage,
+				Storage:      nats.StorageType(v.GetInt("procBucket.storage")),
 				Replicas:     v.GetInt("procBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {

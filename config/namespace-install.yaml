@@ -10375,12 +10375,16 @@ data:
             history: 5
             ttl: 3h
             maxBytes: 0
+            # 0: File, 1: Memory
+            storage: 0
             replicas: 3
           procBucket:
             maxValueSize: 0
             history: 1
             ttl: 72h
             maxBytes: 0
+            # 0: File, 1: Memory
+            storage: 0
             replicas: 3
         versions:
         - version: latest
