@@ -25,7 +25,7 @@ import (
 
 // sinkWriteCount is used to indicate the number of messages written to the sink
 var sinkWriteCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "log_sink",
+	Subsystem: "blackhole_sink",
 	Name:      "write_total",
-	Help:      "Total number of messages written to log sink",
+	Help:      "Total number of messages written to blackhole sink",
 }, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline})
