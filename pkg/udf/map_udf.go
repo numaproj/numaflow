@@ -52,7 +52,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	toBuffers := u.VertexInstance.Vertex.GetToBuffers()
 
 	// watermark variables
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(toBuffers))
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:

@@ -79,7 +79,7 @@ func (d *DataForward) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			d.log.Infow("Stopping reduce data forwarder, context was closed")
+			d.log.Infow("Stopping reduce data forwarder... ", zap.Error(ctx.Err()))
 			return
 		default:
 			d.forwardAChunk(ctx)

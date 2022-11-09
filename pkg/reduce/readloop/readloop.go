@@ -96,7 +96,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 	rl.pbqManager.StartUp(ctx)
 	// gets the partitions from the state
 	partitions := rl.pbqManager.ListPartitions()
-	println("partitions list len ", len(partitions))
+	rl.log.Info("Number of partitions to be replayed ", len(partitions))
 
 	for _, p := range partitions {
 		// Create keyed window for a given partition
@@ -188,6 +188,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		for _, cw := range closedWindows {
 			partitions := cw.Partitions()
 			rl.closePartitions(partitions)
+			rl.log.Debugw("Closing window start - ", cw.Start.UnixMilli(), " end - ", cw.End.UnixMilli())
 		}
 	}
 }
@@ -235,7 +236,7 @@ func (rl *ReadLoop) ShutDown(ctx context.Context) {
 func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindow {
 	// drop the late messages
 	if m.IsLate {
-		rl.log.Infow("Dropping the late message", zap.Time("eventTime", m.EventTime))
+		rl.log.Warnw("Dropping the late message", zap.Time("eventTime", m.EventTime), zap.Time("watermark", m.Watermark))
 		return []*keyed.KeyedWindow{}
 	}
 
@@ -245,6 +246,7 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindo
 		kw := rl.aw.GetKeyedWindow(win)
 		if kw == nil {
 			kw = rl.aw.CreateKeyedWindow(win)
+			rl.log.Debugw("Creating new keyed window", zap.Int64("window startTime", kw.Start.UnixMilli()), zap.Int64("window endTime", kw.End.UnixMilli()))
 		}
 		// track the key to window relationship
 		kw.AddKey(m.Key)
