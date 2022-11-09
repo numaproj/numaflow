@@ -32,12 +32,13 @@ import (
 	"math"
 	"time"
 
+	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
+
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfReducer "github.com/numaproj/numaflow/pkg/udf/reducer"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -96,7 +97,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 	rl.pbqManager.StartUp(ctx)
 	// gets the partitions from the state
 	partitions := rl.pbqManager.ListPartitions()
-	rl.log.Info("Number of partitions to be replayed ", len(partitions))
+	rl.log.Infow("Partitions to be replayed ", zap.Int("count", len(partitions)), zap.Any("partitions", partitions))
 
 	for _, p := range partitions {
 		// Create keyed window for a given partition
@@ -151,7 +152,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 				rErr := q.Write(ctx, m)
 				attempt += 1
 				if rErr != nil {
-					rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
+					rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
 					return false, nil
 				}
 				return true, nil
@@ -168,7 +169,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 				rErr := m.ReadOffset.AckIt()
 				attempt += 1
 				if rErr != nil {
-					rl.log.Errorw("Failed to ack message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.Any("attempt", attempt), zap.Error(rErr))
+					rl.log.Errorw("Failed to ack message", zap.String("msgOffSet", m.ReadOffset.String()), zap.Int("attempt", attempt), zap.Error(rErr))
 					return false, nil
 				}
 				return true, nil
@@ -181,14 +182,14 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		}
 
 		// close any windows that need to be closed.
-		wm := rl.waterMark(m)
+		wm := processor.Watermark(m.Watermark)
 		closedWindows := rl.aw.RemoveWindow(time.Time(wm))
 		rl.log.Debugw("closing windows", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
 
 		for _, cw := range closedWindows {
 			partitions := cw.Partitions()
 			rl.closePartitions(partitions)
-			rl.log.Debugw("Closing window start - ", cw.Start.UnixMilli(), " end - ", cw.End.UnixMilli())
+			rl.log.Debugw("Closing Window", zap.Time("windowStart", cw.Start), zap.Time("windowEnd", cw.End))
 		}
 	}
 }
@@ -213,7 +214,7 @@ func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partitio
 			q, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID)
 			if pbqErr != nil {
 				attempt += 1
-				rl.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", partitionID.String()), zap.Error(pbqErr))
+				rl.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.String("partitionID", partitionID.String()), zap.Error(pbqErr))
 				return false, nil
 			}
 			return true, nil
@@ -246,18 +247,13 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindo
 		kw := rl.aw.GetKeyedWindow(win)
 		if kw == nil {
 			kw = rl.aw.CreateKeyedWindow(win)
-			rl.log.Debugw("Creating new keyed window", zap.Int64("window startTime", kw.Start.UnixMilli()), zap.Int64("window endTime", kw.End.UnixMilli()))
+			rl.log.Debugw("Creating new keyed window", zap.Any("key", kw.Keys), zap.Int64("startTime", kw.Start.UnixMilli()), zap.Int64("endTime", kw.End.UnixMilli()))
 		}
 		// track the key to window relationship
 		kw.AddKey(m.Key)
 		kWindows = append(kWindows, kw)
 	}
 	return kWindows
-}
-
-// FIXME: this shouldn't be required.
-func (rl *ReadLoop) waterMark(message *isb.ReadMessage) processor.Watermark {
-	return processor.Watermark(message.Watermark)
 }
 
 // closePartitions closes the partitions by invoking close-of-book (COB).
