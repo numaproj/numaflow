@@ -315,6 +315,19 @@ List of init containers belonging to the pod. More info:
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>sidecars</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
+\[\]Kubernetes core/v1.Container </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+List of sidecar containers belonging to the pod.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Authorization">
@@ -354,6 +367,18 @@ needs to add “Authorization: Bearer <token>” in the header
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Blackhole">
+Blackhole
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+</p>
+<p>
+<p>
+Blackhole is a sink to emulate /dev/null
+</p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Buffer">
 Buffer
 </h3>
@@ -3307,6 +3332,14 @@ Log </a> </em>
 <td>
 <code>kafka</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink"> KafkaSink </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>blackhole</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Blackhole"> Blackhole </a> </em>
 </td>
 <td>
 </td>

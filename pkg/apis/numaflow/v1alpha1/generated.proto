@@ -127,6 +127,10 @@ message AbstractVertex {
   // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
   // +optional
   repeated k8s.io.api.core.v1.Container initContainers = 11;
+
+  // List of sidecar containers belonging to the pod.
+  // +optional
+  repeated k8s.io.api.core.v1.Container sidecars = 12;
 }
 
 message Authorization {
@@ -134,6 +138,10 @@ message Authorization {
   // To use this, the client needs to add "Authorization: Bearer <token>" in the header
   // +optional
   optional k8s.io.api.core.v1.SecretKeySelector token = 1;
+}
+
+// Blackhole is a sink to emulate /dev/null
+message Blackhole {
 }
 
 message Buffer {
@@ -852,7 +860,9 @@ message Sink {
 
   optional KafkaSink kafka = 2;
 
-  optional UDSink udsink = 3;
+  optional Blackhole blackhole = 3;
+
+  optional UDSink udsink = 4;
 }
 
 message Source {

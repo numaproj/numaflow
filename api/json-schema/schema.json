@@ -17374,6 +17374,13 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
+        "sidecars": {
+          "description": "List of sidecar containers belonging to the pod.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          },
+          "type": "array"
+        },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"
         },
@@ -17411,6 +17418,10 @@
           "description": "A secret selector which contains bearer token To use this, the client needs to add \"Authorization: Bearer \u003ctoken\u003e\" in the header"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.Blackhole": {
+      "description": "Blackhole is a sink to emulate /dev/null",
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Buffer": {
@@ -18718,6 +18729,9 @@
     },
     "io.numaproj.numaflow.v1alpha1.Sink": {
       "properties": {
+        "blackhole": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+        },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
         },
@@ -18988,6 +19002,13 @@
         "serviceAccountName": {
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
+        },
+        "sidecars": {
+          "description": "List of sidecar containers belonging to the pod.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          },
+          "type": "array"
         },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"

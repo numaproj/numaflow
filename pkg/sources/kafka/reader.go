@@ -138,7 +138,7 @@ loop:
 			kafkaSourceReadCount.With(map[string]string{metricspkg.LabelVertex: r.name, metricspkg.LabelPipeline: r.pipelineName}).Inc()
 			_m := toReadMessage(m)
 			msgs = append(msgs, _m)
-			// Get the oldest timestamps for different partitions
+			// Get latest timestamps for different partitions
 			if t, ok := oldestTimestamps[m.Partition]; !ok || m.Timestamp.Before(t) {
 				oldestTimestamps[m.Partition] = m.Timestamp
 			}

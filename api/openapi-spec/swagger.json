@@ -17382,6 +17382,13 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
+        "sidecars": {
+          "description": "List of sidecar containers belonging to the pod.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
+        },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"
         },
@@ -17416,6 +17423,10 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
         }
       }
+    },
+    "io.numaproj.numaflow.v1alpha1.Blackhole": {
+      "description": "Blackhole is a sink to emulate /dev/null",
+      "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Buffer": {
       "type": "object",
@@ -18705,6 +18716,9 @@
     "io.numaproj.numaflow.v1alpha1.Sink": {
       "type": "object",
       "properties": {
+        "blackhole": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+        },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
         },
@@ -18970,6 +18984,13 @@
         "serviceAccountName": {
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
+        },
+        "sidecars": {
+          "description": "List of sidecar containers belonging to the pod.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
         },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"

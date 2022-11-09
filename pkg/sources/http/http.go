@@ -223,7 +223,6 @@ loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-h.messages:
-			//
 			if oldest.IsZero() || m.EventTime.Before(oldest) {
 				oldest = m.EventTime
 			}
@@ -234,7 +233,7 @@ loop:
 			break loop
 		}
 	}
-	h.logger.Debug("Read %d messages.", len(msgs))
+	h.logger.Debugf("Read %d messages.", len(msgs))
 	if len(msgs) > 0 && !oldest.IsZero() {
 		h.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), msgs[len(msgs)-1].ReadOffset)
 	}
