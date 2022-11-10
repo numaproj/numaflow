@@ -19,6 +19,7 @@ package publish
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -31,12 +32,11 @@ import (
 
 // Publisher interface defines how to publish Watermark for a ProcessorEntitier.
 type Publisher interface {
+	io.Closer
 	// PublishWatermark publishes the watermark.
 	PublishWatermark(processor.Watermark, isb.Offset)
 	// GetLatestWatermark returns the latest published watermark.
 	GetLatestWatermark() processor.Watermark
-	// StopPublisher stops the publisher
-	StopPublisher()
 }
 
 // publish publishes the watermark for a processor entity.
@@ -183,20 +183,25 @@ func (p *publish) publishHeartbeat() {
 	}
 }
 
-// StopPublisher stops the publisher and cleans up the data associated with key.
-func (p *publish) StopPublisher() {
+// Close stops the publisher and cleans up the data associated with key.
+func (p *publish) Close() error {
+	p.log.Infow("Closing watermark publisher", zap.String("hbBucket", p.heartbeatStore.GetStoreName()), zap.String("otBucket", p.otStore.GetStoreName()))
+	defer func() {
+		if p.otStore != nil {
+			p.otStore.Close()
+		}
+		if p.heartbeatStore != nil {
+			p.heartbeatStore.Close()
+		}
+	}()
 	// TODO: cleanup after processor dies
 	//   - delete the Offset-Timeline bucket
 	//   - remove itself from heartbeat bucket
 
-	p.log.Infow("Stopping publisher", zap.String("bucket", p.heartbeatStore.GetStoreName()))
-
 	// clean up heartbeat bucket
-	err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetID())
-	if err != nil {
+	if err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetID()); err != nil {
 		p.log.Errorw("Failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetID()), zap.Error(err))
+		return err
 	}
-
-	p.otStore.Close()
-	p.heartbeatStore.Close()
+	return nil
 }

@@ -134,7 +134,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &edgeFetcher{
 				ctx:              ctx,
-				edgeName:         "testBuffer",
+				bufferName:       "testBuffer",
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}

@@ -50,7 +50,8 @@ func (e EventTypeWMProgressor) GetLatestWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
-func (e EventTypeWMProgressor) StopPublisher() {
+func (e EventTypeWMProgressor) Close() error {
+	return nil
 }
 
 func (e EventTypeWMProgressor) GetWatermark(_ isb.Offset) processor.Watermark {
@@ -401,8 +402,7 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_PROCESSORS", hbWatcherCh)
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 
-	var pm = fetch.NewProcessorManager(ctx, wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), fetch.WithPodHeartbeatRate(1), fetch.WithRefreshingProcessorsRate(1))
-	var f = fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), pm)
+	var f = fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
 	return f, publishers
 }
 
