@@ -54,9 +54,10 @@ type publish struct {
 
 // NewPublish returns `Publish`.
 func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, watermarkStores store.WatermarkStorer, inputOpts ...PublishOption) Publisher {
-
-	log := logging.FromContext(ctx)
-
+	log := logging.FromContext(ctx).With("entityID", processorEntity.GetID()).
+		With("otStore", watermarkStores.OffsetTimelineStore().GetStoreName()).
+		With("hbStore", watermarkStores.HeartbeatStore().GetStoreName())
+	log.Info("Creating a new watermark publisher")
 	opts := &publishOptions{
 		autoRefreshHeartbeat: true,
 		podHeartbeatRate:     5,
@@ -81,7 +82,6 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 	if opts.autoRefreshHeartbeat {
 		go p.publishHeartbeat()
 	}
-
 	return p
 }
 

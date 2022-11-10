@@ -42,12 +42,14 @@ type edgeFetcher struct {
 
 // NewEdgeFetcher returns a new edge fetcher.
 func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.WatermarkStoreWatcher) Fetcher {
+	log := logging.FromContext(ctx).With("bufferName", bufferName)
+	log.Info("Creating a new edge watermark fetcher")
 	return &edgeFetcher{
 		ctx:              ctx,
 		bufferName:       bufferName,
 		storeWatcher:     storeWatcher,
 		processorManager: NewProcessorManager(ctx, storeWatcher),
-		log:              logging.FromContext(ctx).With("bufferName", bufferName),
+		log:              log,
 	}
 }
 

@@ -41,12 +41,14 @@ type sourceFetcher struct {
 // NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
 // buckets of the source buffer.
 func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher store.WatermarkStoreWatcher) Fetcher {
+	log := logging.FromContext(ctx).With("sourceBufferName", sourceBufferName)
+	log.Info("Creating a new source watermark fetcher")
 	return &sourceFetcher{
 		ctx:              ctx,
 		sourceBufferName: sourceBufferName,
 		storeWatcher:     storeWatcher,
 		processorManager: NewProcessorManager(ctx, storeWatcher),
-		log:              logging.FromContext(ctx).With("sourceBufferName", sourceBufferName),
+		log:              log,
 	}
 }
 
