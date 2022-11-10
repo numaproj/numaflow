@@ -22,7 +22,8 @@ import (
 
 // Store provides methods to read, write and delete data from the store.
 type Store interface {
-	// Read returns upto N(size) messages from the persisted store
+	// Read returns upto N(size) messages from the persisted store, it also returns
+	// a boolean flag to indicate if the end of file has been reached.
 	Read(size int64) ([]*isb.ReadMessage, bool, error)
 	// Write writes message to persistence store
 	Write(msg *isb.ReadMessage) error

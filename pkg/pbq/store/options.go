@@ -31,6 +31,8 @@ type StoreOptions struct {
 	pbqStoreType dfv1.StoreType
 	// storeSize store array size
 	storeSize int64
+	// storePath
+	storePath string
 }
 
 func (o *StoreOptions) StoreSize() int64 {
@@ -41,12 +43,17 @@ func (o *StoreOptions) PBQStoreType() dfv1.StoreType {
 	return o.pbqStoreType
 }
 
+func (o *StoreOptions) StorePath() string {
+	return o.storePath
+}
+
 func DefaultOptions() *StoreOptions {
 	return &StoreOptions{
 		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
 		syncDuration: dfv1.DefaultStoreSyncDuration,
 		pbqStoreType: dfv1.DefaultStoreType,
 		storeSize:    dfv1.DefaultStoreSize,
+		storePath:    dfv1.DefaultStorePath,
 	}
 }
 
@@ -64,6 +71,14 @@ func WithMaxBufferSize(size int64) StoreOption {
 func WithSyncDuration(maxDuration time.Duration) StoreOption {
 	return func(o *StoreOptions) error {
 		o.syncDuration = maxDuration
+		return nil
+	}
+}
+
+// WithStorePath sets store path option
+func WithStorePath(path string) StoreOption {
+	return func(o *StoreOptions) error {
+		o.storePath = path
 		return nil
 	}
 }
