@@ -23,6 +23,8 @@ import (
 	"context"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -32,7 +34,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/window"
-	"go.uber.org/zap"
 )
 
 // DataForward reads data from isb and forwards them to readloop
@@ -79,6 +80,7 @@ func (d *DataForward) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			d.log.Infow("Stopping reduce data forwarder... ", zap.Error(ctx.Err()))
 			return
 		default:
 			d.forwardAChunk(ctx)
@@ -90,7 +92,6 @@ func (d *DataForward) Start(ctx context.Context) {
 // and forwards the messages to readloop
 func (d *DataForward) forwardAChunk(ctx context.Context) {
 	readMessages, err := d.fromBuffer.Read(ctx, d.opts.readBatchSize)
-
 	if err != nil {
 		d.log.Errorw("Failed to read from isb", zap.Error(err))
 	}
@@ -99,9 +100,9 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 		return
 	}
 
-	// fetch watermark if available
-	// let's track only the last element's watermark
-	processorWM := d.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
+	// fetch watermark using the first element's watermark, because we assign the watermark to all other
+	// elements in the batch based on the watermark we fetch from 0th offset.
+	processorWM := d.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
 		m.Watermark = time.Time(processorWM)
 	}

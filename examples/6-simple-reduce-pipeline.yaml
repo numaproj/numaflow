@@ -1,0 +1,39 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: even-odd-sum
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: atoi
+      scale:
+        min: 1
+      udf:
+        container:
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
+          image: quay.io/numaio/go-even-odd-example
+    - name: compute-sum
+      udf:
+        container:
+          # compute the sum
+          image: quay.io/numaio/go-integer-sum-example
+        groupBy:
+          window:
+            fixed:
+              length: 60s
+          keyed: true
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: atoi
+    - from: atoi
+      to: compute-sum
+      parallelism: 2
+    - from: compute-sum
+      to: sink
