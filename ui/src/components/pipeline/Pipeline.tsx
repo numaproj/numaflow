@@ -134,8 +134,8 @@ export function Pipeline() {
               vertexWatermark.isWaterMarkEnabled = json["isWatermarkEnabled"];
               vertexWatermark.watermark = json["watermark"];
               vertexWatermark.watermarkLocalTime = new Date(
-                json["watermark"]
-              ).toLocaleString();
+                vertexWatermark.watermark
+              ).toISOString();
               vertexToWatermarkMap.set(vertex.name, vertexWatermark);
             });
         })
