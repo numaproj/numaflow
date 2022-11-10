@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -67,6 +68,22 @@ func BuildTestReadMessages(count int64, startTime time.Time) []isb.ReadMessage {
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
 			ReadOffset: isb.SimpleStringOffset(func() string { return fmt.Sprintf("read_%s", writeMessage.Header.ID) }),
+		}
+	}
+
+	return readMessages
+}
+
+// BuildTestReadMessages builds test isb.ReadMessage which can be used for testing.
+func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.ReadMessage {
+	writeMessages := BuildTestWriteMessages(count, startTime)
+	var readMessages = make([]isb.ReadMessage, count)
+
+	for idx, writeMessage := range writeMessages {
+		offset, _ := strconv.Atoi(writeMessage.Header.ID)
+		readMessages[idx] = isb.ReadMessage{
+			Message:    writeMessage,
+			ReadOffset: isb.SimpleIntOffset(func() int64 { return int64(offset) }),
 		}
 	}
 
