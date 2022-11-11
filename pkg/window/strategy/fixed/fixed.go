@@ -81,7 +81,6 @@ func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower 
 func (f *Fixed) CreateWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-
 	// this could be the first window
 	if f.entries.Len() == 0 {
 		f.entries.PushFront(kw)
