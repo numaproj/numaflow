@@ -20,24 +20,6 @@ import (
 	"time"
 )
 
-// IntervalWindow has the window boundary details.
-type IntervalWindow struct {
-	// Start is start time of the boundary which is inclusive.
-	Start time.Time
-	// End is the end time of the boundary and is exclusive.
-	End time.Time
-}
-
-// StartTime returns start of the window.
-func (iw *IntervalWindow) StartTime() time.Time {
-	return iw.Start
-}
-
-// EndTime returns end of the window.
-func (iw *IntervalWindow) EndTime() time.Time {
-	return iw.End
-}
-
 // AlignedWindow interface represents a bounded window at a moment in time
 // for example in case of fixed and sliding windows, AlignedWindow will have the
 // same start and end time as the initial window that element is slotted in to.
@@ -59,4 +41,22 @@ type Windower interface {
 	GetWindow(iw *IntervalWindow) AlignedWindow
 	// RemoveWindows returns list of window(s) that can be closed
 	RemoveWindows(time time.Time) []AlignedWindow
+}
+
+// IntervalWindow has the window boundary details.
+type IntervalWindow struct {
+	// Start is start time of the boundary which is inclusive.
+	Start time.Time
+	// End is the end time of the boundary and is exclusive.
+	End time.Time
+}
+
+// StartTime returns start of the window.
+func (iw *IntervalWindow) StartTime() time.Time {
+	return iw.Start
+}
+
+// EndTime returns end of the window.
+func (iw *IntervalWindow) EndTime() time.Time {
+	return iw.End
 }
