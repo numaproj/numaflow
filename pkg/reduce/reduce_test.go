@@ -72,7 +72,7 @@ type CounterReduceTest struct {
 }
 
 // Reduce returns a result with the count of messages
-func (f CounterReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (f CounterReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	count := 0
 	for range messageStream {
 		count += 1
@@ -104,7 +104,7 @@ func (f CounterReduceTest) WhereTo(s string) ([]string, error) {
 type SumReduceTest struct {
 }
 
-func (s SumReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	sum := 0
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -134,7 +134,7 @@ func (s SumReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, me
 type MaxReduceTest struct {
 }
 
-func (m MaxReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	mx := math.MinInt64
 	for msg := range messageStream {
 		var payload PayloadForTest

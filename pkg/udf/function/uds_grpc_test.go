@@ -307,7 +307,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			Key:   "test",
 		}
 
-		got, err := u.Reduce(ctx, partitionID, messageCh)
+		got, err := u.ApplyReduce(ctx, partitionID, messageCh)
 
 		assert.Len(t, got, 1)
 		assert.NoError(t, err)
@@ -358,7 +358,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			Key:   "test",
 		}
 
-		_, err := u.Reduce(ctx, partitionID, messageCh)
+		_, err := u.ApplyReduce(ctx, partitionID, messageCh)
 
 		assert.ErrorIs(t, err, ApplyUDFErr{
 			UserUDFErr: false,
@@ -400,7 +400,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			End:   time.Unix(120, 0),
 			Key:   "test",
 		}
-		_, err := u.Reduce(ctx, partitionID, messageCh)
+		_, err := u.ApplyReduce(ctx, partitionID, messageCh)
 
 		assert.Error(t, err, ctx.Err())
 	})
@@ -470,7 +470,7 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 		Key:   "test",
 	}
 
-	result, err := u.Reduce(ctx, partitionID, messageCh)
+	result, err := u.ApplyReduce(ctx, partitionID, messageCh)
 
 	var resultPayload testutils.PayloadForTest
 	_ = json.Unmarshal(result[0].Payload, &resultPayload)

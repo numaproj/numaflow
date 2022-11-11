@@ -30,7 +30,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/readloop"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	udfReducer "github.com/numaproj/numaflow/pkg/udf/reducer"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/window"
@@ -47,7 +47,7 @@ type DataForward struct {
 }
 
 func NewDataForward(ctx context.Context,
-	udf udfReducer.Reducer,
+	udf applier.ReduceApplier,
 	fromBuffer isb.BufferReader,
 	toBuffers map[string]isb.BufferWriter,
 	pbqManager *pbq.Manager,

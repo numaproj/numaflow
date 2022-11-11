@@ -185,7 +185,7 @@ func (p *publish) publishHeartbeat() {
 
 // Close stops the publisher and cleans up the data associated with key.
 func (p *publish) Close() error {
-	p.log.Infow("Closing watermark publisher", zap.String("hbBucket", p.heartbeatStore.GetStoreName()), zap.String("otBucket", p.otStore.GetStoreName()))
+	p.log.Info("Closing watermark publisher")
 	defer func() {
 		if p.otStore != nil {
 			p.otStore.Close()
