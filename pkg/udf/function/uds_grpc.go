@@ -19,6 +19,7 @@ package function
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -128,7 +129,14 @@ func (u *udsGRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partitio
 	var result []*functionpb.Datum
 	var err error
 
-	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: partitionID.Key}))
+	// pass key and window information inside the context
+	mdMap := map[string]string{
+		functionsdk.DatumKey:     partitionID.Key,
+		functionsdk.WinStartTime: strconv.FormatInt(partitionID.Start.UnixMilli(), 10),
+		functionsdk.WinEndTime:   strconv.FormatInt(partitionID.End.UnixMilli(), 10),
+	}
+
+	ctx = metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
 
 	// invoke the reduceFn method with datumCh channel
 	wg.Add(1)
