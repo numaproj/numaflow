@@ -24,7 +24,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe
 	github.com/nats-io/nats.go v1.19.1
-	github.com/numaproj/numaflow-go v0.2.3
+	github.com/numaproj/numaflow-go v0.2.4
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/common v0.32.1
 	github.com/soheilhy/cmux v0.1.5
