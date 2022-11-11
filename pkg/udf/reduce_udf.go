@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package udf
 
 import (
@@ -6,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -16,12 +34,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/shuffle"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"go.uber.org/zap"
 )
 
 type ReduceUDFProcessor struct {
@@ -43,29 +61,31 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	var reader isb.BufferReader
 	var writers map[string]isb.BufferWriter
 	var err error
+	var fromBuffer dfv1.Buffer
 	fromBuffers := u.VertexInstance.Vertex.GetFromBuffers()
-	var fromBufferName string
+	// choose the buffer that corresponds to this reduce processor because
+	// reducer's incoming edge can have more than one buffer for parallelism
 	for _, b := range fromBuffers {
 		if strings.HasSuffix(b.Name, fmt.Sprintf("-%d", u.VertexInstance.Replica)) {
-			fromBufferName = b.Name
+			fromBuffer = b
 			break
 		}
 	}
-	if len(fromBufferName) == 0 {
+	if len(fromBuffer.Name) == 0 {
 		return fmt.Errorf("can not find from buffer")
 	}
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		reader, writers = buildRedisBufferIO(ctx, fromBufferName, u.VertexInstance)
+		reader, writers = buildRedisBufferIO(ctx, fromBuffer.Name, u.VertexInstance)
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, fromBuffer)
 		if err != nil {
 			return err
 		}
-		reader, writers, err = buildJetStreamBufferIO(ctx, fromBufferName, u.VertexInstance)
+		reader, writers, err = buildJetStreamBufferIO(ctx, fromBuffer.Name, u.VertexInstance)
 		if err != nil {
 			return err
 		}
@@ -73,18 +93,28 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
+	// Populate shuffle function map
+	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
+	for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
+		if edge.Parallelism != nil && *edge.Parallelism > 1 {
+			s := shuffle.NewShuffle(dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge))
+			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
+		}
+	}
+
 	conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
 		result := []string{}
-		_key := string(key)
-		if _key == dfv1.MessageKeyAll || _key == dfv1.MessageKeyDrop {
-			result = append(result, _key)
+		if key == dfv1.MessageKeyDrop {
 			return result, nil
 		}
-		for _, to := range u.VertexInstance.Vertex.Spec.ToEdges {
-			// If returned key is not "ALL" or "DROP", and there's no conditions defined in the edge,
-			// treat it as "ALL"?
-			if to.Conditions == nil || len(to.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(to.Conditions.KeyIn, _key) {
-				result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, to)...)
+		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
+			// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
+			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key) {
+				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
+				} else {
+					result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+				}
 			}
 		}
 		return result, nil
@@ -105,7 +135,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}
 	}()
-	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName))
+	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer.Name))
 
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType)))

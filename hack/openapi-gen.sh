@@ -19,7 +19,7 @@ VERSION="v1alpha1"
 cd "${FAKE_REPOPATH}"
 
 go run ${CODEGEN_PKG}/cmd/openapi-gen/openapi-gen.go \
-    --go-header-file ${REPO_ROOT}/hack/custom-boilerplate.go.txt \
+    --go-header-file ${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt \
     --input-dirs github.com/numaproj/numaflow/pkg/apis/numaflow/${VERSION} \
     --output-package github.com/numaproj/numaflow/pkg/apis/numaflow/${VERSION} \
     $@

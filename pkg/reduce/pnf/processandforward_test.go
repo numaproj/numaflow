@@ -1,9 +1,24 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package pnf
 
 import (
 	"context"
 	"encoding/json"
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -177,7 +192,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			expected: []bool{false, true},
 			wmExpected: map[string]int64{
 				"buffer1": 120000,
-				"buffer2": math.MinInt64,
+				"buffer2": -1,
 			},
 		},
 		{
@@ -206,8 +221,8 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			pf:       createProcessAndForward(ctx, "test-drop-all", pbqManager, toBuffers3),
 			expected: []bool{true, true},
 			wmExpected: map[string]int64{
-				"buffer1": math.MinInt64,
-				"buffer2": math.MinInt64,
+				"buffer1": -1,
+				"buffer2": -1,
 			},
 		},
 	}

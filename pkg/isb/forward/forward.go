@@ -1,4 +1,20 @@
 /*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/*
 Package forward does the Read (fromBuffer) -> Process (UDF) -> Forward (toBuffers) -> Ack (fromBuffer) loop.
 */
 package forward
@@ -10,10 +26,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -178,8 +195,10 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
-	// let's track only the last element's watermark
-	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
+	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
+	// to all the elements in the batch. If we were to assign last element's watermark, we will wronly mark on-time data
+	// as πlate date.
+	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
 		readBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
 		m.Watermark = time.Time(processorWM)

@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package sinks
 
 import (
@@ -6,6 +22,8 @@ import (
 	"sync"
 
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/sinks/blackhole"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -18,7 +36,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	kafkasink "github.com/numaproj/numaflow/pkg/sinks/kafka"
 	logsink "github.com/numaproj/numaflow/pkg/sinks/logger"
-	udsink "github.com/numaproj/numaflow/pkg/sinks/udsink"
+	"github.com/numaproj/numaflow/pkg/sinks/udsink"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
@@ -61,7 +79,9 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
+		// we have only 1 in buffer ATM
+		fromBuffer := u.VertexInstance.Vertex.GetFromBuffers()[0]
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, fromBuffer)
 		if err != nil {
 			return err
 		}
@@ -125,6 +145,8 @@ func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLo
 		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {
 		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, fetchWM, publishWM, kafkasink.WithLogger(logger))
+	} else if x := sink.Blackhole; x != nil {
+		return blackhole.NewBlackhole(u.VertexInstance.Vertex, reader, fetchWM, publishWM, blackhole.WithLogger(logger))
 	} else if x := sink.UDSink; x != nil {
 		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, udsink.WithLogger(logger))
 	}

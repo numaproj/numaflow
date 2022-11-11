@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import (
@@ -46,6 +62,9 @@ func Test_ListAllEdges(t *testing.T) {
 	es = pl.ListAllEdges()
 	assert.Equal(t, 2, len(es))
 	assert.NotNil(t, es[0].Parallelism)
+	assert.Equal(t, int32(1), *es[0].Parallelism)
+	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
+	es = pl.ListAllEdges()
 	assert.Equal(t, int32(3), *es[0].Parallelism)
 }
 
@@ -145,6 +164,65 @@ func TestGetDaemonDeploy(t *testing.T) {
 		assert.Equal(t, CtrInit, c.Name)
 		assert.Equal(t, req.Image, c.Image)
 		assert.Contains(t, c.Args, "isbsvc-buffer-validate")
+	})
+
+	t.Run("test get deployment obj with pipeline overrides", func(t *testing.T) {
+		env := corev1.EnvVar{Name: "my-env-name", Value: "my-env-value"}
+		initEnv := corev1.EnvVar{Name: "my-init-env-name", Value: "my-init-env-value"}
+		podLabels := map[string]string{"my-label-name": "my-label-value"}
+		podAnnotations := map[string]string{"my-annotation-name": "my-annotation-value"}
+		replicas := int32(2)
+		nodeSelector := map[string]string{"my-node-selector-name": "my-node-selector-value"}
+		priority := int32(100)
+		toleration := corev1.Toleration{
+			Key:      "my-toleration-key",
+			Operator: "Equal",
+			Value:    "my-toleration-value",
+			Effect:   "NoSchedule",
+		}
+		pl := testPipeline.DeepCopy()
+		pl.Spec.Templates = &Templates{
+			DaemonTemplate: &DaemonTemplate{
+				ContainerTemplate: &ContainerTemplate{
+					Resources: testResources,
+					Env:       []corev1.EnvVar{env},
+				},
+				InitContainerTemplate: &ContainerTemplate{
+					Resources: testResources,
+					Env:       []corev1.EnvVar{initEnv},
+				},
+				AbstractPodTemplate: AbstractPodTemplate{
+					Metadata: &Metadata{
+						Annotations: podAnnotations,
+						Labels:      podLabels,
+					},
+					NodeSelector:      nodeSelector,
+					Tolerations:       []corev1.Toleration{toleration},
+					PriorityClassName: "my-priority-class-name",
+					Priority:          &priority,
+				},
+				Replicas: &replicas,
+			},
+		}
+		s, err := pl.GetDaemonDeploymentObj(req)
+		assert.NoError(t, err)
+		assert.Equal(t, pl.GetDaemonDeploymentName(), s.Name)
+		assert.Equal(t, 1, len(s.Spec.Template.Spec.Containers))
+		assert.Greater(t, len(s.Spec.Template.Spec.Containers[0].Env), 1)
+		assert.Contains(t, s.Spec.Template.Spec.Containers[0].Env, env)
+		assert.Equal(t, 1, len(s.Spec.Template.Spec.InitContainers))
+		assert.Equal(t, s.Spec.Template.Spec.InitContainers[0].Resources, testResources)
+		assert.Contains(t, s.Spec.Template.Spec.InitContainers[0].Env, initEnv)
+		assert.Greater(t, len(s.Spec.Template.Labels), len(podLabels))
+		assert.Equal(t, s.Spec.Template.Labels["my-label-name"], podLabels["my-label-name"])
+		assert.Equal(t, s.Spec.Template.Annotations["my-annotation-name"], podAnnotations["my-annotation-name"])
+		assert.NotNil(t, s.Spec.Replicas)
+		assert.Equal(t, *s.Spec.Replicas, replicas)
+		assert.Equal(t, s.Spec.Template.Spec.NodeSelector["my-node-selector-name"], nodeSelector["my-node-selector-name"])
+		assert.NotNil(t, s.Spec.Template.Spec.Priority)
+		assert.Equal(t, *s.Spec.Template.Spec.Priority, priority)
+		assert.Contains(t, s.Spec.Template.Spec.Tolerations, toleration)
+		assert.Equal(t, s.Spec.Template.Spec.PriorityClassName, "my-priority-class-name")
 	})
 }
 

@@ -1,6 +1,6 @@
 # Environment Variables
 
-For the `main` container of vertex pods, environment variable `NUMAFLOW_DEBUG` can be set to `true` for [debugging](./debugging.md).
+For the `numa` container of vertex pods, environment variable `NUMAFLOW_DEBUG` can be set to `true` for [debugging](./debugging.md).
 
 In [`udf`](./user-defined-functions.md) and [`udsink`](./sinks/user-defined-sinks.md) containers, there are some preset environment variables that can be used directly.
 
@@ -9,6 +9,8 @@ In [`udf`](./user-defined-functions.md) and [`udsink`](./sinks/user-defined-sink
 - `NUMAFLOW_REPLICA` - Replica index.
 - `NUMAFLOW_PIPELINE_NAME` - Name of the pipeline.
 - `NUMAFLOW_VERTEX_NAME` - Name of the vertex.
+
+For setting environment variables on pods not owned by a vertex, see [Pipeline Customization](./pipeline-customization.md).
 
 ## Your Own Environment Variables
 

@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fetch
 
 import (
@@ -23,7 +39,7 @@ type ProcessorManager struct {
 	otWatcher store.WatermarkKVWatcher
 	// heartbeat just tracks the heartbeat of each processing unit. we use it to mark a processing unit's status (e.g, inactive)
 	heartbeat *ProcessorHeartbeat
-	// processors has reference to the actual processing unit (ProcessorEntity) which includes offset timeline which is
+	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
 	// used for tracking watermark.
 	processors map[string]*ProcessorToFetch
 	lock       sync.RWMutex
@@ -38,7 +54,6 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
-		separateOTBucket:         false,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
@@ -166,7 +181,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					// A fromProcessor needs to be added to v.processors
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
-					var entity = processor.NewProcessorEntity(value.Key(), processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
+					var entity = processor.NewProcessorEntity(value.Key())
 					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.otWatcher)
 					v.addProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))

@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package pipeline
 
 import (
@@ -434,6 +450,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			InterStepBufferServiceName: pl.Spec.InterStepBufferServiceName,
 			FromEdges:                  fromEdges,
 			ToEdges:                    toEdges,
+			Watermark:                  pl.Spec.Watermark,
 			Replicas:                   &replicas,
 		}
 		hash := sharedutil.MustHash(spec.WithOutReplicas())
@@ -502,27 +519,49 @@ func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferS
 	if len(randomStr) > 6 {
 		randomStr = strings.ToLower(randomStr[:6])
 	}
+	l := map[string]string{
+		dfv1.KeyPartOf:       dfv1.Project,
+		dfv1.KeyManagedBy:    dfv1.ControllerPipeline,
+		dfv1.KeyComponent:    dfv1.ComponentJob,
+		dfv1.KeyPipelineName: pl.Name,
+	}
+	spec := batchv1.JobSpec{
+		TTLSecondsAfterFinished: pointer.Int32(30),
+		BackoffLimit:            pointer.Int32(20),
+		Template: corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels:      l,
+				Annotations: map[string]string{},
+			},
+			Spec: corev1.PodSpec{
+				RestartPolicy: corev1.RestartPolicyOnFailure,
+				Containers:    []corev1.Container{c},
+			},
+		},
+	}
+	if pl.Spec.Templates != nil && pl.Spec.Templates.JobTemplate != nil {
+		jt := pl.Spec.Templates.JobTemplate
+		if jt.TTLSecondsAfterFinished != nil {
+			spec.TTLSecondsAfterFinished = jt.TTLSecondsAfterFinished
+		}
+		if jt.BackoffLimit != nil {
+			spec.BackoffLimit = jt.BackoffLimit
+		}
+		jt.AbstractPodTemplate.ApplyToPodTemplateSpec(&spec.Template)
+		if jt.ContainerTemplate != nil {
+			jt.ContainerTemplate.ApplyToNumaflowContainers(spec.Template.Spec.Containers)
+		}
+	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: pl.Namespace,
 			Name:      fmt.Sprintf("%s-buffer-%s-%v", pl.Name, jobType, randomStr),
-			Labels: map[string]string{
-				dfv1.KeyPipelineName: pl.Name,
-			},
+			Labels:    l,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind),
 			},
 		},
-		Spec: batchv1.JobSpec{
-			TTLSecondsAfterFinished: pointer.Int32(30),
-			BackoffLimit:            pointer.Int32(20),
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-					Containers:    []corev1.Container{c},
-				},
-			},
-		},
+		Spec: spec,
 	}
 }
 

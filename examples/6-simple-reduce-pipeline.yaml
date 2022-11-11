@@ -7,7 +7,9 @@ spec:
     - name: in
       source:
         http: {}
-    - name: even-or-odd
+    - name: atoi
+      scale:
+        min: 1
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
@@ -16,28 +18,22 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/yhl25/reduce-image:master
+          image: quay.io/numaio/go-integer-sum-example
         groupBy:
           window:
             fixed:
               length: 60s
-            keyed: true
+          keyed: true
     - name: sink
+      scale:
+        min: 1
       sink:
         log: {}
   edges:
     - from: in
-      to: even-or-odd
-    - from: even-or-odd
+      to: atoi
+    - from: atoi
       to: compute-sum
-      conditions:
-        keyIn:
-          - even
-          - odd
-      parallelism: 1
+      parallelism: 2
     - from: compute-sum
       to: sink
-      conditions:
-        keyIn:
-          - even
-          - odd

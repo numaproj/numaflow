@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Package generator contains an implementation of a in memory generator that generates
 // payloads in json format.
 package generator
@@ -6,6 +22,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -183,6 +200,13 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	return gensrc, nil
 }
 
+func (mg *memgen) buildSourceWatermarkPublisher(publishWMStores store.WatermarkStorer) publish.Publisher {
+	// for tickgen, it can be the name of the replica
+	entityName := fmt.Sprintf("%s-%d", mg.vertexInstance.Vertex.Name, mg.vertexInstance.Replica)
+	processorEntity := processor.NewProcessorEntity(entityName)
+	return publish.NewPublish(mg.lifecycleCtx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(mg.vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+}
+
 func (mg *memgen) GetName() string {
 	return mg.name
 }
@@ -220,7 +244,8 @@ loop:
 		// into the offset timeline store.
 		// Please note that we are inserting the watermark before the data has been persisted into ISB by the forwarder.
 		o := msgs[len(msgs)-1].ReadOffset
-		nanos, _ := o.Sequence()
+		// use the first eventime as watermark to make it conservative
+		nanos, _ := msgs[0].ReadOffset.Sequence()
 		// remove the nanosecond precision
 		mg.sourcePublishWM.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
 	}

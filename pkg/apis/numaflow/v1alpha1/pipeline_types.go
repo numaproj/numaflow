@@ -1,5 +1,5 @@
 /*
-
+Copyright 2022 The Numaproj Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -91,9 +91,11 @@ func (p Pipeline) ListAllEdges() []Edge {
 		toVertex := p.GetVertex(e.To)
 		if toVertex.UDF == nil || toVertex.UDF.GroupBy == nil {
 			// Clean up parallelism if downstream vertex is not a reduce UDF.
+			// This has been validated by the controller, harmless to do it here.
 			edgeCopy.Parallelism = nil
-		} else if edgeCopy.Parallelism == nil || *edgeCopy.Parallelism < 1 {
-			// Set parallelism = 1 if it's not set.
+		} else if edgeCopy.Parallelism == nil || *edgeCopy.Parallelism < 1 || !toVertex.UDF.GroupBy.Keyed {
+			// Set parallelism = 1 if it's not set, or it's a non-keyed reduce.
+			// Already validated by the controller to make sure parallelism is not > 1 if it's not keyed, harmless to check it again.
 			edgeCopy.Parallelism = pointer.Int32(1)
 		}
 		edges = append(edges, *edgeCopy)
@@ -203,7 +205,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		Name:            CtrMain,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       standardResources, // How to customize resources?
+		Resources:       standardResources,
 		Env:             envVars,
 		Args:            []string{"daemon-server", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
@@ -214,19 +216,27 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		KeyPipelineName: p.Name,
 	}
 	spec := appv1.DeploymentSpec{
-		Replicas: pointer.Int32(1),
 		Selector: &metav1.LabelSelector{
 			MatchLabels: labels,
 		},
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels: labels,
+				Labels:      labels,
+				Annotations: map[string]string{},
 			},
 			Spec: corev1.PodSpec{
 				Containers:     []corev1.Container{c},
 				InitContainers: []corev1.Container{p.getDaemonPodInitContainer(req)},
 			},
 		},
+	}
+	if p.Spec.Templates != nil && p.Spec.Templates.DaemonTemplate != nil {
+		dt := p.Spec.Templates.DaemonTemplate
+		spec.Replicas = dt.Replicas
+		dt.AbstractPodTemplate.ApplyToPodTemplateSpec(&spec.Template)
+		if dt.ContainerTemplate != nil {
+			dt.ContainerTemplate.ApplyToNumaflowContainers(spec.Template.Spec.Containers)
+		}
 	}
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -259,6 +269,9 @@ func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.C
 		bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
 	}
 	c.Args = append(c.Args, "--buffers="+strings.Join(bfs, ","))
+	if p.Spec.Templates != nil && p.Spec.Templates.DaemonTemplate != nil && p.Spec.Templates.DaemonTemplate.InitContainerTemplate != nil {
+		p.Spec.Templates.DaemonTemplate.InitContainerTemplate.ApplyToContainer(&c)
+	}
 	return c
 }
 
@@ -358,12 +371,13 @@ type PipelineSpec struct {
 	// +kubebuilder:default={"readBatchSize": 500, "bufferMaxLength": 30000, "bufferUsageLimit": 80}
 	// +optional
 	Limits *PipelineLimits `json:"limits,omitempty" protobuf:"bytes,5,opt,name=limits"`
-	// Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been
-	// created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline
-	// should be recreated.
+	// Watermark enables watermark progression across the entire pipeline.
 	// +kubebuilder:default={"disabled": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"`
+	// Templates is used to customize additional kubernetes resources required for the Pipeline
+	// +optional
+	Templates *Templates `json:"templates,omitempty" protobuf:"bytes,7,opt,name=templates"`
 }
 
 type Watermark struct {
@@ -383,6 +397,15 @@ func (wm Watermark) GetMaxDelay() time.Duration {
 		return wm.MaxDelay.Duration
 	}
 	return time.Duration(0)
+}
+
+type Templates struct {
+	// DaemonTemplate is used to customize the Daemon Deployment
+	// +optional
+	DaemonTemplate *DaemonTemplate `json:"daemon,omitempty" protobuf:"bytes,1,opt,name=daemon"`
+	// JobTemplate is used to customize Jobs
+	// +optional
+	JobTemplate *JobTemplate `json:"job,omitempty" protobuf:"bytes,2,opt,name=job"`
 }
 
 type PipelineLimits struct {

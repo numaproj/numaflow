@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package isbsvc
 
 import (
@@ -84,7 +100,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 					MaxMsgs:    v.GetInt64("stream.maxMsgs"),
 					MaxAge:     v.GetDuration("stream.maxAge"),
 					MaxBytes:   v.GetInt64("stream.maxBytes"),
-					Storage:    nats.FileStorage,
+					Storage:    nats.StorageType(v.GetInt("stream.storage")),
 					Replicas:   v.GetInt("stream.replicas"),
 					Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period
 				}); err != nil {
@@ -117,7 +133,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 				History:      uint8(v.GetUint("otBucket.history")),
 				TTL:          v.GetDuration("otBucket.ttl"),
 				MaxBytes:     v.GetInt64("otBucket.maxBytes"),
-				Storage:      nats.FileStorage,
+				Storage:      nats.StorageType(v.GetInt("otBucket.storage")),
 				Replicas:     v.GetInt("otBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {
@@ -137,7 +153,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 				History:      uint8(v.GetUint("procBucket.history")),
 				TTL:          v.GetDuration("procBucket.ttl"),
 				MaxBytes:     v.GetInt64("procBucket.maxBytes"),
-				Storage:      nats.FileStorage,
+				Storage:      nats.StorageType(v.GetInt("procBucket.storage")),
 				Replicas:     v.GetInt("procBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {

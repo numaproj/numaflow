@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Package generic implements some shareable watermarking progressors (fetcher and publisher) and methods.
 
 package jetstream
@@ -13,7 +29,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
@@ -22,21 +37,17 @@ import (
 
 // BuildWatermarkProgressors is used to populate fetchWatermark, and a map of publishWatermark with edge name as the key.
 // These are used as watermark progressors in the pipeline, and is attached to each edge of the vertex.
-// Fetcher has one-to-one relationship, whereas we have multiple publishers as the vertex can read only from one edge,
-// and it can write to many.
 // The function is used only when watermarking is enabled on the pipeline.
-func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetch.Fetcher, map[string]publish.Publisher, error) {
+func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBuffer v1alpha1.Buffer) (fetch.Fetcher, map[string]publish.Publisher, error) {
 	// if watermark is not enabled, use no-op.
-	if !sharedutil.IsWatermarkEnabled() {
+	if vertexInstance.Vertex.Spec.Watermark.Disabled {
 		fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertexInstance.Vertex.GetToBuffers()))
 		return fetchWatermark, publishWatermark, nil
 	}
 
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 
-	// Fetcher creation, we have only 1 in buffer ATM
 	var fetchWatermark fetch.Fetcher
-	fromBuffer := vertexInstance.Vertex.GetFromBuffers()[0]
 	hbBucketName := isbsvc.JetStreamProcessorBucket(pipelineName, fromBuffer.Name)
 	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
 	if err != nil {
@@ -89,7 +100,7 @@ func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.Ve
 	if !vertexInstance.Vertex.IsASource() {
 		return nil, fmt.Errorf("not a source vertex")
 	}
-	if !sharedutil.IsWatermarkEnabled() {
+	if vertexInstance.Vertex.Spec.Watermark.Disabled {
 		return store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore()), nil
 	}
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName

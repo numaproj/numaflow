@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vertex
 
 import (
@@ -183,8 +199,6 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetToBuffers() {
@@ -221,8 +235,6 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetFromBuffers() {
@@ -293,8 +305,6 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetFromBuffers() {

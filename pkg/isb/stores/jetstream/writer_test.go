@@ -1,5 +1,21 @@
 //go:build isb_jetstream
 
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package jetstream
 
 import (
@@ -125,6 +141,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	}
 
 	// assert toBuffer is full and all messages appear in toBuffer
+	time.Sleep(2 * time.Second) // wait for isFull check.
 	assert.True(t, to1.isFull.Load())
 
 	fromStepJs, err := fromStep.conn.JetStream()
@@ -132,7 +149,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	fromStepInfo, err := fromStepJs.StreamInfo(streamName)
 	assert.NoError(t, err)
 	// Make sure all messages are cleared up from from buffer as DiscardOldPolicy is false
-	assert.Equal(t, 0, fromStepInfo.State.Msgs)
+	assert.Equal(t, uint64(0), fromStepInfo.State.Msgs)
 
 	// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written
 	f.Stop()
