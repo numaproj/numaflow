@@ -19,10 +19,9 @@ limitations under the License.
 package keyed
 
 import (
-	"sync"
-
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
+	"sync"
 )
 
 // KeyedWindow maintains association between keys and a window.
@@ -61,7 +60,7 @@ func (kw *KeyedWindow) Partitions() []partition.ID {
 	partitions := make([]partition.ID, len(kw.Keys))
 	idx := 0
 	for k := range kw.Keys {
-		partitions[idx] = partition.ID{Start: kw.IntervalWindow.Start, End: kw.IntervalWindow.End, Key: k}
+		partitions[idx] = partition.ID{Start: kw.StartTime(), End: kw.EndTime(), Key: k}
 		idx++
 	}
 

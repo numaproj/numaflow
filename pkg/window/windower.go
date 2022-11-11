@@ -20,16 +20,43 @@ import (
 	"time"
 )
 
-// Windower assigns the element to zero or more windows.
-type Windower interface {
-	// AssignWindow assigns the event to the window based on give window configuration.
-	AssignWindow(eventTime time.Time) []*IntervalWindow
-}
-
 // IntervalWindow has the window boundary details.
 type IntervalWindow struct {
 	// Start is start time of the boundary which is inclusive.
 	Start time.Time
 	// End is the end time of the boundary and is exclusive.
 	End time.Time
+}
+
+// StartTime returns start of the window.
+func (iw *IntervalWindow) StartTime() time.Time {
+	return iw.Start
+}
+
+// EndTime returns end of the window.
+func (iw *IntervalWindow) EndTime() time.Time {
+	return iw.End
+}
+
+// AlignedWindow interface represents a bounded window at a moment in time
+// for example in case of fixed and sliding windows, AlignedWindow will have the
+// same start and end time as the initial window that element is slotted in to.
+// However, same cannot be said about a session window. Window Boundaries will keep
+// changing up until a session is closed or times out.
+type AlignedWindow interface {
+	StartTime() time.Time
+	EndTime() time.Time
+}
+
+// Windower manages windows
+// Will be implemented by each of the windowing strategies.
+type Windower interface {
+	// AssignWindow assigns the event to the window based on give window configuration.
+	AssignWindow(eventTime time.Time) []*IntervalWindow
+	// CreateWindow creates a window for a supplied interval
+	CreateWindow(iw *IntervalWindow) AlignedWindow
+	// GetWindow returns a keyed window for a supplied interval
+	GetWindow(iw *IntervalWindow) AlignedWindow
+	// RemoveWindows returns list of window(s) that can be closed
+	RemoveWindows(time time.Time) []AlignedWindow
 }

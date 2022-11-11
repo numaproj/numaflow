@@ -46,20 +46,18 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
 
 // ReadLoop is responsible for reading and forwarding the message from ISB to PBQ.
 type ReadLoop struct {
-	UDF               udfReducer.Reducer
-	pbqManager        *pbq.Manager
-	windowingStrategy window.Windower
-	aw                *fixed.ActiveWindows
-	op                *orderedForwarder
-	log               *zap.SugaredLogger
-	toBuffers         map[string]isb.BufferWriter
-	whereToDecider    forward.ToWhichStepDecider
-	publishWatermark  map[string]publish.Publisher
+	UDF              udfReducer.Reducer
+	pbqManager       *pbq.Manager
+	windower         window.Windower
+	op               *orderedForwarder
+	log              *zap.SugaredLogger
+	toBuffers        map[string]isb.BufferWriter
+	whereToDecider   forward.ToWhichStepDecider
+	publishWatermark map[string]publish.Publisher
 }
 
 // NewReadLoop initializes  and returns ReadLoop.
@@ -75,10 +73,8 @@ func NewReadLoop(ctx context.Context,
 	op := newOrderedForwarder(ctx)
 
 	rl := &ReadLoop{
-		UDF:               udf,
-		windowingStrategy: windowingStrategy,
-		// TODO: pass window type
-		aw:               fixed.NewWindows(),
+		UDF:              udf,
+		windower:         windowingStrategy,
 		pbqManager:       pbqManager,
 		op:               op,
 		log:              logging.FromContext(ctx),
@@ -109,7 +105,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 			End:   id.End,
 		}
 		// These windows have to be recreated as they are completely in-memory
-		rl.aw.CreateKeyedWindow(intervalWindow)
+		rl.windower.CreateWindow(intervalWindow)
 
 		// create and invoke process and forward for the partition
 		rl.associatePBQAndPnF(ctx, p.PartitionID)
@@ -183,13 +179,14 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
 		// close any windows that need to be closed.
 		wm := processor.Watermark(m.Watermark)
-		closedWindows := rl.aw.RemoveWindow(time.Time(wm))
+		closedWindows := rl.windower.RemoveWindows(time.Time(wm))
 		rl.log.Debugw("closing windows", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
 
 		for _, cw := range closedWindows {
-			partitions := cw.Partitions()
+			kw := cw.(*keyed.KeyedWindow)
+			partitions := kw.Partitions()
 			rl.closePartitions(partitions)
-			rl.log.Debugw("Closing Window", zap.Time("windowStart", cw.Start), zap.Time("windowEnd", cw.End))
+			rl.log.Debugw("Closing Window", zap.Time("windowStart", cw.StartTime()), zap.Time("windowEnd", cw.EndTime()))
 		}
 	}
 }
@@ -241,16 +238,18 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindo
 		return []*keyed.KeyedWindow{}
 	}
 
-	processingWindows := rl.windowingStrategy.AssignWindow(m.EventTime)
+	processingWindows := rl.windower.AssignWindow(m.EventTime)
 	var kWindows []*keyed.KeyedWindow
 	for _, win := range processingWindows {
-		kw := rl.aw.GetKeyedWindow(win)
-		if kw == nil {
-			kw = rl.aw.CreateKeyedWindow(win)
-			rl.log.Debugw("Creating new keyed window", zap.Any("key", kw.Keys), zap.Int64("startTime", kw.Start.UnixMilli()), zap.Int64("endTime", kw.End.UnixMilli()))
+		w := rl.windower.GetWindow(win)
+		if w == nil {
+			w = rl.windower.CreateWindow(win)
 		}
 		// track the key to window relationship
+		kw := w.(*keyed.KeyedWindow)
 		kw.AddKey(m.Key)
+		rl.log.Debugw("Creating new keyed window", zap.Any("key", kw.Keys), zap.Int64("startTime", kw.Start.UnixMilli()), zap.Int64("endTime", kw.End.UnixMilli()))
+
 		kWindows = append(kWindows, kw)
 	}
 	return kWindows
