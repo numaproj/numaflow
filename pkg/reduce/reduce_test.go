@@ -554,6 +554,8 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 	// create publisher for to Buffers
 	for key := range toBuffers {
 		publishEntity := processor.NewProcessorEntity(key)
+		hb, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
+		ot, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
 		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 	}
