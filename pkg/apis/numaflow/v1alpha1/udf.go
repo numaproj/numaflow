@@ -122,11 +122,19 @@ type GroupBy struct {
 type Window struct {
 	// +optional
 	Fixed *FixedWindow `json:"fixed" protobuf:"bytes,1,opt,name=fixed"`
+	// +optional
+	Sliding *SlidingWindow `json:"sliding" protobuf:"bytes,1,opt,name=sliding"`
 }
 
 // FixedWindow describes a fixed window
 type FixedWindow struct {
 	Length *metav1.Duration `json:"length,omitempty" protobuf:"bytes,1,opt,name=length"`
+}
+
+// SlidingWindow describes a sliding window
+type SlidingWindow struct {
+	Length *metav1.Duration `json:"length,omitempty" protobuf:"bytes,1,opt,name=length"`
+	Slide  *metav1.Duration `json:"slide,omitempty" protobuf:"bytes,1,opt,name=slide"`
 }
 
 // PBQStorage defines the persistence configuration for a vertex.
