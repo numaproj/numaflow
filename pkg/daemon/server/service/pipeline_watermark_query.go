@@ -31,41 +31,27 @@ import (
 
 // TODO - Write Unit Tests for this file
 
-// watermarkFetchers used to store watermark metadata for propagation
-type watermarkFetchers struct {
-	// A map used to query watermark for vertices
-	// Key: vertex name
-	// Value: a list of watermark fetchers, each fetcher represents one of the out edges for the vertex
-	fetcherMap map[string][]fetch.Fetcher
-}
-
-// newVertexWatermarkFetcher creates a new instance of watermarkFetchers. This is used to populate a map of vertices to
-// corresponding fetchers. The fetchers are to retrieve vertex level watermarks.
-func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (*watermarkFetchers, error) {
-	ctx := context.Background()
-	var wmFetcher = new(watermarkFetchers)
-
+// GetVertexWatermarkFetchers returns a map of the watermark fetchers, where key is the vertex name,
+// value is a list of fetchers to all the outgoing buffers of that vertex.
+func GetVertexWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[string][]fetch.Fetcher, error) {
+	var wmFetchers = make(map[string][]fetch.Fetcher)
 	if pipeline.Spec.Watermark.Disabled {
-		return wmFetcher, nil
+		return wmFetchers, nil
 	}
 
-	vertexToFetchersMap := make(map[string][]fetch.Fetcher)
-	pipelineName := pipeline.Name
-
-	// TODO: https://github.com/numaproj/numaflow/pull/120#discussion_r927316015
 	for _, vertex := range pipeline.Spec.Vertices {
 		if vertex.Sink != nil {
-			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipelineName, vertex.Name)
-			fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, toBufferName)
+			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipeline.Name, vertex.Name)
+			wmFetcher, err := isbSvcClient.CreateWatermarkFetcher(ctx, toBufferName)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
+				return nil, fmt.Errorf("failed to create watermark fetcher, %w", err)
 			}
-			vertexToFetchersMap[vertex.Name] = []fetch.Fetcher{fetchWatermark}
+			wmFetchers[vertex.Name] = []fetch.Fetcher{wmFetcher}
 		} else {
 			// If the vertex is not a sink, to fetch the watermark, we consult all out edges and grab the latest watermark among them.
 			var wmFetcherList []fetch.Fetcher
 			for _, edge := range pipeline.GetToEdges(vertex.Name) {
-				toBufferNames := v1alpha1.GenerateEdgeBufferNames(pipeline.Namespace, pipelineName, edge)
+				toBufferNames := v1alpha1.GenerateEdgeBufferNames(pipeline.Namespace, pipeline.Name, edge)
 				for _, toBufferName := range toBufferNames {
 					fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, toBufferName)
 					if err != nil {
@@ -74,11 +60,10 @@ func newVertexWatermarkFetcher(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.
 					wmFetcherList = append(wmFetcherList, fetchWatermark)
 				}
 			}
-			vertexToFetchersMap[vertex.Name] = wmFetcherList
+			wmFetchers[vertex.Name] = wmFetcherList
 		}
 	}
-	wmFetcher.fetcherMap = vertexToFetchersMap
-	return wmFetcher, nil
+	return wmFetchers, nil
 }
 
 // GetVertexWatermark is used to return the head watermark for a given vertex.
@@ -103,7 +88,7 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	}
 
 	// Watermark is enabled
-	vertexFetchers, ok := ps.vertexWatermark.fetcherMap[vertexName]
+	vertexFetchers, ok := ps.watermarkFetchers[vertexName]
 
 	// Vertex not found
 	if !ok {
