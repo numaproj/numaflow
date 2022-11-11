@@ -150,7 +150,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	// TODO: fetcher and publishers need to be closed when the service is shut down.
 	dataforwarder, err := reduce.NewDataForward(ctx, udfHandler, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)

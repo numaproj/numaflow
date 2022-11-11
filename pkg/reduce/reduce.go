@@ -38,12 +38,14 @@ import (
 
 // DataForward reads data from isb and forwards them to readloop
 type DataForward struct {
-	fromBuffer        isb.BufferReader
-	readloop          *readloop.ReadLoop
-	fetchWatermark    fetch.Fetcher
-	windowingStrategy window.Windower
-	opts              *Options
-	log               *zap.SugaredLogger
+	fromBuffer          isb.BufferReader
+	toBuffers           map[string]isb.BufferWriter
+	readloop            *readloop.ReadLoop
+	watermarkFetcher    fetch.Fetcher
+	watermarkPublishers map[string]publish.Publisher
+	windowingStrategy   window.Windower
+	opts                *Options
+	log                 *zap.SugaredLogger
 }
 
 func NewDataForward(ctx context.Context,
@@ -53,7 +55,7 @@ func NewDataForward(ctx context.Context,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	fw fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
+	watermarkPublishers map[string]publish.Publisher,
 	windowingStrategy window.Windower, opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
@@ -64,14 +66,16 @@ func NewDataForward(ctx context.Context,
 		}
 	}
 
-	rl := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, publishWatermark, options.windowOpts)
+	rl := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers, options.windowOpts)
 	return &DataForward{
-		fromBuffer:        fromBuffer,
-		readloop:          rl,
-		fetchWatermark:    fw,
-		windowingStrategy: windowingStrategy,
-		log:               logging.FromContext(ctx),
-		opts:              options}, nil
+		fromBuffer:          fromBuffer,
+		toBuffers:           toBuffers,
+		readloop:            rl,
+		watermarkFetcher:    fw,
+		watermarkPublishers: watermarkPublishers,
+		windowingStrategy:   windowingStrategy,
+		log:                 logging.FromContext(ctx),
+		opts:                options}, nil
 }
 
 // Start starts forwarding messages to readloop
@@ -80,7 +84,35 @@ func (d *DataForward) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			d.log.Infow("Stopping reduce data forwarder... ", zap.Error(ctx.Err()))
+			d.log.Infow("Stopping reduce data forwarder...")
+			cctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			d.readloop.ShutDown(cctx)
+
+			if err := d.fromBuffer.Close(); err != nil {
+				d.log.Errorw("Failed to close buffer reader, shutdown anyways...", zap.Error(err))
+			} else {
+				d.log.Infow("Closed buffer reader", zap.String("bufferFrom", d.fromBuffer.GetName()))
+			}
+			for _, v := range d.toBuffers {
+				if err := v.Close(); err != nil {
+					d.log.Errorw("Failed to close buffer writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", v.GetName()))
+				} else {
+					d.log.Infow("Closed buffer writer", zap.String("bufferTo", v.GetName()))
+				}
+			}
+
+			// stop watermark fetcher
+			if err := d.watermarkFetcher.Close(); err != nil {
+				d.log.Errorw("Failed to close watermark fetcher", zap.Error(err))
+			}
+
+			// stop watermark publisher
+			for _, publisher := range d.watermarkPublishers {
+				if err := publisher.Close(); err != nil {
+					d.log.Errorw("Failed to close watermark publisher", zap.Error(err))
+				}
+			}
 			return
 		default:
 			d.forwardAChunk(ctx)
@@ -102,7 +134,7 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
-	processorWM := d.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
+	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
 		m.Watermark = time.Time(processorWM)
 	}
