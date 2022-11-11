@@ -111,7 +111,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		got, err := u.Apply(ctx, &isb.ReadMessage{
+		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					PaneInfo: isb.PaneInfo{
@@ -155,7 +155,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		_, err := u.Apply(ctx, &isb.ReadMessage{
+		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					PaneInfo: isb.PaneInfo{
@@ -235,7 +235,7 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 	var results = make([][]byte, len(readMessages))
 	var resultKeys = make([]string, len(readMessages))
 	for idx, readMessage := range readMessages {
-		apply, err := u.Apply(ctx, &readMessage)
+		apply, err := u.ApplyMap(ctx, &readMessage)
 		assert.NoError(t, err)
 		results[idx] = apply[0].Payload
 		resultKeys[idx] = string(apply[0].Header.Key)

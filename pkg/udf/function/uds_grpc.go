@@ -39,7 +39,7 @@ type udsGRPCBasedUDF struct {
 	client functionsdk.Client
 }
 
-var _ applier.Applier = (*udsGRPCBasedUDF)(nil)
+var _ applier.MapApplier = (*udsGRPCBasedUDF)(nil)
 var _ applier.ReduceApplier = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
@@ -76,7 +76,7 @@ func (u *udsGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
+func (u *udsGRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
 	key := readMessage.Key
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset

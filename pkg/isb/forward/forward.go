@@ -50,7 +50,7 @@ type InterStepDataForward struct {
 	fromBuffer       isb.BufferReader
 	toBuffers        map[string]isb.BufferWriter
 	FSD              ToWhichStepDecider
-	UDF              udfapplier.Applier
+	UDF              udfapplier.MapApplier
 	fetchWatermark   fetch.Fetcher
 	publishWatermark map[string]publish.Publisher
 	opts             options
@@ -64,7 +64,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
 	toSteps map[string]isb.BufferWriter,
 	fsd ToWhichStepDecider,
-	applyUDF udfapplier.Applier,
+	applyUDF udfapplier.MapApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*InterStepDataForward, error) {
@@ -440,7 +440,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 // The UserError retry will be done on the ApplyUDF.
 func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
 	for {
-		writeMessages, err := isdf.UDF.Apply(ctx, readMessage)
+		writeMessages, err := isdf.UDF.ApplyMap(ctx, readMessage)
 		if err != nil {
 			isdf.opts.logger.Errorw("UDF.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.
