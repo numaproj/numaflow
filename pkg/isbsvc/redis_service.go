@@ -19,8 +19,8 @@ package isbsvc
 import (
 	"context"
 	"fmt"
+
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/multierr"
@@ -146,6 +146,6 @@ func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bufferName st
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	hbWatcher := noop.NewKVOpWatch()
 	otWatcher := noop.NewKVOpWatch()
-	watermarkFetcher := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
+	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
 	return watermarkFetcher, nil
 }

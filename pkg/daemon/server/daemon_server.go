@@ -40,6 +40,7 @@ import (
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 type daemonServer struct {
@@ -64,12 +65,27 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	case v1alpha1.ISBSvcTypeJetStream:
 		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithJetStreamClient(jsclient.NewInClusterJetStreamClient()))
 		if err != nil {
-			log.Errorw("Failed to get a ISB Service client.", zap.Error(err))
+			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 			return err
 		}
 	default:
 		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
 	}
+	wmFetchers, err := service.GetVertexWatermarkFetchers(ctx, ds.pipeline, isbSvcClient)
+	if err != nil {
+		return fmt.Errorf("failed to get watermark fetchers, %w", err)
+	}
+
+	defer func() {
+		for _, fetcherList := range wmFetchers {
+			for _, f := range fetcherList {
+				if err := f.Close(); err != nil {
+					log.Errorw("Failed to close watermark fetcher", zap.Error(err))
+				}
+			}
+		}
+	}()
+
 	// Start listener
 	var conn net.Listener
 	var listerErr error
@@ -85,7 +101,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-	grpcServer, err := ds.newGRPCServer(isbSvcClient)
+	grpcServer, err := ds.newGRPCServer(isbSvcClient, wmFetchers)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
@@ -106,7 +122,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) (*grpc.Server, error) {
+func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService, wmFetchers map[string][]fetch.Fetcher) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -120,7 +136,7 @@ func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService) (*grpc.Ser
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline)
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers)
 	if err != nil {
 		return nil, err
 	}

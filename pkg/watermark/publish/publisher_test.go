@@ -92,7 +92,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	head := p.GetLatestWatermark()
 	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
 
-	p.StopPublisher()
+	_ = p.Close()
 
 	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
 	assert.Equal(t, nats.ErrConnectionClosed, err)

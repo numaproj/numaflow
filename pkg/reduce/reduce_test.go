@@ -50,7 +50,8 @@ func (e EventTypeWMProgressor) GetLatestWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
-func (e EventTypeWMProgressor) StopPublisher() {
+func (e EventTypeWMProgressor) Close() error {
+	return nil
 }
 
 func (e EventTypeWMProgressor) GetWatermark(_ isb.Offset) processor.Watermark {
@@ -71,7 +72,7 @@ type CounterReduceTest struct {
 }
 
 // Reduce returns a result with the count of messages
-func (f CounterReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (f CounterReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	count := 0
 	for range messageStream {
 		count += 1
@@ -103,7 +104,7 @@ func (f CounterReduceTest) WhereTo(s string) ([]string, error) {
 type SumReduceTest struct {
 }
 
-func (s SumReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	sum := 0
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -133,7 +134,7 @@ func (s SumReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, me
 type MaxReduceTest struct {
 }
 
-func (m MaxReduceTest) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	mx := math.MinInt64
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -553,6 +554,8 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 	// create publisher for to Buffers
 	for key := range toBuffers {
 		publishEntity := processor.NewProcessorEntity(key)
+		hb, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
+		ot, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
 		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 	}
@@ -576,9 +579,7 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_PROCESSORS", hbWatcherCh)
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 
-	// fetcher for reduce
-	var pm = fetch.NewProcessorManager(ctx, wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), fetch.WithPodHeartbeatRate(1))
-	var f = fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), pm)
+	var f = fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
 	return f, publishers
 }
 

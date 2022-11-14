@@ -56,8 +56,9 @@ func (n NoOpWMProgressor) GetHeadWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
-// StopPublisher stops the no-op publisher.
-func (n NoOpWMProgressor) StopPublisher() {
+// Close stops the no-op progressor.
+func (n NoOpWMProgressor) Close() error {
+	return nil
 }
 
 func BuildNoOpWatermarkProgressorsFromEdgeList(bufferList []string) (fetch.Fetcher, map[string]publish.Publisher) {

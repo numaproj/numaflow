@@ -25,7 +25,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
-	"github.com/numaproj/numaflow/pkg/udf/reducer"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
@@ -41,8 +40,8 @@ type udsGRPCBasedUDF struct {
 	client functionsdk.Client
 }
 
-var _ applier.Applier = (*udsGRPCBasedUDF)(nil)
-var _ reducer.Reducer = (*udsGRPCBasedUDF)(nil)
+var _ applier.MapApplier = (*udsGRPCBasedUDF)(nil)
+var _ applier.ReduceApplier = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
 func NewUDSGRPCBasedUDF() (*udsGRPCBasedUDF, error) {
@@ -78,7 +77,7 @@ func (u *udsGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
+func (u *udsGRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
 	key := readMessage.Key
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
@@ -124,7 +123,7 @@ func (u *udsGRPCBasedUDF) Apply(ctx context.Context, readMessage *isb.ReadMessag
 // should we pass metadata information ?
 
 // Reduce accepts a channel of isbMessages and returns the aggregated result
-func (u *udsGRPCBasedUDF) Reduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (u *udsGRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	datumCh := make(chan *functionpb.Datum)
 	var wg sync.WaitGroup
 	var result []*functionpb.Datum
