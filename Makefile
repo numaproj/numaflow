@@ -41,7 +41,18 @@ ifndef PYTHON
 $(error "Python is not available, please install.")
 endif
 
-K3D ?= $(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo true || echo false)
+IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo "k3d image import")
+ifndef IMAGE_IMPORT_CMD
+IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v minikube`" != '' ] && [[ "`kubectl config current-context`" =~ minikube* ]] && echo "minikube image load")
+endif
+ifndef IMAGE_IMPORT_CMD
+IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v kind`" != '' ] && [[ "`kubectl config current-context`" =~ kind-* ]] && echo "kind load docker-image")
+endif
+
+DOCKER:=$(shell command -v docker 2> /dev/null)
+ifndef DOCKER
+DOCKER:=$(shell command -v podman 2> /dev/null)
+endif
 
 .PHONY: build
 build: dist/$(BINARY_NAME)-linux-amd64.gz dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-arm.gz dist/$(BINARY_NAME)-linux-ppc64le.gz dist/$(BINARY_NAME)-linux-s390x.gz dist/e2eapi
@@ -146,22 +157,25 @@ ui-test: ui-build
 
 .PHONY: image
 image: clean ui-build dist/$(BINARY_NAME)-linux-amd64
-	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=amd64" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
-	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
-ifeq ($(K3D),true)
-	k3d image import $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "ARCH=amd64" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
+	@if [ "$(DOCKER_PUSH)" = "true" ]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
+ifdef IMAGE_IMPORT_CMD
+	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
 
 image-linux-%: dist/$(BINARY_NAME)-linux-$*
-	DOCKER_BUILDKIT=1 docker build --build-arg "ARCH=$*" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$* --platform "linux/$*" --target $(BINARY_NAME) -f $(DOCKERFILE) .
-	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$*; fi
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "ARCH=$*" -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$* --platform "linux/$*" --target $(BINARY_NAME) -f $(DOCKERFILE) .
+	@if [ "$(DOCKER_PUSH)" = "true" ]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)-linux-$*; fi
+
 
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
-	docker buildx build --tag $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file ./Dockerfile ${PUSH_OPTION} .
+	$(DOCKER) buildx build --tag $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file ./Dockerfile ${PUSH_OPTION} .
+
 
 set-qemu:
-	docker pull tonistiigi/binfmt:latest
-	docker run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
+	$(DOCKER) pull tonistiigi/binfmt:latest
+	$(DOCKER) run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
+
 
 .PHONY: swagger
 swagger:
@@ -213,10 +227,10 @@ start: image
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
-	DOCKER_BUILDKIT=1 docker build . --build-arg "ARCH=amd64" --platform=linux/amd64 --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
-	@if [ "$(DOCKER_PUSH)" = "true" ]; then docker push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
-ifeq ($(K3D),true)
-	k3d image import $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
+	DOCKER_BUILDKIT=1 $(DOCKER) build . --build-arg "ARCH=amd64" --platform=linux/amd64 --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
+	@if [ "$(DOCKER_PUSH)" = "true" ]; then $(DOCKER) push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
+ifdef IMAGE_IMPORT_CMD
+	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
 
 /usr/local/bin/mkdocs:
