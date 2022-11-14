@@ -39,14 +39,14 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	udfreducer "github.com/numaproj/numaflow/pkg/udf/reducer"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 )
 
 // ProcessAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
 type ProcessAndForward struct {
 	PartitionID      partition.ID
-	UDF              udfreducer.Reducer
+	UDF              applier.ReduceApplier
 	result           []*isb.Message
 	pbqReader        pbq.Reader
 	log              *zap.SugaredLogger
@@ -58,7 +58,7 @@ type ProcessAndForward struct {
 // NewProcessAndForward will return a new ProcessAndForward instance
 func NewProcessAndForward(ctx context.Context,
 	partitionID partition.ID,
-	udf udfreducer.Reducer,
+	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider, pw map[string]publish.Publisher) *ProcessAndForward {
@@ -79,7 +79,7 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 
 	// FIXME: we need to fix https://github.com/numaproj/numaflow-go/blob/main/pkg/function/service.go#L101
 	// blocking call, only returns the result after it has read all the messages from pbq
-	p.result, err = p.UDF.Reduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
+	p.result, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 	return err
 }
 

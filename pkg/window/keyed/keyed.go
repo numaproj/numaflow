@@ -14,42 +14,56 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package keyed ....
-// TODO: document
+// Package keyed implements KeyedWindows. A keyed window associates key(s) with a window.
+// A key uniquely identifies a partitioned set of events in a given time window.
 package keyed
 
 import (
 	"sync"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // KeyedWindow maintains association between keys and a window.
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
 type KeyedWindow struct {
-	*window.IntervalWindow
-	// TODO: can this be map[string]struct{} ?
-	Keys map[string]string
+	// Start start time of the window
+	Start time.Time
+	// End end time of the window
+	End time.Time
+	// keys map of keys
+	keys map[string]struct{}
 	lock sync.RWMutex
 }
 
 // NewKeyedWindow creates a new keyed window
-func NewKeyedWindow(window *window.IntervalWindow) *KeyedWindow {
+func NewKeyedWindow(start time.Time, end time.Time) *KeyedWindow {
 	kw := &KeyedWindow{
-		IntervalWindow: window,
-		Keys:           make(map[string]string),
-		lock:           sync.RWMutex{},
+		Start: start,
+		End:   end,
+		keys:  make(map[string]struct{}),
+		lock:  sync.RWMutex{},
 	}
 	return kw
+}
+
+// StartTime returns start of the window.
+func (kw *KeyedWindow) StartTime() time.Time {
+	return kw.Start
+}
+
+// EndTime returns end of the window.
+func (kw *KeyedWindow) EndTime() time.Time {
+	return kw.End
 }
 
 // AddKey adds a key to an existing window
 func (kw *KeyedWindow) AddKey(key string) {
 	kw.lock.Lock()
 	defer kw.lock.Unlock()
-	if _, ok := kw.Keys[key]; !ok {
-		kw.Keys[key] = key
+	if _, ok := kw.keys[key]; !ok {
+		kw.keys[key] = struct{}{}
 	}
 }
 
@@ -58,12 +72,25 @@ func (kw *KeyedWindow) Partitions() []partition.ID {
 	kw.lock.RLock()
 	defer kw.lock.RUnlock()
 
-	partitions := make([]partition.ID, len(kw.Keys))
+	partitions := make([]partition.ID, len(kw.keys))
 	idx := 0
-	for k := range kw.Keys {
-		partitions[idx] = partition.ID{Start: kw.IntervalWindow.Start, End: kw.IntervalWindow.End, Key: k}
+	for k := range kw.keys {
+		partitions[idx] = partition.ID{Start: kw.StartTime(), End: kw.EndTime(), Key: k}
 		idx++
 	}
 
 	return partitions
+}
+
+func (kw *KeyedWindow) Keys() []string {
+	kw.lock.RLock()
+	defer kw.lock.RUnlock()
+
+	keys := make([]string, len(kw.keys))
+	idx := 0
+	for k := range kw.keys {
+		keys[idx] = k
+	}
+
+	return keys
 }

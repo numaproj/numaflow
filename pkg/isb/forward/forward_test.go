@@ -48,7 +48,7 @@ func (f myForwardTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -110,7 +110,7 @@ func (f myForwardDropTest) WhereTo(_ string) ([]string, error) {
 	return []string{"__DROP__"}, nil
 }
 
-func (f myForwardDropTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -163,7 +163,7 @@ func (f myForwardApplyErrTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardApplyErrTest) Apply(_ context.Context, _ *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardApplyErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.Message, error) {
 	return nil, udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -215,7 +215,7 @@ func (f myForwardApplyWhereToErrTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, fmt.Errorf("whereToStep failed")
 }
 
-func (f myForwardApplyWhereToErrTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -262,7 +262,7 @@ func (f myForwardApplyUDFErrTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardApplyUDFErrTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardApplyUDFErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
 
 	return nil, fmt.Errorf("UDF error")
 }
@@ -311,7 +311,7 @@ func (f myForwardToAllTest) WhereTo(_ string) ([]string, error) {
 	return []string{dfv1.MessageKeyAll}, nil
 }
 
-func (f myForwardToAllTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 

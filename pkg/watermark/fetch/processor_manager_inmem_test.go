@@ -77,8 +77,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.NoError(t, err)
 	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
 	assert.NoError(t, err)
-	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1))
-	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
+	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)).(*edgeFetcher)
 
 	// start p1 heartbeat for 3 loops
 	wg.Add(1)
@@ -88,7 +87,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 		err = hbStore.DeleteKey(ctx, "p1")
 		assert.NoError(t, err)
@@ -102,7 +101,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		for i := 0; i < 20; i++ {
 			err = hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
@@ -162,12 +161,12 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
 	// wait until p1 becomes active
-	time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+	time.Sleep(1 * time.Second)
 	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	for !allProcessors["p1"].IsActive() {
 		select {
@@ -234,7 +233,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 

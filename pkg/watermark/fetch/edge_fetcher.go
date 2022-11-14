@@ -28,24 +28,28 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 // edgeFetcher is a fetcher between two vertices.
 type edgeFetcher struct {
 	ctx              context.Context
-	edgeName         string
+	bufferName       string
+	storeWatcher     store.WatermarkStoreWatcher
 	processorManager *ProcessorManager
 	log              *zap.SugaredLogger
 }
 
-// NewEdgeFetcher returns a new edge fetcher, processorManager has the details about the processors responsible for writing to this
-// edge.
-func NewEdgeFetcher(ctx context.Context, edgeName string, processorManager *ProcessorManager) Fetcher {
+// NewEdgeFetcher returns a new edge fetcher.
+func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.WatermarkStoreWatcher) Fetcher {
+	log := logging.FromContext(ctx).With("bufferName", bufferName)
+	log.Info("Creating a new edge watermark fetcher")
 	return &edgeFetcher{
 		ctx:              ctx,
-		edgeName:         edgeName,
-		processorManager: processorManager,
-		log:              logging.FromContext(ctx).With("edgeName", edgeName),
+		bufferName:       bufferName,
+		storeWatcher:     storeWatcher,
+		processorManager: NewProcessorManager(ctx, storeWatcher),
+		log:              log,
 	}
 }
 
@@ -107,7 +111,17 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	if epoch == math.MaxInt64 {
 		epoch = -1
 	}
-	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.edgeName, offset, epoch)
+	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bufferName, offset, epoch)
 
 	return processor.Watermark(time.UnixMilli(epoch))
+}
+
+// Close function closes the watchers.
+func (e *edgeFetcher) Close() error {
+	e.log.Infof("Closing edge watermark fetcher")
+	if e.storeWatcher != nil {
+		e.storeWatcher.HeartbeatWatcher().Close()
+		e.storeWatcher.OffsetTimelineWatcher().Close()
+	}
+	return nil
 }

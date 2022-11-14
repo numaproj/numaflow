@@ -86,6 +86,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance)
 		if err != nil {
 			return err

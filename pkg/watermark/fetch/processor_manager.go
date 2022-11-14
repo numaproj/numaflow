@@ -58,7 +58,6 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	for _, opt := range inputOpts {
 		opt(opts)
 	}
-
 	v := &ProcessorManager{
 		ctx:        ctx,
 		hbWatcher:  watermarkStoreWatcher.HeartbeatWatcher(),
@@ -163,10 +162,6 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 	for {
 		select {
 		case <-stopped:
-			// main process exit
-			// close both watcher
-			v.otWatcher.Close()
-			v.hbWatcher.Close()
 			return
 		case value := <-watchCh:
 			if value == nil {

@@ -61,9 +61,9 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 	}
 
 	if fromBuffer.Type == v1alpha1.SourceBuffer {
-		fetchWatermark = generic.NewGenericSourceFetch(ctx, fromBuffer.Name, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+		fetchWatermark = fetch.NewSourceFetcher(ctx, fromBuffer.Name, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
 	} else {
-		fetchWatermark = generic.NewGenericEdgeFetch(ctx, fromBuffer.Name, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBuffer.Name, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
 	}
 
 	// Publisher map creation, we need a publisher per out edge.
