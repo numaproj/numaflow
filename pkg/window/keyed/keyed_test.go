@@ -30,19 +30,19 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 	kw := NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
 	tests := []struct {
 		name         string
-		given        *KeyedWindow
+		given        *AlignedKeyedWindow
 		input        string
 		expectedKeys map[string]struct{}
 	}{
 		{
 			name:         "no_keys",
-			given:        &KeyedWindow{},
+			given:        &AlignedKeyedWindow{},
 			input:        "key1",
 			expectedKeys: map[string]struct{}{"key1": {}},
 		},
 		{
 			name: "with_some_existing_keys",
-			given: &KeyedWindow{
+			given: &AlignedKeyedWindow{
 				keys: map[string]struct{}{"key2": {}, "key3": {}},
 			},
 			input:        "key4",
@@ -70,18 +70,18 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 	kw := NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
 	tests := []struct {
 		name     string
-		given    *KeyedWindow
+		given    *AlignedKeyedWindow
 		input    string
 		expected []partition.ID
 	}{
 		{
 			name:     "no_keys",
-			given:    &KeyedWindow{},
+			given:    &AlignedKeyedWindow{},
 			expected: []partition.ID{},
 		},
 		{
 			name: "with_some_existing_keys",
-			given: &KeyedWindow{
+			given: &AlignedKeyedWindow{
 				keys: map[string]struct{}{"key2": {}, "key3": {}, "key4": {}},
 			},
 			expected: []partition.ID{
