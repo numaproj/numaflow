@@ -55,7 +55,7 @@ type Fixed struct {
 var _ strategy.Windower = (*Fixed)(nil)
 
 // NewFixed returns a Fixed windower.
-func NewFixed(length time.Duration) *Fixed {
+func NewFixed(length time.Duration) strategy.Windower {
 	return &Fixed{
 		Length:  length,
 		entries: list.New(),
