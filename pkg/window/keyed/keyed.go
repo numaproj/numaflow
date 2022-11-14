@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // KeyedWindow maintains association between keys and a window.
@@ -31,16 +30,16 @@ import (
 type KeyedWindow struct {
 	Start time.Time
 	End   time.Time
-	Keys  map[string]struct{}
+	keys  map[string]struct{}
 	lock  sync.RWMutex
 }
 
 // NewKeyedWindow creates a new keyed window
-func NewKeyedWindow(window window.AlignedWindow) *KeyedWindow {
+func NewKeyedWindow(start time.Time, end time.Time) *KeyedWindow {
 	kw := &KeyedWindow{
-		Start: window.StartTime(),
-		End:   window.EndTime(),
-		Keys:  make(map[string]struct{}),
+		Start: start,
+		End:   end,
+		keys:  make(map[string]struct{}),
 		lock:  sync.RWMutex{},
 	}
 	return kw
@@ -60,8 +59,8 @@ func (kw *KeyedWindow) EndTime() time.Time {
 func (kw *KeyedWindow) AddKey(key string) {
 	kw.lock.Lock()
 	defer kw.lock.Unlock()
-	if _, ok := kw.Keys[key]; !ok {
-		kw.Keys[key] = struct{}{}
+	if _, ok := kw.keys[key]; !ok {
+		kw.keys[key] = struct{}{}
 	}
 }
 
@@ -70,9 +69,9 @@ func (kw *KeyedWindow) Partitions() []partition.ID {
 	kw.lock.RLock()
 	defer kw.lock.RUnlock()
 
-	partitions := make([]partition.ID, len(kw.Keys))
+	partitions := make([]partition.ID, len(kw.keys))
 	idx := 0
-	for k := range kw.Keys {
+	for k := range kw.keys {
 		partitions[idx] = partition.ID{Start: kw.StartTime(), End: kw.EndTime(), Key: k}
 		idx++
 	}
@@ -80,13 +79,13 @@ func (kw *KeyedWindow) Partitions() []partition.ID {
 	return partitions
 }
 
-func (kw *KeyedWindow) GetKeys() []string {
+func (kw *KeyedWindow) Keys() []string {
 	kw.lock.RLock()
 	defer kw.lock.RUnlock()
 
-	keys := make([]string, len(kw.Keys))
+	keys := make([]string, len(kw.keys))
 	idx := 0
-	for k := range kw.Keys {
+	for k := range kw.keys {
 		keys[idx] = k
 	}
 

@@ -229,15 +229,15 @@ func (rl *ReadLoop) ShutDown(ctx context.Context) {
 
 // upsertWindowsAndKeys will create or assigns (if already present) a window to the message. It is an upsert operation
 // because windows are created out of order, but they will be closed in-order.
-func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindow {
+func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedWindow {
 	// drop the late messages
 	if m.IsLate {
 		rl.log.Warnw("Dropping the late message", zap.Time("eventTime", m.EventTime), zap.Time("watermark", m.Watermark))
-		return []*keyed.KeyedWindow{}
+		return []window.AlignedWindow{}
 	}
 
 	processingWindows := rl.windower.AssignWindow(m.EventTime)
-	var kWindows []*keyed.KeyedWindow
+	var kWindows []window.AlignedWindow
 	for _, win := range processingWindows {
 		w := rl.windower.GetWindow(win)
 		if w == nil {
@@ -245,9 +245,9 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindo
 		}
 		// track the key to window relationship
 		w.AddKey(m.Key)
-		rl.log.Debugw("Creating new keyed window", zap.Any("key", w.GetKeys()), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
+		rl.log.Debugw("Creating new keyed window", zap.Any("key", w.Keys()), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
 
-		kWindows = append(kWindows, w.(*keyed.KeyedWindow))
+		kWindows = append(kWindows, w)
 	}
 	return kWindows
 }

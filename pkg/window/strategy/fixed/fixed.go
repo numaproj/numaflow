@@ -73,11 +73,7 @@ func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedWindow {
 	// on the boundary will automatically fall in to the window to the right
 	// of the boundary thereby satisfying the requirement.
 	return []window.AlignedWindow{
-		&keyed.KeyedWindow{
-			Start: start,
-			End:   end,
-			Keys:  make(map[string]struct{}),
-		},
+		keyed.NewKeyedWindow(start, end),
 	}
 }
 

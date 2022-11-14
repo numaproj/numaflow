@@ -27,11 +27,7 @@ import (
 )
 
 func TestKeyedWindow_AddKey(t *testing.T) {
-	iw := &KeyedWindow{
-		Start: time.Unix(60, 0),
-		End:   time.Unix(120, 0),
-	}
-	kw := NewKeyedWindow(iw)
+	kw := NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
 	tests := []struct {
 		name         string
 		given        *KeyedWindow
@@ -47,7 +43,7 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 		{
 			name: "with_some_existing_keys",
 			given: &KeyedWindow{
-				Keys: map[string]struct{}{"key2": {}, "key3": {}},
+				keys: map[string]struct{}{"key2": {}, "key3": {}},
 			},
 			input:        "key4",
 			expectedKeys: map[string]struct{}{"key2": {}, "key3": {}, "key4": {}},
@@ -56,14 +52,14 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			kw = NewKeyedWindow(iw)
-			for k := range tt.given.Keys {
+			kw = NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+			for k := range tt.given.keys {
 				kw.AddKey(k)
 			}
 			kw.AddKey(tt.input)
-			assert.Equal(t, len(tt.expectedKeys), len(kw.Keys))
+			assert.Equal(t, len(tt.expectedKeys), len(kw.keys))
 			for k := range tt.expectedKeys {
-				_, ok := kw.Keys[k]
+				_, ok := kw.keys[k]
 				assert.True(t, ok)
 			}
 		})
@@ -71,11 +67,7 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 }
 
 func TestKeyedWindow_Partitions(t *testing.T) {
-	iw := &KeyedWindow{
-		Start: time.Unix(60, 0),
-		End:   time.Unix(120, 0),
-	}
-	kw := NewKeyedWindow(iw)
+	kw := NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
 	tests := []struct {
 		name     string
 		given    *KeyedWindow
@@ -90,7 +82,7 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 		{
 			name: "with_some_existing_keys",
 			given: &KeyedWindow{
-				Keys: map[string]struct{}{"key2": {}, "key3": {}, "key4": {}},
+				keys: map[string]struct{}{"key2": {}, "key3": {}, "key4": {}},
 			},
 			expected: []partition.ID{
 				{
@@ -114,9 +106,9 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			kw.Keys = tt.given.Keys
+			kw.keys = tt.given.keys
 			ret := kw.Partitions()
-			// the kw.Keys is a map so the order of the output is random
+			// the kw.keys is a map so the order of the output is random
 			// use sort to sort the ret array by key
 			sort.Slice(ret, func(i int, j int) bool {
 				return ret[i].Key < ret[j].Key

@@ -32,7 +32,7 @@ type AlignedWindow interface {
 	EndTime() time.Time
 	AddKey(string)
 	Partitions() []partition.ID
-	GetKeys() []string
+	Keys() []string
 }
 
 // Windower manages windows
