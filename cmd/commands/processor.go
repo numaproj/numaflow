@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package commands
 
 import (
@@ -58,21 +74,27 @@ func NewProcessorCommand() *cobra.Command {
 				Replica:  int32(replica),
 			}
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), log)
-			switch processorType {
-			case "source":
+			switch dfv1.VertexType(processorType) {
+			case dfv1.VertexTypeSource:
 				p := &sources.SourceProcessor{
 					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
 					VertexInstance: vertexInstance,
 				}
 				return p.Start(ctx)
-			case "sink":
+			case dfv1.VertexTypeSink:
 				p := &sinks.SinkProcessor{
 					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
 					VertexInstance: vertexInstance,
 				}
 				return p.Start(ctx)
-			case "udf":
-				p := &udf.UDFProcessor{
+			case dfv1.VertexTypeMapUDF:
+				p := &udf.MapUDFProcessor{
+					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
+					VertexInstance: vertexInstance,
+				}
+				return p.Start(ctx)
+			case dfv1.VertexTypeReduceUDF:
+				p := &udf.ReduceUDFProcessor{
 					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
 					VertexInstance: vertexInstance,
 				}

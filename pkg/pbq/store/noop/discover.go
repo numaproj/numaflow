@@ -1,5 +1,5 @@
 /*
-
+Copyright 2022 The Numaproj Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,3 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+package noop
+
+import (
+	"context"
+
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/pbq/store"
+)
+
+func DiscoverPartitions(_ context.Context, _ *store.StoreOptions) ([]partition.ID, error) {
+	return []partition.ID{}, nil
+}

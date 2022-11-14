@@ -1,5 +1,21 @@
 //go:build test
 
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package e2e
 
 import (
@@ -31,7 +47,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	w.Expect().
 		VertexPodsRunning().DaemonPodsRunning().
 		VertexPodLogContains("input", LogSourceVertexStarted).
-		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("output", LogSinkVertexStarted).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
 		VertexPodLogContains("output", `"Data":".*","Createdts":.*`)
@@ -61,7 +77,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Status(200).Body().Contains("buffers")
 
 	HTTPExpect(s.T(), "https://localhost:1234").
-		GET(fmt.Sprintf("/api/v1/pipelines/%s/buffers/%s", pipelineName, dfv1.GenerateEdgeBufferName(Namespace, pipelineName, "input", "p1"))).
+		GET(fmt.Sprintf("/api/v1/pipelines/%s/buffers/%s", pipelineName, dfv1.GenerateEdgeBufferNames(Namespace, pipelineName, dfv1.Edge{From: "input", To: "p1"})[0])).
 		Expect().
 		Status(200).Body().Contains("pipeline")
 
@@ -79,7 +95,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 2, len(buffers))
-	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateEdgeBufferName(Namespace, pipelineName, "input", "p1"))
+	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateEdgeBufferNames(Namespace, pipelineName, dfv1.Edge{From: "input", To: "p1"})[0])
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
 	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
@@ -96,7 +112,7 @@ func (s *FunctionalSuite) TestFiltering() {
 	w.Expect().
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("out", LogSinkVertexStarted)
 
 	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
@@ -132,7 +148,7 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	w.Expect().
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("even-or-odd", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("even-or-odd", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("even-sink", LogSinkVertexStarted).
 		VertexPodLogContains("odd-sink", LogSinkVertexStarted).
 		VertexPodLogContains("number-sink", LogSinkVertexStarted)
@@ -175,9 +191,9 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	w.Expect().
 		VertexPodsRunning().DaemonPodsRunning().
 		VertexPodLogContains("input", LogSourceVertexStarted).
-		VertexPodLogContains("cat1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
-		VertexPodLogContains("cat2", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
-		VertexPodLogContains("cat3", LogUDFVertexStarted, PodLogCheckOptionWithContainer("main")).
+		VertexPodLogContains("cat1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("cat2", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("cat3", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("output1", LogSinkVertexStarted).
 		VertexPodLogContains("output2", LogSinkVertexStarted).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
@@ -196,7 +212,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 5, len(buffers))
-	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateEdgeBufferName(Namespace, pipelineName, "input", "cat1"))
+	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateEdgeBufferNames(Namespace, pipelineName, dfv1.Edge{From: "input", To: "cat1"})[0])
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

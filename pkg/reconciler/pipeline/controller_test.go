@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package pipeline
 
 import (
@@ -12,6 +28,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -36,7 +53,7 @@ var (
 			Name:      dfv1.DefaultISBSvcName,
 		},
 		Spec: dfv1.InterStepBufferServiceSpec{
-			Redis: &dfv1.RedisBuferService{
+			Redis: &dfv1.RedisBufferService{
 				Native: &dfv1.NativeRedis{
 					Version: testVersion,
 				},
@@ -131,13 +148,15 @@ func Test_buildVertices(t *testing.T) {
 	assert.Equal(t, 3, len(r))
 	_, existing := r[testPipeline.Name+"-"+testPipeline.Spec.Vertices[0].Name]
 	assert.True(t, existing)
+	assert.Equal(t, testPipeline.Spec.Watermark.MaxDelay, r[testPipeline.Name+"-"+testPipeline.Spec.Vertices[0].Name].Spec.Watermark.MaxDelay)
 }
 
 func Test_copyVertexLimits(t *testing.T) {
 	pl := testPipeline.DeepCopy()
 	v := pl.Spec.Vertices[0].DeepCopy()
 	copyVertexLimits(pl, v)
-	assert.Nil(t, v.Limits)
+	assert.NotNil(t, v.Limits)
+	assert.Equal(t, int64(dfv1.DefaultReadBatchSize), int64(*v.Limits.ReadBatchSize))
 	one := uint64(1)
 	limitJson := `{"readTimeout": "2s"}`
 	var pipelineLimit dfv1.PipelineLimits
@@ -145,10 +164,11 @@ func Test_copyVertexLimits(t *testing.T) {
 	assert.NoError(t, err)
 	pipelineLimit.ReadBatchSize = &one
 	pl.Spec.Limits = &pipelineLimit
-	copyVertexLimits(pl, v)
-	assert.NotNil(t, v.Limits)
-	assert.Equal(t, one, *v.Limits.ReadBatchSize)
-	assert.Equal(t, "2s", v.Limits.ReadTimeout.Duration.String())
+	v1 := new(dfv1.AbstractVertex)
+	copyVertexLimits(pl, v1)
+	assert.NotNil(t, v1.Limits)
+	assert.Equal(t, int64(one), int64(*v1.Limits.ReadBatchSize))
+	assert.Equal(t, "2s", v1.Limits.ReadTimeout.Duration.String())
 	two := uint64(2)
 	vertexLimitJson := `{"readTimeout": "3s"}`
 	var vertexLimit dfv1.VertexLimits
@@ -159,7 +179,6 @@ func Test_copyVertexLimits(t *testing.T) {
 	copyVertexLimits(pl, v)
 	assert.Equal(t, two, *v.Limits.ReadBatchSize)
 	assert.Equal(t, "3s", v.Limits.ReadTimeout.Duration.String())
-
 }
 
 func Test_copyEdgeLimits(t *testing.T) {
@@ -167,7 +186,8 @@ func Test_copyEdgeLimits(t *testing.T) {
 	edges := []dfv1.Edge{{From: "in", To: "out"}}
 	result := copyEdgeLimits(pl, edges)
 	for _, e := range result {
-		assert.Nil(t, e.Limits)
+		assert.NotNil(t, e.Limits)
+		assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*e.Limits.BufferMaxLength))
 	}
 	onethouand := uint64(1000)
 	eighty := uint32(80)
@@ -192,20 +212,79 @@ func Test_copyEdgeLimits(t *testing.T) {
 }
 
 func Test_buildISBBatchJob(t *testing.T) {
-	j := buildISBBatchJob(testPipeline, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
-	assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
-	assert.True(t, len(j.Spec.Template.Spec.Containers[0].Args) > 0)
-	assert.Contains(t, j.Name, testPipeline.Name+"-buffer-test-")
-	envNames := []string{}
-	for _, e := range j.Spec.Template.Spec.Containers[0].Env {
-		envNames = append(envNames, e.Name)
-	}
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisPassword)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelURL)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
-	assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+	t.Run("test build ISB batch job", func(t *testing.T) {
+		j := buildISBBatchJob(testPipeline, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
+		assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
+		assert.True(t, len(j.Spec.Template.Spec.Containers[0].Args) > 0)
+		assert.Contains(t, j.Name, testPipeline.Name+"-buffer-test-")
+		envNames := []string{}
+		for _, e := range j.Spec.Template.Spec.Containers[0].Env {
+			envNames = append(envNames, e.Name)
+		}
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisPassword)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+	})
+	t.Run("test build ISB batch job with pipeline overrides", func(t *testing.T) {
+		resources := corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				"memory": resource.MustParse("256Mi"),
+			},
+		}
+		env := corev1.EnvVar{Name: "my-env-name", Value: "my-env-value"}
+		podLabels := map[string]string{"my-label-name": "my-label-value"}
+		podAnnotations := map[string]string{"my-annotation-name": "my-annotation-value"}
+		ttlSecondsAfterFinished := int32(600)
+		backoffLimit := int32(50)
+		nodeSelector := map[string]string{"my-node-selector-name": "my-node-selector-value"}
+		priority := int32(100)
+		toleration := corev1.Toleration{
+			Key:      "my-toleration-key",
+			Operator: "Equal",
+			Value:    "my-toleration-value",
+			Effect:   "NoSchedule",
+		}
+		pl := testPipeline.DeepCopy()
+		pl.Spec.Templates = &dfv1.Templates{
+			JobTemplate: &dfv1.JobTemplate{
+				TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+				BackoffLimit:            &backoffLimit,
+				ContainerTemplate: &dfv1.ContainerTemplate{
+					Resources: resources,
+					Env:       []corev1.EnvVar{env},
+				},
+				AbstractPodTemplate: dfv1.AbstractPodTemplate{
+					Metadata: &dfv1.Metadata{
+						Annotations: podAnnotations,
+						Labels:      podLabels,
+					},
+					NodeSelector:      nodeSelector,
+					Tolerations:       []corev1.Toleration{toleration},
+					PriorityClassName: "my-priority-class-name",
+					Priority:          &priority,
+				},
+			},
+		}
+		j := buildISBBatchJob(pl, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
+		assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
+		assert.Equal(t, j.Spec.Template.Spec.Containers[0].Resources, resources)
+		assert.Greater(t, len(j.Spec.Template.Spec.Containers[0].Env), 1)
+		assert.Contains(t, j.Spec.Template.Spec.Containers[0].Env, env)
+		assert.Equal(t, j.Spec.Template.Labels["my-label-name"], podLabels["my-label-name"])
+		assert.Equal(t, j.Spec.Template.Annotations["my-annotation-name"], podAnnotations["my-annotation-name"])
+		assert.NotNil(t, j.Spec.TTLSecondsAfterFinished)
+		assert.Equal(t, *j.Spec.TTLSecondsAfterFinished, ttlSecondsAfterFinished)
+		assert.NotNil(t, j.Spec.BackoffLimit)
+		assert.Equal(t, *j.Spec.BackoffLimit, backoffLimit)
+		assert.Equal(t, j.Spec.Template.Spec.NodeSelector["my-node-selector-name"], nodeSelector["my-node-selector-name"])
+		assert.NotNil(t, j.Spec.Template.Spec.Priority)
+		assert.Equal(t, *j.Spec.Template.Spec.Priority, priority)
+		assert.Contains(t, j.Spec.Template.Spec.Tolerations, toleration)
+		assert.Equal(t, j.Spec.Template.Spec.PriorityClassName, "my-priority-class-name")
+	})
 }
 
 func Test_needsUpdate(t *testing.T) {

@@ -14,15 +14,22 @@ numaflow.numaproj.io/v1alpha1
 Resource Types:
 <ul>
 </ul>
-<h3 id="numaflow.numaproj.io/v1alpha1.AbstractVertex">
-AbstractVertex
+<h3 id="numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
 </p>
 <p>
+<p>
+AbstractPodTemplate provides a template for pod customization in
+vertices, daemon deployments and so on.
+</p>
 </p>
 <table>
 <thead>
@@ -38,54 +45,11 @@ Description
 <tbody>
 <tr>
 <td>
-<code>name</code></br> <em> string </em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>source</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Source"> Source </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
-<code>sink</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Sink"> Sink </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
-<code>containerTemplate</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
-ContainerTemplate </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
-<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
-UDF </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
 <code>metadata</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Metadata"> Metadata </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>
 Metadata sets the pods’s metadata, i.e. annotations and labels
 </p>
@@ -205,8 +169,100 @@ The pod’s scheduling constraints More info:
 <td>
 <em>(Optional)</em>
 <p>
-ServiceAccountName to apply to the StatefulSet
+ServiceAccountName applied to the pod
 </p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.AbstractVertex">
+AbstractVertex
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>source</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source"> Source </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>sink</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Sink"> Sink </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+UDF </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>initContainerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
+</td>
+<td>
+<p>
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
+</p>
+<em>(Optional)</em>
 </td>
 </tr>
 <tr>
@@ -229,7 +285,7 @@ ServiceAccountName to apply to the StatefulSet
 <em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for all the
-vertices of a pipleine, will override pipeline level settings
+vertices of a pipeline, will override pipeline level settings
 </p>
 </td>
 </tr>
@@ -242,6 +298,33 @@ vertices of a pipleine, will override pipeline level settings
 <em>(Optional)</em>
 <p>
 Settings for autoscaling
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>initContainers</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
+\[\]Kubernetes core/v1.Container </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+List of init containers belonging to the pod. More info:
+<a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">https://kubernetes.io/docs/concepts/workloads/pods/init-containers/</a>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>sidecars</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core">
+\[\]Kubernetes core/v1.Container </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+List of sidecar containers belonging to the pod.
 </p>
 </td>
 </tr>
@@ -284,6 +367,18 @@ needs to add “Authorization: Bearer <token>” in the header
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Blackhole">
+Blackhole
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+</p>
+<p>
+<p>
+Blackhole is a sink to emulate /dev/null
+</p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Buffer">
 Buffer
 </h3>
@@ -463,7 +558,9 @@ ContainerTemplate
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
 </p>
 <p>
@@ -521,6 +618,77 @@ Kubernetes core/v1.SecurityContext </a> </em>
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.DaemonTemplate">
+DaemonTemplate
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates">Templates</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
+</td>
+<td>
+<p>
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
+</p>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>replicas</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Replicas is the number of desired replicas of the Deployment. This is a
+pointer to distinguish between explicit zero and unspecified. Defaults
+to 1. More info:
+<a href="https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller">https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller</a>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>initContainerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Edge">
 Edge
 </h3>
@@ -566,7 +734,7 @@ ForwardConditions </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-Conditional forwarding, only allowed when “From” is a Sink or UDF
+Conditional forwarding, only allowed when “From” is a Sink or UDF.
 </p>
 </td>
 </tr>
@@ -580,7 +748,20 @@ Conditional forwarding, only allowed when “From” is a Sink or UDF
 <em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for the
-edge, will override pipeline level settings
+edge, will override pipeline level settings.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>parallelism</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Parallelism is only effective when the “to” vertex is a reduce vertex,
+if it’s provided, the default value is set to “1”. Parallelism is
+ignored when the “to” vertex is not a reduce vertex.
 </p>
 </td>
 </tr>
@@ -626,10 +807,45 @@ overrides the settings from pipeline limits.
 <td>
 <em>(Optional)</em>
 <p>
-BufferUsageLimit is used to define the pencentage of the buffer usage
+BufferUsageLimit is used to define the percentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. It
 overrides the settings from pipeline limits.
 </p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.FixedWindow">
+FixedWindow
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Window">Window</a>)
+</p>
+<p>
+<p>
+FixedWindow describes a fixed window
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>length</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
 </td>
 </tr>
 </tbody>
@@ -1203,6 +1419,64 @@ Kubernetes core/v1.PullPolicy </a> </em>
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.GroupBy">
+GroupBy
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>)
+</p>
+<p>
+<p>
+GroupBy indicates it is a reducer UDF
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>window</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Window"> Window </a> </em>
+</td>
+<td>
+<p>
+Window describes the windowing strategy.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>keyed</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>storage</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PBQStorage"> PBQStorage </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Storage is used to define the PBQ storage for a reduce vertex.
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.HTTPSource">
 HTTPSource
 </h3>
@@ -1264,7 +1538,8 @@ ISBSvcType (<code>string</code> alias)
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.GetDaemonDeploymentReq">GetDaemonDeploymentReq</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">GetVertexPodSpecReq</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">GetVertexPodSpecReq</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBufferServiceStatus">InterStepBufferServiceStatus</a>)
 </p>
 <p>
 </p>
@@ -1308,8 +1583,8 @@ InterStepBufferServiceSpec </a> </em>
 <tr>
 <td>
 <code>redis</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBuferService">
-RedisBuferService </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">
+RedisBufferService </a> </em>
 </td>
 <td>
 </td>
@@ -1362,8 +1637,8 @@ Description
 <tr>
 <td>
 <code>redis</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBuferService">
-RedisBuferService </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">
+RedisBufferService </a> </em>
 </td>
 <td>
 </td>
@@ -1432,6 +1707,15 @@ Description
 <code>config</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">
 BufferServiceConfig </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>type</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ISBSvcType"> ISBSvcType </a>
+</em>
 </td>
 <td>
 </td>
@@ -1531,131 +1815,16 @@ PersistenceStrategy </a> </em>
 </tr>
 <tr>
 <td>
-<code>metadata</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Metadata"> Metadata </a> </em>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
 </td>
 <td>
 <p>
-Metadata sets the pods’s metadata, i.e. annotations and labels
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
 </p>
-</td>
-</tr>
-<tr>
-<td>
-<code>nodeSelector</code></br> <em> map\[string\]string </em>
-</td>
-<td>
 <em>(Optional)</em>
-<p>
-NodeSelector is a selector which must be true for the pod to fit on a
-node. Selector which must match a node’s labels for the pod to be
-scheduled on that node. More info:
-<a href="https://kubernetes.io/docs/concepts/configuration/assign-pod-node/">https://kubernetes.io/docs/concepts/configuration/assign-pod-node/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>tolerations</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
-\[\]Kubernetes core/v1.Toleration </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-If specified, the pod’s tolerations.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>securityContext</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podsecuritycontext-v1-core">
-Kubernetes core/v1.PodSecurityContext </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-SecurityContext holds pod-level security attributes and common container
-settings. Optional: Defaults to empty. See type description for default
-values of each field.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>imagePullSecrets</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-\[\]Kubernetes core/v1.LocalObjectReference </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-ImagePullSecrets is an optional list of references to secrets in the
-same namespace to use for pulling any of the images used by this
-PodSpec. If specified, these secrets will be passed to individual puller
-implementations for them to use. For example, in the case of docker,
-only DockerConfig type secrets are honored. More info:
-<a href="https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod">https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>priorityClassName</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-If specified, indicates the Redis pod’s priority. “system-node-critical”
-and “system-cluster-critical” are two special keywords which indicate
-the highest priorities with the former being the highest priority. Any
-other name must be defined by creating a PriorityClass object with that
-name. If not specified, the pod priority will be default or zero if
-there is no default. More info:
-<a href="https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/">https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>priority</code></br> <em> int32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-The priority value. Various system components use this field to find the
-priority of the Redis pod. When Priority Admission Controller is
-enabled, it prevents users from setting this field. The admission
-controller populates this field from PriorityClassName. The higher the
-value, the higher the priority. More info:
-<a href="https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/">https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>affinity</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#affinity-v1-core">
-Kubernetes core/v1.Affinity </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-The pod’s scheduling constraints More info:
-<a href="https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/">https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>serviceAccountName</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-ServiceAccountName to apply to the StatefulSet
-</p>
 </td>
 </tr>
 <tr>
@@ -1792,6 +1961,85 @@ JetStream (NATS) URL
 <td>
 <p>
 TLS enabled or not
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.JobTemplate">
+JobTemplate
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates">Templates</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
+</td>
+<td>
+<p>
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
+</p>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>ttlSecondsAfterFinished</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+ttlSecondsAfterFinished limits the lifetime of a Job that has finished
+execution (either Complete or Failed). If this field is set,
+ttlSecondsAfterFinished after the Job finishes, it is eligible to be
+automatically deleted. When the Job is being deleted, its lifecycle
+guarantees (e.g. finalizers) will be honored. If this field is unset,
+the Job won’t be automatically deleted. If this field is set to zero,
+the Job becomes eligible to be deleted immediately after it finishes.
+Numaflow defaults to 30
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>backoffLimit</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Specifies the number of retries before marking this job failed. More
+info:
+<a href="https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-backoff-failure-policy">https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-backoff-failure-policy</a>
+Numaflow defaults to 20
 </p>
 </td>
 </tr>
@@ -1982,9 +2230,7 @@ Metadata
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">AbstractPodTemplate</a>)
 </p>
 <p>
 </p>
@@ -2070,7 +2316,7 @@ NativeRedis
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBuferService">RedisBuferService</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>)
 </p>
 <p>
 </p>
@@ -2147,6 +2393,16 @@ MetricsContainerTemplate contains customized spec for metrics container
 </tr>
 <tr>
 <td>
+<code>initContainerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
 <code>persistence</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PersistenceStrategy">
 PersistenceStrategy </a> </em>
@@ -2157,131 +2413,16 @@ PersistenceStrategy </a> </em>
 </tr>
 <tr>
 <td>
-<code>metadata</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Metadata"> Metadata </a> </em>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
 </td>
 <td>
 <p>
-Metadata sets the pods’s metadata, i.e. annotations and labels
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
 </p>
-</td>
-</tr>
-<tr>
-<td>
-<code>nodeSelector</code></br> <em> map\[string\]string </em>
-</td>
-<td>
 <em>(Optional)</em>
-<p>
-NodeSelector is a selector which must be true for the pod to fit on a
-node. Selector which must match a node’s labels for the pod to be
-scheduled on that node. More info:
-<a href="https://kubernetes.io/docs/concepts/configuration/assign-pod-node/">https://kubernetes.io/docs/concepts/configuration/assign-pod-node/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>tolerations</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
-\[\]Kubernetes core/v1.Toleration </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-If specified, the pod’s tolerations.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>securityContext</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podsecuritycontext-v1-core">
-Kubernetes core/v1.PodSecurityContext </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-SecurityContext holds pod-level security attributes and common container
-settings. Optional: Defaults to empty. See type description for default
-values of each field.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>imagePullSecrets</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-\[\]Kubernetes core/v1.LocalObjectReference </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-ImagePullSecrets is an optional list of references to secrets in the
-same namespace to use for pulling any of the images used by this
-PodSpec. If specified, these secrets will be passed to individual puller
-implementations for them to use. For example, in the case of docker,
-only DockerConfig type secrets are honored. More info:
-<a href="https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod">https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>priorityClassName</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-If specified, indicates the Redis pod’s priority. “system-node-critical”
-and “system-cluster-critical” are two special keywords which indicate
-the highest priorities with the former being the highest priority. Any
-other name must be defined by creating a PriorityClass object with that
-name. If not specified, the pod priority will be default or zero if
-there is no default. More info:
-<a href="https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/">https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>priority</code></br> <em> int32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-The priority value. Various system components use this field to find the
-priority of the Redis pod. When Priority Admission Controller is
-enabled, it prevents users from setting this field. The admission
-controller populates this field from PriorityClassName. The higher the
-value, the higher the priority. More info:
-<a href="https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/">https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>affinity</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#affinity-v1-core">
-Kubernetes core/v1.Affinity </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-The pod’s scheduling constraints More info:
-<a href="https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/">https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/</a>
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>serviceAccountName</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-ServiceAccountName to apply to the StatefulSet
-</p>
 </td>
 </tr>
 <tr>
@@ -2300,13 +2441,49 @@ numaflow-controller-config will be used.
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
+PBQStorage
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.GroupBy">GroupBy</a>)
+</p>
+<p>
+<p>
+PBQStorage defines the persistence configuration for a vertex.
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>persistentVolumeClaim</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PersistenceStrategy">
+PersistenceStrategy </a> </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.PersistenceStrategy">
 PersistenceStrategy
 </h3>
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.PBQStorage">PBQStorage</a>)
 </p>
 <p>
 <p>
@@ -2451,7 +2628,7 @@ Lifecycle define the Lifecycle properties
 <em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for all the
-vertices of a pipleine, they could be overridden by each vertex’s
+vertices of a pipeline, they could be overridden by each vertex’s
 settings
 </p>
 </td>
@@ -2465,9 +2642,19 @@ settings
 <em>(Optional)</em>
 <p>
 Watermark enables watermark progression across the entire pipeline.
-Updating this after the pipeline has been created will have no impact
-and will be ignored. To make the pipeline honor any changes to the
-setting, the pipeline should be recreated.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>templates</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates"> Templates </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Templates is used to customize additional kubernetes resources required
+for the Pipeline
 </p>
 </td>
 </tr>
@@ -2539,7 +2726,7 @@ be overridden by the settings in vertex limits.
 <td>
 <em>(Optional)</em>
 <p>
-BufferUsageLimit is used to define the pencentage of the buffer usage
+BufferUsageLimit is used to define the percentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. Only
 applies to UDF and Source vertice as only they do buffer write. It will
 be overridden by the settings in vertex limits.
@@ -2644,7 +2831,7 @@ Lifecycle define the Lifecycle properties
 <em>(Optional)</em>
 <p>
 Limits define the limitations such as buffer read batch size for all the
-vertices of a pipleine, they could be overridden by each vertex’s
+vertices of a pipeline, they could be overridden by each vertex’s
 settings
 </p>
 </td>
@@ -2658,9 +2845,19 @@ settings
 <em>(Optional)</em>
 <p>
 Watermark enables watermark progression across the entire pipeline.
-Updating this after the pipeline has been created will have no impact
-and will be ignored. To make the pipeline honor any changes to the
-setting, the pipeline should be recreated.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>templates</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates"> Templates </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Templates is used to customize additional kubernetes resources required
+for the Pipeline
 </p>
 </td>
 </tr>
@@ -2723,10 +2920,38 @@ Kubernetes meta/v1.Time </a> </em>
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>vertexCount</code></br> <em> uint32 </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>sourceCount</code></br> <em> uint32 </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>sinkCount</code></br> <em> uint32 </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>udfCount</code></br> <em> uint32 </em>
+</td>
+<td>
+</td>
+</tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.RedisBuferService">
-RedisBuferService
+<h3 id="numaflow.numaproj.io/v1alpha1.RedisBufferService">
+RedisBufferService
 </h3>
 <p>
 (<em>Appears on:</em>
@@ -2778,7 +3003,7 @@ RedisConfig
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">BufferServiceConfig</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBuferService">RedisBuferService</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>)
 </p>
 <p>
 </p>
@@ -2945,6 +3170,9 @@ Scale
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>)
 </p>
 <p>
+<p>
+Scale defines the parameters for autoscaling.
+</p>
 </p>
 <table>
 <thead>
@@ -3049,7 +3277,7 @@ only effective for source vertices.
 <td>
 <em>(Optional)</em>
 <p>
-TargetBufferUsage is used to define the target pencentage of usage of
+TargetBufferUsage is used to define the target percentage of usage of
 the buffer to be read. A valid and meaningful value should be less than
 the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
 example, 50. It only applies to UDF and Sink vertices as only they have
@@ -3065,7 +3293,7 @@ buffers to read.
 <em>(Optional)</em>
 <p>
 ReplicasPerScale defines maximum replicas can be scaled up or down at
-once. The is use to prevent too aggresive scaling operations
+once. The is use to prevent too aggressive scaling operations
 </p>
 </td>
 </tr>
@@ -3104,6 +3332,14 @@ Log </a> </em>
 <td>
 <code>kafka</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink"> KafkaSink </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>blackhole</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Blackhole"> Blackhole </a> </em>
 </td>
 <td>
 </td>
@@ -3217,6 +3453,9 @@ StoreType (<code>string</code> alias)
 </p>
 </h3>
 <p>
+<p>
+PBQ store’s backend type.
+</p>
 </p>
 <h3 id="numaflow.numaproj.io/v1alpha1.TLS">
 TLS
@@ -3289,6 +3528,55 @@ KeySecret refers to the secret that contains the key
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Templates">
+Templates
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>daemon</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate"> DaemonTemplate
+</a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+DaemonTemplate is used to customize the Daemon Deployment
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>job</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.JobTemplate"> JobTemplate </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+JobTemplate is used to customize Jobs
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.UDF">
 UDF
 </h3>
@@ -3323,6 +3611,15 @@ Description
 <td>
 <code>builtin</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Function"> Function </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>groupBy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.GroupBy"> GroupBy </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -3453,6 +3750,19 @@ Refer to the Kubernetes API documentation for the fields of the
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>watermark</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Watermark indicates watermark progression in the vertex, it’s populated
+from the pipeline watermark settings.
+</p>
 </td>
 </tr>
 </table>
@@ -3649,6 +3959,19 @@ Description
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>watermark</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Watermark"> Watermark </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Watermark indicates watermark progression in the vertex, it’s populated
+from the pipeline watermark settings.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.VertexStatus">
@@ -3720,12 +4043,19 @@ Kubernetes meta/v1.Time </a> </em>
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.VertexType">
+VertexType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Watermark">
 Watermark
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
 </p>
 <p>
 </p>
@@ -3768,6 +4098,48 @@ means no delay.
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Window">
+Window
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.GroupBy">GroupBy</a>)
+</p>
+<p>
+<p>
+Window describes windowing strategy
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>fixed</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.FixedWindow"> FixedWindow </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.WindowType">
+WindowType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+</p>
 <hr/>
 <p>
 <em> Generated with <code>gen-crd-api-reference-docs</code>. </em>

@@ -1,11 +1,29 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 )
 
 var (
@@ -27,6 +45,28 @@ var (
 		},
 	}
 )
+
+func Test_ListAllEdges(t *testing.T) {
+	es := testPipeline.ListAllEdges()
+	assert.Equal(t, 2, len(es))
+	assert.Nil(t, es[0].Parallelism)
+	assert.Nil(t, es[1].Parallelism)
+	pl := testPipeline.DeepCopy()
+	pl.Spec.Vertices[1].UDF.GroupBy = &GroupBy{}
+	es = pl.ListAllEdges()
+	assert.Equal(t, 2, len(es))
+	assert.NotNil(t, es[0].Parallelism)
+	assert.Equal(t, int32(1), *es[0].Parallelism)
+	assert.Nil(t, es[1].Parallelism)
+	pl.Spec.Edges[0].Parallelism = pointer.Int32(3)
+	es = pl.ListAllEdges()
+	assert.Equal(t, 2, len(es))
+	assert.NotNil(t, es[0].Parallelism)
+	assert.Equal(t, int32(1), *es[0].Parallelism)
+	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
+	es = pl.ListAllEdges()
+	assert.Equal(t, int32(3), *es[0].Parallelism)
+}
 
 func Test_GetToEdges(t *testing.T) {
 	es := testPipeline.GetToEdges("p1")
@@ -125,6 +165,74 @@ func TestGetDaemonDeploy(t *testing.T) {
 		assert.Equal(t, req.Image, c.Image)
 		assert.Contains(t, c.Args, "isbsvc-buffer-validate")
 	})
+
+	t.Run("test get deployment obj with pipeline overrides", func(t *testing.T) {
+		env := corev1.EnvVar{Name: "my-env-name", Value: "my-env-value"}
+		initEnv := corev1.EnvVar{Name: "my-init-env-name", Value: "my-init-env-value"}
+		podLabels := map[string]string{"my-label-name": "my-label-value"}
+		podAnnotations := map[string]string{"my-annotation-name": "my-annotation-value"}
+		replicas := int32(2)
+		nodeSelector := map[string]string{"my-node-selector-name": "my-node-selector-value"}
+		priority := int32(100)
+		toleration := corev1.Toleration{
+			Key:      "my-toleration-key",
+			Operator: "Equal",
+			Value:    "my-toleration-value",
+			Effect:   "NoSchedule",
+		}
+		pl := testPipeline.DeepCopy()
+		pl.Spec.Templates = &Templates{
+			DaemonTemplate: &DaemonTemplate{
+				ContainerTemplate: &ContainerTemplate{
+					Resources: testResources,
+					Env:       []corev1.EnvVar{env},
+				},
+				InitContainerTemplate: &ContainerTemplate{
+					Resources: testResources,
+					Env:       []corev1.EnvVar{initEnv},
+				},
+				AbstractPodTemplate: AbstractPodTemplate{
+					Metadata: &Metadata{
+						Annotations: podAnnotations,
+						Labels:      podLabels,
+					},
+					NodeSelector:      nodeSelector,
+					Tolerations:       []corev1.Toleration{toleration},
+					PriorityClassName: "my-priority-class-name",
+					Priority:          &priority,
+				},
+				Replicas: &replicas,
+			},
+		}
+		s, err := pl.GetDaemonDeploymentObj(req)
+		assert.NoError(t, err)
+		assert.Equal(t, pl.GetDaemonDeploymentName(), s.Name)
+		assert.Equal(t, 1, len(s.Spec.Template.Spec.Containers))
+		assert.Greater(t, len(s.Spec.Template.Spec.Containers[0].Env), 1)
+		assert.Contains(t, s.Spec.Template.Spec.Containers[0].Env, env)
+		assert.Equal(t, 1, len(s.Spec.Template.Spec.InitContainers))
+		assert.Equal(t, s.Spec.Template.Spec.InitContainers[0].Resources, testResources)
+		assert.Contains(t, s.Spec.Template.Spec.InitContainers[0].Env, initEnv)
+		assert.Greater(t, len(s.Spec.Template.Labels), len(podLabels))
+		assert.Equal(t, s.Spec.Template.Labels["my-label-name"], podLabels["my-label-name"])
+		assert.Equal(t, s.Spec.Template.Annotations["my-annotation-name"], podAnnotations["my-annotation-name"])
+		assert.NotNil(t, s.Spec.Replicas)
+		assert.Equal(t, *s.Spec.Replicas, replicas)
+		assert.Equal(t, s.Spec.Template.Spec.NodeSelector["my-node-selector-name"], nodeSelector["my-node-selector-name"])
+		assert.NotNil(t, s.Spec.Template.Spec.Priority)
+		assert.Equal(t, *s.Spec.Template.Spec.Priority, priority)
+		assert.Contains(t, s.Spec.Template.Spec.Tolerations, toleration)
+		assert.Equal(t, s.Spec.Template.Spec.PriorityClassName, "my-priority-class-name")
+	})
+}
+
+func Test_PipelineVertexCounts(t *testing.T) {
+	s := PipelineStatus{}
+	s.SetVertexCounts(testPipeline.Spec.Vertices)
+	assert.Equal(t, uint32(3), *s.VertexCount)
+	assert.Equal(t, uint32(1), *s.SourceCount)
+	assert.Equal(t, uint32(1), *s.SinkCount)
+	assert.Equal(t, uint32(1), *s.UDFCount)
 }
 
 func Test_PipelineSetPhase(t *testing.T) {
@@ -196,6 +304,13 @@ func Test_GetDownstreamEdges(t *testing.T) {
 			Namespace: "test-ns",
 		},
 		Spec: PipelineSpec{
+			Vertices: []AbstractVertex{
+				{Name: "input"},
+				{Name: "p1"},
+				{Name: "p2"},
+				{Name: "p11"},
+				{Name: "output"},
+			},
 			Edges: []Edge{
 				{From: "input", To: "p1"},
 				{From: "p1", To: "p11"},
@@ -206,7 +321,7 @@ func Test_GetDownstreamEdges(t *testing.T) {
 	}
 	edges := pl.GetDownstreamEdges("input")
 	assert.Equal(t, 4, len(edges))
-	assert.Equal(t, edges, pl.Spec.Edges)
+	assert.Equal(t, edges, pl.ListAllEdges())
 	assert.Equal(t, edges[2], Edge{From: "p1", To: "p2"})
 
 	edges = pl.GetDownstreamEdges("p1")
@@ -217,4 +332,51 @@ func Test_GetDownstreamEdges(t *testing.T) {
 
 	edges = pl.GetDownstreamEdges("notexisting")
 	assert.Equal(t, 0, len(edges))
+}
+
+func Test_GetWatermarkMaxDelay(t *testing.T) {
+	wm := Watermark{}
+	assert.Equal(t, "0s", wm.GetMaxDelay().String())
+	wm.MaxDelay = &metav1.Duration{Duration: time.Duration(2 * time.Second)}
+	assert.Equal(t, "2s", wm.GetMaxDelay().String())
+}
+
+func Test_GetDeleteGracePeriodSeconds(t *testing.T) {
+	lc := Lifecycle{}
+	assert.Equal(t, int32(30), lc.GetDeleteGracePeriodSeconds())
+	lc.DeleteGracePeriodSeconds = pointer.Int32(50)
+	assert.Equal(t, int32(50), lc.GetDeleteGracePeriodSeconds())
+}
+
+func Test_GetDesiredPhase(t *testing.T) {
+	lc := Lifecycle{}
+	assert.Equal(t, PipelinePhaseRunning, lc.GetDesiredPhase())
+	lc.DesiredPhase = PipelinePhasePaused
+	assert.Equal(t, PipelinePhasePaused, lc.GetDesiredPhase())
+}
+
+func Test_GetPipelineLimits(t *testing.T) {
+	pl := Pipeline{
+		Spec: PipelineSpec{},
+	}
+	l := pl.GetPipelineLimits()
+	assert.Equal(t, int64(DefaultBufferLength), int64(*l.BufferMaxLength))
+	assert.Equal(t, float64(DefaultBufferUsageLimit), float64(*l.BufferUsageLimit)/100)
+	assert.Equal(t, int64(DefaultReadBatchSize), int64(*l.ReadBatchSize))
+	assert.Equal(t, "1s", l.ReadTimeout.Duration.String())
+
+	length := uint64(2000)
+	usuageLimit := uint32(40)
+	readBatch := uint64(321)
+	pl.Spec.Limits = &PipelineLimits{
+		BufferMaxLength:  &length,
+		BufferUsageLimit: &usuageLimit,
+		ReadBatchSize:    &readBatch,
+		ReadTimeout:      &metav1.Duration{Duration: time.Duration(5 * time.Second)},
+	}
+	l = pl.GetPipelineLimits()
+	assert.Equal(t, length, *l.BufferMaxLength)
+	assert.Equal(t, float64(40)/100, float64(*l.BufferUsageLimit)/100)
+	assert.Equal(t, readBatch, *l.ReadBatchSize)
+	assert.Equal(t, "5s", l.ReadTimeout.Duration.String())
 }

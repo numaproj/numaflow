@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fetch
 
 import (
@@ -74,7 +90,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 			name:             "offset_9",
 			processorManager: processorManager,
 			args:             args{9},
-			want:             time.Time{}.Unix(),
+			want:             -1,
 		},
 		{
 			name:             "offset_15",
@@ -118,15 +134,15 @@ func TestBuffer_GetWatermark(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &edgeFetcher{
 				ctx:              ctx,
-				edgeName:         "testBuffer",
+				bufferName:       "testBuffer",
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
-			if got := b.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.Unix(tt.want, 0).In(location) {
-				t.Errorf("GetWatermark() = %v, want %v", got, processor.Watermark(time.Unix(tt.want, 0)))
+			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+				t.Errorf("GetWatermark() = %v, want %v", got, processor.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 14 because the timeline has been populated ahead of time
-			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.Unix(14, 0).In(location))
+			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.UnixMilli(14).In(location))
 		})
 	}
 }

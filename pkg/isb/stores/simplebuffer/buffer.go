@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 /* package simplebuffer is in memory ring buffer that implements the isb interface. This should be used only for local development
 and testing purposes. Exactly-Once is not implemented because it is a side effect. The locking implementation is very coarse.
 */
@@ -95,6 +111,7 @@ func (b *InMemoryBuffer) IsEmpty() bool {
 
 func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	var errs = make([]error, len(messages))
+	writeOffsets := make([]isb.Offset, len(messages))
 	for idx, message := range messages {
 		if !b.IsFull() {
 			var err1 error
@@ -111,14 +128,16 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			errs[idx] = nil
 			b.buffer[currentIdx].dirty = true
 			b.writeIdx = (currentIdx + 1) % b.size
-
+			writeOffsets = append(writeOffsets, isb.SimpleIntOffset(func() int64 {
+				return currentIdx
+			}))
 			// access buffer via lock
 			b.rwlock.Unlock()
 		} else {
 			errs[idx] = isb.BufferWriteErr{Name: b.name, Full: true, Message: "Buffer full!"}
 		}
 	}
-	return nil, errs
+	return writeOffsets, errs
 }
 
 func (b *InMemoryBuffer) blockIfEmpty(ctx context.Context) error {
@@ -173,7 +192,7 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 			}
 		}
 
-		readMessage := isb.ReadMessage{Message: msg, ReadOffset: isb.SimpleOffset(func() string { return strconv.Itoa(int(currentIdx)) })}
+		readMessage := isb.ReadMessage{Message: msg, ReadOffset: isb.SimpleIntOffset(func() int64 { return currentIdx })}
 
 		readMessages = append(readMessages, &readMessage)
 	}

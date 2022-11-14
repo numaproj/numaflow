@@ -1,11 +1,27 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fetch
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -33,9 +49,10 @@ func (s status) String() string {
 	return "unknown"
 }
 
-// ProcessorToFetch is the smallest unit of entity (from we which we fetch data) that does inorder processing or contains inorder data.
+// ProcessorToFetch is the smallest unit of entity (from which we fetch data) that does inorder processing or contains inorder data.
 type ProcessorToFetch struct {
 	ctx            context.Context
+	cancel         context.CancelFunc
 	entity         processor.ProcessorEntitier
 	status         status
 	offsetTimeline *OffsetTimeline
@@ -50,17 +67,17 @@ func (p *ProcessorToFetch) String() string {
 
 // NewProcessorToFetch creates ProcessorToFetch.
 func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntitier, capacity int, watcher store.WatermarkKVWatcher) *ProcessorToFetch {
+	ctx, cancel := context.WithCancel(ctx)
 	p := &ProcessorToFetch{
 		ctx:            ctx,
+		cancel:         cancel,
 		entity:         processor,
 		status:         _active,
 		offsetTimeline: NewOffsetTimeline(ctx, capacity),
 		otWatcher:      watcher,
 		log:            logging.FromContext(ctx),
 	}
-	if watcher != nil {
-		go p.startTimeLineWatcher()
-	}
+	go p.startTimeLineWatcher()
 	return p
 }
 
@@ -97,11 +114,18 @@ func (p *ProcessorToFetch) IsDeleted() bool {
 	return p.status == _deleted
 }
 
+func (p *ProcessorToFetch) stopTimeLineWatcher() {
+	p.cancel()
+}
+
 func (p *ProcessorToFetch) startTimeLineWatcher() {
-	watchCh := p.otWatcher.Watch(p.ctx)
+	watchCh, stopped := p.otWatcher.Watch(p.ctx)
+
 	for {
 		select {
-		case <-p.ctx.Done():
+		case <-stopped:
+			// no need to close ot watcher here because the ot watcher is shared for the given vertex
+			// the parent ctx will close the ot watcher
 			return
 		case value := <-watchCh:
 			// TODO: why will value will be nil?
@@ -110,21 +134,19 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
-				epoch, skip, err := p.entity.ParseOTWatcherKey(value.Key())
+				if value.Key() != p.entity.BuildOTWatcherKey() {
+					continue
+				}
+				otValue, err := ot.DecodeToOTValue(value.Value())
 				if err != nil {
-					p.log.Errorw("Unable to convert value.Key() to int64", zap.String("received", value.Key()), zap.Error(err))
+					p.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
 					continue
 				}
-				// if skip is set to true, it means the key update we received is for a different processor (sharing of bucket)
-				if skip {
-					continue
-				}
-				uint64Value := binary.LittleEndian.Uint64(value.Value())
 				p.offsetTimeline.Put(OffsetWatermark{
-					watermark: epoch,
-					offset:    int64(uint64Value),
+					watermark: otValue.Watermark,
+					offset:    otValue.Offset,
 				})
-				p.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", p.otWatcher.GetKVName()), zap.Int64("epoch", epoch), zap.Uint64("value", uint64Value))
+				p.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", p.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 			case store.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
 				// naturally trim the KV store.
@@ -132,6 +154,5 @@ func (p *ProcessorToFetch) startTimeLineWatcher() {
 				// skip
 			}
 		}
-
 	}
 }

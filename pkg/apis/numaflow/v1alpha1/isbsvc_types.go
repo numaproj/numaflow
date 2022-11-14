@@ -1,4 +1,20 @@
 /*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/*
 
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,8 +65,10 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=isbsvc
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.status.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type InterStepBufferService struct {
@@ -72,7 +90,7 @@ type InterStepBufferServiceList struct {
 }
 
 type InterStepBufferServiceSpec struct {
-	Redis     *RedisBuferService      `json:"redis,omitempty" protobuf:"bytes,1,opt,name=redis"`
+	Redis     *RedisBufferService     `json:"redis,omitempty" protobuf:"bytes,1,opt,name=redis"`
 	JetStream *JetStreamBufferService `json:"jetstream,omitempty" protobuf:"bytes,2,opt,name=jetstream"`
 }
 
@@ -86,11 +104,16 @@ type InterStepBufferServiceStatus struct {
 	Phase   ISBSvcPhase         `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=ISBSvcPhase"`
 	Message string              `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
 	Config  BufferServiceConfig `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
+	Type    ISBSvcType          `json:"type,omitempty" protobuf:"bytes,5,opt,name=type"`
 }
 
 func (isbsvc *InterStepBufferServiceStatus) SetPhase(phase ISBSvcPhase, msg string) {
 	isbsvc.Phase = phase
 	isbsvc.Message = msg
+}
+
+func (isbsvc *InterStepBufferServiceStatus) SetType(typ ISBSvcType) {
+	isbsvc.Type = typ
 }
 
 // InitConditions sets conditions to Unknown state.

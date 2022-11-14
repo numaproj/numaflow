@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package isbsvc
 
 import (
@@ -5,12 +21,15 @@ import (
 	"fmt"
 
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 type isbsRedisSvc struct {
@@ -121,4 +140,12 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*
 	}
 
 	return bufferInfo, nil
+}
+
+func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
+	hbWatcher := noop.NewKVOpWatch()
+	otWatcher := noop.NewKVOpWatch()
+	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
+	return watermarkFetcher, nil
 }

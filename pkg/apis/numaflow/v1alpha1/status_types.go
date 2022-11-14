@@ -1,5 +1,5 @@
 /*
-
+Copyright 2022 The Numaproj Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ type Status struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
-// InitializeConditions initializes the contions to Unknown
+// InitializeConditions initializes the conditions to Unknown
 func (s *Status) InitializeConditions(conditionTypes ...ConditionType) {
 	for _, t := range conditionTypes {
 		c := metav1.Condition{

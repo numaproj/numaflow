@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Package generator contains an implementation of a in memory generator that generates
 // payloads in json format.
 package generator
@@ -6,6 +22,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -49,7 +66,7 @@ var recordGenerator = func(size int32) []byte {
 	r := payload{Data: b, Createdts: nano}
 	data, err := json.Marshal(r)
 	if err != nil {
-		log.Errorf("error marshalling the record [%v]", r)
+		log.Errorf("Error marshalling the record [%v]", r)
 	}
 	return data
 }
@@ -105,23 +122,32 @@ func WithReadTimeOut(timeout time.Duration) Option {
 	}
 }
 
-// NewMemGen fuction creates an instance of generator.
+// NewMemGen function creates an instance of generator.
 // ctx  - context passed by the cmd/start.go a new context with cancel
 //
 //	is created for use by this vertex.
 //
 // name - name of this vertex
-// rpu  - no of records to generate per time unit. by default the channel buffer size is set to 5*rpu
-// msgSize - size of each generated message
-// timeunit - unit of time per tick. could be any golang time.Duration.
 // writers - destinations to write to
 func NewMemGen(vertexInstance *dfv1.VertexInstance,
-	rpu int,
-	msgSize int32,
-	timeunit time.Duration,
 	writers []isb.BufferWriter,
 	fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, // watermarks
 	opts ...Option) (*memgen, error) {
+
+	// minimal CRDs don't have defaults
+	rpu := 5
+	if vertexInstance.Vertex.Spec.Source.Generator.RPU != nil {
+		rpu = int(*(vertexInstance.Vertex.Spec.Source.Generator.RPU))
+	}
+	msgSize := int32(8)
+	if vertexInstance.Vertex.Spec.Source.Generator.MsgSize != nil {
+		msgSize = *vertexInstance.Vertex.Spec.Source.Generator.MsgSize
+	}
+	timeunit := time.Second
+	if vertexInstance.Vertex.Spec.Source.Generator.Duration != nil {
+		timeunit = vertexInstance.Vertex.Spec.Source.Generator.Duration.Duration
+	}
+
 	gensrc := &memgen{
 		rpu:            rpu,
 		msgSize:        msgSize,
@@ -154,7 +180,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.FromSourceVertex(), forward.WithLogger(gensrc.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(gensrc.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -172,6 +198,13 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	gensrc.forwarder = forwarder
 
 	return gensrc, nil
+}
+
+func (mg *memgen) buildSourceWatermarkPublisher(publishWMStores store.WatermarkStorer) publish.Publisher {
+	// for tickgen, it can be the name of the replica
+	entityName := fmt.Sprintf("%s-%d", mg.vertexInstance.Vertex.Name, mg.vertexInstance.Replica)
+	processorEntity := processor.NewProcessorEntity(entityName)
+	return publish.NewPublish(mg.lifecycleCtx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(mg.vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 }
 
 func (mg *memgen) GetName() string {
@@ -211,7 +244,8 @@ loop:
 		// into the offset timeline store.
 		// Please note that we are inserting the watermark before the data has been persisted into ISB by the forwarder.
 		o := msgs[len(msgs)-1].ReadOffset
-		nanos, _ := o.Sequence()
+		// use the first eventime as watermark to make it conservative
+		nanos, _ := msgs[0].ReadOffset.Sequence()
 		// remove the nanosecond precision
 		mg.sourcePublishWM.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
 	}
@@ -223,7 +257,10 @@ func (mg *memgen) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
 
-func (br *memgen) Close() error {
+func (mg *memgen) Close() error {
+	if err := mg.sourcePublishWM.Close(); err != nil {
+		mg.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
+	}
 	return nil
 }
 
@@ -297,7 +334,7 @@ func newreadmessage(payload []byte, offset int64) *isb.ReadMessage {
 	}
 
 	return &isb.ReadMessage{
-		ReadOffset: isb.SimpleOffset(func() string { return strconv.FormatInt(offset, 10) }),
+		ReadOffset: isb.SimpleIntOffset(func() int64 { return offset }),
 		Message:    msg,
 	}
 }

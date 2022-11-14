@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package kafka
 
 import (
@@ -60,6 +76,8 @@ type KafkaSource struct {
 	saramaClient sarama.Client
 	// source watermark publishers for different partitions
 	sourcePublishWMs map[int32]publish.Publisher
+	// max delay duration of watermark
+	watermarkMaxDelay time.Duration
 	// source watermark publisher stores
 	srcPublishWMStores store.WatermarkStorer
 	lock               *sync.RWMutex
@@ -110,7 +128,7 @@ func (r *KafkaSource) GetName() string {
 // at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages.
 func (r *KafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	// It stores latest timestamps for different partitions
-	latestTimestamps := make(map[int32]time.Time)
+	oldestTimestamps := make(map[int32]time.Time)
 	msgs := make([]*isb.ReadMessage, 0, count)
 	timeout := time.After(r.readTimeout)
 loop:
@@ -121,8 +139,8 @@ loop:
 			_m := toReadMessage(m)
 			msgs = append(msgs, _m)
 			// Get latest timestamps for different partitions
-			if t, ok := latestTimestamps[m.Partition]; !ok || m.Timestamp.After(t) {
-				latestTimestamps[m.Partition] = m.Timestamp
+			if t, ok := oldestTimestamps[m.Partition]; !ok || m.Timestamp.Before(t) {
+				oldestTimestamps[m.Partition] = m.Timestamp
 			}
 		case <-timeout:
 			// log that timeout has happened and don't return an error
@@ -130,7 +148,7 @@ loop:
 			break loop
 		}
 	}
-	for p, t := range latestTimestamps {
+	for p, t := range oldestTimestamps {
 		publisher := r.loadSourceWartermarkPublisher(p)
 		publisher.PublishWatermark(processor.Watermark(t), nil) // Source publisher does not care about the offset
 	}
@@ -146,7 +164,7 @@ func (r *KafkaSource) loadSourceWartermarkPublisher(partitionID int32) publish.P
 	}
 	entityName := fmt.Sprintf("%s-%s-%d", r.pipelineName, r.name, partitionID)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, publish.IsSource(), publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
+	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, publish.IsSource(), publish.WithDelay(r.watermarkMaxDelay))
 	r.sourcePublishWMs[partitionID] = sourcePublishWM
 	return sourcePublishWM
 }
@@ -210,6 +228,11 @@ func (r *KafkaSource) Close() error {
 		}
 	}
 	<-r.stopch
+	for _, p := range r.sourcePublishWMs {
+		if err := p.Close(); err != nil {
+			r.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
+		}
+	}
 	r.logger.Info("Kafka reader closed")
 	return nil
 }
@@ -250,6 +273,7 @@ func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWri
 		handlerbuffer:      100,             // default buffer size for kafka reads
 		srcPublishWMStores: publishWMStores,
 		sourcePublishWMs:   make(map[int32]publish.Publisher, 0),
+		watermarkMaxDelay:  vertexInstance.Vertex.Spec.Watermark.GetMaxDelay(),
 		lock:               new(sync.RWMutex),
 		logger:             logging.NewLogger(), // default logger
 	}
@@ -303,7 +327,7 @@ func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWri
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.FromSourceVertex(), forward.WithLogger(kafkasource.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(kafkasource.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -367,7 +391,7 @@ func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
 	}
 
 	return &isb.ReadMessage{
-		ReadOffset: isb.SimpleOffset(func() string { return offset }),
+		ReadOffset: isb.SimpleStringOffset(func() string { return offset }),
 		Message:    msg,
 	}
 }

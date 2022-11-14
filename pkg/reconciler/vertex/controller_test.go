@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vertex
 
 import (
@@ -13,6 +29,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -39,7 +56,7 @@ var (
 			Name:      dfv1.DefaultISBSvcName,
 		},
 		Spec: dfv1.InterStepBufferServiceSpec{
-			Redis: &dfv1.RedisBuferService{
+			Redis: &dfv1.RedisBufferService{
 				Native: &dfv1.NativeRedis{
 					Version: testVersion,
 				},
@@ -168,7 +185,7 @@ func Test_BuildPodSpec(t *testing.T) {
 			logger: zaptest.NewLogger(t).Sugar(),
 		}
 		testObj := testSrcVertex.DeepCopy()
-		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig)
+		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
@@ -182,8 +199,6 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetToBuffers() {
@@ -206,7 +221,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Spec.Sink = &dfv1.Sink{}
 		testObj.Spec.FromEdges = []dfv1.Edge{{From: "p1", To: "output"}}
 		testObj.Spec.ToEdges = []dfv1.Edge{}
-		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig)
+		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
@@ -220,8 +235,6 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetFromBuffers() {
@@ -252,7 +265,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		testObj.Spec.FromEdges = []dfv1.Edge{{From: "p1", To: "output"}}
 		testObj.Spec.ToEdges = []dfv1.Edge{}
-		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig)
+		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
 		assert.Equal(t, 2, len(spec.Containers))
@@ -263,7 +276,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Equal(t, "arg0", spec.Containers[1].Args[0])
 	})
 
-	t.Run("test udf", func(t *testing.T) {
+	t.Run("test map udf", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		r := &vertexReconciler{
 			client: cl,
@@ -278,7 +291,7 @@ func Test_BuildPodSpec(t *testing.T) {
 				Name: "cat",
 			},
 		}
-		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig)
+		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
 		assert.Equal(t, 2, len(spec.Containers))
@@ -292,8 +305,6 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkDisabled)
-		assert.Contains(t, envNames, dfv1.EnvWatermarkMaxDelay)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		for _, b := range testObj.GetFromBuffers() {
@@ -302,6 +313,49 @@ func Test_BuildPodSpec(t *testing.T) {
 		for _, b := range testObj.GetToBuffers() {
 			assert.Contains(t, argStr, fmt.Sprintf("%s=%s", b.Name, b.Type))
 		}
+	})
+
+	t.Run("test reduce udf", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := &vertexReconciler{
+			client: cl,
+			scheme: scheme.Scheme,
+			config: fakeConfig,
+			image:  testFlowImage,
+			logger: zaptest.NewLogger(t).Sugar(),
+		}
+		testObj := testVertex.DeepCopy()
+		volSize, _ := resource.ParseQuantity("1Gi")
+		testObj.Spec.UDF = &dfv1.UDF{
+			Container: &dfv1.Container{
+				Image: "my-image",
+			},
+			GroupBy: &dfv1.GroupBy{
+				Storage: &dfv1.PBQStorage{
+					PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+						VolumeSize: &volSize,
+					},
+				},
+			},
+		}
+		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 2)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(spec.InitContainers))
+		assert.Equal(t, 2, len(spec.Containers))
+		containsPVC := false
+		containsPVCMount := false
+		for _, v := range spec.Volumes {
+			if v.Name == "pbq-vol" {
+				containsPVC = true
+			}
+		}
+		assert.True(t, containsPVC)
+		for _, m := range spec.Containers[0].VolumeMounts {
+			if m.MountPath == dfv1.PathPBQMount {
+				containsPVCMount = true
+			}
+		}
+		assert.True(t, containsPVCMount)
 	})
 }
 

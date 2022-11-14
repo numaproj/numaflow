@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import (
@@ -6,7 +22,6 @@ import (
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
@@ -29,61 +44,17 @@ type JetStreamBufferService struct {
 	MetricsContainerTemplate *ContainerTemplate `json:"metricsContainerTemplate,omitempty" protobuf:"bytes,5,opt,name=metricsContainerTemplate"`
 	// +optional
 	Persistence *PersistenceStrategy `json:"persistence,omitempty" protobuf:"bytes,6,opt,name=persistence"`
-	// Metadata sets the pods's metadata, i.e. annotations and labels
-	Metadata *Metadata `json:"metadata,omitempty" protobuf:"bytes,77,opt,name=metadata"`
-	// NodeSelector is a selector which must be true for the pod to fit on a node.
-	// Selector which must match a node's labels for the pod to be scheduled on that node.
-	// More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
 	// +optional
-	NodeSelector map[string]string `json:"nodeSelector,omitempty" protobuf:"bytes,8,rep,name=nodeSelector"`
-	// If specified, the pod's tolerations.
-	// +optional
-	Tolerations []corev1.Toleration `json:"tolerations,omitempty" protobuf:"bytes,9,rep,name=tolerations"`
-	// SecurityContext holds pod-level security attributes and common container settings.
-	// Optional: Defaults to empty.  See type description for default values of each field.
-	// +optional
-	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty" protobuf:"bytes,10,opt,name=securityContext"`
-	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
-	// If specified, these secrets will be passed to individual puller implementations for them to use. For example,
-	// in the case of docker, only DockerConfig type secrets are honored.
-	// More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
-	// +optional
-	// +patchMergeKey=name
-	// +patchStrategy=merge
-	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,11,rep,name=imagePullSecrets"`
-	// If specified, indicates the Redis pod's priority. "system-node-critical"
-	// and "system-cluster-critical" are two special keywords which indicate the
-	// highest priorities with the former being the highest priority. Any other
-	// name must be defined by creating a PriorityClass object with that name.
-	// If not specified, the pod priority will be default or zero if there is no
-	// default.
-	// More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-	// +optional
-	PriorityClassName string `json:"priorityClassName,omitempty" protobuf:"bytes,12,opt,name=priorityClassName"`
-	// The priority value. Various system components use this field to find the
-	// priority of the Redis pod. When Priority Admission Controller is enabled,
-	// it prevents users from setting this field. The admission controller populates
-	// this field from PriorityClassName.
-	// The higher the value, the higher the priority.
-	// More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-	// +optional
-	Priority *int32 `json:"priority,omitempty" protobuf:"bytes,13,opt,name=priority"`
-	// The pod's scheduling constraints
-	// More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-	// +optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty" protobuf:"bytes,14,opt,name=affinity"`
-	// ServiceAccountName to apply to the StatefulSet
-	// +optional
-	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,15,opt,name=serviceAccountName"`
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,7,opt,name=abstractPodTemplate"`
 	// JetStream configuration, if not specified, global settings in numaflow-controller-config will be used.
 	// See https://docs.nats.io/running-a-nats-service/configuration#jetstream.
 	// Only configure "max_memory_store" or "max_file_store", do not set "store_dir" as it has been hardcoded.
 	// +optional
-	Settings *string `json:"settings,omitempty" protobuf:"bytes,16,opt,name=settings"`
+	Settings *string `json:"settings,omitempty" protobuf:"bytes,8,opt,name=settings"`
 	// Optional arguments to start nats-server. For example, "-D" to enable debugging output, "-DV" to enable debugging and tracing.
 	// Check https://docs.nats.io/ for all the available arguments.
 	// +optional
-	StartArgs []string `json:"startArgs,omitempty" protobuf:"bytes,17,rep,name=startArgs"`
+	StartArgs []string `json:"startArgs,omitempty" protobuf:"bytes,9,rep,name=startArgs"`
 	// Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config.
 	// It accepts a YAML format configuration, it may include 4 sections, "stream", "consumer", "otBucket" and "procBucket".
 	// Available fields under "stream" include "retention" (e.g. interest, limits, workerQueue), "maxMsgs", "maxAge" (e.g. 72h), "replicas" (1, 3, 5), "duplicates" (e.g. 5m).
@@ -91,16 +62,16 @@ type JetStreamBufferService struct {
 	// Available fields under "otBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).
 	// Available fields under "procBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).
 	// +optional
-	BufferConfig *string `json:"bufferConfig,omitempty" protobuf:"bytes,18,opt,name=bufferConfig"`
+	BufferConfig *string `json:"bufferConfig,omitempty" protobuf:"bytes,10,opt,name=bufferConfig"`
 	// Whether encrypt the data at rest, defaults to false
 	// Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
 	// Toggling the value will impact encypting/decrypting existing messages.
 	// +optional
-	Encryption bool `json:"encryption,omitempty" protobuf:"bytes,19,opt,name=encryption"`
+	Encryption bool `json:"encryption,omitempty" protobuf:"bytes,11,opt,name=encryption"`
 	// Whether enable TLS, defaults to false
 	// Enabling TLS might impact the performance
 	// +optional
-	TLS bool `json:"tls,omitempty" protobuf:"bytes,20,opt,name=tls"`
+	TLS bool `json:"tls,omitempty" protobuf:"bytes,12,opt,name=tls"`
 }
 
 func (j JetStreamBufferService) GetReplicas() int {
@@ -207,7 +178,7 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 				ServiceAccountName:            j.ServiceAccountName,
 				Affinity:                      j.Affinity,
 				ShareProcessNamespace:         pointer.Bool(true),
-				TerminationGracePeriodSeconds: pointer.Int64(60),
+				TerminationGracePeriodSeconds: pointer.Int64(120),
 				Volumes: []corev1.Volume{
 					{Name: "pid", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 					{
@@ -258,6 +229,7 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 							{Name: "SERVER_NAME", Value: "$(POD_NAME)"},
 							{Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 							{Name: "CLUSTER_ADVERTISE", Value: "$(POD_NAME)." + req.ServiceName + ".$(POD_NAMESPACE).svc.cluster.local"},
+							{Name: "GOMEMLIMIT", ValueFrom: &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "main", Resource: "limits.memory"}}},
 							{Name: "JS_KEY", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.ServerEncryptionSecretName}, Key: JetStreamServerSecretEncryptionKey}}},
 						},
 						VolumeMounts: []corev1.VolumeMount{
@@ -326,39 +298,15 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 	if j.ContainerTemplate != nil {
 		spec.Template.Spec.Containers[0].Resources = j.ContainerTemplate.Resources
 	}
+	if j.ReloaderContainerTemplate != nil {
+		spec.Template.Spec.Containers[1].Resources = j.ReloaderContainerTemplate.Resources
+	}
 	if j.MetricsContainerTemplate != nil {
-		spec.Template.Spec.Containers[1].Resources = j.MetricsContainerTemplate.Resources
+		spec.Template.Spec.Containers[2].Resources = j.MetricsContainerTemplate.Resources
 	}
 	if j.Persistence != nil {
-		volMode := corev1.PersistentVolumeFilesystem
-		// Default volume size
-		volSize := apiresource.MustParse("20Gi")
-		if j.Persistence.VolumeSize != nil {
-			volSize = *j.Persistence.VolumeSize
-		}
-		// Default to ReadWriteOnce
-		accessMode := corev1.ReadWriteOnce
-		if j.Persistence.AccessMode != nil {
-			accessMode = *j.Persistence.AccessMode
-		}
 		spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: req.PvcNameIfNeeded,
-				},
-				Spec: corev1.PersistentVolumeClaimSpec{
-					AccessModes: []corev1.PersistentVolumeAccessMode{
-						accessMode,
-					},
-					VolumeMode:       &volMode,
-					StorageClassName: j.Persistence.StorageClassName,
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceStorage: volSize,
-						},
-					},
-				},
-			},
+			j.Persistence.GetPVCSpec(req.PvcNameIfNeeded),
 		}
 		volumeMounts := spec.Template.Spec.Containers[0].VolumeMounts
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: req.PvcNameIfNeeded, MountPath: "/data/jetstream"})

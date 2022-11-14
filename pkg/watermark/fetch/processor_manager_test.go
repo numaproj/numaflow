@@ -1,10 +1,25 @@
-// //go:build isb_jetstream
+//go:build isb_jetstream
+
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package fetch
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"strconv"
 	"sync"
@@ -23,7 +38,7 @@ import (
 func TestFetcherWithSameOTBucket(t *testing.T) {
 	var (
 		keyspace         = "fetcherTest"
-		epoch      int64 = 1651161600
+		epoch      int64 = 1651161600000
 		testOffset int64 = 100
 		wg         sync.WaitGroup
 	)
@@ -59,7 +74,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		Bucket:       keyspace + "_OT",
 		Description:  "",
 		MaxValueSize: 0,
-		History:      0,
+		History:      2,
 		TTL:          0,
 		MaxBytes:     0,
 		Storage:      nats.MemoryStorage,
@@ -77,30 +92,42 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 	defer hbStore.Close()
 
-	// create osStore
+	// create otStore
 	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer otStore.Close()
 
-	// put values into osStore
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(testOffset))
-	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
+	// put values into otStore
+
+	// this first entry should not be in the offset timeline because we set the ot bucket history to 2
+	otValueByte, err := otValueToBytes(testOffset, epoch+100)
 	assert.NoError(t, err)
-	epoch += 60
-	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
-	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p2", "_", epoch), b)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	otValueByte, err = otValueToBytes(testOffset+1, epoch+200)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	otValueByte, err = otValueToBytes(testOffset+2, epoch+300)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	epoch += 60000
+
+	otValueByte, err = otValueToBytes(testOffset+5, epoch)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p2", otValueByte)
 	assert.NoError(t, err)
 
 	// create watchers for heartbeat and offset timeline
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
-	defer hbWatcher.Close()
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
-	defer otWatcher.Close()
-	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(false))
-	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
+	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)).(*edgeFetcher)
 
 	wg.Add(1)
 	go func() {
@@ -109,7 +136,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 		err = hbStore.DeleteKey(ctx, "p1")
 		assert.NoError(t, err)
@@ -123,7 +150,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		for i := 0; i < 20; i++ {
 			err = hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
@@ -133,6 +160,18 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
 				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
+		}
+	}
+
+	for allProcessors["p1"].offsetTimeline.Dump() != "[1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("expected p1 has the offset timeline [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -161,17 +200,17 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
+	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
 	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
-	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
+	// "p1" should be deleted after this GetWatermark offset=101
+	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
+	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
 	allProcessors = testBuffer.processorManager.GetAllProcessors()
-	// we don't delete inactive processors, so the length should still be 2
-	assert.Equal(t, 2, len(allProcessors))
+	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
-	assert.False(t, allProcessors["p1"].IsActive())
 
 	time.Sleep(time.Second)
 	// resume after one second
@@ -182,12 +221,12 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
 	// wait until p1 becomes active
-	time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+	time.Sleep(1 * time.Second)
 	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	for !allProcessors["p1"].IsActive() {
 		select {
@@ -203,17 +242,31 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" status is back to active, the offset timeline should be preserved
-	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
+	// "p1" has been deleted from vertex.Processors
+	// so "p1" will be considered as a new processors and a new offsetTimeline watcher for "p1" will be created
+	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
 	p1 := testBuffer.processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
 	assert.NotNil(t, p1.offsetTimeline)
-	assert.Equal(t, int64(100), p1.offsetTimeline.GetHeadOffset())
+	// wait till the offsetTimeline has been populated
+	newP1head := p1.offsetTimeline.GetHeadOffset()
+	// because the bucket hasn't been cleaned up, the new watcher will read all the history data to create this new offsetTimeline
+	for newP1head != 102 {
+		fmt.Println(p1.offsetTimeline.Dump())
+		select {
+		case <-ctx.Done():
+			t.Fatalf("expected head offset to be 102, %s", ctx.Err())
+		default:
+			time.Sleep(1 * time.Millisecond)
+			newP1head = p1.offsetTimeline.GetHeadOffset()
+		}
+	}
 
-	// publish a new watermark 101
-	binary.LittleEndian.PutUint64(b, uint64(testOffset+1))
-	err = otStore.PutKV(ctx, fmt.Sprintf("%s%s%d", "p1", "_", epoch), b)
+	// publish a new watermark 103
+	otValueByte, err = otValueToBytes(testOffset+3, epoch)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
 
 	// "p1" becomes inactive after 5 loops
@@ -239,7 +292,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
@@ -254,239 +307,21 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}
 
-	// added 101 in the previous steps for p1, so the head should be 101 after resume
-	assert.Equal(t, int64(101), p1.offsetTimeline.GetHeadOffset())
+	// added 103 in the previous steps for p1, so the head should be 103 after resume
+	assert.Equal(t, int64(103), p1.offsetTimeline.GetHeadOffset())
+
+	for allProcessors["p1"].offsetTimeline.Dump() != "[1651161660000:103] -> [1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("expected p1 has the offset timeline [1651161660000:103] -> [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
+		}
+	}
 
 	wg.Wait()
 	cancel()
-
-	// wait for all the ctx.Done() is completed
-	// we don't have wg on the Watch functions go routine..
-	// TODO: opened an issue https://github.com/numaproj/numaflow/issues/224
-	//   fix tests after we revisit the watermark store and watcher closing logic
-	time.Sleep(3 * time.Second)
-}
-
-func TestFetcherWithSeparateOTBucket(t *testing.T) {
-	// FIXME: Check for seperate buckets implementation for single watcher or multiple watcher
-	//   Maybe we should not support seperate OT because controller does not support it
-	t.Skip()
-	// uncomment to debug
-	// os.Setenv("NUMAFLOW_DEBUG", "true")
-
-	var ctx = context.Background()
-
-	// Connect to NATS
-	nc, err := jsclient.NewDefaultJetStreamClient(nats.DefaultURL).Connect(context.TODO())
-	assert.Nil(t, err)
-
-	// Create JetStream Context
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
-	assert.Nil(t, err)
-
-	// create heartbeat bucket
-	var keyspace = "fetcherTest"
-
-	heartbeatBucket, err := js.CreateKeyValue(&nats.KeyValueConfig{
-		Bucket:       keyspace + "_PROCESSORS",
-		Description:  fmt.Sprintf("[%s] heartbeat bucket", keyspace),
-		MaxValueSize: 0,
-		History:      0,
-		TTL:          0,
-		MaxBytes:     0,
-		Storage:      nats.MemoryStorage,
-		Replicas:     0,
-		Placement:    nil,
-	})
-	defer func() { _ = js.DeleteKeyValue(keyspace + "_PROCESSORS") }()
-	assert.Nil(t, err)
-
-	var epoch int64 = 1651161600
-	var testOffset int64 = 100
-	p1OT, _ := js.CreateKeyValue(&nats.KeyValueConfig{
-		Bucket:       keyspace + "_OT_" + "p1",
-		Description:  "",
-		MaxValueSize: 0,
-		History:      0,
-		TTL:          0,
-		MaxBytes:     0,
-		Storage:      nats.MemoryStorage,
-		Replicas:     0,
-		Placement:    nil,
-	})
-	defer func() { _ = js.DeleteKeyValue(keyspace + "_OT_" + "p1") }()
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(testOffset))
-	_, err = p1OT.Put(fmt.Sprintf("%d", epoch), b)
-	assert.NoError(t, err)
-
-	epoch += 60
-	binary.LittleEndian.PutUint64(b, uint64(testOffset+5))
-	p2OT, _ := js.CreateKeyValue(&nats.KeyValueConfig{
-		Bucket:       keyspace + "_OT_" + "p2",
-		Description:  "",
-		MaxValueSize: 0,
-		History:      0,
-		TTL:          0,
-		MaxBytes:     0,
-		Storage:      nats.MemoryStorage,
-		Replicas:     0,
-		Placement:    nil,
-	})
-	defer func() { _ = js.DeleteKeyValue(keyspace + "_OT_" + "p2") }()
-	_, err = p2OT.Put(fmt.Sprintf("%d", epoch), b)
-	assert.NoError(t, err)
-
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
-
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
-	assert.NoError(t, err)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	assert.NoError(t, err)
-	var testVertex = NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher), WithPodHeartbeatRate(1), WithRefreshingProcessorsRate(1), WithSeparateOTBuckets(true))
-	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", testVertex).(*edgeFetcher)
-
-	// var location, _ = time.LoadLocation("UTC")
-	go func() {
-		var err error
-		for i := 0; i < 3; i++ {
-			_, err = heartbeatBucket.Put("p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
-		}
-		err = heartbeatBucket.Delete("p1")
-		assert.NoError(t, err)
-	}()
-
-	go func() {
-		for i := 0; i < 100; i++ {
-			_, err := heartbeatBucket.Put("p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	allProcessors := testBuffer.processorManager.GetAllProcessors()
-	for len(allProcessors) != 2 {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
-		default:
-			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
-		}
-	}
-
-	assert.True(t, allProcessors["p1"].IsActive())
-	assert.True(t, allProcessors["p2"].IsActive())
-
-	// "p1" is deleted after 5 loops
-	for !allProcessors["p1"].IsDeleted() {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("expected p1 to be deleted: %s", ctx.Err())
-		default:
-			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
-		}
-	}
-
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
-	assert.Equal(t, 2, len(allProcessors))
-	assert.True(t, allProcessors["p1"].IsDeleted())
-	assert.True(t, allProcessors["p2"].IsActive())
-	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
-	assert.Equal(t, 2, len(allProcessors))
-	assert.True(t, allProcessors["p1"].IsDeleted())
-	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" should be deleted after this GetWatermark offset=101
-	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
-	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
-	assert.Equal(t, 1, len(allProcessors))
-	assert.True(t, allProcessors["p2"].IsActive())
-
-	time.Sleep(time.Second)
-
-	// resume after one second
-	go func() {
-		var err error
-		for i := 0; i < 5; i++ {
-			_, err = heartbeatBucket.Put("p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
-		}
-	}()
-
-	// wait until p1 becomes active
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
-	for len(allProcessors) != 2 {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
-		default:
-			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
-		}
-	}
-
-	assert.True(t, allProcessors["p1"].IsActive())
-	assert.True(t, allProcessors["p2"].IsActive())
-
-	// "p1" has been deleted from vertex.Processors
-	// so "p1" will be considered as a new processors and a new offsetTimeline watcher for "p1" will be created
-	_ = testBuffer.GetWatermark(isb.SimpleOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
-	newP1 := testBuffer.processorManager.GetProcessor("p1")
-	assert.NotNil(t, newP1)
-	assert.True(t, newP1.IsActive())
-	assert.NotNil(t, newP1.offsetTimeline)
-	// because the bucket hasn't been cleaned up, the new watcher will read all the history data to create this new offsetTimeline
-	assert.Equal(t, int64(100), newP1.offsetTimeline.GetHeadOffset())
-
-	// publish a new watermark 101
-	binary.LittleEndian.PutUint64(b, uint64(testOffset+1))
-	_, err = p1OT.Put(fmt.Sprintf("%d", epoch), b)
-	assert.NoError(t, err)
-
-	// "p1" becomes inactive after 5 loops
-	for !allProcessors["p1"].IsInactive() {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("expected p1 to be inactive: %s", ctx.Err())
-		default:
-			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
-		}
-	}
-
-	time.Sleep(time.Second)
-
-	// resume after one second
-	go func() {
-		var err error
-		for i := 0; i < 5; i++ {
-			_, err = heartbeatBucket.Put("p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-			assert.NoError(t, err)
-			time.Sleep(time.Duration(testVertex.opts.podHeartbeatRate) * time.Second)
-		}
-	}()
-
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
-	for len(allProcessors) != 2 {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
-		default:
-			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
-		}
-	}
-
-	// added 101 in the previous steps for newP1, so the head should be 101 after resume
-	assert.Equal(t, int64(101), newP1.offsetTimeline.GetHeadOffset())
-
 }

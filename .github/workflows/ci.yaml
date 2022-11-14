@@ -82,6 +82,16 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      redis:
+        image: redis:6.2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Set up Go 1.x
         uses: actions/setup-go@v3.1.0
@@ -100,15 +110,10 @@ jobs:
       - name: Install JetStream
         run: |
           set -eux -o pipefail
-          JS_VERSION=2.8.2
+          JS_VERSION=2.9.6
           curl -L https://github.com/nats-io/nats-server/releases/download/v$JS_VERSION/nats-server-v$JS_VERSION-linux-amd64.zip -o nats-server.zip
           sudo unzip nats-server.zip -d nats-server
           nats-server/nats-server-v$JS_VERSION-linux-amd64/nats-server -js &
-      - name: Insall Redis
-        uses: shogo82148/actions-setup-redis@v1
-        with:
-          redis-version: "6.2"
-      - run: redis-cli ping
       - name: Test
         run: make test-code
 

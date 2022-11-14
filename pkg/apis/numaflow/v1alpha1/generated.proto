@@ -1,5 +1,5 @@
 /*
-
+Copyright 2022 The Numaproj Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,38 +30,26 @@ import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
 // Package-wide variables from generator "generated".
 option go_package = "v1alpha1";
 
-message AbstractVertex {
-  optional string name = 1;
-
-  // +optional
-  optional Source source = 3;
-
-  // +optional
-  optional Sink sink = 4;
-
-  // +optional
-  optional ContainerTemplate containerTemplate = 5;
-
-  // +optional
-  optional UDF udf = 6;
-
+// AbstractPodTemplate provides a template for pod customization in vertices, daemon deployments and so on.
+message AbstractPodTemplate {
   // Metadata sets the pods's metadata, i.e. annotations and labels
-  optional Metadata metadata = 7;
+  // +optional
+  optional Metadata metadata = 1;
 
   // NodeSelector is a selector which must be true for the pod to fit on a node.
   // Selector which must match a node's labels for the pod to be scheduled on that node.
   // More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
   // +optional
-  map<string, string> nodeSelector = 8;
+  map<string, string> nodeSelector = 2;
 
   // If specified, the pod's tolerations.
   // +optional
-  repeated k8s.io.api.core.v1.Toleration tolerations = 9;
+  repeated k8s.io.api.core.v1.Toleration tolerations = 3;
 
   // SecurityContext holds pod-level security attributes and common container settings.
   // Optional: Defaults to empty.  See type description for default values of each field.
   // +optional
-  optional k8s.io.api.core.v1.PodSecurityContext securityContext = 10;
+  optional k8s.io.api.core.v1.PodSecurityContext securityContext = 4;
 
   // ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
   // If specified, these secrets will be passed to individual puller implementations for them to use. For example,
@@ -70,7 +58,7 @@ message AbstractVertex {
   // +optional
   // +patchMergeKey=name
   // +patchStrategy=merge
-  repeated k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 11;
+  repeated k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 5;
 
   // If specified, indicates the Redis pod's priority. "system-node-critical"
   // and "system-cluster-critical" are two special keywords which indicate the
@@ -80,7 +68,7 @@ message AbstractVertex {
   // default.
   // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
   // +optional
-  optional string priorityClassName = 12;
+  optional string priorityClassName = 6;
 
   // The priority value. Various system components use this field to find the
   // priority of the Redis pod. When Priority Admission Controller is enabled,
@@ -89,29 +77,60 @@ message AbstractVertex {
   // The higher the value, the higher the priority.
   // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
   // +optional
-  optional int32 priority = 13;
+  optional int32 priority = 7;
 
   // The pod's scheduling constraints
   // More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
   // +optional
-  optional k8s.io.api.core.v1.Affinity affinity = 14;
+  optional k8s.io.api.core.v1.Affinity affinity = 8;
 
-  // ServiceAccountName to apply to the StatefulSet
+  // ServiceAccountName applied to the pod
   // +optional
-  optional string serviceAccountName = 15;
+  optional string serviceAccountName = 9;
+}
+
+message AbstractVertex {
+  optional string name = 1;
+
+  // +optional
+  optional Source source = 2;
+
+  // +optional
+  optional Sink sink = 3;
+
+  // +optional
+  optional UDF udf = 4;
+
+  // +optional
+  optional ContainerTemplate containerTemplate = 5;
+
+  // +optional
+  optional ContainerTemplate initContainerTemplate = 6;
+
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 7;
 
   // +optional
   // +patchStrategy=merge
   // +patchMergeKey=name
-  repeated k8s.io.api.core.v1.Volume volumes = 16;
+  repeated k8s.io.api.core.v1.Volume volumes = 8;
 
-  // Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings
+  // Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
   // +optional
-  optional VertexLimits limits = 17;
+  optional VertexLimits limits = 9;
 
   // Settings for autoscaling
   // +optional
-  optional Scale scale = 18;
+  optional Scale scale = 10;
+
+  // List of init containers belonging to the pod.
+  // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+  // +optional
+  repeated k8s.io.api.core.v1.Container initContainers = 11;
+
+  // List of sidecar containers belonging to the pod.
+  // +optional
+  repeated k8s.io.api.core.v1.Container sidecars = 12;
 }
 
 message Authorization {
@@ -119,6 +138,10 @@ message Authorization {
   // To use this, the client needs to add "Authorization: Bearer <token>" in the header
   // +optional
   optional k8s.io.api.core.v1.SecretKeySelector token = 1;
+}
+
+// Blackhole is a sink to emulate /dev/null
+message Blackhole {
 }
 
 message Buffer {
@@ -164,18 +187,42 @@ message ContainerTemplate {
   repeated k8s.io.api.core.v1.EnvVar env = 4;
 }
 
+message DaemonTemplate {
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 1;
+
+  // Replicas is the number of desired replicas of the Deployment.
+  // This is a pointer to distinguish between explicit zero and unspecified.
+  // Defaults to 1.
+  // More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller
+  // +optional
+  optional int32 replicas = 2;
+
+  // +optional
+  optional ContainerTemplate containerTemplate = 3;
+
+  // +optional
+  optional ContainerTemplate initContainerTemplate = 4;
+}
+
 message Edge {
   optional string from = 1;
 
   optional string to = 2;
 
-  // Conditional forwarding, only allowed when "From" is a Sink or UDF
+  // Conditional forwarding, only allowed when "From" is a Sink or UDF.
   // +optional
   optional ForwardConditions conditions = 3;
 
-  // Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings
+  // Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.
   // +optional
   optional EdgeLimits limits = 4;
+
+  // Parallelism is only effective when the "to" vertex is a reduce vertex,
+  // if it's provided, the default value is set to "1".
+  // Parallelism is ignored when the "to" vertex is not a reduce vertex.
+  // +optional
+  optional int32 parallelism = 5;
 }
 
 message EdgeLimits {
@@ -184,10 +231,15 @@ message EdgeLimits {
   // +optional
   optional uint64 bufferMaxLength = 1;
 
-  // BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+  // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
   // It overrides the settings from pipeline limits.
   // +optional
   optional uint32 bufferUsageLimit = 2;
+}
+
+// FixedWindow describes a fixed window
+message FixedWindow {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
 }
 
 message ForwardConditions {
@@ -322,6 +374,19 @@ message GetVertexPodSpecReq {
   repeated k8s.io.api.core.v1.EnvVar env = 4;
 }
 
+// GroupBy indicates it is a reducer UDF
+message GroupBy {
+  // Window describes the windowing strategy.
+  optional Window window = 1;
+
+  // +optional
+  optional bool keyed = 2;
+
+  // Storage is used to define the PBQ storage for a reduce vertex.
+  // +optional
+  optional PBQStorage storage = 3;
+}
+
 message HTTPSource {
   // +optional
   optional Authorization auth = 1;
@@ -335,8 +400,10 @@ message HTTPSource {
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=isbsvc
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.status.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message InterStepBufferService {
@@ -357,7 +424,7 @@ message InterStepBufferServiceList {
 }
 
 message InterStepBufferServiceSpec {
-  optional RedisBuferService redis = 1;
+  optional RedisBufferService redis = 1;
 
   optional JetStreamBufferService jetstream = 2;
 }
@@ -370,6 +437,8 @@ message InterStepBufferServiceStatus {
   optional string message = 3;
 
   optional BufferServiceConfig config = 4;
+
+  optional string type = 5;
 }
 
 message JetStreamBufferService {
@@ -395,71 +464,19 @@ message JetStreamBufferService {
   // +optional
   optional PersistenceStrategy persistence = 6;
 
-  // Metadata sets the pods's metadata, i.e. annotations and labels
-  optional Metadata metadata = 77;
-
-  // NodeSelector is a selector which must be true for the pod to fit on a node.
-  // Selector which must match a node's labels for the pod to be scheduled on that node.
-  // More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
   // +optional
-  map<string, string> nodeSelector = 8;
-
-  // If specified, the pod's tolerations.
-  // +optional
-  repeated k8s.io.api.core.v1.Toleration tolerations = 9;
-
-  // SecurityContext holds pod-level security attributes and common container settings.
-  // Optional: Defaults to empty.  See type description for default values of each field.
-  // +optional
-  optional k8s.io.api.core.v1.PodSecurityContext securityContext = 10;
-
-  // ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
-  // If specified, these secrets will be passed to individual puller implementations for them to use. For example,
-  // in the case of docker, only DockerConfig type secrets are honored.
-  // More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
-  // +optional
-  // +patchMergeKey=name
-  // +patchStrategy=merge
-  repeated k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 11;
-
-  // If specified, indicates the Redis pod's priority. "system-node-critical"
-  // and "system-cluster-critical" are two special keywords which indicate the
-  // highest priorities with the former being the highest priority. Any other
-  // name must be defined by creating a PriorityClass object with that name.
-  // If not specified, the pod priority will be default or zero if there is no
-  // default.
-  // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-  // +optional
-  optional string priorityClassName = 12;
-
-  // The priority value. Various system components use this field to find the
-  // priority of the Redis pod. When Priority Admission Controller is enabled,
-  // it prevents users from setting this field. The admission controller populates
-  // this field from PriorityClassName.
-  // The higher the value, the higher the priority.
-  // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-  // +optional
-  optional int32 priority = 13;
-
-  // The pod's scheduling constraints
-  // More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-  // +optional
-  optional k8s.io.api.core.v1.Affinity affinity = 14;
-
-  // ServiceAccountName to apply to the StatefulSet
-  // +optional
-  optional string serviceAccountName = 15;
+  optional AbstractPodTemplate abstractPodTemplate = 7;
 
   // JetStream configuration, if not specified, global settings in numaflow-controller-config will be used.
   // See https://docs.nats.io/running-a-nats-service/configuration#jetstream.
   // Only configure "max_memory_store" or "max_file_store", do not set "store_dir" as it has been hardcoded.
   // +optional
-  optional string settings = 16;
+  optional string settings = 8;
 
   // Optional arguments to start nats-server. For example, "-D" to enable debugging output, "-DV" to enable debugging and tracing.
   // Check https://docs.nats.io/ for all the available arguments.
   // +optional
-  repeated string startArgs = 17;
+  repeated string startArgs = 9;
 
   // Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config.
   // It accepts a YAML format configuration, it may include 4 sections, "stream", "consumer", "otBucket" and "procBucket".
@@ -468,18 +485,18 @@ message JetStreamBufferService {
   // Available fields under "otBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).
   // Available fields under "procBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).
   // +optional
-  optional string bufferConfig = 18;
+  optional string bufferConfig = 10;
 
   // Whether encrypt the data at rest, defaults to false
   // Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
   // Toggling the value will impact encypting/decrypting existing messages.
   // +optional
-  optional bool encryption = 19;
+  optional bool encryption = 11;
 
   // Whether enable TLS, defaults to false
   // Enabling TLS might impact the performance
   // +optional
-  optional bool tls = 20;
+  optional bool tls = 12;
 }
 
 message JetStreamConfig {
@@ -493,6 +510,31 @@ message JetStreamConfig {
 
   // TLS enabled or not
   optional bool tlsEnabled = 4;
+}
+
+message JobTemplate {
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 1;
+
+  // +optional
+  optional ContainerTemplate containerTemplate = 2;
+
+  // ttlSecondsAfterFinished limits the lifetime of a Job that has finished
+  // execution (either Complete or Failed). If this field is set,
+  // ttlSecondsAfterFinished after the Job finishes, it is eligible to be
+  // automatically deleted. When the Job is being deleted, its lifecycle
+  // guarantees (e.g. finalizers) will be honored. If this field is unset,
+  // the Job won't be automatically deleted. If this field is set to zero,
+  // the Job becomes eligible to be deleted immediately after it finishes.
+  // Numaflow defaults to 30
+  // +optional
+  optional int32 ttlSecondsAfterFinished = 3;
+
+  // Specifies the number of retries before marking this job failed.
+  // More info: https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-backoff-failure-policy
+  // Numaflow defaults to 20
+  // +optional
+  optional int32 backoffLimit = 4;
 }
 
 message KafkaSink {
@@ -577,66 +619,22 @@ message NativeRedis {
   optional ContainerTemplate metricsContainerTemplate = 5;
 
   // +optional
-  optional PersistenceStrategy persistence = 6;
+  optional ContainerTemplate initContainerTemplate = 6;
 
-  // Metadata sets the pods's metadata, i.e. annotations and labels
-  optional Metadata metadata = 7;
-
-  // NodeSelector is a selector which must be true for the pod to fit on a node.
-  // Selector which must match a node's labels for the pod to be scheduled on that node.
-  // More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
   // +optional
-  map<string, string> nodeSelector = 8;
+  optional PersistenceStrategy persistence = 7;
 
-  // If specified, the pod's tolerations.
   // +optional
-  repeated k8s.io.api.core.v1.Toleration tolerations = 9;
-
-  // SecurityContext holds pod-level security attributes and common container settings.
-  // Optional: Defaults to empty.  See type description for default values of each field.
-  // +optional
-  optional k8s.io.api.core.v1.PodSecurityContext securityContext = 10;
-
-  // ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
-  // If specified, these secrets will be passed to individual puller implementations for them to use. For example,
-  // in the case of docker, only DockerConfig type secrets are honored.
-  // More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
-  // +optional
-  // +patchMergeKey=name
-  // +patchStrategy=merge
-  repeated k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 11;
-
-  // If specified, indicates the Redis pod's priority. "system-node-critical"
-  // and "system-cluster-critical" are two special keywords which indicate the
-  // highest priorities with the former being the highest priority. Any other
-  // name must be defined by creating a PriorityClass object with that name.
-  // If not specified, the pod priority will be default or zero if there is no
-  // default.
-  // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-  // +optional
-  optional string priorityClassName = 12;
-
-  // The priority value. Various system components use this field to find the
-  // priority of the Redis pod. When Priority Admission Controller is enabled,
-  // it prevents users from setting this field. The admission controller populates
-  // this field from PriorityClassName.
-  // The higher the value, the higher the priority.
-  // More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-  // +optional
-  optional int32 priority = 13;
-
-  // The pod's scheduling constraints
-  // More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-  // +optional
-  optional k8s.io.api.core.v1.Affinity affinity = 14;
-
-  // ServiceAccountName to apply to the StatefulSet
-  // +optional
-  optional string serviceAccountName = 15;
+  optional AbstractPodTemplate abstractPodTemplate = 8;
 
   // Redis configuration, if not specified, global settings in numaflow-controller-config will be used.
   // +optional
-  optional RedisSettings settings = 16;
+  optional RedisSettings settings = 9;
+}
+
+// PBQStorage defines the persistence configuration for a vertex.
+message PBQStorage {
+  optional PersistenceStrategy persistentVolumeClaim = 1;
 }
 
 // PersistenceStrategy defines the strategy of persistence
@@ -661,6 +659,11 @@ message PersistenceStrategy {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +kubebuilder:printcolumn:name="Vertices",type=integer,JSONPath=`.status.vertexCount`
+// +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
+// +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
+// +kubebuilder:printcolumn:name="UDFs",type=integer,JSONPath=`.status.udfCount`,priority=10
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message Pipeline {
@@ -681,11 +684,11 @@ message PipelineLimits {
   // BufferMaxLength is used to define the max length of a buffer
   // Only applies to UDF and Source vertice as only they do buffer write.
   // It can be overridden by the settings in vertex limits.
-  // +kubebuilder:default=30000
+  // +kubebuilder:default=50000
   // +optional
   optional uint64 bufferMaxLength = 2;
 
-  // BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+  // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
   // Only applies to UDF and Source vertice as only they do buffer write.
   // It will be overridden by the settings in vertex limits.
   // +kubebuilder:default=80
@@ -722,17 +725,19 @@ message PipelineSpec {
   // +optional
   optional Lifecycle lifecycle = 4;
 
-  // Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, they could be overridden by each vertex's settings
+  // Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings
   // +kubebuilder:default={"readBatchSize": 500, "bufferMaxLength": 30000, "bufferUsageLimit": 80}
   // +optional
   optional PipelineLimits limits = 5;
 
-  // Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been
-  // created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline
-  // should be recreated.
+  // Watermark enables watermark progression across the entire pipeline.
   // +kubebuilder:default={"disabled": false}
   // +optional
   optional Watermark watermark = 6;
+
+  // Templates is used to customize additional kubernetes resources required for the Pipeline
+  // +optional
+  optional Templates templates = 7;
 }
 
 message PipelineStatus {
@@ -743,9 +748,17 @@ message PipelineStatus {
   optional string message = 3;
 
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 4;
+
+  optional uint32 vertexCount = 5;
+
+  optional uint32 sourceCount = 6;
+
+  optional uint32 sinkCount = 7;
+
+  optional uint32 udfCount = 8;
 }
 
-message RedisBuferService {
+message RedisBufferService {
   // Native brings up a native Redis service
   optional NativeRedis native = 1;
 
@@ -797,6 +810,7 @@ message RedisSettings {
   optional string sentinel = 4;
 }
 
+// Scale defines the parameters for autoscaling.
 message Scale {
   // Whether to disable autoscaling.
   // Set to "true" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
@@ -829,14 +843,14 @@ message Scale {
   // +optional
   optional uint32 targetProcessingSeconds = 7;
 
-  // TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read.
+  // TargetBufferUsage is used to define the target percentage of usage of the buffer to be read.
   // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
   // It only applies to UDF and Sink vertices as only they have buffers to read.
   // +optional
   optional uint32 targetBufferUsage = 8;
 
   // ReplicasPerScale defines maximum replicas can be scaled up or down at once.
-  // The is use to prevent too aggresive scaling operations
+  // The is use to prevent too aggressive scaling operations
   // +optional
   optional uint32 replicasPerScale = 9;
 }
@@ -846,7 +860,9 @@ message Sink {
 
   optional KafkaSink kafka = 2;
 
-  optional UDSink udsink = 3;
+  optional Blackhole blackhole = 3;
+
+  optional UDSink udsink = 4;
 }
 
 message Source {
@@ -886,12 +902,25 @@ message TLS {
   optional k8s.io.api.core.v1.SecretKeySelector keySecret = 4;
 }
 
+message Templates {
+  // DaemonTemplate is used to customize the Daemon Deployment
+  // +optional
+  optional DaemonTemplate daemon = 1;
+
+  // JobTemplate is used to customize Jobs
+  // +optional
+  optional JobTemplate job = 2;
+}
+
 message UDF {
   // +optional
   optional Container container = 1;
 
   // +optional
-  optional Function builtin = 12;
+  optional Function builtin = 2;
+
+  // +optional
+  optional GroupBy groupBy = 3;
 }
 
 message UDSink {
@@ -965,6 +994,11 @@ message VertexSpec {
 
   // +optional
   repeated Edge toEdges = 6;
+
+  // Watermark indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.
+  // +kubebuilder:default={"disabled": false}
+  // +optional
+  optional Watermark watermark = 7;
 }
 
 message VertexStatus {
@@ -991,5 +1025,11 @@ message Watermark {
   // +kubebuilder:default="0s"
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxDelay = 2;
+}
+
+// Window describes windowing strategy
+message Window {
+  // +optional
+  optional FixedWindow fixed = 1;
 }
 

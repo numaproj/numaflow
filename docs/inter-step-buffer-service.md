@@ -111,6 +111,8 @@ bufferConfig: |
     maxMsgs: 50000
     maxAge: 168h
     maxBytes: -1
+    # 0: File, 1: Memory
+    storage: 0
     replicas: 3
     duplicates: 60s
   # The consumer properties for the created streams
@@ -129,7 +131,7 @@ Changing the buffer configuration either in the control plane ConfigMap or in th
 
 ### Encryption At Rest
 
-Encryption at rest can be enabled by setting `spec.jetstream.encryption: true`. Be aware this will impact the performace a bit, see the detail at [official doc](https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest).
+Encryption at rest can be enabled by setting `spec.jetstream.encryption: true`. Be aware this will impact the performance a bit, see the detail at [official doc](https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest).
 
 Once a JetStream ISB Service is created, toggling the `encryption` field will cause problem for the exiting messages, so if you want to change the value, please delete and recreate the ISB Service, and you also need to restart all the Vertex Pods to pick up the new credentials.
 
@@ -139,7 +141,36 @@ Check [here](APIs.md#numaflow.numaproj.io/v1alpha1.JetStreamBufferService) for t
 
 ## Redis
 
+**NOTE** Today when using Redis, the pipeline will stall if Redis has any data loss, especially during failovers.
+
 `Redis` is supported as an `Inter-Step Buffer Service` implementation. A keyword `native` under `spec.redis` means several Redis nodes with a [Master-Replicas](https://redis.io/topics/replication) topology will be created in the namespace.
+We also support external redis.
+
+#### External Redis
+If you have a managed Redis, say in AWS, etc., we can make that Redis your ISB. All you need to do is provide the external Redis endpoint name.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: InterStepBufferService
+metadata:
+  name: default
+spec:
+  redis:
+    external:
+      url: "<external redis>"
+      user: "default"
+```
+
+### Cluster Mode
+
+We support [cluster mode](https://redis.io/docs/reference/cluster-spec/), only if the Redis is an external managed Redis. 
+You will have to enter the `url` twice to indicate that the mode is cluster. This is because we use `Universal Client` which 
+requires more than one address to indicate the Redis is in cluster mode.
+
+```yaml
+url: "numaflow-redis-cluster-0.numaflow-redis-cluster-headless:6379,numaflow-redis-cluster-1.numaflow-redis-cluster-headless:6379"
+```
+
 
 ### Version
 

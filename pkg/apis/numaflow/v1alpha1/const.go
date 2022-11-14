@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import (
@@ -46,7 +62,7 @@ const (
 
 	// container names.
 	CtrInit   = "init"
-	CtrMain   = "main"
+	CtrMain   = "numa"
 	CtrUdf    = "udf"
 	CtrUdsink = "udsink"
 
@@ -54,6 +70,7 @@ const (
 	ComponentISBSvc = "isbsvc"
 	ComponentDaemon = "daemon"
 	ComponentVertex = "vertex"
+	ComponentJob    = "job"
 
 	// controllers
 	ControllerISBSvc   = "isbsvc-controller"
@@ -85,10 +102,6 @@ const (
 	EnvISBSvcConfig                   = "NUMAFLOW_ISBSVC_CONFIG"
 	EnvDebug                          = "NUMAFLOW_DEBUG"
 
-	// Watermark
-	EnvWatermarkDisabled = "NUMAFLOW_WATERMARK_DISABLED"
-	EnvWatermarkMaxDelay = "NUMAFLOW_WATERMARK_MAX_DELAY"
-
 	PathVarRun            = "/var/run/numaflow"
 	VertexMetricsPort     = 2469
 	VertexMetricsPortName = "metrics"
@@ -98,8 +111,10 @@ const (
 
 	DefaultRequeueAfter = 10 * time.Second
 
+	// ISB
 	DefaultBufferLength     = 50000
 	DefaultBufferUsageLimit = 0.8
+	DefaultReadBatchSize    = 500
 
 	// Auto scaling
 	DefaultLookbackSeconds         = 180 // Default lookback seconds for calculating avg rate and pending
@@ -121,9 +136,22 @@ const (
 	DefaultStoreSize          = 1000000         // Default persistent store size
 	DefaultStoreMaxBufferSize = 100000          // Default buffer size for pbq in bytes
 
+	// Default window options
+	DefaultWindowType     = FixedType
+	DefaultWindowDuration = 0
+
+	// PVC mount path for PBQ
+	PathPBQMount = "/var/numaflow/pbq"
 )
 
+// PBQ store's backend type.
 type StoreType string
+
+const (
+	InMemoryType   StoreType = "in-memory"
+	FileSystemType StoreType = "file-system"
+	NoOpType       StoreType = "no-op"
+)
 
 func (st StoreType) String() string {
 	switch st {
@@ -138,11 +166,26 @@ func (st StoreType) String() string {
 	}
 }
 
+type WindowType string
+
 const (
-	InMemoryType   StoreType = "in-memory"
-	FileSystemType StoreType = "file-system"
-	NoOpType       StoreType = "no-op"
+	FixedType   WindowType = "fixed"
+	SlidingType WindowType = "sliding"
+	SessionType WindowType = "session"
 )
+
+func (wt WindowType) String() string {
+	switch wt {
+	case FixedType:
+		return string(FixedType)
+	case SlidingType:
+		return string(SlidingType)
+	case SessionType:
+		return string(SessionType)
+	default:
+		return "unknownWindowType"
+	}
+}
 
 var (
 	MessageKeyDrop = fmt.Sprintf("%U__DROP__", '\\') // U+005C__DROP__

@@ -1,6 +1,6 @@
 # User Defined Functions
 
-A `Pipleline` consists of multiple vertices, `Source`, `Sink` and `UDF(User Defined Functions)`.
+A `Pipeline` consists of multiple vertices, `Source`, `Sink` and `UDF(User Defined Functions)`.
 
 UDF runs as a sidecar container in a Vertex Pod, processes the received data. The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.
 
@@ -59,3 +59,12 @@ Some environment variables are available in the user defined function Pods, they
 - `NUMAFLOW_REPLICA` - Replica index.
 - `NUMAFLOW_PIPELINE_NAME` - Name of the pipeline.
 - `NUMAFLOW_VERTEX_NAME` - Name of the vertex.
+
+### Configuration
+
+Configuration data can be provided to the UDF container at runtime multiple ways.
+* [`environment variables`](./environment-variables.md)
+* `args`
+* `command`
+* [`volumes`](./volumes.md)
+* [`init containers`](./init-containers.md)

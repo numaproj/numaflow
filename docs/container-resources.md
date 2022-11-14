@@ -2,9 +2,11 @@
 
 [Container Resources](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) can be customized for all the types of vertices.
 
-## Main Container
+For configuring container resources on pods not owned by a vertex, see [Pipeline Customization](./pipeline-customization.md).
 
-To specify `resources` for the `main` container of vertex pods:
+## Numa Container
+
+To specify `resources` for the `numa` container of vertex pods:
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -70,3 +72,27 @@ spec:
                 cpu: "1"
                 memory: 4Gi
 ```
+
+## Init Container
+
+To specify `resources` for the `init` init-container of vertex pods:
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  vertices:
+    - name: my-vertex
+      initContainerTemplate:
+        resources:
+          limits:
+            cpu: "3"
+            memory: 6Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
+```
+
+Container resources for [user init-containers](./init-containers.md) are instead specified at `.spec.vertices[*].initContainers[*].resources`.

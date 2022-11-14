@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package pbq
 
 import (
@@ -9,6 +25,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/stretchr/testify/assert"
 )
@@ -29,12 +46,18 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	// write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
-	pq, err := qManager.CreateNewPBQ(ctx, "partition-13")
+	partitionID := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Key:   "new-partition",
+	}
+
+	pq, err := qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
-	var readMessages []*isb.Message
+	var readMessages []*isb.ReadMessage
 	// run a parallel go routine which reads from pbq
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -87,13 +110,18 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	//write 10 isb messages to persisted store
 	msgCount := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
 
+	partitionID := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Key:   "new-partition",
+	}
 	var pq ReadWriteCloser
-	pq, err = qManager.CreateNewPBQ(ctx, "partition-14")
+	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
-	var readMessages []*isb.Message
+	var readMessages []*isb.ReadMessage
 	// run a parallel go routine which reads from pbq
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -148,10 +176,15 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	// write 101 isb messages to pbq, but the store size is 100, we should get store is full error
 	msgCount := 101
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestWriteMessages(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
+	partitionID := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Key:   "new-partition",
+	}
 
 	var pq ReadWriteCloser
-	pq, err = qManager.CreateNewPBQ(ctx, "partition-10")
+	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {

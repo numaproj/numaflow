@@ -52,6 +52,8 @@ data:
             maxMsgs: 2000000
             maxAge: 168h
             maxBytes: -1
+            # 0: File, 1: Memory
+            storage: 0
             replicas: 3
             duplicates: 60s
           # The default consumer properties for the created streams
@@ -60,15 +62,19 @@ data:
             maxAckPending: 20000
           otBucket:
             maxValueSize: 0
-            history: 1
+            history: 5
             ttl: 72h
             maxBytes: 0
+            # 0: File, 1: Memory
+            storage: 0
             replicas: 3
           procBucket:
             maxValueSize: 0
             history: 1
             ttl: 72h
             maxBytes: 0
+            # 0: File, 1: Memory
+            storage: 0
             replicas: 3
         versions:
         - version: latest

@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package isbsvc
 
 import (
@@ -10,6 +26,9 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -80,7 +99,7 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 					MaxMsgs:    v.GetInt64("stream.maxMsgs"),
 					MaxAge:     v.GetDuration("stream.maxAge"),
 					MaxBytes:   v.GetInt64("stream.maxBytes"),
-					Storage:    nats.FileStorage,
+					Storage:    nats.StorageType(v.GetInt("stream.storage")),
 					Replicas:   v.GetInt("stream.replicas"),
 					Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period
 				}); err != nil {
@@ -108,12 +127,11 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket:       otBucket,
-				Description:  fmt.Sprintf("Offset timeline bucket of buffer [%s]", buffer.Name),
 				MaxValueSize: v.GetInt32("otBucket.maxValueSize"),
 				History:      uint8(v.GetUint("otBucket.history")),
 				TTL:          v.GetDuration("otBucket.ttl"),
 				MaxBytes:     v.GetInt64("otBucket.maxBytes"),
-				Storage:      nats.FileStorage,
+				Storage:      nats.StorageType(v.GetInt("otBucket.storage")),
 				Replicas:     v.GetInt("otBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {
@@ -128,12 +146,11 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket:       procBucket,
-				Description:  fmt.Sprintf("Processor bucket of buffer [%s]", buffer.Name),
 				MaxValueSize: v.GetInt32("procBucket.maxValueSize"),
 				History:      uint8(v.GetUint("procBucket.history")),
 				TTL:          v.GetDuration("procBucket.ttl"),
 				MaxBytes:     v.GetInt64("procBucket.maxBytes"),
-				Storage:      nats.FileStorage,
+				Storage:      nats.StorageType(v.GetInt("procBucket.storage")),
 				Replicas:     v.GetInt("procBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {
@@ -256,6 +273,21 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) 
 		TotalMessages:   totalMessages,
 	}
 	return bufferInfo, nil
+}
+
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+	hbBucketName := JetStreamProcessorBucket(jss.pipelineName, bufferName)
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
+	if err != nil {
+		return nil, err
+	}
+	otBucketName := JetStreamOTBucket(jss.pipelineName, bufferName)
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jss.jsClient)
+	if err != nil {
+		return nil, err
+	}
+	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+	return watermarkFetcher, nil
 }
 
 func JetStreamName(pipelineName, bufferName string) string {

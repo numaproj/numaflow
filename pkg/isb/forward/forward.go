@@ -1,4 +1,20 @@
 /*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/*
 Package forward does the Read (fromBuffer) -> Process (UDF) -> Forward (toBuffers) -> Ack (fromBuffer) loop.
 */
 package forward
@@ -6,12 +22,15 @@ package forward
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
+
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -31,7 +50,7 @@ type InterStepDataForward struct {
 	fromBuffer       isb.BufferReader
 	toBuffers        map[string]isb.BufferWriter
 	FSD              ToWhichStepDecider
-	UDF              udfapplier.Applier
+	UDF              udfapplier.MapApplier
 	fetchWatermark   fetch.Fetcher
 	publishWatermark map[string]publish.Publisher
 	opts             options
@@ -45,15 +64,15 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
 	toSteps map[string]isb.BufferWriter,
 	fsd ToWhichStepDecider,
-	applyUDF udfapplier.Applier,
+	applyUDF udfapplier.MapApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*InterStepDataForward, error) {
 
 	options := &options{
 		retryInterval:  time.Millisecond,
-		readBatchSize:  1,
-		udfConcurrency: 1,
+		readBatchSize:  dfv1.DefaultReadBatchSize,
+		udfConcurrency: dfv1.DefaultReadBatchSize,
 		logger:         logging.NewLogger(),
 	}
 	for _, o := range opts {
@@ -135,9 +154,16 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 			}
 		}
 
-		// stop watermark publisher if watermarking is enabled
+		// stop watermark fetcher
+		if err := isdf.fetchWatermark.Close(); err != nil {
+			log.Errorw("Failed to close watermark fetcher", zap.Error(err))
+		}
+
+		// stop watermark publisher
 		for _, publisher := range isdf.publishWatermark {
-			publisher.StopPublisher()
+			if err := publisher.Close(); err != nil {
+				log.Errorw("Failed to close watermark publisher", zap.Error(err))
+			}
 		}
 		close(stopped)
 	}()
@@ -176,23 +202,25 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
-	// let's track only the last element's watermark
-	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[len(readMessages)-1].ReadOffset)
+	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
+	// to all the elements in the batch. If we were to assign last element's watermark, we will wronly mark on-time data
+	// as πlate date.
+	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
 		readBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
 		m.Watermark = time.Time(processorWM)
-		if isdf.opts.isFromSourceVertex && processorWM.After(m.EventTime) { // Set late data at source level
+		if isdf.opts.vertexType == dfv1.VertexTypeSource && processorWM.After(m.EventTime) { // Set late data at source level
 			m.IsLate = true
 		}
 	}
 
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][]isb.Message)
-	var toBuffers string
-	for step := range isdf.toBuffers {
+	var toBuffers string // logging purpose
+	for buffer := range isdf.toBuffers {
 		// over allocating to have a predictable pattern
-		messageToStep[step] = make([]isb.Message, 0, len(readMessages))
-		toBuffers += step
+		messageToStep[buffer] = make([]isb.Message, 0, len(readMessages))
+		toBuffers += buffer + ","
 	}
 
 	// udf concurrent processing request channel
@@ -251,12 +279,16 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
-	// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)?
 	for bufferName, offsets := range writeOffsets {
 		if publisher, ok := isdf.publishWatermark[bufferName]; ok {
-			if len(offsets) > 0 {
-				publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
-			} else { // This only happens on sink vertex, and it does not care about the offset during watermark publishing
+			if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
+				isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
+				if len(offsets) > 0 {
+					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
+				}
+				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
+				// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)
+			} else { // For Sink vertex, and it does not care about the offset during watermark publishing
 				publisher.PublishWatermark(processorWM, nil)
 			}
 		}
@@ -282,38 +314,59 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 }
 
 // ackFromBuffer acknowledges an array of offsets back to fromBuffer and is a blocking call or until shutdown has been initiated.
-func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) (err error) {
-	for {
-		errs := isdf.fromBuffer.Ack(ctx, offsets)
+func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) error {
+
+	var ackRetryBackOff = wait.Backoff{
+		Factor:   1,
+		Jitter:   0.1,
+		Steps:    math.MaxInt,
+		Duration: time.Millisecond * 10,
+	}
+	var ackOffsets = offsets
+	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ackRetryBackOff, func() (done bool, err error) {
+		errs := isdf.fromBuffer.Ack(ctx, ackOffsets)
 		summarizedErr := errorArrayToMap(errs)
+		var failedOffsets []isb.Offset
+
 		if len(summarizedErr) > 0 {
 			isdf.opts.logger.Errorw("failed to ack from buffer", zap.Any("errors", summarizedErr))
-			// TODO: implement retry with backoff etc.
-			time.Sleep(isdf.opts.retryInterval)
-			if ok, _ := isdf.IsShuttingDown(); ok {
-				err := fmt.Errorf("ackFromBuffer, Stop called while stuck on an internal error, %v", summarizedErr)
-				return err
+
+			// retry only the failed offsets
+			for i, offset := range ackOffsets {
+				if errs[i] != nil {
+					failedOffsets = append(failedOffsets, offset)
+				}
 			}
-			// TODO: only retry failed ones.
+			ackOffsets = failedOffsets
+			if ok, _ := isdf.IsShuttingDown(); ok {
+				ackErr := fmt.Errorf("ackFromBuffer, Stop called while stuck on an internal error, %v", summarizedErr)
+				return false, ackErr
+			}
+			return false, nil
 		} else {
-			break
+			return true, nil
 		}
+	})
+
+	if ctxClosedErr != nil {
+		isdf.opts.logger.Errorw("Context closed while waiting to ack messages inside forward", zap.Error(ctxClosedErr))
 	}
-	return err
+
+	return ctxClosedErr
 }
 
 // writeToBuffers is a blocking call until all the messages have be forwarded to all the toBuffers, or a shutdown
 // has been initiated while we are stuck looping on an InternalError.
 func (isdf *InterStepDataForward) writeToBuffers(ctx context.Context, messageToStep map[string][]isb.Message) (writeOffsetsEdge map[string][]isb.Offset, err error) {
+	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
+	// So writeOffsetsEdge also contains all the to buffers, but the returned offsets might be empty.
 	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
-	// TODO: rename key to edgeName
-	for key, toBuffer := range isdf.toBuffers {
-		writeOffsetsEdge[key], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[key])
+	for bufferName, toBuffer := range isdf.toBuffers {
+		writeOffsetsEdge[bufferName], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[bufferName])
 		if err != nil {
-			return writeOffsetsEdge, err
+			return nil, err
 		}
 	}
-
 	return writeOffsetsEdge, nil
 }
 
@@ -387,7 +440,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 // The UserError retry will be done on the ApplyUDF.
 func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
 	for {
-		writeMessages, err := isdf.UDF.Apply(ctx, readMessage)
+		writeMessages, err := isdf.UDF.ApplyMap(ctx, readMessage)
 		if err != nil {
 			isdf.opts.logger.Errorw("UDF.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.

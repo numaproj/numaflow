@@ -1,8 +1,12 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: numaflow-sa
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: numaflow-role
-  namespace: numaflow-system
 rules:
 - apiGroups:
   - numaflow.numaproj.io
@@ -73,7 +77,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: numaflow-role-binding
-  namespace: numaflow-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -84,7 +87,7 @@ subjects:
 ---
 apiVersion: v1
 data:
-  controller-config.yaml: |
+  controller-config.yaml: |+
     isbsvc:
       redis:
         # Default Redis settings, could be overridden by InterStepBufferService specs
@@ -133,6 +136,8 @@ data:
             maxMsgs: 2000000
             maxAge: 168h
             maxBytes: -1
+            # 0: File, 1: Memory
+            storage: 0
             replicas: 3
             duplicates: 60s
           # The default consumer properties for the created streams
@@ -141,19 +146,23 @@ data:
             maxAckPending: 20000
           otBucket:
             maxValueSize: 0
-            history: 1
+            history: 5
             ttl: 3h
             maxBytes: 0
+            # 0: File, 1: Memory
+            storage: 0
             replicas: 3
           procBucket:
             maxValueSize: 0
             history: 1
             ttl: 72h
             maxBytes: 0
+            # 0: File, 1: Memory
+            storage: 0
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.9.0
+          natsImage: nats:2.9.4
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -187,16 +196,20 @@ data:
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: nats-server
+        - version: 2.9.6
+          natsImage: nats:2.9.6
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+
 kind: ConfigMap
 metadata:
   name: numaflow-controller-config
-  namespace: numaflow-system
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: numaflow-controller
-  namespace: numaflow-system
 spec:
   replicas: 1
   selector:

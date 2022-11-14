@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package sources
 
 import (
@@ -11,6 +27,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -53,18 +70,23 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
-			group := buffer + "-group"
-			redisClient := redisclient.NewInClusterRedisClient()
-			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
-			writers = append(writers, writer)
+			buffers := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e)
+			for _, buffer := range buffers {
+				group := buffer + "-group"
+				redisClient := redisclient.NewInClusterRedisClient()
+				writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
+				writers = append(writers, writer)
+			}
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, sp.VertexInstance)
+		// we have only 1 in buffer ATM
+		fromBuffer := sp.VertexInstance.Vertex.GetFromBuffers()[0]
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, sp.VertexInstance, fromBuffer)
 		if err != nil {
 			return err
 		}
+
 		sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance)
 		if err != nil {
 			return err
@@ -79,14 +101,16 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateEdgeBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.From, e.To)
-			streamName := fmt.Sprintf("%s-%s", sp.VertexInstance.Vertex.Spec.PipelineName, buffer)
-			jetStreamClient := jsclient.NewInClusterJetStreamClient()
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
-			if err != nil {
-				return err
+			buffers := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e)
+			for _, buffer := range buffers {
+				streamName := isbsvc.JetStreamName(sp.VertexInstance.Vertex.Spec.PipelineName, buffer)
+				jetStreamClient := jsclient.NewInClusterJetStreamClient()
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
+				if err != nil {
+					return err
+				}
+				writers = append(writers, writer)
 			}
-			writers = append(writers, writer)
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
@@ -142,7 +166,7 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, generator.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return generator.NewMemGen(sp.VertexInstance, int(*x.RPU), *x.MsgSize, x.Duration.Duration, writers, fetchWM, publishWM, publishWMStores, readOptions...)
+		return generator.NewMemGen(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.Kafka; x != nil {
 		readOptions := []kafka.Option{
 			kafka.WithGroupName(x.ConsumerGroupName),

@@ -1,4 +1,20 @@
 /*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/*
 Package isb defines and implements the inter-step buffer and the communication. The inter-step communication is reading from the
 previous step (n-1th vertex in the DAG), processing it, conditionally forwarding to zero, one or all the neighboring steps (nth vertices)
 and then acknowledging back to the previous step that we are done with processing.
@@ -73,17 +89,32 @@ type Offset interface {
 	AckIt() error
 }
 
-// SimpleOffset is an Offset convenient function for implementations without needing AckIt()
-type SimpleOffset func() string
+// SimpleStringOffset is an Offset convenient function for implementations without needing AckIt() when offset is a string.
+type SimpleStringOffset func() string
 
-func (so SimpleOffset) String() string {
+func (so SimpleStringOffset) String() string {
 	return so()
 }
 
-func (so SimpleOffset) Sequence() (int64, error) {
+func (so SimpleStringOffset) Sequence() (int64, error) {
 	return strconv.ParseInt(so(), 10, 64)
 }
 
-func (so SimpleOffset) AckIt() error {
+func (so SimpleStringOffset) AckIt() error {
+	return nil
+}
+
+// SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
+type SimpleIntOffset func() int64
+
+func (si SimpleIntOffset) String() string {
+	return strconv.FormatInt(si(), 10)
+}
+
+func (si SimpleIntOffset) Sequence() (int64, error) {
+	return si(), nil
+}
+
+func (si SimpleIntOffset) AckIt() error {
 	return nil
 }

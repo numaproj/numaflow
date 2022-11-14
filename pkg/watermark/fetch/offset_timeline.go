@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fetch
 
 import (
@@ -28,20 +44,20 @@ type OffsetTimeline struct {
 func NewOffsetTimeline(ctx context.Context, c int) *OffsetTimeline {
 	// Initialize a new empty watermarks DLL with nil values of the size capacity.
 	// This is to avoid length check: when a new element is added, the tail element will be deleted.
-	ot := OffsetTimeline{
+	offsetTimeline := OffsetTimeline{
 		ctx:      ctx,
 		capacity: c,
 		log:      logging.FromContext(ctx),
 	}
 
 	for i := 0; i < c; i++ {
-		ot.watermarks.PushBack(OffsetWatermark{
+		offsetTimeline.watermarks.PushBack(OffsetWatermark{
 			watermark: -1,
 			offset:    -1,
 		})
 	}
 
-	return &ot
+	return &offsetTimeline
 }
 
 // OffsetWatermark stores the maximum offset for the given event time
@@ -78,7 +94,7 @@ func (t *OffsetTimeline) Put(node OffsetWatermark) {
 				return
 			} else {
 				// TODO put panic: the new input offset should never be smaller than the existing offset
-				t.log.Errorw("the new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
+				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
 					zap.Int64("existing offset", elementNode.offset), zap.Int64("input offset", node.offset))
 				return
 			}
@@ -147,10 +163,10 @@ func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
 func (t *OffsetTimeline) GetEventTime(inputOffset isb.Offset) int64 {
 	// TODO: handle err?
 	inputOffsetInt64, _ := inputOffset.Sequence()
-	return t.GetEventtimeFromInt64(inputOffsetInt64)
+	return t.GetEventTimeFromInt64(inputOffsetInt64)
 }
 
-func (t *OffsetTimeline) GetEventtimeFromInt64(inputOffsetInt64 int64) int64 {
+func (t *OffsetTimeline) GetEventTimeFromInt64(inputOffsetInt64 int64) int64 {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 

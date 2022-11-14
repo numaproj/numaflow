@@ -28,7 +28,7 @@ namespace: numaflow-system
 
 A namespace installation only watches and executes pipelines in the namespace it is installed (typically `numaflow-system`).
 
-Add an argument `--namespaced` to the `numaflow-controller` deployment to achieve namespace scope installation.
+Add an argument `--namespaced` to the `numaflow-controller` and `numaflow-server` deployments to achieve namespace scope installation.
 
 ```
       - args:
@@ -57,13 +57,11 @@ resources:
 namespace: numaflow-system
 ```
 
-**Note**: Currently namespace scoped installaion only applies to the controller deployment, the `numaflow-server` (User Interface) deployment still remains cluster scoped installation.
-
 ## Managed Namespace Scope
 
 A managed namespace installation watches and executes pipelines in a specific namespace.
 
-To do managed namespace installation, besides `--namespaced`, add `--managed-namespace` and the specific namespace to the `numaflow-controller` deployment arguments.
+To do managed namespace installation, besides `--namespaced`, add `--managed-namespace` and the specific namespace to the `numaflow-controller` and `numaflow-server` deployment arguments.
 
 ```
       - args:

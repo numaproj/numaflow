@@ -1391,8 +1391,7 @@
       "description": "StatefulSetStatus represents the current state of a StatefulSet.",
       "type": "object",
       "required": [
-        "replicas",
-        "availableReplicas"
+        "replicas"
       ],
       "properties": {
         "availableReplicas": {
@@ -17258,6 +17257,60 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.AbstractPodTemplate": {
+      "description": "AbstractPodTemplate provides a template for pod customization in vertices, daemon deployments and so on.",
+      "type": "object",
+      "properties": {
+        "affinity": {
+          "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+          "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
+        },
+        "imagePullSecrets": {
+          "description": "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.LocalObjectReference"
+          },
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "metadata": {
+          "description": "Metadata sets the pods's metadata, i.e. annotations and labels",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Metadata"
+        },
+        "nodeSelector": {
+          "description": "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "priority": {
+          "description": "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+          "type": "integer",
+          "format": "int32"
+        },
+        "priorityClassName": {
+          "description": "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+          "type": "string"
+        },
+        "securityContext": {
+          "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field.",
+          "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
+        },
+        "serviceAccountName": {
+          "description": "ServiceAccountName applied to the pod",
+          "type": "string"
+        },
+        "tolerations": {
+          "description": "If specified, the pod's tolerations.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
+          }
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.AbstractVertex": {
       "type": "object",
       "required": [
@@ -17280,8 +17333,18 @@
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "initContainerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
+        "initContainers": {
+          "description": "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
+        },
         "limits": {
-          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings",
+          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
         },
         "metadata": {
@@ -17316,8 +17379,15 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
+        },
+        "sidecars": {
+          "description": "List of sidecar containers belonging to the pod.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
         },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"
@@ -17353,6 +17423,10 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
         }
       }
+    },
+    "io.numaproj.numaflow.v1alpha1.Blackhole": {
+      "description": "Blackhole is a sink to emulate /dev/null",
+      "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Buffer": {
       "type": "object",
@@ -17436,6 +17510,70 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.DaemonTemplate": {
+      "type": "object",
+      "properties": {
+        "affinity": {
+          "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+          "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
+        },
+        "containerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
+        "imagePullSecrets": {
+          "description": "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.LocalObjectReference"
+          },
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "initContainerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
+        "metadata": {
+          "description": "Metadata sets the pods's metadata, i.e. annotations and labels",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Metadata"
+        },
+        "nodeSelector": {
+          "description": "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "priority": {
+          "description": "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+          "type": "integer",
+          "format": "int32"
+        },
+        "priorityClassName": {
+          "description": "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+          "type": "string"
+        },
+        "replicas": {
+          "description": "Replicas is the number of desired replicas of the Deployment. This is a pointer to distinguish between explicit zero and unspecified. Defaults to 1. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller",
+          "type": "integer",
+          "format": "int32"
+        },
+        "securityContext": {
+          "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field.",
+          "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
+        },
+        "serviceAccountName": {
+          "description": "ServiceAccountName applied to the pod",
+          "type": "string"
+        },
+        "tolerations": {
+          "description": "If specified, the pod's tolerations.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
+          }
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.Edge": {
       "type": "object",
       "required": [
@@ -17444,15 +17582,20 @@
       ],
       "properties": {
         "conditions": {
-          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF",
+          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
         },
         "from": {
           "type": "string"
         },
         "limits": {
-          "description": "Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings",
+          "description": "Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.EdgeLimits"
+        },
+        "parallelism": {
+          "description": "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
+          "type": "integer",
+          "format": "int32"
         },
         "to": {
           "type": "string"
@@ -17468,9 +17611,18 @@
           "format": "int64"
         },
         "bufferUsageLimit": {
-          "description": "BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
+          "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.FixedWindow": {
+      "description": "FixedWindow describes a fixed window",
+      "type": "object",
+      "properties": {
+        "length": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }
     },
@@ -17781,6 +17933,26 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.GroupBy": {
+      "description": "GroupBy indicates it is a reducer UDF",
+      "type": "object",
+      "required": [
+        "window"
+      ],
+      "properties": {
+        "keyed": {
+          "type": "boolean"
+        },
+        "storage": {
+          "description": "Storage is used to define the PBQ storage for a reduce vertex.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PBQStorage"
+        },
+        "window": {
+          "description": "Window describes the windowing strategy.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Window"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.HTTPSource": {
       "type": "object",
       "properties": {
@@ -17852,7 +18024,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.JetStreamBufferService"
         },
         "redis": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisBuferService"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisBufferService"
         }
       }
     },
@@ -17875,6 +18047,9 @@
           "type": "string"
         },
         "phase": {
+          "type": "string"
+        },
+        "type": {
           "type": "string"
         }
       }
@@ -17948,7 +18123,7 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "settings": {
@@ -17995,6 +18170,72 @@
         "url": {
           "description": "JetStream (NATS) URL",
           "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.JobTemplate": {
+      "type": "object",
+      "properties": {
+        "affinity": {
+          "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+          "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
+        },
+        "backoffLimit": {
+          "description": "Specifies the number of retries before marking this job failed. More info: https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-backoff-failure-policy Numaflow defaults to 20",
+          "type": "integer",
+          "format": "int32"
+        },
+        "containerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
+        "imagePullSecrets": {
+          "description": "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.LocalObjectReference"
+          },
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "metadata": {
+          "description": "Metadata sets the pods's metadata, i.e. annotations and labels",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Metadata"
+        },
+        "nodeSelector": {
+          "description": "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "priority": {
+          "description": "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+          "type": "integer",
+          "format": "int32"
+        },
+        "priorityClassName": {
+          "description": "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+          "type": "string"
+        },
+        "securityContext": {
+          "description": "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field.",
+          "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
+        },
+        "serviceAccountName": {
+          "description": "ServiceAccountName applied to the pod",
+          "type": "string"
+        },
+        "tolerations": {
+          "description": "If specified, the pod's tolerations.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
+          }
+        },
+        "ttlSecondsAfterFinished": {
+          "description": "ttlSecondsAfterFinished limits the lifetime of a Job that has finished execution (either Complete or Failed). If this field is set, ttlSecondsAfterFinished after the Job finishes, it is eligible to be automatically deleted. When the Job is being deleted, its lifecycle guarantees (e.g. finalizers) will be honored. If this field is unset, the Job won't be automatically deleted. If this field is set to zero, the Job becomes eligible to be deleted immediately after it finishes. Numaflow defaults to 30",
+          "type": "integer",
+          "format": "int32"
         }
       }
     },
@@ -18112,6 +18353,9 @@
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "initContainerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
         "metadata": {
           "description": "Metadata sets the pods's metadata, i.e. annotations and labels",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Metadata"
@@ -18157,7 +18401,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
         "settings": {
@@ -18174,6 +18418,15 @@
         "version": {
           "description": "Redis version, such as \"6.0.16\"",
           "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.PBQStorage": {
+      "description": "PBQStorage defines the persistence configuration for a vertex.",
+      "type": "object",
+      "properties": {
+        "persistentVolumeClaim": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PersistenceStrategy"
         }
       }
     },
@@ -18229,7 +18482,7 @@
           "format": "int64"
         },
         "bufferUsageLimit": {
-          "description": "BufferUsageLimit is used to define the pencentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertice as only they do buffer write. It will be overridden by the settings in vertex limits.",
+          "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertice as only they do buffer write. It will be overridden by the settings in vertex limits.",
           "type": "integer",
           "format": "int64"
         },
@@ -18287,8 +18540,12 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Lifecycle"
         },
         "limits": {
-          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, they could be overridden by each vertex's settings",
+          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineLimits"
+        },
+        "templates": {
+          "description": "Templates is used to customize additional kubernetes resources required for the Pipeline",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Templates"
         },
         "vertices": {
           "type": "array",
@@ -18299,7 +18556,7 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "watermark": {
-          "description": "Watermark enables watermark progression across the entire pipeline. Updating this after the pipeline has been created will have no impact and will be ignored. To make the pipeline honor any changes to the setting, the pipeline should be recreated.",
+          "description": "Watermark enables watermark progression across the entire pipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Watermark"
         }
       }
@@ -18324,10 +18581,26 @@
         },
         "phase": {
           "type": "string"
+        },
+        "sinkCount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "sourceCount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "udfCount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "vertexCount": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     },
-    "io.numaproj.numaflow.v1alpha1.RedisBuferService": {
+    "io.numaproj.numaflow.v1alpha1.RedisBufferService": {
       "type": "object",
       "properties": {
         "external": {
@@ -18391,6 +18664,7 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.Scale": {
+      "description": "Scale defines the parameters for autoscaling.",
       "type": "object",
       "properties": {
         "cooldownSeconds": {
@@ -18418,12 +18692,12 @@
           "format": "int32"
         },
         "replicasPerScale": {
-          "description": "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggresive scaling operations",
+          "description": "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations",
           "type": "integer",
           "format": "int64"
         },
         "targetBufferUsage": {
-          "description": "TargetBufferUsage is used to define the target pencentage of usage of the buffer to be read. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read.",
+          "description": "TargetBufferUsage is used to define the target percentage of usage of the buffer to be read. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read.",
           "type": "integer",
           "format": "int64"
         },
@@ -18442,6 +18716,9 @@
     "io.numaproj.numaflow.v1alpha1.Sink": {
       "type": "object",
       "properties": {
+        "blackhole": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+        },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
         },
@@ -18502,6 +18779,19 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.Templates": {
+      "type": "object",
+      "properties": {
+        "daemon": {
+          "description": "DaemonTemplate is used to customize the Daemon Deployment",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.DaemonTemplate"
+        },
+        "job": {
+          "description": "JobTemplate is used to customize Jobs",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.JobTemplate"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.UDF": {
       "type": "object",
       "properties": {
@@ -18510,6 +18800,9 @@
         },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        },
+        "groupBy": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GroupBy"
         }
       }
     },
@@ -18633,11 +18926,21 @@
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "initContainerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
+        "initContainers": {
+          "description": "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
+        },
         "interStepBufferServiceName": {
           "type": "string"
         },
         "limits": {
-          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings",
+          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
         },
         "metadata": {
@@ -18679,8 +18982,15 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.PodSecurityContext"
         },
         "serviceAccountName": {
-          "description": "ServiceAccountName to apply to the StatefulSet",
+          "description": "ServiceAccountName applied to the pod",
           "type": "string"
+        },
+        "sidecars": {
+          "description": "List of sidecar containers belonging to the pod.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Container"
+          }
         },
         "sink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Sink"
@@ -18711,6 +19021,10 @@
           },
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
+        },
+        "watermark": {
+          "description": "Watermark indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Watermark"
         }
       }
     },
@@ -18752,6 +19066,15 @@
         "maxDelay": {
           "description": "Maximum delay allowed for watermark calculation, defaults to \"0s\", which means no delay.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.Window": {
+      "description": "Window describes windowing strategy",
+      "type": "object",
+      "properties": {
+        "fixed": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.FixedWindow"
         }
       }
     },

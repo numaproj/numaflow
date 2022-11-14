@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package generic
 
 import (
@@ -9,7 +25,7 @@ import (
 )
 
 // NoOpWMProgressor is a no-op watermark progressor. As the name suggests, it does not do anything, no watermark is
-// progressed.
+// progressed. NoOpWMProgressor is used when watermarking is disabled.
 type NoOpWMProgressor struct {
 }
 
@@ -40,8 +56,9 @@ func (n NoOpWMProgressor) GetHeadWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
-// StopPublisher stops the no-op publisher.
-func (n NoOpWMProgressor) StopPublisher() {
+// Close stops the no-op progressor.
+func (n NoOpWMProgressor) Close() error {
+	return nil
 }
 
 func BuildNoOpWatermarkProgressorsFromEdgeList(bufferList []string) (fetch.Fetcher, map[string]publish.Publisher) {
@@ -53,14 +70,15 @@ func BuildNoOpWatermarkProgressorsFromEdgeList(bufferList []string) (fetch.Fetch
 	return fetchWatermark, publishWatermark
 }
 
-func BuildNoOpWatermarkProgressorsFromBufferMap(bufferList map[string]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
+func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
-	for buffName := range bufferList {
+	for buffName := range bufferMap {
 		publishWatermark[buffName] = NewNoOpWMProgressor()
 	}
 	return fetchWatermark, publishWatermark
 }
+
 func GetBufferNameList(bufferList []v1alpha1.Buffer) []string {
 	bufferName := make([]string, len(bufferList))
 	for idx, buffer := range bufferList {

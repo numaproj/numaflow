@@ -1,4 +1,20 @@
 /*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/*
 Package inmem package implements the watermark progression using in mem store as the KV store.
 */
 package inmem
@@ -13,11 +29,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-)
-
-var (
-	buckets     = make(map[string]*inMemStore)
-	bucketsLock sync.RWMutex
 )
 
 // kvEntry is each key-value entry in the store and the operation associated with the kv pair.
@@ -63,9 +74,6 @@ func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName stri
 		kvEntryCh:    make(chan store.WatermarkKVEntry, 10),
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
-	bucketsLock.Lock()
-	buckets[bucketName] = s
-	bucketsLock.Unlock()
 	return s, s.kvEntryCh, nil
 }
 
@@ -134,7 +142,4 @@ func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 // Close closes the channel connection and clean up the bucket.
 func (kv *inMemStore) Close() {
 	close(kv.kvEntryCh)
-	bucketsLock.Lock()
-	delete(buckets, kv.bucketName)
-	bucketsLock.Unlock()
 }

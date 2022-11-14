@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package service
 
 import (
@@ -13,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 type mockGetType func(url string) (*http.Response, error)
@@ -50,13 +67,17 @@ func (ms *mockIsbSvcClient) ValidateBuffers(ctx context.Context, buffers []v1alp
 	return nil
 }
 
+func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+	return nil, nil
+}
+
 func TestGetVertexMetrics(t *testing.T) {
 	pipelineName := "simple-pipeline"
 	pipeline := &v1alpha1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName)
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil)
 	assert.NoError(t, err)
 
 	metricsResponse := `# HELP vertex_processing_rate Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.
@@ -108,7 +129,6 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 }
 
 func TestGetBuffer(t *testing.T) {
-
 	pipelineName := "simple-pipeline"
 	namespace := "numaflow-system"
 	edges := []v1alpha1.Edge{
@@ -122,11 +142,17 @@ func TestGetBuffer(t *testing.T) {
 			Name:      pipelineName,
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.PipelineSpec{Edges: edges},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "in"},
+				{Name: "cat"},
+			},
+			Edges: edges,
+		},
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil)
 	assert.NoError(t, err)
 
 	bufferName := "numaflow-system-simple-pipeline-in-cat"
@@ -140,7 +166,6 @@ func TestGetBuffer(t *testing.T) {
 }
 
 func TestListBuffers(t *testing.T) {
-
 	pipelineName := "simple-pipeline"
 	namespace := "numaflow-system"
 	edges := []v1alpha1.Edge{
@@ -158,11 +183,18 @@ func TestListBuffers(t *testing.T) {
 			Name:      pipelineName,
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.PipelineSpec{Edges: edges},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "in"},
+				{Name: "cat"},
+				{Name: "out"},
+			},
+			Edges: edges,
+		},
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil)
 	assert.NoError(t, err)
 
 	req := &daemon.ListBuffersRequest{Pipeline: &pipelineName}

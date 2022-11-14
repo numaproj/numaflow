@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package http
 
 import (
@@ -135,7 +151,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 				_, _ = w.Write([]byte(err.Error()))
 				return
 			}
-			eventTime = time.Unix(i, 0)
+			eventTime = time.UnixMilli(i)
 		}
 		m := &isb.ReadMessage{
 			Message: isb.Message{
@@ -147,7 +163,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 					Payload: msg,
 				},
 			},
-			ReadOffset: isb.SimpleOffset(func() string { return id }),
+			ReadOffset: isb.SimpleStringOffset(func() string { return id }),
 		}
 		h.messages <- m
 		w.WriteHeader(http.StatusNoContent)
@@ -175,7 +191,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.FromSourceVertex(), forward.WithLogger(h.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(h.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -191,7 +207,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 	h.cancelfn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(sharedutil.GetWatermarkMaxDelay()))
+	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 	return h, nil
 }
 
@@ -199,16 +215,16 @@ func (h *httpSource) GetName() string {
 	return h.name
 }
 
-func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
+func (h *httpSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := []*isb.ReadMessage{}
-	var latest time.Time
+	var oldest time.Time
 	timeout := time.After(h.readTimeout)
 loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-h.messages:
-			if latest.IsZero() || m.EventTime.After(latest) {
-				latest = m.EventTime
+			if oldest.IsZero() || m.EventTime.Before(oldest) {
+				oldest = m.EventTime
 			}
 			msgs = append(msgs, m)
 			httpSourceReadCount.With(map[string]string{metricspkg.LabelVertex: h.name, metricspkg.LabelPipeline: h.pipelineName}).Inc()
@@ -218,8 +234,8 @@ loop:
 		}
 	}
 	h.logger.Debugf("Read %d messages.", len(msgs))
-	if len(msgs) > 0 && !latest.IsZero() {
-		h.sourcePublishWM.PublishWatermark(processor.Watermark(latest), msgs[len(msgs)-1].ReadOffset)
+	if len(msgs) > 0 && !oldest.IsZero() {
+		h.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), msgs[len(msgs)-1].ReadOffset)
 	}
 	return msgs, nil
 }
@@ -234,6 +250,9 @@ func (h *httpSource) Close() error {
 	close(h.messages)
 	if err := h.shutdown(context.Background()); err != nil {
 		return err
+	}
+	if err := h.sourcePublishWM.Close(); err != nil {
+		h.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
 	}
 	h.logger.Info("HTTP source server shutdown")
 	return nil

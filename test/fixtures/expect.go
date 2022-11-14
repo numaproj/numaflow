@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fixtures
 
 import (
@@ -80,10 +96,10 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 	ctx := context.Background()
 	contains, err := VertexPodLogContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, vertexName, regex, opts...)
 	if err != nil {
-		t.t.Fatalf("Failed to check vertex pod logs: %v", err)
+		t.t.Fatalf("Failed to check vertex %q pod logs: %v", vertexName, err)
 	}
 	if !contains {
-		t.t.Fatalf("Expected vertex pod log contains %q", regex)
+		t.t.Fatalf("Expected vertex %q pod log contains %q", vertexName, regex)
 	}
 	return t
 }
@@ -96,7 +112,7 @@ func (t *Expect) VertexPodLogNotContains(vertexName, regex string, opts ...PodLo
 		t.t.Fatalf("Failed to check vertex pod logs: %v", err)
 	}
 	if !yes {
-		t.t.Fatalf("Not expected vertex pod log contains %q", regex)
+		t.t.Fatalf("Not expected vertex %q pod log contains %q", vertexName, regex)
 	}
 	return t
 }

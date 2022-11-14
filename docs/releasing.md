@@ -12,5 +12,5 @@ Always create a release branch for the releases, for example branch `release-0.5
 1. Run `VERSION=v${x.y.z} make prepare-release` to update version in manifests, where `x.y.x` is the expected new version.
 1. Follow the output of last step, to confirm if all the changes are expected, and then run `VERSION=v${x.y.z} make release`.
 1. Follow the output, push a new tag to the release branch, Github actions will automatically build and publish the new release, this will take around 10 minutes.
-1. Test the new release, make sure everything is running as expected, and then recreate a `stable` tag against the lastest release.
+1. Test the new release, make sure everything is running as expected, and then recreate a `stable` tag against the latest release.
 1. Find the new release tag, and edit the release notes.

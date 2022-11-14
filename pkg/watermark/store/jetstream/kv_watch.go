@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package jetstream
 
 import (
@@ -24,7 +40,7 @@ type jetStreamWatch struct {
 
 var _ store.WatermarkKVWatcher = (*jetStreamWatch)(nil)
 
-// NewKVJetStreamKVWatch returns KVJetStreamWatch specific to Jetsteam which implements the WatermarkKVWatcher interface.
+// NewKVJetStreamKVWatch returns KVJetStreamWatch specific to JetStream which implements the WatermarkKVWatcher interface.
 func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketName string, client jsclient.JetStreamClient, opts ...JSKVWatcherOption) (store.WatermarkKVWatcher, error) {
 	var err error
 	conn, err := client.Connect(ctx)
@@ -32,8 +48,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 		return nil, fmt.Errorf("failed to get nats connection, %w", err)
 	}
 
-	// do we need to specify any opts? if yes, send it via options.
-	js, err := conn.JetStream(nats.PublishAsyncMaxPending(256))
+	js, err := conn.JetStream()
 	if err != nil {
 		if !conn.IsClosed() {
 			conn.Close()
@@ -96,15 +111,16 @@ func (k kvEntry) Operation() store.KVWatchOp {
 }
 
 // Watch watches the key-value store (aka bucket).
-func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntry {
-	kvWatcher, err := k.kv.WatchAll()
+func (k *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
+	kvWatcher, err := k.kv.WatchAll(nats.IncludeHistory())
 	for err != nil {
 		k.log.Errorw("WatchAll failed", zap.String("watcher", k.GetKVName()), zap.Error(err))
-		kvWatcher, err = k.kv.WatchAll()
+		kvWatcher, err = k.kv.WatchAll(nats.IncludeHistory())
 		time.Sleep(100 * time.Millisecond)
 	}
 
 	var updates = make(chan store.WatermarkKVEntry)
+	var stopped = make(chan struct{})
 	go func() {
 		for {
 			select {
@@ -113,11 +129,12 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 				// call jetstream watch stop
 				err = kvWatcher.Stop()
 				if err != nil {
-					k.log.Errorw("failed to stop", zap.String("watcher", k.GetKVName()), zap.Error(err))
+					k.log.Errorw("Failed to stop", zap.String("watcher", k.GetKVName()), zap.Error(err))
 				} else {
 					k.log.Infow("WatchAll successfully stopped", zap.String("watcher", k.GetKVName()))
 				}
 				close(updates)
+				close(stopped)
 				return
 			case value := <-kvWatcher.Updates():
 				// if channel is closed, nil could come in
@@ -144,7 +161,7 @@ func (k *jetStreamWatch) Watch(ctx context.Context) <-chan store.WatermarkKVEntr
 			}
 		}
 	}()
-	return updates
+	return updates, stopped
 }
 
 // GetKVName returns the KV store (bucket) name.

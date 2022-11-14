@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package pipeline
 
 import (
@@ -83,7 +99,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	if !pl.DeletionTimestamp.IsZero() {
 		log.Info("Deleting pipeline")
 		if controllerutil.ContainsFinalizer(pl, finalizerName) {
-			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.DeleteGracePeriodSeconds) * time.Second)) {
+			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetDeleteGracePeriodSeconds()) * time.Second)) {
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
 					log.Errorw("Failed to check if it's safe to delete the pipeline", zap.Error(err))
@@ -92,7 +108,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 				if !safeToDelete {
 					log.Info("Pipeline deletion is waiting to finish the unconsumed messages")
-					//Requeue request to process after 10s
+					// Requeue request to process after 10s
 					return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
 				}
 			}
@@ -112,7 +128,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		return r.reconcileNonLifecycleChanges(ctx, pl)
 	}
 
-	if oldPhase := pl.Status.Phase; oldPhase != pl.Spec.Lifecycle.DesiredPhase {
+	if oldPhase := pl.Status.Phase; oldPhase != pl.Spec.Lifecycle.GetDesiredPhase() {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			log.Errorw("Updated desired pipeline phase failed", zap.Error(err))
@@ -143,6 +159,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
 		return ctrl.Result{}, err
 	}
+	pl.Status.SetVertexCounts(pl.Spec.Vertices)
 	pl.Status.MarkConfigured()
 
 	isbSvc := &dfv1.InterStepBufferService{}
@@ -261,7 +278,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	}
 
 	pl.Status.MarkDeployed()
-	pl.Status.SetPhase(pl.Spec.Lifecycle.DesiredPhase, "")
+	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
 	return ctrl.Result{}, nil
 }
 
@@ -369,7 +386,7 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 			if apierrors.IsNotFound(err) { // somehow it doesn't need to clean up
 				return nil
 			}
-			log.Errorw("failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
+			log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 			return err
 		}
 
@@ -433,6 +450,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			InterStepBufferServiceName: pl.Spec.InterStepBufferServiceName,
 			FromEdges:                  fromEdges,
 			ToEdges:                    toEdges,
+			Watermark:                  pl.Spec.Watermark,
 			Replicas:                   &replicas,
 		}
 		hash := sharedutil.MustHash(spec.WithOutReplicas())
@@ -456,34 +474,30 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 }
 
 func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
-	if pl.Spec.Limits == nil {
-		return
-	}
+	plLimits := pl.GetPipelineLimits()
 	if v.Limits == nil {
 		v.Limits = &dfv1.VertexLimits{}
 	}
 	if v.Limits.ReadBatchSize == nil {
-		v.Limits.ReadBatchSize = pl.Spec.Limits.ReadBatchSize
+		v.Limits.ReadBatchSize = plLimits.ReadBatchSize
 	}
 	if v.Limits.ReadTimeout == nil {
-		v.Limits.ReadTimeout = pl.Spec.Limits.ReadTimeout
+		v.Limits.ReadTimeout = plLimits.ReadTimeout
 	}
 }
 
 func copyEdgeLimits(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.Edge {
-	if pl.Spec.Limits == nil {
-		return edges
-	}
+	plLimits := pl.GetPipelineLimits()
 	result := []dfv1.Edge{}
 	for _, e := range edges {
 		if e.Limits == nil {
 			e.Limits = &dfv1.EdgeLimits{}
 		}
 		if e.Limits.BufferMaxLength == nil {
-			e.Limits.BufferMaxLength = pl.Spec.Limits.BufferMaxLength
+			e.Limits.BufferMaxLength = plLimits.BufferMaxLength
 		}
 		if e.Limits.BufferUsageLimit == nil {
-			e.Limits.BufferUsageLimit = pl.Spec.Limits.BufferUsageLimit
+			e.Limits.BufferUsageLimit = plLimits.BufferUsageLimit
 		}
 		result = append(result, e)
 	}
@@ -505,27 +519,49 @@ func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferS
 	if len(randomStr) > 6 {
 		randomStr = strings.ToLower(randomStr[:6])
 	}
+	l := map[string]string{
+		dfv1.KeyPartOf:       dfv1.Project,
+		dfv1.KeyManagedBy:    dfv1.ControllerPipeline,
+		dfv1.KeyComponent:    dfv1.ComponentJob,
+		dfv1.KeyPipelineName: pl.Name,
+	}
+	spec := batchv1.JobSpec{
+		TTLSecondsAfterFinished: pointer.Int32(30),
+		BackoffLimit:            pointer.Int32(20),
+		Template: corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels:      l,
+				Annotations: map[string]string{},
+			},
+			Spec: corev1.PodSpec{
+				RestartPolicy: corev1.RestartPolicyOnFailure,
+				Containers:    []corev1.Container{c},
+			},
+		},
+	}
+	if pl.Spec.Templates != nil && pl.Spec.Templates.JobTemplate != nil {
+		jt := pl.Spec.Templates.JobTemplate
+		if jt.TTLSecondsAfterFinished != nil {
+			spec.TTLSecondsAfterFinished = jt.TTLSecondsAfterFinished
+		}
+		if jt.BackoffLimit != nil {
+			spec.BackoffLimit = jt.BackoffLimit
+		}
+		jt.AbstractPodTemplate.ApplyToPodTemplateSpec(&spec.Template)
+		if jt.ContainerTemplate != nil {
+			jt.ContainerTemplate.ApplyToNumaflowContainers(spec.Template.Spec.Containers)
+		}
+	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: pl.Namespace,
 			Name:      fmt.Sprintf("%s-buffer-%s-%v", pl.Name, jobType, randomStr),
-			Labels: map[string]string{
-				dfv1.KeyPipelineName: pl.Name,
-			},
+			Labels:    l,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind),
 			},
 		},
-		Spec: batchv1.JobSpec{
-			TTLSecondsAfterFinished: pointer.Int32(30),
-			BackoffLimit:            pointer.Int32(20),
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-					Containers:    []corev1.Container{c},
-				},
-			},
-		},
+		Spec: spec,
 	}
 }
 
@@ -535,7 +571,7 @@ var allVertexFilter vertexFilterFunc = func(v dfv1.Vertex) bool { return true }
 var sourceVertexFilter vertexFilterFunc = func(v dfv1.Vertex) bool { return v.IsASource() }
 
 func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-	switch pl.Spec.Lifecycle.DesiredPhase {
+	switch pl.Spec.Lifecycle.GetDesiredPhase() {
 	case dfv1.PipelinePhasePaused:
 		return r.pausePipeline(ctx, pl)
 	case dfv1.PipelinePhaseRunning, dfv1.PipelinePhaseUnknown:
@@ -629,7 +665,7 @@ func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline
 	if err != nil {
 		return false, err
 	}
-	//Requeue pipeline to take effect the vertex replica changes
+	// Requeue pipeline to take effect the vertex replica changes
 	if vertexPatched {
 		return false, nil
 	}

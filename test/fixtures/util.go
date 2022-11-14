@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fixtures
 
 import (
@@ -5,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -18,6 +35,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -273,7 +291,7 @@ func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, na
 	for _, p := range podList.Items {
 		go func(podName string) {
 			fmt.Printf("Watching POD: %s\n", podName)
-			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan, errChan); err != nil {
+			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan); err != nil {
 				errChan <- err
 				return
 			}
@@ -325,7 +343,7 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	for _, p := range podList.Items {
 		go func(podName string) {
 			fmt.Printf("Watching POD: %s\n", podName)
-			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan, errChan); err != nil {
+			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan); err != nil {
 				errChan <- err
 				return
 			}
@@ -354,8 +372,29 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	}
 }
 
-func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan bool, errs chan error) error {
-	stream, err := client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
+func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan bool) error {
+	var stream io.ReadCloser
+	var err error
+	// Streaming logs from file could be rotated by container log manager and as consequence, we receive EOF and need to re-initialize the stream.
+	// To prevent such issue, we apply retry on stream initialization.
+	// 3 attempts with 1 second fixed wait time are tested sufficient for it.
+	var retryBackOff = wait.Backoff{
+		Factor:   1,
+		Jitter:   0,
+		Steps:    3,
+		Duration: time.Second * 1,
+	}
+
+	_ = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func() (done bool, err error) {
+		stream, err = client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
+		if err == nil {
+			return true, nil
+		}
+
+		fmt.Printf("Got error %v, retrying.\n", err)
+		return false, nil
+	})
+
 	if err != nil {
 		return err
 	}

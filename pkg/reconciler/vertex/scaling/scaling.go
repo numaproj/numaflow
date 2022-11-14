@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package scaling
 
 import (
@@ -169,11 +185,11 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Debug("Corresponding Pipeline being deleted")
 		return nil
 	}
-	if pl.Spec.Lifecycle.DesiredPhase != dfv1.PipelinePhaseRunning {
+	if pl.Spec.Lifecycle.GetDesiredPhase() != dfv1.PipelinePhaseRunning {
 		log.Debug("Corresponding Pipeline not in Running state")
 		return nil
 	}
-	if int(vertex.Status.Replicas) != vertex.Spec.GetReplicas() {
+	if int(vertex.Status.Replicas) != vertex.GetReplicas() {
 		log.Debugf("Vertex %s might be under processing, replicas mismatch", vertex.Name)
 		return nil
 	}
@@ -228,7 +244,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 			_ = s.vertexMetricsCache.Add(*bInfo.BufferName+"/length", totalBufferLength)
 		}
 	}
-	current := int32(vertex.Spec.GetReplicas())
+	current := int32(vertex.GetReplicas())
 	desired := s.desiredReplicas(ctx, vertex, rate, pending, totalBufferLength, targetAvailableBufferLength)
 	log.Debugf("Calculated desired replica number of vertex %q is: %v", vertex.Name, desired)
 	max := vertex.Spec.Scale.GetMaxReplicas()
@@ -366,24 +382,27 @@ func (s *Scaler) Start(ctx context.Context) {
 func (s *Scaler) hasBackPressure(pl dfv1.Pipeline, vertex dfv1.Vertex) (bool, bool) {
 	downstreamEdges := pl.GetDownstreamEdges(vertex.Spec.Name)
 	directPressure, downstreamPressure := false, false
+loop:
 	for _, e := range downstreamEdges {
 		vertexKey := pl.Namespace + "/" + pl.Name + "-" + e.To
-		bufferName := dfv1.GenerateEdgeBufferName(pl.Namespace, pl.Name, e.From, e.To)
-		pendingVal, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
-		if !ok { // Vertex key has not been cached, skip it.
-			continue
-		}
-		pending := pendingVal.(int64)
-		bufferLengthVal, ok := s.vertexMetricsCache.Get(bufferName + "/length")
-		if !ok { // Buffer length has not been cached, skip it.
-			continue
-		}
-		length := bufferLengthVal.(int64)
-		if float64(pending)/float64(length) >= s.options.backPressureThreshold {
-			downstreamPressure = true
-			if e.From == vertex.Spec.Name {
-				directPressure = true
-				break
+		bufferNames := dfv1.GenerateEdgeBufferNames(pl.Namespace, pl.Name, e)
+		for _, bufferName := range bufferNames {
+			pendingVal, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
+			if !ok { // Vertex key has not been cached, skip it.
+				continue
+			}
+			pending := pendingVal.(int64)
+			bufferLengthVal, ok := s.vertexMetricsCache.Get(bufferName + "/length")
+			if !ok { // Buffer length has not been cached, skip it.
+				continue
+			}
+			length := bufferLengthVal.(int64)
+			if float64(pending)/float64(length) >= s.options.backPressureThreshold {
+				downstreamPressure = true
+				if e.From == vertex.Spec.Name {
+					directPressure = true
+					break loop
+				}
 			}
 		}
 	}

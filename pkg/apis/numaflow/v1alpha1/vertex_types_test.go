@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import (
@@ -101,12 +117,27 @@ func TestWithoutReplicas(t *testing.T) {
 }
 
 func TestGetVertexReplicas(t *testing.T) {
-	s := &VertexSpec{}
-	assert.Equal(t, 1, s.GetReplicas())
-	s.Replicas = pointer.Int32(3)
-	assert.Equal(t, 3, s.GetReplicas())
-	s.Replicas = pointer.Int32(0)
-	assert.Equal(t, 0, s.GetReplicas())
+	v := Vertex{
+		Spec: VertexSpec{
+			AbstractVertex: AbstractVertex{
+				Name: "b",
+			},
+		},
+	}
+	assert.Equal(t, 1, v.GetReplicas())
+	v.Spec.Replicas = pointer.Int32(3)
+	assert.Equal(t, 3, v.GetReplicas())
+	v.Spec.Replicas = pointer.Int32(0)
+	assert.Equal(t, 0, v.GetReplicas())
+	v.Spec.UDF = &UDF{
+		GroupBy: &GroupBy{},
+	}
+	v.Spec.FromEdges = []Edge{
+		{From: "a", To: "b", Parallelism: pointer.Int32(5)},
+	}
+	assert.Equal(t, 0, v.GetReplicas())
+	v.Spec.Replicas = pointer.Int32(1000)
+	assert.Equal(t, 5, v.GetReplicas())
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {
@@ -177,7 +208,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvVertexObject)
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
-		assert.Contains(t, s.Containers[0].Args, "--type=source")
+		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
 		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 	})
@@ -211,12 +242,12 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvVertexObject)
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
-		assert.Contains(t, s.Containers[0].Args, "--type=sink")
+		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSink))
 		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 	})
 
-	t.Run("test user defind sink", func(t *testing.T) {
+	t.Run("test user defined sink", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &Sink{
 			UDSink: &UDSink{
@@ -263,7 +294,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvVertexObject)
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
-		assert.Contains(t, s.Containers[0].Args, "--type=udf")
+		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeMapUDF))
 		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 	})
@@ -326,7 +357,7 @@ func Test_VertexIsSink(t *testing.T) {
 	assert.True(t, o.IsASink())
 }
 
-func Test_VertexGetInitContainer(t *testing.T) {
+func Test_VertexGetInitContainers(t *testing.T) {
 	req := GetVertexPodSpecReq{
 		ISBSvcType: ISBSvcTypeRedis,
 		Image:      testFlowImage,
@@ -337,19 +368,28 @@ func Test_VertexGetInitContainer(t *testing.T) {
 	}
 	o := testVertex.DeepCopy()
 	o.Spec.Sink = &Sink{}
-	s := o.getInitContainer(req)
-	assert.Equal(t, CtrInit, s.Name)
+	o.Spec.InitContainers = []corev1.Container{
+		{Name: "my-test-init", Image: "my-test-init-image"},
+	}
+	o.Spec.InitContainerTemplate = &ContainerTemplate{Resources: testResources}
+	s := o.getInitContainers(req)
+	assert.Len(t, s, 2)
+	assert.Equal(t, CtrInit, s[0].Name)
+	assert.Equal(t, s[0].Resources, testResources)
+	assert.Equal(t, "my-test-init", s[1].Name)
+	assert.Equal(t, "my-test-init-image", s[1].Image)
+	assert.Equal(t, s[1].Resources, corev1.ResourceRequirements{})
 	a := []string{}
-	for _, env := range s.Env {
+	for _, env := range s[0].Env {
 		a = append(a, env.Name)
 	}
-	for _, env := range s.Env {
+	for _, env := range s[0].Env {
 		assert.Contains(t, a, env.Name)
 	}
 }
 
 func TestGenerateEdgeBufferName(t *testing.T) {
-	assert.Equal(t, "a-b-c-d", GenerateEdgeBufferName("a", "b", "c", "d"))
+	assert.Equal(t, []string{"a-b-c-d"}, GenerateEdgeBufferNames("a", "b", Edge{From: "c", To: "d"}))
 }
 
 func TestScalable(t *testing.T) {

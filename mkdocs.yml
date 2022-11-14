@@ -51,6 +51,7 @@ nav:
       - Sinks:
           - sinks/kafka.md
           - sinks/log.md
+          - sinks/blackhole.md
           - User Defined Sinks: "sinks/user-defined-sinks.md"
       - User Defined Functions:
           - Overview: "user-defined-functions.md"
@@ -64,6 +65,9 @@ nav:
       - container-resources.md
       - volumes.md
       - environment-variables.md
+      - init-containers.md
+      - sidecar-containers.md
+      - pipeline-customization.md
       - watermarks.md
       - APIs.md
   - Operator Manual:
@@ -80,4 +84,4 @@ nav:
       - debugging.md
       - static-code-analysis.md
       - releasing.md
-  - Numaproj: https://www.numaproj.io
+  - Numaproj: https://numaproj.io

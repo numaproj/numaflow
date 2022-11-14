@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fetch
 
 import (
@@ -16,13 +32,15 @@ import (
 )
 
 // ProcessorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor). The code is running on Vn vertex.
-// It has the mapping of all the processors which in turn has all the information about each processor
-// timelines.
+// It has the mapping of all the processors which in turn has all the information about each processor timelines.
 type ProcessorManager struct {
-	ctx        context.Context
-	hbWatcher  store.WatermarkKVWatcher
-	otWatcher  store.WatermarkKVWatcher
-	heartbeat  *ProcessorHeartbeat
+	ctx       context.Context
+	hbWatcher store.WatermarkKVWatcher
+	otWatcher store.WatermarkKVWatcher
+	// heartbeat just tracks the heartbeat of each processing unit. we use it to mark a processing unit's status (e.g, inactive)
+	heartbeat *ProcessorHeartbeat
+	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
+	// used for tracking watermark.
 	processors map[string]*ProcessorToFetch
 	lock       sync.RWMutex
 	log        *zap.SugaredLogger
@@ -36,12 +54,10 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
-		separateOTBucket:         false,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
 	}
-
 	v := &ProcessorManager{
 		ctx:        ctx,
 		hbWatcher:  watermarkStoreWatcher.HeartbeatWatcher(),
@@ -52,14 +68,11 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 		opts:       opts,
 	}
 	go v.startRefreshingProcessors()
-	// we do not care about heartbeat watcher if this is a source vertex
-	if v.hbWatcher != nil {
-		go v.startHeatBeatWatcher()
-	}
+	go v.startHeatBeatWatcher()
 	return v
 }
 
-// addProcessor adds a new processor.
+// addProcessor adds a new processor. If the given processor already exists, the value will be updated.
 func (v *ProcessorManager) addProcessor(processor string, p *ProcessorToFetch) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -77,7 +90,6 @@ func (v *ProcessorManager) GetProcessor(processor string) *ProcessorToFetch {
 }
 
 // DeleteProcessor deletes a processor.
-// Note: This operation is not used anywhere ATM.
 func (v *ProcessorManager) DeleteProcessor(processor string) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -122,7 +134,16 @@ func (v *ProcessorManager) refreshingProcessors() {
 		}
 		// default heartbeat rate is every 5 seconds
 		// TODO: tolerance?
-		if time.Now().Unix()-pTime > v.opts.podHeartbeatRate {
+		if time.Now().Unix()-pTime > 10*v.opts.podHeartbeatRate {
+			// if the pod doesn't come back after 10 heartbeats,
+			// it's possible the pod has exited unexpectedly, so we need to delete the pod
+			// NOTE: the pod entry still remains in the heartbeat store (bucket)
+			// TODO: how to delete the pod from the heartbeat store?
+			v.log.Infow("Processor has been inactive for 10 heartbeats, deleting...", zap.String("key", pName), zap.String(pName, p.String()))
+			p.setStatus(_deleted)
+			p.stopTimeLineWatcher()
+			v.heartbeat.Delete(pName)
+		} else if time.Now().Unix()-pTime > v.opts.podHeartbeatRate {
 			// if the pod's last heartbeat is greater than podHeartbeatRate
 			// then the pod is not considered as live
 			p.setStatus(_inactive)
@@ -137,10 +158,10 @@ func (v *ProcessorManager) refreshingProcessors() {
 // startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
 func (v *ProcessorManager) startHeatBeatWatcher() {
-	watchCh := v.hbWatcher.Watch(v.ctx)
+	watchCh, stopped := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {
-		case <-v.ctx.Done():
+		case <-stopped:
 			return
 		case value := <-watchCh:
 			if value == nil {
@@ -148,14 +169,14 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
-				var entity = processor.NewProcessorEntity(value.Key(), processor.WithSeparateOTBuckets(v.opts.separateOTBucket))
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
-				if p == nil {
+				if p == nil || p.IsDeleted() {
 					// if p is nil, create a new processor
 					// A fromProcessor needs to be added to v.processors
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
+					var entity = processor.NewProcessorEntity(value.Key())
 					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.otWatcher)
 					v.addProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
@@ -179,6 +200,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				} else {
 					v.log.Infow("Deleting", zap.String("key", value.Key()), zap.String(value.Key(), p.String()))
 					p.setStatus(_deleted)
+					p.stopTimeLineWatcher()
 					v.heartbeat.Delete(value.Key())
 				}
 			case store.KVPurge:

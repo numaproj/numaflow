@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Package service is built for querying metadata and to expose it over daemon service.
 package service
 
@@ -18,6 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 // metricsHttpClient interface for the GET call to metrics endpoint.
@@ -28,18 +45,19 @@ type metricsHttpClient interface {
 
 // pipelineMetadataQuery has the metadata required for the pipeline queries
 type pipelineMetadataQuery struct {
-	isbSvcClient    isbsvc.ISBService
-	pipeline        *v1alpha1.Pipeline
-	httpClient      metricsHttpClient
-	vertexWatermark *watermarkFetchers
+	isbSvcClient      isbsvc.ISBService
+	pipeline          *v1alpha1.Pipeline
+	httpClient        metricsHttpClient
+	watermarkFetchers map[string][]fetch.Fetcher
 }
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
-func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) (*pipelineMetadataQuery, error) {
+func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline, wmFetchers map[string][]fetch.Fetcher) (*pipelineMetadataQuery, error) {
 	var err error
 	ps := pipelineMetadataQuery{
-		isbSvcClient: isbSvcClient,
-		pipeline:     pipeline,
+		isbSvcClient:      isbSvcClient,
+		pipeline:          pipeline,
+		watermarkFetchers: wmFetchers,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -47,7 +65,6 @@ func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1
 			Timeout: time.Second * 3,
 		},
 	}
-	ps.vertexWatermark, err = newVertexWatermarkFetcher(pipeline)
 	if err != nil {
 		return nil, err
 	}
@@ -60,32 +77,34 @@ func (ps *pipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.Li
 	resp := new(daemon.ListBuffersResponse)
 
 	buffers := []*daemon.BufferInfo{}
-	for _, edge := range ps.pipeline.Spec.Edges {
-		buffer := v1alpha1.GenerateEdgeBufferName(ps.pipeline.Namespace, ps.pipeline.Name, edge.From, edge.To)
-		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
+	for _, edge := range ps.pipeline.ListAllEdges() {
+		bs := v1alpha1.GenerateEdgeBufferNames(ps.pipeline.Namespace, ps.pipeline.Name, edge)
+		for _, buffer := range bs {
+			bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
+			if err != nil {
+				return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
+			}
+			log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
+			bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, edge)
+			usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
+			if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
+				usage = x
+			}
+			b := &daemon.BufferInfo{
+				Pipeline:         &ps.pipeline.Name,
+				FromVertex:       pointer.String(fmt.Sprintf("%v", edge.From)),
+				ToVertex:         pointer.String(fmt.Sprintf("%v", edge.To)),
+				BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
+				PendingCount:     &bufferInfo.PendingCount,
+				AckPendingCount:  &bufferInfo.AckPendingCount,
+				TotalMessages:    &bufferInfo.TotalMessages,
+				BufferLength:     &bufferLength,
+				BufferUsageLimit: &bufferUsageLimit,
+				BufferUsage:      &usage,
+				IsFull:           pointer.Bool(usage >= bufferUsageLimit),
+			}
+			buffers = append(buffers, b)
 		}
-		log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
-		bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, edge)
-		usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
-		if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
-			usage = x
-		}
-		b := &daemon.BufferInfo{
-			Pipeline:         &ps.pipeline.Name,
-			FromVertex:       pointer.String(fmt.Sprintf("%v", edge.From)),
-			ToVertex:         pointer.String(fmt.Sprintf("%v", edge.To)),
-			BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
-			PendingCount:     &bufferInfo.PendingCount,
-			AckPendingCount:  &bufferInfo.AckPendingCount,
-			TotalMessages:    &bufferInfo.TotalMessages,
-			BufferLength:     &bufferLength,
-			BufferUsageLimit: &bufferUsageLimit,
-			BufferUsage:      &usage,
-			IsFull:           pointer.Bool(usage >= bufferUsageLimit),
-		}
-		buffers = append(buffers, b)
 	}
 	resp.Buffers = buffers
 	return resp, nil
@@ -196,16 +215,9 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 }
 
 func getBufferLimits(pl *v1alpha1.Pipeline, edge v1alpha1.Edge) (bufferLength int64, bufferUsageLimit float64) {
-	bufferLength = int64(v1alpha1.DefaultBufferLength)
-	bufferUsageLimit = v1alpha1.DefaultBufferUsageLimit
-	if x := pl.Spec.Limits; x != nil {
-		if x.BufferMaxLength != nil {
-			bufferLength = int64(*x.BufferMaxLength)
-		}
-		if x.BufferUsageLimit != nil {
-			bufferUsageLimit = float64(*x.BufferUsageLimit) / 100
-		}
-	}
+	plLimits := pl.GetPipelineLimits()
+	bufferLength = int64(*plLimits.BufferMaxLength)
+	bufferUsageLimit = float64(*plLimits.BufferUsageLimit) / 100
 	if x := edge.Limits; x != nil {
 		if x.BufferMaxLength != nil {
 			bufferLength = int64(*x.BufferMaxLength)

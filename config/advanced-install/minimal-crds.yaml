@@ -14,12 +14,18 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .status.type
+      name: Type
+      type: string
     - jsonPath: .status.phase
       name: Phase
       type: string
     - jsonPath: .status.message
       name: Message
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -66,6 +72,24 @@ spec:
     - jsonPath: .status.message
       name: Message
       type: string
+    - jsonPath: .status.vertexCount
+      name: Vertices
+      type: integer
+    - jsonPath: .status.sourceCount
+      name: Sources
+      priority: 10
+      type: integer
+    - jsonPath: .status.sinkCount
+      name: Sinks
+      priority: 10
+      type: integer
+    - jsonPath: .status.udfCount
+      name: UDFs
+      priority: 10
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
