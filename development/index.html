@@ -1165,8 +1165,8 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#create-a-k8s-cluster-with-k3d-if-needed" class="md-nav__link">
-    Create a k8s cluster with k3d if needed
+  <a href="#example-create-a-k8s-cluster-with-k3d" class="md-nav__link">
+    Example: Create a k8s cluster with k3d
   </a>
   
 </li>
@@ -1345,8 +1345,8 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#create-a-k8s-cluster-with-k3d-if-needed" class="md-nav__link">
-    Create a k8s cluster with k3d if needed
+  <a href="#example-create-a-k8s-cluster-with-k3d" class="md-nav__link">
+    Example: Create a k8s cluster with k3d
   </a>
   
 </li>
@@ -1387,9 +1387,12 @@
 <li><a href="https://pandoc.org/installing.html"><code>pandoc</code></a> 2.17 for generating API markdown</li>
 <li><a href="https://nodejs.org/en/"><code>Node.js®</code></a> for running the UI</li>
 <li><a href="https://classic.yarnpkg.com/en/"><code>yarn</code></a></li>
-<li><a href="https://k3d.io/"><code>k3d</code></a> for local development, if needed</li>
+<li>A local Kubernetes cluster - you need one of the following options as your local Kubernetes cluster for development usage:</li>
+<li><a href="https://k3d.io/"><code>k3d</code></a></li>
+<li><a href="https://kind.sigs.k8s.io/"><code>kind</code></a></li>
+<li><a href="https://minikube.sigs.k8s.io/docs/start/"><code>minikube</code></a></li>
 </ol>
-<h3 id="create-a-k8s-cluster-with-k3d-if-needed">Create a k8s cluster with k3d if needed<a class="headerlink" href="#create-a-k8s-cluster-with-k3d-if-needed" title="Permanent link">&para;</a></h3>
+<h3 id="example-create-a-k8s-cluster-with-k3d">Example: Create a k8s cluster with k3d<a class="headerlink" href="#example-create-a-k8s-cluster-with-k3d" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1"># Create a cluster with default name k3s-default</span>
 k3d cluster create -i rancher/k3s:v1.24.4-k3s1
 
@@ -1398,6 +1401,10 @@ k3d kubeconfig get k3s-default
 </code></pre></div>
 <h3 id="useful-commands">Useful Commands<a class="headerlink" href="#useful-commands" title="Permanent link">&para;</a></h3>
 <ul>
+<li>
+<p><code>make start</code>
+  Build the source code, image, and install the Numaflow controller in the <code>numaflow-system</code> namespace.</p>
+</li>
 <li>
 <p><code>make build</code>
   Binaries are placed in <code>./dist</code>.</p>
@@ -1412,11 +1419,7 @@ k3d kubeconfig get k3s-default
 </li>
 <li>
 <p><code>make image</code>
-  Build container image, and import it to <code>k3d</code> cluster if corresponding <code>kubeconfig</code> is sourced.</p>
-</li>
-<li>
-<p><code>make start</code>
-  Build the source code, image, and install the Numa controller in the <code>numaflow-system</code> namespace.</p>
+  Build container image, and import it to <code>k3d</code> or <code>minikube</code> cluster if corresponding <code>kubeconfig</code> is sourced.</p>
 </li>
 <li>
 <p><code>make docs</code>
