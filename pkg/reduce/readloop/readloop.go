@@ -99,7 +99,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 		// so that the window can be closed when the watermark
 		// crosses the window.
 		id := p.PartitionID
-		intervalWindow := &keyed.KeyedWindow{
+		intervalWindow := &keyed.AlignedKeyedWindow{
 			Start: id.Start,
 			End:   id.End,
 		}
@@ -229,15 +229,15 @@ func (rl *ReadLoop) ShutDown(ctx context.Context) {
 
 // upsertWindowsAndKeys will create or assigns (if already present) a window to the message. It is an upsert operation
 // because windows are created out of order, but they will be closed in-order.
-func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedWindow {
+func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKeyedWindower {
 	// drop the late messages
 	if m.IsLate {
 		rl.log.Warnw("Dropping the late message", zap.Time("eventTime", m.EventTime), zap.Time("watermark", m.Watermark))
-		return []window.AlignedWindow{}
+		return []window.AlignedKeyedWindower{}
 	}
 
 	processingWindows := rl.windower.AssignWindow(m.EventTime)
-	var kWindows []window.AlignedWindow
+	var kWindows []window.AlignedKeyedWindower
 	for _, win := range processingWindows {
 		w := rl.windower.GetWindow(win)
 		if w == nil {
