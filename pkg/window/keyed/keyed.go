@@ -14,31 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package keyed ....
-// TODO: document
+// Package keyed implements KeyedWindows. A keyed window associates key(s) with a window.
+// A key uniquely identifies a partitioned set of events in a given time window.
 package keyed
 
 import (
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/window"
 	"sync"
+
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/window/strategy"
 )
 
 // KeyedWindow maintains association between keys and a window.
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
 type KeyedWindow struct {
-	*window.IntervalWindow
-	// TODO: can this be map[string]struct{} ?
-	Keys map[string]string
+	strategy.AlignedWindow
+	Keys map[string]struct{}
 	lock sync.RWMutex
 }
 
 // NewKeyedWindow creates a new keyed window
-func NewKeyedWindow(window *window.IntervalWindow) *KeyedWindow {
+func NewKeyedWindow(window strategy.AlignedWindow) *KeyedWindow {
 	kw := &KeyedWindow{
-		IntervalWindow: window,
-		Keys:           make(map[string]string),
-		lock:           sync.RWMutex{},
+		AlignedWindow: window,
+		Keys:          make(map[string]struct{}),
+		lock:          sync.RWMutex{},
 	}
 	return kw
 }
@@ -48,7 +48,7 @@ func (kw *KeyedWindow) AddKey(key string) {
 	kw.lock.Lock()
 	defer kw.lock.Unlock()
 	if _, ok := kw.Keys[key]; !ok {
-		kw.Keys[key] = key
+		kw.Keys[key] = struct{}{}
 	}
 }
 

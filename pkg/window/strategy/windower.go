@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package window
+package strategy
 
 import (
 	"time"
@@ -34,11 +34,11 @@ type AlignedWindow interface {
 // Will be implemented by each of the windowing strategies.
 type Windower interface {
 	// AssignWindow assigns the event to the window based on give window configuration.
-	AssignWindow(eventTime time.Time) []*IntervalWindow
+	AssignWindow(eventTime time.Time) []AlignedWindow
 	// CreateWindow creates a window for a supplied interval
-	CreateWindow(iw *IntervalWindow) AlignedWindow
+	CreateWindow(aw AlignedWindow) AlignedWindow
 	// GetWindow returns a keyed window for a supplied interval
-	GetWindow(iw *IntervalWindow) AlignedWindow
+	GetWindow(aw AlignedWindow) AlignedWindow
 	// RemoveWindows returns list of window(s) that can be closed
 	RemoveWindows(time time.Time) []AlignedWindow
 }

@@ -32,6 +32,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/window/strategy"
+
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -52,7 +54,7 @@ import (
 type ReadLoop struct {
 	UDF              udfReducer.Reducer
 	pbqManager       *pbq.Manager
-	windower         window.Windower
+	windower         strategy.Windower
 	op               *orderedForwarder
 	log              *zap.SugaredLogger
 	toBuffers        map[string]isb.BufferWriter
@@ -64,7 +66,7 @@ type ReadLoop struct {
 func NewReadLoop(ctx context.Context,
 	udf udfReducer.Reducer,
 	pbqManager *pbq.Manager,
-	windowingStrategy window.Windower,
+	windowingStrategy strategy.Windower,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
@@ -100,7 +102,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 		// so that the window can be closed when the watermark
 		// crosses the window.
 		id := p.PartitionID
-		intervalWindow := &window.IntervalWindow{
+		intervalWindow := &strategy.IntervalWindow{
 			Start: id.Start,
 			End:   id.End,
 		}
@@ -135,8 +137,8 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		for _, kw := range windows {
 			// identify partition for message
 			partitionID := partition.ID{
-				Start: kw.IntervalWindow.Start,
-				End:   kw.IntervalWindow.End,
+				Start: kw.StartTime(),
+				End:   kw.EndTime(),
 				Key:   m.Key,
 			}
 
@@ -248,7 +250,7 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []*keyed.KeyedWindo
 		// track the key to window relationship
 		kw := w.(*keyed.KeyedWindow)
 		kw.AddKey(m.Key)
-		rl.log.Debugw("Creating new keyed window", zap.Any("key", kw.Keys), zap.Int64("startTime", kw.Start.UnixMilli()), zap.Int64("endTime", kw.End.UnixMilli()))
+		rl.log.Debugw("Creating new keyed window", zap.Any("key", kw.Keys), zap.Int64("startTime", kw.StartTime().UnixMilli()), zap.Int64("endTime", kw.EndTime().UnixMilli()))
 
 		kWindows = append(kWindows, kw)
 	}

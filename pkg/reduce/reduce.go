@@ -23,6 +23,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/window/strategy"
+
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -33,7 +35,6 @@ import (
 	udfReducer "github.com/numaproj/numaflow/pkg/udf/reducer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // DataForward reads data from isb and forwards them to readloop
@@ -41,7 +42,7 @@ type DataForward struct {
 	fromBuffer        isb.BufferReader
 	readloop          *readloop.ReadLoop
 	fetchWatermark    fetch.Fetcher
-	windowingStrategy window.Windower
+	windowingStrategy strategy.Windower
 	opts              *Options
 	log               *zap.SugaredLogger
 }
@@ -54,7 +55,7 @@ func NewDataForward(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	fw fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
-	windowingStrategy window.Windower, opts ...Option) (*DataForward, error) {
+	windowingStrategy strategy.Windower, opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
 

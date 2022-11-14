@@ -21,14 +21,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/window/strategy"
+
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 
-	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestKeyedWindow_AddKey(t *testing.T) {
-	iw := &window.IntervalWindow{
+	iw := &strategy.IntervalWindow{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
 	}
@@ -37,21 +38,21 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 		name         string
 		given        *KeyedWindow
 		input        string
-		expectedKeys map[string]string
+		expectedKeys map[string]struct{}
 	}{
 		{
 			name:         "no_keys",
 			given:        &KeyedWindow{},
 			input:        "key1",
-			expectedKeys: map[string]string{"key1": "key1"},
+			expectedKeys: map[string]struct{}{"key1": {}},
 		},
 		{
 			name: "with_some_existing_keys",
 			given: &KeyedWindow{
-				Keys: map[string]string{"key2": "key2", "key3": "key3"},
+				Keys: map[string]struct{}{"key2": {}, "key3": {}},
 			},
 			input:        "key4",
-			expectedKeys: map[string]string{"key2": "key2", "key3": "key3", "key4": "key4"},
+			expectedKeys: map[string]struct{}{"key2": {}, "key3": {}, "key4": {}},
 		},
 	}
 
@@ -72,7 +73,7 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 }
 
 func TestKeyedWindow_Partitions(t *testing.T) {
-	iw := &window.IntervalWindow{
+	iw := &strategy.IntervalWindow{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
 	}
@@ -91,7 +92,7 @@ func TestKeyedWindow_Partitions(t *testing.T) {
 		{
 			name: "with_some_existing_keys",
 			given: &KeyedWindow{
-				Keys: map[string]string{"key2": "key2", "key3": "key3", "key4": "key4"},
+				Keys: map[string]struct{}{"key2": {}, "key3": {}, "key4": {}},
 			},
 			expected: []partition.ID{
 				{

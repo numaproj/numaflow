@@ -18,12 +18,13 @@ package fixed
 
 import (
 	"container/list"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/window/keyed"
+	"github.com/numaproj/numaflow/pkg/window/strategy"
 )
 
 func TestFixed_AssignWindow(t *testing.T) {
@@ -35,13 +36,13 @@ func TestFixed_AssignWindow(t *testing.T) {
 		name      string
 		length    time.Duration
 		eventTime time.Time
-		want      []*window.IntervalWindow
+		want      []*strategy.IntervalWindow
 	}{
 		{
 			name:      "minute",
 			length:    time.Minute,
 			eventTime: baseTime,
-			want: []*window.IntervalWindow{
+			want: []*strategy.IntervalWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
 					End:   time.Unix(1651129260, 0).In(loc),
@@ -52,7 +53,7 @@ func TestFixed_AssignWindow(t *testing.T) {
 			name:      "hour",
 			length:    time.Hour,
 			eventTime: baseTime,
-			want: []*window.IntervalWindow{
+			want: []*strategy.IntervalWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
 					End:   time.Unix(1651129200+3600, 0).In(loc),
@@ -63,7 +64,7 @@ func TestFixed_AssignWindow(t *testing.T) {
 			name:      "5_minute",
 			length:    time.Minute * 5,
 			eventTime: baseTime,
-			want: []*window.IntervalWindow{
+			want: []*strategy.IntervalWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
 					End:   time.Unix(1651129200+300, 0).In(loc),
@@ -74,7 +75,7 @@ func TestFixed_AssignWindow(t *testing.T) {
 			name:      "30_second",
 			length:    time.Second * 30,
 			eventTime: baseTime,
-			want: []*window.IntervalWindow{
+			want: []*strategy.IntervalWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
 					End:   time.Unix(1651129230, 0).In(loc),
@@ -85,7 +86,7 @@ func TestFixed_AssignWindow(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := NewFixed(tt.length)
-			if got := f.AssignWindow(tt.eventTime); !(got[0].Start.Equal(tt.want[0].Start) && got[0].End.Equal(tt.want[0].End)) {
+			if got := f.AssignWindow(tt.eventTime); !(got[0].StartTime().Equal(tt.want[0].Start) && got[0].EndTime().Equal(tt.want[0].End)) {
 				t.Errorf("AssignWindow() = %v, want %v", got, tt.want)
 			}
 		})
@@ -99,19 +100,19 @@ func TestAligned_CreateWindow(t *testing.T) {
 	tests := []struct {
 		name            string
 		given           []*keyed.KeyedWindow
-		input           *window.IntervalWindow
+		input           *strategy.IntervalWindow
 		expectedWindows []*keyed.KeyedWindow
 	}{
 		{
 			name:  "FirstWindow",
 			given: []*keyed.KeyedWindow{},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(0, 0),
 				End:   time.Unix(60, 0),
 			},
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(0, 0),
 						End:   time.Unix(60, 0),
 					},
@@ -122,25 +123,25 @@ func TestAligned_CreateWindow(t *testing.T) {
 			name: "late_window",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 			},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(60, 0),
 				End:   time.Unix(120, 0),
 			},
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(60, 0),
 						End:   time.Unix(120, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
@@ -151,25 +152,25 @@ func TestAligned_CreateWindow(t *testing.T) {
 			name: "early_window",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 			},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(240, 0),
 				End:   time.Unix(300, 0),
 			},
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(240, 0),
 						End:   time.Unix(300, 0),
 					},
@@ -180,37 +181,37 @@ func TestAligned_CreateWindow(t *testing.T) {
 			name: "insert_middle",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(240, 0),
 						End:   time.Unix(300, 0),
 					},
 				},
 			},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(180, 0),
 				End:   time.Unix(240, 0),
 			},
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(180, 0),
 						End:   time.Unix(240, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(240, 0),
 						End:   time.Unix(300, 0),
 					},
@@ -228,8 +229,8 @@ func TestAligned_CreateWindow(t *testing.T) {
 			assert.Equal(t, len(tt.expectedWindows), windows.entries.Len())
 			node := windows.entries.Front()
 			for _, kw := range tt.expectedWindows {
-				assert.Equal(t, kw.Start, node.Value.(*keyed.KeyedWindow).Start)
-				assert.Equal(t, kw.End, node.Value.(*keyed.KeyedWindow).End)
+				assert.Equal(t, kw.StartTime(), node.Value.(*keyed.KeyedWindow).StartTime())
+				assert.Equal(t, kw.EndTime(), node.Value.(*keyed.KeyedWindow).EndTime())
 				node = node.Next()
 			}
 		})
@@ -241,13 +242,13 @@ func TestAligned_GetWindow(t *testing.T) {
 	tests := []struct {
 		name           string
 		given          []*keyed.KeyedWindow
-		input          *window.IntervalWindow
+		input          *strategy.IntervalWindow
 		expectedWindow *keyed.KeyedWindow
 	}{
 		{
 			name:  "non_existing",
 			given: []*keyed.KeyedWindow{},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(0, 0),
 				End:   time.Unix(60, 0),
 			},
@@ -257,19 +258,19 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "non_existing_before_earlier",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(60, 0),
 						End:   time.Unix(120, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 			},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(0, 0),
 				End:   time.Unix(60, 0),
 			},
@@ -279,19 +280,19 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "non_existing_after_recent",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(60, 0),
 						End:   time.Unix(120, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 			},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(180, 0),
 				End:   time.Unix(240, 0),
 			},
@@ -301,19 +302,19 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "non_existing_middle",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(60, 0),
 						End:   time.Unix(120, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(180, 0),
 						End:   time.Unix(240, 0),
 					},
 				},
 			},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(120, 0),
 				End:   time.Unix(180, 0),
 			},
@@ -323,24 +324,24 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "existing",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(60, 0),
 						End:   time.Unix(120, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 			},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(60, 0),
 				End:   time.Unix(120, 0),
 			},
 			expectedWindow: &keyed.KeyedWindow{
-				IntervalWindow: &window.IntervalWindow{
+				AlignedWindow: &strategy.IntervalWindow{
 					Start: time.Unix(60, 0),
 					End:   time.Unix(120, 0),
 				},
@@ -350,24 +351,24 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "first_window",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(240, 0),
 						End:   time.Unix(300, 0),
 					},
 				},
 			},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(120, 0),
 				End:   time.Unix(180, 0),
 			},
 			expectedWindow: &keyed.KeyedWindow{
-				IntervalWindow: &window.IntervalWindow{
+				AlignedWindow: &strategy.IntervalWindow{
 					Start: time.Unix(120, 0),
 					End:   time.Unix(180, 0),
 				},
@@ -377,24 +378,24 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "last_window",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(240, 0),
 						End:   time.Unix(300, 0),
 					},
 				},
 			},
-			input: &window.IntervalWindow{
+			input: &strategy.IntervalWindow{
 				Start: time.Unix(240, 0),
 				End:   time.Unix(300, 0),
 			},
 			expectedWindow: &keyed.KeyedWindow{
-				IntervalWindow: &window.IntervalWindow{
+				AlignedWindow: &strategy.IntervalWindow{
 					Start: time.Unix(240, 0),
 					End:   time.Unix(300, 0),
 				},
@@ -436,7 +437,7 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			name: "wm_on_edge",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
@@ -449,7 +450,7 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			name: "single_window",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
@@ -458,7 +459,7 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			input: time.Unix(181, 0),
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
@@ -469,19 +470,19 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			name: "single_when_multiple",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(180, 0),
 						End:   time.Unix(240, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(240, 0),
 						End:   time.Unix(300, 0),
 					},
@@ -490,7 +491,7 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			input: time.Unix(181, 0),
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
@@ -501,19 +502,19 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			name: "multiple_removals",
 			given: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(180, 0),
 						End:   time.Unix(240, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(240, 0),
 						End:   time.Unix(300, 0),
 					},
@@ -522,13 +523,13 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			input: time.Unix(245, 0),
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(120, 0),
 						End:   time.Unix(180, 0),
 					},
 				},
 				{
-					IntervalWindow: &window.IntervalWindow{
+					AlignedWindow: &strategy.IntervalWindow{
 						Start: time.Unix(180, 0),
 						End:   time.Unix(240, 0),
 					},
@@ -543,8 +544,8 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			ret := windows.RemoveWindows(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), len(ret))
 			for idx, kw := range tt.expectedWindows {
-				assert.Equal(t, kw.Start, ret[idx].StartTime())
-				assert.Equal(t, kw.End, ret[idx].EndTime())
+				assert.Equal(t, kw.StartTime(), ret[idx].StartTime())
+				assert.Equal(t, kw.EndTime(), ret[idx].EndTime())
 			}
 		})
 	}

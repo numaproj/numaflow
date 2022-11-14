@@ -38,7 +38,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/numaproj/numaflow/pkg/window/strategy"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
 
@@ -51,7 +51,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var windower window.Windower
+	var windower strategy.Windower
 	if x := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed; x != nil {
 		windower = fixed.NewFixed(x.Length.Duration)
 	}
