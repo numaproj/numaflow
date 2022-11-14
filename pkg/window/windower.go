@@ -22,12 +22,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 )
 
-// AlignedWindow interface represents a bounded window at a moment in time
-// for example in case of fixed and sliding windows, AlignedWindow will have the
-// same start and end time as the initial window that element is slotted in to.
-// However, same cannot be said about a session window. Window Boundaries will keep
-// changing up until a session is closed or times out.
-type AlignedWindow interface {
+// AlignedKeyedWindower represents a bounded window (i.e., it will have a definite start and end time), and the
+// keys that also fall into the same window.
+type AlignedKeyedWindower interface {
 	// StartTime returns the start time of the window
 	StartTime() time.Time
 	// EndTime returns the end time of the window
@@ -40,15 +37,15 @@ type AlignedWindow interface {
 	Keys() []string
 }
 
-// Windower manages windows
+// Windower manages AlignedKeyedWindower
 // Will be implemented by each of the windowing strategies.
 type Windower interface {
 	// AssignWindow assigns the event to the window based on give window configuration.
-	AssignWindow(eventTime time.Time) []AlignedWindow
+	AssignWindow(eventTime time.Time) []AlignedKeyedWindower
 	// CreateWindow creates a window for a supplied interval
-	CreateWindow(aw AlignedWindow) AlignedWindow
+	CreateWindow(aw AlignedKeyedWindower) AlignedKeyedWindower
 	// GetWindow returns a keyed window for a supplied interval
-	GetWindow(aw AlignedWindow) AlignedWindow
+	GetWindow(aw AlignedKeyedWindower) AlignedKeyedWindower
 	// RemoveWindows returns list of window(s) that can be closed
-	RemoveWindows(time time.Time) []AlignedWindow
+	RemoveWindows(time time.Time) []AlignedKeyedWindower
 }
