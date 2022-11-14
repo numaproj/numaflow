@@ -87,24 +87,10 @@ test-coverage:
 	rm test/profile.cov.tmp
 	go tool cover -func=test/profile.cov
 
-.PHONY: test-redis
-test-redis:
-	go test -tags isb_redis -race -short -v ./pkg/isb/redis ./pkg/isbsvc
-
-.PHONY: test-jetstream
-test-jetstream:
-	go test -tags isb_jetstream -race -short -v ./pkg/isb/jetstream
 
 .PHONY: test-coverage-with-isb
 test-coverage-with-isb:
-	go test -covermode=atomic -coverprofile=test/profile.cov.tmp  -tags=isb_redis,isb_jetstream $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
-	cat test/profile.cov.tmp | grep -v v1alpha1/zz_generated | grep -v v1alpha1/generated > test/profile.cov
-	rm test/profile.cov.tmp
-	go tool cover -func=test/profile.cov
-
-.PHONY: test-coverage-with-jetstream
-test-coverage-with-jetstream:
-	go test -covermode=atomic -coverprofile=test/profile.cov.tmp  -tags isb_jetstream $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
+	go test -covermode=atomic -coverprofile=test/profile.cov.tmp -tags=isb_redis,isb_jetstream $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
 	cat test/profile.cov.tmp | grep -v v1alpha1/zz_generated | grep -v v1alpha1/generated > test/profile.cov
 	rm test/profile.cov.tmp
 	go tool cover -func=test/profile.cov
