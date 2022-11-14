@@ -145,7 +145,7 @@ const (
 	PathPBQMount = "/var/numaflow/pbq"
 )
 
-// PBQ store's backend type.
+// StoreType is the PBQ store's backend type.
 type StoreType string
 
 const (
