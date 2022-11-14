@@ -28,10 +28,15 @@ import (
 // However, same cannot be said about a session window. Window Boundaries will keep
 // changing up until a session is closed or times out.
 type AlignedWindow interface {
+	// StartTime returns the start time of the window
 	StartTime() time.Time
+	// EndTime returns the end time of the window
 	EndTime() time.Time
+	// AddKey adds a key to the window
 	AddKey(string)
+	// Partitions returns an array of partition ids
 	Partitions() []partition.ID
+	// Keys returns an array of keys
 	Keys() []string
 }
 

@@ -28,10 +28,13 @@ import (
 // KeyedWindow maintains association between keys and a window.
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
 type KeyedWindow struct {
+	// Start start time of the window
 	Start time.Time
-	End   time.Time
-	keys  map[string]struct{}
-	lock  sync.RWMutex
+	// End end time of the window
+	End time.Time
+	// keys map of keys
+	keys map[string]struct{}
+	lock sync.RWMutex
 }
 
 // NewKeyedWindow creates a new keyed window
