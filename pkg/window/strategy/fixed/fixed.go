@@ -64,7 +64,7 @@ func NewFixed(length time.Duration) window.Windower {
 }
 
 // AssignWindow assigns a window for the given eventTime.
-func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedWindow {
+func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower {
 	start := eventTime.Truncate(f.Length)
 	end := start.Add(f.Length)
 
@@ -72,13 +72,13 @@ func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedWindow {
 	// principle. Since we use truncate here, it is guaranteed that any element
 	// on the boundary will automatically fall in to the window to the right
 	// of the boundary thereby satisfying the requirement.
-	return []window.AlignedWindow{
+	return []window.AlignedKeyedWindower{
 		keyed.NewKeyedWindow(start, end),
 	}
 }
 
 // CreateWindow adds a window for a given interval window
-func (f *Fixed) CreateWindow(kw window.AlignedWindow) window.AlignedWindow {
+func (f *Fixed) CreateWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -88,8 +88,8 @@ func (f *Fixed) CreateWindow(kw window.AlignedWindow) window.AlignedWindow {
 		return kw
 	}
 
-	earliestWindow := f.entries.Front().Value.(*keyed.KeyedWindow)
-	recentWindow := f.entries.Back().Value.(*keyed.KeyedWindow)
+	earliestWindow := f.entries.Front().Value.(*keyed.AlignedKeyedWindow)
+	recentWindow := f.entries.Back().Value.(*keyed.AlignedKeyedWindow)
 
 	// late arrival
 	if !earliestWindow.StartTime().Before(kw.EndTime()) {
@@ -100,7 +100,7 @@ func (f *Fixed) CreateWindow(kw window.AlignedWindow) window.AlignedWindow {
 	} else {
 		// a window in the middle
 		for e := f.entries.Back(); e != nil; e = e.Prev() {
-			win := e.Value.(*keyed.KeyedWindow)
+			win := e.Value.(*keyed.AlignedKeyedWindow)
 			if !win.StartTime().Before(kw.EndTime()) {
 				f.entries.InsertBefore(kw, e)
 				break
@@ -111,7 +111,7 @@ func (f *Fixed) CreateWindow(kw window.AlignedWindow) window.AlignedWindow {
 }
 
 // GetWindow returns an existing window for the given interval
-func (f *Fixed) GetWindow(kw window.AlignedWindow) window.AlignedWindow {
+func (f *Fixed) GetWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -121,21 +121,21 @@ func (f *Fixed) GetWindow(kw window.AlignedWindow) window.AlignedWindow {
 
 	// are we looking for a window that is later than the current latest?
 	latest := f.entries.Back()
-	lkw := latest.Value.(*keyed.KeyedWindow)
+	lkw := latest.Value.(*keyed.AlignedKeyedWindow)
 	if !lkw.EndTime().After(kw.StartTime()) {
 		return nil
 	}
 
 	// are we looking for a window that is earlier than the current earliest?
 	earliest := f.entries.Front()
-	ekw := earliest.Value.(*keyed.KeyedWindow)
+	ekw := earliest.Value.(*keyed.AlignedKeyedWindow)
 	if !ekw.StartTime().Before(kw.EndTime()) {
 		return nil
 	}
 
 	// check if we already have a window
 	for e := f.entries.Back(); e != nil; e = e.Prev() {
-		win := e.Value.(*keyed.KeyedWindow)
+		win := e.Value.(*keyed.AlignedKeyedWindow)
 		if win.StartTime().Equal(kw.StartTime()) && win.EndTime().Equal(kw.EndTime()) {
 			return win
 		} else if win.StartTime().Before(kw.EndTime()) {
@@ -149,14 +149,14 @@ func (f *Fixed) GetWindow(kw window.AlignedWindow) window.AlignedWindow {
 
 // RemoveWindows returns an array of keyed windows that are before the current watermark.
 // So these windows can be closed.
-func (f *Fixed) RemoveWindows(wm time.Time) []window.AlignedWindow {
+func (f *Fixed) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	closedWindows := make([]window.AlignedWindow, 0)
+	closedWindows := make([]window.AlignedKeyedWindower, 0)
 
 	for e := f.entries.Front(); e != nil; {
-		win := e.Value.(*keyed.KeyedWindow)
+		win := e.Value.(*keyed.AlignedKeyedWindow)
 		next := e.Next()
 		// remove window only after the watermark has passed the end of the window
 		if win.EndTime().Before(wm) {
