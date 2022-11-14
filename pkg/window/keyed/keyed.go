@@ -23,11 +23,12 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// KeyedWindow maintains association between keys and a window.
+// AlignedKeyedWindow maintains association between keys and a window.
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
-type KeyedWindow struct {
+type AlignedKeyedWindow struct {
 	// Start start time of the window
 	Start time.Time
 	// End end time of the window
@@ -37,9 +38,11 @@ type KeyedWindow struct {
 	lock sync.RWMutex
 }
 
+var _ window.AlignedKeyedWindower = (*AlignedKeyedWindow)(nil)
+
 // NewKeyedWindow creates a new keyed window
-func NewKeyedWindow(start time.Time, end time.Time) *KeyedWindow {
-	kw := &KeyedWindow{
+func NewKeyedWindow(start time.Time, end time.Time) *AlignedKeyedWindow {
+	kw := &AlignedKeyedWindow{
 		Start: start,
 		End:   end,
 		keys:  make(map[string]struct{}),
@@ -49,17 +52,17 @@ func NewKeyedWindow(start time.Time, end time.Time) *KeyedWindow {
 }
 
 // StartTime returns start of the window.
-func (kw *KeyedWindow) StartTime() time.Time {
+func (kw *AlignedKeyedWindow) StartTime() time.Time {
 	return kw.Start
 }
 
 // EndTime returns end of the window.
-func (kw *KeyedWindow) EndTime() time.Time {
+func (kw *AlignedKeyedWindow) EndTime() time.Time {
 	return kw.End
 }
 
 // AddKey adds a key to an existing window
-func (kw *KeyedWindow) AddKey(key string) {
+func (kw *AlignedKeyedWindow) AddKey(key string) {
 	kw.lock.Lock()
 	defer kw.lock.Unlock()
 	if _, ok := kw.keys[key]; !ok {
@@ -68,7 +71,7 @@ func (kw *KeyedWindow) AddKey(key string) {
 }
 
 // Partitions returns an array of partitions for a window
-func (kw *KeyedWindow) Partitions() []partition.ID {
+func (kw *AlignedKeyedWindow) Partitions() []partition.ID {
 	kw.lock.RLock()
 	defer kw.lock.RUnlock()
 
@@ -82,7 +85,7 @@ func (kw *KeyedWindow) Partitions() []partition.ID {
 	return partitions
 }
 
-func (kw *KeyedWindow) Keys() []string {
+func (kw *AlignedKeyedWindow) Keys() []string {
 	kw.lock.RLock()
 	defer kw.lock.RUnlock()
 
