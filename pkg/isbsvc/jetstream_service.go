@@ -27,7 +27,6 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"github.com/spf13/viper"
@@ -128,7 +127,6 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket:       otBucket,
-				Description:  fmt.Sprintf("Offset timeline bucket of buffer [%s]", buffer.Name),
 				MaxValueSize: v.GetInt32("otBucket.maxValueSize"),
 				History:      uint8(v.GetUint("otBucket.history")),
 				TTL:          v.GetDuration("otBucket.ttl"),
@@ -148,7 +146,6 @@ func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffe
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket:       procBucket,
-				Description:  fmt.Sprintf("Processor bucket of buffer [%s]", buffer.Name),
 				MaxValueSize: v.GetInt32("procBucket.maxValueSize"),
 				History:      uint8(v.GetUint("procBucket.history")),
 				TTL:          v.GetDuration("procBucket.ttl"),
@@ -289,7 +286,7 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bufferName 
 	if err != nil {
 		return nil, err
 	}
-	watermarkFetcher := generic.NewGenericEdgeFetch(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bufferName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
 	return watermarkFetcher, nil
 }
 

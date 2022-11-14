@@ -31,7 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
-	"github.com/numaproj/numaflow/pkg/udf/reducer"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -49,7 +49,7 @@ func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*
 func TestOrderedProcessing(t *testing.T) {
 
 	// Test Reducer returns the messages as is
-	identityReducer := reducer.ReduceFunc(func(ctx context.Context, partitionID *partition.ID, input <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+	identityReducer := applier.ApplyReduceFunc(func(ctx context.Context, partitionID *partition.ID, input <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 		messages := make([]*isb.Message, 0)
 		for msg := range input {
 			messages = append(messages, &msg.Message)

@@ -251,6 +251,9 @@ func (h *httpSource) Close() error {
 	if err := h.shutdown(context.Background()); err != nil {
 		return err
 	}
+	if err := h.sourcePublishWM.Close(); err != nil {
+		h.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
+	}
 	h.logger.Info("HTTP source server shutdown")
 	return nil
 }

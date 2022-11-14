@@ -32,27 +32,26 @@ import (
 	"math"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/window/strategy"
-
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/numaproj/numaflow/pkg/isb/forward"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
-	udfReducer "github.com/numaproj/numaflow/pkg/udf/reducer"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/window/strategy"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
 
 // ReadLoop is responsible for reading and forwarding the message from ISB to PBQ.
 type ReadLoop struct {
-	UDF              udfReducer.Reducer
+	UDF              applier.ReduceApplier
 	pbqManager       *pbq.Manager
 	windower         strategy.Windower
 	op               *orderedForwarder
@@ -64,7 +63,7 @@ type ReadLoop struct {
 
 // NewReadLoop initializes  and returns ReadLoop.
 func NewReadLoop(ctx context.Context,
-	udf udfReducer.Reducer,
+	udf applier.ReduceApplier,
 	pbqManager *pbq.Manager,
 	windowingStrategy strategy.Windower,
 	toBuffers map[string]isb.BufferWriter,

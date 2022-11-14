@@ -228,6 +228,11 @@ func (r *KafkaSource) Close() error {
 		}
 	}
 	<-r.stopch
+	for _, p := range r.sourcePublishWMs {
+		if err := p.Close(); err != nil {
+			r.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
+		}
+	}
 	r.logger.Info("Kafka reader closed")
 	return nil
 }

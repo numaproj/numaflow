@@ -34,6 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 // metricsHttpClient interface for the GET call to metrics endpoint.
@@ -44,18 +45,19 @@ type metricsHttpClient interface {
 
 // pipelineMetadataQuery has the metadata required for the pipeline queries
 type pipelineMetadataQuery struct {
-	isbSvcClient    isbsvc.ISBService
-	pipeline        *v1alpha1.Pipeline
-	httpClient      metricsHttpClient
-	vertexWatermark *watermarkFetchers
+	isbSvcClient      isbsvc.ISBService
+	pipeline          *v1alpha1.Pipeline
+	httpClient        metricsHttpClient
+	watermarkFetchers map[string][]fetch.Fetcher
 }
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
-func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline) (*pipelineMetadataQuery, error) {
+func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline, wmFetchers map[string][]fetch.Fetcher) (*pipelineMetadataQuery, error) {
 	var err error
 	ps := pipelineMetadataQuery{
-		isbSvcClient: isbSvcClient,
-		pipeline:     pipeline,
+		isbSvcClient:      isbSvcClient,
+		pipeline:          pipeline,
+		watermarkFetchers: wmFetchers,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -63,7 +65,6 @@ func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1
 			Timeout: time.Second * 3,
 		},
 	}
-	ps.vertexWatermark, err = newVertexWatermarkFetcher(pipeline, isbSvcClient)
 	if err != nil {
 		return nil, err
 	}
