@@ -31,11 +31,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-var (
-	buckets     = make(map[string]*inMemStore)
-	bucketsLock sync.RWMutex
-)
-
 // kvEntry is each key-value entry in the store and the operation associated with the kv pair.
 type kvEntry struct {
 	key   string
@@ -79,9 +74,6 @@ func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName stri
 		kvEntryCh:    make(chan store.WatermarkKVEntry, 10),
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
-	bucketsLock.Lock()
-	buckets[bucketName] = s
-	bucketsLock.Unlock()
 	return s, s.kvEntryCh, nil
 }
 
@@ -150,7 +142,4 @@ func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 // Close closes the channel connection and clean up the bucket.
 func (kv *inMemStore) Close() {
 	close(kv.kvEntryCh)
-	bucketsLock.Lock()
-	delete(buckets, kv.bucketName)
-	bucketsLock.Unlock()
 }

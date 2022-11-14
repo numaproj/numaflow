@@ -21,28 +21,34 @@ import (
 	"math"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"go.uber.org/zap"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 // sourceFetcher is a fetcher on source buffers.
 type sourceFetcher struct {
 	ctx              context.Context
 	sourceBufferName string
+	storeWatcher     store.WatermarkStoreWatcher
 	processorManager *ProcessorManager
 	log              *zap.SugaredLogger
 }
 
 // NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
 // buckets of the source buffer.
-func NewSourceFetcher(ctx context.Context, sourceBufferName string, processorManager *ProcessorManager) Fetcher {
+func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher store.WatermarkStoreWatcher) Fetcher {
+	log := logging.FromContext(ctx).With("sourceBufferName", sourceBufferName)
+	log.Info("Creating a new source watermark fetcher")
 	return &sourceFetcher{
 		ctx:              ctx,
 		sourceBufferName: sourceBufferName,
-		processorManager: processorManager,
-		log:              logging.FromContext(ctx).With("sourceBufferName", sourceBufferName),
+		storeWatcher:     storeWatcher,
+		processorManager: NewProcessorManager(ctx, storeWatcher),
+		log:              log,
 	}
 }
 
@@ -80,4 +86,14 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) processor.Watermark {
 		epoch = -1
 	}
 	return processor.Watermark(time.UnixMilli(epoch))
+}
+
+// Close function closes the watchers.
+func (e *sourceFetcher) Close() error {
+	e.log.Infof("Closing source watermark fetcher")
+	if e.storeWatcher != nil {
+		e.storeWatcher.HeartbeatWatcher().Close()
+		e.storeWatcher.OffsetTimelineWatcher().Close()
+	}
+	return nil
 }

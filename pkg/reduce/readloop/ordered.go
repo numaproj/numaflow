@@ -32,7 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	udfreducer "github.com/numaproj/numaflow/pkg/udf/reducer"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 )
 
 var retryDelay = 1 * time.Second
@@ -69,7 +69,7 @@ func (of *orderedForwarder) startUp(ctx context.Context) {
 
 // schedulePnF creates and schedules the PnF routine.
 func (of *orderedForwarder) schedulePnF(ctx context.Context,
-	udf udfreducer.Reducer,
+	udf applier.ReduceApplier,
 	pbq pbq.Reader,
 	partitionID partition.ID,
 	toBuffers map[string]isb.BufferWriter,
