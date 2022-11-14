@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"github.com/numaproj/numaflow/pkg/window/strategy"
 )
 
 func TestFixed_AssignWindow(t *testing.T) {
@@ -36,13 +35,13 @@ func TestFixed_AssignWindow(t *testing.T) {
 		name      string
 		length    time.Duration
 		eventTime time.Time
-		want      []*strategy.IntervalWindow
+		want      []*keyed.KeyedWindow
 	}{
 		{
 			name:      "minute",
 			length:    time.Minute,
 			eventTime: baseTime,
-			want: []*strategy.IntervalWindow{
+			want: []*keyed.KeyedWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
 					End:   time.Unix(1651129260, 0).In(loc),
@@ -53,7 +52,7 @@ func TestFixed_AssignWindow(t *testing.T) {
 			name:      "hour",
 			length:    time.Hour,
 			eventTime: baseTime,
-			want: []*strategy.IntervalWindow{
+			want: []*keyed.KeyedWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
 					End:   time.Unix(1651129200+3600, 0).In(loc),
@@ -64,7 +63,7 @@ func TestFixed_AssignWindow(t *testing.T) {
 			name:      "5_minute",
 			length:    time.Minute * 5,
 			eventTime: baseTime,
-			want: []*strategy.IntervalWindow{
+			want: []*keyed.KeyedWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
 					End:   time.Unix(1651129200+300, 0).In(loc),
@@ -75,7 +74,7 @@ func TestFixed_AssignWindow(t *testing.T) {
 			name:      "30_second",
 			length:    time.Second * 30,
 			eventTime: baseTime,
-			want: []*strategy.IntervalWindow{
+			want: []*keyed.KeyedWindow{
 				{
 					Start: time.Unix(1651129200, 0).In(loc),
 					End:   time.Unix(1651129230, 0).In(loc),
@@ -100,22 +99,20 @@ func TestAligned_CreateWindow(t *testing.T) {
 	tests := []struct {
 		name            string
 		given           []*keyed.KeyedWindow
-		input           *strategy.IntervalWindow
+		input           *keyed.KeyedWindow
 		expectedWindows []*keyed.KeyedWindow
 	}{
 		{
 			name:  "FirstWindow",
 			given: []*keyed.KeyedWindow{},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(0, 0),
 				End:   time.Unix(60, 0),
 			},
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(0, 0),
-						End:   time.Unix(60, 0),
-					},
+					Start: time.Unix(0, 0),
+					End:   time.Unix(60, 0),
 				},
 			},
 		},
@@ -123,28 +120,22 @@ func TestAligned_CreateWindow(t *testing.T) {
 			name: "late_window",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(60, 0),
 				End:   time.Unix(120, 0),
 			},
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(60, 0),
-						End:   time.Unix(120, 0),
-					},
+					Start: time.Unix(60, 0),
+					End:   time.Unix(120, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
 		},
@@ -152,28 +143,22 @@ func TestAligned_CreateWindow(t *testing.T) {
 			name: "early_window",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(240, 0),
 				End:   time.Unix(300, 0),
 			},
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(240, 0),
-						End:   time.Unix(300, 0),
-					},
+					Start: time.Unix(240, 0),
+					End:   time.Unix(300, 0),
 				},
 			},
 		},
@@ -181,40 +166,30 @@ func TestAligned_CreateWindow(t *testing.T) {
 			name: "insert_middle",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(240, 0),
-						End:   time.Unix(300, 0),
-					},
+					Start: time.Unix(240, 0),
+					End:   time.Unix(300, 0),
 				},
 			},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(180, 0),
 				End:   time.Unix(240, 0),
 			},
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(180, 0),
-						End:   time.Unix(240, 0),
-					},
+					Start: time.Unix(180, 0),
+					End:   time.Unix(240, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(240, 0),
-						End:   time.Unix(300, 0),
-					},
+					Start: time.Unix(240, 0),
+					End:   time.Unix(300, 0),
 				},
 			},
 		},
@@ -243,13 +218,13 @@ func TestAligned_GetWindow(t *testing.T) {
 	tests := []struct {
 		name           string
 		given          []*keyed.KeyedWindow
-		input          *strategy.IntervalWindow
+		input          *keyed.KeyedWindow
 		expectedWindow *keyed.KeyedWindow
 	}{
 		{
 			name:  "non_existing",
 			given: []*keyed.KeyedWindow{},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(0, 0),
 				End:   time.Unix(60, 0),
 			},
@@ -259,19 +234,15 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "non_existing_before_earlier",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(60, 0),
-						End:   time.Unix(120, 0),
-					},
+					Start: time.Unix(60, 0),
+					End:   time.Unix(120, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(0, 0),
 				End:   time.Unix(60, 0),
 			},
@@ -281,19 +252,15 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "non_existing_after_recent",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(60, 0),
-						End:   time.Unix(120, 0),
-					},
+					Start: time.Unix(60, 0),
+					End:   time.Unix(120, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(180, 0),
 				End:   time.Unix(240, 0),
 			},
@@ -303,19 +270,15 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "non_existing_middle",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(60, 0),
-						End:   time.Unix(120, 0),
-					},
+					Start: time.Unix(60, 0),
+					End:   time.Unix(120, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(180, 0),
-						End:   time.Unix(240, 0),
-					},
+					Start: time.Unix(180, 0),
+					End:   time.Unix(240, 0),
 				},
 			},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(120, 0),
 				End:   time.Unix(180, 0),
 			},
@@ -325,81 +288,63 @@ func TestAligned_GetWindow(t *testing.T) {
 			name: "existing",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(60, 0),
-						End:   time.Unix(120, 0),
-					},
+					Start: time.Unix(60, 0),
+					End:   time.Unix(120, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(60, 0),
 				End:   time.Unix(120, 0),
 			},
 			expectedWindow: &keyed.KeyedWindow{
-				AlignedWindow: &strategy.IntervalWindow{
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
+				Start: time.Unix(60, 0),
+				End:   time.Unix(120, 0),
 			},
 		},
 		{
 			name: "first_window",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(240, 0),
-						End:   time.Unix(300, 0),
-					},
+					Start: time.Unix(240, 0),
+					End:   time.Unix(300, 0),
 				},
 			},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(120, 0),
 				End:   time.Unix(180, 0),
 			},
 			expectedWindow: &keyed.KeyedWindow{
-				AlignedWindow: &strategy.IntervalWindow{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+				Start: time.Unix(120, 0),
+				End:   time.Unix(180, 0),
 			},
 		},
 		{
 			name: "last_window",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(240, 0),
-						End:   time.Unix(300, 0),
-					},
+					Start: time.Unix(240, 0),
+					End:   time.Unix(300, 0),
 				},
 			},
-			input: &strategy.IntervalWindow{
+			input: &keyed.KeyedWindow{
 				Start: time.Unix(240, 0),
 				End:   time.Unix(300, 0),
 			},
 			expectedWindow: &keyed.KeyedWindow{
-				AlignedWindow: &strategy.IntervalWindow{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
+				Start: time.Unix(240, 0),
+				End:   time.Unix(300, 0),
 			},
 		},
 	}
@@ -438,10 +383,8 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			name: "wm_on_edge",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
 			input:           time.Unix(180, 0),
@@ -451,19 +394,15 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			name: "single_window",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
 			input: time.Unix(181, 0),
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
 		},
@@ -471,31 +410,23 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			name: "single_when_multiple",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(180, 0),
-						End:   time.Unix(240, 0),
-					},
+					Start: time.Unix(180, 0),
+					End:   time.Unix(240, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(240, 0),
-						End:   time.Unix(300, 0),
-					},
+					Start: time.Unix(240, 0),
+					End:   time.Unix(300, 0),
 				},
 			},
 			input: time.Unix(181, 0),
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 			},
 		},
@@ -503,37 +434,27 @@ func TestAligned_RemoveWindow(t *testing.T) {
 			name: "multiple_removals",
 			given: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(180, 0),
-						End:   time.Unix(240, 0),
-					},
+					Start: time.Unix(180, 0),
+					End:   time.Unix(240, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(240, 0),
-						End:   time.Unix(300, 0),
-					},
+					Start: time.Unix(240, 0),
+					End:   time.Unix(300, 0),
 				},
 			},
 			input: time.Unix(245, 0),
 			expectedWindows: []*keyed.KeyedWindow{
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(120, 0),
-						End:   time.Unix(180, 0),
-					},
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
 				},
 				{
-					AlignedWindow: &strategy.IntervalWindow{
-						Start: time.Unix(180, 0),
-						End:   time.Unix(240, 0),
-					},
+					Start: time.Unix(180, 0),
+					End:   time.Unix(240, 0),
 				},
 			},
 		},

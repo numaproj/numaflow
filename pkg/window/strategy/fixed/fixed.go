@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"github.com/numaproj/numaflow/pkg/window/strategy"
 )
 
 // Fixed implements Fixed window.
@@ -52,10 +52,10 @@ type Fixed struct {
 	lock    sync.RWMutex
 }
 
-var _ strategy.Windower = (*Fixed)(nil)
+var _ window.Windower = (*Fixed)(nil)
 
 // NewFixed returns a Fixed windower.
-func NewFixed(length time.Duration) strategy.Windower {
+func NewFixed(length time.Duration) window.Windower {
 	return &Fixed{
 		Length:  length,
 		entries: list.New(),
@@ -64,7 +64,7 @@ func NewFixed(length time.Duration) strategy.Windower {
 }
 
 // AssignWindow assigns a window for the given eventTime.
-func (f *Fixed) AssignWindow(eventTime time.Time) []strategy.AlignedWindow {
+func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedWindow {
 	start := eventTime.Truncate(f.Length)
 	end := start.Add(f.Length)
 
@@ -72,20 +72,19 @@ func (f *Fixed) AssignWindow(eventTime time.Time) []strategy.AlignedWindow {
 	// principle. Since we use truncate here, it is guaranteed that any element
 	// on the boundary will automatically fall in to the window to the right
 	// of the boundary thereby satisfying the requirement.
-	return []strategy.AlignedWindow{
-		&strategy.IntervalWindow{
+	return []window.AlignedWindow{
+		&keyed.KeyedWindow{
 			Start: start,
 			End:   end,
+			Keys:  make(map[string]struct{}),
 		},
 	}
 }
 
 // CreateWindow adds a window for a given interval window
-func (f *Fixed) CreateWindow(aw strategy.AlignedWindow) strategy.AlignedWindow {
+func (f *Fixed) CreateWindow(kw window.AlignedWindow) window.AlignedWindow {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-
-	kw := keyed.NewKeyedWindow(aw)
 
 	// this could be the first window
 	if f.entries.Len() == 0 {
@@ -116,7 +115,7 @@ func (f *Fixed) CreateWindow(aw strategy.AlignedWindow) strategy.AlignedWindow {
 }
 
 // GetWindow returns an existing window for the given interval
-func (f *Fixed) GetWindow(iw strategy.AlignedWindow) strategy.AlignedWindow {
+func (f *Fixed) GetWindow(kw window.AlignedWindow) window.AlignedWindow {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -127,23 +126,23 @@ func (f *Fixed) GetWindow(iw strategy.AlignedWindow) strategy.AlignedWindow {
 	// are we looking for a window that is later than the current latest?
 	latest := f.entries.Back()
 	lkw := latest.Value.(*keyed.KeyedWindow)
-	if !lkw.EndTime().After(iw.StartTime()) {
+	if !lkw.EndTime().After(kw.StartTime()) {
 		return nil
 	}
 
 	// are we looking for a window that is earlier than the current earliest?
 	earliest := f.entries.Front()
 	ekw := earliest.Value.(*keyed.KeyedWindow)
-	if !ekw.StartTime().Before(iw.EndTime()) {
+	if !ekw.StartTime().Before(kw.EndTime()) {
 		return nil
 	}
 
 	// check if we already have a window
 	for e := f.entries.Back(); e != nil; e = e.Prev() {
 		win := e.Value.(*keyed.KeyedWindow)
-		if win.StartTime().Equal(iw.StartTime()) && win.EndTime().Equal(iw.EndTime()) {
+		if win.StartTime().Equal(kw.StartTime()) && win.EndTime().Equal(kw.EndTime()) {
 			return win
-		} else if win.StartTime().Before(iw.EndTime()) {
+		} else if win.StartTime().Before(kw.EndTime()) {
 			// we have moved past the range that we are looking for
 			// so, we can bail out early.
 			break
@@ -154,11 +153,11 @@ func (f *Fixed) GetWindow(iw strategy.AlignedWindow) strategy.AlignedWindow {
 
 // RemoveWindows returns an array of keyed windows that are before the current watermark.
 // So these windows can be closed.
-func (f *Fixed) RemoveWindows(wm time.Time) []strategy.AlignedWindow {
+func (f *Fixed) RemoveWindows(wm time.Time) []window.AlignedWindow {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	closedWindows := make([]strategy.AlignedWindow, 0)
+	closedWindows := make([]window.AlignedWindow, 0)
 
 	for e := f.entries.Front(); e != nil; {
 		win := e.Value.(*keyed.KeyedWindow)

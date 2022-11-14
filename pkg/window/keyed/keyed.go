@@ -20,27 +20,40 @@ package keyed
 
 import (
 	"sync"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/window/strategy"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // KeyedWindow maintains association between keys and a window.
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
 type KeyedWindow struct {
-	strategy.AlignedWindow
-	Keys map[string]struct{}
-	lock sync.RWMutex
+	Start time.Time
+	End   time.Time
+	Keys  map[string]struct{}
+	lock  sync.RWMutex
 }
 
 // NewKeyedWindow creates a new keyed window
-func NewKeyedWindow(window strategy.AlignedWindow) *KeyedWindow {
+func NewKeyedWindow(window window.AlignedWindow) *KeyedWindow {
 	kw := &KeyedWindow{
-		AlignedWindow: window,
-		Keys:          make(map[string]struct{}),
-		lock:          sync.RWMutex{},
+		Start: window.StartTime(),
+		End:   window.EndTime(),
+		Keys:  make(map[string]struct{}),
+		lock:  sync.RWMutex{},
 	}
 	return kw
+}
+
+// StartTime returns start of the window.
+func (kw *KeyedWindow) StartTime() time.Time {
+	return kw.Start
+}
+
+// EndTime returns end of the window.
+func (kw *KeyedWindow) EndTime() time.Time {
+	return kw.End
 }
 
 // AddKey adds a key to an existing window
@@ -65,4 +78,17 @@ func (kw *KeyedWindow) Partitions() []partition.ID {
 	}
 
 	return partitions
+}
+
+func (kw *KeyedWindow) GetKeys() []string {
+	kw.lock.RLock()
+	defer kw.lock.RUnlock()
+
+	keys := make([]string, len(kw.Keys))
+	idx := 0
+	for k := range kw.Keys {
+		keys[idx] = k
+	}
+
+	return keys
 }

@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package strategy
+package window
 
 import (
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 )
 
 // AlignedWindow interface represents a bounded window at a moment in time
@@ -28,6 +30,9 @@ import (
 type AlignedWindow interface {
 	StartTime() time.Time
 	EndTime() time.Time
+	AddKey(string)
+	Partitions() []partition.ID
+	GetKeys() []string
 }
 
 // Windower manages windows
@@ -41,22 +46,4 @@ type Windower interface {
 	GetWindow(aw AlignedWindow) AlignedWindow
 	// RemoveWindows returns list of window(s) that can be closed
 	RemoveWindows(time time.Time) []AlignedWindow
-}
-
-// IntervalWindow has the window boundary details.
-type IntervalWindow struct {
-	// Start is start time of the boundary which is inclusive.
-	Start time.Time
-	// End is the end time of the boundary and is exclusive.
-	End time.Time
-}
-
-// StartTime returns start of the window.
-func (iw *IntervalWindow) StartTime() time.Time {
-	return iw.Start
-}
-
-// EndTime returns end of the window.
-func (iw *IntervalWindow) EndTime() time.Time {
-	return iw.End
 }

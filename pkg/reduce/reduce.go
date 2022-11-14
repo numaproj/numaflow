@@ -23,9 +23,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/window/strategy"
-
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/window"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -44,7 +44,7 @@ type DataForward struct {
 	readloop            *readloop.ReadLoop
 	watermarkFetcher    fetch.Fetcher
 	watermarkPublishers map[string]publish.Publisher
-	windowingStrategy   strategy.Windower
+	windowingStrategy   window.Windower
 	opts                *Options
 	log                 *zap.SugaredLogger
 }
@@ -57,7 +57,7 @@ func NewDataForward(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	fw fetch.Fetcher,
 	watermarkPublishers map[string]publish.Publisher,
-	windowingStrategy strategy.Windower, opts ...Option) (*DataForward, error) {
+	windowingStrategy window.Windower, opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
 

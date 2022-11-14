@@ -21,15 +21,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/window/strategy"
-
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestKeyedWindow_AddKey(t *testing.T) {
-	iw := &strategy.IntervalWindow{
+	iw := &KeyedWindow{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
 	}
@@ -73,7 +71,7 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 }
 
 func TestKeyedWindow_Partitions(t *testing.T) {
-	iw := &strategy.IntervalWindow{
+	iw := &KeyedWindow{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
 	}
