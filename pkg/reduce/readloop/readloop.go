@@ -182,8 +182,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		rl.log.Debugw("closing windows", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
 
 		for _, cw := range closedWindows {
-			kw := cw.(*keyed.KeyedWindow)
-			partitions := kw.Partitions()
+			partitions := cw.Partitions()
 			rl.closePartitions(partitions)
 			rl.log.Debugw("Closing Window", zap.Time("windowStart", cw.StartTime()), zap.Time("windowEnd", cw.EndTime()))
 		}
