@@ -4,17 +4,14 @@ This doc explains how to set up a development environment for Numaflow.
 
 ### Install required tools
 
-1. [`go`](https://golang.org/doc/install) 1.19+
-1. [`git`](https://help.github.com/articles/set-up-git/)
-1. [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-1. [`protoc`](https://github.com/protocolbuffers/protobuf) 3.19 for compiling protocol buffers
-1. [`pandoc`](https://pandoc.org/installing.html) 2.17 for generating API markdown
-1. [`Node.js®`](https://nodejs.org/en/) for running the UI
-1. [`yarn`](https://classic.yarnpkg.com/en/)
-1. A local Kubernetes cluster - you need one of the following options as your local Kubernetes cluster for development usage:
-   1. [`k3d`](https://k3d.io/)
-   2. [`kind`](https://kind.sigs.k8s.io/)
-   3. [`minikube`](https://minikube.sigs.k8s.io/docs/start/)
+1. [`go`](https://golang.org/doc/install) 1.19+.
+1. [`git`](https://help.github.com/articles/set-up-git/).
+1. [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
+1. [`protoc`](https://github.com/protocolbuffers/protobuf) 3.19 for compiling protocol buffers.
+1. [`pandoc`](https://pandoc.org/installing.html) 2.17 for generating API markdown.
+1. [`Node.js®`](https://nodejs.org/en/) for running the UI.
+1. [`yarn`](https://classic.yarnpkg.com/en/).
+1. A local Kubernetes cluster for development usage, pick either one of [`k3d`](https://k3d.io/), [`kind`](https://kind.sigs.k8s.io/), or [`minikube`](https://minikube.sigs.k8s.io/docs/start/).
 
 ### Example: Create a k8s cluster with k3d
 
@@ -41,7 +38,7 @@ k3d kubeconfig get k3s-default
   Run unit tests.
 
 - `make image`
-  Build container image, and import it to `k3d` or `minikube` cluster if corresponding `kubeconfig` is sourced.
+  Build container image, and import it to `k3d`, `kind`, or `minikube` cluster if corresponding `kubeconfig` is sourced.
 
 - `make docs`
   Convert the docs to Github pages, check if there's any error.
