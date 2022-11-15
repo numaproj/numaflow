@@ -87,9 +87,12 @@ func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
 // finished forwarding the output to ISB.
 func (p *PBQ) GC() error {
 	err := p.store.GC()
+	if err != nil {
+		return err
+	}
 	p.store = nil
 	p.manager.deregister(p.PartitionID)
-	return err
+	return nil
 }
 
 // replayRecordsFromStore replays store messages when replay flag is set during start up time. It replays by reading from

@@ -135,7 +135,6 @@ const (
 	DefaultStoreType          = NoOpType        // Default store type
 	DefaultStoreSize          = 1000000         // Default persistent store size
 	DefaultStoreMaxBufferSize = 100000          // Default buffer size for pbq in bytes
-	DefaultStorePath          = "/"
 
 	// Default window options
 	DefaultWindowType     = FixedType

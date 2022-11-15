@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,8 +23,11 @@ func Test_writeReadHeader(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
+	opts := &store.StoreOptions{}
+	err := store.WithStorePath(tmp)(opts)
+	assert.NoError(t, err)
 
-	wal, err := NewWAL(context.Background(), id, tmp)
+	wal, err := NewWAL(context.Background(), id, opts)
 	fName := wal.fp.Name()
 	assert.NoError(t, err)
 	// read will fail because the file was opened only in write only mode
@@ -33,7 +37,7 @@ func Test_writeReadHeader(t *testing.T) {
 	fmt.Println(fName)
 	assert.NoError(t, err)
 
-	openWAL, err := OpenWAL(fName, nil)
+	openWAL, err := OpenWAL(fName)
 	assert.NoError(t, err)
 	// we have already read the header in OpenWAL
 	_, err = openWAL.readHeader()
@@ -115,8 +119,11 @@ func Test_writeReadEntry(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
+	opts := &store.StoreOptions{}
+	err := store.WithStorePath(tmp)(opts)
+	assert.NoError(t, err)
 
-	wal, err := NewWAL(context.Background(), id, tmp)
+	wal, err := NewWAL(context.Background(), id, opts)
 	assert.NoError(t, err)
 
 	startTime := time.Unix(1665109020, 0).In(location)
@@ -129,7 +136,7 @@ func Test_writeReadEntry(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Reopen the WAL for read and write.
-	wal, err = NewWAL(context.Background(), id, tmp)
+	wal, err = NewWAL(context.Background(), id, opts)
 	assert.NoError(t, err)
 	// we have already read the header in OpenWAL
 	_, err = wal.readHeader()
