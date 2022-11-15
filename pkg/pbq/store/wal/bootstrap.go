@@ -113,6 +113,10 @@ func (w *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 		return nil, false, fmt.Errorf("opened using O_WRONLY")
 	}
 
+	if w.rOffset < w.wOffset {
+		return nil, false, fmt.Errorf("read can only happen at startup not after any new writes")
+	}
+
 	messages := make([]*isb.ReadMessage, 0)
 	// if size is greater than the number of messages in the store
 	// we will assign size with the number of messages in the store

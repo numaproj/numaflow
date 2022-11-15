@@ -131,10 +131,11 @@ const (
 	DefaultPBQReadBatchSize     = 100             // Default read batch size for pbq
 
 	// Default persistent store options
-	DefaultStoreSyncDuration  = 2 * time.Second // Default sync duration for pbq
-	DefaultStoreType          = NoOpType        // Default store type
-	DefaultStoreSize          = 1000000         // Default persistent store size
-	DefaultStoreMaxBufferSize = 100000          // Default buffer size for pbq in bytes
+	DefaultStoreSyncDuration  = 2 * time.Second        // Default sync duration for pbq
+	DefaultStoreType          = NoOpType               // Default store type
+	DefaultStoreSize          = 1000000                // Default persistent store size
+	DefaultStoreMaxBufferSize = 100000                 // Default buffer size for pbq in bytes
+	DefaultStorePath          = PathPBQMount + "/wals" // Default store path
 
 	// Default window options
 	DefaultWindowType     = FixedType
