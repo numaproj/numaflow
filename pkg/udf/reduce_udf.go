@@ -138,7 +138,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer.Name))
 
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType)))
+	// TODO: revisit to see if we need to use more storeOptions
+	if storage := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage; storage != nil && storage.PersistentVolumeClaim != nil {
+		pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithPbqStoreType(dfv1.FileSystemType)))
+	} else {
+		// use in memory type by default
+		pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType)))
+	}
 
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
