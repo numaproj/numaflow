@@ -99,10 +99,9 @@ func (rl *ReadLoop) Startup(ctx context.Context) {
 		// so that the window can be closed when the watermark
 		// crosses the window.
 		id := p.PartitionID
-		intervalWindow := &keyed.AlignedKeyedWindow{
-			Start: id.Start,
-			End:   id.End,
-		}
+
+		intervalWindow := keyed.NewKeyedWindow(id.Start, id.End)
+
 		// These windows have to be recreated as they are completely in-memory
 		rl.windower.CreateWindow(intervalWindow)
 
