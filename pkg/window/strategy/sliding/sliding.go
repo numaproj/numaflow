@@ -1,16 +1,17 @@
 // Package sliding implements Sliding windows. Sliding windows are defined by a static window size
-// e.g. minutely windows or hourly windows and a fixed "slide". This is the duration by which successive windows
-// are separated.
+// e.g. minutely windows or hourly windows and a fixed "slide". This is the duration by which the boundaries
+// of the windows move once every <slide> duration.
 // Package sliding also maintains the state of active windows.
 // Watermark is used to trigger the expiration of windows.
 package sliding
 
 import (
 	"container/list"
-	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"sync"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
 
 // Sliding implements sliding windows
@@ -36,7 +37,7 @@ type Sliding struct {
 
 var _ window.Windower = (*Sliding)(nil)
 
-// NewSliding returns a sliding windower
+// NewSliding returns a Sliding windower
 func NewSliding(length time.Duration, slide time.Duration) *Sliding {
 	return &Sliding{
 		Length:  length,
@@ -46,8 +47,8 @@ func NewSliding(length time.Duration, slide time.Duration) *Sliding {
 	}
 }
 
-// AssignWindow returns a set of windows that element falls in to based on event time
-func (s *Sliding) AssignWindow(eventTime time.Time) []*window.IntervalWindow {
+// AssignWindow returns a set of windows that contain the element based on event time
+func (s *Sliding) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower {
 	// start time of the window in to which this element certainly belongs.
 	startTime := eventTime.Truncate(s.Length)
 	// end time of the window in to which this element certainly belongs.
@@ -60,7 +61,7 @@ func (s *Sliding) AssignWindow(eventTime time.Time) []*window.IntervalWindow {
 	maxEndTime := maxStartTime.Add(s.Length)
 
 	wCount := int((maxEndTime.Sub(minEndTime)) / s.Slide)
-	windows := make([]*window.IntervalWindow, 0)
+	windows := make([]window.AlignedKeyedWindower, 0)
 
 	for i := 0; i < wCount; i++ {
 		st := minStartTime.Add(time.Duration(i) * s.Slide)
@@ -76,31 +77,26 @@ func (s *Sliding) AssignWindow(eventTime time.Time) []*window.IntervalWindow {
 			continue
 		}
 
-		iw := &window.IntervalWindow{
-			Start: st,
-			End:   et,
-		}
+		akw := keyed.NewKeyedWindow(st, et)
 
-		windows = append(windows, iw)
+		windows = append(windows, akw)
 	}
 
 	return windows
 }
 
 // CreateWindow returns a keyed window for a given interval window
-func (s *Sliding) CreateWindow(iw *window.IntervalWindow) window.AlignedWindow {
+func (s *Sliding) CreateWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
-	kw := keyed.NewKeyedWindow(iw)
 
 	if s.entries.Len() == 0 {
 		s.entries.PushFront(kw)
 		return kw
 	}
 
-	earliestWindow := s.entries.Front().Value.(*keyed.KeyedWindow)
-	recentWindow := s.entries.Back().Value.(*keyed.KeyedWindow)
+	earliestWindow := s.entries.Front().Value.(*keyed.AlignedKeyedWindow)
+	recentWindow := s.entries.Back().Value.(*keyed.AlignedKeyedWindow)
 
 	// late arrival
 	if kw.StartTime().Before(earliestWindow.StartTime()) {
@@ -111,7 +107,7 @@ func (s *Sliding) CreateWindow(iw *window.IntervalWindow) window.AlignedWindow {
 	} else {
 		// a window in the middle
 		for e := s.entries.Back(); e != nil; e = e.Prev() {
-			win := e.Value.(*keyed.KeyedWindow)
+			win := e.Value.(*keyed.AlignedKeyedWindow)
 			if !win.StartTime().Before(kw.StartTime()) {
 				s.entries.InsertBefore(kw, e)
 				break
@@ -123,7 +119,7 @@ func (s *Sliding) CreateWindow(iw *window.IntervalWindow) window.AlignedWindow {
 }
 
 // GetWindow returns a keyed window for a given interval window
-func (s *Sliding) GetWindow(iw *window.IntervalWindow) window.AlignedWindow {
+func (s *Sliding) GetWindow(iw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
@@ -133,21 +129,21 @@ func (s *Sliding) GetWindow(iw *window.IntervalWindow) window.AlignedWindow {
 
 	// are we looking for a window that is later than the current latest?
 	latest := s.entries.Back()
-	lkw := latest.Value.(*keyed.KeyedWindow)
+	lkw := latest.Value.(*keyed.AlignedKeyedWindow)
 	if iw.EndTime().After(lkw.EndTime()) {
 		return nil
 	}
 
 	// are we looking for a window that is earlier than the current earliest?
 	earliest := s.entries.Front()
-	ekw := earliest.Value.(*keyed.KeyedWindow)
+	ekw := earliest.Value.(*keyed.AlignedKeyedWindow)
 	if iw.StartTime().Before(ekw.StartTime()) {
 		return nil
 	}
 
 	// check if we already have a window
 	for e := s.entries.Back(); e != nil; e = e.Prev() {
-		win := e.Value.(*keyed.KeyedWindow)
+		win := e.Value.(*keyed.AlignedKeyedWindow)
 		if win.StartTime().Equal(iw.StartTime()) && win.EndTime().Equal(iw.EndTime()) {
 			return win
 		} else if win.StartTime().Before(iw.StartTime()) {
@@ -159,14 +155,14 @@ func (s *Sliding) GetWindow(iw *window.IntervalWindow) window.AlignedWindow {
 	return nil
 }
 
-func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedWindow {
+func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	closedWindows := make([]window.AlignedWindow, 0)
+	closedWindows := make([]window.AlignedKeyedWindower, 0)
 
 	for e := s.entries.Front(); e != nil; {
-		win := e.Value.(*keyed.KeyedWindow)
+		win := e.Value.(*keyed.AlignedKeyedWindow)
 		next := e.Next()
 		// remove window only after the watermark has passed the end of the window
 		if win.EndTime().Before(wm) {

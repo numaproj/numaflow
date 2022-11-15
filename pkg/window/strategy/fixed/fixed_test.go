@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
 
@@ -35,57 +36,45 @@ func TestFixed_AssignWindow(t *testing.T) {
 		name      string
 		length    time.Duration
 		eventTime time.Time
-		want      []*keyed.AlignedKeyedWindow
+		want      []window.AlignedKeyedWindower
 	}{
 		{
 			name:      "minute",
 			length:    time.Minute,
 			eventTime: baseTime,
-			want: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129260, 0).In(loc),
-				},
+			want: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(1651129200, 0).In(loc), time.Unix(1651129260, 0).In(loc)),
 			},
 		},
 		{
 			name:      "hour",
 			length:    time.Hour,
 			eventTime: baseTime,
-			want: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129200+3600, 0).In(loc),
-				},
+			want: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(1651129200, 0).In(loc), time.Unix(1651129200+3600, 0).In(loc)),
 			},
 		},
 		{
 			name:      "5_minute",
 			length:    time.Minute * 5,
 			eventTime: baseTime,
-			want: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129200+300, 0).In(loc),
-				},
+			want: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(1651129200, 0).In(loc), time.Unix(1651129200+300, 0).In(loc)),
 			},
 		},
 		{
 			name:      "30_second",
 			length:    time.Second * 30,
 			eventTime: baseTime,
-			want: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129230, 0).In(loc),
-				},
+			want: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(1651129200, 0).In(loc), time.Unix(1651129230, 0).In(loc)),
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := NewFixed(tt.length)
-			if got := f.AssignWindow(tt.eventTime); !(got[0].StartTime().Equal(tt.want[0].Start) && got[0].EndTime().Equal(tt.want[0].End)) {
+			if got := f.AssignWindow(tt.eventTime); !(got[0].StartTime().Equal(tt.want[0].StartTime()) && got[0].EndTime().Equal(tt.want[0].EndTime())) {
 				t.Errorf("AssignWindow() = %v, want %v", got, tt.want)
 			}
 		})
@@ -100,97 +89,55 @@ func TestAligned_CreateWindow(t *testing.T) {
 		name            string
 		given           []*keyed.AlignedKeyedWindow
 		input           *keyed.AlignedKeyedWindow
-		expectedWindows []*keyed.AlignedKeyedWindow
+		expectedWindows []window.AlignedKeyedWindower
 	}{
 		{
 			name:  "FirstWindow",
 			given: []*keyed.AlignedKeyedWindow{},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(0, 0),
-				End:   time.Unix(60, 0),
-			},
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(0, 0),
-					End:   time.Unix(60, 0),
-				},
+			input: keyed.NewKeyedWindow(time.Unix(0, 0), time.Unix(60, 0)),
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(0, 0), time.Unix(60, 0)),
 			},
 		},
 		{
 			name: "late_window",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(60, 0),
-				End:   time.Unix(120, 0),
-			},
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+			input: keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
 		},
 		{
 			name: "early_window",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
 			input: &keyed.AlignedKeyedWindow{
 				Start: time.Unix(240, 0),
 				End:   time.Unix(300, 0),
 			},
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 			},
 		},
 		{
 			name: "insert_middle",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 			},
 			input: &keyed.AlignedKeyedWindow{
 				Start: time.Unix(180, 0),
 				End:   time.Unix(240, 0),
 			},
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
+				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 			},
 		},
 	}
@@ -224,128 +171,63 @@ func TestAligned_GetWindow(t *testing.T) {
 		{
 			name:  "non_existing",
 			given: []*keyed.AlignedKeyedWindow{},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(0, 0),
-				End:   time.Unix(60, 0),
-			},
+			input: keyed.NewKeyedWindow(time.Unix(0, 0), time.Unix(60, 0)),
+
 			expectedWindow: nil,
 		},
 		{
 			name: "non_existing_before_earlier",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(0, 0),
-				End:   time.Unix(60, 0),
-			},
+			input:          keyed.NewKeyedWindow(time.Unix(0, 0), time.Unix(60, 0)),
 			expectedWindow: nil,
 		},
 		{
 			name: "non_existing_after_recent",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(180, 0),
-				End:   time.Unix(240, 0),
-			},
+			input:          keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
 			expectedWindow: nil,
 		},
 		{
 			name: "non_existing_middle",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
+				keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
 			},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(120, 0),
-				End:   time.Unix(180, 0),
-			},
+			input:          keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			expectedWindow: nil,
 		},
 		{
 			name: "existing",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(60, 0),
-				End:   time.Unix(120, 0),
-			},
-			expectedWindow: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(60, 0),
-				End:   time.Unix(120, 0),
-			},
+			input:          keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
+			expectedWindow: keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
 		},
 		{
 			name: "first_window",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 			},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(120, 0),
-				End:   time.Unix(180, 0),
-			},
-			expectedWindow: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(120, 0),
-				End:   time.Unix(180, 0),
-			},
+			input:          keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+			expectedWindow: keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 		},
 		{
 			name: "last_window",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 			},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(240, 0),
-				End:   time.Unix(300, 0),
-			},
-			expectedWindow: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(240, 0),
-				End:   time.Unix(300, 0),
-			},
+			input:          keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
+			expectedWindow: keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 		},
 	}
 
@@ -371,91 +253,55 @@ func TestAligned_RemoveWindow(t *testing.T) {
 		name            string
 		given           []*keyed.AlignedKeyedWindow
 		input           time.Time
-		expectedWindows []*keyed.AlignedKeyedWindow
+		expectedWindows []window.AlignedKeyedWindower
 	}{
 		{
 			name:            "empty_windows",
 			given:           []*keyed.AlignedKeyedWindow{},
 			input:           time.Unix(60, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{},
+			expectedWindows: []window.AlignedKeyedWindower{},
 		},
 		{
 			name: "wm_on_edge",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
 			input:           time.Unix(180, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{},
+			expectedWindows: []window.AlignedKeyedWindower{},
 		},
 		{
 			name: "single_window",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
 			input: time.Unix(181, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
 		},
 		{
 			name: "single_when_multiple",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
+				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 			},
 			input: time.Unix(181, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			},
 		},
 		{
 			name: "multiple_removals",
 			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
+				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 			},
 			input: time.Unix(245, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
 			},
 		},
 	}
