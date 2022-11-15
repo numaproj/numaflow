@@ -53,7 +53,7 @@ func DefaultOptions() *StoreOptions {
 		syncDuration: dfv1.DefaultStoreSyncDuration,
 		pbqStoreType: dfv1.DefaultStoreType,
 		storeSize:    dfv1.DefaultStoreSize,
-		storePath:    dfv1.DefaultStorePath,
+		storePath:    dfv1.PathPBQMount,
 	}
 }
 
