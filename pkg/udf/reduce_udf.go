@@ -139,10 +139,11 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	var pbqManager *pbq.Manager
 	// TODO: revisit to see if we need to use more storeOptions
-	if u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage == nil {
-		pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType)))
-	} else {
+	if u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage != nil && u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.PersistentVolumeClaim != nil {
 		pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithPbqStoreType(dfv1.FileSystemType)))
+	} else {
+		// use in memory type by default
+		pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType)))
 	}
 
 	if err != nil {
