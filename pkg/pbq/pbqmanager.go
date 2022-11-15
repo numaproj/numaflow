@@ -19,7 +19,6 @@ package pbq
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -33,6 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/pbq/store/noop"
+	"github.com/numaproj/numaflow/pkg/pbq/store/wal"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -82,11 +82,15 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 	case dfv1.InMemoryType:
 		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.storeOptions)
 		if err != nil {
-			m.log.Errorw("Error while creating persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PBQStoreType()), zap.Error(err))
+			m.log.Errorw("Error while creating in memory persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PBQStoreType()), zap.Error(err))
 			return nil, err
 		}
 	case dfv1.FileSystemType:
-		return nil, fmt.Errorf("not implemented, %s", dfv1.FileSystemType)
+		persistentStore, err = wal.NewWAL(ctx, &partitionID, m.storeOptions)
+		if err != nil {
+			m.log.Errorw("Error while creating file system persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PBQStoreType()), zap.Error(err))
+			return nil, err
+		}
 	default:
 		return nil, errors.New("not implemented (default)")
 	}
@@ -114,7 +118,7 @@ func (m *Manager) discoverPartitions(ctx context.Context) ([]partition.ID, error
 	case dfv1.InMemoryType:
 		return memory.DiscoverPartitions(ctx, m.storeOptions)
 	case dfv1.FileSystemType:
-		return nil, fmt.Errorf("not implemented, %s", dfv1.FileSystemType)
+		return wal.DiscoverPartitions(ctx, m.storeOptions)
 	default:
 		return nil, errors.New("not implemented (default)")
 	}

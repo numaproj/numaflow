@@ -29,7 +29,7 @@ func (w *WAL) IsCorrupted() bool {
 }
 
 // OpenWAL returns a WAL if present
-func OpenWAL(filePath string, o *options) (*WAL, error) {
+func OpenWAL(filePath string) (*WAL, error) {
 	stat, err := os.Stat(filePath)
 	// there could be other errors
 	if os.IsNotExist(err) {

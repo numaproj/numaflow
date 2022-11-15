@@ -13,6 +13,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/pbq/store"
 )
 
 const (
@@ -46,7 +47,7 @@ type WAL struct {
 	// corrupted indicates whether the data of the file has been corrupted
 	corrupted   bool
 	partitionID *partition.ID
-	opts        *options
+	opts        *store.StoreOptions
 }
 
 // Message footer
@@ -55,31 +56,18 @@ const (
 	EOS             // End of Stream (aka COB)
 )
 
-func NewWAL(ctx context.Context, id *partition.ID, dir string, opts ...Option) (*WAL, error) {
-	// initialize options
-	o := defaultOptions()
-	for _, opt := range opts {
-		if opt != nil {
-			if err := opt(o); err != nil {
-				return nil, err
-			}
-		}
-	}
-
+func NewWAL(ctx context.Context, id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 	// let's open or create, initialize and return a new WAL
-	wal, err := openOrCreateWAL(id, dir, o)
+	wal, err := openOrCreateWAL(id, opts)
 
 	return wal, err
 }
 
 // openOrCreateWAL open or creates a new WAL segment.
-func openOrCreateWAL(id *partition.ID, dir string, opts *options) (*WAL, error) {
+func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 	var err error
-	if dir == "" {
-		return nil, fmt.Errorf("please provide a dir to store the WAL segments")
-	}
 
-	filePath := getSegmentFilePath(id, dir)
+	filePath := getSegmentFilePath(id, opts.StorePath())
 	stat, err := os.Stat(filePath)
 
 	var fp *os.File
@@ -87,7 +75,7 @@ func openOrCreateWAL(id *partition.ID, dir string, opts *options) (*WAL, error) 
 	if os.IsNotExist(err) {
 		// here we are explicitly giving O_WRONLY because we will not be using this to read. Our read is only during
 		// boot up.
-		fp, err = os.OpenFile(getSegmentFilePath(id, dir), os.O_WRONLY|os.O_CREATE, 0644)
+		fp, err = os.OpenFile(getSegmentFilePath(id, opts.StorePath()), os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
 			return nil, err
 		}
@@ -227,11 +215,7 @@ func encodeEntry(message *isb.ReadMessage) (*bytes.Buffer, error) {
 func encodeEntryHeader(message *isb.ReadMessage, messageLen int64, checksum uint32) (*bytes.Buffer, error) {
 	watermark := message.Watermark.UnixMilli()
 
-	offsetInt, ok := message.ReadOffset.(isb.SimpleIntOffset)
-	if !ok {
-		return nil, fmt.Errorf("expect int64 offset for isb.ReadMessage")
-	}
-	offset, err := offsetInt.Sequence()
+	offset, err := message.ReadOffset.Sequence()
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +297,10 @@ func (w *WAL) Close() error {
 // GC cleans up the WAL Segment.
 func (w *WAL) GC() error {
 	if !w.closed {
-		return fmt.Errorf("file (%s) has not been closed, cannot GC", w.fp.Name())
+		err := w.Close()
+		if err != nil {
+			return err
+		}
 	}
 	return os.Remove(w.fp.Name())
 }
