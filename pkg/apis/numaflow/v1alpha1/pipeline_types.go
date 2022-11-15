@@ -89,6 +89,9 @@ func (p Pipeline) ListAllEdges() []Edge {
 	for _, e := range p.Spec.Edges {
 		edgeCopy := e.DeepCopy()
 		toVertex := p.GetVertex(e.To)
+		if toVertex == nil {
+			continue
+		}
 		if toVertex.UDF == nil || toVertex.UDF.GroupBy == nil {
 			// Clean up parallelism if downstream vertex is not a reduce UDF.
 			// This has been validated by the controller, harmless to do it here.
