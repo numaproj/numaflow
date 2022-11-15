@@ -6124,6 +6124,13 @@ spec:
                                     length:
                                       type: string
                                   type: object
+                                sliding:
+                                  properties:
+                                    length:
+                                      type: string
+                                    slide:
+                                      type: string
+                                  type: object
                               type: object
                           required:
                           - window
@@ -9412,6 +9419,13 @@ spec:
                           fixed:
                             properties:
                               length:
+                                type: string
+                            type: object
+                          sliding:
+                            properties:
+                              length:
+                                type: string
+                              slide:
                                 type: string
                             type: object
                         type: object

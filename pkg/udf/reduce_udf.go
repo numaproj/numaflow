@@ -19,11 +19,12 @@ package udf
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
+	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 
 	"go.uber.org/zap"
 
@@ -57,7 +58,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
 
 	if f != nil && s != nil {
-		return fmt.Errorf("invalid window spec. only one of fixed or sliding is permitted")
+		return fmt.Errorf("invalid window spec. found both fixed and sliding window specs on the same vertex. only one of fixed or sliding is permitted. ")
 	}
 	if f != nil {
 		windower = fixed.NewFixed(f.Length.Duration)

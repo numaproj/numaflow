@@ -203,12 +203,25 @@ func validateVertex(v dfv1.AbstractVertex) error {
 
 func validateUDF(udf dfv1.UDF) error {
 	if udf.GroupBy != nil {
-		if x := udf.GroupBy.Window.Fixed; x == nil {
+		f := udf.GroupBy.Window.Fixed
+		s := udf.GroupBy.Window.Sliding
+		if f == nil && s == nil {
 			return fmt.Errorf(`invalid "groupBy.window", no windowing strategy specified`)
-		} else {
-			if x.Length == nil {
-				return fmt.Errorf(`invalid "groupBy.window", "length" is missing`)
-			}
+		}
+
+		if f != nil && s != nil {
+			return fmt.Errorf(`invalid "groupBy.window", either of fixed or sliding is allowed. not both`)
+		}
+
+		if f != nil && f.Length == nil {
+			return fmt.Errorf(`invalid "groupBy.window.fixed", "length" is missing`)
+		}
+
+		if s != nil && (s.Length == nil) {
+			return fmt.Errorf(`invalid "groupBy.window.sliding", "length" is missing`)
+		}
+		if s != nil && (s.Slide == nil) {
+			return fmt.Errorf(`invalid "groupBy.window.sliding", "slide" is missing`)
 		}
 	}
 	return nil

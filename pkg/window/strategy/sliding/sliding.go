@@ -54,16 +54,23 @@ func (s *Sliding) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindowe
 	// end time of the window in to which this element certainly belongs.
 	endTime := startTime.Add(s.Length)
 
+	// we have to find the boundaries of the sliding windows that are possible
+	// first lets consider end time as fixed, find the min start and end times
 	minEndTime := startTime.Add(s.Length % s.Slide)
 	minStartTime := minEndTime.Add(-s.Length)
 
+	// lets consider start time as fixed and find the max start and end times.
 	maxStartTime := endTime.Add(-(s.Length % s.Slide))
 	maxEndTime := maxStartTime.Add(s.Length)
 
+	// now all the windows should fall in between maxend and minend times.
+	// one could also consider min start and max start times as well.
 	wCount := int((maxEndTime.Sub(minEndTime)) / s.Slide)
 	windows := make([]window.AlignedKeyedWindower, 0)
 
 	for i := 0; i < wCount; i++ {
+		// we make the windows left aligned since the original truncation operation
+		// is left aligned.
 		st := minStartTime.Add(time.Duration(i) * s.Slide)
 		et := st.Add(s.Length)
 

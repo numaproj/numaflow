@@ -18730,6 +18730,18 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.SlidingWindow": {
+      "description": "SlidingWindow describes a sliding window",
+      "type": "object",
+      "properties": {
+        "length": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "slide": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.Source": {
       "type": "object",
       "properties": {
@@ -19075,6 +19087,9 @@
       "properties": {
         "fixed": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.FixedWindow"
+        },
+        "sliding": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SlidingWindow"
         }
       }
     },
