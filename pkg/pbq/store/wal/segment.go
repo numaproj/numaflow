@@ -23,13 +23,12 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"hash/crc32"
-	"os"
-	"path/filepath"
-
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"hash/crc32"
+	"os"
+	"path/filepath"
 )
 
 const (

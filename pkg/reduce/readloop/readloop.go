@@ -153,8 +153,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 					return false, nil
 				}
 				// TODO - add real vertex name as metric dimension.
-				wal.EntriesCountPerWal.With(map[string]string{metricspkg.LabelVertex: "vertex-name", "pID": partitionID.Key}).Inc()
-				wal.EntriesCountPerVertex.With(map[string]string{metricspkg.LabelVertex: "vertex-name"}).Inc()
+				wal.EntriesCount.With(map[string]string{metricspkg.LabelVertex: "vertex-name"}).Inc()
 				return true, nil
 			})
 

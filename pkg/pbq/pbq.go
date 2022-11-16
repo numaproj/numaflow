@@ -96,7 +96,7 @@ func (p *PBQ) GC() error {
 	}
 	p.store = nil
 	p.manager.deregister(p.PartitionID)
-	wal.GarbageCollectingTimePerWal.With(map[string]string{metricspkg.LabelVertex: "vertex-name", "pID": p.PartitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+	wal.GarbageCollectingTime.With(map[string]string{metricspkg.LabelVertex: "vertex-name", "pID": p.PartitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
 	return nil
 }
 
