@@ -56,7 +56,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	var windower window.Windower
 	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
-	
+
 	if f != nil {
 		windower = fixed.NewFixed(f.Length.Duration)
 	} else if s != nil {
