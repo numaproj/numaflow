@@ -82,19 +82,25 @@ func NewDataForward(ctx context.Context,
 // Start starts forwarding messages to readloop
 func (d *DataForward) Start(ctx context.Context) {
 	d.readloop.Startup(ctx)
+	rCtx, rCancel := context.WithCancel(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			d.log.Infow("Stopping reduce data forwarder...")
 			cctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			d.readloop.ShutDown(cctx)
 
 			if err := d.fromBuffer.Close(); err != nil {
 				d.log.Errorw("Failed to close buffer reader, shutdown anyways...", zap.Error(err))
 			} else {
 				d.log.Infow("Closed buffer reader", zap.String("bufferFrom", d.fromBuffer.GetName()))
 			}
+
+			// cancel the readloop context so that all the messages are persisted and acked.
+			rCancel()
+			// allow readloop to clean itself up.
+			d.readloop.ShutDown(cctx)
+
 			for _, v := range d.toBuffers {
 				if err := v.Close(); err != nil {
 					d.log.Errorw("Failed to close buffer writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", v.GetName()))
@@ -116,7 +122,10 @@ func (d *DataForward) Start(ctx context.Context) {
 			}
 			return
 		default:
-			d.forwardAChunk(ctx)
+			// pass the child context so that the reader can be closed before the readloop
+			// this way we can avoid the race condition and have all the read messages persisted
+			// and acked.
+			d.forwardAChunk(rCtx)
 		}
 	}
 }
