@@ -217,7 +217,9 @@ func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partitio
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
 		rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
+		rl.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
+
 	return q
 }
 
@@ -241,11 +243,13 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 		w := rl.windower.GetWindow(win)
 		if w == nil {
 			w = rl.windower.CreateWindow(win)
+			rl.log.Debugw("Creating new keyed window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
+		} else {
+			rl.log.Debugw("Found an existing window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
+
 		}
 		// track the key to window relationship
 		w.AddKey(m.Key)
-		rl.log.Debugw("Creating new keyed window", zap.Any("key", w.Keys()), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
-
 		kWindows = append(kWindows, w)
 	}
 	return kWindows
@@ -255,6 +259,7 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
 	for _, p := range partitions {
 		q := rl.pbqManager.GetPBQ(p)
+		rl.log.Debugw("Close of book", zap.String("partitionID", p.String()))
 		q.CloseOfBook()
 	}
 }
