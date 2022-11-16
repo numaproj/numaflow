@@ -19,6 +19,8 @@ package pbq
 import (
 	"context"
 	"errors"
+	"fmt"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"math"
 	"sync"
 	"time"
@@ -72,7 +74,7 @@ func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
 
 // CreateNewPBQ creates new pbq for a partition
 func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
-
+	fmt.Printf("KERAN-TEST - creating new PBQ with storage type: %s", m.storeOptions.PBQStoreType())
 	var persistentStore store.Store
 	var err error
 
@@ -91,6 +93,8 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 			m.log.Errorw("Error while creating file system persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PBQStoreType()), zap.Error(err))
 			return nil, err
 		}
+		// TODO - add vertex name as metric dimension.
+		wal.FilesCount.With(map[string]string{metricspkg.LabelVertex: "vertex-name"}).Inc()
 	default:
 		return nil, errors.New("not implemented (default)")
 	}
@@ -112,6 +116,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 
 // discoverPartitions discovers partitions.
 func (m *Manager) discoverPartitions(ctx context.Context) ([]partition.ID, error) {
+	fmt.Printf("KERAN-TEST: m.storeOptions.PBQStoreType() is %s", m.storeOptions.PBQStoreType())
 	switch m.storeOptions.PBQStoreType() {
 	case dfv1.NoOpType:
 		return noop.DiscoverPartitions(ctx, m.storeOptions)
@@ -274,6 +279,7 @@ func (m *Manager) getPBQs() []*PBQ {
 
 // Replay replays messages which are persisted in pbq store.
 func (m *Manager) Replay(ctx context.Context) {
+	// TODO - How long it takes to replay
 	var wg sync.WaitGroup
 
 	for _, val := range m.getPBQs() {

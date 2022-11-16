@@ -19,6 +19,9 @@ package pbq
 import (
 	"context"
 	"errors"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/pbq/store/wal"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
@@ -86,12 +89,14 @@ func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
 // GC cleans up the PBQ and also the store associated with it. GC is invoked after the Reader (ProcessAndForward) has
 // finished forwarding the output to ISB.
 func (p *PBQ) GC() error {
+	start := time.Now()
 	err := p.store.GC()
 	if err != nil {
 		return err
 	}
 	p.store = nil
 	p.manager.deregister(p.PartitionID)
+	wal.GarbageCollectingTimePerWal.With(map[string]string{metricspkg.LabelVertex: "vertex-name", "pID": p.PartitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
 	return nil
 }
 

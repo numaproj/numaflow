@@ -29,6 +29,8 @@ package readloop
 
 import (
 	"context"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/pbq/store/wal"
 	"math"
 	"time"
 
@@ -150,6 +152,9 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 					rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
 					return false, nil
 				}
+				// TODO - add vertex name as metric dimension.
+				wal.EntriesCountPerWal.With(map[string]string{metricspkg.LabelVertex: "vertex-name", "pID": partitionID.Key}).Inc()
+				wal.EntriesCountPerVertex.With(map[string]string{metricspkg.LabelVertex: "vertex-name"}).Inc()
 				return true, nil
 			})
 

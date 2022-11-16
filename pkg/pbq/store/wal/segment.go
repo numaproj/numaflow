@@ -129,7 +129,6 @@ func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 			return nil, fmt.Errorf("expected partition key %s, but got %s", id.Key, readPartition.Key)
 		}
 	}
-
 	return wal, err
 }
 
