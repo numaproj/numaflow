@@ -35,6 +35,10 @@ type StoreOptions struct {
 	storePath string
 }
 
+func (o *StoreOptions) MaxBatchSize() int64 {
+	return o.maxBatchSize
+}
+
 func (o *StoreOptions) StoreSize() int64 {
 	return o.storeSize
 }

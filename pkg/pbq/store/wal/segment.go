@@ -51,6 +51,8 @@ type WAL struct {
 	fp *os.File
 	// wOffset is the write offset as tracked by the writer
 	wOffset int64
+	// prevSyncedWOffset is the write offset that is already synced as tracked by the writer
+	prevSyncedWOffset int64
 	// rOffset is the read offset as tracked when reading. Reading only
 	// happens during boostrap. It is highly unlikely to reread the data
 	// once boostrap sequence has been completed.
@@ -101,13 +103,14 @@ func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 			return nil, err
 		}
 		wal = &WAL{
-			fp:          fp,
-			openMode:    os.O_WRONLY,
-			wOffset:     0,
-			rOffset:     0,
-			readUpTo:    0,
-			partitionID: id,
-			opts:        opts,
+			fp:                fp,
+			openMode:          os.O_WRONLY,
+			wOffset:           0,
+			prevSyncedWOffset: 0,
+			rOffset:           0,
+			readUpTo:          0,
+			partitionID:       id,
+			opts:              opts,
 		}
 
 		err = wal.writeHeader()
@@ -124,13 +127,14 @@ func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 			return nil, err
 		}
 		wal = &WAL{
-			fp:          fp,
-			openMode:    os.O_RDWR,
-			wOffset:     0,
-			rOffset:     0,
-			readUpTo:    stat.Size(),
-			partitionID: id,
-			opts:        opts,
+			fp:                fp,
+			openMode:          os.O_RDWR,
+			wOffset:           0,
+			prevSyncedWOffset: 0,
+			rOffset:           0,
+			readUpTo:          stat.Size(),
+			partitionID:       id,
+			opts:              opts,
 		}
 		readPartition, err := wal.readHeader()
 		if err != nil {
@@ -295,7 +299,13 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 
 	w.wOffset += int64(wrote)
 	// TODO: add batch sync()
-	return w.fp.Sync()
+
+	if w.wOffset-w.prevSyncedWOffset > w.opts.MaxBatchSize() {
+		w.prevSyncedWOffset = w.wOffset
+		return w.fp.Sync()
+	}
+
+	return nil
 }
 
 // Close closes the WAL Segment.
