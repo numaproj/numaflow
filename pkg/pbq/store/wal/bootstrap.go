@@ -152,6 +152,7 @@ func (w *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 
 	if w.isEnd() {
 		w.wOffset = w.rOffset
+		w.prevSyncedWOffset = w.wOffset
 		return messages, true, nil
 	}
 	return messages, false, nil
