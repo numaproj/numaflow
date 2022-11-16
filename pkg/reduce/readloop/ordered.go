@@ -118,9 +118,6 @@ func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 	case <-ctx.Done():
 		return
 	}
-
-	// TODO: remove this?
-	of.log.Debugw("Post to task done chan took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 }
 
 // forward monitors the task queue, as soon as the task at the head of the queue has been completed, the result is
