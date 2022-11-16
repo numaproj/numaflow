@@ -147,7 +147,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 				// we use a background context since these messages have to be written to pbq
 				cctx := context.Background()
 				attempt := 0
-				wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
+				timeoutErr := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
 					rErr := q.Write(cctx, m)
 					attempt += 1
 					if rErr != nil {
@@ -157,11 +157,16 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 					return true, nil
 				})
 
+				if timeoutErr != nil {
+					rl.log.Errorw("Not able to write the messages to all partitions. To avoid message loss, this message will not be acked", zap.String("msgOffSet", m.ReadOffset.String()))
+					return
+				}
+
 			}
 
 			// Ack the message to ISB
 			attempt := 0
-			wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
+			timeoutErr := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
 				rErr := m.ReadOffset.AckIt()
 				attempt += 1
 				if rErr != nil {
@@ -172,6 +177,11 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
 				return true, nil
 			})
+
+			if timeoutErr != nil {
+				rl.log.Errorw("Timed out while trying to ack a message.", zap.String("msgOffSet", m.ReadOffset.String()))
+				return
+			}
 
 			// close any windows that need to be closed.
 			wm := processor.Watermark(m.Watermark)
