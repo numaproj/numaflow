@@ -151,9 +151,9 @@ func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
 	return nil
 }
 
-// StartUp restores the state of the pbqManager. It reads from the PBQs store to get the persisted partitions
+// GetExistingPartitions restores the state of the pbqManager. It reads from the PBQs store to get the persisted partitions
 // and builds the PBQ Map.
-func (m *Manager) StartUp(ctx context.Context) {
+func (m *Manager) GetExistingPartitions(ctx context.Context) ([]partition.ID, error) {
 	var ctxClosedErr error
 	var partitionIDs []partition.ID
 
@@ -177,32 +177,10 @@ func (m *Manager) StartUp(ctx context.Context) {
 	})
 	if ctxClosedErr != nil {
 		m.log.Errorw("Context closed while discovering partitions", zap.Error(ctxClosedErr))
-		return
+		return partitionIDs, ctxClosedErr
 	}
 
-	var createPBQBackoff = wait.Backoff{
-		Steps:    math.MaxInt,
-		Duration: 100 * time.Millisecond,
-		Factor:   1,
-		Jitter:   0.1,
-	}
-
-	for _, partitionID := range partitionIDs {
-		ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, createPBQBackoff, func() (done bool, err error) {
-			var attempt int
-			_, err = m.CreateNewPBQ(ctx, partitionID)
-
-			if err != nil {
-				attempt += 1
-				m.log.Errorw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.Any("partitionID", partitionID.String()), zap.Error(err))
-				return false, nil
-			}
-			return true, nil
-		})
-		if ctxClosedErr != nil {
-			m.log.Errorw("Context closed while creating new pbq", zap.Any("partitionID", partitionID.String()), zap.Error(ctxClosedErr))
-		}
-	}
+	return partitionIDs, nil
 }
 
 // ShutDown for clean shut down, flushes pending messages to store and closes the store

@@ -19,6 +19,7 @@ package pbq
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"go.uber.org/zap"
 
@@ -60,6 +61,7 @@ func (p *PBQ) Write(ctx context.Context, message *isb.ReadMessage) error {
 	case <-ctx.Done():
 		// closing the output channel will not cause panic, since its inside select case
 		// ctx.Done implicitly means write hasn't succeeded.
+		fmt.Println("got a context done event, closing pbq")
 		close(p.output)
 		writeErr = ctx.Err()
 	}

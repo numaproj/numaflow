@@ -81,7 +81,10 @@ func NewDataForward(ctx context.Context,
 
 // Start starts forwarding messages to readloop
 func (d *DataForward) Start(ctx context.Context) {
-	d.readloop.Startup(ctx)
+	err := d.readloop.Startup(ctx)
+	if err != nil {
+		d.log.Errorw("Failed to start the data forwarder in reduce vertex", zap.Error(err))
+	}
 	for {
 		select {
 		case <-ctx.Done():

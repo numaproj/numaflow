@@ -87,30 +87,32 @@ func NewReadLoop(ctx context.Context,
 
 // Startup starts up the read-loop, because during boot up, it has to replay the data from the persistent store of
 // PBQ before it can start reading from ISB. Startup will return only after the replay has been completed.
-func (rl *ReadLoop) Startup(ctx context.Context) {
+func (rl *ReadLoop) Startup(ctx context.Context) error {
 	// start the PBQManager which discovers and builds the state from persistent store of the PBQ.
-	rl.pbqManager.StartUp(ctx)
-	// gets the partitions from the state
-	partitions := rl.pbqManager.ListPartitions()
+	partitions, err := rl.pbqManager.GetExistingPartitions(ctx)
+	if err != nil {
+		return err
+	}
+
 	rl.log.Infow("Partitions to be replayed ", zap.Int("count", len(partitions)), zap.Any("partitions", partitions))
 
 	for _, p := range partitions {
 		// Create keyed window for a given partition
 		// so that the window can be closed when the watermark
 		// crosses the window.
-		id := p.PartitionID
 
-		intervalWindow := keyed.NewKeyedWindow(id.Start, id.End)
+		alignedKeyedWindow := keyed.NewKeyedWindow(p.Start, p.End)
 
 		// These windows have to be recreated as they are completely in-memory
-		rl.windower.CreateWindow(intervalWindow)
+		rl.windower.CreateWindow(alignedKeyedWindow)
 
 		// create and invoke process and forward for the partition
-		rl.associatePBQAndPnF(ctx, p.PartitionID)
+		rl.associatePBQAndPnF(ctx, p)
 	}
 
 	// replays the data (replay internally writes the data from persistent store on to the PBQ)
 	rl.pbqManager.Replay(ctx)
+	return nil
 }
 
 // Process is one iteration of the read loop.
@@ -178,7 +180,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		// close any windows that need to be closed.
 		wm := processor.Watermark(m.Watermark)
 		closedWindows := rl.windower.RemoveWindows(time.Time(wm))
-		rl.log.Debugw("closing windows", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
+		rl.log.Infow("closing windows", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
 
 		for _, cw := range closedWindows {
 			partitions := cw.Partitions()
@@ -259,7 +261,7 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
 	for _, p := range partitions {
 		q := rl.pbqManager.GetPBQ(p)
-		rl.log.Debugw("Close of book", zap.String("partitionID", p.String()))
+		rl.log.Infow("Close of book", zap.String("partitionID", p.String()))
 		q.CloseOfBook()
 	}
 }
