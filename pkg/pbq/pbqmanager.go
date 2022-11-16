@@ -275,9 +275,10 @@ func (m *Manager) getPBQs() []*PBQ {
 // Replay replays messages which are persisted in pbq store.
 func (m *Manager) Replay(ctx context.Context) {
 	var wg sync.WaitGroup
-
+	var tm = time.Now()
+	partitionsIds := make([]partition.ID, 0)
 	for _, val := range m.getPBQs() {
-		val := val
+		partitionsIds = append(partitionsIds, val.PartitionID)
 		wg.Add(1)
 		m.log.Info("Replaying records from store", zap.Any("PBQ", val.PartitionID))
 		go func(ctx context.Context, p *PBQ) {
@@ -287,4 +288,5 @@ func (m *Manager) Replay(ctx context.Context) {
 	}
 
 	wg.Wait()
+	m.log.Infow("Finished replaying records from store", zap.Duration("took", time.Since(tm)), zap.Any("partitions", partitionsIds))
 }
