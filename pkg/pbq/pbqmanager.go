@@ -264,7 +264,7 @@ func (m *Manager) deregister(partitionID partition.ID) {
 func (m *Manager) getPBQs() []*PBQ {
 	m.RLock()
 	defer m.RUnlock()
-	var pbqs = make([]*PBQ, 0)
+	var pbqs = make([]*PBQ, 0, len(m.pbqMap))
 	for _, pbq := range m.pbqMap {
 		pbqs = append(pbqs, pbq)
 	}
