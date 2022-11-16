@@ -277,6 +277,7 @@ func (m *Manager) Replay(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	for _, val := range m.getPBQs() {
+		val := val
 		wg.Add(1)
 		m.log.Info("Replaying records from store", zap.Any("PBQ", val.PartitionID))
 		go func(ctx context.Context, p *PBQ) {
