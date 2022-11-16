@@ -304,6 +304,16 @@ func TestAligned_RemoveWindow(t *testing.T) {
 				keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
 			},
 		},
+		{
+			name: "lagging watermark",
+			given: []*keyed.AlignedKeyedWindow{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
+				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
+			},
+			input:           time.Unix(120, 0),
+			expectedWindows: []window.AlignedKeyedWindower{},
+		},
 	}
 
 	for _, tt := range tests {

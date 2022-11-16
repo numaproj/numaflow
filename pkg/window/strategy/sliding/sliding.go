@@ -64,7 +64,7 @@ func (s *Sliding) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindowe
 	maxEndTime := maxStartTime.Add(s.Length)
 
 	// now all the windows should fall in between maxend and minend times.
-	// one could also consider min start and max start times as well.
+	// one could consider min start and max start times as well.
 	wCount := int((maxEndTime.Sub(minEndTime)) / s.Slide)
 	windows := make([]window.AlignedKeyedWindower, 0)
 
@@ -167,6 +167,16 @@ func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 	defer s.lock.Unlock()
 
 	closedWindows := make([]window.AlignedKeyedWindower, 0)
+
+	if s.entries.Len() == 0 {
+		return closedWindows
+	}
+	// examine the earliest window
+	earliestWindow := s.entries.Front().Value.(*keyed.AlignedKeyedWindow)
+	if earliestWindow.EndTime().After(wm) {
+		// no windows to close since the watermark is behind the earliest window
+		return closedWindows
+	}
 
 	for e := s.entries.Front(); e != nil; {
 		win := e.Value.(*keyed.AlignedKeyedWindow)

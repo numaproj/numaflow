@@ -56,10 +56,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	var windower window.Windower
 	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
-
-	if f != nil && s != nil {
-		return fmt.Errorf("invalid window spec. found both fixed and sliding window specs on the same vertex. only one of fixed or sliding is permitted. ")
-	}
+	
 	if f != nil {
 		windower = fixed.NewFixed(f.Length.Duration)
 	} else if s != nil {
