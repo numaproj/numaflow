@@ -40,48 +40,48 @@ nav:
       - quick-start.md
   - User Guide:
       - Core Concepts:
-          - pipeline.md
-          - vertex.md
-          - inter-step-buffer.md
-          - inter-step-buffer-service.md
+          - user-guide/pipeline.md
+          - user-guide/vertex.md
+          - user-guide/inter-step-buffer.md
+          - user-guide/inter-step-buffer-service.md
       - Sources:
-          - sources/generator.md
-          - sources/http.md
-          - sources/kafka.md
+          - user-guide/sources/generator.md
+          - user-guide/sources/http.md
+          - user-guide/sources/kafka.md
       - Sinks:
-          - sinks/kafka.md
-          - sinks/log.md
-          - sinks/blackhole.md
-          - User Defined Sinks: "sinks/user-defined-sinks.md"
+          - user-guide/sinks/kafka.md
+          - user-guide/sinks/log.md
+          - user-guide/sinks/blackhole.md
+          - User Defined Sinks: "user-guide/sinks/user-defined-sinks.md"
       - User Defined Functions:
-          - Overview: "user-defined-functions.md"
+          - Overview: "user-guide/user-defined-functions.md"
           - Built-in UDFs:
-              - Overview: "builtin-functions/README.md"
-              - Cat: "builtin-functions/cat.md"
-              - Filter: "builtin-functions/filter.md"
-      - pipeline-tuning.md
-      - conditional-forwarding.md
-      - autoscaling.md
-      - container-resources.md
-      - volumes.md
-      - environment-variables.md
-      - init-containers.md
-      - sidecar-containers.md
-      - pipeline-customization.md
-      - watermarks.md
+              - Overview: "user-guide/builtin-functions/README.md"
+              - Cat: "user-guide/builtin-functions/cat.md"
+              - Filter: "user-guide/builtin-functions/filter.md"
+      - user-guide/pipeline-tuning.md
+      - user-guide/conditional-forwarding.md
+      - user-guide/autoscaling.md
+      - user-guide/container-resources.md
+      - user-guide/volumes.md
+      - user-guide/environment-variables.md
+      - user-guide/init-containers.md
+      - user-guide/sidecar-containers.md
+      - user-guide/pipeline-customization.md
+      - user-guide/watermarks.md
       - APIs.md
   - Operator Manual:
-      - Releases ⧉: "releases.md"
-      - installation.md
+      - Releases ⧉: "operations/releases.md"
+      - operations/installation.md
       - Configuration:
-          - Controller Configuration: "controller-configmap.md"
-          - metrics/metrics.md
+          - Controller Configuration: "operations/controller-configmap.md"
+          - operations/metrics/metrics.md
   - Developer Guide:
-      - development.md
+      - development/development.md
       - Specifications:
-          - Overview: "specs/overview.md"
-          - "specs/autoscaling.md"
-      - debugging.md
-      - static-code-analysis.md
-      - releasing.md
+          - Overview: "specifications/overview.md"
+          - "specifications/autoscaling.md"
+      - development/debugging.md
+      - development/static-code-analysis.md
+      - development/releasing.md
   - Numaproj: https://numaproj.io
