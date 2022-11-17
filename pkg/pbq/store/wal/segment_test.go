@@ -314,7 +314,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	assert.NoError(t, err)
 
 	// -----------------------------
-	// Change the syncDuration'
+	// Change the syncDuration
 	err = store.WithMaxBufferSize(100000)(opts)
 	assert.NoError(t, err)
 	err = store.WithSyncDuration(0)(opts)
