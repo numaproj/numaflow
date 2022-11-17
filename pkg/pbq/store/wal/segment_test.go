@@ -259,7 +259,9 @@ func Test_batchSync(t *testing.T) {
 	assert.NoError(t, err)
 
 	err = store.WithMaxBufferSize(10)(opts)
+	assert.NoError(t, err)
 	err = wal.Write(&message)
+	assert.NoError(t, err)
 	assert.Equal(t, wal.prevSyncedWOffset, int64(844))
 
 	// -----------------------------
