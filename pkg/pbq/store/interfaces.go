@@ -38,8 +38,8 @@ type Store interface {
 
 // StoreProvider defines the functions for store implementation
 type StoreProvider interface {
-	// CreatStore returns a new store instance.
-	CreatStore(context.Context, partition.ID) (Store, error)
+	// CreateStore returns a new store instance.
+	CreateStore(context.Context, partition.ID) (Store, error)
 	// DiscoverPartitions discovers all the managed partitions.
 	DiscoverPartitions(context.Context) ([]partition.ID, error)
 }

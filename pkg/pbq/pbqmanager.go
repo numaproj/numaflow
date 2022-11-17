@@ -68,7 +68,7 @@ func NewManager(ctx context.Context, storeProvider store.StoreProvider, opts ...
 
 // CreateNewPBQ creates new pbq for a partition
 func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
-	persistentStore, err := m.storeProvider.CreatStore(ctx, partitionID)
+	persistentStore, err := m.storeProvider.CreateStore(ctx, partitionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a PBQ store, %w", err)
 	}

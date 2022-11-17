@@ -30,7 +30,7 @@ func NewNoopStores() store.StoreProvider {
 	return &noopStores{}
 }
 
-func (ns *noopStores) CreatStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+func (ns *noopStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
 	return &PBQNoOpStore{}, nil
 }
 

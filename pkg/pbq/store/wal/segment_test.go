@@ -40,7 +40,7 @@ func Test_writeReadHeader(t *testing.T) {
 
 	tmp := t.TempDir()
 	stores := NewWALStores(tmp)
-	store, err := stores.CreatStore(context.Background(), id)
+	store, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 	wal := store.(*WAL)
 	fName := wal.fp.Name()
@@ -135,7 +135,7 @@ func Test_writeReadEntry(t *testing.T) {
 
 	tmp := t.TempDir()
 	stores := NewWALStores(tmp)
-	wal, err := stores.CreatStore(context.Background(), id)
+	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
 	startTime := time.Unix(1665109020, 0).In(location)
@@ -148,7 +148,7 @@ func Test_writeReadEntry(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Reopen the WAL for read and write.
-	store, err := stores.CreatStore(context.Background(), id)
+	store, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 	newWal := store.(*WAL)
 	// we have already read the header in OpenWAL

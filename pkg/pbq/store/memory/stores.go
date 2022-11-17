@@ -40,7 +40,7 @@ func NewMemoryStores(opts ...Option) store.StoreProvider {
 	return s
 }
 
-func (ms *memoryStores) CreatStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
 	memStore := &memoryStore{
 		writePos:    0,
 		readPos:     0,

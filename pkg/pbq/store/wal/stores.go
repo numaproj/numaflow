@@ -37,7 +37,7 @@ func NewWALStores(storePath string) store.StoreProvider {
 	}
 }
 
-func (ws *walStores) CreatStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+func (ws *walStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
 	// Create wal dir if not exist
 	var err error
 	if _, err = os.Stat(ws.storePath); os.IsNotExist(err) {
