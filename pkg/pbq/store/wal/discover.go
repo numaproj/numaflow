@@ -57,6 +57,6 @@ func DiscoverPartitions(_ context.Context, options *store.StoreOptions) ([]parti
 		}
 		partitions = append(partitions, *readPartition)
 	}
-	
+
 	return partitions, nil
 }
