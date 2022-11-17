@@ -34,11 +34,10 @@ import (
 
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
-	stores       store.StoreProvider
-	storeOptions *store.StoreOptions
-	pbqOptions   *options
-	pbqMap       map[string]*PBQ
-	log          *zap.SugaredLogger
+	stores     store.StoreProvider
+	pbqOptions *options
+	pbqMap     map[string]*PBQ
+	log        *zap.SugaredLogger
 	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
@@ -58,11 +57,10 @@ func NewManager(ctx context.Context, stores store.StoreProvider, opts ...PBQOpti
 	}
 
 	pbqManager := &Manager{
-		stores:       stores,
-		pbqMap:       make(map[string]*PBQ),
-		pbqOptions:   pbqOpts,
-		storeOptions: pbqOpts.storeOptions,
-		log:          logging.FromContext(ctx),
+		stores:     stores,
+		pbqMap:     make(map[string]*PBQ),
+		pbqOptions: pbqOpts,
+		log:        logging.FromContext(ctx),
 	}
 
 	return pbqManager, nil

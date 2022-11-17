@@ -22,11 +22,9 @@ import (
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/pbq/store/noop"
 	"github.com/stretchr/testify/assert"
@@ -158,10 +156,9 @@ func TestPBQFlow(t *testing.T) {
 }
 
 func TestPBQFlowWithNoOpStore(t *testing.T) {
-	size := 100
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, noop.NewNoopStores(), WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.NoOpType)),
+	pbqManager, err := NewManager(ctx, noop.NewNoopStores(),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 	testPartition := partition.ID{
