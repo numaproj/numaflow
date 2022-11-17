@@ -34,10 +34,10 @@ import (
 
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
-	stores     store.StoreProvider
-	pbqOptions *options
-	pbqMap     map[string]*PBQ
-	log        *zap.SugaredLogger
+	storeProvider store.StoreProvider
+	pbqOptions    *options
+	pbqMap        map[string]*PBQ
+	log           *zap.SugaredLogger
 	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
@@ -46,7 +46,7 @@ type Manager struct {
 
 // NewManager returns new instance of manager
 // We don't intend this to be called by multiple routines.
-func NewManager(ctx context.Context, stores store.StoreProvider, opts ...PBQOption) (*Manager, error) {
+func NewManager(ctx context.Context, storeProvider store.StoreProvider, opts ...PBQOption) (*Manager, error) {
 	pbqOpts := DefaultOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -57,10 +57,10 @@ func NewManager(ctx context.Context, stores store.StoreProvider, opts ...PBQOpti
 	}
 
 	pbqManager := &Manager{
-		stores:     stores,
-		pbqMap:     make(map[string]*PBQ),
-		pbqOptions: pbqOpts,
-		log:        logging.FromContext(ctx),
+		storeProvider: storeProvider,
+		pbqMap:        make(map[string]*PBQ),
+		pbqOptions:    pbqOpts,
+		log:           logging.FromContext(ctx),
 	}
 
 	return pbqManager, nil
@@ -68,7 +68,7 @@ func NewManager(ctx context.Context, stores store.StoreProvider, opts ...PBQOpti
 
 // CreateNewPBQ creates new pbq for a partition
 func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
-	persistentStore, err := m.stores.CreatStore(ctx, partitionID)
+	persistentStore, err := m.storeProvider.CreatStore(ctx, partitionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a PBQ store, %w", err)
 	}
@@ -131,7 +131,7 @@ func (m *Manager) StartUp(ctx context.Context) {
 	ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, discoverPartitionsBackoff, func() (done bool, err error) {
 		var attempt int
 
-		partitionIDs, err = m.stores.DiscoverPartitions(ctx)
+		partitionIDs, err = m.storeProvider.DiscoverPartitions(ctx)
 		if err != nil {
 			attempt += 1
 			m.log.Errorw("Failed to discover partitions during startup, retrying", zap.Any("attempt", attempt), zap.Error(err))
