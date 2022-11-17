@@ -298,7 +298,6 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 	}
 
 	w.wOffset += int64(wrote)
-	// TODO: add batch sync()
 
 	if w.wOffset-w.prevSyncedWOffset > w.opts.MaxBatchSize() {
 		w.prevSyncedWOffset = w.wOffset

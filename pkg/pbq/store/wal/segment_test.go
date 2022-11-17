@@ -229,3 +229,65 @@ func Test_encodeDecodeEntry(t *testing.T) {
 		})
 	}
 }
+
+func Test_batchSync(t *testing.T) {
+	id := &partition.ID{
+		Start: time.Unix(1665109020, 0).In(location),
+		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
+		Key:   "test1",
+	}
+
+	tmp := t.TempDir()
+	opts := &store.StoreOptions{}
+	err := store.WithStorePath(tmp)(opts)
+	err = store.WithMaxBufferSize(100000)(opts)
+	assert.NoError(t, err)
+
+	wal, err := NewWAL(context.Background(), id, opts)
+	assert.NoError(t, err)
+
+	startTime := time.Unix(1665109020, 0).In(location)
+	msgCount := 2
+	writeMessages := testutils.BuildTestReadMessagesIntOffset(int64(msgCount), startTime)
+	message := writeMessages[0]
+	err = wal.Write(&message)
+	assert.Equal(t, wal.prevSyncedWOffset, int64(0))
+	assert.NoError(t, err)
+
+	err = store.WithMaxBufferSize(10)(opts)
+	wal.wOffset = 0
+	err = wal.Write(&message)
+	assert.Equal(t, wal.prevSyncedWOffset, int64(403))
+
+	err = wal.Close()
+	assert.NoError(t, err)
+
+	// Reopen the WAL for read and write.
+	wal, err = NewWAL(context.Background(), id, opts)
+	assert.NoError(t, err)
+	// we have already read the header in OpenWAL
+	_, err = wal.readHeader()
+	assert.Error(t, err)
+
+	actualMessages, finished, err := wal.Read(10000)
+	assert.NoError(t, err)
+	// Check we reach the end of file
+	assert.Equal(t, true, finished)
+	assert.Equal(t, wal.readUpTo, wal.rOffset)
+
+	assert.Len(t, actualMessages, 2)
+	actualMessage := actualMessages[0]
+	assert.Equalf(t, message.Message, actualMessage.Message, "Read(%v)", message.Message)
+	expectedOffset, err := message.ReadOffset.Sequence()
+	assert.NoError(t, err)
+	actualOffset, err := actualMessage.ReadOffset.Sequence()
+	assert.NoError(t, err)
+	assert.Equalf(t, expectedOffset, actualOffset, "Read(%v)", message.ReadOffset)
+	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeEntry(%v)", message.Watermark)
+
+	// Start to write an entry again
+	err = wal.Write(&message)
+	assert.NoError(t, err)
+	err = wal.Close()
+	assert.NoError(t, err)
+}
