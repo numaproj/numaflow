@@ -327,8 +327,11 @@ func (w *WAL) GC() error {
 		}
 	}
 	err := os.Remove(w.fp.Name())
-	garbageCollectingTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
-	lifespan.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(time.Since(w.openTime).Minutes())
+
+	if err == nil {
+		garbageCollectingTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+		lifespan.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(time.Since(w.openTime).Minutes())
+	}
 	return err
 }
 

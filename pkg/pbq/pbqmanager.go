@@ -72,6 +72,7 @@ func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
 
 // CreateNewPBQ creates new pbq for a partition
 func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
+
 	var persistentStore store.Store
 	var err error
 
