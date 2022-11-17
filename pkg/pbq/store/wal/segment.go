@@ -26,6 +26,7 @@ import (
 	"hash/crc32"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
@@ -53,6 +54,8 @@ type WAL struct {
 	wOffset int64
 	// prevSyncedWOffset is the write offset that is already synced as tracked by the writer
 	prevSyncedWOffset int64
+	// prevSyncedTime is the time when the last sync was made
+	prevSyncedTime time.Duration
 	// rOffset is the read offset as tracked when reading. Reading only
 	// happens during boostrap. It is highly unlikely to reread the data
 	// once boostrap sequence has been completed.
@@ -107,6 +110,7 @@ func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 			openMode:          os.O_WRONLY,
 			wOffset:           0,
 			prevSyncedWOffset: 0,
+			prevSyncedTime:    0,
 			rOffset:           0,
 			readUpTo:          0,
 			partitionID:       id,
@@ -131,6 +135,7 @@ func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 			openMode:          os.O_RDWR,
 			wOffset:           0,
 			prevSyncedWOffset: 0,
+			prevSyncedTime:    0,
 			rOffset:           0,
 			readUpTo:          stat.Size(),
 			partitionID:       id,
@@ -298,9 +303,10 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 	}
 
 	w.wOffset += int64(wrote)
-
-	if w.wOffset-w.prevSyncedWOffset > w.opts.MaxBatchSize() {
+	currentTime := time.Duration(time.Now().UnixNano())
+	if w.wOffset-w.prevSyncedWOffset > w.opts.MaxBatchSize() || currentTime-w.prevSyncedTime > w.opts.SyncDuration() {
 		w.prevSyncedWOffset = w.wOffset
+		w.prevSyncedTime = currentTime
 		return w.fp.Sync()
 	}
 

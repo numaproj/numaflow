@@ -39,6 +39,10 @@ func (o *StoreOptions) MaxBatchSize() int64 {
 	return o.maxBatchSize
 }
 
+func (o *StoreOptions) SyncDuration() time.Duration {
+	return o.syncDuration
+}
+
 func (o *StoreOptions) StoreSize() int64 {
 	return o.storeSize
 }
