@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 )
@@ -31,10 +32,14 @@ type walStores struct {
 	storePath string
 }
 
-func NewWALStores(storePath string) store.StoreProvider {
-	return &walStores{
-		storePath: storePath,
+func NewWALStores(opts ...Option) store.StoreProvider {
+	s := &walStores{
+		storePath: dfv1.DefaultStorePath,
 	}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 func (ws *walStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {

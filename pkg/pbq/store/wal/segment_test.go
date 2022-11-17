@@ -39,7 +39,7 @@ func Test_writeReadHeader(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(tmp)
+	stores := NewWALStores(WithStorePath(tmp))
 	store, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 	wal := store.(*WAL)
@@ -134,7 +134,7 @@ func Test_writeReadEntry(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(tmp)
+	stores := NewWALStores(WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
