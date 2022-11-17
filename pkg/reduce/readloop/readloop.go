@@ -144,7 +144,6 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 				}
 
 				q := rl.associatePBQAndPnF(ctx, partitionID)
-
 				// write the message to PBQ
 				attempt := 0
 				timeoutErr := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
@@ -152,14 +151,8 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 					rErr := q.Write(context.Background(), m)
 					attempt += 1
 					if rErr != nil {
-						select {
-						case <-ctx.Done():
-							rl.log.Errorw("Failed to write message and context closed.", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(ctx.Err()))
-							return true, nil
-						default:
-							rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
-							return false, nil
-						}
+						rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
+						return false, nil
 					}
 					return true, nil
 				})

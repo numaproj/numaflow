@@ -25,6 +25,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -143,7 +144,6 @@ func TestProcessAndForward_Process(t *testing.T) {
 }
 
 func TestProcessAndForward_Forward(t *testing.T) {
-	t.Skip()
 	ctx := context.Background()
 
 	var pbqManager *pbq.Manager
@@ -281,7 +281,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 		UDF:              nil,
 		result:           result,
 		pbqReader:        simplePbq,
-		log:              nil,
+		log:              logging.FromContext(ctx),
 		toBuffers:        toBuffers,
 		whereToDecider:   myForwardTest{},
 		publishWatermark: pw,
