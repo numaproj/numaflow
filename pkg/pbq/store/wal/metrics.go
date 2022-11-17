@@ -26,15 +26,22 @@ var filesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 var garbageCollectingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_garbage_collecting_time",
-	Help:      "Garbage Collecting times of a pbq wal (100 to 5000 microseconds)",
+	Help:      "Garbage Collecting time of a pbq wal (100 to 5000 microseconds)",
 	Buckets:   prometheus.ExponentialBucketsRange(100, 5000, 5),
 }, []string{LabelPartitionKey})
 
 var fileSyncWaitTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_file_sync_wait_time",
-	Help:      "File Sync wait time of a pbq wal (100 to 5000 microseconds)",
-	Buckets:   prometheus.ExponentialBucketsRange(100, 5000, 5),
+	Help:      "File Sync wait time (1 to 60 milliseconds)",
+	Buckets:   prometheus.ExponentialBucketsRange(1, 60, 5),
+}, []string{LabelPartitionKey})
+
+var entryWriteTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Subsystem: "pbq_wal",
+	Name:      "wal_entry_write_time",
+	Help:      "Entry write time (1 to 60 milliseconds)",
+	Buckets:   prometheus.ExponentialBucketsRange(1, 60, 5),
 }, []string{LabelPartitionKey})
 
 var lifespan = promauto.NewHistogramVec(prometheus.HistogramOpts{

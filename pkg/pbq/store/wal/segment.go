@@ -273,6 +273,7 @@ func calculateChecksum(data []byte) uint32 {
 //
 // CRC will be used for detecting entry corruptions.
 func (w *WAL) Write(message *isb.ReadMessage) error {
+	writeStart := time.Now()
 	entry, err := encodeEntry(message)
 	if err != nil {
 		return err
@@ -288,10 +289,11 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 
 	w.wOffset += int64(wrote)
 	// TODO: add batch sync()
-	start := time.Now()
+	fSyncStart := time.Now()
 	err = w.fp.Sync()
-	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
 	if err == nil {
+		entryWriteTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(writeStart).Milliseconds()))
 		entriesCount.With(map[string]string{}).Inc()
 	}
 	return err
@@ -301,7 +303,7 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 func (w *WAL) Close() error {
 	start := time.Now()
 	err := w.fp.Sync()
-	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Milliseconds()))
 
 	if err != nil {
 		return err
