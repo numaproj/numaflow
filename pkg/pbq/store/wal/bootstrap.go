@@ -149,11 +149,11 @@ func (w *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 		w.rOffset += sizeRead
 		messages = append(messages, message)
 	}
-
+	currentTime := time.Now()
 	if w.isEnd() {
 		w.wOffset = w.rOffset
 		w.prevSyncedWOffset = w.wOffset
-		w.prevSyncedTime = time.Now()
+		w.prevSyncedTime = currentTime
 		return messages, true, nil
 	}
 	return messages, false, nil

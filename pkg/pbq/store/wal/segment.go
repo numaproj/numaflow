@@ -302,8 +302,8 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 		return err
 	}
 
-	w.wOffset += int64(wrote)
 	currentTime := time.Now()
+	w.wOffset += int64(wrote)
 
 	if w.wOffset-w.prevSyncedWOffset > w.opts.MaxBatchSize() || currentTime.Sub(w.prevSyncedTime) > w.opts.SyncDuration() {
 		w.prevSyncedWOffset = w.wOffset
