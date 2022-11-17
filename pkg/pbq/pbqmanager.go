@@ -19,7 +19,6 @@ package pbq
 import (
 	"context"
 	"errors"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"math"
 	"sync"
 	"time"
@@ -91,8 +90,6 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 			m.log.Errorw("Error while creating file system persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PBQStoreType()), zap.Error(err))
 			return nil, err
 		}
-		// TODO - add real vertex name as metric dimension.
-		wal.FilesCount.With(map[string]string{metricspkg.LabelVertex: "vertex-name"}).Inc()
 	default:
 		return nil, errors.New("not implemented (default)")
 	}

@@ -23,12 +23,14 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"hash/crc32"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/pbq/store"
 )
 
 const (
@@ -57,6 +59,8 @@ type WAL struct {
 	readUpTo int64
 	// openMode denotes which mode we opened the file in. Only during boot up we will open in read-write mode
 	openMode int
+	// openTime is the timestamp when the WAL segment is opened.
+	openTime time.Time
 	// closed indicates whether the file has been closed
 	closed bool
 	// corrupted indicates whether the data of the file has been corrupted
@@ -68,7 +72,6 @@ type WAL struct {
 func NewWAL(ctx context.Context, id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 	// let's open or create, initialize and return a new WAL
 	wal, err := openOrCreateWAL(id, opts)
-
 	return wal, err
 }
 
@@ -88,9 +91,11 @@ func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 		if err != nil {
 			return nil, err
 		}
+		filesCount.With(map[string]string{}).Inc()
 		wal = &WAL{
 			fp:          fp,
 			openMode:    os.O_WRONLY,
+			openTime:    time.Now(),
 			wOffset:     0,
 			rOffset:     0,
 			readUpTo:    0,
@@ -114,6 +119,7 @@ func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 		wal = &WAL{
 			fp:          fp,
 			openMode:    os.O_RDWR,
+			openTime:    time.Now(),
 			wOffset:     0,
 			rOffset:     0,
 			readUpTo:    stat.Size(),
@@ -282,12 +288,21 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 
 	w.wOffset += int64(wrote)
 	// TODO: add batch sync()
-	return w.fp.Sync()
+	start := time.Now()
+	err = w.fp.Sync()
+	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+	if err == nil {
+		entriesCount.With(map[string]string{}).Inc()
+	}
+	return err
 }
 
 // Close closes the WAL Segment.
 func (w *WAL) Close() error {
+	start := time.Now()
 	err := w.fp.Sync()
+	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+
 	if err != nil {
 		return err
 	}
@@ -304,13 +319,17 @@ func (w *WAL) Close() error {
 
 // GC cleans up the WAL Segment.
 func (w *WAL) GC() error {
+	start := time.Now()
 	if !w.closed {
 		err := w.Close()
 		if err != nil {
 			return err
 		}
 	}
-	return os.Remove(w.fp.Name())
+	err := os.Remove(w.fp.Name())
+	garbageCollectingTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+	lifespan.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(time.Since(w.openTime).Minutes())
+	return err
 }
 
 func getSegmentFilePath(id *partition.ID, dir string) string {
