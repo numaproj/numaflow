@@ -55,7 +55,7 @@ type WAL struct {
 	// prevSyncedWOffset is the write offset that is already synced as tracked by the writer
 	prevSyncedWOffset int64
 	// prevSyncedTime is the time when the last sync was made
-	prevSyncedTime time.Duration
+	prevSyncedTime time.Time
 	// rOffset is the read offset as tracked when reading. Reading only
 	// happens during boostrap. It is highly unlikely to reread the data
 	// once boostrap sequence has been completed.
@@ -110,7 +110,7 @@ func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 			openMode:          os.O_WRONLY,
 			wOffset:           0,
 			prevSyncedWOffset: 0,
-			prevSyncedTime:    0,
+			prevSyncedTime:    time.Time{},
 			rOffset:           0,
 			readUpTo:          0,
 			partitionID:       id,
@@ -135,7 +135,7 @@ func openOrCreateWAL(id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
 			openMode:          os.O_RDWR,
 			wOffset:           0,
 			prevSyncedWOffset: 0,
-			prevSyncedTime:    0,
+			prevSyncedTime:    time.Time{},
 			rOffset:           0,
 			readUpTo:          stat.Size(),
 			partitionID:       id,
@@ -303,8 +303,9 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 	}
 
 	w.wOffset += int64(wrote)
-	currentTime := time.Duration(time.Now().UnixNano())
-	if w.wOffset-w.prevSyncedWOffset > w.opts.MaxBatchSize() || currentTime-w.prevSyncedTime > w.opts.SyncDuration() {
+	currentTime := time.Now()
+
+	if w.wOffset-w.prevSyncedWOffset > w.opts.MaxBatchSize() || currentTime.Sub(w.prevSyncedTime) > w.opts.SyncDuration() {
 		w.prevSyncedWOffset = w.wOffset
 		w.prevSyncedTime = currentTime
 		return w.fp.Sync()

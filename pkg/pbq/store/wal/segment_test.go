@@ -246,10 +246,11 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	// Change the maxBatchSize
 	err = store.WithMaxBufferSize(100000)(opts)
 	assert.NoError(t, err)
-	err = store.WithSyncDuration(time.Duration(time.Now().UnixNano()) + 10*time.Second)(opts)
+	err = store.WithSyncDuration(10 * time.Second)(opts)
 	assert.NoError(t, err)
 
 	wal, err := NewWAL(context.Background(), id, opts)
+	wal.prevSyncedTime = time.Now()
 	assert.NoError(t, err)
 
 	startTime := time.Unix(1665109020, 0).In(location)
@@ -316,7 +317,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	// Change the syncDuration'
 	err = store.WithMaxBufferSize(100000)(opts)
 	assert.NoError(t, err)
-	err = store.WithSyncDuration(100000)(opts)
+	err = store.WithSyncDuration(0)(opts)
 	assert.NoError(t, err)
 
 	wal, err := NewWAL(context.Background(), id, opts)

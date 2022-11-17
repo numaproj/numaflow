@@ -153,7 +153,7 @@ func (w *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 	if w.isEnd() {
 		w.wOffset = w.rOffset
 		w.prevSyncedWOffset = w.wOffset
-		w.prevSyncedTime = time.Duration(time.Now().UnixNano())
+		w.prevSyncedTime = time.Now()
 		return messages, true, nil
 	}
 	return messages, false, nil
