@@ -240,6 +240,10 @@ func Test_batchSync(t *testing.T) {
 	tmp := t.TempDir()
 	opts := &store.StoreOptions{}
 	err := store.WithStorePath(tmp)(opts)
+	assert.NoError(t, err)
+
+	// -----------------------------
+	// Change the maxBatchSize
 	err = store.WithMaxBufferSize(100000)(opts)
 	assert.NoError(t, err)
 
@@ -258,6 +262,7 @@ func Test_batchSync(t *testing.T) {
 	err = wal.Write(&message)
 	assert.Equal(t, wal.prevSyncedWOffset, int64(844))
 
+	// -----------------------------
 	err = wal.Close()
 	assert.NoError(t, err)
 
