@@ -264,7 +264,7 @@ func (m *Manager) deregister(partitionID partition.ID) {
 func (m *Manager) getPBQs() []*PBQ {
 	m.RLock()
 	defer m.RUnlock()
-	var pbqs = make([]*PBQ, 0)
+	var pbqs = make([]*PBQ, 0, len(m.pbqMap))
 	for _, pbq := range m.pbqMap {
 		pbqs = append(pbqs, pbq)
 	}
@@ -275,8 +275,10 @@ func (m *Manager) getPBQs() []*PBQ {
 // Replay replays messages which are persisted in pbq store.
 func (m *Manager) Replay(ctx context.Context) {
 	var wg sync.WaitGroup
-
+	var tm = time.Now()
+	partitionsIds := make([]partition.ID, 0)
 	for _, val := range m.getPBQs() {
+		partitionsIds = append(partitionsIds, val.PartitionID)
 		wg.Add(1)
 		m.log.Info("Replaying records from store", zap.Any("PBQ", val.PartitionID))
 		go func(ctx context.Context, p *PBQ) {
@@ -286,4 +288,5 @@ func (m *Manager) Replay(ctx context.Context) {
 	}
 
 	wg.Wait()
+	m.log.Infow("Finished replaying records from store", zap.Duration("took", time.Since(tm)), zap.Any("partitions", partitionsIds))
 }

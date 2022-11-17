@@ -36,6 +36,7 @@ import (
 const (
 	IEEE            = 0xedb88320
 	EntryHeaderSize = 28
+	SegmentPrefix   = "segment"
 )
 
 // Various errors contained in DNSError.
@@ -70,6 +71,16 @@ type WAL struct {
 }
 
 func NewWAL(ctx context.Context, id *partition.ID, opts *store.StoreOptions) (*WAL, error) {
+	// Create wal dir if not exist
+	var err error
+	dir := opts.StorePath()
+	if _, err = os.Stat(dir); os.IsNotExist(err) {
+		err = os.Mkdir(dir, 0644)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// let's open or create, initialize and return a new WAL
 	wal, err := openOrCreateWAL(id, opts)
 	return wal, err
@@ -338,6 +349,6 @@ func (w *WAL) GC() error {
 }
 
 func getSegmentFilePath(id *partition.ID, dir string) string {
-	filename := fmt.Sprintf("segment_%d.%d.%s", id.Start.Unix(), id.End.Unix(), id.Key)
+	filename := fmt.Sprintf("%s_%d.%d.%s", SegmentPrefix, id.Start.Unix(), id.End.Unix(), id.Key)
 	return filepath.Join(dir, filename)
 }

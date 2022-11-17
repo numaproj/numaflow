@@ -65,11 +65,6 @@ func (kw *AlignedKeyedWindow) EndTime() time.Time {
 func (kw *AlignedKeyedWindow) AddKey(key string) {
 	kw.lock.Lock()
 	defer kw.lock.Unlock()
-	// TODO: investigate why without map init, PBQ WAL replay can fail
-	// 		 with 'panic: assignment to entry in nil map'
-	if kw.keys == nil {
-		kw.keys = make(map[string]struct{})
-	}
 	if _, ok := kw.keys[key]; !ok {
 		kw.keys[key] = struct{}{}
 	}

@@ -25,7 +25,9 @@ spec:
   # Optional, if not specified, defaults to "default"
   interStepBufferServiceName: different-name
 ```
+
 To query `Inter-Step Buffer Service` objects with `kubectl`:
+
 ```sh
 kubectl get isbsvc
 ```
@@ -137,7 +139,7 @@ Once a JetStream ISB Service is created, toggling the `encryption` field will ca
 
 ### Other Configuration
 
-Check [here](APIs.md#numaflow.numaproj.io/v1alpha1.JetStreamBufferService) for the full spec of `spec.jetstream`.
+Check [here](../APIs.md#numaflow.numaproj.io/v1alpha1.JetStreamBufferService) for the full spec of `spec.jetstream`.
 
 ## Redis
 
@@ -147,6 +149,7 @@ Check [here](APIs.md#numaflow.numaproj.io/v1alpha1.JetStreamBufferService) for t
 We also support external redis.
 
 #### External Redis
+
 If you have a managed Redis, say in AWS, etc., we can make that Redis your ISB. All you need to do is provide the external Redis endpoint name.
 
 ```yaml
@@ -163,14 +166,13 @@ spec:
 
 ### Cluster Mode
 
-We support [cluster mode](https://redis.io/docs/reference/cluster-spec/), only if the Redis is an external managed Redis. 
-You will have to enter the `url` twice to indicate that the mode is cluster. This is because we use `Universal Client` which 
+We support [cluster mode](https://redis.io/docs/reference/cluster-spec/), only if the Redis is an external managed Redis.
+You will have to enter the `url` twice to indicate that the mode is cluster. This is because we use `Universal Client` which
 requires more than one address to indicate the Redis is in cluster mode.
 
 ```yaml
 url: "numaflow-redis-cluster-0.numaflow-redis-cluster-headless:6379,numaflow-redis-cluster-1.numaflow-redis-cluster-headless:6379"
 ```
-
 
 ### Version
 
@@ -243,4 +245,4 @@ Here is the [reference](https://github.com/redis/redis/blob/unstable/redis.conf)
 
 ### Other Configuration
 
-Check [here](APIs.md#numaflow.numaproj.io/v1alpha1.NativeRedis) for the full spec of `spec.redis.native`.
+Check [here](../APIs.md#numaflow.numaproj.io/v1alpha1.NativeRedis) for the full spec of `spec.redis.native`.
