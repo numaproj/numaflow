@@ -18,7 +18,7 @@ package pbq
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -26,18 +26,15 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
-	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
-	"github.com/numaproj/numaflow/pkg/pbq/store/noop"
-	"github.com/numaproj/numaflow/pkg/pbq/store/wal"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
+	stores       store.StoreProvider
 	storeOptions *store.StoreOptions
 	pbqOptions   *options
 	pbqMap       map[string]*PBQ
@@ -50,7 +47,7 @@ type Manager struct {
 
 // NewManager returns new instance of manager
 // We don't intend this to be called by multiple routines.
-func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
+func NewManager(ctx context.Context, stores store.StoreProvider, opts ...PBQOption) (*Manager, error) {
 	pbqOpts := DefaultOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -61,6 +58,7 @@ func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
 	}
 
 	pbqManager := &Manager{
+		stores:       stores,
 		pbqMap:       make(map[string]*PBQ),
 		pbqOptions:   pbqOpts,
 		storeOptions: pbqOpts.storeOptions,
@@ -72,27 +70,9 @@ func NewManager(ctx context.Context, opts ...PBQOption) (*Manager, error) {
 
 // CreateNewPBQ creates new pbq for a partition
 func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
-
-	var persistentStore store.Store
-	var err error
-
-	switch m.storeOptions.PBQStoreType() {
-	case dfv1.NoOpType:
-		persistentStore, _ = noop.NewPBQNoOpStore()
-	case dfv1.InMemoryType:
-		persistentStore, err = memory.NewMemoryStore(ctx, partitionID, m.storeOptions)
-		if err != nil {
-			m.log.Errorw("Error while creating in memory persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PBQStoreType()), zap.Error(err))
-			return nil, err
-		}
-	case dfv1.FileSystemType:
-		persistentStore, err = wal.NewWAL(ctx, &partitionID, m.storeOptions)
-		if err != nil {
-			m.log.Errorw("Error while creating file system persistent store", zap.Any("ID", partitionID), zap.Any("storeType", m.storeOptions.PBQStoreType()), zap.Error(err))
-			return nil, err
-		}
-	default:
-		return nil, errors.New("not implemented (default)")
+	persistentStore, err := m.stores.CreatStore(ctx, partitionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a PBQ store, %w", err)
 	}
 
 	// output channel is buffered to support bulk reads
@@ -108,20 +88,6 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 
 	m.register(partitionID, p)
 	return p, nil
-}
-
-// discoverPartitions discovers partitions.
-func (m *Manager) discoverPartitions(ctx context.Context) ([]partition.ID, error) {
-	switch m.storeOptions.PBQStoreType() {
-	case dfv1.NoOpType:
-		return noop.DiscoverPartitions(ctx, m.storeOptions)
-	case dfv1.InMemoryType:
-		return memory.DiscoverPartitions(ctx, m.storeOptions)
-	case dfv1.FileSystemType:
-		return wal.DiscoverPartitions(ctx, m.storeOptions)
-	default:
-		return nil, errors.New("not implemented (default)")
-	}
 }
 
 // ListPartitions returns all the pbq instances
@@ -167,7 +133,7 @@ func (m *Manager) StartUp(ctx context.Context) {
 	ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, discoverPartitionsBackoff, func() (done bool, err error) {
 		var attempt int
 
-		partitionIDs, err = m.discoverPartitions(ctx)
+		partitionIDs, err = m.stores.DiscoverPartitions(ctx)
 		if err != nil {
 			attempt += 1
 			m.log.Errorw("Failed to discover partitions during startup, retrying", zap.Any("attempt", attempt), zap.Error(err))

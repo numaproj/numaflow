@@ -35,14 +35,6 @@ type StoreOptions struct {
 	storePath string
 }
 
-func (o *StoreOptions) StoreSize() int64 {
-	return o.storeSize
-}
-
-func (o *StoreOptions) PBQStoreType() dfv1.StoreType {
-	return o.pbqStoreType
-}
-
 func (o *StoreOptions) StorePath() string {
 	return o.storePath
 }

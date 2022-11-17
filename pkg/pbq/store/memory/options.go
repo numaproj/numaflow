@@ -14,15 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package noop
+package memory
 
 import (
 	"context"
 
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
 )
 
-func DiscoverPartitions(_ context.Context, _ *store.StoreOptions) ([]partition.ID, error) {
-	return []partition.ID{}, nil
+type Option func(stores *memoryStores)
+
+// WithDiscoverer sets the discover func of memorystores
+func WithDiscoverer(f func(ctx context.Context) ([]partition.ID, error)) Option {
+	return func(stores *memoryStores) {
+		stores.discoverFunc = f
+	}
+}
+
+// WithStoreSize sets the store size
+func WithStoreSize(size int64) Option {
+	return func(stores *memoryStores) {
+		stores.storeSize = size
+	}
 }

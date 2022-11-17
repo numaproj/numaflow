@@ -31,6 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/stretchr/testify/assert"
 )
@@ -107,7 +108,7 @@ func TestOrderedProcessing(t *testing.T) {
 			op.startUp(ctx)
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.
-			pbqManager, _ := pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(int64(100)), store.WithPbqStoreType(dfv1.InMemoryType)),
+			pbqManager, _ := pbq.NewManager(ctx, memory.NewMemoryStores(), pbq.WithPBQStoreOptions(store.WithStoreSize(int64(100)), store.WithPbqStoreType(dfv1.InMemoryType)),
 				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 			cCtx, cancelFn := context.WithCancel(ctx)
 			defer cancelFn()

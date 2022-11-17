@@ -21,20 +21,13 @@ import (
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMemoryStore_WriteToStore(t *testing.T) {
-	// create a store of size 100 (it can store max 100 messages)
-	storeSize := 100
-	options := &store.StoreOptions{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
-	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
 	partitionID := partition.ID{
@@ -42,8 +35,8 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 		End:   time.Unix(120, 0),
 		Key:   "new-partition",
 	}
-
-	memStore, err := NewMemoryStore(ctx, partitionID, options)
+	// create a store of size 100 (it can store max 100 messages)
+	memStore, err := NewMemoryStores(WithStoreSize(100)).CreatStore(ctx, partitionID)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -58,11 +51,6 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 }
 
 func TestMemoryStore_ReadFromStore(t *testing.T) {
-	// create a store of size 100 (it can store max 100 messages)
-	storeSize := 100
-	options := &store.StoreOptions{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
-	_ = store.WithStoreSize(int64(storeSize))(options)
 	ctx := context.Background()
 
 	partitionID := partition.ID{
@@ -71,7 +59,8 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 		Key:   "new-partition",
 	}
 
-	memStore, err := NewMemoryStore(ctx, partitionID, options)
+	// create a store of size 100 (it can store max 100 messages)
+	memStore, err := NewMemoryStores(WithStoreSize(100)).CreatStore(ctx, partitionID)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -92,9 +81,7 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 
 func TestEmptyStore_Read(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
-	storeSize := 100
-	options := &store.StoreOptions{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
+	storeSize := int64(100)
 	ctx := context.Background()
 
 	partitionID := partition.ID{
@@ -103,10 +90,10 @@ func TestEmptyStore_Read(t *testing.T) {
 		Key:   "new-partition",
 	}
 
-	memStore, err := NewMemoryStore(ctx, partitionID, options)
+	memStore, err := NewMemoryStores(WithStoreSize(storeSize)).CreatStore(ctx, partitionID)
 	assert.NoError(t, err)
 	var eof bool
-	_, eof, err = memStore.Read(int64(storeSize))
+	_, eof, err = memStore.Read(storeSize)
 	assert.NoError(t, err)
 	// since store is empty, eof will be true
 	assert.Equal(t, eof, true)
@@ -115,10 +102,7 @@ func TestEmptyStore_Read(t *testing.T) {
 
 func TestFullStore_Write(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
-	storeSize := 100
-	options := &store.StoreOptions{}
-	_ = store.WithPbqStoreType(dfv1.InMemoryType)(options)
-	_ = store.WithStoreSize(int64(storeSize))(options)
+	storeSize := int64(100)
 	ctx := context.Background()
 
 	partitionID := partition.ID{
@@ -127,7 +111,7 @@ func TestFullStore_Write(t *testing.T) {
 		Key:   "new-partition",
 	}
 
-	memStore, err := NewMemoryStore(ctx, partitionID, options)
+	memStore, err := NewMemoryStores(WithStoreSize(storeSize)).CreatStore(ctx, partitionID)
 	assert.NoError(t, err)
 
 	//write 100 isb messages to persisted store
