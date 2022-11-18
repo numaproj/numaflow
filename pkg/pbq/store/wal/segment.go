@@ -57,8 +57,8 @@ type WAL struct {
 	readUpTo int64
 	// openMode denotes which mode we opened the file in. Only during boot up we will open in read-write mode
 	openMode int
-	// openTime is the timestamp when the WAL segment is opened.
-	openTime time.Time
+	// createTime is the timestamp when the WAL segment is created.
+	createTime time.Time
 	// closed indicates whether the file has been closed
 	closed bool
 	// corrupted indicates whether the data of the file has been corrupted
@@ -263,7 +263,8 @@ func (w *WAL) GC() error {
 
 	if err == nil {
 		garbageCollectingTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
-		lifespan.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(time.Since(w.openTime).Minutes())
+		lifespan.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(time.Since(w.createTime).Minutes())
+		activeFilesCount.With(map[string]string{}).Dec()
 	}
 	return err
 }

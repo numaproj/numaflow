@@ -36,8 +36,14 @@ var entriesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 var filesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_files_total",
-	Help:      "Total number of wal files/partitions",
+	Help:      "Total number of wal files/partitions (including both active and closed)",
 }, []string{})
+
+var activeFilesCount = promauto.NewGaugeVec(prometheus.GaugeOpts(prometheus.CounterOpts{
+	Subsystem: "pbq_wal",
+	Name:      "active_wal_files_total",
+	Help:      "Total number of active wal files/partitions",
+}), []string{})
 
 var garbageCollectingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "pbq_wal",
