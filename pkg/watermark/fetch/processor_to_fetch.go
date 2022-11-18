@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -56,13 +55,12 @@ type ProcessorToFetch struct {
 	entity         processor.ProcessorEntitier
 	status         status
 	offsetTimeline *OffsetTimeline
-	otWatcher      store.WatermarkKVWatcher
 	lock           sync.RWMutex
 	log            *zap.SugaredLogger
 }
 
 func (p *ProcessorToFetch) String() string {
-	return fmt.Sprintf("%s status:%v, timeline: %s", p.entity.GetID(), p.getStatus(), p.offsetTimeline.Dump())
+	return fmt.Sprintf("%s status:%v, timeline: %s", p.entity.GetName(), p.getStatus(), p.offsetTimeline.Dump())
 }
 
 // NewProcessorToFetch creates ProcessorToFetch.
@@ -74,10 +72,8 @@ func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntit
 		entity:         processor,
 		status:         _active,
 		offsetTimeline: NewOffsetTimeline(ctx, capacity),
-		otWatcher:      watcher,
 		log:            logging.FromContext(ctx),
 	}
-	go p.startTimeLineWatcher()
 	return p
 }
 
@@ -112,47 +108,4 @@ func (p *ProcessorToFetch) IsDeleted() bool {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	return p.status == _deleted
-}
-
-func (p *ProcessorToFetch) stopTimeLineWatcher() {
-	p.cancel()
-}
-
-func (p *ProcessorToFetch) startTimeLineWatcher() {
-	watchCh, stopped := p.otWatcher.Watch(p.ctx)
-
-	for {
-		select {
-		case <-stopped:
-			// no need to close ot watcher here because the ot watcher is shared for the given vertex
-			// the parent ctx will close the ot watcher
-			return
-		case value := <-watchCh:
-			// TODO: why will value will be nil?
-			if value == nil {
-				continue
-			}
-			switch value.Operation() {
-			case store.KVPut:
-				if value.Key() != p.entity.BuildOTWatcherKey() {
-					continue
-				}
-				otValue, err := ot.DecodeToOTValue(value.Value())
-				if err != nil {
-					p.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
-					continue
-				}
-				p.offsetTimeline.Put(OffsetWatermark{
-					watermark: otValue.Watermark,
-					offset:    otValue.Offset,
-				})
-				p.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", p.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
-			case store.KVDelete:
-				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
-				// naturally trim the KV store.
-			case store.KVPurge:
-				// skip
-			}
-		}
-	}
 }

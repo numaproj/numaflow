@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -141,7 +142,6 @@ func (v *ProcessorManager) refreshingProcessors() {
 			// TODO: how to delete the pod from the heartbeat store?
 			v.log.Infow("Processor has been inactive for 10 heartbeats, deleting...", zap.String("key", pName), zap.String(pName, p.String()))
 			p.setStatus(_deleted)
-			p.stopTimeLineWatcher()
 			v.heartbeat.Delete(pName)
 		} else if time.Now().Unix()-pTime > v.opts.podHeartbeatRate {
 			// if the pod's last heartbeat is greater than podHeartbeatRate
@@ -200,7 +200,6 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				} else {
 					v.log.Infow("Deleting", zap.String("key", value.Key()), zap.String(value.Key(), p.String()))
 					p.setStatus(_deleted)
-					p.stopTimeLineWatcher()
 					v.heartbeat.Delete(value.Key())
 				}
 			case store.KVPurge:
@@ -210,5 +209,42 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				zap.String("HB", v.hbWatcher.GetKVName()), zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 		}
 
+	}
+}
+
+func (v *ProcessorManager) startTimeLineWatcher() {
+	watchCh, stopped := v.otWatcher.Watch(v.ctx)
+
+	for {
+		select {
+		case <-stopped:
+			return
+		case value := <-watchCh:
+			if value == nil {
+				continue
+			}
+			switch value.Operation() {
+			case store.KVPut:
+				p := v.GetProcessor(value.Key())
+				if p == nil {
+					continue
+				}
+				otValue, err := ot.DecodeToOTValue(value.Value())
+				if err != nil {
+					v.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
+					continue
+				}
+				p.offsetTimeline.Put(OffsetWatermark{
+					watermark: otValue.Watermark,
+					offset:    otValue.Offset,
+				})
+				v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
+			case store.KVDelete:
+				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
+				// naturally trim the KV store.
+			case store.KVPurge:
+				// skip
+			}
+		}
 	}
 }
