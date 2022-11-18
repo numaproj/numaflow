@@ -26,6 +26,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -226,18 +227,19 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
-				retries := 1
 				p := v.GetProcessor(value.Key())
-				for p == nil && retries <= 10 {
-					// it is possible that by the time we receive the ot KVPut event,
-					// the heartbeat store hasn't added the new processor yet,
-					// so we need to set up the retry logic:
-					//   default processor heartbeat rate is 5 seconds
-					//   (1+..+10)*100=5500ms=5.5s
-					retries++
-					time.Sleep(time.Millisecond * time.Duration(retries*100))
-					p = v.GetProcessor(value.Key())
-				}
+				_ = wait.ExponentialBackoffWithContext(v.ctx, wait.Backoff{
+					// default heartbeat rate is set to 5 seconds, so retry every "duration * factor + [0, jitter]" interval for 5 times
+					Duration: 1 * time.Second,
+					Factor:   1,
+					Jitter:   0.1,
+					Steps:    5,
+				}, func() (done bool, err error) {
+					if p = v.GetProcessor(value.Key()); p == nil {
+						return false, nil
+					}
+					return true, nil
+				})
 				if p == nil {
 					v.log.Errorw("Unable to find the processor", zap.String("processorEntity", value.Key()))
 					continue
