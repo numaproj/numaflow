@@ -178,7 +178,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
 					var entity = processor.NewProcessorEntity(value.Key())
-					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.otWatcher)
+					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10)
 					v.addProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active
