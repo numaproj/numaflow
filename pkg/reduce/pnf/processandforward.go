@@ -27,14 +27,15 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -187,6 +188,8 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		for i, message := range writeMessages {
 			if writeErrs[i] != nil {
 				failedMessages = append(failedMessages, message)
+			} else {
+				p.log.Debugw("Forwarded message", zap.String("bufferID", bufferID), zap.Any("message", message))
 			}
 		}
 		// retry only the failed messages

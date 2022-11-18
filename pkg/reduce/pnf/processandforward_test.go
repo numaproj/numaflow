@@ -25,6 +25,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -34,14 +35,15 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
 	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
+	"github.com/stretchr/testify/assert"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	udfcall "github.com/numaproj/numaflow/pkg/udf/function"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/stretchr/testify/assert"
 )
 
 type myForwardTest struct {
@@ -80,7 +82,6 @@ func TestProcessAndForward_Process(t *testing.T) {
 		}
 	}()
 
-	size := 100
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
 		End:   time.UnixMilli(120000),
@@ -89,7 +90,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	var err error
 	var pbqManager *pbq.Manager
 
-	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType)),
+	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(100)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -146,7 +147,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 
 	var pbqManager *pbq.Manager
 
-	pbqManager, _ = pbq.NewManager(ctx)
+	pbqManager, _ = pbq.NewManager(ctx, memory.NewMemoryStores())
 
 	test1Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
 	test1Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
@@ -279,7 +280,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 		UDF:              nil,
 		result:           result,
 		pbqReader:        simplePbq,
-		log:              nil,
+		log:              logging.FromContext(ctx),
 		toBuffers:        toBuffers,
 		whereToDecider:   myForwardTest{},
 		publishWatermark: pw,

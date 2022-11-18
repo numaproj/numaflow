@@ -17,12 +17,16 @@ limitations under the License.
 package store
 
 import (
+	"context"
+
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/pbq/partition"
 )
 
 // Store provides methods to read, write and delete data from the store.
 type Store interface {
-	// Read returns upto N(size) messages from the persisted store
+	// Read returns upto N(size) messages from the persisted store, it also returns
+	// a boolean flag to indicate if the end of file has been reached.
 	Read(size int64) ([]*isb.ReadMessage, bool, error)
 	// Write writes message to persistence store
 	Write(msg *isb.ReadMessage) error
@@ -30,4 +34,12 @@ type Store interface {
 	Close() error
 	// GC does garbage collection and deletes all the messages that are persisted
 	GC() error
+}
+
+// StoreProvider defines the functions for store implementation
+type StoreProvider interface {
+	// CreateStore returns a new store instance.
+	CreateStore(context.Context, partition.ID) (Store, error)
+	// DiscoverPartitions discovers all the managed partitions.
+	DiscoverPartitions(context.Context) ([]partition.ID, error)
 }

@@ -103,24 +103,21 @@ func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 		if err == nil {
 			break
 		} else if err == ctx.Err() {
-			of.log.Infow("ReduceOp exiting", zap.Error(ctx.Err()))
+			of.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
 			return
 		}
-		of.log.Errorw("Process failed", zap.Error(err))
+		of.log.Errorw("Process failed", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(err))
 		time.Sleep(retryDelay)
 	}
 	// after retrying indicate that we are done with processing the package. the processing can move on
 	close(t.doneCh)
-	of.log.Debugw("Process->Reduce call took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+	of.log.Debugw("Process->Reduce call took ", zap.String("partitionID", t.pf.PartitionID.String()), zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 	// notify that some work has been completed
 	select {
 	case of.taskDone <- struct{}{}:
 	case <-ctx.Done():
 		return
 	}
-
-	// TODO: remove this?
-	of.log.Debugw("Post to task done chan took ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 }
 
 // forward monitors the task queue, as soon as the task at the head of the queue has been completed, the result is
@@ -144,6 +141,8 @@ func (of *orderedForwarder) forward(ctx context.Context) {
 		// for every signal, we try to empty out the task-queue.
 		of.RLock()
 		n := of.taskQueue.Len()
+		of.log.Debugw("Received a signal in task queue ", zap.Int("task count", n))
+
 		of.RUnlock()
 		// n could be 0 because we have emptied the queue
 		if n == 0 {
@@ -174,9 +173,10 @@ func (of *orderedForwarder) forward(ctx context.Context) {
 				rm := currElement
 				currElement = currElement.Next()
 				of.taskQueue.Remove(rm)
+				of.log.Debugw("Removing task post forward call", zap.String("partitionID", t.pf.PartitionID.String()))
 				of.Unlock()
 			case <-ctx.Done():
-				of.log.Infow("Forward exiting while waiting on the head of the queue task", zap.Error(ctx.Err()))
+				of.log.Infow("Forward exiting while waiting on the head of the queue task", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
 				return
 			}
 		}
