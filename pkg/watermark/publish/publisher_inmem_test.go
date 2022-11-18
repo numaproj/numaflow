@@ -70,7 +70,7 @@ func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 
 	_ = p.Close()
 
-	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
+	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetName())
 	assert.Equal(t, fmt.Errorf("key publisherTestPod1 not found"), err)
 
 }

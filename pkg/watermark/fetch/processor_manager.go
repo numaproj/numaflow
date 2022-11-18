@@ -24,7 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -69,6 +71,7 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	}
 	go v.startRefreshingProcessors()
 	go v.startHeatBeatWatcher()
+	go v.startTimeLineWatcher()
 	return v
 }
 
@@ -141,7 +144,6 @@ func (v *ProcessorManager) refreshingProcessors() {
 			// TODO: how to delete the pod from the heartbeat store?
 			v.log.Infow("Processor has been inactive for 10 heartbeats, deleting...", zap.String("key", pName), zap.String(pName, p.String()))
 			p.setStatus(_deleted)
-			p.stopTimeLineWatcher()
 			v.heartbeat.Delete(pName)
 		} else if time.Now().Unix()-pTime > v.opts.podHeartbeatRate {
 			// if the pod's last heartbeat is greater than podHeartbeatRate
@@ -177,7 +179,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
 					var entity = processor.NewProcessorEntity(value.Key())
-					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.otWatcher)
+					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10)
 					v.addProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active
@@ -200,7 +202,6 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				} else {
 					v.log.Infow("Deleting", zap.String("key", value.Key()), zap.String(value.Key(), p.String()))
 					p.setStatus(_deleted)
-					p.stopTimeLineWatcher()
 					v.heartbeat.Delete(value.Key())
 				}
 			case store.KVPurge:
@@ -210,5 +211,55 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				zap.String("HB", v.hbWatcher.GetKVName()), zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 		}
 
+	}
+}
+
+func (v *ProcessorManager) startTimeLineWatcher() {
+	watchCh, stopped := v.otWatcher.Watch(v.ctx)
+
+	for {
+		select {
+		case <-stopped:
+			return
+		case value := <-watchCh:
+			if value == nil {
+				continue
+			}
+			switch value.Operation() {
+			case store.KVPut:
+				p := v.GetProcessor(value.Key())
+				_ = wait.ExponentialBackoffWithContext(v.ctx, wait.Backoff{
+					// default heartbeat rate is set to 5 seconds, so retry every "duration * factor + [0, jitter]" interval for 5 times
+					Duration: 1 * time.Second,
+					Factor:   1,
+					Jitter:   0.1,
+					Steps:    5,
+				}, func() (done bool, err error) {
+					if p = v.GetProcessor(value.Key()); p == nil {
+						return false, nil
+					}
+					return true, nil
+				})
+				if p == nil {
+					v.log.Errorw("Unable to find the processor", zap.String("processorEntity", value.Key()))
+					continue
+				}
+				otValue, err := ot.DecodeToOTValue(value.Value())
+				if err != nil {
+					v.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
+					continue
+				}
+				p.offsetTimeline.Put(OffsetWatermark{
+					watermark: otValue.Watermark,
+					offset:    otValue.Offset,
+				})
+				v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
+			case store.KVDelete:
+				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
+				// naturally trim the KV store.
+			case store.KVPurge:
+				// skip
+			}
+		}
 	}
 }

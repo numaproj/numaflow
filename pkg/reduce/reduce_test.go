@@ -264,7 +264,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
-	//create to buffers
+	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
 	toBuffer := map[string]isb.BufferWriter{
 		toBufferName: buffer,
@@ -337,7 +337,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
-	//create to buffers
+	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
 	toBuffer := map[string]isb.BufferWriter{
 		toBufferName: buffer,
@@ -410,7 +410,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
-	//create to buffers
+	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
 	toBuffer := map[string]isb.BufferWriter{
 		toBufferName: buffer,
@@ -483,7 +483,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
-	//create to buffers
+	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
 	toBuffer := map[string]isb.BufferWriter{
 		toBufferName: buffer,
