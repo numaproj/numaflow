@@ -40,9 +40,9 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	otWatcher := noop.NewKVOpWatch()
 	processorManager := NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
 	var (
-		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, otWatcher)
-		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, otWatcher)
-		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, otWatcher)
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
 		pod0Timeline = []OffsetWatermark{
 			{watermark: 11, offset: 9},
 			{watermark: 12, offset: 20},

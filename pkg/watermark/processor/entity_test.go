@@ -26,7 +26,7 @@ import (
 
 func TestEntity(t *testing.T) {
 	e := NewProcessorEntity("pod0")
-	assert.Equal(t, "pod0", e.GetID())
+	assert.Equal(t, "pod0", e.GetName())
 }
 
 func ExampleWatermark_String() {

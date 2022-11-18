@@ -104,7 +104,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 		}
 		if p.IsDeleted() && (offset > p.offsetTimeline.GetHeadOffset()) {
 			// if the pod is not active and the current offset is ahead of all offsets in Timeline
-			e.processorManager.DeleteProcessor(p.entity.GetID())
+			e.processorManager.DeleteProcessor(p.entity.GetName())
 		}
 	}
 	// if the offset is smaller than every offset in the timeline, set the value to be -1

@@ -49,8 +49,7 @@ func (w Watermark) Before(t time.Time) bool {
 // ProcessorEntitier defines what can be a processor. The Processor is the smallest unit where the watermark will
 // monotonically increase.
 type ProcessorEntitier interface {
-	GetID() string
-	BuildOTWatcherKey() string
+	GetName() string
 }
 
 // processorEntity implements ProcessorEntitier.
@@ -68,12 +67,7 @@ func NewProcessorEntity(name string) ProcessorEntitier {
 	}
 }
 
-// GetID returns the ID of the processor.
-func (p *processorEntity) GetID() string {
+// GetName returns the ID of the processor.
+func (p *processorEntity) GetName() string {
 	return p.name
-}
-
-// BuildOTWatcherKey builds the offset-timeline key name
-func (p *processorEntity) BuildOTWatcherKey() string {
-	return p.GetID()
 }

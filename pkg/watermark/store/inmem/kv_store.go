@@ -141,5 +141,7 @@ func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 
 // Close closes the channel connection and clean up the bucket.
 func (kv *inMemStore) Close() {
+	kv.kvLock.Lock()
+	defer kv.kvLock.Unlock()
 	close(kv.kvEntryCh)
 }
