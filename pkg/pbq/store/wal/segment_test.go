@@ -52,7 +52,7 @@ func Test_writeReadHeader(t *testing.T) {
 	fmt.Println(fName)
 	assert.NoError(t, err)
 
-	openWAL, err := OpenWAL(fName)
+	openWAL, err := OpenWAL(context.Background(), fName)
 	assert.NoError(t, err)
 	// we have already read the header in OpenWAL
 	_, err = openWAL.readHeader()

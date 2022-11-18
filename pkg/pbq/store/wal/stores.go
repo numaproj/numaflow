@@ -92,7 +92,7 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 	} else {
 		// here we are explicitly giving O_RDWR because we will be using this to read too. Our read is only during
 		// bootstrap.
-		fp, err = os.OpenFile(filePath, os.O_RDWR|os.O_APPEND, stat.Mode())
+		fp, err = os.OpenFile(filePath, os.O_RDWR, stat.Mode())
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +128,7 @@ func (ws *walStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, er
 	for _, f := range files {
 		if strings.HasPrefix(f.Name(), SegmentPrefix) && !f.IsDir() {
 			filePath := filepath.Join(ws.storePath, f.Name())
-			wal, err := OpenWAL(filePath)
+			wal, err := OpenWAL(ctx, filePath)
 			if err != nil {
 				return nil, err
 			}
