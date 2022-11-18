@@ -225,3 +225,55 @@ func Test_encodeDecodeEntry(t *testing.T) {
 		})
 	}
 }
+
+func Test_batchSyncWithMaxBatchSize(t *testing.T) {
+	id := partition.ID{
+		Start: time.Unix(1665109020, 0).In(location),
+		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
+		Key:   "test1",
+	}
+
+	tmp := t.TempDir()
+	stores := NewWALStores(WithStorePath(tmp), WithMaxBufferSize(0), WithSyncDuration(0))
+	wal, err := stores.CreateStore(context.Background(), id)
+	assert.NoError(t, err)
+
+	startTime := time.Unix(1665109020, 0).In(location)
+	msgCount := 2
+	writeMessages := testutils.BuildTestReadMessagesIntOffset(int64(msgCount), startTime)
+	message := writeMessages[0]
+	err = wal.Write(&message)
+	assert.NoError(t, err)
+	err = wal.Close()
+	assert.NoError(t, err)
+
+	// Reopen the WAL for read and write.
+	store, err := stores.CreateStore(context.Background(), id)
+	assert.NoError(t, err)
+	newWal := store.(*WAL)
+	// we have already read the header in OpenWAL
+	_, err = newWal.readHeader()
+	assert.Error(t, err)
+
+	actualMessages, finished, err := newWal.Read(10000)
+	assert.NoError(t, err)
+	// Check we reach the end of file
+	assert.Equal(t, true, finished)
+	assert.Equal(t, newWal.readUpTo, newWal.rOffset)
+
+	assert.Len(t, actualMessages, 1)
+	actualMessage := actualMessages[0]
+	assert.Equalf(t, message.Message, actualMessage.Message, "Read(%v)", message.Message)
+	expectedOffset, err := message.ReadOffset.Sequence()
+	assert.NoError(t, err)
+	actualOffset, err := actualMessage.ReadOffset.Sequence()
+	assert.NoError(t, err)
+	assert.Equalf(t, expectedOffset, actualOffset, "Read(%v)", message.ReadOffset)
+	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeEntry(%v)", message.Watermark)
+
+	// Start to write an entry again
+	err = newWal.Write(&message)
+	assert.NoError(t, err)
+	err = newWal.Close()
+	assert.NoError(t, err)
+}

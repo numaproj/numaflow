@@ -64,6 +64,12 @@ type WAL struct {
 	// corrupted indicates whether the data of the file has been corrupted
 	corrupted   bool
 	partitionID *partition.ID
+	// prevSyncedWOffset is the write offset that is already synced as tracked by the writer
+	prevSyncedWOffset int64
+	// prevSyncedTime is the time when the last sync was made
+	prevSyncedTime    time.Time
+	walStores         *walStores
+	numOfUnsyncedMsgs int64
 }
 
 // writeHeader writes the header to the file
@@ -217,15 +223,25 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 		return err
 	}
 
+	w.numOfUnsyncedMsgs = w.numOfUnsyncedMsgs + 1
 	// Only increase the write offset when we successfully write for atomicity.
 	w.wOffset += int64(wrote)
 	// TODO: add batch sync()
-	fSyncStart := time.Now()
-	err = w.fp.Sync()
-	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
-	if err == nil {
-		entryWriteTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(writeStart).Milliseconds()))
-		entriesCount.With(map[string]string{}).Inc()
+
+	currentTime := time.Now()
+
+	if w.wOffset-w.prevSyncedWOffset > w.walStores.maxBatchSize || currentTime.Sub(w.prevSyncedTime) > w.walStores.syncDuration {
+		w.prevSyncedWOffset = w.wOffset
+		w.prevSyncedTime = currentTime
+		fSyncStart := time.Now()
+		err = w.fp.Sync()
+		fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
+		if err == nil {
+			entryWriteTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(writeStart).Milliseconds()) / float64(w.numOfUnsyncedMsgs))
+			entriesCount.With(map[string]string{}).Add(float64(w.numOfUnsyncedMsgs))
+		}
+		w.numOfUnsyncedMsgs = 0
+		return err
 	}
 	return err
 }
