@@ -128,9 +128,9 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			errs[idx] = nil
 			b.buffer[currentIdx].dirty = true
 			b.writeIdx = (currentIdx + 1) % b.size
-			writeOffsets = append(writeOffsets, isb.SimpleIntOffset(func() int64 {
+			writeOffsets[idx] = isb.SimpleIntOffset(func() int64 {
 				return currentIdx
-			}))
+			})
 			// access buffer via lock
 			b.rwlock.Unlock()
 		} else {

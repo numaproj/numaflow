@@ -25,6 +25,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -34,6 +35,8 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
 	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
+	"github.com/stretchr/testify/assert"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -41,7 +44,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	udfcall "github.com/numaproj/numaflow/pkg/udf/function"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/stretchr/testify/assert"
 )
 
 type myForwardTest struct {
@@ -278,7 +280,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 		UDF:              nil,
 		result:           result,
 		pbqReader:        simplePbq,
-		log:              nil,
+		log:              logging.FromContext(ctx),
 		toBuffers:        toBuffers,
 		whereToDecider:   myForwardTest{},
 		publishWatermark: pw,
