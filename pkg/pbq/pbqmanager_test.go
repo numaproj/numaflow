@@ -22,12 +22,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/pbq/store/noop"
-	"github.com/stretchr/testify/assert"
 )
 
 // tests for pbqManager (store type - in-memory)
@@ -35,7 +36,6 @@ import (
 func TestManager_ListPartitions(t *testing.T) {
 	size := int64(100)
 	t.Skip()
-	size := 100
 
 	ctx := context.Background()
 	pbqManager, err := NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(size)),
