@@ -16,6 +16,7 @@ You will also need `kubectl` to manage the cluster.
 ## Installation
 
 Run the following command lines to install Numaflow and start the Inter-Step Buffer Service that handles communication between vertices.
+
 ```shell
 kubectl create ns numaflow-system
 kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
@@ -25,6 +26,7 @@ kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exam
 ## A Simple Pipeline
 
 Create a `simple pipeline`, which contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages.
+
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 kubectl get pipeline # or "pl" as a short name
@@ -56,20 +58,23 @@ kubectl logs -f simple-pipeline-out-0-xxxx
 # Port forward the UI to https://localhost:8443/
 kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 ```
+
 ![Numaflow UI](assets/numaflow-ui-simple-pipeline.png)
 
 The pipeline can be deleted by
+
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 ```
 
 ## An Advanced Pipeline
 
-In this example, there are five vertices in a pipeline. An [HTTP](./sources/http.md) source vertex which serves an HTTP endpoint to receive numbers as source data, a [UDF](./user-defined-functions.md) vertex to tag the ingested numbers with the key `even` or `odd`, three [Log](./sinks/log.md) sinks, one to print the `even` numbers, one to print the `odd` numbers, and the other one to print both the even and odd numbers.
+In this example, there are five vertices in a pipeline. An [HTTP](./user-guide/sources/http.md) source vertex which serves an HTTP endpoint to receive numbers as source data, a [UDF](./user-guide/user-defined-functions.md) vertex to tag the ingested numbers with the key `even` or `odd`, three [Log](./user-guide/sinks/log.md) sinks, one to print the `even` numbers, one to print the `odd` numbers, and the other one to print both the even and odd numbers.
 
 ![Pipeline Diagram](assets/even-odd.png)
 
 Create the `even-odd` pipeline.
+
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
 
@@ -91,9 +96,9 @@ kubectl port-forward even-odd-in-0-xxxx 8444:8443
 
 # Post data to the HTTP endpoint
 curl -kq -X POST -d "101" https://localhost:8444/vertices/in
-curl -kq -X POST -d "102" https://localhost:8444/vertices/in 
+curl -kq -X POST -d "102" https://localhost:8444/vertices/in
 curl -kq -X POST -d "103" https://localhost:8444/vertices/in
-curl -kq -X POST -d "104" https://localhost:8444/vertices/in 
+curl -kq -X POST -d "104" https://localhost:8444/vertices/in
 
 # Watch the log for the even vertex
 kubectl logs -f even-odd-even-sink-0-nf2ql
@@ -109,9 +114,10 @@ kubectl logs -f even-odd-odd-sink-0-a6p0n
 View the UI for the advanced pipeline at https://localhost:8443/
 ![Numaflow UI](assets/numaflow-ui-advanced-pipeline.png)
 
-The source code of the `even-odd` [User Defined Function](./user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd). You also can replace the [Log](./sinks/log.md) Sink with some other sinks like [Kafka](./sinks/kafka.md) to forward the data to Kafka topics.
+The source code of the `even-odd` [User Defined Function](./user-guide/user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd). You also can replace the [Log](./user-guide/sinks/log.md) Sink with some other sinks like [Kafka](./user-guide/sinks/kafka.md) to forward the data to Kafka topics.
 
 The pipeline can be deleted by
+
 ```shell
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
 ```
@@ -120,4 +126,4 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/tes
 
 Try more examples in the [`examples`](https://github.com/numaproj/numaflow/tree/main/examples) directory.
 
-After exploring how Numaflow pipeline run, you can check what data [Sources](./sources/generator.md) and [Sinks](./sinks/kafka.md) Numaflow supports out of the box, or learn how to write [User Defined Functions](./user-defined-functions.md).
+After exploring how Numaflow pipeline run, you can check what data [Sources](./user-guide/sources/generator.md) and [Sinks](./user-guide/sinks/kafka.md) Numaflow supports out of the box, or learn how to write [User Defined Functions](./user-guide/user-defined-functions.md).
