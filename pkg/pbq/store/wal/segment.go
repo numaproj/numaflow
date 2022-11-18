@@ -69,11 +69,12 @@ func (w *WAL) writeHeader() error {
 	if err != nil {
 		return err
 	}
-	wrote, err := w.fp.Write(header.Bytes())
+	wrote, err := w.fp.WriteAt(header.Bytes(), w.wOffset)
 	if wrote != header.Len() {
 		return fmt.Errorf("expected to write %d, but wrote only %d, %w", header.Len(), wrote, err)
 	}
 
+	// Only increase the write offset when we successfully write for atomicity.
 	w.wOffset += int64(wrote)
 	return err
 }
@@ -204,7 +205,7 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 		return err
 	}
 
-	wrote, err := w.fp.Write(entry.Bytes())
+	wrote, err := w.fp.WriteAt(entry.Bytes(), w.wOffset)
 	if wrote != entry.Len() {
 		return fmt.Errorf("expected to write %d, but wrote only %d, %w", entry.Len(), wrote, err)
 	}
@@ -212,6 +213,7 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 		return err
 	}
 
+	// Only increase the write offset when we successfully write for atomicity.
 	w.wOffset += int64(wrote)
 	// TODO: add batch sync()
 	return w.fp.Sync()

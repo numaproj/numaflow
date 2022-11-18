@@ -18,15 +18,18 @@ package wal
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"os"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 var location *time.Location
@@ -45,18 +48,20 @@ func (w *WAL) IsCorrupted() bool {
 }
 
 // OpenWAL returns a WAL if present
-func OpenWAL(filePath string) (*WAL, error) {
+func OpenWAL(ctx context.Context, filePath string) (*WAL, error) {
 	stat, err := os.Stat(filePath)
 	// there could be other errors
 	if os.IsNotExist(err) {
 		return nil, nil
 	} else if err != nil {
+		log := logging.FromContext(ctx).With("pbqStore", "FileSystem")
+		log.Errorw("Error when opening WAL file", zap.Any("file name", filePath))
 		return nil, err
 	}
 
 	// here we are explicitly giving O_RDWR because we will be using this to read too. Our read is only during
 	// boot up.
-	fp, err := os.OpenFile(filePath, os.O_RDWR|os.O_APPEND, stat.Mode())
+	fp, err := os.OpenFile(filePath, os.O_RDWR, stat.Mode())
 	if err != nil {
 		return nil, err
 	}
