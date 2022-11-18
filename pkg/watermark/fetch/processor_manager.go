@@ -226,8 +226,20 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
+				retries := 1
 				p := v.GetProcessor(value.Key())
+				for p == nil && retries <= 10 {
+					// it is possible that by the time we receive the ot KVPut event,
+					// the heartbeat store hasn't added the net processor yet,
+					// so we need to set up the retry logic:
+					//   default processor heartbeat rate is 5 seconds
+					//   (1+..+10)*100=5500ms=5.5s
+					retries++
+					time.Sleep(time.Millisecond * time.Duration(retries*100))
+					p = v.GetProcessor(value.Key())
+				}
 				if p == nil {
+					v.log.Errorw("Unable to find the processor", zap.String("processorEntity", value.Key()))
 					continue
 				}
 				otValue, err := ot.DecodeToOTValue(value.Value())
