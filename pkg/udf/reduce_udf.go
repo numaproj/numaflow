@@ -141,7 +141,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	var storeProvider store.StoreProvider
 	if storage := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage; storage != nil && storage.PersistentVolumeClaim != nil {
-		storeProvider = wal.NewWALStores(wal.WithStorePath(dfv1.DefaultStorePath))
+		storeProvider = wal.NewWALStores(wal.WithStorePath(dfv1.DefaultStorePath), wal.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 	} else {
 		// use in memory type by default
 		storeProvider = memory.NewMemoryStores()
