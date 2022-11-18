@@ -1,12 +1,9 @@
 /*
 Copyright 2022 The Numaproj Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -31,11 +28,17 @@ import (
 
 type walStores struct {
 	storePath string
+	// maxBufferSize max size of batch before it's flushed to store
+	maxBatchSize int64
+	// syncDuration timeout to sync to store
+	syncDuration time.Duration
 }
 
 func NewWALStores(opts ...Option) store.StoreProvider {
 	s := &walStores{
-		storePath: dfv1.DefaultStorePath,
+		storePath:    dfv1.DefaultStorePath,
+		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
+		syncDuration: dfv1.DefaultStoreSyncDuration,
 	}
 	for _, o := range opts {
 		o(s)
@@ -78,13 +81,17 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 		filesCount.With(map[string]string{}).Inc()
 		activeFilesCount.With(map[string]string{}).Inc()
 		wal = &WAL{
-			fp:          fp,
-			openMode:    os.O_WRONLY,
-			createTime:  time.Now(),
-			wOffset:     0,
-			rOffset:     0,
-			readUpTo:    0,
-			partitionID: id,
+			fp:                fp,
+			openMode:          os.O_WRONLY,
+			createTime:        time.Now(),
+			wOffset:           0,
+			rOffset:           0,
+			readUpTo:          0,
+			partitionID:       id,
+			prevSyncedWOffset: 0,
+			prevSyncedTime:    time.Time{},
+			walStores:         ws,
+			numOfUnsyncedMsgs: 0,
 		}
 
 		err = wal.writeHeader()
@@ -101,13 +108,17 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 			return nil, err
 		}
 		wal = &WAL{
-			fp:          fp,
-			openMode:    os.O_RDWR,
-			createTime:  time.Now(),
-			wOffset:     0,
-			rOffset:     0,
-			readUpTo:    stat.Size(),
-			partitionID: id,
+			fp:                fp,
+			openMode:          os.O_RDWR,
+			createTime:        time.Now(),
+			wOffset:           0,
+			rOffset:           0,
+			readUpTo:          stat.Size(),
+			partitionID:       id,
+			prevSyncedWOffset: 0,
+			prevSyncedTime:    time.Time{},
+			walStores:         ws,
+			numOfUnsyncedMsgs: 0,
 		}
 		readPartition, err := wal.readHeader()
 		if err != nil {
