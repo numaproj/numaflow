@@ -22,8 +22,11 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -36,28 +39,34 @@ import (
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"github.com/stretchr/testify/assert"
 )
 
-type EventTypeWMProgressor struct{}
-
-func (e EventTypeWMProgressor) PublishWatermark(watermark processor.Watermark, offset isb.Offset) {
-
+type EventTypeWMProgressor struct {
+	watermarks map[string]processor.Watermark
+	m          sync.Mutex
 }
 
-func (e EventTypeWMProgressor) GetLatestWatermark() processor.Watermark {
+func (e *EventTypeWMProgressor) PublishWatermark(watermark processor.Watermark, offset isb.Offset) {
+	e.m.Lock()
+	defer e.m.Unlock()
+	e.watermarks[offset.String()] = watermark
+}
+
+func (e *EventTypeWMProgressor) GetLatestWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
-func (e EventTypeWMProgressor) Close() error {
+func (e *EventTypeWMProgressor) Close() error {
 	return nil
 }
 
-func (e EventTypeWMProgressor) GetWatermark(_ isb.Offset) processor.Watermark {
-	return processor.Watermark(time.Now())
+func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset) processor.Watermark {
+	e.m.Lock()
+	defer e.m.Unlock()
+	return e.watermarks[offset.String()]
 }
 
-func (e EventTypeWMProgressor) GetHeadWatermark() processor.Watermark {
+func (e *EventTypeWMProgressor) GetHeadWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
@@ -179,8 +188,12 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 	to := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
 
+	wmpublisher := &EventTypeWMProgressor{
+		watermarks: make(map[string]processor.Watermark),
+	}
+
 	// keep on writing <count> messages every 1 second for the supplied key
-	go writeMessages(child, 10, "no-op-test", fromBuffer, EventTypeWMProgressor{}, time.Second*1)
+	go writeMessages(child, 10, "no-op-test", fromBuffer, wmpublisher, time.Second*1)
 
 	toBuffer := map[string]isb.BufferWriter{
 		toBufferName: to,
@@ -195,14 +208,14 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	assert.NoError(t, err)
 
 	publisher := map[string]publish.Publisher{
-		"to": EventTypeWMProgressor{},
+		"to": &EventTypeWMProgressor{},
 	}
 
 	// create new fixed window of (windowTime)
 	window := fixed.NewFixed(windowTime)
 
 	var reduceDataForwarder *DataForward
-	reduceDataForwarder, err = NewDataForward(child, CounterReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, EventTypeWMProgressor{}, publisher, window, WithReadBatchSize(10))
+	reduceDataForwarder, err = NewDataForward(child, CounterReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher, window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	go reduceDataForwarder.Start(child)
@@ -228,7 +241,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	var readMessagePayload PayloadForTest
 	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
 	// here the count will always be equal to the number of messages written per key
-	assert.Equal(t, 1, readMessagePayload.Value)
+	assert.Equal(t, 10, readMessagePayload.Value)
 	assert.Equal(t, "count", readMessagePayload.Key)
 
 }
@@ -584,24 +597,22 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 
 // buildMessagesForReduce builds test isb.Message which can be used for testing reduce.
 func buildMessagesForReduce(count int, key string, publishTime time.Time) []isb.Message {
-	var messages = make([]isb.Message, 0, count)
+	var messages = make([]isb.Message, count, count)
 	for i := 0; i < count; i++ {
 		result, _ := json.Marshal(PayloadForTest{
 			Key:   key,
 			Value: i,
 		})
-		messages = append(messages,
-			isb.Message{
-				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{
-						EventTime: publishTime,
-					},
-					ID:  fmt.Sprintf("%d", i),
-					Key: key,
+		messages[i] = isb.Message{
+			Header: isb.Header{
+				PaneInfo: isb.PaneInfo{
+					EventTime: publishTime,
 				},
-				Body: isb.Body{Payload: result},
+				ID:  fmt.Sprintf("%d", i),
+				Key: key,
 			},
-		)
+			Body: isb.Body{Payload: result},
+		}
 	}
 
 	return messages
@@ -609,27 +620,20 @@ func buildMessagesForReduce(count int, key string, publishTime time.Time) []isb.
 
 // writeMessages writes message to simple buffer and publishes the watermark using write offsets
 func writeMessages(ctx context.Context, count int, key string, fromBuffer *simplebuffer.InMemoryBuffer, publish publish.Publisher, interval time.Duration) {
-	generateTime := 100 * time.Millisecond
-	ticker := time.NewTicker(generateTime)
 	intervalDuration := interval
 	publishTime := time.Unix(60, 0)
 	i := 1
-	for {
-		select {
-		case <-ticker.C:
-			// build  messages with eventTime time.Now()
-			publishTime = publishTime.Add(intervalDuration)
-			messages := buildMessagesForReduce(count, key+strconv.Itoa(i), publishTime)
-			i++
 
-			// write the messages to fromBuffer, so that it will be available for consuming
-			offsets, _ := fromBuffer.Write(ctx, messages)
-			if len(offsets) > 0 {
-				publish.PublishWatermark(processor.Watermark(publishTime), offsets[len(offsets)-1])
-			}
-		case <-ctx.Done():
-			ticker.Stop()
-			return
+	for k := 0; k < 3; k++ {
+		// build  messages with eventTime set to publish time
+		publishTime = publishTime.Add(intervalDuration)
+		messages := buildMessagesForReduce(count, key+strconv.Itoa(i), publishTime)
+		i++
+
+		// write the messages to fromBuffer, so that it will be available for consuming
+		offsets, _ := fromBuffer.Write(ctx, messages)
+		for _, offset := range offsets {
+			publish.PublishWatermark(processor.Watermark(publishTime), offset)
 		}
 	}
 }
