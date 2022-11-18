@@ -230,7 +230,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 				p := v.GetProcessor(value.Key())
 				for p == nil && retries <= 10 {
 					// it is possible that by the time we receive the ot KVPut event,
-					// the heartbeat store hasn't added the net processor yet,
+					// the heartbeat store hasn't added the new processor yet,
 					// so we need to set up the retry logic:
 					//   default processor heartbeat rate is 5 seconds
 					//   (1+..+10)*100=5500ms=5.5s
