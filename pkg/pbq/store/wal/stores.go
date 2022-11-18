@@ -133,7 +133,7 @@ func (ws *walStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, er
 	for _, f := range files {
 		if strings.HasPrefix(f.Name(), SegmentPrefix) && !f.IsDir() {
 			filePath := filepath.Join(ws.storePath, f.Name())
-			wal, err := OpenWAL(ctx, filePath)
+			wal, err := OpenWAL(filePath)
 			if err != nil {
 				return nil, err
 			}

@@ -597,7 +597,7 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 
 // buildMessagesForReduce builds test isb.Message which can be used for testing reduce.
 func buildMessagesForReduce(count int, key string, publishTime time.Time) []isb.Message {
-	var messages = make([]isb.Message, count, count)
+	var messages = make([]isb.Message, count)
 	for i := 0; i < count; i++ {
 		result, _ := json.Marshal(PayloadForTest{
 			Key:   key,
