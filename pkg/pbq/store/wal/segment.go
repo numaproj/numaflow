@@ -24,6 +24,7 @@ import (
 	"hash/crc32"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
@@ -56,6 +57,8 @@ type WAL struct {
 	readUpTo int64
 	// openMode denotes which mode we opened the file in. Only during boot up we will open in read-write mode
 	openMode int
+	// createTime is the timestamp when the WAL segment is created.
+	createTime time.Time
 	// closed indicates whether the file has been closed
 	closed bool
 	// corrupted indicates whether the data of the file has been corrupted
@@ -200,6 +203,7 @@ func calculateChecksum(data []byte) uint32 {
 //
 // CRC will be used for detecting entry corruptions.
 func (w *WAL) Write(message *isb.ReadMessage) error {
+	writeStart := time.Now()
 	entry, err := encodeEntry(message)
 	if err != nil {
 		return err
@@ -216,12 +220,22 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 	// Only increase the write offset when we successfully write for atomicity.
 	w.wOffset += int64(wrote)
 	// TODO: add batch sync()
-	return w.fp.Sync()
+	fSyncStart := time.Now()
+	err = w.fp.Sync()
+	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
+	if err == nil {
+		entryWriteTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(writeStart).Milliseconds()))
+		entriesCount.With(map[string]string{}).Inc()
+	}
+	return err
 }
 
 // Close closes the WAL Segment.
 func (w *WAL) Close() error {
+	start := time.Now()
 	err := w.fp.Sync()
+	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Milliseconds()))
+
 	if err != nil {
 		return err
 	}
@@ -238,13 +252,21 @@ func (w *WAL) Close() error {
 
 // GC cleans up the WAL Segment.
 func (w *WAL) GC() error {
+	start := time.Now()
 	if !w.closed {
 		err := w.Close()
 		if err != nil {
 			return err
 		}
 	}
-	return os.Remove(w.fp.Name())
+	err := os.Remove(w.fp.Name())
+
+	if err == nil {
+		garbageCollectingTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+		lifespan.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(time.Since(w.createTime).Minutes())
+		activeFilesCount.With(map[string]string{}).Dec()
+	}
+	return err
 }
 
 func getSegmentFilePath(id *partition.ID, dir string) string {
