@@ -70,6 +70,7 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	}
 	go v.startRefreshingProcessors()
 	go v.startHeatBeatWatcher()
+	go v.startTimeLineWatcher()
 	return v
 }
 
