@@ -16,11 +16,27 @@ limitations under the License.
 
 package wal
 
+import "time"
+
 type Option func(stores *walStores)
 
 // WithStorePath sets the WAL store path
 func WithStorePath(path string) Option {
 	return func(stores *walStores) {
 		stores.storePath = path
+	}
+}
+
+// WithMaxBufferSize sets the WAL buffer max size option
+func WithMaxBufferSize(size int64) Option {
+	return func(stores *walStores) {
+		stores.maxBatchSize = size
+	}
+}
+
+// WithSyncDuration sets the WAL sync duration option
+func WithSyncDuration(maxDuration time.Duration) Option {
+	return func(stores *walStores) {
+		stores.syncDuration = maxDuration
 	}
 }
