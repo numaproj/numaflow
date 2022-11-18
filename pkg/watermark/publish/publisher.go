@@ -54,7 +54,7 @@ type publish struct {
 
 // NewPublish returns `Publish`.
 func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, watermarkStores store.WatermarkStorer, inputOpts ...PublishOption) Publisher {
-	log := logging.FromContext(ctx).With("entityID", processorEntity.GetID()).
+	log := logging.FromContext(ctx).With("entityID", processorEntity.GetName()).
 		With("otStore", watermarkStores.OffsetTimelineStore().GetStoreName()).
 		With("hbStore", watermarkStores.HeartbeatStore().GetStoreName())
 	log.Info("Creating a new watermark publisher")
@@ -108,7 +108,7 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 		return
 	}
 
-	var key = p.entity.BuildOTWatcherKey()
+	var key = p.entity.GetName()
 
 	// build value
 	var seq int64
@@ -145,16 +145,16 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 func (p *publish) loadLatestFromStore() processor.Watermark {
 	var (
 		timeWatermark = time.UnixMilli(-1)
-		key           = p.entity.BuildOTWatcherKey()
+		key           = p.entity.GetName()
 	)
 	byteValue, err := p.otStore.GetValue(p.ctx, key)
 	if err != nil {
-		p.log.Errorw("Unable to load latest watermark from ot store (failed to get value from ot store)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
+		p.log.Errorw("Unable to load latest watermark from ot store (failed to get value from ot store)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
 		return processor.Watermark(timeWatermark)
 	}
 	otValue, err := ot.DecodeToOTValue(byteValue)
 	if err != nil {
-		p.log.Errorw("Unable to load latest watermark from ot store (failed to decode ot value)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetID()), zap.Error(err))
+		p.log.Errorw("Unable to load latest watermark from ot store (failed to decode ot value)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
 		return processor.Watermark(timeWatermark)
 	}
 	timeWatermark = time.UnixMilli(otValue.Watermark)
@@ -175,7 +175,7 @@ func (p *publish) publishHeartbeat() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			err := p.heartbeatStore.PutKV(p.ctx, p.entity.GetID(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			err := p.heartbeatStore.PutKV(p.ctx, p.entity.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			if err != nil {
 				p.log.Errorw("Put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 			}
@@ -199,8 +199,8 @@ func (p *publish) Close() error {
 	//   - remove itself from heartbeat bucket
 
 	// clean up heartbeat bucket
-	if err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetID()); err != nil {
-		p.log.Errorw("Failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetID()), zap.Error(err))
+	if err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetName()); err != nil {
+		p.log.Errorw("Failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetName()), zap.Error(err))
 		return err
 	}
 	return nil
