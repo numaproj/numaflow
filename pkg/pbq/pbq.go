@@ -20,10 +20,11 @@ import (
 	"context"
 	"errors"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
-	"go.uber.org/zap"
 )
 
 var ErrCOB = errors.New("error while writing to pbq, pbq is closed")
@@ -46,8 +47,8 @@ var _ ReadWriteCloser = (*PBQ)(nil)
 func (p *PBQ) Write(ctx context.Context, message *isb.ReadMessage) error {
 	// if cob we should return
 	if p.cob {
-		p.log.Errorw("Failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.Header))
-		return ErrCOB
+		p.log.Errorw("Failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.Header), zap.Any("message", message))
+		return nil
 	}
 	var writeErr error
 	// we need context to get out of blocking write
@@ -87,9 +88,12 @@ func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
 // finished forwarding the output to ISB.
 func (p *PBQ) GC() error {
 	err := p.store.GC()
+	if err != nil {
+		return err
+	}
 	p.store = nil
 	p.manager.deregister(p.PartitionID)
-	return err
+	return nil
 }
 
 // replayRecordsFromStore replays store messages when replay flag is set during start up time. It replays by reading from
