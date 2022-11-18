@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
@@ -74,9 +75,12 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 		if err != nil {
 			return nil, err
 		}
+		filesCount.With(map[string]string{}).Inc()
+		activeFilesCount.With(map[string]string{}).Inc()
 		wal = &WAL{
 			fp:          fp,
 			openMode:    os.O_WRONLY,
+			createTime:  time.Now(),
 			wOffset:     0,
 			rOffset:     0,
 			readUpTo:    0,
@@ -99,6 +103,7 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 		wal = &WAL{
 			fp:          fp,
 			openMode:    os.O_RDWR,
+			createTime:  time.Now(),
 			wOffset:     0,
 			rOffset:     0,
 			readUpTo:    stat.Size(),
