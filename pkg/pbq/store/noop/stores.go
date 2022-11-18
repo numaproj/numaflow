@@ -23,6 +23,17 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 )
 
-func DiscoverPartitions(_ context.Context, _ *store.StoreOptions) ([]partition.ID, error) {
+type noopStores struct {
+}
+
+func NewNoopStores() store.StoreProvider {
+	return &noopStores{}
+}
+
+func (ns *noopStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+	return &PBQNoOpStore{}, nil
+}
+
+func (ns *noopStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
 	return []partition.ID{}, nil
 }

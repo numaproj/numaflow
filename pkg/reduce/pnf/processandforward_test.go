@@ -38,7 +38,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	udfcall "github.com/numaproj/numaflow/pkg/udf/function"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/stretchr/testify/assert"
@@ -80,7 +80,6 @@ func TestProcessAndForward_Process(t *testing.T) {
 		}
 	}()
 
-	size := 100
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
 		End:   time.UnixMilli(120000),
@@ -89,7 +88,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	var err error
 	var pbqManager *pbq.Manager
 
-	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(int64(size)), store.WithPbqStoreType(dfv1.InMemoryType)),
+	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(100)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -146,7 +145,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 
 	var pbqManager *pbq.Manager
 
-	pbqManager, _ = pbq.NewManager(ctx)
+	pbqManager, _ = pbq.NewManager(ctx, memory.NewMemoryStores())
 
 	test1Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
 	test1Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
