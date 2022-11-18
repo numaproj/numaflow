@@ -26,14 +26,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -204,7 +201,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	var pbqManager *pbq.Manager
 
 	// create pbqManager
-	pbqManager, err = pbq.NewManager(child, pbq.WithPBQStoreOptions(store.WithStoreSize(100), store.WithPbqStoreType(dfv1.InMemoryType)),
+	pbqManager, err = pbq.NewManager(child, memory.NewMemoryStores(memory.WithStoreSize(100)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -273,7 +270,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(1000), store.WithPbqStoreType(dfv1.InMemoryType)),
+	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -346,7 +343,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(1000), store.WithPbqStoreType(dfv1.InMemoryType)),
+	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -419,7 +416,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(1000), store.WithPbqStoreType(dfv1.InMemoryType)),
+	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -492,7 +489,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, pbq.WithPBQStoreOptions(store.WithStoreSize(1000), store.WithPbqStoreType(dfv1.InMemoryType)),
+	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 

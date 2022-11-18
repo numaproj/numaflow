@@ -173,7 +173,10 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	// Watch Pods
-	if err := vertexController.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.Vertex{}, IsController: true}); err != nil {
+	if err := vertexController.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.Vertex{}, IsController: true},
+		predicate.Funcs{
+			CreateFunc: func(event.CreateEvent) bool { return false }, // Do not watch pod create events
+		}); err != nil {
 		logger.Fatalw("Unable to watch Pods", zap.Error(err))
 	}
 

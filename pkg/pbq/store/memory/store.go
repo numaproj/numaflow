@@ -17,13 +17,11 @@ limitations under the License.
 package memory
 
 import (
-	"context"
 	"math"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"go.uber.org/zap"
 )
 
@@ -33,25 +31,9 @@ type memoryStore struct {
 	writePos    int64
 	readPos     int64
 	storage     []*isb.ReadMessage
-	options     *store.StoreOptions
+	storeSize   int64
 	log         *zap.SugaredLogger
 	partitionID partition.ID
-}
-
-// NewMemoryStore returns new memory store
-func NewMemoryStore(ctx context.Context, partitionID partition.ID, options *store.StoreOptions) (store.Store, error) {
-
-	memStore := &memoryStore{
-		writePos:    0,
-		readPos:     0,
-		closed:      false,
-		storage:     make([]*isb.ReadMessage, options.StoreSize()),
-		options:     options,
-		log:         logging.FromContext(ctx).With("PBQ store", "Memory store").With("Partition ID", partitionID),
-		partitionID: partitionID,
-	}
-
-	return memStore, nil
 }
 
 // ReadFromStore will return upto N messages persisted in store
@@ -72,7 +54,7 @@ func (m *memoryStore) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 
 // WriteToStore writes a message to store
 func (m *memoryStore) Write(msg *isb.ReadMessage) error {
-	if m.writePos >= m.options.StoreSize() {
+	if m.writePos >= m.storeSize {
 		m.log.Errorw(store.WriteStoreFullErr.Error(), zap.Any("msg header", msg.Header))
 		return store.WriteStoreFullErr
 	}

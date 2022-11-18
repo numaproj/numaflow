@@ -17,9 +17,9 @@ limitations under the License.
 package pbq
 
 import (
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"time"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 type options struct {
@@ -29,12 +29,6 @@ type options struct {
 	readTimeout time.Duration
 	// readBatchSize max size of batch to read from store
 	readBatchSize int64
-	// storeOptions options for pbq store
-	storeOptions *store.StoreOptions
-}
-
-func (o *options) StoreOptions() *store.StoreOptions {
-	return o.storeOptions
 }
 
 type PBQOption func(options *options) error
@@ -44,7 +38,6 @@ func DefaultOptions() *options {
 		channelBufferSize: dfv1.DefaultPBQChannelBufferSize,
 		readTimeout:       dfv1.DefaultPBQReadTimeout,
 		readBatchSize:     dfv1.DefaultPBQReadBatchSize,
-		storeOptions:      store.DefaultOptions(),
 	}
 }
 
@@ -68,19 +61,6 @@ func WithReadTimeout(seconds time.Duration) PBQOption {
 func WithReadBatchSize(size int64) PBQOption {
 	return func(o *options) error {
 		o.readBatchSize = size
-		return nil
-	}
-}
-
-// WithPBQStoreOptions sets different pbq store options
-func WithPBQStoreOptions(opts ...store.StoreOption) PBQOption {
-	return func(options *options) error {
-		for _, opt := range opts {
-			err := opt(options.storeOptions)
-			if err != nil {
-				return err
-			}
-		}
 		return nil
 	}
 }

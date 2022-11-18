@@ -22,11 +22,11 @@ import (
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,14 +34,13 @@ import (
 
 func TestPBQ_ReadWrite(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
-	storeSize := 100
+	storeSize := int64(100)
 	// create a pbq with buffer size 5
 	buffSize := 5
 
 	ctx := context.Background()
 
-	qManager, _ := NewManager(ctx, WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second),
-		WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType), store.WithStoreSize(int64(storeSize))))
+	qManager, _ := NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(storeSize)), WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
 
 	// write 10 isb messages to persisted store
 	msgCount := 10
@@ -94,7 +93,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 
 func Test_PBQReadWithCanceledContext(t *testing.T) {
 	// create a store of size 100 (it can store max 100 messages)
-	storeSize := 100
+	storeSize := int64(100)
 	//create a pbq with buffer size 10
 	bufferSize := 10
 	var err error
@@ -102,8 +101,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 
 	ctx := context.Background()
 
-	qManager, err = NewManager(ctx, WithChannelBufferSize(int64(bufferSize)), WithReadTimeout(1*time.Second),
-		WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType), store.WithStoreSize(int64(storeSize))))
+	qManager, err = NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(storeSize)), WithChannelBufferSize(int64(bufferSize)), WithReadTimeout(1*time.Second))
 
 	assert.NoError(t, err)
 
@@ -162,15 +160,14 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 func TestPBQ_WriteWithStoreFull(t *testing.T) {
 
 	// create a store of size 100 (it can store max 100 messages)
-	storeSize := 100
+	storeSize := int64(100)
 	// create a pbq with buffer size 101
 	buffSize := 101
 	var qManager *Manager
 	var err error
 	ctx := context.Background()
 
-	qManager, err = NewManager(ctx, WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second),
-		WithPBQStoreOptions(store.WithPbqStoreType(dfv1.InMemoryType), store.WithStoreSize(int64(storeSize))))
+	qManager, err = NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(storeSize)), WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
 	assert.NoError(t, err)
 
 	// write 101 isb messages to pbq, but the store size is 100, we should get store is full error
