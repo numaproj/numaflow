@@ -29,22 +29,20 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
 )
 
 func Test_writeReadHeader(t *testing.T) {
-	id := &partition.ID{
+	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
 		Key:   "test1",
 	}
 
 	tmp := t.TempDir()
-	opts := &store.StoreOptions{}
-	err := store.WithStorePath(tmp)(opts)
+	stores := NewWALStores(WithStorePath(tmp))
+	store, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
-
-	wal, err := NewWAL(context.Background(), id, opts)
+	wal := store.(*WAL)
 	fName := wal.fp.Name()
 	assert.NoError(t, err)
 	// read will fail because the file was opened only in write only mode
@@ -61,7 +59,7 @@ func Test_writeReadHeader(t *testing.T) {
 	assert.Error(t, err)
 
 	// compare the original ID with read ID
-	assert.Equal(t, id, openWAL.partitionID)
+	assert.Equal(t, id, *openWAL.partitionID)
 }
 
 func Test_encodeDecodeHeader(t *testing.T) {
@@ -129,18 +127,15 @@ func Test_runeEncoding(t *testing.T) {
 }
 
 func Test_writeReadEntry(t *testing.T) {
-	id := &partition.ID{
+	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
 		Key:   "test1",
 	}
 
 	tmp := t.TempDir()
-	opts := &store.StoreOptions{}
-	err := store.WithStorePath(tmp)(opts)
-	assert.NoError(t, err)
-
-	wal, err := NewWAL(context.Background(), id, opts)
+	stores := NewWALStores(WithStorePath(tmp))
+	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
 	startTime := time.Unix(1665109020, 0).In(location)
@@ -153,17 +148,18 @@ func Test_writeReadEntry(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Reopen the WAL for read and write.
-	wal, err = NewWAL(context.Background(), id, opts)
+	store, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
+	newWal := store.(*WAL)
 	// we have already read the header in OpenWAL
-	_, err = wal.readHeader()
+	_, err = newWal.readHeader()
 	assert.Error(t, err)
 
-	actualMessages, finished, err := wal.Read(10000)
+	actualMessages, finished, err := newWal.Read(10000)
 	assert.NoError(t, err)
 	// Check we reach the end of file
 	assert.Equal(t, true, finished)
-	assert.Equal(t, wal.readUpTo, wal.rOffset)
+	assert.Equal(t, newWal.readUpTo, newWal.rOffset)
 
 	assert.Len(t, actualMessages, 1)
 	actualMessage := actualMessages[0]
@@ -176,9 +172,9 @@ func Test_writeReadEntry(t *testing.T) {
 	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeEntry(%v)", message.Watermark)
 
 	// Start to write an entry again
-	err = wal.Write(&message)
+	err = newWal.Write(&message)
 	assert.NoError(t, err)
-	err = wal.Close()
+	err = newWal.Close()
 	assert.NoError(t, err)
 }
 
