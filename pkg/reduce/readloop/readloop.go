@@ -152,6 +152,20 @@ func (rl *ReadLoop) writeMessagesToWindows(ctx context.Context, messages []*isb.
 
 messagesLoop:
 	for _, message := range messages {
+		// NOTE(potential bug): if we get a message where the event time is < watermark, skip processing the message.
+		// This could be due to a couple of problem, eg. ack was not registered, etc.
+		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
+		// to be violated.
+		if message.EventTime.Before(message.Watermark) {
+			// TODO: track as a counter metric
+			rl.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.Unix()), zap.Int64("watermark", message.Watermark.Unix()), zap.Any("message", message.Message))
+			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
+			writtenMessages = append(writtenMessages, message)
+			// let's not continue processing this message, most likely the window has already been closed and the message
+			// won't be processed anyways.
+			continue
+		}
+
 		// identify and add window for the message
 		windows := rl.upsertWindowsAndKeys(message)
 		// for each window we will have a PBQ. A message could belong to multiple windows (e.g., sliding).
@@ -214,6 +228,7 @@ func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadM
 	return err
 }
 
+// ackMessages acks messages. Retries until it can succeed or ctx.Done() happens.
 func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage) error {
 	var err error
 	var ackBackoff = wait.Backoff{
