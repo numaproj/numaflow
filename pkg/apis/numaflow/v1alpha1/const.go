@@ -130,63 +130,14 @@ const (
 	DefaultPBQReadTimeout       = 1 * time.Second // Default read timeout for pbq
 	DefaultPBQReadBatchSize     = 100             // Default read batch size for pbq
 
-	// Default persistent store options
-	DefaultStoreSyncDuration  = 2 * time.Second        // Default sync duration for pbq
-	DefaultStoreType          = NoOpType               // Default store type
-	DefaultStoreSize          = 1000000                // Default persistent store size
-	DefaultStoreMaxBufferSize = 100000                 // Default buffer size for pbq in bytes
-	DefaultStorePath          = PathPBQMount + "/wals" // Default store path
-
-	// Default window options
-	DefaultWindowType     = FixedType
-	DefaultWindowDuration = 0
-
 	// PVC mount path for PBQ
 	PathPBQMount = "/var/numaflow/pbq"
+
+	// Default persistent store options
+	DefaultStoreSyncDuration  = 2 * time.Second        // Default sync duration for pbq
+	DefaultStoreMaxBufferSize = 100000                 // Default buffer size for pbq in bytes
+	DefaultStorePath          = PathPBQMount + "/wals" // Default store path
 )
-
-// StoreType is the PBQ store's backend type.
-type StoreType string
-
-const (
-	InMemoryType   StoreType = "in-memory"
-	FileSystemType StoreType = "file-system"
-	NoOpType       StoreType = "no-op"
-)
-
-func (st StoreType) String() string {
-	switch st {
-	case InMemoryType:
-		return string(InMemoryType)
-	case FileSystemType:
-		return string(FileSystemType)
-	case NoOpType:
-		return string(NoOpType)
-	default:
-		return "unknownStoreType"
-	}
-}
-
-type WindowType string
-
-const (
-	FixedType   WindowType = "fixed"
-	SlidingType WindowType = "sliding"
-	SessionType WindowType = "session"
-)
-
-func (wt WindowType) String() string {
-	switch wt {
-	case FixedType:
-		return string(FixedType)
-	case SlidingType:
-		return string(SlidingType)
-	case SessionType:
-		return string(SessionType)
-	default:
-		return "unknownWindowType"
-	}
-}
 
 var (
 	MessageKeyDrop = fmt.Sprintf("%U__DROP__", '\\') // U+005C__DROP__
