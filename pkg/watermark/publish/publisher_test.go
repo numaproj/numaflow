@@ -94,6 +94,6 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 
 	_ = p.Close()
 
-	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetID())
+	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetName())
 	assert.Equal(t, nats.ErrConnectionClosed, err)
 }

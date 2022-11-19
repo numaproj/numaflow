@@ -182,27 +182,13 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
-	// so "p1" will be considered as a new processors and a new offsetTimeline watcher for "p1" will be created
+	// so "p1" will be considered as a new processors with a new default offset timeline
 	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
 	p1 := testBuffer.processorManager.GetProcessor("p1")
-
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
 	assert.NotNil(t, p1.offsetTimeline)
-	// wait till the offsetTimeline has been populated
-	newP1head := p1.offsetTimeline.GetHeadOffset()
-	for newP1head == -1 {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("expected head offset to not be equal to -1, %s", ctx.Err())
-		default:
-			time.Sleep(1 * time.Millisecond)
-			newP1head = p1.offsetTimeline.GetHeadOffset()
-		}
-	}
-	// because we keep the kv updates history in the in mem watermark
-	// the new watcher will read all the history data to create this new offsetTimeline
-	assert.Equal(t, int64(100), p1.offsetTimeline.GetHeadOffset())
+	assert.Equal(t, int64(-1), p1.offsetTimeline.GetHeadOffset())
 
 	// publish a new watermark 101
 	otValueByte, err = otValueToBytes(testOffset+1, epoch)

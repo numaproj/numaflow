@@ -243,25 +243,13 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
-	// so "p1" will be considered as a new processors and a new offsetTimeline watcher for "p1" will be created
+	// so "p1" will be considered as a new processors with a new default offset timeline
 	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
 	p1 := testBuffer.processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
 	assert.NotNil(t, p1.offsetTimeline)
-	// wait till the offsetTimeline has been populated
-	newP1head := p1.offsetTimeline.GetHeadOffset()
-	// because the bucket hasn't been cleaned up, the new watcher will read all the history data to create this new offsetTimeline
-	for newP1head != 102 {
-		fmt.Println(p1.offsetTimeline.Dump())
-		select {
-		case <-ctx.Done():
-			t.Fatalf("expected head offset to be 102, %s", ctx.Err())
-		default:
-			time.Sleep(1 * time.Millisecond)
-			newP1head = p1.offsetTimeline.GetHeadOffset()
-		}
-	}
+	assert.Equal(t, int64(-1), p1.offsetTimeline.GetHeadOffset())
 
 	// publish a new watermark 103
 	otValueByte, err = otValueToBytes(testOffset+3, epoch)
@@ -310,11 +298,11 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	// added 103 in the previous steps for p1, so the head should be 103 after resume
 	assert.Equal(t, int64(103), p1.offsetTimeline.GetHeadOffset())
 
-	for allProcessors["p1"].offsetTimeline.Dump() != "[1651161660000:103] -> [1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for allProcessors["p1"].offsetTimeline.Dump() != "[1651161660000:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the offset timeline [1651161660000:103] -> [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [1651161660000:103] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)

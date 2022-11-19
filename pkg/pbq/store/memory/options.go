@@ -20,21 +20,20 @@ import (
 	"context"
 
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
 )
 
-var discoverer func(*store.StoreOptions) ([]partition.ID, error)
+type Option func(stores *memoryStores)
 
-// DiscoverPartitions discovers the in-memory partitions. This is very useful during testing.
-func DiscoverPartitions(ctx context.Context, options *store.StoreOptions) ([]partition.ID, error) {
-	if discoverer == nil {
-		return []partition.ID{}, nil
+// WithDiscoverer sets the discover func of memorystores
+func WithDiscoverer(f func(ctx context.Context) ([]partition.ID, error)) Option {
+	return func(stores *memoryStores) {
+		stores.discoverFunc = f
 	}
-	return discoverer(options)
 }
 
-// SetDiscoverer sets the function that returns the initial list of partitions
-// Only for testing purposes
-func SetDiscoverer(d func(*store.StoreOptions) ([]partition.ID, error)) {
-	discoverer = d
+// WithStoreSize sets the store size
+func WithStoreSize(size int64) Option {
+	return func(stores *memoryStores) {
+		stores.storeSize = size
+	}
 }
