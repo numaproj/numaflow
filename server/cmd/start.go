@@ -114,8 +114,8 @@ func setBaseHRef(filename string, baseHRef string) error {
 		return err
 	}
 
-	prevHRef := "<base href=\"/\">"
-	newHRef := fmt.Sprintf("<base href=\"%s\">", baseHRef)
+	prevHRef := `<base href="/">`
+	newHRef := fmt.Sprintf(`<base href="%s">`, baseHRef)
 	file = bytes.Replace(file, []byte(prevHRef), []byte(newHRef), -1)
 
 	err = os.WriteFile(filename, file, 0666)
