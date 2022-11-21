@@ -30,6 +30,7 @@ package readloop
 import (
 	"context"
 	"math"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -125,10 +126,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	}
 
 	// ack successful messages
-	err = rl.ackMessages(ctx, successfullyWrittenMessages)
-	if err != nil {
-		rl.log.Errorw("Failed to acks messages", zap.Error(err))
-	}
+	rl.ackMessages(ctx, successfullyWrittenMessages)
 
 	// for each successfully written message,
 	for _, m := range successfullyWrittenMessages {
@@ -229,42 +227,50 @@ func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadM
 }
 
 // ackMessages acks messages. Retries until it can succeed or ctx.Done() happens.
-func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage) error {
-	var err error
+func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage) {
 	var ackBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
 		Duration: 1 * time.Second,
 		Factor:   1.5,
 		Jitter:   0.1,
 	}
+	var wg sync.WaitGroup
+
 	// Ack the message to ISB
 	for _, m := range messages {
-		err := wait.ExponentialBackoff(ackBackoff, func() (done bool, err error) {
-			rErr := m.ReadOffset.AckIt()
-			if rErr != nil {
-				rl.log.Errorw("Failed to ack message", zap.String("msgOffSet", m.ReadOffset.String()), zap.Error(rErr))
-				// no point retrying if ctx.Done has been invoked
-				select {
-				case <-ctx.Done():
-					// no point in retrying after we have been asked to stop.
-					return false, ctx.Err()
-				default:
-					// keep retrying
-					return false, nil
+		wg.Add(1)
+
+		go func(o isb.Offset) {
+			defer wg.Done()
+			attempt := 0
+			ackErr := wait.ExponentialBackoff(ackBackoff, func() (done bool, err error) {
+				rErr := o.AckIt()
+				attempt += 1
+				if rErr != nil {
+					rl.log.Errorw("Failed to ack message, retrying", zap.String("msgOffSet", o.String()), zap.Error(rErr), zap.Int("attempt", attempt))
+					// no point retrying if ctx.Done has been invoked
+					select {
+					case <-ctx.Done():
+						// no point in retrying after we have been asked to stop.
+						return false, ctx.Err()
+					default:
+						// keep retrying
+						return false, nil
+					}
 				}
+				rl.log.Debugw("Successfully acked message", zap.String("msgOffSet", o.String()))
+
+				return true, nil
+			})
+			// no point trying the rest of the message, most likely that will also fail
+			if ackErr != nil {
+				rl.log.Errorw("Context closed while waiting to ack messages inside readloop", zap.Error(ackErr), zap.String("offset", o.String()))
+
 			}
-			rl.log.Debugw("Successfully acked message", zap.String("msgOffSet", m.ReadOffset.String()))
+		}(m.ReadOffset)
 
-			return true, nil
-		})
-		// no point trying the rest of the message, most likely that will also fail
-		if err != nil {
-			rl.log.Errorw("Failed to ack message, exiting the loop", zap.Error(err))
-			break
-		}
 	}
-
-	return err
+	wg.Wait()
 }
 
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
