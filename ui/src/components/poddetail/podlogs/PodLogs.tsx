@@ -88,7 +88,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
     setLogRequestKey(requestKey);
     setLogs(["Loading logs..."]);
     fetch(
-      `/api/v1/namespaces/${namespaceId}/pods/${podName}/log?container=${containerName}&follow=true&tailLines=${MAX_LOGS}`
+      `api/v1/namespaces/${namespaceId}/pods/${podName}/log?container=${containerName}&follow=true&tailLines=${MAX_LOGS}`
     )
       .then((response) => {
         if (response && response.body) {

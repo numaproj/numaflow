@@ -63,7 +63,7 @@ export function Pipeline() {
       Promise.all(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/pods`
+            `api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/pods`
           )
             .then((response) => response.json())
             .then((json) => {
@@ -81,7 +81,7 @@ export function Pipeline() {
       Promise.all(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/metrics`
+            `api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/metrics`
           )
             .then((response) => response.json())
             .then((json) => {
@@ -126,7 +126,7 @@ export function Pipeline() {
       Promise.all(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/watermark`
+            `api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/watermark`
           )
             .then((response) => response.json())
             .then((json) => {

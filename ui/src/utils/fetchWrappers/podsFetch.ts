@@ -16,7 +16,7 @@ export const usePodsFetch = (
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods`
+    `api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods`
   );
 
   useEffect(() => {

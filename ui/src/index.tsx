@@ -23,7 +23,10 @@ const theme = createTheme({
 
 });
 
-
+// todo: should have a basename, i.e.: <BrowserRouter basename="/numaflow">
+// however it shouldn't be /numaflow but rather dynamic & be what base href is
+// ref: https://stackoverflow.com/questions/55007809/dynamic-basename-with-browserrouter-in-react-router-dom
+// can't think of a really clean way to do this while supporting arbitrary long subpaths for base href
 root.render(
   <React.StrictMode>
     <BrowserRouter>

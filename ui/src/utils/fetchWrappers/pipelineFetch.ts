@@ -15,7 +15,7 @@ export const usePipelineFetch = (
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?refreshKey=${requestKey}`
+    `api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?refreshKey=${requestKey}`
   );
 
   useEffect(() => {

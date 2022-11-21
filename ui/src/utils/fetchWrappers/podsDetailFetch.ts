@@ -14,7 +14,7 @@ export const usePodsDetailFetch = (namespaceId: string, requestKey: string) => {
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
+    `api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
   );
 
   useEffect(() => {

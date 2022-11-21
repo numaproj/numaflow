@@ -28,6 +28,7 @@ func NewServerCommand() *cobra.Command {
 		port             int
 		namespaced       bool
 		managedNamespace string
+		baseHRef         string
 	)
 
 	command := &cobra.Command{
@@ -37,12 +38,13 @@ func NewServerCommand() *cobra.Command {
 			if !cmd.Flags().Changed("port") && insecure {
 				port = 8080
 			}
-			svrcmd.Start(insecure, port, namespaced, managedNamespace)
+			svrcmd.Start(insecure, port, namespaced, managedNamespace, baseHRef)
 		},
 	}
 	command.Flags().BoolVar(&insecure, "insecure", false, "Whether to disable TLS, defaults to false.")
 	command.Flags().IntVarP(&port, "port", "p", 8443, "Port to listen on, defaults to 8443 or 8080 if insecure is set")
 	command.Flags().BoolVar(&namespaced, "namespaced", false, "Whether to run in namespaced scope, defaults to false.")
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", sharedutil.LookupEnvStringOr("NAMESPACE", "numaflow-system"), "The namespace that the server watches when \"--namespaced\" is \"true\".")
+	command.Flags().StringVar(&baseHRef, "base-href", "/", "Base href in index.html.  Useful for when the server is running behind a reverse proxy under a path other than /")
 	return command
 }

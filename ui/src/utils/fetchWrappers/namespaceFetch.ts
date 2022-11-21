@@ -9,7 +9,7 @@ export const useNamespaceFetch = (namespaceId: string | undefined) => {
     data,
     loading: fetchLoading,
     error,
-  } = useFetch(`/api/v1/namespaces/${namespaceId}/pipelines`);
+  } = useFetch(`api/v1/namespaces/${namespaceId}/pipelines`);
 
   useEffect(() => {
     if (fetchLoading) {

@@ -17,9 +17,11 @@ limitations under the License.
 package cmd
 
 import (
+	"bytes"
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-contrib/static"
@@ -36,8 +38,13 @@ var (
 	}
 )
 
-func Start(insecure bool, port int, namespaced bool, managedNamespace string) {
+func Start(insecure bool, port int, namespaced bool, managedNamespace string, baseHRef string) {
 	logger := logging.NewLogger().Named("server")
+
+	if err := setBaseHRef("ui/build/index.html", baseHRef); err != nil {
+		panic(err)
+	}
+
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.RedirectTrailingSlash = true
@@ -95,4 +102,22 @@ func Namespace(ns string) gin.HandlerFunc {
 		c.Set("namespace", ns)
 		c.Next()
 	}
+}
+
+func setBaseHRef(filename string, baseHRef string) error {
+	if baseHRef == "/" {
+		return nil
+	}
+
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	prevHRef := "<base href=\"/\">"
+	newHRef := fmt.Sprintf("<base href=\"%s\">", baseHRef)
+	file = bytes.Replace(file, []byte(prevHRef), []byte(newHRef), -1)
+
+	err = os.WriteFile(filename, file, 0666)
+	return err
 }

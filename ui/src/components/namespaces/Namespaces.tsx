@@ -16,7 +16,7 @@ import "./Namespaces.css";
 
 
 export function Namespaces() {
-  const { data } = useFetch("/api/v1/namespaces");
+  const { data } = useFetch("api/v1/namespaces");
 
   return (
     <div className="Namespaces">
