@@ -102,6 +102,8 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 		// crosses the window.
 
 		alignedKeyedWindow := keyed.NewKeyedWindow(p.Start, p.End)
+		// add key to the window
+		alignedKeyedWindow.AddKey(p.Key)
 
 		// These windows have to be recreated as they are completely in-memory
 		rl.windower.CreateWindow(alignedKeyedWindow)
