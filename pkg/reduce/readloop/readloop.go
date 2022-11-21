@@ -242,10 +242,12 @@ func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage
 
 		go func(o isb.Offset) {
 			defer wg.Done()
+			attempt := 0
 			ackErr := wait.ExponentialBackoff(ackBackoff, func() (done bool, err error) {
 				rErr := o.AckIt()
+				attempt += 1
 				if rErr != nil {
-					rl.log.Errorw("Failed to ack message", zap.String("msgOffSet", o.String()), zap.Error(rErr))
+					rl.log.Errorw("Failed to ack message, retrying", zap.String("msgOffSet", o.String()), zap.Error(rErr), zap.Int("attempt", attempt))
 					// no point retrying if ctx.Done has been invoked
 					select {
 					case <-ctx.Done():
@@ -262,7 +264,7 @@ func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage
 			})
 			// no point trying the rest of the message, most likely that will also fail
 			if ackErr != nil {
-				rl.log.Errorw("Failed to ack message", zap.Error(ackErr), zap.String("offset", o.String()))
+				rl.log.Errorw("Context closed while waiting to ack messages inside readloop", zap.Error(ackErr), zap.String("offset", o.String()))
 
 			}
 		}(m.ReadOffset)
