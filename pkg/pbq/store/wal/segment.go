@@ -73,7 +73,12 @@ type WAL struct {
 }
 
 // writeHeader writes the header to the file
-func (w *WAL) writeHeader() error {
+func (w *WAL) writeHeader() (err error) {
+	defer func() {
+		if err != nil {
+			walErrors.With(map[string]string{"kind": "writeHeader"}).Inc()
+		}
+	}()
 	header, err := encodeHeader(w.partitionID)
 	if err != nil {
 		return err
@@ -110,8 +115,13 @@ type entryHeaderPreamble struct {
 //	+--------------------+------------------+-----------------+------------+
 //
 // We require the key-len because key is variadic.
-func encodeHeader(id *partition.ID) (*bytes.Buffer, error) {
-	buf := new(bytes.Buffer)
+func encodeHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
+	defer func() {
+		if err != nil {
+			walErrors.With(map[string]string{"kind": "encodeHeader"}).Inc()
+		}
+	}()
+	buf = new(bytes.Buffer)
 	hp := headerPreamble{
 		S:    id.Start.UnixMilli(),
 		E:    id.End.UnixMilli(),
@@ -119,7 +129,7 @@ func encodeHeader(id *partition.ID) (*bytes.Buffer, error) {
 	}
 
 	// write the fixed values
-	err := binary.Write(buf, binary.LittleEndian, hp)
+	err = binary.Write(buf, binary.LittleEndian, hp)
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +140,13 @@ func encodeHeader(id *partition.ID) (*bytes.Buffer, error) {
 	return buf, err
 }
 
-func encodeEntry(message *isb.ReadMessage) (*bytes.Buffer, error) {
-	buf := new(bytes.Buffer)
+func encodeEntry(message *isb.ReadMessage) (buf *bytes.Buffer, err error) {
+	defer func() {
+		if err != nil {
+			walErrors.With(map[string]string{"kind": "encodeEntry"}).Inc()
+		}
+	}()
+	buf = new(bytes.Buffer)
 	body, err := encodeEntryBody(message)
 	if err != nil {
 		return nil, err
@@ -181,6 +196,7 @@ func encodeEntryHeader(message *isb.ReadMessage, messageLen int64, checksum uint
 	buf := new(bytes.Buffer)
 	err = binary.Write(buf, binary.LittleEndian, entryHeader)
 	if err != nil {
+		walErrors.With(map[string]string{"kind": "encodeEntryHeader"}).Inc()
 		return nil, err
 	}
 	return buf, nil
@@ -191,6 +207,7 @@ func encodeEntryBody(message *isb.ReadMessage) (*bytes.Buffer, error) {
 	enc := gob.NewEncoder(m)
 	err := enc.Encode(message.Message)
 	if err != nil {
+		walErrors.With(map[string]string{"kind": "encodeEntryBody"}).Inc()
 		return nil, fmt.Errorf("entry body encountered encode err: %w", err)
 	}
 	return m, nil
@@ -208,7 +225,12 @@ func calculateChecksum(data []byte) uint32 {
 //	+-------------------+----------------+-----------------+--------------+----------------+
 //
 // CRC will be used for detecting entry corruptions.
-func (w *WAL) Write(message *isb.ReadMessage) error {
+func (w *WAL) Write(message *isb.ReadMessage) (err error) {
+	defer func() {
+		if err != nil {
+			walErrors.With(map[string]string{"kind": "write"}).Inc()
+		}
+	}()
 	writeStart := time.Now()
 	entry, err := encodeEntry(message)
 	if err != nil {
@@ -235,9 +257,9 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 		w.prevSyncedTime = currentTime
 		fSyncStart := time.Now()
 		err = w.fp.Sync()
-		fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
+		fileSyncWaitTime.With(map[string]string{labelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
 		if err == nil {
-			entryWriteTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(writeStart).Milliseconds()) / float64(w.numOfUnsyncedMsgs))
+			entryWriteTime.With(map[string]string{labelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(writeStart).Milliseconds()) / float64(w.numOfUnsyncedMsgs))
 			entriesCount.With(map[string]string{}).Add(float64(w.numOfUnsyncedMsgs))
 		}
 		w.numOfUnsyncedMsgs = 0
@@ -247,10 +269,15 @@ func (w *WAL) Write(message *isb.ReadMessage) error {
 }
 
 // Close closes the WAL Segment.
-func (w *WAL) Close() error {
+func (w *WAL) Close() (err error) {
+	defer func() {
+		if err != nil {
+			walErrors.With(map[string]string{"kind": "close"}).Inc()
+		}
+	}()
 	start := time.Now()
-	err := w.fp.Sync()
-	fileSyncWaitTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Milliseconds()))
+	err = w.fp.Sync()
+	fileSyncWaitTime.With(map[string]string{labelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Milliseconds()))
 
 	if err != nil {
 		return err
@@ -267,7 +294,12 @@ func (w *WAL) Close() error {
 }
 
 // GC cleans up the WAL Segment.
-func (w *WAL) GC() error {
+func (w *WAL) GC() (err error) {
+	defer func() {
+		if err != nil {
+			walErrors.With(map[string]string{"kind": "gc"}).Inc()
+		}
+	}()
 	start := time.Now()
 	if !w.closed {
 		err := w.Close()
@@ -275,11 +307,11 @@ func (w *WAL) GC() error {
 			return err
 		}
 	}
-	err := os.Remove(w.fp.Name())
+	err = os.Remove(w.fp.Name())
 
 	if err == nil {
-		garbageCollectingTime.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
-		lifespan.With(map[string]string{LabelPartitionKey: w.partitionID.Key}).Observe(time.Since(w.createTime).Minutes())
+		garbageCollectingTime.With(map[string]string{labelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+		lifespan.With(map[string]string{labelPartitionKey: w.partitionID.Key}).Observe(time.Since(w.createTime).Minutes())
 		activeFilesCount.With(map[string]string{}).Dec()
 	}
 	return err
