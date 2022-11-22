@@ -233,7 +233,7 @@ loop:
 		select {
 		case r := <-mg.srcchan:
 			tickgenSourceReadCount.With(map[string]string{metricspkg.LabelVertex: mg.name, metricspkg.LabelPipeline: mg.pipelineName}).Inc()
-			msgs = append(msgs, newreadmessage(r.data, r.offset))
+			msgs = append(msgs, mg.newreadmessage(r.data, r.offset))
 		case <-timeout:
 			mg.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
 			break loop
@@ -323,12 +323,12 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 	}()
 }
 
-func newreadmessage(payload []byte, offset int64) *isb.ReadMessage {
+func (mg *memgen) newreadmessage(payload []byte, offset int64) *isb.ReadMessage {
 	msg := isb.Message{
 		Header: isb.Header{
 			// TODO: insert the right time based on the generator
 			PaneInfo: isb.PaneInfo{EventTime: timefromNanos(parseTime(payload))},
-			ID:       strconv.FormatInt(offset, 10),
+			ID:       strconv.FormatInt(offset, 10) + "-" + strconv.FormatInt(int64(mg.vertexInstance.Replica), 10),
 		},
 		Body: isb.Body{Payload: payload},
 	}
