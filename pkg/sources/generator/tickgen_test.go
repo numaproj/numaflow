@@ -37,8 +37,7 @@ import (
 
 func TestRead(t *testing.T) {
 	dest := simplebuffer.NewInMemoryBuffer("writer", 20)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
+	ctx := context.Background()
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "memgen",
