@@ -80,8 +80,7 @@ func (t *TestStore) GC() error {
 
 // mock store provider for test
 type StoreProviderTest struct {
-	partitions   []partition.ID
-	discoverFunc func(ctx context.Context) ([]partition.ID, error)
+	partitions []partition.ID
 }
 
 func NewStoreProviderTest(partitions []partition.ID) store.StoreProvider {

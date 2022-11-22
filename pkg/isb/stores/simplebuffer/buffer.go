@@ -163,7 +163,8 @@ func (b *InMemoryBuffer) blockIfEmpty(ctx context.Context) error {
 
 func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var readMessages = make([]*isb.ReadMessage, 0, count)
-	cctx, _ := context.WithTimeout(ctx, b.readTimeout)
+	cctx, cancel := context.WithTimeout(ctx, b.readTimeout)
+	defer cancel()
 	for i := int64(0); i < count; i++ {
 		// wait till we have data
 		if err := b.blockIfEmpty(cctx); err != nil {
