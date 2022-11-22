@@ -80,12 +80,13 @@ func (t *TestStore) GC() error {
 
 // mock store provider for test
 type StoreProviderTest struct {
+	partitions   []partition.ID
 	discoverFunc func(ctx context.Context) ([]partition.ID, error)
 }
 
-func NewStoreProviderTest(f func(ctx context.Context) ([]partition.ID, error)) store.StoreProvider {
+func NewStoreProviderTest(partitions []partition.ID) store.StoreProvider {
 	return &StoreProviderTest{
-		discoverFunc: f,
+		partitions: partitions,
 	}
 }
 
@@ -103,7 +104,7 @@ func (i *StoreProviderTest) CreateStore(ctx context.Context, id partition.ID) (s
 }
 
 func (i *StoreProviderTest) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
-	return i.discoverFunc(ctx)
+	return i.partitions, nil
 }
 
 // testing startup code with replay included using in-memory pbq
@@ -130,12 +131,8 @@ func TestReadLoop_Startup(t *testing.T) {
 		},
 	}
 
-	discoverer := func(ctx context.Context) ([]partition.ID, error) {
-		return partitionIds, nil
-	}
-
 	// in-memory store
-	storeProvider := NewStoreProviderTest(discoverer)
+	storeProvider := NewStoreProviderTest(partitionIds)
 	pManager, _ := pbq.NewManager(ctx, storeProvider, pbq.WithChannelBufferSize(10))
 
 	to1 := simplebuffer.NewInMemoryBuffer("reduce-buffer", 3)

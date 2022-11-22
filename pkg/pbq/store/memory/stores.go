@@ -28,11 +28,13 @@ import (
 type memoryStores struct {
 	storeSize    int64
 	discoverFunc func(ctx context.Context) ([]partition.ID, error)
+	partitions   []partition.ID
 }
 
 func NewMemoryStores(opts ...Option) store.StoreProvider {
 	s := &memoryStores{
-		storeSize: 100,
+		storeSize:  100,
+		partitions: make([]partition.ID, 0),
 	}
 	for _, o := range opts {
 		o(s)
@@ -50,6 +52,7 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 		log:         logging.FromContext(ctx).With("pbqStore", "Memory").With("partitionID", partitionID),
 		partitionID: partitionID,
 	}
+	ms.partitions = append(ms.partitions, partitionID)
 
 	return memStore, nil
 }
@@ -58,5 +61,5 @@ func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID,
 	if ms.discoverFunc != nil {
 		return ms.discoverFunc(ctx)
 	}
-	return []partition.ID{}, nil
+	return ms.partitions, nil
 }

@@ -103,7 +103,8 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 		// crosses the window.
 
 		alignedKeyedWindow := keyed.NewKeyedWindow(p.Start, p.End)
-		// add key to the window
+		// add key to the window, so that when a new message with the watermark greater than
+		// the window end time comes, key will not be lost and the windows will be closed as expected
 		alignedKeyedWindow.AddKey(p.Key)
 
 		// These windows have to be recreated as they are completely in-memory
