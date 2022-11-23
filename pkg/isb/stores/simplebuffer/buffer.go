@@ -33,13 +33,13 @@ import (
 
 // InMemoryBuffer implements ISB interface.
 type InMemoryBuffer struct {
-	name        string
-	size        int64
-	buffer      []elem
-	writeIdx    int64
-	readIdx     int64
-	readTimeout time.Duration
-	rwlock      *sync.RWMutex
+	name     string
+	size     int64
+	buffer   []elem
+	writeIdx int64
+	readIdx  int64
+	options  *options
+	rwlock   *sync.RWMutex
 }
 
 var _ isb.BufferReader = (*InMemoryBuffer)(nil)
@@ -55,15 +55,24 @@ type elem struct {
 }
 
 // NewInMemoryBuffer returns a new buffer.
-func NewInMemoryBuffer(name string, size int64) *InMemoryBuffer {
+func NewInMemoryBuffer(name string, size int64, opts ...Option) *InMemoryBuffer {
+
+	bufferOptions := &options{
+		readTimeOut: time.Second, // default read time out
+	}
+
+	for _, o := range opts {
+		_ = o(bufferOptions)
+	}
+
 	sb := &InMemoryBuffer{
-		name:        name,
-		size:        size,
-		buffer:      make([]elem, size),
-		writeIdx:    int64(0),
-		readIdx:     int64(0),
-		rwlock:      new(sync.RWMutex),
-		readTimeout: time.Second, // default read time out
+		name:     name,
+		size:     size,
+		buffer:   make([]elem, size),
+		writeIdx: int64(0),
+		readIdx:  int64(0),
+		rwlock:   new(sync.RWMutex),
+		options:  bufferOptions,
 	}
 	return sb
 }
@@ -163,7 +172,7 @@ func (b *InMemoryBuffer) blockIfEmpty(ctx context.Context) error {
 
 func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var readMessages = make([]*isb.ReadMessage, 0, count)
-	cctx, cancel := context.WithTimeout(ctx, b.readTimeout)
+	cctx, cancel := context.WithTimeout(ctx, b.options.readTimeOut)
 	defer cancel()
 	for i := int64(0); i < count; i++ {
 		// wait till we have data
