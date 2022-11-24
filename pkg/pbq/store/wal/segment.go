@@ -21,13 +21,13 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"hash/crc32"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 )
 

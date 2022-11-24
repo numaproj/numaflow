@@ -21,13 +21,11 @@ package reduce
 
 import (
 	"context"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"time"
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/window"
-
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -36,6 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // DataForward reads data from isb and forwards them to readloop

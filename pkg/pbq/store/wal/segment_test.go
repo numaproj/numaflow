@@ -19,7 +19,6 @@ package wal
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"testing"
 	"time"
@@ -63,6 +62,9 @@ func Test_writeReadHeader(t *testing.T) {
 
 	// compare the original ID with read ID
 	assert.Equal(t, id, *openWAL.partitionID)
+
+	err = openWAL.Close()
+	assert.NoError(t, err)
 }
 
 func Test_encodeDecodeHeader(t *testing.T) {
@@ -105,33 +107,9 @@ func Test_encodeDecodeHeader(t *testing.T) {
 			result, err := decodeHeader(got)
 			assert.NoError(t, err)
 			assert.Equalf(t, tt.id, result, "encodeHeader(%v)", tt.id)
-		})
-	}
-}
-
-// Keran - Do we need to test the functionality of third-party library?
-func Test_runeEncoding(t *testing.T) {
-	var inputs = [][]rune{
-		{'世', '界'},
-		{'1', '2'},
-		{'g', 'o', 'o', 'd', ' ', 'b', 'y', 'e'},
-	}
-	for _, input := range inputs {
-		var err error
-		// write
-		var buf = new(bytes.Buffer)
-		for _, runeValue := range input {
-			err := binary.Write(buf, binary.LittleEndian, runeValue)
+			err = newWal.Close()
 			assert.NoError(t, err)
-		}
-
-		// read
-		var output = make([]rune, len(input))
-		err = binary.Read(buf, binary.LittleEndian, &output)
-		assert.NoError(t, err)
-
-		assert.NotEmpty(t, output[0]) // shouldn't be 0 at any cost
-		assert.Equal(t, input, output)
+		})
 	}
 }
 
@@ -188,12 +166,6 @@ func Test_writeReadEntry(t *testing.T) {
 }
 
 func Test_encodeDecodeEntry(t *testing.T) {
-	id := partition.ID{
-		Start: time.Unix(1665109020, 0).In(location),
-		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
-		Key:   "test1",
-	}
-
 	// write 1 isb messages to persisted store
 	startTime := time.Unix(1665109020, 0).In(location)
 	writeMessages := testutils.BuildTestReadMessagesIntOffset(1, startTime)
@@ -225,7 +197,7 @@ func Test_encodeDecodeEntry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := t.TempDir()
 			stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
-			wal, err := stores.CreateStore(context.Background(), id)
+			wal, err := stores.CreateStore(context.Background(), partition.ID{})
 			assert.NoError(t, err)
 			newWal := wal.(*WAL)
 
@@ -243,6 +215,8 @@ func Test_encodeDecodeEntry(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equalf(t, expectedOffset, actualOffset, "encodeEntry(%v)", tt.message.ReadOffset)
 			assert.Equalf(t, tt.message.Watermark, result.Watermark, "encodeEntry(%v)", tt.message.Watermark)
+			err = newWal.Close()
+			assert.NoError(t, err)
 		})
 	}
 }

@@ -19,13 +19,13 @@ package wal
 import (
 	"context"
 	"fmt"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
 )
@@ -54,7 +54,6 @@ func NewWALStores(pipelineName string, vertexName string, opts ...Option) store.
 	return s
 }
 
-// keran - Why context if not used at all.
 func (ws *walStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
 	// Create wal dir if not exist
 	var err error
@@ -145,7 +144,6 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 	return wal, err
 }
 
-// Keran - -why context if not used at all.
 func (ws *walStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
 	files, err := os.ReadDir(ws.storePath)
 	if os.IsNotExist(err) {
