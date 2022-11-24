@@ -31,6 +31,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 )
 
+const testPipelineName = "test-pipeline-name"
+const testVertexName = "test-vertex-name"
+
 func Test_writeReadHeader(t *testing.T) {
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
@@ -39,7 +42,7 @@ func Test_writeReadHeader(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(WithStorePath(tmp))
+	stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
 	store, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 	wal := store.(*WAL)
@@ -90,7 +93,12 @@ func Test_encodeDecodeHeader(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := encodeHeader(tt.id)
+			tmp := t.TempDir()
+			stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
+			wal, err := stores.CreateStore(context.Background(), *tt.id)
+			assert.NoError(t, err)
+			newWal := wal.(*WAL)
+			got, err := newWal.encodeHeader(tt.id)
 			if !tt.wantErr(t, err, fmt.Sprintf("encodeHeader(%v)", tt.id)) {
 				return
 			}
@@ -101,6 +109,7 @@ func Test_encodeDecodeHeader(t *testing.T) {
 	}
 }
 
+// Keran - Do we need to test the functionality of third-party library?
 func Test_runeEncoding(t *testing.T) {
 	var inputs = [][]rune{
 		{'世', '界'},
@@ -134,7 +143,7 @@ func Test_writeReadEntry(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(WithStorePath(tmp))
+	stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
@@ -179,6 +188,12 @@ func Test_writeReadEntry(t *testing.T) {
 }
 
 func Test_encodeDecodeEntry(t *testing.T) {
+	id := partition.ID{
+		Start: time.Unix(1665109020, 0).In(location),
+		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
+		Key:   "test1",
+	}
+
 	// write 1 isb messages to persisted store
 	startTime := time.Unix(1665109020, 0).In(location)
 	writeMessages := testutils.BuildTestReadMessagesIntOffset(1, startTime)
@@ -208,7 +223,13 @@ func Test_encodeDecodeEntry(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := encodeEntry(tt.message)
+			tmp := t.TempDir()
+			stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
+			wal, err := stores.CreateStore(context.Background(), id)
+			assert.NoError(t, err)
+			newWal := wal.(*WAL)
+
+			got, err := newWal.encodeEntry(tt.message)
 			if !tt.wantErr(t, err, fmt.Sprintf("encodeEntry(%v)", tt.message)) {
 				return
 			}
@@ -234,7 +255,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(WithStorePath(tmp))
+	stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
@@ -299,7 +320,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(WithStorePath(tmp))
+	stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 

@@ -21,6 +21,7 @@ package reduce
 
 import (
 	"context"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"time"
 
 	"go.uber.org/zap"
@@ -39,6 +40,8 @@ import (
 
 // DataForward reads data from isb and forwards them to readloop
 type DataForward struct {
+	vertexName          string
+	pipelineName        string
 	fromBuffer          isb.BufferReader
 	toBuffers           map[string]isb.BufferWriter
 	readloop            *readloop.ReadLoop
@@ -51,13 +54,15 @@ type DataForward struct {
 
 func NewDataForward(ctx context.Context,
 	udf applier.ReduceApplier,
+	vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	toBuffers map[string]isb.BufferWriter,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	fw fetch.Fetcher,
 	watermarkPublishers map[string]publish.Publisher,
-	windowingStrategy window.Windower, opts ...Option) (*DataForward, error) {
+	windowingStrategy window.Windower,
+	opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
 
@@ -69,6 +74,8 @@ func NewDataForward(ctx context.Context,
 
 	rl := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
 	return &DataForward{
+		vertexName:          vertex.Spec.Name,
+		pipelineName:        vertex.Spec.PipelineName,
 		fromBuffer:          fromBuffer,
 		toBuffers:           toBuffers,
 		readloop:            rl,

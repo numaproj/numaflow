@@ -19,6 +19,7 @@ package wal
 import (
 	"context"
 	"fmt"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,13 +36,17 @@ type walStores struct {
 	maxBatchSize int64
 	// syncDuration timeout to sync to store
 	syncDuration time.Duration
+	pipelineName string
+	vertexName   string
 }
 
-func NewWALStores(opts ...Option) store.StoreProvider {
+func NewWALStores(pipelineName string, vertexName string, opts ...Option) store.StoreProvider {
 	s := &walStores{
 		storePath:    dfv1.DefaultStorePath,
 		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
 		syncDuration: dfv1.DefaultStoreSyncDuration,
+		pipelineName: pipelineName,
+		vertexName:   vertexName,
 	}
 	for _, o := range opts {
 		o(s)
@@ -49,6 +54,7 @@ func NewWALStores(opts ...Option) store.StoreProvider {
 	return s
 }
 
+// keran - Why context if not used at all.
 func (ws *walStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
 	// Create wal dir if not exist
 	var err error
@@ -81,8 +87,8 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 		if err != nil {
 			return nil, err
 		}
-		filesCount.With(map[string]string{}).Inc()
-		activeFilesCount.With(map[string]string{}).Inc()
+		filesCount.With(map[string]string{metricspkg.LabelPipeline: ws.pipelineName, metricspkg.LabelVertex: ws.vertexName}).Inc()
+		activeFilesCount.With(map[string]string{metricspkg.LabelPipeline: ws.pipelineName, metricspkg.LabelVertex: ws.vertexName}).Inc()
 		wal = &WAL{
 			fp:                fp,
 			openMode:          os.O_WRONLY,
@@ -95,6 +101,8 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 			prevSyncedTime:    time.Time{},
 			walStores:         ws,
 			numOfUnsyncedMsgs: 0,
+			pipelineName:      ws.pipelineName,
+			vertexName:        ws.vertexName,
 		}
 
 		err = wal.writeHeader()
@@ -122,6 +130,8 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 			prevSyncedTime:    time.Time{},
 			walStores:         ws,
 			numOfUnsyncedMsgs: 0,
+			pipelineName:      ws.pipelineName,
+			vertexName:        ws.vertexName,
 		}
 		readPartition, err := wal.readHeader()
 		if err != nil {
@@ -135,6 +145,7 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 	return wal, err
 }
 
+// Keran - -why context if not used at all.
 func (ws *walStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
 	files, err := os.ReadDir(ws.storePath)
 	if os.IsNotExist(err) {

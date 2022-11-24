@@ -141,7 +141,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	var storeProvider store.StoreProvider
 	if storage := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage; storage != nil && storage.PersistentVolumeClaim != nil {
-		storeProvider = wal.NewWALStores(wal.WithStorePath(dfv1.DefaultStorePath), wal.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
+		storeProvider = wal.NewWALStores(u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Vertex.Spec.Name, wal.WithStorePath(dfv1.DefaultStorePath), wal.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 	} else {
 		// use in memory type by default
 		storeProvider = memory.NewMemoryStores()
@@ -158,7 +158,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	dataforwarder, err := reduce.NewDataForward(ctx, udfHandler, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, opts...)
+	dataForwarder, err := reduce.NewDataForward(ctx, udfHandler, u.VertexInstance.Vertex, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}
@@ -167,7 +167,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		dataforwarder.Start(ctx)
+		dataForwarder.Start(ctx)
 		log.Info("Forwarder stopped, exiting reduce udf data processor...")
 	}()
 

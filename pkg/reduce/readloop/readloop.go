@@ -170,6 +170,7 @@ messagesLoop:
 		// We need to write the messages to these PBQs.
 		for _, kw := range windows {
 			// identify partition for message
+			// Keran - should partitionID by globally unique? - add pipeline and vertex name?
 			partitionID := partition.ID{
 				Start: kw.StartTime(),
 				End:   kw.EndTime(),
