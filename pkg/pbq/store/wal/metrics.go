@@ -24,7 +24,7 @@ import (
 
 const (
 	labelPartitionKey = "partitionKey"
-	labelErrorKind    = "errorKind"
+	labelErrorKind    = "kind"
 )
 
 // TODO - Adjust metric bucket range after we get more map reduce use cases.
