@@ -115,7 +115,7 @@ func WithLogger(l *zap.SugaredLogger) Option {
 	}
 }
 
-func WithReadTimeOut(timeout time.Duration) Option {
+func WithReadTimeout(timeout time.Duration) Option {
 	return func(o *memgen) error {
 		o.readTimeout = timeout
 		return nil

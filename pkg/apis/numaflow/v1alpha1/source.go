@@ -27,6 +27,8 @@ type Source struct {
 	Kafka *KafkaSource `json:"kafka,omitempty" protobuf:"bytes,2,opt,name=kafka"`
 	// +optional
 	HTTP *HTTPSource `json:"http,omitempty" protobuf:"bytes,3,opt,name=http"`
+	// +optional
+	Nats *NatsSource `json:"nats,omitempty" protobuf:"bytes,4,opt,name=nats"`
 }
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
