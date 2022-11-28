@@ -12,6 +12,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 	"github.com/stretchr/testify/assert"
@@ -57,35 +58,17 @@ func (s *SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.
 	}, nil
 }
 
-// mock store for test
-type TestStore struct {
-	storage []*isb.ReadMessage
-}
-
-func (t *TestStore) Read(_ int64) ([]*isb.ReadMessage, bool, error) {
-	return t.storage, true, nil
-}
-
-func (t *TestStore) Write(_ *isb.ReadMessage) error {
-	return nil
-}
-
-func (t *TestStore) Close() error {
-	return nil
-}
-
-func (t *TestStore) GC() error {
-	return nil
-}
-
 // mock store provider for test
 type StoreProviderTest struct {
-	partitions []partition.ID
+	partitions   []partition.ID
+	memoryStores store.StoreProvider
 }
 
 func NewStoreProviderTest(partitions []partition.ID) store.StoreProvider {
+	memStores := memory.NewMemoryStores(memory.WithStoreSize(100))
 	return &StoreProviderTest{
-		partitions: partitions,
+		partitions:   partitions,
+		memoryStores: memStores,
 	}
 }
 
@@ -96,10 +79,12 @@ func (i *StoreProviderTest) CreateStore(ctx context.Context, id partition.ID) (s
 	} else {
 		msgVal = 3
 	}
+	memStore, _ := i.memoryStores.CreateStore(ctx, id)
 	storeMessages := createStoreMessages(ctx, id.Key, msgVal, id.Start, 10)
-	return &TestStore{
-		storage: storeMessages,
-	}, nil
+	for _, msg := range storeMessages {
+		_ = memStore.Write(msg)
+	}
+	return memStore, nil
 }
 
 func (i *StoreProviderTest) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
