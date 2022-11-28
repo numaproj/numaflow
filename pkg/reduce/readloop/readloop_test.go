@@ -11,7 +11,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
@@ -58,39 +57,6 @@ func (s *SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.
 	}, nil
 }
 
-// mock store provider for test
-type StoreProviderTest struct {
-	partitions   []partition.ID
-	memoryStores store.StoreProvider
-}
-
-func NewStoreProviderTest(partitions []partition.ID) store.StoreProvider {
-	memStores := memory.NewMemoryStores(memory.WithStoreSize(100))
-	return &StoreProviderTest{
-		partitions:   partitions,
-		memoryStores: memStores,
-	}
-}
-
-func (i *StoreProviderTest) CreateStore(ctx context.Context, id partition.ID) (store.Store, error) {
-	var msgVal int
-	if id.Key == "even" {
-		msgVal = 2
-	} else {
-		msgVal = 3
-	}
-	memStore, _ := i.memoryStores.CreateStore(ctx, id)
-	storeMessages := createStoreMessages(ctx, id.Key, msgVal, id.Start, 10)
-	for _, msg := range storeMessages {
-		_ = memStore.Write(msg)
-	}
-	return memStore, nil
-}
-
-func (i *StoreProviderTest) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
-	return i.partitions, nil
-}
-
 // testing startup code with replay included using in-memory pbq
 func TestReadLoop_Startup(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
@@ -115,9 +81,28 @@ func TestReadLoop_Startup(t *testing.T) {
 		},
 	}
 
-	// in-memory store
-	storeProvider := NewStoreProviderTest(partitionIds)
-	pManager, _ := pbq.NewManager(ctx, storeProvider, pbq.WithChannelBufferSize(10))
+	memStoreProvider := memory.NewMemoryStores(memory.WithStoreSize(100))
+
+	for _, id := range partitionIds {
+		memStore, err := memStoreProvider.CreateStore(ctx, id)
+		assert.NoError(t, err)
+
+		var msgVal int
+		if id.Key == "even" {
+			msgVal = 2
+		} else {
+			msgVal = 3
+		}
+
+		// write messages to the store, which will be replayed
+		storeMessages := createStoreMessages(ctx, id.Key, msgVal, id.Start, 10)
+		for _, msg := range storeMessages {
+			err = memStore.Write(msg)
+			assert.NoError(t, err)
+		}
+	}
+
+	pManager, _ := pbq.NewManager(ctx, memStoreProvider, pbq.WithChannelBufferSize(10))
 
 	to1 := simplebuffer.NewInMemoryBuffer("reduce-buffer", 3)
 	toSteps := map[string]isb.BufferWriter{
