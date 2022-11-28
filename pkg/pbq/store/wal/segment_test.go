@@ -25,13 +25,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 )
 
-const testPipelineName = "test-pipeline-name"
-const testVertexName = "test-vertex-name"
+var vi = &dfv1.VertexInstance{
+	Vertex:   &dfv1.Vertex{},
+	Hostname: "test-host",
+	Replica:  0,
+}
 
 func Test_writeReadHeader(t *testing.T) {
 	id := partition.ID{
@@ -41,7 +45,7 @@ func Test_writeReadHeader(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
+	stores := NewWALStores(vi, WithStorePath(tmp))
 	store, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 	wal := store.(*WAL)
@@ -96,7 +100,7 @@ func Test_encodeDecodeHeader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := t.TempDir()
-			stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
+			stores := NewWALStores(vi, WithStorePath(tmp))
 			wal, err := stores.CreateStore(context.Background(), *tt.id)
 			assert.NoError(t, err)
 			newWal := wal.(*WAL)
@@ -121,7 +125,7 @@ func Test_writeReadEntry(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
+	stores := NewWALStores(vi, WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
@@ -196,7 +200,7 @@ func Test_encodeDecodeEntry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := t.TempDir()
-			stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
+			stores := NewWALStores(vi, WithStorePath(tmp))
 			wal, err := stores.CreateStore(context.Background(), partition.ID{})
 			assert.NoError(t, err)
 			newWal := wal.(*WAL)
@@ -229,7 +233,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
+	stores := NewWALStores(vi, WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
@@ -294,7 +298,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(testPipelineName, testVertexName, WithStorePath(tmp))
+	stores := NewWALStores(vi, WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 

@@ -40,13 +40,13 @@ type walStores struct {
 	vertexName   string
 }
 
-func NewWALStores(pipelineName string, vertexName string, opts ...Option) store.StoreProvider {
+func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) store.StoreProvider {
 	s := &walStores{
 		storePath:    dfv1.DefaultStorePath,
 		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
 		syncDuration: dfv1.DefaultStoreSyncDuration,
-		pipelineName: pipelineName,
-		vertexName:   vertexName,
+		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
+		vertexName:   vertexInstance.Vertex.Spec.Name,
 	}
 	for _, o := range opts {
 		o(s)
