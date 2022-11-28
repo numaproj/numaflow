@@ -277,7 +277,7 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 				Subject: jw.subject,
 				Data:    message.Payload,
 			}
-			if pubAck, err := jw.js.PublishMsg(m, nats.MsgId(message.Header.ID)); err != nil { // nats.MsgId() is for exactly-once writing
+			if pubAck, err := jw.js.PublishMsg(m, nats.MsgId(message.Header.ID), nats.AckWait(2*time.Second)); err != nil { // nats.MsgId() is for exactly-once writing
 				errs[idx] = err
 				isbWriteErrors.With(metricsLabels).Inc()
 			} else {
