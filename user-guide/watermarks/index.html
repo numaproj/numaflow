@@ -948,9 +948,87 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Watermarks
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         Watermarks
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#disable-watermark" class="md-nav__link">
+    Disable Watermark
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maxdelay" class="md-nav__link">
+    maxDelay
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#watermark-api" class="md-nav__link">
+    Watermark API
+  </a>
+  
+    <nav class="md-nav" aria-label="Watermark API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-golang" class="md-nav__link">
+    Example Golang
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1286,6 +1364,68 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#disable-watermark" class="md-nav__link">
+    Disable Watermark
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maxdelay" class="md-nav__link">
+    maxDelay
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#watermark-api" class="md-nav__link">
+    Watermark API
+  </a>
+  
+    <nav class="md-nav" aria-label="Watermark API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-golang" class="md-nav__link">
+    Example Golang
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1303,22 +1443,41 @@
 
 
 <h1 id="watermarks">Watermarks<a class="headerlink" href="#watermarks" title="Permanent link">&para;</a></h1>
-<p><code>Watermarks</code> is a real-time streaming technology used to handle late arriving data, it tells how long the system should wait for the late data. Numaflow supports watermarks out-of-the-box. Source vertices generate watermarks based on the event time, and propagate to downstream vertices.</p>
-<p>When processing data in <a href="../user-defined-functions/">User Defined Functions</a>, you can get the current watermark through an API.</p>
-<div class="highlight"><pre><span></span><code><span class="c1">// Go</span><span class="w"></span>
-<span class="kd">func</span><span class="w"> </span><span class="nx">handle</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="w"> </span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">()</span><span class="w"> </span><span class="c1">// Event time</span><span class="w"></span>
-<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">()</span><span class="w"> </span><span class="c1">// Watermark</span><span class="w"></span>
-<span class="w">    </span><span class="o">...</span><span class="w"> </span><span class="o">...</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
-</code></pre></div>
-<p>Watermarks can be disabled with by setting <code>disabled: true</code>. You also can give more time for the system to wait for late data with <code>maxDelay</code>.</p>
+<p>When processing an unbounded data stream, Numaflow has to materialize the results of the processing done on the data. 
+The materialization of the output depends on the notion of time, e.g., the total number of logins served per minute. 
+Without the idea of time inbuilt into the platform, we will not be able to determine the passage of time, which is 
+necessary for grouping elements together to materialize the result. <code>Watermarks</code> is that notion of time which will help
+us group unbounded data into discrete chunks. Numaflow supports watermarks out-of-the-box. 
+Source vertices generate watermarks based on the event time, and propagate to downstream vertices.</p>
+<p>Watermark is defined as <em>“a monotonically increasing timestamp of the oldest work/event not yet completed”</em>. In other words, 
+if the watermark has advanced past some timestamp T, we are guaranteed by its monotonic property that no more processing 
+will occur for on-time events at or before T.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<h3 id="disable-watermark">Disable Watermark<a class="headerlink" href="#disable-watermark" title="Permanent link">&para;</a></h3>
+<p>Watermarks can be disabled with by setting <code>disabled: true</code>. </p>
+<h3 id="maxdelay">maxDelay<a class="headerlink" href="#maxdelay" title="Permanent link">&para;</a></h3>
+<p>Watermark assignments happen at source. Sources could be out of ordered, so sometimes we want to extend the
+window (default is <code>0s</code>) to wait before we start marking data as late-data.
+You can give more time for the system to wait for late data with <code>maxDelay</code> so that the late data within the specified
+time duration will be considered as data on-time. This means, the watermark propagation will be delayed by <code>maxDelay</code>.</p>
+<h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
 <span class="nt">spec</span><span class="p">:</span><span class="w"></span>
 <span class="w">  </span><span class="nt">watermark</span><span class="p">:</span><span class="w"></span>
 <span class="w">    </span><span class="nt">disabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># Optional, defaults to false.</span><span class="w"></span>
 <span class="w">    </span><span class="nt">maxDelay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span><span class="w"> </span><span class="c1"># Optional, defaults to &quot;0s&quot;.</span><span class="w"></span>
+</code></pre></div>
+<h2 id="watermark-api">Watermark API<a class="headerlink" href="#watermark-api" title="Permanent link">&para;</a></h2>
+<p>When processing data in <a href="../user-defined-functions/">User Defined Functions</a>, you can get the current watermark through
+an API. Watermark API is supported in all our client SDKs.</p>
+<h3 id="example-golang">Example Golang<a class="headerlink" href="#example-golang" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// Go</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">handle</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="w"> </span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">()</span><span class="w"> </span><span class="c1">// Event time</span><span class="w"></span>
+<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">()</span><span class="w"> </span><span class="c1">// Watermark</span><span class="w"></span>
+<span class="w">    </span><span class="o">...</span><span class="w"> </span><span class="o">...</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
 </code></pre></div>
 
               
