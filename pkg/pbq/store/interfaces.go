@@ -42,4 +42,6 @@ type StoreProvider interface {
 	CreateStore(context.Context, partition.ID) (Store, error)
 	// DiscoverPartitions discovers all the managed partitions.
 	DiscoverPartitions(context.Context) ([]partition.ID, error)
+	// DeleteStore deletes the store
+	DeleteStore(partition.ID) error
 }

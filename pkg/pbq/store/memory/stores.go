@@ -60,3 +60,8 @@ func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID,
 	}
 	return []partition.ID{}, nil
 }
+
+func (ms *memoryStores) DeleteStore(partitionID partition.ID) error {
+	delete(ms.partitions, partitionID)
+	return nil
+}

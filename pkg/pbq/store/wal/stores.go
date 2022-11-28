@@ -157,3 +157,12 @@ func (ws *walStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, er
 
 	return partitions, nil
 }
+
+func (ws *walStores) DeleteStore(partitionID partition.ID) error {
+	filePath := getSegmentFilePath(&partitionID, ws.storePath)
+	_, err := os.Stat(filePath)
+	if err != nil {
+		return err
+	}
+	return os.Remove(filePath)
+}

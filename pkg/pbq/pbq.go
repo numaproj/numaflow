@@ -92,8 +92,8 @@ func (p *PBQ) GC() error {
 		return err
 	}
 	p.store = nil
-	p.manager.deregister(p.PartitionID)
-	return nil
+	err = p.manager.deregister(p.PartitionID)
+	return err
 }
 
 // replayRecordsFromStore replays store messages when replay flag is set during start up time. It replays by reading from
