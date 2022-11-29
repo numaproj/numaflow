@@ -116,6 +116,50 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 	w.Expect().VertexPodLogContains("sink", "Start -  60000  End -  70000")
 }
 
+func (r *ReduceSuite) TestComplexReducePipeline() {
+	w := r.Given().Pipeline("@testdata/complex-reduce-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+
+	defer w.DeletePipelineAndWait()
+
+	// wait for all the pods to come up
+	w.Expect().
+		VertexPodsRunning().
+		VertexPodLogContains("in", LogSourceVertexStarted).
+		VertexPodLogContains("atoi", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("first-aggregation", LogReduceUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("second-aggregation", LogReduceUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("sink", LogSinkVertexStarted)
+
+	// port forward source vertex(to publish messages)
+	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
+		TerminateAllPodPortForwards()
+
+	// publish messages to source vertex, with event time starting from 60000
+	startTime := 60000
+	for i := 0; i < 300; i++ {
+		eventTime := strconv.Itoa(startTime + i*1000)
+		fmt.Println("event time ", eventTime)
+
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
+			Expect().
+			Status(204)
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).
+			Expect().
+			Status(204)
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).
+			Expect().
+			Status(204)
+	}
+
+	// since the key can be even or odd and the first window duration is 10s(which is keyed)
+	// and the second window duration is 60s(non keyed)
+	// the sum should be 20(for even) and 40(for odd)
+	w.Expect().VertexPodLogContains("sink", "360")
+	w.Expect().VertexPodLogContains("sink", "Start -  60000  End -  120000")
+}
+
 func TestReduceSuite(t *testing.T) {
 	suite.Run(t, new(ReduceSuite))
 }
