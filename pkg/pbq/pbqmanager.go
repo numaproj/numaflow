@@ -196,6 +196,7 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 }
 
 // deregister is intended to be used by PBQ to deregister itself after GC is called.
+// it will also delete the store using the store provider
 func (m *Manager) deregister(partitionID partition.ID) error {
 	m.Lock()
 	defer m.Unlock()

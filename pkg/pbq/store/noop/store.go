@@ -42,7 +42,3 @@ func (p *PBQNoOpStore) Write(msg *isb.ReadMessage) error {
 func (p *PBQNoOpStore) Close() error {
 	return nil
 }
-
-func (p *PBQNoOpStore) GC() error {
-	return nil
-}

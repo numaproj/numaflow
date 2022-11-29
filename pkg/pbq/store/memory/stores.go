@@ -18,6 +18,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
@@ -28,11 +29,21 @@ import (
 type memoryStores struct {
 	storeSize    int64
 	discoverFunc func(ctx context.Context) ([]partition.ID, error)
+	partitions   map[partition.ID]*memoryStore
 }
 
 func NewMemoryStores(opts ...Option) store.StoreProvider {
 	s := &memoryStores{
-		storeSize: 100,
+		storeSize:  100,
+		partitions: make(map[partition.ID]*memoryStore),
+	}
+	// default discover function
+	s.discoverFunc = func(ctx context.Context) ([]partition.ID, error) {
+		partitionsIds := make([]partition.ID, 0)
+		for key := range s.partitions {
+			partitionsIds = append(partitionsIds, key)
+		}
+		return partitionsIds, nil
 	}
 	for _, o := range opts {
 		o(s)
@@ -62,6 +73,13 @@ func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID,
 }
 
 func (ms *memoryStores) DeleteStore(partitionID partition.ID) error {
+	memStore, ok := ms.partitions[partitionID]
+	if !ok {
+		return errors.New("store not found")
+	}
+
+	memStore.storage = nil
+	memStore.writePos = -1
 	delete(ms.partitions, partitionID)
 	return nil
 }
