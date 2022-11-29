@@ -2,7 +2,7 @@
   "swagger": "2.0",
   "info": {
     "title": "Numaflow",
-    "version": "v0.6.3"
+    "version": "v0.6.4"
   },
   "paths": {},
   "definitions": {
