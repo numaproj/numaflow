@@ -61,7 +61,7 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 		log:         logging.FromContext(ctx).With("pbqStore", "Memory").With("partitionID", partitionID),
 		partitionID: partitionID,
 	}
-
+	ms.partitions[partitionID] = memStore
 	return memStore, nil
 }
 
