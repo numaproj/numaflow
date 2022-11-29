@@ -36,7 +36,7 @@ import (
 )
 
 func TestRead(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("writer", 20)
+	dest := simplebuffer.NewInMemoryBuffer("writer", 20, simplebuffer.WithReadTimeOut(10*time.Second))
 	ctx := context.Background()
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{

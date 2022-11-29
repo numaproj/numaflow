@@ -28,11 +28,21 @@ import (
 type memoryStores struct {
 	storeSize    int64
 	discoverFunc func(ctx context.Context) ([]partition.ID, error)
+	partitions   map[partition.ID]store.Store
 }
 
 func NewMemoryStores(opts ...Option) store.StoreProvider {
 	s := &memoryStores{
-		storeSize: 100,
+		storeSize:  100,
+		partitions: make(map[partition.ID]store.Store),
+	}
+	// default discover function
+	s.discoverFunc = func(ctx context.Context) ([]partition.ID, error) {
+		partitionsIds := make([]partition.ID, 0)
+		for key := range s.partitions {
+			partitionsIds = append(partitionsIds, key)
+		}
+		return partitionsIds, nil
 	}
 	for _, o := range opts {
 		o(s)
@@ -41,6 +51,9 @@ func NewMemoryStores(opts ...Option) store.StoreProvider {
 }
 
 func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+	if memStore, ok := ms.partitions[partitionID]; ok {
+		return memStore, nil
+	}
 	memStore := &memoryStore{
 		writePos:    0,
 		readPos:     0,
@@ -50,13 +63,11 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 		log:         logging.FromContext(ctx).With("pbqStore", "Memory").With("partitionID", partitionID),
 		partitionID: partitionID,
 	}
+	ms.partitions[partitionID] = memStore
 
 	return memStore, nil
 }
 
 func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
-	if ms.discoverFunc != nil {
-		return ms.discoverFunc(ctx)
-	}
-	return []partition.ID{}, nil
+	return ms.discoverFunc(ctx)
 }
