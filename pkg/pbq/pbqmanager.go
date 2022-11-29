@@ -152,7 +152,6 @@ func (m *Manager) ShutDown(ctx context.Context) {
 	// iterate through the map of pbq
 	// close all the pbq
 	var wg sync.WaitGroup
-
 	var PBQCloseBackOff = wait.Backoff{
 		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
