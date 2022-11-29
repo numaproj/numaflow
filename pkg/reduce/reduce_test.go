@@ -291,7 +291,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	go reduceDataForward.Start(ctx)
 
 	// start the producer
-	go publishMessages(ctx, startTime, messageValue, 300, 10, p[fromBuffer.GetName()], fromBuffer, 0)
+	go publishMessages(ctx, startTime, messageValue, 300, 10, p[fromBuffer.GetName()], fromBuffer)
 
 	// wait until there is data in to buffer
 	for buffer.IsEmpty() {
@@ -364,7 +364,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	go reduceDataForward.Start(ctx)
 
 	// start the producer
-	go publishMessages(ctx, startTime, messageValue, 300, 10, p[fromBuffer.GetName()], fromBuffer, 0)
+	go publishMessages(ctx, startTime, messageValue, 300, 10, p[fromBuffer.GetName()], fromBuffer)
 
 	// wait until there is data in to buffer
 	for buffer.IsEmpty() {
@@ -437,7 +437,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	go reduceDataForward.Start(ctx)
 
 	// start the producer
-	go publishMessages(ctx, startTime, messageValue, 600, 10, p[fromBuffer.GetName()], fromBuffer, 0)
+	go publishMessages(ctx, startTime, messageValue, 600, 10, p[fromBuffer.GetName()], fromBuffer)
 
 	// wait until there is data in to buffer
 	for buffer.IsEmpty() {
@@ -510,7 +510,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	go reduceDataForward.Start(ctx)
 
 	// start the producer
-	go publishMessages(ctx, startTime, messages, 600, 10, p[fromBuffer.GetName()], fromBuffer, 0)
+	go publishMessages(ctx, startTime, messages, 600, 10, p[fromBuffer.GetName()], fromBuffer)
 
 	// wait until there is data in to buffer
 	for buffer.IsEmpty() {
@@ -556,6 +556,8 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		err            error
 	)
 
+	cctx, childCancel := context.WithCancel(ctx)
+
 	defer cancel()
 
 	// create from buffers
@@ -572,33 +574,46 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, storeProvider,
+	pbqManager, err = pbq.NewManager(cctx, storeProvider,
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
-	f, p := fetcherAndPublisher(ctx, toBuffer, fromBuffer, t.Name())
+	f, p := fetcherAndPublisher(cctx, toBuffer, fromBuffer, t.Name())
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
 		window, WithReadBatchSize(1))
 	assert.NoError(t, err)
 
 	// start the forwarder
-	go reduceDataForward.Start(ctx)
-	// publish messages with 1 millisecond delay
-	go publishMessages(ctx, startTime, messages, 600, 10, p[fromBuffer.GetName()], fromBuffer, 1*time.Millisecond)
+	go reduceDataForward.Start(cctx)
+	// window duration is 300s, we are sending only 200 messages with event time less than window end time, so the window will not be closed
+	publishMessages(cctx, startTime, messages, 200, 10, p[fromBuffer.GetName()], fromBuffer)
 	// sleep for 100 milliseconds, so that few messages are processed and partitions are created
 	time.Sleep(100 * time.Millisecond)
-	cancel()
-	// wait for a second for the messages to get persisted
-	time.Sleep(time.Second)
+	childCancel()
+
+	var discoveredPartitions []partition.ID
+	for {
+		discoveredPartitions, _ = storeProvider.DiscoverPartitions(ctx)
+
+		if len(discoveredPartitions) > 0 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 
 	// since we have 2 different keys
-	discoveredPartitions, _ := storeProvider.DiscoverPartitions(ctx)
 	assert.Len(t, discoveredPartitions, 2)
 
 }
@@ -697,7 +712,7 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 	}
 }
 
-func publishMessages(ctx context.Context, startTime int, messages []int, testDuration int, batchSize int, publish publish.Publisher, fromBuffer *simplebuffer.InMemoryBuffer, interval time.Duration) {
+func publishMessages(ctx context.Context, startTime int, messages []int, testDuration int, batchSize int, publish publish.Publisher, fromBuffer *simplebuffer.InMemoryBuffer) {
 	eventTime := startTime
 
 	inputChan := make(chan int)
@@ -731,7 +746,6 @@ func publishMessages(ctx context.Context, startTime int, messages []int, testDur
 					}
 					count = 0
 				}
-				time.Sleep(interval)
 			}
 		case <-ctx.Done():
 			return
