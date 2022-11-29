@@ -47,6 +47,8 @@ func NewMemoryStores(opts ...Option) store.StoreProvider {
 }
 
 func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+	ms.Lock()
+	defer ms.Unlock()
 	if memStore, ok := ms.partitions[partitionID]; ok {
 		return memStore, nil
 	}
@@ -59,8 +61,6 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 		log:         logging.FromContext(ctx).With("pbqStore", "Memory").With("partitionID", partitionID),
 		partitionID: partitionID,
 	}
-	ms.Lock()
-	defer ms.Unlock()
 	ms.partitions[partitionID] = memStore
 	return memStore, nil
 }
