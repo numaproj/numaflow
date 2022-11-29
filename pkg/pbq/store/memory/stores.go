@@ -47,6 +47,9 @@ func NewMemoryStores(opts ...Option) store.StoreProvider {
 }
 
 func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+	if memStore, ok := ms.partitions[partitionID]; ok {
+		return memStore, nil
+	}
 	memStore := &memoryStore{
 		writePos:    0,
 		readPos:     0,
