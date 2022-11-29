@@ -21,7 +21,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -230,49 +229,6 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 		}(vertex)
 	}
 	wg.Wait()
-}
-
-func (s *FunctionalSuite) TestSimpleReducePipeline() {
-	w := s.Given().Pipeline("@testdata/simple-reduce-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-
-	defer w.DeletePipelineAndWait()
-
-	// wait for all the pods to come up
-	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("atoi", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("compute-sum", LogReduceUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("sink", LogSinkVertexStarted)
-
-	// port forward source vertex(to publish messages)
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
-
-	// publish messages to source vertex, with event time starting from 60000
-	startTime := 60000
-	for i := 0; i < 300; i++ {
-		eventTime := strconv.Itoa(startTime + i*1000)
-		fmt.Println("event time ", eventTime)
-
-		HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
-			Expect().
-			Status(204)
-		HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).
-			Expect().
-			Status(204)
-		HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).
-			Expect().
-			Status(204)
-	}
-
-	// since the key can be even or odd and the window duration is 60s
-	// the sum should be 120(for even) and 240(for odd)
-	w.Expect().VertexPodLogContains("sink", "120")
-	w.Expect().VertexPodLogContains("sink", "240")
-	w.Expect().VertexPodLogContains("sink", "Start -  60000  End -  120000")
 }
 
 // isWatermarkProgressing checks whether the watermark for a given vertex is progressing monotonically.

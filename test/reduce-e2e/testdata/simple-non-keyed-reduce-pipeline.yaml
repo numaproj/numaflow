@@ -1,0 +1,33 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: even-odd-sum
+spec:
+  limits:
+    readBatchSize: 10
+  vertices:
+    - name: in
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: compute-sum
+      udf:
+        container:
+          # compute the sum
+          image: quay.io/numaio/go-integer-sum-example
+        groupBy:
+          window:
+            fixed:
+              length: 10s
+          keyed: true
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: compute-sum
+    - from: compute-sum
+      to: sink
