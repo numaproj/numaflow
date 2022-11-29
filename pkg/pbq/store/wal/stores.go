@@ -77,7 +77,7 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 	if os.IsNotExist(err) {
 		// here we are explicitly giving O_WRONLY because we will not be using this to read. Our read is only during
 		// boot up.
-		fp, err = os.OpenFile(getSegmentFilePath(id, ws.storePath), os.O_WRONLY|os.O_CREATE, 0644)
+		fp, err = os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
 			return nil, err
 		}
@@ -156,4 +156,30 @@ func (ws *walStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, er
 	}
 
 	return partitions, nil
+}
+
+func (ws *walStores) DeleteStore(partitionID partition.ID) error {
+	var err error
+	defer func() {
+		if err != nil {
+			walErrors.With(map[string]string{"kind": "gc"}).Inc()
+		}
+	}()
+
+	filePath := getSegmentFilePath(&partitionID, ws.storePath)
+	_, err = os.Stat(filePath)
+
+	if err != nil {
+		return err
+	}
+
+	start := time.Now()
+	// an open file can also be deleted
+	err = os.Remove(filePath)
+
+	if err == nil {
+		garbageCollectingTime.With(map[string]string{labelPartitionKey: partitionID.Key}).Observe(float64(time.Since(start).Microseconds()))
+		activeFilesCount.With(map[string]string{}).Dec()
+	}
+	return err
 }
