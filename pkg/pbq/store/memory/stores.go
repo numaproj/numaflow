@@ -77,15 +77,15 @@ func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID,
 }
 
 func (ms *memoryStores) DeleteStore(partitionID partition.ID) error {
+	ms.Lock()
+	defer ms.Unlock()
 	memStore, ok := ms.partitions[partitionID]
 	if !ok {
 		return errors.New("store not found")
 	}
-
+	
 	memStore.storage = nil
 	memStore.writePos = -1
-	ms.Lock()
-	defer ms.Unlock()
 	delete(ms.partitions, partitionID)
 	return nil
 }
