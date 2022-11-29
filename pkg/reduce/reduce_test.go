@@ -544,6 +544,93 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 }
 
+func TestDataForward_WithContextClose(t *testing.T) {
+	var (
+		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		fromBufferSize = int64(100000)
+		toBufferSize   = int64(10)
+		messages       = []int{100, 99}
+		startTime      = 0 // time in millis
+		fromBufferName = "source-reduce-buffer"
+		toBufferName   = "reduce-to-buffer"
+		err            error
+	)
+
+	cctx, childCancel := context.WithCancel(ctx)
+
+	defer cancel()
+	defer childCancel()
+
+	// create from buffers
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+
+	// create to buffers
+	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	toBuffer := map[string]isb.BufferWriter{
+		toBufferName: buffer,
+	}
+
+	// create a store provider
+	storeProvider := memory.NewMemoryStores(memory.WithStoreSize(1000))
+
+	// create pbq manager
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(cctx, storeProvider,
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+	assert.NoError(t, err)
+
+	// create in memory watermark publisher and fetcher
+	f, p := fetcherAndPublisher(cctx, toBuffer, fromBuffer, t.Name())
+
+	// create a fixed window of 5 minutes
+	window := fixed.NewFixed(5 * time.Minute)
+
+	var reduceDataForward *DataForward
+	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, WithReadBatchSize(1))
+	assert.NoError(t, err)
+
+	// start the forwarder
+	go reduceDataForward.Start(cctx)
+	// window duration is 300s, we are sending only 200 messages with event time less than window end time, so the window will not be closed
+	publishMessages(cctx, startTime, messages, 200, 10, p[fromBuffer.GetName()], fromBuffer)
+	// wait for the partitions to be created
+	for {
+		partitionsList := pbqManager.ListPartitions()
+		if len(partitionsList) > 0 {
+			childCancel()
+			break
+		}
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	var discoveredPartitions []partition.ID
+	for {
+		discoveredPartitions, _ = storeProvider.DiscoverPartitions(ctx)
+
+		if len(discoveredPartitions) > 0 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	// since we have 2 different keys
+	assert.Len(t, discoveredPartitions, 2)
+
+}
+
 // fetcherAndPublisher creates watermark fetcher and publishers, and keeps the processors alive by sending heartbeats
 func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWriter, fromBuffer *simplebuffer.InMemoryBuffer, key string) (fetch.Fetcher, map[string]publish.Publisher) {
 
