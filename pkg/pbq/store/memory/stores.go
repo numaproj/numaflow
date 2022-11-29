@@ -18,6 +18,8 @@ package memory
 
 import (
 	"context"
+	"errors"
+	"sync"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
@@ -28,12 +30,16 @@ import (
 type memoryStores struct {
 	storeSize    int64
 	discoverFunc func(ctx context.Context) ([]partition.ID, error)
+	partitions   map[partition.ID]*memoryStore
+	sync.RWMutex
 }
 
 func NewMemoryStores(opts ...Option) store.StoreProvider {
 	s := &memoryStores{
-		storeSize: 100,
+		storeSize:  100,
+		partitions: make(map[partition.ID]*memoryStore),
 	}
+
 	for _, o := range opts {
 		o(s)
 	}
@@ -41,6 +47,11 @@ func NewMemoryStores(opts ...Option) store.StoreProvider {
 }
 
 func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+	ms.Lock()
+	defer ms.Unlock()
+	if memStore, ok := ms.partitions[partitionID]; ok {
+		return memStore, nil
+	}
 	memStore := &memoryStore{
 		writePos:    0,
 		readPos:     0,
@@ -50,13 +61,31 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 		log:         logging.FromContext(ctx).With("pbqStore", "Memory").With("partitionID", partitionID),
 		partitionID: partitionID,
 	}
-
+	ms.partitions[partitionID] = memStore
 	return memStore, nil
 }
 
 func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
-	if ms.discoverFunc != nil {
-		return ms.discoverFunc(ctx)
+	if ms.discoverFunc == nil {
+		partitionsIds := make([]partition.ID, 0)
+		for key := range ms.partitions {
+			partitionsIds = append(partitionsIds, key)
+		}
+		return partitionsIds, nil
 	}
-	return []partition.ID{}, nil
+	return ms.discoverFunc(ctx)
+}
+
+func (ms *memoryStores) DeleteStore(partitionID partition.ID) error {
+	ms.Lock()
+	defer ms.Unlock()
+	memStore, ok := ms.partitions[partitionID]
+	if !ok {
+		return errors.New("store not found")
+	}
+
+	memStore.storage = nil
+	memStore.writePos = -1
+	delete(ms.partitions, partitionID)
+	return nil
 }

@@ -32,8 +32,6 @@ type Store interface {
 	Write(msg *isb.ReadMessage) error
 	// Close closes store
 	Close() error
-	// GC does garbage collection and deletes all the messages that are persisted
-	GC() error
 }
 
 // StoreProvider defines the functions for store implementation
@@ -42,4 +40,6 @@ type StoreProvider interface {
 	CreateStore(context.Context, partition.ID) (Store, error)
 	// DiscoverPartitions discovers all the managed partitions.
 	DiscoverPartitions(context.Context) ([]partition.ID, error)
+	// DeleteStore deletes the store
+	DeleteStore(partition.ID) error
 }

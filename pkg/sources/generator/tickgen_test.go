@@ -26,15 +26,17 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/numaproj/numaflow/pkg/isb"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 func TestRead(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("writer", 20)
+	dest := simplebuffer.NewInMemoryBuffer("writer", 20, simplebuffer.WithReadTimeOut(10*time.Second))
 	ctx := context.Background()
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
