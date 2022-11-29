@@ -67,7 +67,6 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 
 func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
 	if ms.discoverFunc == nil {
-		println("hey")
 		partitionsIds := make([]partition.ID, 0)
 		for key := range ms.partitions {
 			partitionsIds = append(partitionsIds, key)
