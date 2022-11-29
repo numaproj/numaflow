@@ -38,6 +38,7 @@ Check the links below to see the UDF examples for different languages.
 
 - [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/function)
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function)
 
 After building a docker image for the written UDF, specify the image as below in the vertex spec.
 
@@ -63,6 +64,7 @@ Some environment variables are available in the user defined function Pods, they
 ### Configuration
 
 Configuration data can be provided to the UDF container at runtime multiple ways.
+
 * [`environment variables`](./environment-variables.md)
 * `args`
 * `command`

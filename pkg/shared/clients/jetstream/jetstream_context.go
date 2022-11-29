@@ -68,3 +68,7 @@ func (jsc *JetStreamContext) DeleteConsumer(stream string, consumer string, opts
 func (jsc *JetStreamContext) PublishMsgAsync(m *nats.Msg, opts ...nats.PubOpt) (nats.PubAckFuture, error) {
 	return jsc.js.PublishMsgAsync(m, opts...)
 }
+
+func (jsc *JetStreamContext) PublishMsg(m *nats.Msg, opts ...nats.PubOpt) (*nats.PubAck, error) {
+	return jsc.js.PublishMsg(m, opts...)
+}
