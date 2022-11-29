@@ -138,7 +138,7 @@ func TestReadLoop_Startup(t *testing.T) {
 	}
 
 	rl.Process(ctx, []*isb.ReadMessage{latestMessage})
-	for to1.IsFull() {
+	for !to1.IsFull() {
 		select {
 		case <-ctx.Done():
 			assert.Fail(t, ctx.Err().Error())

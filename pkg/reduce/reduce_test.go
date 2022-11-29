@@ -559,6 +559,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	cctx, childCancel := context.WithCancel(ctx)
 
 	defer cancel()
+	defer childCancel()
 
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
@@ -593,9 +594,21 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	go reduceDataForward.Start(cctx)
 	// window duration is 300s, we are sending only 200 messages with event time less than window end time, so the window will not be closed
 	publishMessages(cctx, startTime, messages, 200, 10, p[fromBuffer.GetName()], fromBuffer)
-	// sleep for 100 milliseconds, so that few messages are processed and partitions are created
-	time.Sleep(100 * time.Millisecond)
-	childCancel()
+	// wait for the partitions to be created
+	for {
+		partitionsList := pbqManager.ListPartitions()
+		if len(partitionsList) > 0 {
+			childCancel()
+			break
+		}
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 
 	var discoveredPartitions []partition.ID
 	for {
