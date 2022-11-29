@@ -143,7 +143,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 5
       matrix:
         driver: [jetstream]
         case: [e2e, kafka-e2e, http-e2e, sdks-e2e, reduce-e2e]
