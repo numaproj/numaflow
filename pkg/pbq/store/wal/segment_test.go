@@ -32,7 +32,12 @@ import (
 )
 
 var vi = &dfv1.VertexInstance{
-	Vertex:   &dfv1.Vertex{},
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+		},
+	}},
 	Hostname: "test-host",
 	Replica:  0,
 }
@@ -58,7 +63,7 @@ func Test_writeReadHeader(t *testing.T) {
 	fmt.Println(fName)
 	assert.NoError(t, err)
 
-	openWAL, err := OpenWAL(fName)
+	openWAL, err := wal.walStores.openWAL(fName)
 	assert.NoError(t, err)
 	// we have already read the header in OpenWAL
 	_, err = openWAL.readHeader()
