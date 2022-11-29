@@ -201,8 +201,7 @@ func (m *Manager) deregister(partitionID partition.ID) error {
 	m.Lock()
 	defer m.Unlock()
 	delete(m.pbqMap, partitionID.String())
-	err := m.storeProvider.DeleteStore(partitionID)
-	return err
+	return m.storeProvider.DeleteStore(partitionID)
 }
 
 func (m *Manager) getPBQs() []*PBQ {
