@@ -83,7 +83,7 @@ func (ms *memoryStores) DeleteStore(partitionID partition.ID) error {
 	if !ok {
 		return errors.New("store not found")
 	}
-	
+
 	memStore.storage = nil
 	memStore.writePos = -1
 	delete(ms.partitions, partitionID)
