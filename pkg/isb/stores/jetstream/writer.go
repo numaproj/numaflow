@@ -30,6 +30,7 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 type jetStreamWriter struct {
@@ -187,13 +188,12 @@ func (jw *jetStreamWriter) Rate(_ context.Context, seconds int64) (float64, erro
 	return float64(endSeqInfo.seq-startSeqInfo.seq) / float64(endSeqInfo.timestamp-startSeqInfo.timestamp), nil
 }
 
-func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
+func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	labels := map[string]string{"buffer": jw.GetName()}
 	var errs = make([]error, len(messages))
 	for i := 0; i < len(errs); i++ {
 		errs[i] = fmt.Errorf("unknown error")
 	}
-	var writeOffsets = make([]isb.Offset, len(messages))
 	if jw.isFull.Load() {
 		jw.log.Debugw("Is full")
 		isbFull.With(map[string]string{"buffer": jw.GetName()}).Inc()
@@ -203,7 +203,15 @@ func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]i
 		isbWriteErrors.With(labels).Inc()
 		return nil, errs
 	}
+	// TODO: temp env flag for sync/async writing, revisit this later.
+	if sharedutil.LookupEnvStringOr("ISB_ASYNC_WRITE", "false") == "true" {
+		return jw.asyncWrite(ctx, messages, errs, labels)
+	}
+	return jw.syncWrite(ctx, messages, errs, labels)
+}
 
+func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message, errs []error, metricsLabels map[string]string) ([]isb.Offset, []error) {
+	var writeOffsets = make([]isb.Offset, len(messages))
 	var futures = make([]nats.PubAckFuture, len(messages))
 	for index, message := range messages {
 		m := &nats.Msg{
@@ -235,7 +243,7 @@ func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]i
 				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
 			case err := <-fu.Err():
 				errs[idx] = err
-				isbWriteErrors.With(labels).Inc()
+				isbWriteErrors.With(metricsLabels).Inc()
 			case <-ctx.Done():
 			}
 		}(index, f)
@@ -252,8 +260,34 @@ func (jw *jetStreamWriter) Write(_ context.Context, messages []isb.Message) ([]i
 		cancel()
 		<-futureCheckDone
 		// TODO: Maybe need to reconnect.
-		isbWriteTimeout.With(labels).Inc()
+		isbWriteTimeout.With(metricsLabels).Inc()
 	}
+	return writeOffsets, errs
+}
+
+func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, errs []error, metricsLabels map[string]string) ([]isb.Offset, []error) {
+	var writeOffsets = make([]isb.Offset, len(messages))
+	wg := new(sync.WaitGroup)
+	for index, msg := range messages {
+		wg.Add(1)
+		go func(message isb.Message, idx int) {
+			defer wg.Done()
+			m := &nats.Msg{
+				Header:  convert2NatsMsgHeader(message.Header),
+				Subject: jw.subject,
+				Data:    message.Payload,
+			}
+			if pubAck, err := jw.js.PublishMsg(m, nats.MsgId(message.Header.ID), nats.AckWait(2*time.Second)); err != nil { // nats.MsgId() is for exactly-once writing
+				errs[idx] = err
+				isbWriteErrors.With(metricsLabels).Inc()
+			} else {
+				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
+				errs[idx] = nil
+				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
+			}
+		}(msg, index)
+	}
+	wg.Wait()
 	return writeOffsets, errs
 }
 
