@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.6.4 (2022-11-28)
+
+ * [ad9719a](https://github.com/numaproj/numaflow/commit/ad9719a61ec7208da36a228cea129f65cdf70d77) Update manifests to v0.6.4
+ * [c5e8217](https://github.com/numaproj/numaflow/commit/c5e82176b1dd70aa991797bffaaf02bc4a8f6609) chore(docs): update docs (#380)
+ * [1b244c1](https://github.com/numaproj/numaflow/commit/1b244c1a0eea48ab9c75a0704cf70848640e5d6b) fix: best effort processing during SIGTERM. Closes #371 (#372)
+ * [9bb8ebd](https://github.com/numaproj/numaflow/commit/9bb8ebd58835618d62402f11a191063cb299170c) feat(wal): First pass to implement WAL and hook to PBQ store. (#344)
+
+### Contributors
+
+ * Derek Wang
+ * Vigith Maurice
+ * xdevxy
+
 ## v0.6.3 (2022-11-18)
 
  * [3cf391b](https://github.com/numaproj/numaflow/commit/3cf391b19e862744ae04ef350e34dc57d88fe6b1) Update manifests to v0.6.3
