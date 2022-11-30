@@ -684,7 +684,7 @@ message PipelineLimits {
   // BufferMaxLength is used to define the max length of a buffer
   // Only applies to UDF and Source vertice as only they do buffer write.
   // It can be overridden by the settings in vertex limits.
-  // +kubebuilder:default=50000
+  // +kubebuilder:default=30000
   // +optional
   optional uint64 bufferMaxLength = 2;
 

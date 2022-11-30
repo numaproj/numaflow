@@ -49,7 +49,7 @@ data:
           stream:
             # 0: Limits, 1: Interest, 2: WorkQueue
             retention: 0
-            maxMsgs: 2000000
+            maxMsgs: 100000
             maxAge: 168h
             maxBytes: -1
             # 0: File, 1: Memory
@@ -78,7 +78,7 @@ data:
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.9.4
+          natsImage: nats:2.9.8
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -117,4 +117,8 @@ data:
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
-
+        - version: 2.9.8
+          natsImage: nats:2.9.8
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server

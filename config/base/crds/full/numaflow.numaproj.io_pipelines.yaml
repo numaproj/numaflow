@@ -117,7 +117,7 @@ spec:
                   readBatchSize: 500
                 properties:
                   bufferMaxLength:
-                    default: 50000
+                    default: 30000
                     format: int64
                     type: integer
                   bufferUsageLimit:
