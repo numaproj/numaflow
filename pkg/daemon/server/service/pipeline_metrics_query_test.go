@@ -161,7 +161,7 @@ func TestGetBuffer(t *testing.T) {
 
 	resp, err := pipelineMetricsQueryService.GetBuffer(context.Background(), req)
 	assert.NoError(t, err)
-	assert.Equal(t, *resp.Buffer.BufferUsage, 0.0004)
+	assert.Equal(t, *resp.Buffer.BufferUsage, 0.0006666666666666666)
 
 }
 

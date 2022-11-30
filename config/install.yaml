@@ -2338,7 +2338,7 @@ spec:
                   readBatchSize: 500
                 properties:
                   bufferMaxLength:
-                    default: 50000
+                    default: 30000
                     format: int64
                     type: integer
                   bufferUsageLimit:
@@ -10406,7 +10406,7 @@ subjects:
 ---
 apiVersion: v1
 data:
-  controller-config.yaml: |+
+  controller-config.yaml: |
     isbsvc:
       redis:
         # Default Redis settings, could be overridden by InterStepBufferService specs
@@ -10452,8 +10452,8 @@ data:
           stream:
             # 0: Limits, 1: Interest, 2: WorkQueue
             retention: 0
-            maxMsgs: 2000000
-            maxAge: 168h
+            maxMsgs: 100000
+            maxAge: 72h
             maxBytes: -1
             # 0: File, 1: Memory
             storage: 0
@@ -10462,7 +10462,7 @@ data:
           # The default consumer properties for the created streams
           consumer:
             ackWait: 60s
-            maxAckPending: 20000
+            maxAckPending: 25000
           otBucket:
             maxValueSize: 0
             history: 5
@@ -10481,7 +10481,7 @@ data:
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.9.4
+          natsImage: nats:2.9.8
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -10520,7 +10520,11 @@ data:
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
-
+        - version: 2.9.8
+          natsImage: nats:2.9.8
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
 kind: ConfigMap
 metadata:
   name: numaflow-controller-config

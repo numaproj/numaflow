@@ -153,6 +153,10 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
+		if !d.vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed {
+			m.Key = dfv1.DefaultKeyForNonKeyedData
+			m.Message.Key = dfv1.DefaultKeyForNonKeyedData
+		}
 		m.Watermark = time.Time(processorWM)
 	}
 
