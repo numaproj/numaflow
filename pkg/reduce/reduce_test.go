@@ -46,6 +46,7 @@ var vertex = dfv1.Vertex{Spec: dfv1.VertexSpec{
 	PipelineName: "testPipeline",
 	AbstractVertex: dfv1.AbstractVertex{
 		Name: "testVertex",
+		UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
 	},
 }}
 
