@@ -29,7 +29,7 @@
   "liveNow": false,
   "panels": [
     {
-      "collapsed": true,
+      "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -615,8 +615,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -665,7 +664,7 @@
       "type": "timeseries"
     },
     {
-      "collapsed": true,
+      "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -676,73 +675,6 @@
       "panels": [],
       "title": "WAL State Metrics",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Ub43gsvVk"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 27
-      },
-      "id": 16,
-      "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true
-      },
-      "pluginVersion": "9.2.4",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Ub43gsvVk"
-          },
-          "editorMode": "builder",
-          "expr": "pbq_wal_wal_lifespan_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}",
-          "format": "heatmap",
-          "interval": "",
-          "legendFormat": "{{le}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "WAL Lifespan Distribution(minutes)",
-      "type": "bargauge"
     },
     {
       "datasource": {
@@ -789,8 +721,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -803,8 +734,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
+        "w": 24,
+        "x": 0,
         "y": 27
       },
       "id": 26,
@@ -905,14 +836,14 @@
           "type": "prometheus",
           "uid": "Ub43gsvVk"
         },
-        "definition": "label_values({pipeline=~\"$pipeline\"}, vertex)",
+        "definition": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\"}, vertex)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "vertex",
         "options": [],
         "query": {
-          "query": "label_values({pipeline=~\"$pipeline\"}, vertex)",
+          "query": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\"}, vertex)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -932,14 +863,14 @@
           "type": "prometheus",
           "uid": "Ub43gsvVk"
         },
-        "definition": "label_values({vertex=~\"$vertex\"}, replica)",
+        "definition": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\",vertex=~\"$vertex\"}, replica)",
         "hide": 0,
         "includeAll": true,
         "multi": true,
         "name": "replica",
         "options": [],
         "query": {
-          "query": "label_values({vertex=~\"$vertex\"}, replica)",
+          "query": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\",vertex=~\"$vertex\"}, replica)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -958,6 +889,6 @@
   "timezone": "",
   "title": "wal-dashboard",
   "uid": "-4S8uggVzs",
-  "version": 22,
+  "version": 25,
   "weekStart": ""
 }
