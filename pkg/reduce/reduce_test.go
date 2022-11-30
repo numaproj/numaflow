@@ -561,7 +561,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 }
 
-// Max operation with 5 minutes window and two keys
+// Max operation with 5 minutes window and non keyed
 func TestReduceDataForward_NonKeyed(t *testing.T) {
 	var (
 		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
