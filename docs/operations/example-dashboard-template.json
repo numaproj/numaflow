@@ -25,7 +25,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 11,
+  "id": 16,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -131,7 +131,7 @@
           "refId": "A"
         }
       ],
-      "title": "Inbound Messages",
+      "title": "Inbound Messages(TPS)",
       "type": "timeseries"
     },
     {
@@ -148,7 +148,7 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "no. of messages per second",
+            "axisLabel": "bytes per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -218,13 +218,13 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "rate(forwarder_write_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
+          "expr": "rate(forwarder_read_bytes_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Outbound Messages",
+      "title": "Inbound Data Size",
       "type": "timeseries"
     },
     {
@@ -290,7 +290,7 @@
         "x": 16,
         "y": 1
       },
-      "id": 4,
+      "id": 32,
       "options": {
         "legend": {
           "calcs": [],
@@ -310,13 +310,13 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "rate(forwarder_ack_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
+          "expr": "rate(forwarder_write_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Ack'ed Messages",
+      "title": "Outbound Messages(TPS)",
       "type": "timeseries"
     },
     {
@@ -377,8 +377,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 12,
+        "h": 8,
+        "w": 8,
         "x": 0,
         "y": 10
       },
@@ -408,7 +408,7 @@
           "refId": "A"
         }
       ],
-      "title": "UDF Inbound Messages",
+      "title": "UDF Inbound Messages(TPS)",
       "type": "timeseries"
     },
     {
@@ -470,9 +470,9 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
+        "h": 8,
+        "w": 8,
+        "x": 8,
         "y": 10
       },
       "id": 15,
@@ -501,7 +501,99 @@
           "refId": "A"
         }
       ],
-      "title": "UDF Outbound Messages",
+      "title": "UDF Outbound Messages(TPS)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Ub43gsvVk"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "no. of messages per second",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 10
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Ub43gsvVk"
+          },
+          "editorMode": "builder",
+          "expr": "rate(forwarder_ack_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Ack'ed Messages(TPS)",
       "type": "timeseries"
     },
     {
@@ -510,7 +602,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 18
       },
       "id": 11,
       "panels": [],
@@ -615,7 +707,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 19
       },
       "id": 17,
       "options": {
@@ -637,7 +729,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.9, rate(forwarder_udf_processing_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])) / 1000000",
+          "expr": "histogram_quantile(0.9, rate(forwarder_concurrent_udf_processing_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])) / 1000000",
           "legendFormat": "{{le}}",
           "range": true,
           "refId": "A"
@@ -667,7 +759,7 @@
           "refId": "C"
         }
       ],
-      "title": "UDF - Processing Time",
+      "title": "UDF - Concurrent Batch Processing Time",
       "type": "timeseries"
     },
     {
@@ -768,7 +860,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 19
       },
       "id": 18,
       "options": {
@@ -820,7 +912,7 @@
           "refId": "C"
         }
       ],
-      "title": "E2E - Processing Time",
+      "title": "Forwarder E2E - Batch Processing Time",
       "type": "timeseries"
     },
     {
@@ -829,7 +921,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 27
       },
       "id": 9,
       "panels": [],
@@ -897,7 +989,7 @@
         "h": 7,
         "w": 8,
         "x": 0,
-        "y": 29
+        "y": 28
       },
       "id": 21,
       "options": {
@@ -989,7 +1081,7 @@
         "h": 7,
         "w": 8,
         "x": 8,
-        "y": 29
+        "y": 28
       },
       "id": 23,
       "options": {
@@ -1081,7 +1173,7 @@
         "h": 7,
         "w": 8,
         "x": 16,
-        "y": 29
+        "y": 28
       },
       "id": 24,
       "options": {
@@ -1173,7 +1265,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 36
+        "y": 35
       },
       "id": 25,
       "options": {
@@ -1265,7 +1357,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 36
+        "y": 35
       },
       "id": 26,
       "options": {
@@ -1302,7 +1394,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 43
       },
       "id": 6,
       "panels": [],
@@ -1370,7 +1462,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 45
+        "y": 44
       },
       "id": 28,
       "options": {
@@ -1462,7 +1554,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 45
+        "y": 44
       },
       "id": 29,
       "options": {
@@ -1554,7 +1646,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 45
+        "y": 44
       },
       "id": 30,
       "options": {
@@ -1646,7 +1738,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 45
+        "y": 44
       },
       "id": 31,
       "options": {
@@ -1712,9 +1804,9 @@
       },
       {
         "current": {
-          "selected": false,
-          "text": "even-odd-sum",
-          "value": "even-odd-sum"
+          "selected": true,
+          "text": "simple-pipeline",
+          "value": "simple-pipeline"
         },
         "datasource": {
           "type": "prometheus",
@@ -1738,7 +1830,7 @@
       },
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "in",
           "value": "in"
         },
@@ -1746,14 +1838,14 @@
           "type": "prometheus",
           "uid": "Ub43gsvVk"
         },
-        "definition": "label_values({pipeline=~\"$pipeline\"}, vertex)",
+        "definition": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\"}, vertex)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "vertex",
         "options": [],
         "query": {
-          "query": "label_values({pipeline=~\"$pipeline\"}, vertex)",
+          "query": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\"}, vertex)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -1764,22 +1856,22 @@
       },
       {
         "current": {
-          "selected": false,
-          "text": "default-even-odd-sum-in-atoi",
-          "value": "default-even-odd-sum-in-atoi"
+          "selected": true,
+          "text": "default-simple-pipeline-in-cat",
+          "value": "default-simple-pipeline-in-cat"
         },
         "datasource": {
           "type": "prometheus",
           "uid": "Ub43gsvVk"
         },
-        "definition": "label_values({vertex=~\"$vertex\"}, buffer)",
+        "definition": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\", vertex=~\"$vertex\"}, buffer)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "buffer",
         "options": [],
         "query": {
-          "query": "label_values({vertex=~\"$vertex\"}, buffer)",
+          "query": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\", vertex=~\"$vertex\"}, buffer)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -1791,13 +1883,13 @@
     ]
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "numaflow-dashboard",
   "uid": "-4S8ugdVz",
-  "version": 44,
+  "version": 14,
   "weekStart": ""
 }
