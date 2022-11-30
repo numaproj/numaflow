@@ -16,7 +16,7 @@ metadata:
 spec:
   limits:
     readBatchSize: 100
-    bufferMaxLength: 50000
+    bufferMaxLength: 30000
     bufferUsageLimit: 85
 ```
 
@@ -30,7 +30,7 @@ metadata:
 spec:
   limits: # Default limits for all the vertices and edges (buffers) of this pipeline
     readBatchSize: 100
-    bufferMaxLength: 50000
+    bufferMaxLength: 30000
     bufferUsageLimit: 85
   vertices:
     - name: in
@@ -51,7 +51,7 @@ spec:
     - from: in
       to: cat
       limits:
-        bufferMaxLength: 20000 # It overrides the default limit "50000"
+        bufferMaxLength: 20000 # It overrides the default limit "30000"
         bufferUsageLimit: 70 # It overrides the default limit "85"
     - from: cat
       to: out
