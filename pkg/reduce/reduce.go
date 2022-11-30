@@ -39,8 +39,7 @@ import (
 
 // DataForward reads data from isb and forwards them to readloop
 type DataForward struct {
-	vertexName          string
-	pipelineName        string
+	vertexInstance      *dfv1.VertexInstance
 	fromBuffer          isb.BufferReader
 	toBuffers           map[string]isb.BufferWriter
 	readloop            *readloop.ReadLoop
@@ -53,7 +52,7 @@ type DataForward struct {
 
 func NewDataForward(ctx context.Context,
 	udf applier.ReduceApplier,
-	vertex *dfv1.Vertex,
+	vertexInstance *dfv1.VertexInstance,
 	fromBuffer isb.BufferReader,
 	toBuffers map[string]isb.BufferWriter,
 	pbqManager *pbq.Manager,
@@ -73,8 +72,7 @@ func NewDataForward(ctx context.Context,
 
 	rl := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
 	return &DataForward{
-		vertexName:          vertex.Spec.Name,
-		pipelineName:        vertex.Spec.PipelineName,
+		vertexInstance:      vertexInstance,
 		fromBuffer:          fromBuffer,
 		toBuffers:           toBuffers,
 		readloop:            rl,

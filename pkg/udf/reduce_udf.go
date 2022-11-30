@@ -158,7 +158,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	dataForwarder, err := reduce.NewDataForward(ctx, udfHandler, u.VertexInstance.Vertex, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, opts...)
+	dataForwarder, err := reduce.NewDataForward(ctx, udfHandler, u.VertexInstance, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}
