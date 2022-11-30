@@ -66,13 +66,6 @@ var entryWriteTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   prometheus.ExponentialBucketsRange(1, 60, 5),
 }, []string{labelPartitionKey})
 
-var lifespan = promauto.NewHistogramVec(prometheus.HistogramOpts{
-	Subsystem: "pbq_wal",
-	Name:      "wal_lifespan",
-	Help:      "Lifespan of a pbq wal (1 to 20 minutes)",
-	Buckets:   prometheus.ExponentialBucketsRange(1, 20, 5),
-}, []string{labelPartitionKey})
-
 var walErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_errors",
