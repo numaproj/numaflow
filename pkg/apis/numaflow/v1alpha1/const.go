@@ -137,6 +137,9 @@ const (
 	DefaultStoreSyncDuration  = 2 * time.Second        // Default sync duration for pbq
 	DefaultStoreMaxBufferSize = 100000                 // Default buffer size for pbq in bytes
 	DefaultStorePath          = PathPBQMount + "/wals" // Default store path
+
+	// DefaultKeyForNonKeyedData Default key for non keyed stream
+	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 )
 
 var (
