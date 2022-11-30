@@ -594,7 +594,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, &vertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
 		window, WithReadBatchSize(1))
 	assert.NoError(t, err)
 
