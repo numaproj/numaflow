@@ -112,9 +112,10 @@ Logic:
 **Matrix of Operations**
 
 |                | Source           | Processor    | Sink          |
-| -------------- | ---------------- | ------------ | ------------- |
+| -------------- |------------------| ------------ |---------------|
 | ReadFromBuffer | Read From Source | Generic      | Generic       |
-| CallUDF        | Void             | User Defined | Write To Sink |
+| CallUDF        | Void             | User Defined | Void          |
+| Forward        | Generic          | Generic      | Write To Sink |
 | Ack            | Ack Source       | Generic      | Generic       |
 
 ## Requirements

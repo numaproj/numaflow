@@ -35,7 +35,6 @@ import (
 
 func TestManager_ListPartitions(t *testing.T) {
 	size := int64(100)
-	t.Skip()
 
 	ctx := context.Background()
 	pbqManager, err := NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(size)),

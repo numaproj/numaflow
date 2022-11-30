@@ -74,15 +74,6 @@ func (m *memoryStore) Close() error {
 	return nil
 }
 
-// GC does garbage collection
-// for in-memory implementation we set the storage to nil, so that it will
-// ready for GC
-func (m *memoryStore) GC() error {
-	m.storage = nil
-	m.writePos = -1
-	return nil
-}
-
 // isEmpty check if there are any records persisted in store
 func (m *memoryStore) isEmpty() bool {
 	// is empty should return true when the store is created and no messages are written

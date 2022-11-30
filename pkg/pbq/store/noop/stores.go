@@ -37,3 +37,7 @@ func (ns *noopStores) CreateStore(ctx context.Context, partitionID partition.ID)
 func (ns *noopStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
 	return []partition.ID{}, nil
 }
+
+func (ns *noopStores) DeleteStore(partitionID partition.ID) error {
+	return nil
+}

@@ -85,7 +85,7 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 	if os.IsNotExist(err) {
 		// here we are explicitly giving O_WRONLY because we will not be using this to read. Our read is only during
 		// boot up.
-		fp, err = os.OpenFile(getSegmentFilePath(id, ws.storePath), os.O_WRONLY|os.O_CREATE, 0644)
+		fp, err = os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
 			return nil, err
 		}
@@ -200,4 +200,43 @@ func (ws *walStores) openWAL(filePath string) (*WAL, error) {
 	w.partitionID, err = w.readHeader()
 
 	return w, err
+}
+
+func (ws *walStores) DeleteStore(partitionID partition.ID) error {
+	var err error
+	defer func() {
+		if err != nil {
+			walErrors.With(map[string]string{
+				metricspkg.LabelPipeline: ws.pipelineName,
+				metricspkg.LabelVertex:   ws.vertexName,
+				labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+				labelErrorKind:           "gc",
+			}).Inc()
+		}
+	}()
+
+	filePath := getSegmentFilePath(&partitionID, ws.storePath)
+	_, err = os.Stat(filePath)
+
+	if err != nil {
+		return err
+	}
+
+	start := time.Now()
+	// an open file can also be deleted
+	err = os.Remove(filePath)
+
+	if err == nil {
+		garbageCollectingTime.With(map[string]string{
+			metricspkg.LabelPipeline: ws.pipelineName,
+			metricspkg.LabelVertex:   ws.vertexName,
+			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+		}).Observe(float64(time.Since(start).Microseconds()))
+		activeFilesCount.With(map[string]string{
+			metricspkg.LabelPipeline: ws.pipelineName,
+			metricspkg.LabelVertex:   ws.vertexName,
+			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+		}).Dec()
+	}
+	return err
 }

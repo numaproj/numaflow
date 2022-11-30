@@ -344,46 +344,6 @@ func (w *WAL) Close() (err error) {
 	return nil
 }
 
-// GC cleans up the WAL Segment.
-func (w *WAL) GC() (err error) {
-	defer func() {
-		if err != nil {
-			walErrors.With(map[string]string{metricspkg.LabelPipeline: w.walStores.pipelineName,
-				metricspkg.LabelVertex:  w.walStores.vertexName,
-				labelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
-				labelErrorKind:          "gc",
-			}).Inc()
-		}
-	}()
-	start := time.Now()
-	if !w.closed {
-		err := w.Close()
-		if err != nil {
-			return err
-		}
-	}
-	err = os.Remove(w.fp.Name())
-
-	if err == nil {
-		garbageCollectingTime.With(map[string]string{
-			metricspkg.LabelPipeline: w.walStores.pipelineName,
-			metricspkg.LabelVertex:   w.walStores.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-		}).Observe(float64(time.Since(start).Microseconds()))
-		lifespan.With(map[string]string{
-			metricspkg.LabelPipeline: w.walStores.pipelineName,
-			metricspkg.LabelVertex:   w.walStores.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-		}).Observe(time.Since(w.createTime).Minutes())
-		activeFilesCount.With(map[string]string{
-			metricspkg.LabelPipeline: w.walStores.pipelineName,
-			metricspkg.LabelVertex:   w.walStores.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-		}).Dec()
-	}
-	return err
-}
-
 func getSegmentFilePath(id *partition.ID, dir string) string {
 	filename := fmt.Sprintf("%s_%d.%d.%s", SegmentPrefix, id.Start.Unix(), id.End.Unix(), id.Key)
 	return filepath.Join(dir, filename)
