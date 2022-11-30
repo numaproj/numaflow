@@ -1249,6 +1249,20 @@
 
             
           
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../grafana/" class="md-nav__link">
+        Grafana
+      </a>
+    </li>
+  
+
+            
+          
         </ul>
       </nav>
     </li>
@@ -1941,6 +1955,7 @@
 </table>
 <h2 id="prometheus-operator-for-scraping-metrics">Prometheus Operator for Scraping Metrics:<a class="headerlink" href="#prometheus-operator-for-scraping-metrics" title="Permanent link">&para;</a></h2>
 <p>You can follow the <a href="https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md">prometheus operator</a> setup guide if you would like to use prometheus operator configured in your cluster.</p>
+<p>You can also set up prometheus operator via <a href="https://bitnami.com/stack/prometheus-operator/helm">helm</a>.</p>
 <h3 id="configure-the-below-service-monitors-for-scraping-your-pipeline-metrics">Configure the below Service Monitors for scraping your pipeline metrics:<a class="headerlink" href="#configure-the-below-service-monitors-for-scraping-your-pipeline-metrics" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span><span class="w"></span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span><span class="w"></span>
@@ -2024,13 +2039,13 @@
       
       
         
-        <a href="../../../development/development/" class="md-footer__link md-footer__link--next" aria-label="Next: Development" rel="next">
+        <a href="../../grafana/" class="md-footer__link md-footer__link--next" aria-label="Next: Grafana" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Development
+              Grafana
             </div>
           </div>
           <div class="md-footer__button md-icon">

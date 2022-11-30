@@ -13,7 +13,7 @@
     
     
       
-        <title>Autoscaling - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Grafana - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#autoscaling" class="md-skip">
+        <a href="#grafana" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Autoscaling
+              Grafana
             
           </span>
         </div>
@@ -247,13 +247,15 @@
         
   
   
+    
+  
 
 
   
   
   
     <li class="md-tabs__item">
-      <a href="../../operations/releases/" class="md-tabs__link">
+      <a href="../releases/" class="md-tabs__link md-tabs__link--active">
         Operator Manual
       </a>
     </li>
@@ -263,15 +265,13 @@
         
   
   
-    
-  
 
 
   
   
   
     <li class="md-tabs__item">
-      <a href="../../development/development/" class="md-tabs__link md-tabs__link--active">
+      <a href="../../development/development/" class="md-tabs__link">
         Developer Guide
       </a>
     </li>
@@ -971,12 +971,14 @@
 
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4" type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4" type="checkbox" id="__nav_4" checked>
       
       
       
@@ -999,7 +1001,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/releases/" class="md-nav__link">
+      <a href="../releases/" class="md-nav__link">
         Releases ⧉
       </a>
     </li>
@@ -1013,7 +1015,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/installation/" class="md-nav__link">
+      <a href="../installation/" class="md-nav__link">
         Installation
       </a>
     </li>
@@ -1025,12 +1027,14 @@
               
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_3" type="checkbox" id="__nav_4_3" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_3" type="checkbox" id="__nav_4_3" checked>
       
       
       
@@ -1053,7 +1057,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/controller-configmap/" class="md-nav__link">
+      <a href="../controller-configmap/" class="md-nav__link">
         Controller Configuration
       </a>
     </li>
@@ -1067,7 +1071,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/metrics/metrics/" class="md-nav__link">
+      <a href="../metrics/metrics/" class="md-nav__link">
         Metrics
       </a>
     </li>
@@ -1079,11 +1083,59 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../../operations/grafana/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Grafana
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Grafana
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#setup-grafana" class="md-nav__link">
+    Setup Grafana
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sample-dashboard" class="md-nav__link">
+    Sample Dashboard
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1108,14 +1160,12 @@
 
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5" type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5" type="checkbox" id="__nav_5" >
       
       
       
@@ -1150,14 +1200,12 @@
               
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5_2" type="checkbox" id="__nav_5_2" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_5_2" type="checkbox" id="__nav_5_2" >
       
       
       
@@ -1180,7 +1228,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../overview/" class="md-nav__link">
+      <a href="../../specifications/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1192,80 +1240,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Autoscaling
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../specifications/autoscaling/" class="md-nav__link">
         Autoscaling
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#numaflow-autoscaling" class="md-nav__link">
-    Numaflow Autoscaling
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#source-vertices" class="md-nav__link">
-    Source Vertices
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#udf-and-sink-vertices" class="md-nav__link">
-    UDF and Sink Vertices
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#back-pressure-impact" class="md-nav__link">
-    Back Pressure Impact
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#autoscaling-tuning" class="md-nav__link">
-    Autoscaling Tuning
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1368,36 +1347,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#numaflow-autoscaling" class="md-nav__link">
-    Numaflow Autoscaling
+  <a href="#setup-grafana" class="md-nav__link">
+    Setup Grafana
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#source-vertices" class="md-nav__link">
-    Source Vertices
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#udf-and-sink-vertices" class="md-nav__link">
-    UDF and Sink Vertices
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#back-pressure-impact" class="md-nav__link">
-    Back Pressure Impact
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#autoscaling-tuning" class="md-nav__link">
-    Autoscaling Tuning
+  <a href="#sample-dashboard" class="md-nav__link">
+    Sample Dashboard
   </a>
   
 </li>
@@ -1414,48 +1372,24 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/specifications/autoscaling.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/operations/grafana.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="autoscaling">Autoscaling<a class="headerlink" href="#autoscaling" title="Permanent link">&para;</a></h1>
-<p><a href="https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource">Scale Subresource</a> is enabled in <code>Vertex</code> <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>, which makes it possible to scale vertex pods. To be specifically, it is enabled by adding following comments to <code>Vertex</code> struct model, and then corresponding CRD definition is automatically generated.</p>
-<div class="highlight"><pre><span></span><code>// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
-</code></pre></div>
-<p>Pods management is done by vertex controller.</p>
-<p><img alt="Vertex Controller Reconciliation Loop" src="../../assets/vertex_controller_loop.png" /></p>
-<p>With <code>scale</code> subresource implemented, <code>vertex</code> object can be scaled by either horizontal or vertical pod autoscaling.</p>
-<h2 id="numaflow-autoscaling">Numaflow Autoscaling<a class="headerlink" href="#numaflow-autoscaling" title="Permanent link">&para;</a></h2>
-<p>The out of box Numaflow autoscaling is done by a <code>scaling</code> component running in the controller manager, you can find the source code <a href="https://github.com/numaproj/numaflow/tree/main/pkg/reconciler/vertex/scaling">here</a>. The autoscaling strategy is implemented according to different type of vertices.</p>
-<h2 id="source-vertices">Source Vertices<a class="headerlink" href="#source-vertices" title="Permanent link">&para;</a></h2>
-<p>For source vertices, we define a target time (in seconds) to finish processing the pending messages based on the processing rate (tps) of the vertex.</p>
-<div class="highlight"><pre><span></span><code>  pendingMessages / processingRate = targetSeconds
-</code></pre></div>
-<p>For example, if <code>targetSeconds</code> is 3, current replica number is <code>2</code>, current <code>tps</code> is 10000/second, and the pending messages is 60000, so we calculate the desired replica number as following:</p>
-<div class="highlight"><pre><span></span><code>  desiredReplicas = 60000 / (3 * (10000 / 2)) = 4
-</code></pre></div>
-<p>Numaflow autoscaling does not work for those source vertices that can not calculate pending messages.</p>
-<h2 id="udf-and-sink-vertices">UDF and Sink Vertices<a class="headerlink" href="#udf-and-sink-vertices" title="Permanent link">&para;</a></h2>
-<p>Pending messages of a UDF or Sink vertex does not represent the real number because of the restrained writing caused by back pressure, so we use a different model to achieve autoscaling for them.</p>
-<p>For each of the vertices, we calculate the available buffer length, and consider it is contributed by all the replicas, so that we can get each replica's contribution.</p>
-<div class="highlight"><pre><span></span><code>  availableBufferLength = totalBufferLength * bufferLimit(%) - pendingMessages
-  singleReplicaContribution = availableBufferLength / currentReplicas
-</code></pre></div>
-<p>We define a target available buffer length, and then calculate how many replicas are needed to achieve the target.</p>
-<div class="highlight"><pre><span></span><code>  desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
-</code></pre></div>
-<h2 id="back-pressure-impact">Back Pressure Impact<a class="headerlink" href="#back-pressure-impact" title="Permanent link">&para;</a></h2>
-<p>Back pressure is considered during autoscaling (which is only available for Source and UDF vertices).</p>
-<p>We measure the back pressure by defining a threshold of the buffer usage. For example, the total buffer length is 50000, buffer limit is 80%, and the back pressure threshold is 90%, if in the past period of time, the average pending messages is more than <code>36000 (50000 * 80% * 90%)</code>, we consider there's back pressure.</p>
-<p>When the calculated desired replicas is greater than current replicas:</p>
-<ol>
-<li>For vertices which have back pressure from the directly connected vertices, instead of increasing the replica number, we decrease it by 1;</li>
-<li>For vertices which have back pressure in any of its downstream vertices, the replica number remains unchanged.</li>
-</ol>
-<h2 id="autoscaling-tuning">Autoscaling Tuning<a class="headerlink" href="#autoscaling-tuning" title="Permanent link">&para;</a></h2>
-<p>Numaflow autoscaling can be tuned by updating some parameters, find the details at the <a href="../../user-guide/autoscaling/">doc</a>.</p>
+<h1 id="grafana">Grafana<a class="headerlink" href="#grafana" title="Permanent link">&para;</a></h1>
+<p>Numaflow provides prometheus metrics on top of which you can build Grafana dashboard to monitor your pipeline.</p>
+<h2 id="setup-grafana">Setup Grafana<a class="headerlink" href="#setup-grafana" title="Permanent link">&para;</a></h2>
+<ul>
+<li>(Pre-requisite) Follow <a href="../metrics/metrics/">Metrics</a> to set up prometheus operator.</li>
+<li>Follow <a href="https://prometheus.io/docs/tutorials/visualizing_metrics_using_grafana/">Prometheus Tutorial</a> to install Grafana and visualize metrics.</li>
+</ul>
+<h2 id="sample-dashboard">Sample Dashboard<a class="headerlink" href="#sample-dashboard" title="Permanent link">&para;</a></h2>
+<p>You can customize your own dashboard by selecting metrics that best describe the health of your pipeline. Below is a sample dashboard which includes some basic metrics. </p>
+<p><img alt="" src="../../assets/sample-dashboard-img-1.png" />
+<img alt="" src="../../assets/sample-dashboard-img-2.png" /></p>
+<p>To use the sample dashboard, download the corresponding <a href="../example-dashboard-template.json">sample dashboard template</a>, import it to Grafana and use the dropdown menu at top-left of the dashboard to choose which pipeline/vertex/buffer metrics to display.</p>
 
               
             </article>
@@ -1476,7 +1410,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../overview/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Overview" rel="prev">
+        <a href="../metrics/metrics/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Metrics" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -1485,20 +1419,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Overview
+              Metrics
             </div>
           </div>
         </a>
       
       
         
-        <a href="../../development/debugging/" class="md-footer__link md-footer__link--next" aria-label="Next: How To Debug" rel="next">
+        <a href="../../development/development/" class="md-footer__link md-footer__link--next" aria-label="Next: Development" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              How To Debug
+              Development
             </div>
           </div>
           <div class="md-footer__button md-icon">
