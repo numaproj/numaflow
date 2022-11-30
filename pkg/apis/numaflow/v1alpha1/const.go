@@ -112,7 +112,7 @@ const (
 	DefaultRequeueAfter = 10 * time.Second
 
 	// ISB
-	DefaultBufferLength     = 50000
+	DefaultBufferLength     = 30000
 	DefaultBufferUsageLimit = 0.8
 	DefaultReadBatchSize    = 500
 
