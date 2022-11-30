@@ -232,7 +232,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	window := fixed.NewFixed(windowTime)
 
 	var reduceDataForwarder *DataForward
-	reduceDataForwarder, err = NewDataForward(child, CounterReduceTest{}, &keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher, window, WithReadBatchSize(10))
+	reduceDataForwarder, err = NewDataForward(child, CounterReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher, window, true, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	go reduceDataForwarder.Start(child)
@@ -300,8 +300,8 @@ func TestReduceDataForward_Count(t *testing.T) {
 	window := fixed.NewFixed(60 * time.Second)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, &keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, true, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -373,8 +373,8 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	window := fixed.NewFixed(2 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, &keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, true, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -446,8 +446,8 @@ func TestReduceDataForward_Max(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, MaxReduceTest{}, &keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, MaxReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, true, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -519,8 +519,8 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, &keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, true, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -598,8 +598,8 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, &nonKeyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, false, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -678,8 +678,8 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, &keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, WithReadBatchSize(1))
+	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, true, WithReadBatchSize(1))
 	assert.NoError(t, err)
 
 	// start the forwarder

@@ -138,7 +138,7 @@ const (
 	DefaultStoreMaxBufferSize = 100000                 // Default buffer size for pbq in bytes
 	DefaultStorePath          = PathPBQMount + "/wals" // Default store path
 
-	// DefaultGlobalKey Default key for non keyed stream
+	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 )
 

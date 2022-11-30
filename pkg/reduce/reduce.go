@@ -53,14 +53,15 @@ type DataForward struct {
 
 func NewDataForward(ctx context.Context,
 	udf applier.ReduceApplier,
-	vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	toBuffers map[string]isb.BufferWriter,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	fw fetch.Fetcher,
 	watermarkPublishers map[string]publish.Publisher,
-	windowingStrategy window.Windower, opts ...Option) (*DataForward, error) {
+	windowingStrategy window.Windower,
+	keyed bool,
+	opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
 
@@ -79,7 +80,7 @@ func NewDataForward(ctx context.Context,
 		watermarkPublishers: watermarkPublishers,
 		windowingStrategy:   windowingStrategy,
 		log:                 logging.FromContext(ctx),
-		keyed:               vertex.Spec.UDF.GroupBy.Keyed,
+		keyed:               keyed,
 		opts:                options}, nil
 }
 
@@ -152,16 +153,12 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
-	if d.keyed {
-		for _, m := range readMessages {
-			m.Watermark = time.Time(processorWM)
-		}
-	} else {
-		for _, m := range readMessages {
+	for _, m := range readMessages {
+		if !d.keyed {
 			m.Key = dfv1.DefaultKeyForNonKeyedData
 			m.Message.Key = dfv1.DefaultKeyForNonKeyedData
-			m.Watermark = time.Time(processorWM)
 		}
+		m.Watermark = time.Time(processorWM)
 	}
 
 	d.readloop.Process(ctx, readMessages)
