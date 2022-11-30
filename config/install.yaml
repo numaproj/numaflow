@@ -10462,7 +10462,7 @@ data:
           # The default consumer properties for the created streams
           consumer:
             ackWait: 60s
-            maxAckPending: 20000
+            maxAckPending: 25000
           otBucket:
             maxValueSize: 0
             history: 5
