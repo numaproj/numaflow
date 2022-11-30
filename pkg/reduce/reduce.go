@@ -23,6 +23,7 @@ import (
 	"context"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/window"
@@ -47,10 +48,12 @@ type DataForward struct {
 	windowingStrategy   window.Windower
 	opts                *Options
 	log                 *zap.SugaredLogger
+	keyed               bool
 }
 
 func NewDataForward(ctx context.Context,
 	udf applier.ReduceApplier,
+	vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	toBuffers map[string]isb.BufferWriter,
 	pbqManager *pbq.Manager,
@@ -76,6 +79,7 @@ func NewDataForward(ctx context.Context,
 		watermarkPublishers: watermarkPublishers,
 		windowingStrategy:   windowingStrategy,
 		log:                 logging.FromContext(ctx),
+		keyed:               vertex.Spec.UDF.GroupBy.Keyed,
 		opts:                options}, nil
 }
 
@@ -148,8 +152,16 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
-	for _, m := range readMessages {
-		m.Watermark = time.Time(processorWM)
+	if d.keyed {
+		for _, m := range readMessages {
+			m.Watermark = time.Time(processorWM)
+		}
+	} else {
+		for _, m := range readMessages {
+			m.Key = dfv1.DefaultGlobalKey
+			m.Message.Key = dfv1.DefaultGlobalKey
+			m.Watermark = time.Time(processorWM)
+		}
 	}
 
 	d.readloop.Process(ctx, readMessages)
