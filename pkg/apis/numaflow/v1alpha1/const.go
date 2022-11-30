@@ -139,7 +139,7 @@ const (
 	DefaultStorePath          = PathPBQMount + "/wals" // Default store path
 
 	// DefaultGlobalKey Default key for non keyed stream
-	DefaultGlobalKey = "NON_KEYED_STREAM"
+	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 )
 
 var (

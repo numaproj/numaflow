@@ -158,8 +158,8 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	} else {
 		for _, m := range readMessages {
-			m.Key = dfv1.DefaultGlobalKey
-			m.Message.Key = dfv1.DefaultGlobalKey
+			m.Key = dfv1.DefaultKeyForNonKeyedData
+			m.Message.Key = dfv1.DefaultKeyForNonKeyedData
 			m.Watermark = time.Time(processorWM)
 		}
 	}
