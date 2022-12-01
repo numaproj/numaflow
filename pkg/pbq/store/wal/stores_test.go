@@ -2,6 +2,7 @@ package wal
 
 import (
 	"context"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"testing"
 	"time"
 
@@ -10,6 +11,16 @@ import (
 )
 
 func TestWalStores(t *testing.T) {
+	vi = &dfv1.VertexInstance{
+		Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+			},
+		}},
+		Hostname: "test-host",
+		Replica:  0,
+	}
 	var err error
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
@@ -32,7 +43,7 @@ func TestWalStores(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	storeProvider := NewWALStores(WithStorePath(tmp))
+	storeProvider := NewWALStores(vi, WithStorePath(tmp))
 
 	for _, partitionID := range partitionIds {
 		_, err = storeProvider.CreateStore(ctx, partitionID)
