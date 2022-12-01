@@ -41,11 +41,7 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("atoi", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("compute-sum", LogReduceUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("sink", LogSinkVertexStarted)
+		VertexPodsRunning()
 
 	// port forward source vertex(to publish messages)
 	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
