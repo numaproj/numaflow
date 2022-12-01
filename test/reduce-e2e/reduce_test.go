@@ -66,8 +66,8 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	//w.Expect().VertexPodLogContains("sink", "20")
-	w.Expect().VertexPodLogContains("sink", "Payload -  20  Key -  even  Start -  60000  End -  70000")
 	w.Expect().VertexPodLogContains("sink", "Payload -  40  Key -  odd  Start -  60000  End -  70000")
+	w.Expect().VertexPodLogContains("sink", "Payload -  20  Key -  even  Start -  60000  End -  70000")
 }
 
 // one reduce vertex(non keyed)
