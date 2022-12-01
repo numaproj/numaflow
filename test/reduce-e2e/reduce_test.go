@@ -66,8 +66,8 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	//w.Expect().VertexPodLogContains("sink", "20")
-	w.Expect().VertexPodLogContains("sink", "60")
-	w.Expect().VertexPodLogContains("sink", "Start -  60000  End -  70000")
+	w.Expect().VertexPodLogContains("sink", "Payload -  20  Key -  even  Start -  60000  End -  70000")
+	w.Expect().VertexPodLogContains("sink", "Payload -  40  Key -  odd  Start -  60000  End -  70000")
 }
 
 // one reduce vertex(non keyed)
@@ -141,7 +141,6 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyed() {
 	// the sum should be 60(for even) and 120(for odd)
 	w.Expect().VertexPodLogContains("sink", "60")
 	w.Expect().VertexPodLogContains("sink", "120")
-	w.Expect().VertexPodLogContains("sink", "Start -  60000  End -  120000")
 }
 
 // two reduce vertex(keyed and non keyed)
@@ -176,8 +175,7 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 	// since the key can be even or odd and the first window duration is 10s(which is keyed)
 	// and the second window duration is 60s(non-keyed)
 	// the sum should be 180(60 + 120)
-	w.Expect().VertexPodLogContains("sink", "180")
-	w.Expect().VertexPodLogContains("sink", "Start -  120000  End -  180000")
+	w.Expect().VertexPodLogContains("sink", "Payload -  180  Key -  NON_KEYED_STREAM  Start -  120000  End -  180000")
 }
 
 func TestReduceSuite(t *testing.T) {
