@@ -1,10 +1,10 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: reduce-sum
+  name: complex-sum
 spec:
   limits:
-    readBatchSize: 10
+    readBatchSize: 1
   vertices:
     - name: in
       scale:
@@ -18,7 +18,7 @@ spec:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
           image: quay.io/numaio/go-even-odd-example
-    - name: compute-sum
+    - name: first-aggregation
       udf:
         container:
           # compute the sum
@@ -27,7 +27,17 @@ spec:
           window:
             fixed:
               length: 10s
-          keyed: false
+          keyed: true
+    - name: second-aggregation
+      udf:
+        container:
+          # compute the sum
+          image: quay.io/numaio/go-integer-sum-example
+        groupBy:
+          window:
+            fixed:
+              length: 60s
+          keyed: true
     - name: sink
       scale:
         min: 1
@@ -37,6 +47,10 @@ spec:
     - from: in
       to: atoi
     - from: atoi
-      to: compute-sum
-    - from: compute-sum
+      to: first-aggregation
+      parallelism: 2
+    - from: first-aggregation
+      to: second-aggregation
+      parallelism: 2
+    - from: second-aggregation
       to: sink

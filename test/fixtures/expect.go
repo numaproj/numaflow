@@ -99,8 +99,9 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 		t.t.Fatalf("Failed to check vertex %q pod logs: %v", vertexName, err)
 	}
 	if !contains {
-		t.t.Fatalf("Expected vertex %q pod log contains %q", vertexName, regex)
+		t.t.Fatalf("Expected vertex %q pod log doesn't contain %q", vertexName, regex)
 	}
+	t.t.Logf("Expected vertex %q pod contains %q", vertexName, regex)
 	return t
 }
 

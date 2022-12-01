@@ -19,7 +19,6 @@ limitations under the License.
 package reduce_e2e
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -32,6 +31,7 @@ type ReduceSuite struct {
 	E2ESuite
 }
 
+// one reduce vertex (keyed)
 func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	w := r.Given().Pipeline("@testdata/simple-keyed-reduce-pipeline.yaml").
 		When().
@@ -55,7 +55,6 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	startTime := 60000
 	for i := 0; i < 100; i++ {
 		eventTime := strconv.Itoa(startTime + i*1000)
-		fmt.Println("event time ", eventTime)
 
 		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
 			Expect().
@@ -70,11 +69,12 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
-	w.Expect().VertexPodLogContains("sink", "20")
-	w.Expect().VertexPodLogContains("sink", "40")
+	//w.Expect().VertexPodLogContains("sink", "20")
+	w.Expect().VertexPodLogContains("sink", "60")
 	w.Expect().VertexPodLogContains("sink", "Start -  60000  End -  70000")
 }
 
+// one reduce vertex(non keyed)
 func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 	w := r.Given().Pipeline("@testdata/simple-non-keyed-reduce-pipeline.yaml").
 		When().
@@ -84,10 +84,7 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("compute-sum", LogReduceUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("sink", LogSinkVertexStarted)
+		VertexPodsRunning()
 
 	// port forward source vertex(to publish messages)
 	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
@@ -97,7 +94,6 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 	startTime := 60000
 	for i := 0; i < 300; i++ {
 		eventTime := strconv.Itoa(startTime + i*1000)
-		fmt.Println("event time ", eventTime)
 
 		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
 			Expect().
@@ -112,12 +108,12 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 
 	// since there is no key, all the messages will be assigned to same window
 	// the sum should be 60(since the window is 10s)
-	w.Expect().VertexPodLogContains("sink", "60")
-	w.Expect().VertexPodLogContains("sink", "Start -  60000  End -  70000")
+	w.Expect().VertexPodLogContains("sink", "Payload -  60  Key -  NON_KEYED_STREAM  Start -  60000  End -  70000")
 }
 
-func (r *ReduceSuite) TestComplexReducePipeline() {
-	w := r.Given().Pipeline("@testdata/complex-reduce-pipeline.yaml").
+// two reduce vertex(both are keyed)
+func (r *ReduceSuite) TestComplexReducePipelineKeyed() {
+	w := r.Given().Pipeline("@testdata/complex-keyed-reduce-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
 
@@ -125,12 +121,7 @@ func (r *ReduceSuite) TestComplexReducePipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("atoi", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("first-aggregation", LogReduceUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("second-aggregation", LogReduceUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("sink", LogSinkVertexStarted)
+		VertexPodsRunning()
 
 	// port forward source vertex(to publish messages)
 	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
@@ -140,7 +131,6 @@ func (r *ReduceSuite) TestComplexReducePipeline() {
 	startTime := 60000
 	for i := 0; i < 300; i++ {
 		eventTime := strconv.Itoa(startTime + i*1000)
-		fmt.Println("event time ", eventTime)
 
 		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
 			Expect().
@@ -148,16 +138,50 @@ func (r *ReduceSuite) TestComplexReducePipeline() {
 		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).
 			Expect().
 			Status(204)
-		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).
+	}
+
+	// since the key can be even or odd and the first window duration is 10s(which is keyed)
+	// and the second window duration is 60s(keyed)
+	// the sum should be 60(for even) and 120(for odd)
+	w.Expect().VertexPodLogContains("sink", "60")
+	w.Expect().VertexPodLogContains("sink", "120")
+	w.Expect().VertexPodLogContains("sink", "Start -  60000  End -  120000")
+}
+
+// two reduce vertex(keyed and non keyed)
+func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
+	w := r.Given().Pipeline("@testdata/complex-non-keyed-reduce-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+
+	defer w.DeletePipelineAndWait()
+
+	// wait for all the pods to come up
+	w.Expect().
+		VertexPodsRunning()
+
+	// port forward source vertex(to publish messages)
+	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
+		TerminateAllPodPortForwards()
+
+	// publish messages to source vertex, with event time starting from 60000
+	startTime := 60000
+	for i := 0; i < 300; i++ {
+		eventTime := strconv.Itoa(startTime + i*1000)
+
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
+			Expect().
+			Status(204)
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).
 			Expect().
 			Status(204)
 	}
 
 	// since the key can be even or odd and the first window duration is 10s(which is keyed)
-	// and the second window duration is 60s(non keyed)
-	// the sum should be 20(for even) and 40(for odd)
-	w.Expect().VertexPodLogContains("sink", "360")
-	w.Expect().VertexPodLogContains("sink", "Start -  60000  End -  120000")
+	// and the second window duration is 60s(non-keyed)
+	// the sum should be 180(60 + 120)
+	w.Expect().VertexPodLogContains("sink", "180")
+	w.Expect().VertexPodLogContains("sink", "Start -  120000  End -  180000")
 }
 
 func TestReduceSuite(t *testing.T) {
