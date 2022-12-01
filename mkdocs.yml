@@ -76,6 +76,7 @@ nav:
       - Configuration:
           - Controller Configuration: "operations/controller-configmap.md"
           - operations/metrics/metrics.md
+          - operations/grafana.md
   - Developer Guide:
       - development/development.md
       - Specifications:

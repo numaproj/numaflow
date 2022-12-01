@@ -419,7 +419,7 @@ type PipelineLimits struct {
 	// BufferMaxLength is used to define the max length of a buffer
 	// Only applies to UDF and Source vertice as only they do buffer write.
 	// It can be overridden by the settings in vertex limits.
-	// +kubebuilder:default=50000
+	// +kubebuilder:default=30000
 	// +optional
 	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,2,opt,name=bufferMaxLength"`
 	// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.

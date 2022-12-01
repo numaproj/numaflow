@@ -23,6 +23,7 @@ import (
 	"context"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/window"
@@ -47,6 +48,7 @@ type DataForward struct {
 	windowingStrategy   window.Windower
 	opts                *Options
 	log                 *zap.SugaredLogger
+	keyed               bool
 }
 
 func NewDataForward(ctx context.Context,
@@ -57,7 +59,9 @@ func NewDataForward(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	fw fetch.Fetcher,
 	watermarkPublishers map[string]publish.Publisher,
-	windowingStrategy window.Windower, opts ...Option) (*DataForward, error) {
+	windowingStrategy window.Windower,
+	keyed bool,
+	opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
 
@@ -76,6 +80,7 @@ func NewDataForward(ctx context.Context,
 		watermarkPublishers: watermarkPublishers,
 		windowingStrategy:   windowingStrategy,
 		log:                 logging.FromContext(ctx),
+		keyed:               keyed,
 		opts:                options}, nil
 }
 
@@ -149,6 +154,10 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
+		if !d.keyed {
+			m.Key = dfv1.DefaultKeyForNonKeyedData
+			m.Message.Key = dfv1.DefaultKeyForNonKeyedData
+		}
 		m.Watermark = time.Time(processorWM)
 	}
 
