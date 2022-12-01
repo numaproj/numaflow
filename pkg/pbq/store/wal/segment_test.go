@@ -19,17 +19,28 @@ package wal
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 )
+
+var vi = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
 
 func Test_writeReadHeader(t *testing.T) {
 	id := partition.ID{
@@ -39,7 +50,7 @@ func Test_writeReadHeader(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(WithStorePath(tmp))
+	stores := NewWALStores(vi, WithStorePath(tmp))
 	store, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 	wal := store.(*WAL)
@@ -52,7 +63,7 @@ func Test_writeReadHeader(t *testing.T) {
 	fmt.Println(fName)
 	assert.NoError(t, err)
 
-	openWAL, err := OpenWAL(fName)
+	openWAL, err := wal.walStores.openWAL(fName)
 	assert.NoError(t, err)
 	// we have already read the header in OpenWAL
 	_, err = openWAL.readHeader()
@@ -60,6 +71,9 @@ func Test_writeReadHeader(t *testing.T) {
 
 	// compare the original ID with read ID
 	assert.Equal(t, id, *openWAL.partitionID)
+
+	err = openWAL.Close()
+	assert.NoError(t, err)
 }
 
 func Test_encodeDecodeHeader(t *testing.T) {
@@ -90,39 +104,21 @@ func Test_encodeDecodeHeader(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := encodeHeader(tt.id)
+			tmp := t.TempDir()
+			stores := NewWALStores(vi, WithStorePath(tmp))
+			wal, err := stores.CreateStore(context.Background(), *tt.id)
+			assert.NoError(t, err)
+			newWal := wal.(*WAL)
+			got, err := newWal.encodeHeader(tt.id)
 			if !tt.wantErr(t, err, fmt.Sprintf("encodeHeader(%v)", tt.id)) {
 				return
 			}
 			result, err := decodeHeader(got)
 			assert.NoError(t, err)
 			assert.Equalf(t, tt.id, result, "encodeHeader(%v)", tt.id)
-		})
-	}
-}
-
-func Test_runeEncoding(t *testing.T) {
-	var inputs = [][]rune{
-		{'世', '界'},
-		{'1', '2'},
-		{'g', 'o', 'o', 'd', ' ', 'b', 'y', 'e'},
-	}
-	for _, input := range inputs {
-		var err error
-		// write
-		var buf = new(bytes.Buffer)
-		for _, runeValue := range input {
-			err := binary.Write(buf, binary.LittleEndian, runeValue)
+			err = newWal.Close()
 			assert.NoError(t, err)
-		}
-
-		// read
-		var output = make([]rune, len(input))
-		err = binary.Read(buf, binary.LittleEndian, &output)
-		assert.NoError(t, err)
-
-		assert.NotEmpty(t, output[0]) // shouldn't be 0 at any cost
-		assert.Equal(t, input, output)
+		})
 	}
 }
 
@@ -134,7 +130,7 @@ func Test_writeReadEntry(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(WithStorePath(tmp))
+	stores := NewWALStores(vi, WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
@@ -208,7 +204,13 @@ func Test_encodeDecodeEntry(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := encodeEntry(tt.message)
+			tmp := t.TempDir()
+			stores := NewWALStores(vi, WithStorePath(tmp))
+			wal, err := stores.CreateStore(context.Background(), partition.ID{})
+			assert.NoError(t, err)
+			newWal := wal.(*WAL)
+
+			got, err := newWal.encodeEntry(tt.message)
 			if !tt.wantErr(t, err, fmt.Sprintf("encodeEntry(%v)", tt.message)) {
 				return
 			}
@@ -222,6 +224,8 @@ func Test_encodeDecodeEntry(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equalf(t, expectedOffset, actualOffset, "encodeEntry(%v)", tt.message.ReadOffset)
 			assert.Equalf(t, tt.message.Watermark, result.Watermark, "encodeEntry(%v)", tt.message.Watermark)
+			err = newWal.Close()
+			assert.NoError(t, err)
 		})
 	}
 }
@@ -234,7 +238,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(WithStorePath(tmp))
+	stores := NewWALStores(vi, WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
@@ -299,7 +303,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(WithStorePath(tmp))
+	stores := NewWALStores(vi, WithStorePath(tmp))
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 

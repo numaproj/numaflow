@@ -24,9 +24,11 @@ import (
 	"hash/crc32"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 )
 
@@ -76,10 +78,15 @@ type WAL struct {
 func (w *WAL) writeHeader() (err error) {
 	defer func() {
 		if err != nil {
-			walErrors.With(map[string]string{"kind": "writeHeader"}).Inc()
+			walErrors.With(map[string]string{
+				metricspkg.LabelPipeline: w.walStores.pipelineName,
+				metricspkg.LabelVertex:   w.walStores.vertexName,
+				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:           "writeHeader",
+			}).Inc()
 		}
 	}()
-	header, err := encodeHeader(w.partitionID)
+	header, err := w.encodeHeader(w.partitionID)
 	if err != nil {
 		return err
 	}
@@ -115,10 +122,15 @@ type entryHeaderPreamble struct {
 //	+--------------------+------------------+-----------------+------------+
 //
 // We require the key-len because key is variadic.
-func encodeHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
+func (w *WAL) encodeHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	defer func() {
 		if err != nil {
-			walErrors.With(map[string]string{"kind": "encodeHeader"}).Inc()
+			walErrors.With(map[string]string{
+				metricspkg.LabelPipeline: w.walStores.pipelineName,
+				metricspkg.LabelVertex:   w.walStores.vertexName,
+				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:           "encodeHeader",
+			}).Inc()
 		}
 	}()
 	buf = new(bytes.Buffer)
@@ -140,21 +152,26 @@ func encodeHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	return buf, err
 }
 
-func encodeEntry(message *isb.ReadMessage) (buf *bytes.Buffer, err error) {
+func (w *WAL) encodeEntry(message *isb.ReadMessage) (buf *bytes.Buffer, err error) {
 	defer func() {
 		if err != nil {
-			walErrors.With(map[string]string{"kind": "encodeEntry"}).Inc()
+			walErrors.With(map[string]string{
+				metricspkg.LabelPipeline: w.walStores.pipelineName,
+				metricspkg.LabelVertex:   w.walStores.vertexName,
+				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:           "encodeEntry",
+			}).Inc()
 		}
 	}()
 	buf = new(bytes.Buffer)
-	body, err := encodeEntryBody(message)
+	body, err := w.encodeEntryBody(message)
 	if err != nil {
 		return nil, err
 	}
 	checksum := calculateChecksum(body.Bytes())
 
 	// Writes the message header
-	header, err := encodeEntryHeader(message, int64(body.Len()), checksum)
+	header, err := w.encodeEntryHeader(message, int64(body.Len()), checksum)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +194,7 @@ func encodeEntry(message *isb.ReadMessage) (buf *bytes.Buffer, err error) {
 	return buf, nil
 }
 
-func encodeEntryHeader(message *isb.ReadMessage, messageLen int64, checksum uint32) (*bytes.Buffer, error) {
+func (w *WAL) encodeEntryHeader(message *isb.ReadMessage, messageLen int64, checksum uint32) (*bytes.Buffer, error) {
 	watermark := message.Watermark.UnixMilli()
 
 	offset, err := message.ReadOffset.Sequence()
@@ -196,18 +213,28 @@ func encodeEntryHeader(message *isb.ReadMessage, messageLen int64, checksum uint
 	buf := new(bytes.Buffer)
 	err = binary.Write(buf, binary.LittleEndian, entryHeader)
 	if err != nil {
-		walErrors.With(map[string]string{"kind": "encodeEntryHeader"}).Inc()
+		walErrors.With(map[string]string{
+			metricspkg.LabelPipeline: w.walStores.pipelineName,
+			metricspkg.LabelVertex:   w.walStores.vertexName,
+			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+			labelErrorKind:           "encodeEntryHeader",
+		}).Inc()
 		return nil, err
 	}
 	return buf, nil
 }
 
-func encodeEntryBody(message *isb.ReadMessage) (*bytes.Buffer, error) {
+func (w *WAL) encodeEntryBody(message *isb.ReadMessage) (*bytes.Buffer, error) {
 	m := new(bytes.Buffer)
 	enc := gob.NewEncoder(m)
 	err := enc.Encode(message.Message)
 	if err != nil {
-		walErrors.With(map[string]string{"kind": "encodeEntryBody"}).Inc()
+		walErrors.With(map[string]string{
+			metricspkg.LabelPipeline: w.walStores.pipelineName,
+			metricspkg.LabelVertex:   w.walStores.vertexName,
+			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+			labelErrorKind:           "encodeEntryBody",
+		}).Inc()
 		return nil, fmt.Errorf("entry body encountered encode err: %w", err)
 	}
 	return m, nil
@@ -228,11 +255,16 @@ func calculateChecksum(data []byte) uint32 {
 func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	defer func() {
 		if err != nil {
-			walErrors.With(map[string]string{"kind": "write"}).Inc()
+			walErrors.With(map[string]string{
+				metricspkg.LabelPipeline: w.walStores.pipelineName,
+				metricspkg.LabelVertex:   w.walStores.vertexName,
+				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:           "write",
+			}).Inc()
 		}
 	}()
 	writeStart := time.Now()
-	entry, err := encodeEntry(message)
+	entry, err := w.encodeEntry(message)
 	if err != nil {
 		return err
 	}
@@ -248,8 +280,6 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	w.numOfUnsyncedMsgs = w.numOfUnsyncedMsgs + 1
 	// Only increase the write offset when we successfully write for atomicity.
 	w.wOffset += int64(wrote)
-	// TODO: add batch sync()
-
 	currentTime := time.Now()
 
 	if w.wOffset-w.prevSyncedWOffset > w.walStores.maxBatchSize || currentTime.Sub(w.prevSyncedTime) > w.walStores.syncDuration {
@@ -257,10 +287,22 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 		w.prevSyncedTime = currentTime
 		fSyncStart := time.Now()
 		err = w.fp.Sync()
-		fileSyncWaitTime.With(map[string]string{labelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
+		fileSyncWaitTime.With(map[string]string{
+			metricspkg.LabelPipeline: w.walStores.pipelineName,
+			metricspkg.LabelVertex:   w.walStores.vertexName,
+			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+		}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
 		if err == nil {
-			entryWriteTime.With(map[string]string{labelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(writeStart).Milliseconds()) / float64(w.numOfUnsyncedMsgs))
-			entriesCount.With(map[string]string{}).Add(float64(w.numOfUnsyncedMsgs))
+			entryWriteTime.With(map[string]string{
+				metricspkg.LabelPipeline: w.walStores.pipelineName,
+				metricspkg.LabelVertex:   w.walStores.vertexName,
+				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+			}).Observe(float64(time.Since(writeStart).Milliseconds()) / float64(w.numOfUnsyncedMsgs))
+			entriesCount.With(map[string]string{
+				metricspkg.LabelPipeline: w.walStores.pipelineName,
+				metricspkg.LabelVertex:   w.walStores.vertexName,
+				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+			}).Add(float64(w.numOfUnsyncedMsgs))
 		}
 		w.numOfUnsyncedMsgs = 0
 		return err
@@ -272,12 +314,21 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 func (w *WAL) Close() (err error) {
 	defer func() {
 		if err != nil {
-			walErrors.With(map[string]string{"kind": "close"}).Inc()
+			walErrors.With(map[string]string{
+				metricspkg.LabelPipeline: w.walStores.pipelineName,
+				metricspkg.LabelVertex:   w.walStores.vertexName,
+				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:           "close",
+			}).Inc()
 		}
 	}()
 	start := time.Now()
 	err = w.fp.Sync()
-	fileSyncWaitTime.With(map[string]string{labelPartitionKey: w.partitionID.Key}).Observe(float64(time.Since(start).Milliseconds()))
+	fileSyncWaitTime.With(map[string]string{
+		metricspkg.LabelPipeline: w.walStores.pipelineName,
+		metricspkg.LabelVertex:   w.walStores.vertexName,
+		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+	}).Observe(float64(time.Since(start).Milliseconds()))
 
 	if err != nil {
 		return err

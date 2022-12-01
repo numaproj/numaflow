@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -42,21 +42,29 @@ import (
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
 
-var keyedVertex = dfv1.Vertex{Spec: dfv1.VertexSpec{
-	PipelineName: "testPipeline",
-	AbstractVertex: dfv1.AbstractVertex{
-		Name: "testVertex",
-		UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
-	},
-}}
+var keyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
 
-var nonKeyedVertex = dfv1.Vertex{Spec: dfv1.VertexSpec{
-	PipelineName: "testPipeline",
-	AbstractVertex: dfv1.AbstractVertex{
-		Name: "testVertex",
-		UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: false}},
-	},
-}}
+var nonKeyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: false}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
 
 type EventTypeWMProgressor struct {
 	watermarks map[string]processor.Watermark
@@ -232,7 +240,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	window := fixed.NewFixed(windowTime)
 
 	var reduceDataForwarder *DataForward
-	reduceDataForwarder, err = NewDataForward(child, CounterReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher, window, true, WithReadBatchSize(10))
+	reduceDataForwarder, err = NewDataForward(child, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher,
+		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	go reduceDataForwarder.Start(child)
@@ -300,8 +309,8 @@ func TestReduceDataForward_Count(t *testing.T) {
 	window := fixed.NewFixed(60 * time.Second)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, true, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -373,8 +382,8 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	window := fixed.NewFixed(2 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, true, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -446,8 +455,8 @@ func TestReduceDataForward_Max(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, MaxReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, true, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, MaxReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -519,8 +528,10 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, true, WithReadBatchSize(10))
+
+	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, WithReadBatchSize(10))
+
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -598,8 +609,8 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, false, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -678,8 +689,8 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
-		window, true, WithReadBatchSize(1))
+	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, WithReadBatchSize(1))
 	assert.NoError(t, err)
 
 	// start the forwarder

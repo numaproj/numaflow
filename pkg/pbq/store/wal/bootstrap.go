@@ -44,33 +44,6 @@ func (w *WAL) IsCorrupted() bool {
 	return w.corrupted
 }
 
-// OpenWAL returns a WAL if present
-func OpenWAL(filePath string) (*WAL, error) {
-	stat, err := os.Stat(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("filed to open WAL file %q, %w", filePath, err)
-	}
-
-	// here we are explicitly giving O_RDWR because we will be using this to read too. Our read is only during
-	// boot up.
-	fp, err := os.OpenFile(filePath, os.O_RDWR, stat.Mode())
-	if err != nil {
-		return nil, err
-	}
-
-	w := &WAL{
-		fp:       fp,
-		openMode: os.O_RDWR,
-	}
-
-	w.partitionID, err = w.readHeader()
-
-	return w, err
-}
-
 func (w *WAL) readHeader() (*partition.ID, error) {
 	if w.openMode == os.O_WRONLY {
 		return nil, fmt.Errorf("opened using O_WRONLY")

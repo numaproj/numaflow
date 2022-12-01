@@ -23,11 +23,9 @@ import (
 	"context"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/window"
-
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -36,10 +34,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // DataForward reads data from isb and forwards them to readloop
 type DataForward struct {
+	vertexInstance      *dfv1.VertexInstance
 	fromBuffer          isb.BufferReader
 	toBuffers           map[string]isb.BufferWriter
 	readloop            *readloop.ReadLoop
@@ -48,11 +48,11 @@ type DataForward struct {
 	windowingStrategy   window.Windower
 	opts                *Options
 	log                 *zap.SugaredLogger
-	keyed               bool
 }
 
 func NewDataForward(ctx context.Context,
 	udf applier.ReduceApplier,
+	vertexInstance *dfv1.VertexInstance,
 	fromBuffer isb.BufferReader,
 	toBuffers map[string]isb.BufferWriter,
 	pbqManager *pbq.Manager,
@@ -60,7 +60,6 @@ func NewDataForward(ctx context.Context,
 	fw fetch.Fetcher,
 	watermarkPublishers map[string]publish.Publisher,
 	windowingStrategy window.Windower,
-	keyed bool,
 	opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
@@ -73,6 +72,7 @@ func NewDataForward(ctx context.Context,
 
 	rl := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
 	return &DataForward{
+		vertexInstance:      vertexInstance,
 		fromBuffer:          fromBuffer,
 		toBuffers:           toBuffers,
 		readloop:            rl,
@@ -80,7 +80,6 @@ func NewDataForward(ctx context.Context,
 		watermarkPublishers: watermarkPublishers,
 		windowingStrategy:   windowingStrategy,
 		log:                 logging.FromContext(ctx),
-		keyed:               keyed,
 		opts:                options}, nil
 }
 
@@ -154,7 +153,7 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
-		if !d.keyed {
+		if !d.vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed {
 			m.Key = dfv1.DefaultKeyForNonKeyedData
 			m.Message.Key = dfv1.DefaultKeyForNonKeyedData
 		}
