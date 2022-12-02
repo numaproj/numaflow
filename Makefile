@@ -103,7 +103,7 @@ test-e2e:
 test-kafka-e2e:
 test-http-e2e:
 test-sdks-e2e:
-test-reducer-e2e:
+test-reduce-e2e:
 test-%: 
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
