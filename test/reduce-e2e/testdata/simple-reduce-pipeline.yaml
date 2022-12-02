@@ -29,7 +29,6 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 10Gi
-              storageClassName: standard
               accessMode: ReadWriteOnce
     - name: sink
       scale:

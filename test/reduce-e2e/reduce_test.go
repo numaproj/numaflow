@@ -1,3 +1,20 @@
+//go:build test
+
+/*
+Copyright 2022 The Numaproj Authors.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package reduce_e2e
 
 import (
@@ -36,15 +53,15 @@ func (s *ReduceSuite) TestSimpleReducePipelineFailOver() {
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=even-odd-sum,numaflow.numaproj.io/vertex-name=compute-sum"
 
-	// Kill one of the pod before processing to trigger failover.
+	// Kill the reducer pods before processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	w.Expect().VertexPodsRunning()
 
 	startTime := int(time.Unix(1000, 0).UnixMilli())
 	for i := 1; i <= 100; i++ {
 		eventTime := startTime + (i * 1000)
-		if i == 50 {
-			// Kill one of the pod during processing to trigger failover.
+		if i == 5 {
+			// Kill the reducer pods during processing to trigger failover.
 			w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 		}
 
@@ -61,14 +78,18 @@ func (s *ReduceSuite) TestSimpleReducePipelineFailOver() {
 			Status(204)
 	}
 
-	w.Expect().VertexPodLogContains("sink", "Payload", PodLogCheckOptionWithCount(120))
-	w.Expect().VertexPodLogContains("sink", "Payload", PodLogCheckOptionWithCount(240))
+	w.Expect().VertexPodLogContains("sink", "Payload -  38", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  76", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  120", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  240", PodLogCheckOptionWithCount(1))
 
-	// Kill one of the pod after processing to trigger failover.
+	// Kill the reducer pods after processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	w.Expect().VertexPodsRunning()
-	w.Expect().VertexPodLogContains("sink", "Payload", PodLogCheckOptionWithCount(120))
-	w.Expect().VertexPodLogContains("sink", "Payload", PodLogCheckOptionWithCount(240))
+	w.Expect().VertexPodLogContains("sink", "Payload -  38", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  76", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  120", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  240", PodLogCheckOptionWithCount(1))
 }
 
 func TestReduceSuite(t *testing.T) {
