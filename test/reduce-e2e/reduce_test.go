@@ -49,7 +49,7 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 
 	// publish messages to source vertex, with event time starting from 60000
 	startTime := 60000
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 300; i++ {
 		eventTime := strconv.Itoa(startTime + i*1000)
 
 		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
