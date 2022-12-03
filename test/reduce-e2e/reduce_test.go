@@ -55,13 +55,13 @@ func (s *ReduceSuite) TestSimpleReducePipelineFailOver() {
 
 	// Kill the reducer pods before processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
-	w.Expect().VertexPodsRunning()
 
 	startTime := int(time.Unix(1000, 0).UnixMilli())
 	for i := 1; i <= 100; i++ {
 		eventTime := startTime + (i * 1000)
 		if i == 5 {
 			// Kill the reducer pods during processing to trigger failover.
+			w.Expect().VertexPodsRunning()
 			w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 		}
 
