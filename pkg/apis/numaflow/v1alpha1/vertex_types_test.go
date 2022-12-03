@@ -355,6 +355,9 @@ func Test_VertexIsSink(t *testing.T) {
 	o := testVertex.DeepCopy()
 	o.Spec.Sink = &Sink{}
 	assert.True(t, o.IsASink())
+	assert.False(t, o.IsUDSink())
+	o.Spec.Sink.UDSink = &UDSink{}
+	assert.True(t, o.IsUDSink())
 }
 
 func Test_VertexGetInitContainers(t *testing.T) {

@@ -75,6 +75,10 @@ func (v Vertex) IsASink() bool {
 	return v.Spec.Sink != nil
 }
 
+func (v Vertex) IsUDSink() bool {
+	return v.IsASink() && v.Spec.Sink.UDSink != nil
+}
+
 func (v Vertex) IsMapUDF() bool {
 	return v.Spec.UDF != nil && v.Spec.UDF.GroupBy == nil
 }
