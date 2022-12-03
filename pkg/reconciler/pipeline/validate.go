@@ -29,8 +29,8 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("nil pipeline")
 	}
 
-	if x := k8svalidation.IsDNS1035Label(pl.Name); len(x) > 0 {
-		return fmt.Errorf("invalid pipeline name %q, %v", pl.Name, x)
+	if errs := k8svalidation.IsDNS1035Label(pl.Name); len(errs) > 0 {
+		return fmt.Errorf("invalid pipeline name %q, %v", pl.Name, errs)
 	}
 
 	if len(pl.Spec.Vertices) == 0 {
@@ -176,8 +176,8 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 }
 
 func validateVertex(v dfv1.AbstractVertex) error {
-	if x := k8svalidation.IsDNS1035Label(v.Name); len(x) > 0 {
-		return fmt.Errorf("invalid vertex name %q, %v", v.Name, x)
+	if errs := k8svalidation.IsDNS1035Label(v.Name); len(errs) > 0 {
+		return fmt.Errorf("invalid vertex name %q, %v", v.Name, errs)
 	}
 	min, max := int32(0), int32(dfv1.DefaultMaxReplicas)
 	if v.Scale.Min != nil {
