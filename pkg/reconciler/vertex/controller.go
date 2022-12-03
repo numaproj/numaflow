@@ -215,6 +215,11 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			labels[dfv1.KeyVertexName] = vertex.Spec.Name
 			annotations[dfv1.KeyHash] = hash
 			annotations[dfv1.KeyReplica] = strconv.Itoa(replica)
+			if vertex.IsMapUDF() || vertex.IsReduceUDF() {
+				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrUdf
+			} else if vertex.IsUDSink() {
+				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrUdsink
+			}
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace:       vertex.Namespace,
