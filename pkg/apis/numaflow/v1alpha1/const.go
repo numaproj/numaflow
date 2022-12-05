@@ -28,16 +28,17 @@ const (
 	Project = "numaflow"
 
 	// label/annotation keys.
-	KeyHash         = "numaflow.numaproj.io/hash" // hash of the object
-	KeyComponent    = "app.kubernetes.io/component"
-	KeyPartOf       = "app.kubernetes.io/part-of"
-	KeyManagedBy    = "app.kubernetes.io/managed-by"
-	KeyAppName      = "app.kubernetes.io/name"
-	KeyISBSvcName   = "numaflow.numaproj.io/isbsvc-name"
-	KeyISBSvcType   = "numaflow.numaproj.io/isbsvc-type"
-	KeyPipelineName = "numaflow.numaproj.io/pipeline-name"
-	KeyVertexName   = "numaflow.numaproj.io/vertex-name"
-	KeyReplica      = "numaflow.numaproj.io/replica"
+	KeyHash             = "numaflow.numaproj.io/hash" // hash of the object
+	KeyComponent        = "app.kubernetes.io/component"
+	KeyPartOf           = "app.kubernetes.io/part-of"
+	KeyManagedBy        = "app.kubernetes.io/managed-by"
+	KeyAppName          = "app.kubernetes.io/name"
+	KeyISBSvcName       = "numaflow.numaproj.io/isbsvc-name"
+	KeyISBSvcType       = "numaflow.numaproj.io/isbsvc-type"
+	KeyPipelineName     = "numaflow.numaproj.io/pipeline-name"
+	KeyVertexName       = "numaflow.numaproj.io/vertex-name"
+	KeyReplica          = "numaflow.numaproj.io/replica"
+	KeyDefaultContainer = "kubectl.kubernetes.io/default-container"
 
 	// ID key in the header of sources like http
 	KeyMetaID        = "x-numaflow-id"

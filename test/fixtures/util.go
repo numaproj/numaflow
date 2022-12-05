@@ -48,6 +48,11 @@ var OutputRegexp = func(rx string) func(t *testing.T, output string, err error) 
 	}
 }
 
+var CheckPodKillSucceeded = func(t *testing.T, output string, err error) {
+	assert.Contains(t, output, "deleted")
+	assert.NoError(t, err)
+}
+
 func Exec(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Env = os.Environ()

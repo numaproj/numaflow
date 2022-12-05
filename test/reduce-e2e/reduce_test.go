@@ -2,7 +2,6 @@
 
 /*
 Copyright 2022 The Numaproj Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -21,6 +20,7 @@ package reduce_e2e
 import (
 	"strconv"
 	"testing"
+	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	. "github.com/numaproj/numaflow/test/fixtures"
@@ -140,6 +140,67 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 	// and the second window duration is 60s(non-keyed)
 	// the sum should be 180(60 + 120)
 	w.Expect().VertexPodLogContains("sink", "Payload -  180  Key -  NON_KEYED_STREAM  Start -  120000  End -  180000")
+}
+
+func (r *ReduceSuite) TestSimpleReducePipelineFailOver() {
+	w := r.Given().Pipeline("@testdata/simple-reduce-pipeline-wal.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	pipelineName := "even-odd-sum"
+
+	w.Expect().VertexPodsRunning()
+
+	w.Expect().
+		VertexPodLogContains("in", LogSourceVertexStarted).
+		VertexPodLogContains("atoi", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("sink", LogSinkVertexStarted).
+		DaemonPodLogContains(pipelineName, LogDaemonStarted)
+
+	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
+		TerminateAllPodPortForwards()
+
+	args := "kubectl delete po -n numaflow-system -l " +
+		"numaflow.numaproj.io/pipeline-name=even-odd-sum,numaflow.numaproj.io/vertex-name=compute-sum"
+
+	// Kill the reducer pods before processing to trigger failover.
+	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
+
+	startTime := int(time.Unix(1000, 0).UnixMilli())
+	for i := 1; i <= 100; i++ {
+		eventTime := startTime + (i * 1000)
+		if i == 5 {
+			// Kill the reducer pods during processing to trigger failover.
+			w.Expect().VertexPodsRunning()
+			w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
+		}
+
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("X-Numaflow-Event-Time", strconv.Itoa(eventTime)).WithBytes([]byte("1")).
+			Expect().
+			Status(204)
+
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("X-Numaflow-Event-Time", strconv.Itoa(eventTime)).WithBytes([]byte("2")).
+			Expect().
+			Status(204)
+
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("X-Numaflow-Event-Time", strconv.Itoa(eventTime)).WithBytes([]byte("3")).
+			Expect().
+			Status(204)
+	}
+
+	w.Expect().VertexPodLogContains("sink", "Payload -  38", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  76", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  120", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  240", PodLogCheckOptionWithCount(1))
+
+	// Kill the reducer pods after processing to trigger failover.
+	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
+	w.Expect().VertexPodsRunning()
+	w.Expect().VertexPodLogContains("sink", "Payload -  38", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  76", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  120", PodLogCheckOptionWithCount(1))
+	w.Expect().VertexPodLogContains("sink", "Payload -  240", PodLogCheckOptionWithCount(1))
 }
 
 func TestReduceSuite(t *testing.T) {
