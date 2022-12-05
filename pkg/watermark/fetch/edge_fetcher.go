@@ -110,10 +110,6 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 			e.processorManager.DeleteProcessor(p.entity.GetName())
 		}
 	}
-	// if the offset is smaller than every offset in the timeline, set the value to be -1
-	if epoch == math.MaxInt64 {
-		epoch = -1
-	}
 	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bufferName, offset, epoch)
 
 	return processor.Watermark(time.UnixMilli(epoch))
