@@ -29,5 +29,5 @@ type ID struct {
 }
 
 func (p ID) String() string {
-	return fmt.Sprintf("%v-%v-%s", p.Start.Unix(), p.End.Unix(), p.Key)
+	return fmt.Sprintf("%v-%v-%s", p.Start.UnixMilli(), p.End.UnixMilli(), p.Key)
 }
