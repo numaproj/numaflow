@@ -101,7 +101,6 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 		var t = p.offsetTimeline.GetEventTime(inputOffset)
 		if t == -1 { // watermark cannot be computed, perhaps a new processing unit was added or offset fell off the timeline
 			epoch = t
-			break
 		} else if t < epoch {
 			epoch = t
 		}
