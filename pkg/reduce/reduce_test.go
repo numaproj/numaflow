@@ -770,9 +770,7 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 			case <-ctx.Done():
 				return
 			default:
-				for key := range publishers {
-					_ = hb.PutKV(ctx, key, []byte(fmt.Sprintf("%d", time.Now().Unix())))
-				}
+				_ = hb.PutKV(ctx, fromBuffer.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 				time.Sleep(time.Duration(1) * time.Second)
 			}
 		}

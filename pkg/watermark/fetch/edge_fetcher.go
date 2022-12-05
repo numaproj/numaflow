@@ -99,7 +99,9 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	for _, p := range allProcessors {
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
 		var t = p.offsetTimeline.GetEventTime(inputOffset)
-		if t != -1 && t < epoch {
+		if t == -1 { // this is a bug
+			epoch = t
+		} else if t < epoch {
 			epoch = t
 		}
 		if p.IsDeleted() && (offset > p.offsetTimeline.GetHeadOffset()) {
