@@ -50,10 +50,11 @@ const (
 	ISBSvcName     = "numaflow-e2e"
 	defaultTimeout = 60 * time.Second
 
-	LogSourceVertexStarted = "Start processing source messages"
-	LogSinkVertexStarted   = "Start processing sink messages"
-	LogUDFVertexStarted    = "Start processing udf messages"
-	LogDaemonStarted       = "Daemon server started successfully"
+	LogSourceVertexStarted    = "Start processing source messages"
+	LogSinkVertexStarted      = "Start processing sink messages"
+	LogUDFVertexStarted       = "Start processing udf messages"
+	LogReduceUDFVertexStarted = "Start processing reduce udf messages"
+	LogDaemonStarted          = "Daemon server started successfully"
 )
 
 var (

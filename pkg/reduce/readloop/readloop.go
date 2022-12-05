@@ -141,7 +141,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		for _, cw := range closedWindows {
 			partitions := cw.Partitions()
 			rl.closePartitions(partitions)
-			rl.log.Debugw("Closing Window", zap.Time("windowStart", cw.StartTime()), zap.Time("windowEnd", cw.EndTime()))
+			rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
 		}
 	}
 }
@@ -159,7 +159,7 @@ messagesLoop:
 		// to be violated.
 		if message.EventTime.Before(message.Watermark) {
 			// TODO: track as a counter metric
-			rl.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.Unix()), zap.Int64("watermark", message.Watermark.Unix()), zap.Any("message", message.Message))
+			rl.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
 			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
 			writtenMessages = append(writtenMessages, message)
 			// let's not continue processing this message, most likely the window has already been closed and the message
