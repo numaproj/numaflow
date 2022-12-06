@@ -199,7 +199,7 @@ func TestAligned_CreateWindow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			windows := windows.(*Fixed)
 			setup(windows, tt.given)
-			ret := windows.CreateWindow(tt.input)
+			ret := windows.InsertWindow(tt.input)
 			assert.Equal(t, tt.input.Start, ret.StartTime())
 			assert.Equal(t, tt.input.End, ret.EndTime())
 			assert.Equal(t, len(tt.expectedWindows), windows.entries.Len())
@@ -352,7 +352,7 @@ func TestAligned_GetWindow(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			setup(windows.(*Fixed), tt.given)
-			ret := windows.GetWindow(tt.input)
+			ret := windows.GetWindow(tt.input.StartTime(), tt.input.EndTime())
 			if tt.expectedWindow == nil {
 				assert.Nil(t, ret)
 			} else {

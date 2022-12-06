@@ -42,10 +42,10 @@ type AlignedKeyedWindower interface {
 type Windower interface {
 	// AssignWindow assigns the event to the window based on give window configuration.
 	AssignWindow(eventTime time.Time) []AlignedKeyedWindower
-	// CreateWindow creates a window for a supplied interval
-	CreateWindow(aw AlignedKeyedWindower) AlignedKeyedWindower
+	// InsertWindow inserts window to the list of active windows
+	InsertWindow(aw AlignedKeyedWindower) AlignedKeyedWindower
 	// GetWindow returns a keyed window for a supplied interval
-	GetWindow(aw AlignedKeyedWindower) AlignedKeyedWindower
+	GetWindow(startTime time.Time, endTime time.Time) AlignedKeyedWindower
 	// RemoveWindows returns list of window(s) that can be closed
 	RemoveWindows(time time.Time) []AlignedKeyedWindower
 }

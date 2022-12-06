@@ -77,8 +77,8 @@ func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower 
 	}
 }
 
-// CreateWindow adds a window for a given interval window
-func (f *Fixed) CreateWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
+// InsertWindow adds a window to the list of active windows
+func (f *Fixed) InsertWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -111,7 +111,7 @@ func (f *Fixed) CreateWindow(kw window.AlignedKeyedWindower) window.AlignedKeyed
 }
 
 // GetWindow returns an existing window for the given interval
-func (f *Fixed) GetWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
+func (f *Fixed) GetWindow(startTime time.Time, endTime time.Time) window.AlignedKeyedWindower {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -122,23 +122,23 @@ func (f *Fixed) GetWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWin
 	// are we looking for a window that is later than the current latest?
 	latest := f.entries.Back()
 	lkw := latest.Value.(*keyed.AlignedKeyedWindow)
-	if !lkw.EndTime().After(kw.StartTime()) {
+	if !lkw.EndTime().After(startTime) {
 		return nil
 	}
 
 	// are we looking for a window that is earlier than the current earliest?
 	earliest := f.entries.Front()
 	ekw := earliest.Value.(*keyed.AlignedKeyedWindow)
-	if !ekw.StartTime().Before(kw.EndTime()) {
+	if !ekw.StartTime().Before(endTime) {
 		return nil
 	}
 
 	// check if we already have a window
 	for e := f.entries.Back(); e != nil; e = e.Prev() {
 		win := e.Value.(*keyed.AlignedKeyedWindow)
-		if win.StartTime().Equal(kw.StartTime()) && win.EndTime().Equal(kw.EndTime()) {
+		if win.StartTime().Equal(startTime) && win.EndTime().Equal(endTime) {
 			return win
-		} else if win.StartTime().Before(kw.EndTime()) {
+		} else if win.StartTime().Before(endTime) {
 			// we have moved past the range that we are looking for
 			// so, we can bail out early.
 			break
