@@ -19,9 +19,10 @@ package udsink
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
-	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v2"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -94,9 +95,24 @@ func (s *UserDefinedSink) IsFull() bool {
 
 // Write writes to the UDSink container.
 func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	msgs := make([]*sinkpb.Datum, len(messages))
-	for i, m := range messages {
-		msgs[i] = &sinkpb.Datum{
+	var (
+		datumCh      = make(chan *sinkpb.Datum)
+		responseList []*sinkpb.Response
+		err          error
+		errs         []error
+		wg           sync.WaitGroup
+	)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// start listening on datumCh
+		responseList, err = s.udsink.Apply(ctx, datumCh)
+	}()
+
+	// start sending data to datumCh
+	for _, m := range messages {
+		datumCh <- &sinkpb.Datum{
 			// NOTE: key is not used anywhere ATM
 			Id:        m.ID,
 			Value:     m.Payload,
@@ -105,7 +121,43 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 			Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
 		}
 	}
-	return nil, s.udsink.Apply(ctx, msgs)
+	// complete sending data, close the datumCh
+	close(datumCh)
+	wg.Wait()
+
+	// processing error list
+	if err != nil {
+		for i := range responseList {
+			errs[i] = ApplyUDSinkErr{
+				UserUDSinkErr: false,
+				Message:       fmt.Sprintf("gRPC client.SinkFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+		}
+		return nil, errs
+	}
+	// Use ID to map the response messages, so that there's no strict requirement for the user defined sink to return the responseList in order.
+	resMap := make(map[string]*sinkpb.Response)
+	for _, res := range responseList {
+		resMap[res.GetId()] = res
+	}
+	for i, m := range messages {
+		if r, existing := resMap[m.ID]; !existing {
+			errs[i] = fmt.Errorf("not found in responseList")
+		} else {
+			if !r.Success {
+				if r.GetErrMsg() != "" {
+					errs[i] = fmt.Errorf(r.GetErrMsg())
+				} else {
+					errs[i] = fmt.Errorf("unsuccessful due to unknown reason")
+				}
+			}
+		}
+	}
+	return nil, errs
 }
 
 func (br *UserDefinedSink) Close() error {

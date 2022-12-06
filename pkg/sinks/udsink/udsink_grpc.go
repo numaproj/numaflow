@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
-	sinksdk "github.com/numaproj/numaflow-go/pkg/sink"
-	"github.com/numaproj/numaflow-go/pkg/sink/client"
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v2"
+	sinksdk "github.com/numaproj/numaflow-go/pkg/sinkv2"
+	"github.com/numaproj/numaflow-go/pkg/sinkv2/client"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -59,40 +59,6 @@ func (u *udsGRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *udsGRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.Datum) []error {
-	errs := make([]error, len(dList))
-
-	responseList, err := u.client.SinkFn(ctx, dList)
-	if err != nil {
-		for i := range dList {
-			errs[i] = ApplyUDSinkErr{
-				UserUDSinkErr: false,
-				Message:       fmt.Sprintf("gRPC client.SinkFn failed, %s", err),
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			}
-		}
-		return errs
-	}
-	// Use ID to map the response messages, so that there's no strict requirement for the user defined sink to return the responseList in order.
-	resMap := make(map[string]*sinkpb.Response)
-	for _, res := range responseList {
-		resMap[res.GetId()] = res
-	}
-	for i, m := range dList {
-		if r, existing := resMap[m.GetId()]; !existing {
-			errs[i] = fmt.Errorf("not found in responseList")
-		} else {
-			if !r.Success {
-				if r.GetErrMsg() != "" {
-					errs[i] = fmt.Errorf(r.GetErrMsg())
-				} else {
-					errs[i] = fmt.Errorf("unsuccessful due to unknown reason")
-				}
-			}
-		}
-	}
-	return errs
+func (u *udsGRPCBasedUDSink) Apply(ctx context.Context, datumCh <-chan *sinkpb.Datum) ([]*sinkpb.Response, error) {
+	return u.client.SinkFn(ctx, datumCh)
 }
