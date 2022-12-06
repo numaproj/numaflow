@@ -107,7 +107,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 		// the window end time comes, key will not be lost and the windows will be closed as expected
 		alignedKeyedWindow.AddKey(p.Key)
 
-		// These windows have to be recreated as they are completely in-memory
+		// insert the window to the list of active windows, since the active window list is in-memory
 		rl.windower.InsertWindow(alignedKeyedWindow)
 
 		// create and invoke process and forward for the partition
