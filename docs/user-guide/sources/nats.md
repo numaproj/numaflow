@@ -32,4 +32,6 @@ spec:
                 key: my-password
 ```
 
+## Auth
+
 The `auth` strategies supported in `nats` source include `basic` (user and password), `token` and `nkey`, check the [API](https://github.com/numaproj/numaflow/blob/main/docs/APIs.md#numaflow.numaproj.io/v1alpha1.NatsAuth) for the details.

@@ -19,7 +19,6 @@ package nats
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -154,29 +153,19 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 		n.natsConn = conn
 	}
 	if sub, err := n.natsConn.QueueSubscribe(source.Subject, source.Queue, func(msg *natslib.Msg) {
-		id := msg.Header.Get(dfv1.KeyMetaID)
-		if id == "" {
-			id = uuid.New().String()
-		}
-		eventTime := time.Now()
-		if x := msg.Header.Get(dfv1.KeyMetaEventTime); x != "" {
-			i, err := strconv.ParseInt(x, 10, 64)
-			if err != nil {
-				n.logger.Warnf("Invalid event time %q", x)
-				return
-			}
-			eventTime = time.UnixMilli(i)
-		}
+		id := uuid.New().String()
 		m := &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{EventTime: eventTime},
+					// TODO: Be able to specify event time.
+					PaneInfo: isb.PaneInfo{EventTime: time.Now()},
 					ID:       id,
 				},
 				Body: isb.Body{
 					Payload: msg.Data,
 				},
 			},
+			// TODO: Be able to specify an ID for dedup?
 			ReadOffset: isb.SimpleStringOffset(func() string { return id }),
 		}
 		n.messages <- m
