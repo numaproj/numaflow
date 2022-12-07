@@ -700,7 +700,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// wait for the partitions to be created
 	for {
 		partitionsList := pbqManager.ListPartitions()
-		if len(partitionsList) > 0 {
+		if len(partitionsList) > 1 {
 			childCancel()
 			break
 		}
@@ -717,7 +717,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	for {
 		discoveredPartitions, _ = storeProvider.DiscoverPartitions(ctx)
 
-		if len(discoveredPartitions) > 0 {
+		if len(discoveredPartitions) > 1 {
 			break
 		}
 		select {
