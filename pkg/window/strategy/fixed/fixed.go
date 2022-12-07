@@ -91,9 +91,9 @@ func (f *Fixed) InsertIfNotPresent(kw window.AlignedKeyedWindower) (aw window.Al
 	earliestWindow := f.entries.Front().Value.(*keyed.AlignedKeyedWindow)
 	recentWindow := f.entries.Back().Value.(*keyed.AlignedKeyedWindow)
 
-	// if there are only upto 2 windows in the list
-	if recentWindow.StartTime().Equal(kw.StartTime()) && recentWindow.EndTime().Equal(kw.EndTime()) {
-		aw = recentWindow
+	// if there is only one window
+	if earliestWindow.StartTime().Equal(kw.StartTime()) && earliestWindow.EndTime().Equal(kw.EndTime()) {
+		aw = earliestWindow
 		isPresent = true
 	} else if !earliestWindow.StartTime().Before(kw.EndTime()) {
 		// late arrival
@@ -105,16 +105,16 @@ func (f *Fixed) InsertIfNotPresent(kw window.AlignedKeyedWindower) (aw window.Al
 		aw = kw
 	} else {
 		// a window in the middle
-		for e := f.entries.Front(); e.Next() != nil; e = e.Next() {
+		for e := f.entries.Back(); e.Prev() != nil; e = e.Prev() {
 			win := e.Value.(*keyed.AlignedKeyedWindow)
-			nextWin := e.Next().Value.(*keyed.AlignedKeyedWindow)
+			prevWin := e.Prev().Value.(*keyed.AlignedKeyedWindow)
 			if win.StartTime().Equal(kw.StartTime()) && win.EndTime().Equal(kw.EndTime()) {
 				aw = win
 				isPresent = true
 				break
 			}
-			if !win.EndTime().Before(kw.StartTime()) && nextWin.StartTime().After(kw.StartTime()) {
-				f.entries.InsertAfter(kw, e)
+			if !win.StartTime().Before(kw.EndTime()) && !prevWin.EndTime().After(kw.StartTime()) {
+				f.entries.InsertBefore(kw, e)
 				aw = kw
 				break
 			}
