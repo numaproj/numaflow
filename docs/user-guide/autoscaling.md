@@ -62,6 +62,14 @@ spec:
         disabled: true
 ```
 
+**Notes**
+
+Numaflow autoscaling does not apply to some types of vertices, following source vertices can not be autoscaled as these sources do not persist the data, thus no way to calculate their pending messages.
+
+- Generator
+- HTTP
+- Nats
+
 ### Kubernetes HPA
 
 [Kubernetes HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) is supported in Numaflow for any type of Vertex. To use HPA, remember to point the `scaleTargetRef` to the vertex as below, and disable Numaflow autoscaling in your Pipeline spec.
@@ -88,14 +96,6 @@ spec:
 With the configuration above, Kubernetes HPA controller will keep the target utilization of the pods of the Vertex at 50%.
 
 Kubernetes HPA autoscaling is useful for those Source vertices not able to count pending messages, such as [HTTP](sources/http.md).
-
-**Notes**
-
-Numaflow autoscaling does not apply to all the types of vertices, following source vertices can not be autoscaled as these sources do not persist the data, thus no way to calculate their pending messages.
-
-- Generator
-- HTTP
-- Nats
 
 ### Third Party Autoscaling
 
