@@ -108,7 +108,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 		alignedKeyedWindow.AddKey(p.Key)
 
 		// insert the window to the list of active windows, since the active window list is in-memory
-		rl.windower.InsertWindow(alignedKeyedWindow)
+		rl.windower.InsertIfNotPresent(alignedKeyedWindow)
 
 		// create and invoke process and forward for the partition
 		rl.associatePBQAndPnF(ctx, p)
@@ -328,9 +328,8 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 	processingWindows := rl.windower.AssignWindow(m.EventTime)
 	var kWindows []window.AlignedKeyedWindower
 	for _, win := range processingWindows {
-		w := rl.windower.GetWindow(win.StartTime(), win.EndTime())
-		if w == nil {
-			w = rl.windower.InsertWindow(win)
+		w, isNew := rl.windower.InsertIfNotPresent(win)
+		if isNew {
 			rl.log.Debugw("Creating new keyed window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
 		} else {
 			rl.log.Debugw("Found an existing window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
