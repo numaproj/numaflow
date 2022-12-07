@@ -89,6 +89,14 @@ With the configuration above, Kubernetes HPA controller will keep the target uti
 
 Kubernetes HPA autoscaling is useful for those Source vertices not able to count pending messages, such as [HTTP](sources/http.md).
 
+**Notes**
+
+Numaflow autoscaling does not apply to all the types of vertices, following source vertices can not be autoscaled as these sources do not persist the data, thus no way to calculate their pending messages.
+
+- Generator
+- HTTP
+- Nats
+
 ### Third Party Autoscaling
 
 Third party autoscaling tools like [KEDA](https://keda.sh/) are also supported in Numaflow, which can be used to autoscale any type of vertex with the scalers it supports.

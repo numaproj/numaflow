@@ -48,6 +48,7 @@ nav:
           - user-guide/sources/generator.md
           - user-guide/sources/http.md
           - user-guide/sources/kafka.md
+          - user-guide/sources/nats.md
       - Sinks:
           - user-guide/sinks/kafka.md
           - user-guide/sinks/log.md
