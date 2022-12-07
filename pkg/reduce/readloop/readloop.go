@@ -103,12 +103,13 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 		// crosses the window.
 
 		alignedKeyedWindow := keyed.NewKeyedWindow(p.Start, p.End)
-		// add key to the window, so that when a new message with the watermark greater than
-		// the window end time comes, key will not be lost and the windows will be closed as expected
-		alignedKeyedWindow.AddKey(p.Key)
 
 		// insert the window to the list of active windows, since the active window list is in-memory
-		rl.windower.InsertIfNotPresent(alignedKeyedWindow)
+		keyedWindow, _ := rl.windower.InsertIfNotPresent(alignedKeyedWindow)
+
+		// add key to the window, so that when a new message with the watermark greater than
+		// the window end time comes, key will not be lost and the windows will be closed as expected
+		keyedWindow.AddKey(p.Key)
 
 		// create and invoke process and forward for the partition
 		rl.associatePBQAndPnF(ctx, p)
