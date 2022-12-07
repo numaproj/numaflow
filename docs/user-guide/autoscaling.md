@@ -64,7 +64,7 @@ spec:
 
 **Notes**
 
-Numaflow autoscaling does not apply to some types of vertices, following source vertices can not be autoscaled as these sources do not persist the data, thus no way to calculate their pending messages.
+Numaflow autoscaling does not apply to some types of vertices such as reduce vertices, and following source vertices can not be autoscaled as these sources do not persist the data, thus no way to calculate their pending messages.
 
 - Generator
 - HTTP
