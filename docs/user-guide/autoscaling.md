@@ -118,4 +118,12 @@ spec:
 
 ## Vertical Pod Autoscaling
 
-TBD.
+`Vertical Pod Autoscaling` can be achieved by setting the `targetRed` to `Vertex` objects as following.
+
+```yaml
+spec:
+  targetRef:
+    apiVersion: numaflow.numaproj.io/v1alpha1
+    kind: Vertex
+    name: my-vertex
+```
