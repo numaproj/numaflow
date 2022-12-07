@@ -67,7 +67,7 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 
 func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
 	ms.RLock()
-	ms.RUnlock()
+	defer ms.RUnlock()
 	if ms.discoverFunc == nil {
 		partitionsIds := make([]partition.ID, 0)
 		for key := range ms.partitions {
