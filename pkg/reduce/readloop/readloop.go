@@ -33,6 +33,8 @@ import (
 	"sync"
 	"time"
 
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/shared/metrics"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -50,6 +52,8 @@ import (
 
 // ReadLoop is responsible for reading and forwarding the message from ISB to PBQ.
 type ReadLoop struct {
+	vertexName       string
+	pipelineName     string
 	UDF              applier.ReduceApplier
 	pbqManager       *pbq.Manager
 	windower         window.Windower
@@ -62,6 +66,8 @@ type ReadLoop struct {
 
 // NewReadLoop initializes  and returns ReadLoop.
 func NewReadLoop(ctx context.Context,
+	vertexName string,
+	pipelineName string,
 	udf applier.ReduceApplier,
 	pbqManager *pbq.Manager,
 	windowingStrategy window.Windower,
@@ -69,10 +75,11 @@ func NewReadLoop(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
 ) *ReadLoop {
-
-	op := newOrderedForwarder(ctx)
+	op := newOrderedForwarder(ctx, vertexName, pipelineName)
 
 	rl := &ReadLoop{
+		vertexName:       vertexName,
+		pipelineName:     pipelineName,
 		UDF:              udf,
 		windower:         windowingStrategy,
 		pbqManager:       pbqManager,
@@ -82,6 +89,7 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:   whereToDecider,
 		publishWatermark: pw,
 	}
+
 	op.startUp(ctx)
 	return rl
 }
@@ -164,6 +172,7 @@ messagesLoop:
 			writtenMessages = append(writtenMessages, message)
 			// let's not continue processing this message, most likely the window has already been closed and the message
 			// won't be processed anyways.
+			droppedMessagesCount.With(map[string]string{metricspkg.LabelVertex: rl.vertexName, metricspkg.LabelPipeline: rl.pipelineName, metricspkg.LabelReason: "watermark_issue"}).Inc()
 			continue
 		}
 
@@ -197,6 +206,8 @@ messagesLoop:
 // writeToPBQ writes to the PBQ. It will return error only if it is not failing to write to PBQ and is in a continuous
 // error loop, and we have received ctx.Done() via SIGTERM.
 func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadMessage) error {
+	startTime := time.Now()
+	defer pbqWriteTime.With(map[string]string{metricspkg.LabelVertex: rl.vertexName, metricspkg.LabelPipeline: rl.pipelineName}).Observe(float64(time.Since(startTime).Milliseconds()))
 	var pbqWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
 		Duration: 1 * time.Second,
@@ -210,6 +221,7 @@ func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadM
 		rErr := q.Write(context.Background(), m)
 		if rErr != nil {
 			rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()), zap.Error(rErr))
+			pbqWriteErrorCount.With(map[string]string{metricspkg.LabelVertex: rl.vertexName, metricspkg.LabelPipeline: rl.pipelineName}).Inc()
 			// no point retrying if ctx.Done has been invoked
 			select {
 			case <-ctx.Done():
@@ -222,6 +234,7 @@ func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadM
 
 		}
 		// happy path
+		pbqWriteMessagesCount.With(map[string]string{metricspkg.LabelVertex: rl.vertexName, metricspkg.LabelPipeline: rl.pipelineName}).Inc()
 		rl.log.Debugw("Successfully wrote the message", zap.String("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()))
 		return true, nil
 	})
@@ -250,6 +263,7 @@ func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage
 				rErr := o.AckIt()
 				attempt += 1
 				if rErr != nil {
+					metrics.AckMessageError.With(map[string]string{metricspkg.LabelVertex: rl.vertexName, metricspkg.LabelPipeline: rl.pipelineName}).Inc()
 					rl.log.Errorw("Failed to ack message, retrying", zap.String("msgOffSet", o.String()), zap.Error(rErr), zap.Int("attempt", attempt))
 					// no point retrying if ctx.Done has been invoked
 					select {
@@ -322,6 +336,7 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 	// drop the late messages
 	if m.IsLate {
 		rl.log.Warnw("Dropping the late message", zap.Time("eventTime", m.EventTime), zap.Time("watermark", m.Watermark))
+		droppedMessagesCount.With(map[string]string{metricspkg.LabelVertex: rl.vertexName, metricspkg.LabelPipeline: rl.pipelineName, metricspkg.LabelReason: "late"}).Inc()
 		return []window.AlignedKeyedWindower{}
 	}
 

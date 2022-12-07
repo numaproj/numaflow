@@ -147,7 +147,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		storeProvider = memory.NewMemoryStores()
 	}
 
-	pbqManager, err := pbq.NewManager(ctx, storeProvider)
+	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, storeProvider)
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)

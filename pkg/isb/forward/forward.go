@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/metrics"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -190,16 +191,15 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	readMessages, err := isdf.fromBuffer.Read(ctx, isdf.opts.readBatchSize)
 	if err != nil {
 		isdf.opts.logger.Warnw("failed to read fromBuffer", zap.Error(err))
-		readMessagesError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
+		metrics.ReadMessagesError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
 	}
-	readMessagesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(readMessages)))
-
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
 	// reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
 		return
 	}
 
+	metrics.ReadMessagesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(readMessages)))
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
 	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
@@ -207,7 +207,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// as πlate date.
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
-		readBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
+		metrics.ReadBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
 		m.Watermark = time.Time(processorWM)
 		if isdf.opts.vertexType == dfv1.VertexTypeSource && processorWM.After(m.EventTime) { // Set late data at source level
 			m.IsLate = true
@@ -258,7 +258,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	for _, m := range udfResults {
 		// look for errors in udf processing, if we see even 1 error let's return. handling partial retrying is not worth ATM.
 		if m.udfError != nil {
-			udfError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
+			metrics.UdfError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
 			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
 			return
 		}
@@ -304,10 +304,10 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// implicit return for posterity :-)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed to ack from buffer", zap.Error(err))
-		ackMessageError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(readOffsets)))
+		metrics.AckMessageError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(readOffsets)))
 		return
 	}
-	ackMessagesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(readOffsets)))
+	metrics.AckMessagesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(readOffsets)))
 
 	// ProcessingTimes of the entire forwardAChunk
 	forwardAChunkProcessingTime.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "from": isdf.fromBuffer.GetName(), "to": toBuffers}).Observe(float64(time.Since(start).Microseconds()))
@@ -399,11 +399,11 @@ retry:
 				needRetry = true
 				// we retry only failed messages
 				failedMessages = append(failedMessages, messages[idx])
-				writeMessagesError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Inc()
+				metrics.WriteMessagesError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Inc()
 				// a shutdown can break the blocking loop caused due to InternalErr
 				if ok, _ := isdf.IsShuttingDown(); ok {
 					err := fmt.Errorf("writeToBuffer failed, Stop called while stuck on an internal error with failed messages:%d, %v", len(failedMessages), errs)
-					platformError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName}).Inc()
+					metrics.PlatformError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName}).Inc()
 					return writeOffsets, err
 				}
 			} else {
@@ -425,8 +425,8 @@ retry:
 		}
 	}
 
-	writeMessagesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(float64(len(messages)))
-	writeBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(totalBytes)
+	metrics.WriteMessagesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(float64(len(messages)))
+	metrics.WriteBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(totalBytes)
 	return writeOffsets, nil
 }
 
@@ -458,7 +458,7 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 			// this does not mean we should prohibit this from a shutdown.
 			if ok, _ := isdf.IsShuttingDown(); ok {
 				isdf.opts.logger.Errorw("UDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
-				platformError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName}).Inc()
+				metrics.PlatformError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName}).Inc()
 				return nil, err
 			}
 			continue
@@ -484,7 +484,7 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, message
 		// a shutdown can break the blocking loop caused due to InternalErr
 		if ok, _ := isdf.IsShuttingDown(); ok {
 			err := fmt.Errorf("whereToStep, Stop called while stuck on an internal error, %v", err)
-			platformError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName}).Inc()
+			metrics.PlatformError.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName}).Inc()
 			return err
 		}
 		return err

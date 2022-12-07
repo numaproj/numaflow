@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/shared/metrics"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -46,6 +48,8 @@ import (
 // ProcessAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
 type ProcessAndForward struct {
+	vertexName       string
+	pipelineName     string
 	PartitionID      partition.ID
 	UDF              applier.ReduceApplier
 	result           []*isb.Message
@@ -58,12 +62,16 @@ type ProcessAndForward struct {
 
 // NewProcessAndForward will return a new ProcessAndForward instance
 func NewProcessAndForward(ctx context.Context,
+	vertexName string,
+	pipelineName string,
 	partitionID partition.ID,
 	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider, pw map[string]publish.Publisher) *ProcessAndForward {
 	return &ProcessAndForward{
+		vertexName:       vertexName,
+		pipelineName:     pipelineName,
 		PartitionID:      partitionID,
 		UDF:              udf,
 		pbqReader:        pbqReader,
@@ -78,7 +86,6 @@ func NewProcessAndForward(ctx context.Context,
 func (p *ProcessAndForward) Process(ctx context.Context) error {
 	var err error
 
-	// FIXME: we need to fix https://github.com/numaproj/numaflow-go/blob/main/pkg/function/service.go#L101
 	// blocking call, only returns the result after it has read all the messages from pbq
 	p.result, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 	return err
@@ -92,6 +99,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	// decide which ISB to write to
 	to, err := p.whereToDecider.WhereTo(p.PartitionID.Key)
 	if err != nil {
+		metrics.PlatformError.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Inc()
 		return err
 	}
 	messagesToStep := p.whereToStep(to)
@@ -170,6 +178,7 @@ func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 // writeToBuffer writes to the ISBs.
 // TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
 func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
+	var totalBytes float64
 	var ISBWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
@@ -189,6 +198,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 			if writeErrs[i] != nil {
 				failedMessages = append(failedMessages, message)
 			} else {
+				totalBytes += float64(len(message.Payload))
 				p.log.Debugw("Forwarded message", zap.String("bufferID", bufferID), zap.Any("message", message))
 			}
 		}
@@ -196,10 +206,14 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		if len(failedMessages) > 0 {
 			p.log.Warnw("Failed to write messages to isb inside pnf", zap.Errors("errors", writeErrs))
 			writeMessages = failedMessages
+			metrics.WriteMessagesError.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Add(float64(len(failedMessages)))
 			return false, nil
 		}
 		return true, nil
 	})
+
+	metrics.WriteMessagesCount.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName, "buffer": bufferID}).Add(float64(len(resultMessages)))
+	metrics.WriteBytesCount.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName, "buffer": bufferID}).Add(totalBytes)
 	return offsets, ctxClosedErr
 }
 

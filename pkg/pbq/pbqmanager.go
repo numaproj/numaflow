@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -34,6 +35,8 @@ import (
 
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
+	vertexName    string
+	pipelineName  string
 	storeProvider store.StoreProvider
 	pbqOptions    *options
 	pbqMap        map[string]*PBQ
@@ -46,7 +49,7 @@ type Manager struct {
 
 // NewManager returns new instance of manager
 // We don't intend this to be called by multiple routines.
-func NewManager(ctx context.Context, storeProvider store.StoreProvider, opts ...PBQOption) (*Manager, error) {
+func NewManager(ctx context.Context, vertexName string, pipelineName string, storeProvider store.StoreProvider, opts ...PBQOption) (*Manager, error) {
 	pbqOpts := DefaultOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -57,6 +60,8 @@ func NewManager(ctx context.Context, storeProvider store.StoreProvider, opts ...
 	}
 
 	pbqManager := &Manager{
+		vertexName:    vertexName,
+		pipelineName:  pipelineName,
 		storeProvider: storeProvider,
 		pbqMap:        make(map[string]*PBQ),
 		pbqOptions:    pbqOpts,
@@ -83,7 +88,6 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 		manager:     m,
 		log:         logging.FromContext(ctx).With("PBQ", partitionID),
 	}
-
 	m.register(partitionID, p)
 	return p, nil
 }
@@ -192,6 +196,8 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 	if _, ok := m.pbqMap[partitionID.String()]; !ok {
 		m.pbqMap[partitionID.String()] = p
 	}
+	activePbqsCount.With(map[string]string{metricspkg.LabelVertex: m.vertexName, metricspkg.LabelPipeline: m.pipelineName}).Inc()
+
 }
 
 // deregister is intended to be used by PBQ to deregister itself after GC is called.
@@ -200,6 +206,7 @@ func (m *Manager) deregister(partitionID partition.ID) error {
 	m.Lock()
 	defer m.Unlock()
 	delete(m.pbqMap, partitionID.String())
+	activePbqsCount.With(map[string]string{metricspkg.LabelVertex: m.vertexName, metricspkg.LabelPipeline: m.pipelineName}).Dec()
 	return m.storeProvider.DeleteStore(partitionID)
 }
 

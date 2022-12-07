@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/shared/metrics"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -471,7 +472,7 @@ func validateMetrics(t *testing.T) {
 		forwarder_read_total{buffer="from",pipeline="testPipeline",vertex="testVertex"} 5
 	`
 
-	err := testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
+	err := testutil.CollectAndCompare(metrics.ReadMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -484,7 +485,7 @@ func validateMetrics(t *testing.T) {
 		forwarder_write_total{buffer="to1",pipeline="testPipeline",vertex="testVertex"} 5
 	`
 
-	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
+	err = testutil.CollectAndCompare(metrics.WriteMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -497,7 +498,7 @@ func validateMetrics(t *testing.T) {
 		forwarder_ack_total{buffer="from",pipeline="testPipeline",vertex="testVertex"} 5
 	`
 
-	err = testutil.CollectAndCompare(ackMessagesCount, strings.NewReader(ackMetadata+ackExpected), "forwarder_ack_total")
+	err = testutil.CollectAndCompare(metrics.AckMessagesCount, strings.NewReader(ackMetadata+ackExpected), "forwarder_ack_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
