@@ -77,74 +77,50 @@ func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower 
 	}
 }
 
-// CreateWindow adds a window for a given interval window
-func (f *Fixed) CreateWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
+// InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window
+func (f *Fixed) InsertIfNotPresent(kw window.AlignedKeyedWindower) (aw window.AlignedKeyedWindower, isPresent bool) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	// this could be the first window
 	if f.entries.Len() == 0 {
 		f.entries.PushFront(kw)
-		return kw
+		return kw, false
 	}
 
 	earliestWindow := f.entries.Front().Value.(*keyed.AlignedKeyedWindow)
 	recentWindow := f.entries.Back().Value.(*keyed.AlignedKeyedWindow)
 
-	// late arrival
-	if !earliestWindow.StartTime().Before(kw.EndTime()) {
+	// if there is only one window
+	if earliestWindow.StartTime().Equal(kw.StartTime()) && earliestWindow.EndTime().Equal(kw.EndTime()) {
+		aw = earliestWindow
+		isPresent = true
+	} else if !earliestWindow.StartTime().Before(kw.EndTime()) {
+		// late arrival
 		f.entries.PushFront(kw)
+		aw = kw
 	} else if !recentWindow.EndTime().After(kw.StartTime()) {
 		// early arrival
 		f.entries.PushBack(kw)
+		aw = kw
 	} else {
 		// a window in the middle
-		for e := f.entries.Back(); e != nil; e = e.Prev() {
+		for e := f.entries.Back(); e.Prev() != nil; e = e.Prev() {
 			win := e.Value.(*keyed.AlignedKeyedWindow)
-			if !win.StartTime().Before(kw.EndTime()) {
+			prevWin := e.Prev().Value.(*keyed.AlignedKeyedWindow)
+			if win.StartTime().Equal(kw.StartTime()) && win.EndTime().Equal(kw.EndTime()) {
+				aw = win
+				isPresent = true
+				break
+			}
+			if !win.StartTime().Before(kw.EndTime()) && !prevWin.EndTime().After(kw.StartTime()) {
 				f.entries.InsertBefore(kw, e)
+				aw = kw
 				break
 			}
 		}
 	}
-	return kw
-}
-
-// GetWindow returns an existing window for the given interval
-func (f *Fixed) GetWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
-	if f.entries.Len() == 0 {
-		return nil
-	}
-
-	// are we looking for a window that is later than the current latest?
-	latest := f.entries.Back()
-	lkw := latest.Value.(*keyed.AlignedKeyedWindow)
-	if !lkw.EndTime().After(kw.StartTime()) {
-		return nil
-	}
-
-	// are we looking for a window that is earlier than the current earliest?
-	earliest := f.entries.Front()
-	ekw := earliest.Value.(*keyed.AlignedKeyedWindow)
-	if !ekw.StartTime().Before(kw.EndTime()) {
-		return nil
-	}
-
-	// check if we already have a window
-	for e := f.entries.Back(); e != nil; e = e.Prev() {
-		win := e.Value.(*keyed.AlignedKeyedWindow)
-		if win.StartTime().Equal(kw.StartTime()) && win.EndTime().Equal(kw.EndTime()) {
-			return win
-		} else if win.StartTime().Before(kw.EndTime()) {
-			// we have moved past the range that we are looking for
-			// so, we can bail out early.
-			break
-		}
-	}
-	return nil
+	return
 }
 
 // RemoveWindows returns an array of keyed windows that are before the current watermark.
