@@ -589,6 +589,20 @@
 
             
           
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sources/nats/" class="md-nav__link">
+        Nats Source
+      </a>
+    </li>
+  
+
+            
+          
         </ul>
       </nav>
     </li>
@@ -1485,6 +1499,13 @@
 <span class="w">      </span><span class="nt">scale</span><span class="p">:</span><span class="w"></span>
 <span class="w">        </span><span class="nt">disabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"></span>
 </code></pre></div>
+<p><strong>Notes</strong></p>
+<p>Numaflow autoscaling does not apply to reduce vertices, and following source vertices which do not have a way to calculate their pending messages.</p>
+<ul>
+<li>Generator</li>
+<li>HTTP</li>
+<li>Nats</li>
+</ul>
 <h3 id="kubernetes-hpa">Kubernetes HPA<a class="headerlink" href="#kubernetes-hpa" title="Permanent link">&para;</a></h3>
 <p><a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Kubernetes HPA</a> is supported in Numaflow for any type of Vertex. To use HPA, remember to point the <code>scaleTargetRef</code> to the vertex as below, and disable Numaflow autoscaling in your Pipeline spec.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">autoscaling/v2beta1</span><span class="w"></span>
@@ -1521,7 +1542,13 @@
 <span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">... ...</span><span class="w"></span>
 </code></pre></div>
 <h2 id="vertical-pod-autoscaling">Vertical Pod Autoscaling<a class="headerlink" href="#vertical-pod-autoscaling" title="Permanent link">&para;</a></h2>
-<p>TBD.</p>
+<p><code>Vertical Pod Autoscaling</code> can be achieved by setting the <code>targetRef</code> to <code>Vertex</code> objects as following.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
+<span class="w">  </span><span class="nt">targetRef</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vertex</span><span class="w"></span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span><span class="w"></span>
+</code></pre></div>
 
               
             </article>
