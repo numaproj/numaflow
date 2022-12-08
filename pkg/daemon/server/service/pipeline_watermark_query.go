@@ -113,3 +113,56 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	resp.VertexWatermark = v
 	return resp, nil
 }
+
+// GetPipelineWatermark is used to return the head watermark for a given pipeline.
+func (ps *pipelineMetadataQuery) GetPipelineWatermark(ctx context.Context, request *daemon.GetPipelineWatermarkRequest) (*daemon.GetPipelineWatermarkResponse, error) {
+	resp := new(daemon.GetPipelineWatermarkResponse)
+	retFalse := false
+	retTrue := true
+
+	// If watermark is not enabled, return time zero
+	if ps.pipeline.Spec.Watermark.Disabled {
+		timeZero := time.Unix(0, 0).UnixMilli()
+		watermarkArr := make([]*daemon.VertexWatermark, len(ps.watermarkFetchers))
+		i := 0
+		for k := range ps.watermarkFetchers {
+			func(i int, vertex string) {
+				vm := daemon.VertexWatermark{
+					Pipeline:           &ps.pipeline.Name,
+					Vertex:             &k,
+					Watermark:          &timeZero,
+					IsWatermarkEnabled: &retFalse,
+				}
+				watermarkArr[i] = &vm
+			}(i, k)
+		}
+		resp.VertexWatermark = watermarkArr
+		return resp, nil
+	}
+
+	// Watermark is enabled
+	watermarkArr := make([]*daemon.VertexWatermark, len(ps.watermarkFetchers))
+	i := 0
+	for k, v := range ps.watermarkFetchers {
+		vertexFetchers := v
+		var latestWatermark = int64(-1)
+		for _, fetcher := range vertexFetchers {
+			watermark := fetcher.GetHeadWatermark().UnixMilli()
+			if watermark > latestWatermark {
+				latestWatermark = watermark
+			}
+		}
+		func(i int, latestWatermark int64, vertex string) {
+			vm := daemon.VertexWatermark{
+				Pipeline:           &ps.pipeline.Name,
+				Vertex:             &vertex,
+				Watermark:          &latestWatermark,
+				IsWatermarkEnabled: &retTrue,
+			}
+			watermarkArr[i] = &vm
+		}(i, latestWatermark, k)
+		i++
+	}
+	resp.VertexWatermark = watermarkArr
+	return resp, nil
+}
