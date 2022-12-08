@@ -192,8 +192,9 @@ func TestInstall(t *testing.T) {
 		assert.NotEmpty(t, testObj.Status.Config.JetStream.BufferConfig)
 		assert.NotEmpty(t, testObj.Status.Config.JetStream.URL)
 		assert.NotNil(t, testObj.Status.Config.JetStream.Auth)
-		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.User)
-		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.Password)
+		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.Basic)
+		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.Basic.User)
+		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.Basic.Password)
 	})
 }
 

@@ -167,9 +167,10 @@ func TestReconcileJetStream(t *testing.T) {
 		assert.True(t, testIsb.Status.IsReady())
 		assert.NotNil(t, testIsb.Status.Config.JetStream)
 		assert.NotEmpty(t, testIsb.Status.Config.JetStream.URL)
-		assert.NotEmpty(t, testIsb.Status.Config.JetStream.Auth)
-		assert.NotNil(t, testIsb.Status.Config.JetStream.Auth.User)
-		assert.NotNil(t, testIsb.Status.Config.JetStream.Auth.Password)
+		assert.NotNil(t, testIsb.Status.Config.JetStream.Auth)
+		assert.NotNil(t, testIsb.Status.Config.JetStream.Auth.Basic)
+		assert.NotNil(t, testIsb.Status.Config.JetStream.Auth.Basic.User)
+		assert.NotNil(t, testIsb.Status.Config.JetStream.Auth.Basic.Password)
 		sts := &appv1.StatefulSetList{}
 		selector, _ := labels.Parse(dfv1.KeyComponent + "=" + "isbsvc")
 		err = r.client.List(ctx, sts, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
