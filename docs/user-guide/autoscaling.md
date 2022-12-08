@@ -118,7 +118,7 @@ spec:
 
 ## Vertical Pod Autoscaling
 
-`Vertical Pod Autoscaling` can be achieved by setting the `targetRed` to `Vertex` objects as following.
+`Vertical Pod Autoscaling` can be achieved by setting the `targetRef` to `Vertex` objects as following.
 
 ```yaml
 spec:
