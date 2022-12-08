@@ -19,13 +19,14 @@ package udsink
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1/sinkmock"
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v2"
-	"github.com/numaproj/numaflow-go/pkg/sink/clienttest"
+	"github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v2/sinkmock"
+	"github.com/numaproj/numaflow-go/pkg/sinkv2/clienttest"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -106,57 +107,18 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			},
 		}
 
-		mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
-
-		mockClient.EXPECT().SinkFn(gomock.Any(), &rpcMsg{msg: &sinkpb.DatumList{
-			Elements: testDatumList,
-		}}).Return(&sinkpb.ResponseList{
+		mockSinkClient := sinkmock.NewMockUserDefinedSink_SinkFnClient(ctrl)
+		mockSinkClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
+		mockSinkClient.EXPECT().CloseAndRecv().Return(&sinkpb.ResponseList{
 			Responses: testResponseList,
 		}, nil)
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockUDSGRPCBasedUDF(mockClient)
-		gotErrList := u.Apply(ctx, testDatumList)
-		assert.Equal(t, 2, len(gotErrList))
-		assert.Equal(t, nil, gotErrList[0])
-		assert.Equal(t, fmt.Errorf("mock sink message error"), gotErrList[1])
-	})
-
-	t.Run("test err", func(t *testing.T) {
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		testDatumList := []*sinkpb.Datum{
-			{
-				Id:        "test_id_0",
-				Value:     []byte(`sink_message_grpc_err`),
-				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
-				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
-			},
-			{
-				Id:        "test_id_1",
-				Value:     []byte(`sink_message_grpc_err`),
-				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
-				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
-			},
-		}
+		mockSinkErrClient := sinkmock.NewMockUserDefinedSink_SinkFnClient(ctrl)
+		mockSinkErrClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 
 		mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
-
-		mockClient.EXPECT().SinkFn(gomock.Any(), &rpcMsg{msg: &sinkpb.DatumList{
-			Elements: testDatumList,
-		}}).Return(&sinkpb.ResponseList{
-			Responses: nil,
-		}, fmt.Errorf("mock error"))
+		mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkClient, nil)
+		mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkErrClient, fmt.Errorf("mock SinkFn error"))
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -167,27 +129,80 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSGRPCBasedUDF(mockClient)
-		gotErrList := u.Apply(ctx, testDatumList)
-		expectedErrList := []error{
-			ApplyUDSinkErr{
-				UserUDSinkErr: false,
-				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock error",
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			},
-			ApplyUDSinkErr{
-				UserUDSinkErr: false,
-				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock error",
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			},
+		var reduceDatumCh = make(chan *sinkpb.Datum, 10)
+		for _, datum := range testDatumList {
+			reduceDatumCh <- datum
 		}
-		assert.Equal(t, 2, len(gotErrList))
-		assert.Equal(t, expectedErrList, gotErrList)
+		close(reduceDatumCh)
+
+		u := NewMockUDSGRPCBasedUDF(mockClient)
+		got, err := u.Apply(ctx, reduceDatumCh)
+		reflect.DeepEqual(got, testResponseList)
+		assert.NoError(t, err)
+
+		got, err = u.Apply(ctx, reduceDatumCh)
+		assert.Nil(t, got)
+		assert.EqualError(t, err, "failed to execute c.grpcClt.SinkFn(): mock SinkFn error")
 	})
+
+	// t.Run("test err", func(t *testing.T) {
+	//
+	// 	ctrl := gomock.NewController(t)
+	// 	defer ctrl.Finish()
+	//
+	// 	testDatumList := []*sinkpb.Datum{
+	// 		{
+	// 			Id:        "test_id_0",
+	// 			Value:     []byte(`sink_message_grpc_err`),
+	// 			EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
+	// 			Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+	// 		},
+	// 		{
+	// 			Id:        "test_id_1",
+	// 			Value:     []byte(`sink_message_grpc_err`),
+	// 			EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
+	// 			Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+	// 		},
+	// 	}
+	//
+	// 	mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
+	//
+	// 	mockClient.EXPECT().SinkFn(gomock.Any(), &rpcMsg{msg: &sinkpb.DatumList{
+	// 		Elements: testDatumList,
+	// 	}}).Return(&sinkpb.ResponseList{
+	// 		Responses: nil,
+	// 	}, fmt.Errorf("mock error"))
+	//
+	// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	// 	defer cancel()
+	// 	go func() {
+	// 		<-ctx.Done()
+	// 		if ctx.Err() == context.DeadlineExceeded {
+	// 			t.Log(t.Name(), "test timeout")
+	// 		}
+	// 	}()
+	//
+	// 	u := NewMockUDSGRPCBasedUDF(mockClient)
+	// 	gotErrList := u.Apply(ctx, testDatumList)
+	// 	expectedErrList := []error{
+	// 		ApplyUDSinkErr{
+	// 			UserUDSinkErr: false,
+	// 			Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock error",
+	// 			InternalErr: InternalErr{
+	// 				Flag:        true,
+	// 				MainCarDown: false,
+	// 			},
+	// 		},
+	// 		ApplyUDSinkErr{
+	// 			UserUDSinkErr: false,
+	// 			Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock error",
+	// 			InternalErr: InternalErr{
+	// 				Flag:        true,
+	// 				MainCarDown: false,
+	// 			},
+	// 		},
+	// 	}
+	// 	assert.Equal(t, 2, len(gotErrList))
+	// 	assert.Equal(t, expectedErrList, gotErrList)
+	// })
 }
