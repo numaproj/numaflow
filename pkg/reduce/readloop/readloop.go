@@ -110,12 +110,13 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 		// crosses the window.
 
 		alignedKeyedWindow := keyed.NewKeyedWindow(p.Start, p.End)
+
+		// insert the window to the list of active windows, since the active window list is in-memory
+		keyedWindow, _ := rl.windower.InsertIfNotPresent(alignedKeyedWindow)
+
 		// add key to the window, so that when a new message with the watermark greater than
 		// the window end time comes, key will not be lost and the windows will be closed as expected
-		alignedKeyedWindow.AddKey(p.Key)
-
-		// These windows have to be recreated as they are completely in-memory
-		rl.windower.CreateWindow(alignedKeyedWindow)
+		keyedWindow.AddKey(p.Key)
 
 		// create and invoke process and forward for the partition
 		rl.associatePBQAndPnF(ctx, p)
@@ -342,9 +343,8 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 	processingWindows := rl.windower.AssignWindow(m.EventTime)
 	var kWindows []window.AlignedKeyedWindower
 	for _, win := range processingWindows {
-		w := rl.windower.GetWindow(win)
-		if w == nil {
-			w = rl.windower.CreateWindow(win)
+		w, isNew := rl.windower.InsertIfNotPresent(win)
+		if isNew {
 			rl.log.Debugw("Creating new keyed window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
 		} else {
 			rl.log.Debugw("Found an existing window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))

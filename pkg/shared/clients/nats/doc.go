@@ -31,4 +31,5 @@ limitations under the License.
 // For example:
 //
 // client.Connect(ctx, AutoReconnect())
-package jetstream
+
+package nats

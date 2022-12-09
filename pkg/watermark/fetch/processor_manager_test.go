@@ -1,5 +1,3 @@
-//go:build isb_jetstream
-
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -30,7 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
@@ -42,11 +40,15 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		testOffset int64 = 100
 		wg         sync.WaitGroup
 	)
+
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	// connect to NATS
-	nc, err := jsclient.NewDefaultJetStreamClient(nats.DefaultURL).Connect(context.TODO())
+	nc, err := natstest.JetStreamClient(t, s).Connect(context.TODO())
 	assert.NoError(t, err)
 	defer nc.Close()
 
@@ -84,8 +86,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	defer func() { _ = js.DeleteKeyValue(keyspace + "_OT") }()
 	assert.NoError(t, err)
 
-	// create default JetStream client
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 
 	// create hbStore
 	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)

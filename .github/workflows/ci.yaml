@@ -107,13 +107,6 @@ jobs:
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
       - name: Get dependencies
         run: go mod download
-      - name: Install JetStream
-        run: |
-          set -eux -o pipefail
-          JS_VERSION=2.9.6
-          curl -L https://github.com/nats-io/nats-server/releases/download/v$JS_VERSION/nats-server-v$JS_VERSION-linux-amd64.zip -o nats-server.zip
-          sudo unzip nats-server.zip -d nats-server
-          nats-server/nats-server-v$JS_VERSION-linux-amd64/nats-server -js &
       - name: Test
         run: make test-code
 
@@ -146,7 +139,7 @@ jobs:
       max-parallel: 5
       matrix:
         driver: [jetstream]
-        case: [e2e, kafka-e2e, http-e2e, sdks-e2e, reduce-e2e]
+        case: [e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-e2e]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
