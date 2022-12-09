@@ -6,12 +6,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const (
+	LabelReason = "reason"
+)
+
 // droppedMessagesCount is used to indicate the number of messages dropped
 var droppedMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce",
 	Name:      "dropped_total",
 	Help:      "Total number of Messages Dropped",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelReason})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, LabelReason})
 
 // pbqWriteErrorCount is used to indicate the number of errors while writing to pbq
 var pbqWriteErrorCount = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -55,18 +59,18 @@ var ackMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_forwarder",
 	Name:      "ack_total",
 	Help:      "Total number of Messages Acknowledged",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, "buffer"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline})
 
 // ackMessageError is used to indicate the errors in the number of  messages acknowledged
 var ackMessageError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_forwarder",
 	Name:      "ack_error_total",
 	Help:      "Total number of Acknowledged Errors",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, "buffer"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline})
 
 // udfError is used to indicate the number of UDF errors
 var udfError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_forwarder",
 	Name:      "udf_error_total",
 	Help:      "Total number of UDF Errors",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, "buffer"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline})

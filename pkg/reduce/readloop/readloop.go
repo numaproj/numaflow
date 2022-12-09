@@ -172,7 +172,7 @@ messagesLoop:
 			writtenMessages = append(writtenMessages, message)
 			// let's not continue processing this message, most likely the window has already been closed and the message
 			// won't be processed anyways.
-			droppedMessagesCount.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName, metrics.LabelReason: "watermark_issue"}).Inc()
+			droppedMessagesCount.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName, LabelReason: "watermark_issue"}).Inc()
 			continue
 		}
 
@@ -336,7 +336,7 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 	// drop the late messages
 	if m.IsLate {
 		rl.log.Warnw("Dropping the late message", zap.Time("eventTime", m.EventTime), zap.Time("watermark", m.Watermark))
-		droppedMessagesCount.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName, metrics.LabelReason: "late"}).Inc()
+		droppedMessagesCount.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName, LabelReason: "late"}).Inc()
 		return []window.AlignedKeyedWindower{}
 	}
 
