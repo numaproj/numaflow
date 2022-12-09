@@ -107,13 +107,6 @@ jobs:
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
       - name: Get dependencies
         run: go mod download
-      - name: Install JetStream
-        run: |
-          set -eux -o pipefail
-          JS_VERSION=2.9.6
-          curl -L https://github.com/nats-io/nats-server/releases/download/v$JS_VERSION/nats-server-v$JS_VERSION-linux-amd64.zip -o nats-server.zip
-          sudo unzip nats-server.zip -d nats-server
-          nats-server/nats-server-v$JS_VERSION-linux-amd64/nats-server -js &
       - name: Test
         run: make test-code
 

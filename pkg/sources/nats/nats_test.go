@@ -22,14 +22,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-server/v2/server"
-	natstestserver "github.com/nats-io/nats-server/v2/test"
 	natslib "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
@@ -67,19 +66,11 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 	return New(vi, dest, fetchWatermark, publishWatermark, publishWMStores, WithReadTimeout(1*time.Second))
 }
 
-func runNatsServer(t *testing.T) *server.Server {
-	t.Helper()
-	opts := natstestserver.DefaultTestOptions
-	opts.Port = 9989
-	opts.Cluster.Name = "testing"
-	return natstestserver.RunServer(&opts)
-}
-
 func Test_Single(t *testing.T) {
-	server := runNatsServer(t)
+	server := natstest.RunNatsServer(t)
 	defer server.Shutdown()
 
-	url := "127.0.0.1:9989"
+	url := "127.0.0.1"
 	testSubject := "test"
 	testQueue := "test-queue"
 	vi := testVertex(t, url, testSubject, testQueue, "test-host", 0)
@@ -102,10 +93,10 @@ func Test_Single(t *testing.T) {
 }
 
 func Test_Multiple(t *testing.T) {
-	server := runNatsServer(t)
+	server := natstest.RunNatsServer(t)
 	defer server.Shutdown()
 
-	url := "127.0.0.1:9989"
+	url := "127.0.0.1"
 	testSubject := "test"
 	testQueue := "test-queue"
 	v1 := testVertex(t, url, testSubject, testQueue, "test-host1", 0)

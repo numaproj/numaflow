@@ -1,5 +1,3 @@
-//go:build isb_jetstream
-
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -28,17 +26,18 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 )
 
-var natsJetStreamUrl = "nats://localhost:4222"
-
 func TestJetStreamBufferRead(t *testing.T) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -64,8 +63,15 @@ func TestJetStreamBufferRead(t *testing.T) {
 		}
 	}
 	// Test Write
-	_, errs := jw.Write(ctx, messages)
+	ofs, errs := jw.Write(ctx, messages)
+	assert.Equal(t, len(ofs), 20)
+	for _, o := range ofs {
+		assert.NotNil(t, o)
+	}
 	assert.Equal(t, len(errs), 20)
+	for _, e := range errs {
+		assert.NoError(t, e)
+	}
 
 	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName)
 	assert.NoError(t, err)
@@ -74,14 +80,15 @@ func TestJetStreamBufferRead(t *testing.T) {
 
 	readMessages, err := fromStep.Read(ctx, 20)
 	assert.NoError(t, err)
-	offsetsInsideReadMessages := make([]isb.Offset, len(messages))
-	messagesInsideReadMessages := make([]isb.Message, len(messages))
+	assert.Equal(t, 20, len(readMessages))
+	for _, m := range readMessages {
+		assert.NotNil(t, m)
+	}
+	offsetsInsideReadMessages := make([]isb.Offset, len(readMessages))
 	for idx, readMessage := range readMessages {
-		messagesInsideReadMessages[idx] = readMessage.Message
 		offsetsInsideReadMessages[idx] = readMessage.ReadOffset
 	}
-
-	assert.Equal(t, 20, len(readMessages))
+	assert.Equal(t, 20, len(offsetsInsideReadMessages))
 
 	fromStepJs, err := fromStep.conn.JetStream()
 	assert.NoError(t, err)
@@ -116,12 +123,12 @@ func TestJetStreamBufferRead(t *testing.T) {
 
 // TestGetName is used to test the GetName function
 func TestGetName(t *testing.T) {
-
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -140,12 +147,13 @@ func TestGetName(t *testing.T) {
 
 // TestClose is used to test Close
 func TestClose(t *testing.T) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -174,6 +182,9 @@ func TestConvert2IsbMsgHeader(t *testing.T) {
 }
 
 func addStream(t *testing.T, js *jsclient.JetStreamContext, streamName string) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
 	_, err := js.AddStream(&nats.StreamConfig{
 		Name:       streamName,
 		Subjects:   []string{streamName},

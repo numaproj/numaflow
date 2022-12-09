@@ -1,5 +1,3 @@
-//go:build isb_jetstream
-
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -28,7 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
@@ -42,14 +41,16 @@ func createAndLaterDeleteBucket(js *jsclient.JetStreamContext, kvConfig *nats.Ke
 	return func() {
 		// ignore error as this will be executed only via defer
 		_ = js.DeleteKeyValue(kv.Bucket())
-		return
 	}, nil
 }
 
 func TestPublisherWithSharedOTBucket(t *testing.T) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
 	var ctx = context.Background()
 
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(nats.DefaultURL)
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -58,9 +59,11 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	var keyspace = "publisherTest"
 
 	deleteFn, err := createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: keyspace + "_PROCESSORS"})
+	assert.NoError(t, err)
 	defer deleteFn()
 
 	deleteFn, err = createAndLaterDeleteBucket(js, &nats.KeyValueConfig{Bucket: keyspace + "_OT"})
+	assert.NoError(t, err)
 	defer deleteFn()
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1")

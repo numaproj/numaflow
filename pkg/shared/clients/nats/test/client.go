@@ -14,6 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fetch
+package test
 
-// TODO: Add test cases
+import (
+	"testing"
+
+	"github.com/nats-io/nats-server/v2/server"
+
+	"github.com/numaproj/numaflow/pkg/shared/clients/nats"
+)
+
+// JetStreamClient is used to get a testing JetStream client instance
+func JetStreamClient(t *testing.T, s *server.Server) nats.JetStreamClient {
+	return nats.NewDefaultJetStreamClient(s.ClientURL())
+}

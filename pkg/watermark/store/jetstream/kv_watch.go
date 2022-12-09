@@ -24,7 +24,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
