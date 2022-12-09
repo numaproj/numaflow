@@ -117,18 +117,20 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 	return &dfv1.BufferServiceConfig{
 		JetStream: &dfv1.JetStreamConfig{
 			URL: fmt.Sprintf("nats://%s.%s.svc.cluster.local:%s", generateJetStreamServiceName(r.isbs), r.isbs.Namespace, strconv.Itoa(int(clientPort))),
-			Auth: &dfv1.NATSAuth{
-				User: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: generateJetStreamClientAuthSecretName(r.isbs),
+			Auth: &dfv1.NatsAuth{
+				Basic: &dfv1.BasicAuth{
+					User: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: generateJetStreamClientAuthSecretName(r.isbs),
+						},
+						Key: dfv1.JetStreamClientAuthSecretUserKey,
 					},
-					Key: dfv1.JetStreamClientAuthSecretUserKey,
-				},
-				Password: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: generateJetStreamClientAuthSecretName(r.isbs),
+					Password: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: generateJetStreamClientAuthSecretName(r.isbs),
+						},
+						Key: dfv1.JetStreamClientAuthSecretPasswordKey,
 					},
-					Key: dfv1.JetStreamClientAuthSecretPasswordKey,
 				},
 			},
 			BufferConfig: string(b),

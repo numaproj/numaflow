@@ -31,7 +31,7 @@ import (
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	kafkasink "github.com/numaproj/numaflow/pkg/sinks/kafka"

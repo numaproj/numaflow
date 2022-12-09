@@ -14,6 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fetch
+package v1alpha1
 
-// TODO: Add test cases
+import corev1 "k8s.io/api/core/v1"
+
+// NatsAuth defines how to authenticate the nats access
+type NatsAuth struct {
+	// Basic auth which contains a user name and a password
+	// +optional
+	Basic *BasicAuth `json:"basic,omitempty" protobuf:"bytes,1,opt,name=basic"`
+	// Token auth
+	// +optional
+	Token *corev1.SecretKeySelector `json:"token,omitempty" protobuf:"bytes,2,opt,name=token"`
+	// NKey auth
+	// +optional
+	NKey *corev1.SecretKeySelector `json:"nkey,omitempty" protobuf:"bytes,3,opt,name=nkey"`
+}

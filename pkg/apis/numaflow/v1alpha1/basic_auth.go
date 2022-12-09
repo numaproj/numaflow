@@ -14,6 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fetch
+package v1alpha1
 
-// TODO: Add test cases
+import corev1 "k8s.io/api/core/v1"
+
+// BasicAuth represents the basic authentication approach which contains a user name and a password.
+type BasicAuth struct {
+	// Secret for auth user
+	// +optional
+	User *corev1.SecretKeySelector `json:"user,omitempty" protobuf:"bytes,1,opt,name=user"`
+	// Secret for auth password
+	// +optional
+	Password *corev1.SecretKeySelector `json:"password,omitempty" protobuf:"bytes,2,opt,name=password"`
+}
