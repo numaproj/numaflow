@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v2"
-	sinksdk "github.com/numaproj/numaflow-go/pkg/sinkv2"
-	"github.com/numaproj/numaflow-go/pkg/sinkv2/client"
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
+	sinksdk "github.com/numaproj/numaflow-go/pkg/sink"
+	"github.com/numaproj/numaflow-go/pkg/sink/client"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 

@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v2"
-	"github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v2/sinkmock"
-	"github.com/numaproj/numaflow-go/pkg/sinkv2/clienttest"
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
+	"github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1/sinkmock"
+	"github.com/numaproj/numaflow-go/pkg/sink/clienttest"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
