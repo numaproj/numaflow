@@ -1,5 +1,3 @@
-//go:build isb_jetstream
-
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -25,14 +23,13 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
-	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/jetstream"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 )
 
 type myForwardJetStreamTest struct {
@@ -48,11 +45,12 @@ func (f myForwardJetStreamTest) ApplyMap(ctx context.Context, message *isb.ReadM
 
 // TestForwarderJetStreamBuffer is a test that is used to test forwarder with jetstream buffer
 func TestForwarderJetStreamBuffer(t *testing.T) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-
-	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -159,11 +157,13 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 
 // TestJetStreamBufferWrite on buffer full
 func TestJetStreamBufferWriterBufferFull(t *testing.T) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -214,12 +214,13 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 
 // TestGetName is used to test the GetName function
 func TestWriteGetName(t *testing.T) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -239,12 +240,13 @@ func TestWriteGetName(t *testing.T) {
 
 // TestWriteClose is used to test Close function in Write
 func TestWriteClose(t *testing.T) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	opts := nats.UserInfo("", "")
-	defaultJetStreamClient := jsclient.NewDefaultJetStreamClient(natsJetStreamUrl, opts)
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
@@ -272,7 +274,5 @@ func TestConvert2NatsMsgHeader(t *testing.T) {
 		},
 		ID: "1",
 	}
-
 	assert.NotNil(t, convert2NatsMsgHeader(isbHeader))
-
 }
