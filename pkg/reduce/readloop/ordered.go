@@ -23,7 +23,6 @@ import (
 	"time"
 
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
-	"github.com/numaproj/numaflow/pkg/shared/metrics"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -110,7 +109,7 @@ func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 		if err == nil {
 			break
 		} else if err == ctx.Err() {
-			metrics.UdfError.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Inc()
+			udfError.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Inc()
 			of.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
 			return
 		}

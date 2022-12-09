@@ -23,8 +23,7 @@ import (
 	"context"
 	"time"
 
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
-	"github.com/numaproj/numaflow/pkg/shared/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -149,15 +148,16 @@ func (d *DataForward) Start(ctx context.Context) {
 // and forwards the messages to readloop
 func (d *DataForward) forwardAChunk(ctx context.Context) {
 	readMessages, err := d.fromBuffer.Read(ctx, d.opts.readBatchSize)
+	totalBytes := 0
 	if err != nil {
 		d.log.Errorw("Failed to read from isb", zap.Error(err))
-		metrics.ReadMessagesError.With(map[string]string{metricspkg.LabelVertex: d.vertexName, metricspkg.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Inc()
+		readMessagesError.With(map[string]string{metrics.LabelVertex: d.vertexName, metrics.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Inc()
 	}
 
 	if len(readMessages) == 0 {
 		return
 	}
-	metrics.ReadMessagesCount.With(map[string]string{metricspkg.LabelVertex: d.vertexName, metricspkg.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Add(float64(len(readMessages)))
+	readMessagesCount.With(map[string]string{metrics.LabelVertex: d.vertexName, metrics.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Add(float64(len(readMessages)))
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
@@ -167,7 +167,8 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 			m.Message.Key = dfv1.DefaultKeyForNonKeyedData
 		}
 		m.Watermark = time.Time(processorWM)
+		totalBytes += len(m.Payload)
 	}
-
+	readBytesCount.With(map[string]string{metrics.LabelVertex: d.vertexName, metrics.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Add(float64(totalBytes))
 	d.readloop.Process(ctx, readMessages)
 }

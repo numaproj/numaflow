@@ -28,7 +28,6 @@ import (
 	"time"
 
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
-	"github.com/numaproj/numaflow/pkg/shared/metrics"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -99,7 +98,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	// decide which ISB to write to
 	to, err := p.whereToDecider.WhereTo(p.PartitionID.Key)
 	if err != nil {
-		metrics.PlatformError.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Inc()
+		platformError.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Inc()
 		return err
 	}
 	messagesToStep := p.whereToStep(to)
@@ -206,14 +205,14 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		if len(failedMessages) > 0 {
 			p.log.Warnw("Failed to write messages to isb inside pnf", zap.Errors("errors", writeErrs))
 			writeMessages = failedMessages
-			metrics.WriteMessagesError.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Add(float64(len(failedMessages)))
+			writeMessagesError.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Add(float64(len(failedMessages)))
 			return false, nil
 		}
 		return true, nil
 	})
 
-	metrics.WriteMessagesCount.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName, "buffer": bufferID}).Add(float64(len(resultMessages)))
-	metrics.WriteBytesCount.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName, "buffer": bufferID}).Add(totalBytes)
+	writeMessagesCount.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName, "buffer": bufferID}).Add(float64(len(resultMessages)))
+	writeBytesCount.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName, "buffer": bufferID}).Add(totalBytes)
 	return offsets, ctxClosedErr
 }
 
