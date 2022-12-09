@@ -322,8 +322,8 @@ func (h *handler) GetVertexWatermark(c *gin.Context) {
 	c.JSON(http.StatusOK, l)
 }
 
-// GetPipelineWatermark is used to provide head watermark for a given pipeline
-func (h *handler) GetPipelineWatermark(c *gin.Context) {
+// GetPipelineWatermarks is used to provide head watermark for a given pipeline
+func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
@@ -334,7 +334,7 @@ func (h *handler) GetPipelineWatermark(c *gin.Context) {
 	defer func() {
 		_ = client.Close()
 	}()
-	l, err := client.GetPipelineWatermark(context.Background(), pipeline)
+	l, err := client.GetPipelineWatermarks(context.Background(), pipeline)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return

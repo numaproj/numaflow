@@ -120,30 +120,30 @@ export function Pipeline() {
   }, [getMetrics]);
 
   // This is used to obtain the watermark of a given vertex
-  const getWatermark = useCallback(() => {
-    const vertexToWatermarkMap = new Map();
-    if (pipeline?.spec?.vertices) {
-      Promise.all(
-        pipeline?.spec?.vertices.map((vertex) => {
-          return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/watermark`
-          )
-            .then((response) => response.json())
-            .then((json) => {
-              const vertexWatermark = {} as VertexWatermark;
-              vertexWatermark.isWaterMarkEnabled = json["isWatermarkEnabled"];
-              vertexWatermark.watermark = json["watermark"];
-              vertexWatermark.watermarkLocalTime = new Date(
-                vertexWatermark.watermark
-              ).toISOString();
-              vertexToWatermarkMap.set(vertex.name, vertexWatermark);
-            });
-        })
-      )
-        .then(() => setVertexWatermark(vertexToWatermarkMap))
-        .catch(console.error);
-    }
-  }, [pipeline]);
+  // const getWatermark = useCallback(() => {
+  //   const vertexToWatermarkMap = new Map();
+  //   if (pipeline?.spec?.vertices) {
+  //     Promise.all(
+  //       pipeline?.spec?.vertices.map((vertex) => {
+  //         return fetch(
+  //           `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/watermark`
+  //         )
+  //           .then((response) => response.json())
+  //           .then((json) => {
+  //             const vertexWatermark = {} as VertexWatermark;
+  //             vertexWatermark.isWaterMarkEnabled = json["isWatermarkEnabled"];
+  //             vertexWatermark.watermark = json["watermark"];
+  //             vertexWatermark.watermarkLocalTime = new Date(
+  //               vertexWatermark.watermark
+  //             ).toISOString();
+  //             vertexToWatermarkMap.set(vertex.name, vertexWatermark);
+  //           });
+  //       })
+  //     )
+  //       .then(() => setVertexWatermark(vertexToWatermarkMap))
+  //       .catch(console.error);
+  //   }
+  // }, [pipeline]);
 
   // This is used to obtain the watermark of a given pipeline
   const getPipelineWatermark = useCallback(() => {
@@ -154,7 +154,7 @@ export function Pipeline() {
       } else {
         Promise.all( [
               fetch(
-                  `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermark`
+                  `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
               )
                   .then((response) => response.json())
                   .then((json) => {

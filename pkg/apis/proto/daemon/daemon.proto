@@ -87,7 +87,7 @@ message GetVertexWatermarkResponse {
   required VertexWatermark vertexWatermark = 1;
 }
 
-message GetPipelineWatermarkResponse {
+message GetPipelineWatermarksResponse {
   repeated VertexWatermark vertexWatermark = 1;
 }
 
@@ -97,7 +97,7 @@ message GetVertexWatermarkRequest {
   required string vertex = 2;
 }
 
-message GetPipelineWatermarkRequest {
+message GetPipelineWatermarksRequest {
   required string pipeline = 1;
 }
 
@@ -121,8 +121,8 @@ service DaemonService {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/watermark";
   };
 
-  //GetPipelineWatermark return the watermark of the given pipeline
-  rpc GetPipelineWatermark (GetPipelineWatermarkRequest) returns (GetPipelineWatermarkResponse) {
-    option (google.api.http).get = "/api/v1/pipeline/{pipeline}/watermark";
+  // GetPipelineWatermark return the watermark of the given pipeline
+  rpc GetPipelineWatermarks (GetPipelineWatermarksRequest) returns (GetPipelineWatermarksResponse) {
+    option (google.api.http).get = "/api/v1/pipeline/{pipeline}/watermarks";
   }
 }

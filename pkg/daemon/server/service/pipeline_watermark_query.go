@@ -114,9 +114,9 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	return resp, nil
 }
 
-// GetPipelineWatermark is used to return the head watermark for a given pipeline.
-func (ps *pipelineMetadataQuery) GetPipelineWatermark(ctx context.Context, request *daemon.GetPipelineWatermarkRequest) (*daemon.GetPipelineWatermarkResponse, error) {
-	resp := new(daemon.GetPipelineWatermarkResponse)
+// GetPipelineWatermarks is used to return the head watermark for a given pipeline.
+func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, request *daemon.GetPipelineWatermarksRequest) (*daemon.GetPipelineWatermarksResponse, error) {
+	resp := new(daemon.GetPipelineWatermarksResponse)
 	retFalse := false
 	retTrue := true
 
@@ -126,15 +126,14 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermark(ctx context.Context, reque
 		watermarkArr := make([]*daemon.VertexWatermark, len(ps.watermarkFetchers))
 		i := 0
 		for k := range ps.watermarkFetchers {
-			func(i int, vertex string) {
-				vm := daemon.VertexWatermark{
-					Pipeline:           &ps.pipeline.Name,
-					Vertex:             &k,
-					Watermark:          &timeZero,
-					IsWatermarkEnabled: &retFalse,
-				}
-				watermarkArr[i] = &vm
-			}(i, k)
+			vertexName := k
+			watermarkArr[i] = &daemon.VertexWatermark{
+				Pipeline:           &ps.pipeline.Name,
+				Vertex:             &vertexName,
+				Watermark:          &timeZero,
+				IsWatermarkEnabled: &retFalse,
+			}
+			i++
 		}
 		resp.VertexWatermark = watermarkArr
 		return resp, nil
@@ -152,15 +151,13 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermark(ctx context.Context, reque
 				latestWatermark = watermark
 			}
 		}
-		func(i int, latestWatermark int64, vertex string) {
-			vm := daemon.VertexWatermark{
-				Pipeline:           &ps.pipeline.Name,
-				Vertex:             &vertex,
-				Watermark:          &latestWatermark,
-				IsWatermarkEnabled: &retTrue,
-			}
-			watermarkArr[i] = &vm
-		}(i, latestWatermark, k)
+		vertexName := k
+		watermarkArr[i] = &daemon.VertexWatermark{
+			Pipeline:           &ps.pipeline.Name,
+			Vertex:             &vertexName,
+			Watermark:          &latestWatermark,
+			IsWatermarkEnabled: &retTrue,
+		}
 		i++
 	}
 	resp.VertexWatermark = watermarkArr
