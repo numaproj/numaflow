@@ -137,6 +137,7 @@ func TestAligned_CreateWindow(t *testing.T) {
 		given           []*keyed.AlignedKeyedWindow
 		input           *keyed.AlignedKeyedWindow
 		expectedWindows []window.AlignedKeyedWindower
+		isPresent       bool
 	}{
 		{
 			name:  "FirstWindow",
@@ -145,6 +146,7 @@ func TestAligned_CreateWindow(t *testing.T) {
 			expectedWindows: []window.AlignedKeyedWindower{
 				keyed.NewKeyedWindow(time.Unix(0, 0), time.Unix(60, 0)),
 			},
+			isPresent: false,
 		},
 		{
 			name: "overlapping_windows",
@@ -156,6 +158,7 @@ func TestAligned_CreateWindow(t *testing.T) {
 				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
 			},
+			isPresent: false,
 		},
 		{
 			name: "early_window",
@@ -167,6 +170,7 @@ func TestAligned_CreateWindow(t *testing.T) {
 				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 			},
+			isPresent: false,
 		},
 		{
 			name: "insert_middle",
@@ -180,12 +184,59 @@ func TestAligned_CreateWindow(t *testing.T) {
 				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
 				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
 			},
+			isPresent: false,
+		},
+		{
+			name: "existing_windows",
+			given: []*keyed.AlignedKeyedWindow{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
+				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
+			},
+			input: keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
+				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
+			},
+			isPresent: true,
+		},
+		{
+			name: "existing_early_window",
+			given: []*keyed.AlignedKeyedWindow{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
+				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
+			},
+			input: keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
+				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
+			},
+			isPresent: true,
+		},
+		{
+			name: "existing_latest_window",
+			given: []*keyed.AlignedKeyedWindow{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
+				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
+			},
+			input: keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
+			expectedWindows: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
+				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
+			},
+			isPresent: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			setup(windows, tt.given)
-			ret := windows.CreateWindow(tt.input)
+			ret, isNew := windows.InsertIfNotPresent(tt.input)
+			assert.Equal(t, isNew, tt.isPresent)
 			assert.Equal(t, tt.input.StartTime(), ret.StartTime())
 			assert.Equal(t, tt.input.EndTime(), ret.EndTime())
 			assert.Equal(t, len(tt.expectedWindows), windows.entries.Len())

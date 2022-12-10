@@ -92,74 +92,49 @@ func (s *Sliding) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindowe
 	return windows
 }
 
-// CreateWindow returns a keyed window for a given interval window
-func (s *Sliding) CreateWindow(kw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
+// InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window
+func (s *Sliding) InsertIfNotPresent(kw window.AlignedKeyedWindower) (aw window.AlignedKeyedWindower, isPresent bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
+	// this could be the first window
 	if s.entries.Len() == 0 {
 		s.entries.PushFront(kw)
-		return kw
+		return kw, false
 	}
 
 	earliestWindow := s.entries.Front().Value.(*keyed.AlignedKeyedWindow)
 	recentWindow := s.entries.Back().Value.(*keyed.AlignedKeyedWindow)
 
-	// late arrival
-	if kw.StartTime().Before(earliestWindow.StartTime()) {
+	// if there is only one window
+	if earliestWindow.StartTime().Equal(kw.StartTime()) && earliestWindow.EndTime().Equal(kw.EndTime()) {
+		aw = earliestWindow
+		isPresent = true
+	} else if earliestWindow.StartTime().After(kw.StartTime()) {
+		// late arrival
 		s.entries.PushFront(kw)
-	} else if kw.EndTime().After(recentWindow.EndTime()) {
+		aw = kw
+	} else if recentWindow.StartTime().Before(kw.StartTime()) {
 		// early arrival
 		s.entries.PushBack(kw)
+		aw = kw
 	} else {
 		// a window in the middle
-		for e := s.entries.Back(); e != nil; e = e.Prev() {
+		for e := s.entries.Back(); e.Prev() != nil; e = e.Prev() {
 			win := e.Value.(*keyed.AlignedKeyedWindow)
-			if !win.StartTime().Before(kw.StartTime()) {
+			prevWin := e.Prev().Value.(*keyed.AlignedKeyedWindow)
+			if win.StartTime().Equal(kw.StartTime()) && win.EndTime().Equal(kw.EndTime()) {
+				aw = win
+				isPresent = true
+				break
+			}
+			if win.StartTime().After(kw.StartTime()) && prevWin.StartTime().Before(kw.StartTime()) {
 				s.entries.InsertBefore(kw, e)
+				aw = kw
 				break
 			}
 		}
 	}
-
-	return kw
-}
-
-// GetWindow returns a keyed window for a given interval window
-func (s *Sliding) GetWindow(iw window.AlignedKeyedWindower) window.AlignedKeyedWindower {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	if s.entries.Len() == 0 {
-		return nil
-	}
-
-	// are we looking for a window that is later than the current latest?
-	latest := s.entries.Back()
-	lkw := latest.Value.(*keyed.AlignedKeyedWindow)
-	if iw.EndTime().After(lkw.EndTime()) {
-		return nil
-	}
-
-	// are we looking for a window that is earlier than the current earliest?
-	earliest := s.entries.Front()
-	ekw := earliest.Value.(*keyed.AlignedKeyedWindow)
-	if iw.StartTime().Before(ekw.StartTime()) {
-		return nil
-	}
-
-	// check if we already have a window
-	for e := s.entries.Back(); e != nil; e = e.Prev() {
-		win := e.Value.(*keyed.AlignedKeyedWindow)
-		if win.StartTime().Equal(iw.StartTime()) && win.EndTime().Equal(iw.EndTime()) {
-			return win
-		} else if win.StartTime().Before(iw.StartTime()) {
-			// we have moved past the range that we are looking for
-			// so, we can bail out early.
-			break
-		}
-	}
-	return nil
+	return
 }
 
 func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
