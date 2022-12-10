@@ -102,6 +102,8 @@ These metrics can be used to determine if there are any errors in the pipeline
 
 You can follow the [prometheus operator](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md) setup guide if you would like to use prometheus operator configured in your cluster.
 
+You can also set up prometheus operator via [helm](https://bitnami.com/stack/prometheus-operator/helm).
+
 ### Configure the below Service Monitors for scraping your pipeline metrics:
 
 ```yaml

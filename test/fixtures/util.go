@@ -48,6 +48,11 @@ var OutputRegexp = func(rx string) func(t *testing.T, output string, err error) 
 	}
 }
 
+var CheckPodKillSucceeded = func(t *testing.T, output string, err error) {
+	assert.Contains(t, output, "deleted")
+	assert.NoError(t, err)
+}
+
 func Exec(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Env = os.Environ()
@@ -237,7 +242,7 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 		if err != nil {
 			return fmt.Errorf("error getting vertex pod name: %w", err)
 		}
-		ok = ok && len(podList.Items) > 0 && len(podList.Items) == int(*vertexList.Items[0].Spec.Replicas) // pod number should equal to desired replicas
+		ok = ok && len(podList.Items) > 0 && len(podList.Items) == vertexList.Items[0].GetReplicas() // pod number should equal to desired replicas
 		for _, p := range podList.Items {
 			ok = ok && p.Status.Phase == corev1.PodRunning
 		}

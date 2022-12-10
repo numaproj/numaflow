@@ -22,12 +22,13 @@ import (
 	"io"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"go.uber.org/zap"
 )
 
 // Publisher interface defines how to publish Watermark for a ProcessorEntitier.
@@ -148,8 +149,9 @@ func (p *publish) loadLatestFromStore() processor.Watermark {
 		key           = p.entity.GetName()
 	)
 	byteValue, err := p.otStore.GetValue(p.ctx, key)
+	// could happen during boot up
 	if err != nil {
-		p.log.Errorw("Unable to load latest watermark from ot store (failed to get value from ot store)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
+		p.log.Warnw("Unable to load latest watermark from ot store (failed to get value from ot store)", zap.String("OT", p.otStore.GetStoreName()), zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
 		return processor.Watermark(timeWatermark)
 	}
 	otValue, err := ot.DecodeToOTValue(byteValue)

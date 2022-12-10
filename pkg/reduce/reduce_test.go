@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -40,6 +41,30 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
+
+var keyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
+
+var nonKeyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: false}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
 
 type EventTypeWMProgressor struct {
 	watermarks map[string]processor.Watermark
@@ -215,7 +240,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	window := fixed.NewFixed(windowTime)
 
 	var reduceDataForwarder *DataForward
-	reduceDataForwarder, err = NewDataForward(child, CounterReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher, window, WithReadBatchSize(10))
+	reduceDataForwarder, err = NewDataForward(child, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher,
+		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	go reduceDataForwarder.Start(child)
@@ -283,7 +309,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	window := fixed.NewFixed(60 * time.Second)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
 		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -356,7 +382,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	window := fixed.NewFixed(2 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
 		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -429,7 +455,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, MaxReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+	reduceDataForward, err = NewDataForward(ctx, MaxReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
 		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -502,8 +528,10 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+
+	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
 		window, WithReadBatchSize(10))
+
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -535,12 +563,174 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload1)
 	_ = json.Unmarshal(msgs[1].Payload, &readMessagePayload2)
 	// since the window duration is 5 minutes, the output should be
-	// 100 * 300(for key even) and 100 * 97(for key odd)
+	// 100 * 300(for key even) and 99 * 300(for key odd)
 	// we cant guarantee the order of the output
 	assert.Contains(t, []int{30000, 29700}, readMessagePayload1.Value)
 	assert.Contains(t, []int{30000, 29700}, readMessagePayload2.Value)
 	assert.Equal(t, "sum", readMessagePayload1.Key)
 	assert.Equal(t, "sum", readMessagePayload2.Key)
+
+}
+
+// Max operation with 5 minutes window and non keyed
+func TestReduceDataForward_NonKeyed(t *testing.T) {
+	var (
+		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		fromBufferSize = int64(100000)
+		toBufferSize   = int64(10)
+		messages       = []int{100, 99}
+		startTime      = 0 // time in millis
+		fromBufferName = "source-reduce-buffer"
+		toBufferName   = "reduce-to-buffer"
+		err            error
+	)
+
+	defer cancel()
+
+	// create from buffers
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+
+	// create to buffers
+	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	toBuffer := map[string]isb.BufferWriter{
+		toBufferName: buffer,
+	}
+
+	// create pbq manager
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+	assert.NoError(t, err)
+
+	// create in memory watermark publisher and fetcher
+	f, p := fetcherAndPublisher(ctx, toBuffer, fromBuffer, t.Name())
+
+	// create a fixed window of 5 minutes
+	window := fixed.NewFixed(5 * time.Minute)
+
+	var reduceDataForward *DataForward
+	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, WithReadBatchSize(10))
+	assert.NoError(t, err)
+
+	// start the forwarder
+	go reduceDataForward.Start(ctx)
+
+	// start the producer
+	go publishMessages(ctx, startTime, messages, 600, 10, p[fromBuffer.GetName()], fromBuffer)
+
+	// wait until there is data in to buffer
+	for buffer.IsEmpty() {
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	// we are reading only one message here but the count should be equal to
+	// the number of keyed windows that closed
+	msgs, readErr := buffer.Read(ctx, 1)
+	assert.Nil(t, readErr)
+	assert.Len(t, msgs, 1)
+
+	// assert the output of reduce
+	var readMessagePayload PayloadForTest
+	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
+	// since the window duration is 5 minutes, the output should be
+	// 100 * 300 + 99 * 300
+	// we cant guarantee the order of the output
+	assert.Equal(t, 59700, readMessagePayload.Value)
+	assert.Equal(t, "sum", readMessagePayload.Key)
+
+}
+
+func TestDataForward_WithContextClose(t *testing.T) {
+	var (
+		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		fromBufferSize = int64(100000)
+		toBufferSize   = int64(10)
+		messages       = []int{100, 99}
+		startTime      = 0 // time in millis
+		fromBufferName = "source-reduce-buffer"
+		toBufferName   = "reduce-to-buffer"
+		err            error
+	)
+
+	cctx, childCancel := context.WithCancel(ctx)
+
+	defer cancel()
+	defer childCancel()
+
+	// create from buffers
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+
+	// create to buffers
+	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	toBuffer := map[string]isb.BufferWriter{
+		toBufferName: buffer,
+	}
+
+	// create a store provider
+	storeProvider := memory.NewMemoryStores(memory.WithStoreSize(1000))
+
+	// create pbq manager
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(cctx, storeProvider,
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+	assert.NoError(t, err)
+
+	// create in memory watermark publisher and fetcher
+	f, p := fetcherAndPublisher(cctx, toBuffer, fromBuffer, t.Name())
+
+	// create a fixed window of 5 minutes
+	window := fixed.NewFixed(5 * time.Minute)
+
+	var reduceDataForward *DataForward
+	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, p,
+		window, WithReadBatchSize(1))
+	assert.NoError(t, err)
+
+	// start the forwarder
+	go reduceDataForward.Start(cctx)
+	// window duration is 300s, we are sending only 200 messages with event time less than window end time, so the window will not be closed
+	publishMessages(cctx, startTime, messages, 200, 10, p[fromBuffer.GetName()], fromBuffer)
+	// wait for the partitions to be created
+	for {
+		partitionsList := pbqManager.ListPartitions()
+		if len(partitionsList) > 1 {
+			childCancel()
+			break
+		}
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	var discoveredPartitions []partition.ID
+	for {
+		discoveredPartitions, _ = storeProvider.DiscoverPartitions(ctx)
+
+		if len(discoveredPartitions) > 1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	// since we have 2 different keys
+	assert.Len(t, discoveredPartitions, 2)
 
 }
 
@@ -580,9 +770,7 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 			case <-ctx.Done():
 				return
 			default:
-				for key := range publishers {
-					_ = hb.PutKV(ctx, key, []byte(fmt.Sprintf("%d", time.Now().Unix())))
-				}
+				_ = hb.PutKV(ctx, fromBuffer.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 				time.Sleep(time.Duration(1) * time.Second)
 			}
 		}

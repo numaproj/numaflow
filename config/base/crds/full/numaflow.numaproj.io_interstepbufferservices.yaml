@@ -2131,7 +2131,32 @@ spec:
                     properties:
                       auth:
                         properties:
-                          password:
+                          basic:
+                            properties:
+                              password:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                              user:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                            type: object
+                          nkey:
                             properties:
                               key:
                                 type: string
@@ -2142,7 +2167,7 @@ spec:
                             required:
                             - key
                             type: object
-                          user:
+                          token:
                             properties:
                               key:
                                 type: string

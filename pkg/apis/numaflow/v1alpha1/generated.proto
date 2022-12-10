@@ -140,6 +140,17 @@ message Authorization {
   optional k8s.io.api.core.v1.SecretKeySelector token = 1;
 }
 
+// BasicAuth represents the basic authentication approach which contains a user name and a password.
+message BasicAuth {
+  // Secret for auth user
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector user = 1;
+
+  // Secret for auth password
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector password = 2;
+}
+
 // Blackhole is a sink to emulate /dev/null
 message Blackhole {
 }
@@ -503,7 +514,7 @@ message JetStreamConfig {
   // JetStream (NATS) URL
   optional string url = 1;
 
-  optional NATSAuth auth = 2;
+  optional NatsAuth auth = 2;
 
   // +optional
   optional string bufferConfig = 3;
@@ -588,16 +599,6 @@ message Metadata {
   map<string, string> labels = 2;
 }
 
-message NATSAuth {
-  // Secret for auth user
-  // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector user = 1;
-
-  // Secret for auth password
-  // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector password = 2;
-}
-
 message NativeRedis {
   // Redis version, such as "6.0.16"
   optional string version = 1;
@@ -630,6 +631,40 @@ message NativeRedis {
   // Redis configuration, if not specified, global settings in numaflow-controller-config will be used.
   // +optional
   optional RedisSettings settings = 9;
+}
+
+// NatsAuth defines how to authenticate the nats access
+message NatsAuth {
+  // Basic auth which contains a user name and a password
+  // +optional
+  optional BasicAuth basic = 1;
+
+  // Token auth
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector token = 2;
+
+  // NKey auth
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector nkey = 3;
+}
+
+message NatsSource {
+  // URL to connect to NATS cluster, multiple urls could be separated by comma.
+  optional string url = 1;
+
+  // Subject holds the name of the subject onto which messages are published.
+  optional string subject = 2;
+
+  // Queue is used for queue subscription.
+  optional string queue = 3;
+
+  // TLS configuration for the nats client.
+  // +optional
+  optional TLS tls = 4;
+
+  // Auth information
+  // +optional
+  optional NatsAuth auth = 5;
 }
 
 // PBQStorage defines the persistence configuration for a vertex.
@@ -684,7 +719,7 @@ message PipelineLimits {
   // BufferMaxLength is used to define the max length of a buffer
   // Only applies to UDF and Source vertice as only they do buffer write.
   // It can be overridden by the settings in vertex limits.
-  // +kubebuilder:default=50000
+  // +kubebuilder:default=30000
   // +optional
   optional uint64 bufferMaxLength = 2;
 
@@ -881,6 +916,9 @@ message Source {
 
   // +optional
   optional HTTPSource http = 3;
+
+  // +optional
+  optional NatsSource nats = 4;
 }
 
 // Status is a common structure which can be used for Status field.

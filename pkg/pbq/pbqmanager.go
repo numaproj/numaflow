@@ -152,7 +152,6 @@ func (m *Manager) ShutDown(ctx context.Context) {
 	// iterate through the map of pbq
 	// close all the pbq
 	var wg sync.WaitGroup
-
 	var PBQCloseBackOff = wait.Backoff{
 		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
@@ -196,11 +195,12 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 }
 
 // deregister is intended to be used by PBQ to deregister itself after GC is called.
-func (m *Manager) deregister(partitionID partition.ID) {
+// it will also delete the store using the store provider
+func (m *Manager) deregister(partitionID partition.ID) error {
 	m.Lock()
 	defer m.Unlock()
-
 	delete(m.pbqMap, partitionID.String())
+	return m.storeProvider.DeleteStore(partitionID)
 }
 
 func (m *Manager) getPBQs() []*PBQ {
@@ -231,5 +231,4 @@ func (m *Manager) Replay(ctx context.Context) {
 
 	wg.Wait()
 	m.log.Infow("Finished replaying records from store", zap.Duration("took", time.Since(tm)), zap.Any("partitions", partitionsIds))
-
 }

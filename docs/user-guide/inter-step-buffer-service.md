@@ -110,7 +110,7 @@ bufferConfig: |
   stream:
     # 0: Limits, 1: Interest, 2: WorkQueue
     retention: 1
-    maxMsgs: 50000
+    maxMsgs: 30000
     maxAge: 168h
     maxBytes: -1
     # 0: File, 1: Memory

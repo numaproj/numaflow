@@ -43,5 +43,5 @@ full-featured stream processing platforms.
 
 - [QUICK_START](docs/quick-start.md)
 - [EXAMPLES](examples)
-- [DEVELOPMENT](docs/development.md)
+- [DEVELOPMENT](docs/development/development.md)
 - [CONTRIBUTING](https://github.com/numaproj/numaproj/blob/main/CONTRIBUTING.md)

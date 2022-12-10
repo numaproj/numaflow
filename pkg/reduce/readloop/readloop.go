@@ -30,6 +30,7 @@ package readloop
 import (
 	"context"
 	"math"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -67,7 +68,7 @@ func NewReadLoop(ctx context.Context,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
-	_ *window.Options) *ReadLoop {
+) *ReadLoop {
 
 	op := newOrderedForwarder(ctx)
 
@@ -103,8 +104,12 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 
 		alignedKeyedWindow := keyed.NewKeyedWindow(p.Start, p.End)
 
-		// These windows have to be recreated as they are completely in-memory
-		rl.windower.CreateWindow(alignedKeyedWindow)
+		// insert the window to the list of active windows, since the active window list is in-memory
+		keyedWindow, _ := rl.windower.InsertIfNotPresent(alignedKeyedWindow)
+
+		// add key to the window, so that when a new message with the watermark greater than
+		// the window end time comes, key will not be lost and the windows will be closed as expected
+		keyedWindow.AddKey(p.Key)
 
 		// create and invoke process and forward for the partition
 		rl.associatePBQAndPnF(ctx, p)
@@ -115,10 +120,84 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 	return nil
 }
 
-// Process is one iteration of the read loop.
+// Process is one iteration of the read loop which writes the messages to the PBQs followed by acking the messages, and
+// then closing the windows that can closed.
 func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
-	// There is no Cap on backoff because setting a Cap will result in
-	// backoff stopped once the duration exceeds the Cap
+	// write messages to windows based by PBQs.
+	successfullyWrittenMessages, err := rl.writeMessagesToWindows(ctx, messages)
+	if err != nil {
+		rl.log.Errorw("Failed to write messages", zap.Int("totalMessages", len(messages)), zap.Int("writtenMessage", len(successfullyWrittenMessages)))
+	}
+
+	// ack successful messages
+	rl.ackMessages(ctx, successfullyWrittenMessages)
+
+	// for each successfully written message,
+	for _, m := range successfullyWrittenMessages {
+		// close any windows that need to be closed.
+		wm := processor.Watermark(m.Watermark)
+		closedWindows := rl.windower.RemoveWindows(time.Time(wm))
+		rl.log.Debugw("Windows eligible for closing", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
+
+		for _, cw := range closedWindows {
+			partitions := cw.Partitions()
+			rl.closePartitions(partitions)
+			rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
+		}
+	}
+}
+
+// writeMessagesToWindows write the messages to each window that message belongs to. Each window is backed by a PBQ.
+func (rl *ReadLoop) writeMessagesToWindows(ctx context.Context, messages []*isb.ReadMessage) ([]*isb.ReadMessage, error) {
+	var err error
+	var writtenMessages = make([]*isb.ReadMessage, 0, len(messages))
+
+messagesLoop:
+	for _, message := range messages {
+		// NOTE(potential bug): if we get a message where the event time is < watermark, skip processing the message.
+		// This could be due to a couple of problem, eg. ack was not registered, etc.
+		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
+		// to be violated.
+		if message.EventTime.Before(message.Watermark) {
+			// TODO: track as a counter metric
+			rl.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
+			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
+			writtenMessages = append(writtenMessages, message)
+			// let's not continue processing this message, most likely the window has already been closed and the message
+			// won't be processed anyways.
+			continue
+		}
+
+		// identify and add window for the message
+		windows := rl.upsertWindowsAndKeys(message)
+		// for each window we will have a PBQ. A message could belong to multiple windows (e.g., sliding).
+		// We need to write the messages to these PBQs.
+		for _, kw := range windows {
+			// identify partition for message
+			partitionID := partition.ID{
+				Start: kw.StartTime(),
+				End:   kw.EndTime(),
+				Key:   message.Key,
+			}
+
+			err := rl.writeToPBQ(ctx, partitionID, message)
+			// there is no point continuing because we are seeing an error.
+			// this error will ONLY BE set if we are in a erroring loop and ctx.Done() has been invoked.
+			if err != nil {
+				rl.log.Errorw("Failed to write message, asked to stop trying", zap.Any("msgOffSet", message.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Error(err))
+				break messagesLoop
+			}
+		}
+
+		writtenMessages = append(writtenMessages, message)
+	}
+
+	return writtenMessages, err
+}
+
+// writeToPBQ writes to the PBQ. It will return error only if it is not failing to write to PBQ and is in a continuous
+// error loop, and we have received ctx.Done() via SIGTERM.
+func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadMessage) error {
 	var pbqWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
 		Duration: 1 * time.Second,
@@ -126,76 +205,76 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		Jitter:   0.1,
 	}
 
-	select {
-	case <-ctx.Done():
-		return
+	q := rl.associatePBQAndPnF(ctx, p)
 
-	default:
-		for _, m := range messages {
-			// identify and add window for the message
-			windows := rl.upsertWindowsAndKeys(m)
-			// for each window we will have a PBQ. A message could belong to multiple windows (e.g., sliding).
-			for _, kw := range windows {
-				// identify partition for message
-				partitionID := partition.ID{
-					Start: kw.StartTime(),
-					End:   kw.EndTime(),
-					Key:   m.Key,
-				}
-
-				q := rl.associatePBQAndPnF(ctx, partitionID)
-				// write the message to PBQ
-				attempt := 0
-				timeoutErr := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
-					// FIXME(p0): temporarily fixing happy path
-					rErr := q.Write(context.Background(), m)
-					attempt += 1
-					if rErr != nil {
-						rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Any("attempt", attempt), zap.Error(rErr))
-						return false, nil
-					}
-					return true, nil
-				})
-
-				if timeoutErr != nil {
-					rl.log.Errorw("Not able to write the messages to all partitions. To avoid message loss, this message will not be acked", zap.String("msgOffSet", m.ReadOffset.String()))
-					return
-				}
-
+	err := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
+		rErr := q.Write(context.Background(), m)
+		if rErr != nil {
+			rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()), zap.Error(rErr))
+			// no point retrying if ctx.Done has been invoked
+			select {
+			case <-ctx.Done():
+				// no point in retrying after we have been asked to stop.
+				return false, ctx.Err()
+			default:
+				// keep retrying
+				return false, nil
 			}
 
-			// Ack the message to ISB
+		}
+		// happy path
+		rl.log.Debugw("Successfully wrote the message", zap.String("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()))
+		return true, nil
+	})
+
+	return err
+}
+
+// ackMessages acks messages. Retries until it can succeed or ctx.Done() happens.
+func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage) {
+	var ackBackoff = wait.Backoff{
+		Steps:    math.MaxInt,
+		Duration: 1 * time.Second,
+		Factor:   1.5,
+		Jitter:   0.1,
+	}
+	var wg sync.WaitGroup
+
+	// Ack the message to ISB
+	for _, m := range messages {
+		wg.Add(1)
+
+		go func(o isb.Offset) {
+			defer wg.Done()
 			attempt := 0
-			timeoutErr := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
-				rErr := m.ReadOffset.AckIt()
+			ackErr := wait.ExponentialBackoff(ackBackoff, func() (done bool, err error) {
+				rErr := o.AckIt()
 				attempt += 1
 				if rErr != nil {
-					rl.log.Errorw("Failed to ack message", zap.String("msgOffSet", m.ReadOffset.String()), zap.Int("attempt", attempt), zap.Error(rErr))
-					return false, nil
+					rl.log.Errorw("Failed to ack message, retrying", zap.String("msgOffSet", o.String()), zap.Error(rErr), zap.Int("attempt", attempt))
+					// no point retrying if ctx.Done has been invoked
+					select {
+					case <-ctx.Done():
+						// no point in retrying after we have been asked to stop.
+						return false, ctx.Err()
+					default:
+						// keep retrying
+						return false, nil
+					}
 				}
-				rl.log.Debugw("Successfully acked message", zap.String("msgOffSet", m.ReadOffset.String()))
+				rl.log.Debugw("Successfully acked message", zap.String("msgOffSet", o.String()))
 
 				return true, nil
 			})
+			// no point trying the rest of the message, most likely that will also fail
+			if ackErr != nil {
+				rl.log.Errorw("Context closed while waiting to ack messages inside readloop", zap.Error(ackErr), zap.String("offset", o.String()))
 
-			if timeoutErr != nil {
-				rl.log.Errorw("Timed out while trying to ack a message.", zap.String("msgOffSet", m.ReadOffset.String()))
-				return
 			}
+		}(m.ReadOffset)
 
-			// close any windows that need to be closed.
-			wm := processor.Watermark(m.Watermark)
-			closedWindows := rl.windower.RemoveWindows(time.Time(wm))
-			rl.log.Infow("closing windows", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
-
-			for _, cw := range closedWindows {
-				partitions := cw.Partitions()
-				rl.closePartitions(partitions)
-				rl.log.Debugw("Closing Window", zap.Time("windowStart", cw.StartTime()), zap.Time("windowEnd", cw.EndTime()))
-			}
-		}
 	}
-
+	wg.Wait()
 }
 
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
@@ -250,9 +329,8 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 	processingWindows := rl.windower.AssignWindow(m.EventTime)
 	var kWindows []window.AlignedKeyedWindower
 	for _, win := range processingWindows {
-		w := rl.windower.GetWindow(win)
-		if w == nil {
-			w = rl.windower.CreateWindow(win)
+		w, isNew := rl.windower.InsertIfNotPresent(win)
+		if isNew {
 			rl.log.Debugw("Creating new keyed window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
 		} else {
 			rl.log.Debugw("Found an existing window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))

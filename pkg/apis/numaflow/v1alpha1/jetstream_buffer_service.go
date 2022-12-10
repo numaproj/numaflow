@@ -328,18 +328,9 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 type JetStreamConfig struct {
 	// JetStream (NATS) URL
 	URL  string    `json:"url,omitempty" protobuf:"bytes,1,opt,name=url"`
-	Auth *NATSAuth `json:"auth,omitempty" protobuf:"bytes,2,opt,name=auth"`
+	Auth *NatsAuth `json:"auth,omitempty" protobuf:"bytes,2,opt,name=auth"`
 	// +optional
 	BufferConfig string `json:"bufferConfig,omitempty" protobuf:"bytes,3,opt,name=bufferConfig"`
 	// TLS enabled or not
 	TLSEnabled bool `json:"tlsEnabled,omitempty" protobuf:"bytes,4,opt,name=tlsEnabled"`
-}
-
-type NATSAuth struct {
-	// Secret for auth user
-	// +optional
-	User *corev1.SecretKeySelector `json:"user,omitempty" protobuf:"bytes,1,opt,name=user"`
-	// Secret for auth password
-	// +optional
-	Password *corev1.SecretKeySelector `json:"password,omitempty" protobuf:"bytes,2,opt,name=password"`
 }

@@ -117,7 +117,7 @@ spec:
                   readBatchSize: 500
                 properties:
                   bufferMaxLength:
-                    default: 50000
+                    default: 30000
                     format: int64
                     type: integer
                   bufferUsageLimit:
@@ -3726,6 +3726,107 @@ spec:
                               type: string
                           required:
                           - topic
+                          type: object
+                        nats:
+                          properties:
+                            auth:
+                              properties:
+                                basic:
+                                  properties:
+                                    password:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    user:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                  type: object
+                                nkey:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                token:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                              type: object
+                            queue:
+                              type: string
+                            subject:
+                              type: string
+                            tls:
+                              properties:
+                                caCertSecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                clientCertSecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                clientKeySecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                insecureSkipVerify:
+                                  type: boolean
+                              type: object
+                            url:
+                              type: string
+                          required:
+                          - queue
+                          - subject
+                          - url
                           type: object
                       type: object
                     tolerations:

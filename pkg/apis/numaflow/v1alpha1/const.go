@@ -28,16 +28,17 @@ const (
 	Project = "numaflow"
 
 	// label/annotation keys.
-	KeyHash         = "numaflow.numaproj.io/hash" // hash of the object
-	KeyComponent    = "app.kubernetes.io/component"
-	KeyPartOf       = "app.kubernetes.io/part-of"
-	KeyManagedBy    = "app.kubernetes.io/managed-by"
-	KeyAppName      = "app.kubernetes.io/name"
-	KeyISBSvcName   = "numaflow.numaproj.io/isbsvc-name"
-	KeyISBSvcType   = "numaflow.numaproj.io/isbsvc-type"
-	KeyPipelineName = "numaflow.numaproj.io/pipeline-name"
-	KeyVertexName   = "numaflow.numaproj.io/vertex-name"
-	KeyReplica      = "numaflow.numaproj.io/replica"
+	KeyHash             = "numaflow.numaproj.io/hash" // hash of the object
+	KeyComponent        = "app.kubernetes.io/component"
+	KeyPartOf           = "app.kubernetes.io/part-of"
+	KeyManagedBy        = "app.kubernetes.io/managed-by"
+	KeyAppName          = "app.kubernetes.io/name"
+	KeyISBSvcName       = "numaflow.numaproj.io/isbsvc-name"
+	KeyISBSvcType       = "numaflow.numaproj.io/isbsvc-type"
+	KeyPipelineName     = "numaflow.numaproj.io/pipeline-name"
+	KeyVertexName       = "numaflow.numaproj.io/vertex-name"
+	KeyReplica          = "numaflow.numaproj.io/replica"
+	KeyDefaultContainer = "kubectl.kubernetes.io/default-container"
 
 	// ID key in the header of sources like http
 	KeyMetaID        = "x-numaflow-id"
@@ -112,7 +113,7 @@ const (
 	DefaultRequeueAfter = 10 * time.Second
 
 	// ISB
-	DefaultBufferLength     = 50000
+	DefaultBufferLength     = 30000
 	DefaultBufferUsageLimit = 0.8
 	DefaultReadBatchSize    = 500
 
@@ -130,63 +131,17 @@ const (
 	DefaultPBQReadTimeout       = 1 * time.Second // Default read timeout for pbq
 	DefaultPBQReadBatchSize     = 100             // Default read batch size for pbq
 
+	// PVC mount path for PBQ
+	PathPBQMount = "/var/numaflow/pbq"
+
 	// Default persistent store options
 	DefaultStoreSyncDuration  = 2 * time.Second        // Default sync duration for pbq
-	DefaultStoreType          = NoOpType               // Default store type
-	DefaultStoreSize          = 1000000                // Default persistent store size
 	DefaultStoreMaxBufferSize = 100000                 // Default buffer size for pbq in bytes
 	DefaultStorePath          = PathPBQMount + "/wals" // Default store path
 
-	// Default window options
-	DefaultWindowType     = FixedType
-	DefaultWindowDuration = 0
-
-	// PVC mount path for PBQ
-	PathPBQMount = "/var/numaflow/pbq"
+	// DefaultKeyForNonKeyedData Default key for non keyed stream
+	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 )
-
-// StoreType is the PBQ store's backend type.
-type StoreType string
-
-const (
-	InMemoryType   StoreType = "in-memory"
-	FileSystemType StoreType = "file-system"
-	NoOpType       StoreType = "no-op"
-)
-
-func (st StoreType) String() string {
-	switch st {
-	case InMemoryType:
-		return string(InMemoryType)
-	case FileSystemType:
-		return string(FileSystemType)
-	case NoOpType:
-		return string(NoOpType)
-	default:
-		return "unknownStoreType"
-	}
-}
-
-type WindowType string
-
-const (
-	FixedType   WindowType = "fixed"
-	SlidingType WindowType = "sliding"
-	SessionType WindowType = "session"
-)
-
-func (wt WindowType) String() string {
-	switch wt {
-	case FixedType:
-		return string(FixedType)
-	case SlidingType:
-		return string(SlidingType)
-	case SessionType:
-		return string(SessionType)
-	default:
-		return "unknownWindowType"
-	}
-}
 
 var (
 	MessageKeyDrop = fmt.Sprintf("%U__DROP__", '\\') // U+005C__DROP__
