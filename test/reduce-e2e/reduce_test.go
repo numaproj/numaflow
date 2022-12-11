@@ -167,7 +167,7 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 
 	startTime := int(time.Unix(1000, 0).UnixMilli())
-	for i := 1; i <= 300; i++ {
+	for i := 1; i <= 100; i++ {
 		eventTime := startTime + (i * 1000)
 		if i == 5 {
 			// Kill the reducer pods during processing to trigger failover.
