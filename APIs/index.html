@@ -4826,6 +4826,50 @@ Log </a> </em>
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SlidingWindow">
+SlidingWindow
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Window">Window</a>)
+</p>
+<p>
+<p>
+SlidingWindow describes a sliding window
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>length</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>slide</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Source">
 Source
 </h3>
@@ -5601,6 +5645,16 @@ Description
 <code>fixed</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.FixedWindow"> FixedWindow </a>
 </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>sliding</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SlidingWindow"> SlidingWindow
+</a> </em>
 </td>
 <td>
 <em>(Optional)</em>
