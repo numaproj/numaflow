@@ -220,7 +220,7 @@ func validateUDF(udf dfv1.UDF) error {
 		}
 
 		if f != nil && s != nil {
-			return fmt.Errorf(`invalid "groupBy.window", either of fixed or sliding is allowed. not both`)
+			return fmt.Errorf(`invalid "groupBy.window", either fixed or sliding is allowed, not both`)
 		}
 
 		if f != nil && f.Length == nil {
