@@ -139,13 +139,13 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 		testDatumList := []*sinkpb.Datum{
 			{
 				Id:        "test_id_0",
-				Value:     []byte(`sink_message_success`),
+				Value:     []byte(`sink_message_grpc_err`),
 				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
 				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 			},
 			{
 				Id:        "test_id_1",
-				Value:     []byte(`sink_message_err`),
+				Value:     []byte(`sink_message_grpc_err`),
 				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
 				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 			},
