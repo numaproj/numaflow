@@ -80,23 +80,14 @@ message VertexWatermark {
   required string pipeline = 1;
   required string vertex = 2;
   required int64 watermark = 3;
-  required bool isWatermarkEnabled = 4;
-}
-
-message GetVertexWatermarkResponse {
-  required VertexWatermark vertexWatermark = 1;
+  required bool disabled = 4;
 }
 
 message GetPipelineWatermarksResponse {
   repeated VertexWatermark vertexWatermark = 1;
 }
 
-// GetVertexWatermarksRequest requests for the watermark for a pipeline's vertex.
-message GetVertexWatermarkRequest {
-  required string pipeline = 1;
-  required string vertex = 2;
-}
-
+// GetPipelineWatermarksRequest requests for the watermark for a pipeline.
 message GetPipelineWatermarksRequest {
   required string pipeline = 1;
 }
@@ -116,12 +107,7 @@ service DaemonService {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/metrics";
   };
 
-  // GetVertexWatermark return the watermark of the given vertex.
-  rpc GetVertexWatermark (GetVertexWatermarkRequest) returns (GetVertexWatermarkResponse) {
-    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/watermark";
-  };
-
-  // GetPipelineWatermark return the watermark of the given pipeline
+  // GetPipelineWatermarks return the watermark of the given pipeline
   rpc GetPipelineWatermarks (GetPipelineWatermarksRequest) returns (GetPipelineWatermarksResponse) {
     option (google.api.http).get = "/api/v1/pipeline/{pipeline}/watermarks";
   }

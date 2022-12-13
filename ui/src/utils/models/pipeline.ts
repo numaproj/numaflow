@@ -9,7 +9,7 @@ export interface VertexMetrics {
 export interface VertexWatermark {
   watermark: number;
   watermarkLocalTime: string;
-  isWaterMarkEnabled: boolean;
+  disabled: boolean;
 }
 
 export interface EdgeInfo {

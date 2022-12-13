@@ -24,7 +24,7 @@ const SinkNode = ({
           fontSize: "0.50rem",
         }}
       >
-        {data?.vertexWatermark?.isWaterMarkEnabled && (
+        {data?.vertexWatermark?.disabled === false && (
           <Tooltip
             title={
               <div className={"node-tooltip"}>
