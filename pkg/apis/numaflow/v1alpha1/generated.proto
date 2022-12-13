@@ -900,6 +900,13 @@ message Sink {
   optional UDSink udsink = 4;
 }
 
+// SlidingWindow describes a sliding window
+message SlidingWindow {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
+
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration slide = 2;
+}
+
 message Source {
   // +optional
   optional GeneratorSource generator = 1;
@@ -1069,5 +1076,8 @@ message Watermark {
 message Window {
   // +optional
   optional FixedWindow fixed = 1;
+
+  // +optional
+  optional SlidingWindow sliding = 2;
 }
 
