@@ -80,13 +80,15 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 
 	// output channel is buffered to support bulk reads
 	p := &PBQ{
-		store:       persistentStore,
-		output:      make(chan *isb.ReadMessage, m.pbqOptions.channelBufferSize),
-		cob:         false,
-		PartitionID: partitionID,
-		options:     m.pbqOptions,
-		manager:     m,
-		log:         logging.FromContext(ctx).With("PBQ", partitionID),
+		vertexName:   m.vertexName,
+		pipelineName: m.pipelineName,
+		store:        persistentStore,
+		output:       make(chan *isb.ReadMessage, m.pbqOptions.channelBufferSize),
+		cob:          false,
+		PartitionID:  partitionID,
+		options:      m.pbqOptions,
+		manager:      m,
+		log:          logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 	m.register(partitionID, p)
 	return p, nil
