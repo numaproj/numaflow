@@ -22,10 +22,11 @@ import (
 
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/function/server"
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/builtin/cat"
 	"github.com/numaproj/numaflow/pkg/udf/builtin/filter"
-	"go.uber.org/zap"
 )
 
 type Builtin struct {
