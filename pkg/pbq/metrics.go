@@ -6,9 +6,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// activePbqsCount is used to indicate the number of tasks in ordered processor
-var activePbqsCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
+// activePartitionCount is used to indicate the number of active partitions
+var activePartitionCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "pbq",
-	Name:      "active_pbq_count",
-	Help:      "Total number of PBQ's active",
+	Name:      "active_partition_count",
+	Help:      "Total number of active partitions",
 }, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline})

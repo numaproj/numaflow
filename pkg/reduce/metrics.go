@@ -8,21 +8,21 @@ import (
 
 // readMessagesCount is used to indicate the number of messages read
 var readMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "reduce_forwarder",
+	Subsystem: "isb_reader",
 	Name:      "read_total",
 	Help:      "Total number of Messages Read",
 }, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, "buffer"})
 
 // readBytesCount is to indicate the number of bytes read
 var readBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "reduce_forwarder",
+	Subsystem: "isb_reader",
 	Name:      "read_bytes_total",
 	Help:      "Total number of bytes read",
 }, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, "buffer"})
 
-// readMessagesError is used to indicate the number of errors messages read
+// readMessagesError is used to indicate the number of read errors
 var readMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "reduce_forwarder",
+	Subsystem: "isb_reader",
 	Name:      "read_error_total",
 	Help:      "Total number of Read Errors",
 }, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, "buffer"})

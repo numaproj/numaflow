@@ -84,7 +84,8 @@ func NewProcessAndForward(ctx context.Context,
 // Process method reads messages from the supplied PBQ, invokes UDF to reduce the result.
 func (p *ProcessAndForward) Process(ctx context.Context) error {
 	var err error
-
+	startTime := time.Now()
+	defer reduceProcessTime.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Observe(float64(time.Since(startTime).Milliseconds()))
 	// blocking call, only returns the result after it has read all the messages from pbq
 	p.result, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 	return err
@@ -93,6 +94,8 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 // Forward writes messages to the ISBs, publishes watermark, and invokes GC on PBQ.
 func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	// extract window end time from the partitionID, which will be used for watermark
+	startTime := time.Now()
+	defer reduceForwardTime.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Observe(float64(time.Since(startTime).Microseconds()))
 	processorWM := processor.Watermark(p.PartitionID.End)
 
 	// decide which ISB to write to

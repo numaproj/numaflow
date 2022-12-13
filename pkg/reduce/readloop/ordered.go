@@ -91,7 +91,7 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 	of.Lock()
 	defer of.Unlock()
 	of.taskQueue.PushBack(t)
-	orderedProcessorTaskCount.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Inc()
+	partitionsInFlight.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Inc()
 
 	// invoke the reduce function
 	go of.reduceOp(ctx, t)
@@ -101,7 +101,6 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 // to wait for the close-of-book on the PBQ to materialize the result.
 func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 	start := time.Now()
-	defer reduceProcessTime.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Observe(time.Since(start).Seconds())
 	for {
 		// FIXME: this error handling won't work with streams. We cannot do infinite retries
 		//  because whatever is written to the stream is lost between retries.
@@ -180,7 +179,7 @@ func (of *orderedForwarder) forward(ctx context.Context) {
 				rm := currElement
 				currElement = currElement.Next()
 				of.taskQueue.Remove(rm)
-				orderedProcessorTaskCount.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Dec()
+				partitionsInFlight.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Dec()
 				of.log.Debugw("Removing task post forward call", zap.String("partitionID", t.pf.PartitionID.String()))
 				of.Unlock()
 			case <-ctx.Done():

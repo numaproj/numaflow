@@ -196,7 +196,7 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 	if _, ok := m.pbqMap[partitionID.String()]; !ok {
 		m.pbqMap[partitionID.String()] = p
 	}
-	activePbqsCount.With(map[string]string{metricspkg.LabelVertex: m.vertexName, metricspkg.LabelPipeline: m.pipelineName}).Inc()
+	activePartitionCount.With(map[string]string{metricspkg.LabelVertex: m.vertexName, metricspkg.LabelPipeline: m.pipelineName}).Inc()
 
 }
 
@@ -206,7 +206,7 @@ func (m *Manager) deregister(partitionID partition.ID) error {
 	m.Lock()
 	defer m.Unlock()
 	delete(m.pbqMap, partitionID.String())
-	activePbqsCount.With(map[string]string{metricspkg.LabelVertex: m.vertexName, metricspkg.LabelPipeline: m.pipelineName}).Dec()
+	activePartitionCount.With(map[string]string{metricspkg.LabelVertex: m.vertexName, metricspkg.LabelPipeline: m.pipelineName}).Dec()
 	return m.storeProvider.DeleteStore(partitionID)
 }
 
