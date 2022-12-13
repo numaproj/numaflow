@@ -109,9 +109,10 @@ func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 		of.log.Errorw("Process failed", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(err))
 		time.Sleep(retryDelay)
 	}
-	// after retrying indicate that we are done with processing the package. the processing can move on
+	// indicate that we are done with reduce UDF invocation.
 	close(t.doneCh)
 	of.log.Debugw("Process->Reduce call took ", zap.String("partitionID", t.pf.PartitionID.String()), zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+
 	// notify that some work has been completed
 	select {
 	case of.taskDone <- struct{}{}:
