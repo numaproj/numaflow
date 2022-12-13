@@ -72,7 +72,7 @@ func NewDataForward(ctx context.Context,
 	}
 
 	rl := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
-	return &DataForward{
+	df := &DataForward{
 		ctx:                 ctx,
 		vertexInstance:      vertexInstance,
 		fromBuffer:          fromBuffer,
@@ -82,16 +82,16 @@ func NewDataForward(ctx context.Context,
 		watermarkPublishers: watermarkPublishers,
 		windowingStrategy:   windowingStrategy,
 		log:                 logging.FromContext(ctx),
-		opts:                options}, nil
+		opts:                options}
+
+	// replay the saved WAL entries
+	err := df.readloop.Startup(ctx)
+
+	return df, err
 }
 
 // Start starts forwarding messages to readloop
 func (d *DataForward) Start() {
-	err := d.readloop.Startup(d.ctx)
-	if err != nil {
-		d.log.Errorw("Failed to start the data forwarder in reduce vertex", zap.Error(err))
-	}
-
 	for {
 		select {
 		case <-d.ctx.Done():
