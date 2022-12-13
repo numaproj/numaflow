@@ -22,10 +22,11 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 var (
@@ -108,6 +109,26 @@ var (
 					},
 				},
 				{
+					Name: "p3",
+					UDF: &dfv1.UDF{
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
+						GroupBy: &dfv1.GroupBy{
+							Window: dfv1.Window{
+								Sliding: &dfv1.SlidingWindow{
+									Length: &metav1.Duration{
+										Duration: time.Duration(60 * time.Second),
+									},
+									Slide: &metav1.Duration{
+										Duration: time.Duration(30 * time.Second),
+									},
+								},
+							},
+						},
+					},
+				},
+				{
 					Name: "output",
 					Sink: &dfv1.Sink{},
 				},
@@ -115,7 +136,8 @@ var (
 			Edges: []dfv1.Edge{
 				{From: "input", To: "p1"},
 				{From: "p1", To: "p2"},
-				{From: "p2", To: "output"},
+				{From: "p2", To: "p3"},
+				{From: "p3", To: "output"},
 			},
 		},
 	}

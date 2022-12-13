@@ -81,7 +81,6 @@ func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower 
 func (f *Fixed) InsertIfNotPresent(kw window.AlignedKeyedWindower) (aw window.AlignedKeyedWindower, isPresent bool) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-
 	// this could be the first window
 	if f.entries.Len() == 0 {
 		f.entries.PushFront(kw)
@@ -130,6 +129,16 @@ func (f *Fixed) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 	defer f.lock.Unlock()
 
 	closedWindows := make([]window.AlignedKeyedWindower, 0)
+
+	if f.entries.Len() == 0 {
+		return closedWindows
+	}
+	// examine the earliest window
+	earliestWindow := f.entries.Front().Value.(*keyed.AlignedKeyedWindow)
+	if earliestWindow.EndTime().After(wm) {
+		// no windows to close since the watermark is behind the earliest window
+		return closedWindows
+	}
 
 	for e := f.entries.Front(); e != nil; {
 		win := e.Value.(*keyed.AlignedKeyedWindow)
