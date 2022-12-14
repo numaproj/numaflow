@@ -34,7 +34,7 @@ export const usePodsFetch = (
         const containers: string[] = [];
         const containerSpecMap = new Map<string, PodContainerSpec>();
         raw.spec?.containers?.forEach((rawC: any) => {
-          const cpu = rawC.resources?.requests?.cpu;
+          const cpu = rawC.resources?.limits?.cpu;
           let cpuParsed: undefined | number;
           if (cpu) {
             try {
@@ -43,7 +43,7 @@ export const usePodsFetch = (
               cpuParsed = undefined;
             }
           }
-          const memory = rawC.resources?.requests?.memory;
+          const memory = rawC.resources?.limits?.memory;
           let memoryParsed: undefined | number;
           if (memory) {
             try {
