@@ -42,6 +42,16 @@ type When struct {
 	portForwarderStopChannels map[string]chan struct{}
 }
 
+// SendMessageTo sends msg to a http source vertex.
+func (w *When) SendMessageTo(pipelineName string, vertexName string, msg []byte) *When {
+	w.t.Helper()
+	err := SendMessageTo(pipelineName, vertexName, msg)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return w
+}
+
 func (w *When) CreateISBSvc() *When {
 	w.t.Helper()
 	if w.isbSvc == nil {

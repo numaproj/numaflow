@@ -6,7 +6,8 @@ spec:
   vertices:
     - name: in
       source:
-        http: {}
+        http:
+          service: true
     - name: p1
       udf:
         builtin:
@@ -15,7 +16,7 @@ spec:
             expression: int(json(payload).id) < 100 && json(payload).msg == 'hello' && sprig.contains('good', string(json(payload).desc))
     - name: out
       sink:
-        log: {}
+        redis: {}
   edges:
     - from: in
       to: p1

@@ -18677,6 +18677,10 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.RedisSink": {
+      "description": "RedisSink is a sink for publishing to Redis",
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.Scale": {
       "description": "Scale defines the parameters for autoscaling.",
       "properties": {
@@ -18737,6 +18741,9 @@
         },
         "log": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
+        },
+        "redis": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisSink"
         },
         "udsink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"

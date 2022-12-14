@@ -92,7 +92,6 @@ func GetKafkaCount(topic string, count int) int {
 
 func SendMessage(topic string, key string, message string) {
 	InvokeE2EAPIPOST("/kafka/produce-topic?topic=%s&key=%s", message, topic, key)
-
 }
 
 func ValidateMessage(topic string, key string, position int) {

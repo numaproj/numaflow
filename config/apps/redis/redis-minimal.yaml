@@ -1,0 +1,212 @@
+# This is a direct copy from https://github.com/sobotklp/kubernetes-redis-cluster
+# TODO - can we simplify it by removing some resources/configurations?
+---
+#
+# Redis Cluster service
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster
+  labels:
+    app: redis-cluster
+    environment: dev
+spec:
+  publishNotReadyAddresses: true
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: client
+    - port: 16379
+      targetPort: 16379
+      name: gossip
+  clusterIP: None
+  #type: ClusterIP
+  selector:
+    app: redis-cluster
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-cluster-pdb
+spec:
+  selector:
+    matchLabels:
+      app: redis-cluster
+  maxUnavailable: 0
+---
+#
+# Redis configuration file for clustered mode
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-cluster-config
+  labels:
+    app: redis-cluster
+data:
+  redis.conf: |+
+    cluster-enabled yes
+    cluster-require-full-coverage no
+    cluster-node-timeout 15000
+    cluster-config-file nodes.conf
+    cluster-migration-barrier 1 
+    appendonly yes
+    # Other cluster members need to be able to connect
+    protected-mode no
+  #
+  # A script to bootstrap Stateful Set members as they initialize
+  #
+  bootstrap-pod.sh: |+
+    #!/bin/sh
+    set -ex
+
+    # Find which member of the Stateful Set this pod is running
+    # e.g. "redis-cluster-0" -> "0"
+    PET_ORDINAL=$(cat /etc/podinfo/pod_name | rev | cut -d- -f1)
+    MY_SHARD=$(($PET_ORDINAL % $NUM_SHARDS))
+
+    redis-server /conf/redis.conf &
+    
+    # TODO: Wait until redis-server process is ready
+    sleep 1
+
+    if [ $PET_ORDINAL -lt $NUM_SHARDS ]; then
+      # Set up primary nodes. Divide slots into equal(ish) contiguous blocks
+      NUM_SLOTS=$(( 16384 / $NUM_SHARDS ))
+      REMAINDER=$(( 16384 % $NUM_SHARDS ))
+      START_SLOT=$(( $NUM_SLOTS * $MY_SHARD + ($MY_SHARD < $REMAINDER ? $MY_SHARD : $REMAINDER) ))
+      END_SLOT=$(( $NUM_SLOTS * ($MY_SHARD+1) + ($MY_SHARD+1 < $REMAINDER ? $MY_SHARD+1 : $REMAINDER) - 1 ))
+
+      PEER_IP=$(perl -MSocket -e "print inet_ntoa(scalar(gethostbyname(\"redis-cluster-0.redis-cluster.$POD_NAMESPACE.svc.cluster.local\")))")
+      redis-cli cluster meet $PEER_IP 6379
+      redis-cli cluster addslots $(seq $START_SLOT $END_SLOT)
+    else
+      # Set up a replica
+      PEER_IP=$(perl -MSocket -e "print inet_ntoa(scalar(gethostbyname(\"redis-cluster-$MY_SHARD.redis-cluster.$POD_NAMESPACE.svc.cluster.local\")))")
+      redis-cli --cluster add-node localhost:6379 $PEER_IP:6379 --cluster-slave
+    fi
+
+    wait
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-cluster
+spec:
+  podManagementPolicy: OrderedReady # default
+  serviceName: redis-cluster
+  replicas: 2
+  selector:
+    matchLabels:
+      app: redis-cluster # has to match .spec.template.metadata.labels
+  template:
+    metadata:
+      labels:
+        app: redis-cluster
+        name: redis-cluster
+    spec:
+      #      affinity:  # Ensure that each Redis instance is provisioned on a different k8s node
+      #        podAntiAffinity:
+      #          requiredDuringSchedulingIgnoredDuringExecution:
+      #            - labelSelector:
+      #                matchExpressions:
+      #                  - key: "app"
+      #                    operator: In
+      #                    values:
+      #                      - redis-cluster
+      #              topologyKey: "kubernetes.io/hostname"
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: redis-cluster
+          image: redis:6.2.6
+          ports:
+            - containerPort: 6379
+              name: client
+            - containerPort: 16379
+              name: gossip
+          command:
+            - sh
+          args:
+            - /conf/bootstrap-pod.sh
+          # Ensure that Redis is online before initializing the next node.
+          # TODO: Test that the cluster node is init'd properly.
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli -h $(hostname) ping"
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+          # Mark a node as down if Redis server stops running
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli -h $(hostname) ping"
+            initialDelaySeconds: 20
+            periodSeconds: 3
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: NUM_SHARDS
+              value: "1"  # If you modify this value, make sure there are at least 2 times the number of replicas
+          volumeMounts:
+            - name: conf
+              mountPath: /conf
+              readOnly: false
+            - name: podinfo
+              mountPath: /etc/podinfo
+              readOnly: false
+      initContainers:
+        # Wait for the redis-cluster service to exist. We need it to resolve the hostnames of our nodes
+        - name: init-redis-cluster
+          image: busybox:1.28
+          command: ['sh', '-c', "until nslookup redis-cluster.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for redis-cluster; sleep 2; done"]
+      volumes:
+        # Insert our pre-baked Redis configuration file into /conf/redis.conf
+        - name: conf
+          configMap:
+            name: redis-cluster-config
+            items:
+              - key: redis.conf
+                path: redis.conf
+              - key: bootstrap-pod.sh  # TODO: Move this or extract it into its own Docker image
+                path: bootstrap-pod.sh
+        # The init container will use this info to find cluster peers
+        - name: podinfo
+          downwardAPI:
+            items:
+              - path: "labels"
+                fieldRef:
+                  fieldPath: metadata.labels
+              - path: "annotations"
+                fieldRef:
+                  fieldPath: metadata.annotations
+              - path: "pod_name"
+                fieldRef:
+                  fieldPath: metadata.name
+              - path: "pod_namespace"
+                fieldRef:
+                  fieldPath: metadata.namespace
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 10Gi

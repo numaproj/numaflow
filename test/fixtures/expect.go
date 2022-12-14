@@ -19,6 +19,7 @@ package fixtures
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"testing"
 	"time"
 
@@ -39,6 +40,26 @@ type Expect struct {
 	pipeline       *dfv1.Pipeline
 	restConfig     *rest.Config
 	kubeClient     kubernetes.Interface
+}
+
+func (t *Expect) RedisContains(sinkName string, targetRegex string, opts ...RedisCheckOption) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	contains := RedisContains(ctx, sinkName, targetRegex, opts...)
+	if !contains {
+		t.t.Fatalf("Redis doesn't contain enough data matching target regex %s", targetRegex)
+	}
+	return t
+}
+
+func (t *Expect) RedisNotContains(sinkName string, regex string) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	notContains := RedisNotContains(ctx, sinkName, regex)
+	if !notContains {
+		t.t.Fatalf("Sink %s contains regex %s", sinkName, regex)
+	}
+	return t
 }
 
 func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
@@ -101,6 +122,37 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 	if !contains {
 		t.t.Fatalf("Expected vertex %q pod log contains %q", vertexName, regex)
 	}
+	return t
+}
+
+func (t *Expect) HttpVertexReadyForPost(pipelineName, vertexName string) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+
+	// Posting right after vertex creation sometimes gets the "dial tcp: connect: connection refused" error.
+	// Adding retry to mitigate such issue.
+	// 3 attempts with 2 second fixed wait time are tested sufficient for it.
+	var retryBackOff = wait.Backoff{
+		Factor:   1,
+		Jitter:   0,
+		Steps:    3,
+		Duration: time.Second * 2,
+	}
+
+	err := wait.ExponentialBackoffWithContext(ctx, retryBackOff, func() (done bool, err error) {
+		err = SendMessageTo(pipelineName, vertexName, []byte("test"))
+		if err == nil {
+			return true, nil
+		}
+
+		fmt.Printf("Got error %v, retrying.\n", err)
+		return false, nil
+	})
+
+	if err != nil {
+		t.t.Fatalf("Http vertex %s is not ready to serve post request.", vertexName)
+	}
+
 	return t
 }
 

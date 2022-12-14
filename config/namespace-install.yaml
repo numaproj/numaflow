@@ -5742,6 +5742,8 @@ spec:
                           type: object
                         log:
                           type: object
+                        redis:
+                          type: object
                         udsink:
                           properties:
                             container:
@@ -8998,6 +9000,8 @@ spec:
                     - topic
                     type: object
                   log:
+                    type: object
+                  redis:
                     type: object
                   udsink:
                     properties:

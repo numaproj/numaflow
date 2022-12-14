@@ -1,0 +1,6 @@
+resources:
+  - redis-minimal.yaml
+
+commonLabels:
+  "numaflow-e2e": "true"
+

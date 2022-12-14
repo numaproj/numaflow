@@ -15,7 +15,7 @@ spec:
           name: cat
     - name: output
       sink:
-        log: {}
+        redis: {}
   edges:
     - from: input
       to: p1

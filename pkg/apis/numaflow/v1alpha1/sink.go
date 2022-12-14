@@ -24,7 +24,8 @@ type Sink struct {
 	Log       *Log       `json:"log,omitempty" protobuf:"bytes,1,opt,name=log"`
 	Kafka     *KafkaSink `json:"kafka,omitempty" protobuf:"bytes,2,opt,name=kafka"`
 	Blackhole *Blackhole `json:"blackhole,omitempty" protobuf:"bytes,3,opt,name=blackhole"`
-	UDSink    *UDSink    `json:"udsink,omitempty" protobuf:"bytes,4,opt,name=udsink"`
+	Redis     *RedisSink `json:"redis,omitempty" protobuf:"bytes,4,opt,name=redis"`
+	UDSink    *UDSink    `json:"udsink,omitempty" protobuf:"bytes,5,opt,name=udsink"`
 }
 
 func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, error) {
