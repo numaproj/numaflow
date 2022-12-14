@@ -32,8 +32,14 @@ const (
 var entriesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_entries_total",
-	Help:      "Total number of entries written across ALL wal files/partitions",
+	Help:      "Total number of entries written",
 }, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, labelVertexReplicaIndex})
+
+var entriesBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "pbq_wal",
+	Name:      "wal_entries_bytes_total",
+	Help:      "Total number of bytes written to WAL",
+}, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, labelVertexReplicaIndex})
 
 var filesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
@@ -54,18 +60,22 @@ var garbageCollectingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   prometheus.ExponentialBucketsRange(100, 5000, 5),
 }, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, labelVertexReplicaIndex})
 
-var fileSyncWaitTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+var fileSyncWaitTime = promauto.NewSummaryVec(prometheus.SummaryOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_file_sync_wait_time",
-	Help:      "File Sync wait time (1 to 60 milliseconds)",
-	Buckets:   prometheus.ExponentialBucketsRange(1, 60, 5),
+	Help:      "File Sync wait time",
 }, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, labelVertexReplicaIndex})
 
-var entryWriteTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+var entryWriteLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
 	Subsystem: "pbq_wal",
-	Name:      "wal_entry_write_time",
-	Help:      "Entry write time (1 to 60 milliseconds)",
-	Buckets:   prometheus.ExponentialBucketsRange(1, 60, 5),
+	Name:      "wal_entry_write_latency",
+	Help:      "Entry write time to WAL",
+}, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, labelVertexReplicaIndex})
+
+var entryEncodeLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
+	Subsystem: "pbq_wal",
+	Name:      "wal_entry_encode_latency",
+	Help:      "Time taken to encode an Entry",
 }, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, labelVertexReplicaIndex})
 
 var walErrors = promauto.NewCounterVec(prometheus.CounterOpts{
