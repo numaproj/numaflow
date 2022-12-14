@@ -38,7 +38,7 @@ var entriesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 var entriesBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_entries_bytes_total",
-	Help:      "Total number of entries bytes written",
+	Help:      "Total number of bytes written to WAL",
 }, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, labelVertexReplicaIndex})
 
 var filesCount = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -69,13 +69,13 @@ var fileSyncWaitTime = promauto.NewSummaryVec(prometheus.SummaryOpts{
 var entryWriteLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_entry_write_latency",
-	Help:      "Entry write time",
+	Help:      "Entry write time to WAL",
 }, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, labelVertexReplicaIndex})
 
 var entryEncodeLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_entry_encode_latency",
-	Help:      "Entry write time",
+	Help:      "Time taken to encode an Entry",
 }, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, labelVertexReplicaIndex})
 
 var walErrors = promauto.NewCounterVec(prometheus.CounterOpts{
