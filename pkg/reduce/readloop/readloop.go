@@ -61,7 +61,13 @@ type ReadLoop struct {
 }
 
 // NewReadLoop initializes  and returns ReadLoop.
-func NewReadLoop(ctx context.Context, udf applier.ReduceApplier, pbqManager *pbq.Manager, windowingStrategy window.Windower, toBuffers map[string]isb.BufferWriter, whereToDecider forward.ToWhichStepDecider, pw map[string]publish.Publisher) (*ReadLoop, error) {
+func NewReadLoop(ctx context.Context,
+	udf applier.ReduceApplier,
+	pbqManager *pbq.Manager,
+	windowingStrategy window.Windower,
+	toBuffers map[string]isb.BufferWriter,
+	whereToDecider forward.ToWhichStepDecider,
+	pw map[string]publish.Publisher) (*ReadLoop, error) {
 
 	op := newOrderedForwarder(ctx)
 
