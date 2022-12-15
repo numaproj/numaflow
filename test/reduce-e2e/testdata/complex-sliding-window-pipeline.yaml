@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: complex-sum
+  name: complex-sliding-sum
 spec:
   limits:
     readBatchSize: 50
@@ -26,7 +26,7 @@ spec:
         groupBy:
           window:
             fixed:
-              length: 10s
+              length: 5s
           keyed: true
     - name: second-aggregation
       udf:
@@ -36,7 +36,18 @@ spec:
         groupBy:
           window:
             fixed:
+              length: 10s
+          keyed: false
+    - name: third-aggregation
+      udf:
+        container:
+          # compute the sum
+          image: quay.io/numaio/go-integer-sum-example
+        groupBy:
+          window:
+            sliding:
               length: 60s
+              slide: 10s
           keyed: false
     - name: sink
       scale:
@@ -52,4 +63,6 @@ spec:
     - from: first-aggregation
       to: second-aggregation
     - from: second-aggregation
+      to: third-aggregation
+    - from: third-aggregation
       to: sink

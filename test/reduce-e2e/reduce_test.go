@@ -202,6 +202,42 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	w.Expect().VertexPodLogContains("sink", "Payload -  240", PodLogCheckOptionWithCount(1))
 }
 
+// two reduce vertex(keyed and non keyed) followed by a sliding window vertex
+func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
+	w := r.Given().Pipeline("@testdata/complex-sliding-window-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+
+	defer w.DeletePipelineAndWait()
+
+	// wait for all the pods to come up
+	w.Expect().
+		VertexPodsRunning()
+
+	// port forward source vertex(to publish messages)
+	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
+		TerminateAllPodPortForwards()
+
+	// publish messages to source vertex, with event time starting from 60000
+	startTime := 60000
+	for i := 0; i < 300; i++ {
+		eventTime := strconv.Itoa(startTime + i*1000)
+
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
+			Expect().
+			Status(204)
+		HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).
+			Expect().
+			Status(204)
+	}
+
+	// since the key can be even or odd and the first window duration is 10s(which is keyed)
+	// and the second window duration is 60s(non-keyed)
+	// the sum should be 180(60 + 120)
+	w.Expect().VertexPodLogContains("sink", "Payload -  15  Key -  NON_KEYED_STREAM  Start -  20000  End -  80000")
+	w.Expect().VertexPodLogContains("sink", "Payload -  35  Key -  NON_KEYED_STREAM  Start -  30000  End -  90000")
+}
+
 func TestReduceSuite(t *testing.T) {
 	suite.Run(t, new(ReduceSuite))
 }
