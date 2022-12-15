@@ -16,7 +16,7 @@ spec:
       sink:
         udsink:
           container:
-            # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/udsink_log
+            # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/log
             image: quay.io/numaio/sink-go-log:latest
     - name: python-split
       udf:
@@ -33,7 +33,7 @@ spec:
             args:
             - python
             - example.py
-            # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/simplesink
+            # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/simplesink TODO: fix url
             image: quay.io/numaio/sink-python-log:latest
   edges:
     - from: in
