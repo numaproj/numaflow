@@ -29,9 +29,9 @@ import (
 // AlignedKeyedWindow maintains association between keys and a window.
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
 type AlignedKeyedWindow struct {
-	// Start start time of the window
+	// Start time of the window
 	Start time.Time
-	// End end time of the window
+	// End time of the window
 	End time.Time
 	// keys map of keys
 	keys map[string]struct{}

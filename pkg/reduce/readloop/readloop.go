@@ -67,8 +67,7 @@ func NewReadLoop(ctx context.Context,
 	windowingStrategy window.Windower,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
-	pw map[string]publish.Publisher,
-) *ReadLoop {
+	pw map[string]publish.Publisher) (*ReadLoop, error) {
 
 	op := newOrderedForwarder(ctx)
 
@@ -82,8 +81,10 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:   whereToDecider,
 		publishWatermark: pw,
 	}
-	op.startUp(ctx)
-	return rl
+
+	err := rl.Startup(ctx)
+
+	return rl, err
 }
 
 // Startup starts up the read-loop, because during boot up, it has to replay the data from the persistent store of
@@ -329,8 +330,8 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 	processingWindows := rl.windower.AssignWindow(m.EventTime)
 	var kWindows []window.AlignedKeyedWindower
 	for _, win := range processingWindows {
-		w, isNew := rl.windower.InsertIfNotPresent(win)
-		if isNew {
+		w, isPresent := rl.windower.InsertIfNotPresent(win)
+		if !isPresent {
 			rl.log.Debugw("Creating new keyed window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
 		} else {
 			rl.log.Debugw("Found an existing window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))

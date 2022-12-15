@@ -23,6 +23,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
+	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
+
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -41,7 +44,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
 
 type ReduceUDFProcessor struct {
@@ -54,9 +56,15 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var windower window.Windower
-	if x := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed; x != nil {
-		windower = fixed.NewFixed(x.Length.Duration)
+	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
+	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
+
+	if f != nil {
+		windower = fixed.NewFixed(f.Length.Duration)
+	} else if s != nil {
+		windower = sliding.NewSliding(s.Length.Duration, s.Slide.Duration)
 	}
+
 	if windower == nil {
 		return fmt.Errorf("invalid window spec")
 	}
@@ -167,7 +175,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		dataForwarder.Start(ctx)
+		dataForwarder.Start()
 		log.Info("Forwarder stopped, exiting reduce udf data processor...")
 	}()
 

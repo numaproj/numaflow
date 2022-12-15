@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
+
 	"github.com/numaproj/numaflow/pkg/shared/expr"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
