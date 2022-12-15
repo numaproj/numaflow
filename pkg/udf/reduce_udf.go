@@ -175,7 +175,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		dataForwarder.Start(ctx)
+		dataForwarder.Start()
 		log.Info("Forwarder stopped, exiting reduce udf data processor...")
 	}()
 
