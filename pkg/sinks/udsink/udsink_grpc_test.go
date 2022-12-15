@@ -27,7 +27,6 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1/sinkmock"
 	"github.com/numaproj/numaflow-go/pkg/sink/clienttest"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -55,22 +54,6 @@ func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {
 	u := NewMockUDSGRPCBasedUDF(mockClient)
 	err := u.WaitUntilReady(ctx)
 	assert.NoError(t, err)
-}
-
-type rpcMsg struct {
-	msg proto.Message
-}
-
-func (r *rpcMsg) Matches(msg interface{}) bool {
-	m, ok := msg.(proto.Message)
-	if !ok {
-		return false
-	}
-	return proto.Equal(m, r.msg)
-}
-
-func (r *rpcMsg) String() string {
-	return fmt.Sprintf("is %s", r.msg)
 }
 
 func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
