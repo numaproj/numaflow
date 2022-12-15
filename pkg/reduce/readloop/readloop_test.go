@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -14,7 +16,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"github.com/stretchr/testify/assert"
 )
 
 // PayloadForTest is a dummy payload for testing.
@@ -26,11 +27,11 @@ type PayloadForTest struct {
 type SumReduceTest struct {
 }
 
-func (s *SumReduceTest) WhereTo(s2 string) ([]string, error) {
+func (s *SumReduceTest) WhereTo(_ string) ([]string, error) {
 	return []string{"reduce-buffer"}, nil
 }
 
-func (s *SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s *SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	sum := 0
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -118,7 +119,7 @@ func TestReadLoop_Startup(t *testing.T) {
 
 	window := fixed.NewFixed(60 * time.Second)
 
-	rl := NewReadLoop(ctx, &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
+	rl, _ := NewReadLoop(ctx, &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
 
 	err := rl.Startup(ctx)
 	assert.NoError(t, err)
@@ -179,7 +180,7 @@ func TestReadLoop_Startup(t *testing.T) {
 
 }
 
-func createStoreMessages(ctx context.Context, key string, value int, eventTime time.Time, count int) []*isb.ReadMessage {
+func createStoreMessages(_ context.Context, key string, value int, eventTime time.Time, count int) []*isb.ReadMessage {
 	readMessages := make([]*isb.ReadMessage, count)
 	for j := 0; j < count; j++ {
 		result, _ := json.Marshal(PayloadForTest{
