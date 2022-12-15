@@ -8,7 +8,7 @@ Data processing in the UDF is supposed to be idempotent.
 
 ## Builtin UDF
 
-There are some [Built-in Functions](./builtin-functions/README.md) that can be used directly.
+There are some [Built-in Functions](builtin-functions/README.md) that can be used directly.
 
 ## Build Your Own UDF
 
@@ -65,8 +65,8 @@ Some environment variables are available in the user defined function Pods, they
 
 Configuration data can be provided to the UDF container at runtime multiple ways.
 
-* [`environment variables`](./environment-variables.md)
+* [`environment variables`](../environment-variables.md)
 * `args`
 * `command`
-* [`volumes`](./volumes.md)
-* [`init containers`](./init-containers.md)
+* [`volumes`](../volumes.md)
+* [`init containers`](../init-containers.md)
