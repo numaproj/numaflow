@@ -61,14 +61,7 @@ type ReadLoop struct {
 }
 
 // NewReadLoop initializes  and returns ReadLoop.
-func NewReadLoop(ctx context.Context,
-	udf applier.ReduceApplier,
-	pbqManager *pbq.Manager,
-	windowingStrategy window.Windower,
-	toBuffers map[string]isb.BufferWriter,
-	whereToDecider forward.ToWhichStepDecider,
-	pw map[string]publish.Publisher,
-) *ReadLoop {
+func NewReadLoop(ctx context.Context, udf applier.ReduceApplier, pbqManager *pbq.Manager, windowingStrategy window.Windower, toBuffers map[string]isb.BufferWriter, whereToDecider forward.ToWhichStepDecider, pw map[string]publish.Publisher) (*ReadLoop, error) {
 
 	op := newOrderedForwarder(ctx)
 
@@ -82,8 +75,10 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:   whereToDecider,
 		publishWatermark: pw,
 	}
-	op.startUp(ctx)
-	return rl
+
+	err := rl.Startup(ctx)
+
+	return rl, err
 }
 
 // Startup starts up the read-loop, because during boot up, it has to replay the data from the persistent store of

@@ -71,7 +71,7 @@ func NewDataForward(ctx context.Context,
 		}
 	}
 
-	rl := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
+	rl, err := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
 	df := &DataForward{
 		ctx:                 ctx,
 		vertexInstance:      vertexInstance,
@@ -83,9 +83,6 @@ func NewDataForward(ctx context.Context,
 		windowingStrategy:   windowingStrategy,
 		log:                 logging.FromContext(ctx),
 		opts:                options}
-
-	// replay the saved WAL entries
-	err := df.readloop.Startup(ctx)
 
 	return df, err
 }

@@ -55,16 +55,15 @@ type orderedForwarder struct {
 
 // newOrderedForwarder returns an orderedForwarder.
 func newOrderedForwarder(ctx context.Context) *orderedForwarder {
-	return &orderedForwarder{
+	of := &orderedForwarder{
 		taskDone:  make(chan struct{}),
 		taskQueue: list.New(),
 		log:       logging.FromContext(ctx),
 	}
-}
 
-// startUp starts forwarder.
-func (of *orderedForwarder) startUp(ctx context.Context) {
 	go of.forward(ctx)
+
+	return of
 }
 
 // schedulePnF creates and schedules the PnF routine.
