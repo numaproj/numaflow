@@ -12,7 +12,7 @@ const (
 
 // droppedMessagesCount is used to indicate the number of messages dropped
 var droppedMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "reduce",
+	Subsystem: "reduce_readloop",
 	Name:      "dropped_total",
 	Help:      "Total number of Messages Dropped",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, LabelReason})
@@ -33,7 +33,7 @@ var pbqWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 
 // partitionsInFlight is used to indicate the partitions in flight
 var partitionsInFlight = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Subsystem: "reduce",
+	Subsystem: "reduce_readloop",
 	Name:      "partitions_inflight",
 	Help:      "Total number of partitions in flight",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
