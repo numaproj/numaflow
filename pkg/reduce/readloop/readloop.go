@@ -89,8 +89,9 @@ func NewReadLoop(ctx context.Context,
 		publishWatermark: pw,
 	}
 
-	op.startUp(ctx)
-	return rl
+	err := rl.Startup(ctx)
+
+	return rl, err
 }
 
 // Startup starts up the read-loop, because during boot up, it has to replay the data from the persistent store of

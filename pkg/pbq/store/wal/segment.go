@@ -263,13 +263,24 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 			}).Inc()
 		}
 	}()
-	writeStart := time.Now()
+	encodeStart := time.Now()
 	entry, err := w.encodeEntry(message)
+	entryEncodeLatency.With(map[string]string{
+		metricspkg.LabelPipeline: w.walStores.pipelineName,
+		metricspkg.LabelVertex:   w.walStores.vertexName,
+		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+	}).Observe(float64(time.Since(encodeStart).Milliseconds()))
 	if err != nil {
 		return err
 	}
 
+	writeStart := time.Now()
 	wrote, err := w.fp.WriteAt(entry.Bytes(), w.wOffset)
+	entryWriteLatency.With(map[string]string{
+		metricspkg.LabelPipeline: w.walStores.pipelineName,
+		metricspkg.LabelVertex:   w.walStores.vertexName,
+		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+	}).Observe(float64(time.Since(writeStart).Milliseconds()))
 	if wrote != entry.Len() {
 		return fmt.Errorf("expected to write %d, but wrote only %d, %w", entry.Len(), wrote, err)
 	}
@@ -280,6 +291,16 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	w.numOfUnsyncedMsgs = w.numOfUnsyncedMsgs + 1
 	// Only increase the write offset when we successfully write for atomicity.
 	w.wOffset += int64(wrote)
+	entriesBytesCount.With(map[string]string{
+		metricspkg.LabelPipeline: w.walStores.pipelineName,
+		metricspkg.LabelVertex:   w.walStores.vertexName,
+		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+	}).Add(float64(wrote))
+	entriesCount.With(map[string]string{
+		metricspkg.LabelPipeline: w.walStores.pipelineName,
+		metricspkg.LabelVertex:   w.walStores.vertexName,
+		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+	}).Inc()
 	currentTime := time.Now()
 
 	if w.wOffset-w.prevSyncedWOffset > w.walStores.maxBatchSize || currentTime.Sub(w.prevSyncedTime) > w.walStores.syncDuration {
@@ -292,18 +313,6 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 			metricspkg.LabelVertex:   w.walStores.vertexName,
 			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
 		}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
-		if err == nil {
-			entryWriteTime.With(map[string]string{
-				metricspkg.LabelPipeline: w.walStores.pipelineName,
-				metricspkg.LabelVertex:   w.walStores.vertexName,
-				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-			}).Observe(float64(time.Since(writeStart).Milliseconds()) / float64(w.numOfUnsyncedMsgs))
-			entriesCount.With(map[string]string{
-				metricspkg.LabelPipeline: w.walStores.pipelineName,
-				metricspkg.LabelVertex:   w.walStores.vertexName,
-				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-			}).Add(float64(w.numOfUnsyncedMsgs))
-		}
 		w.numOfUnsyncedMsgs = 0
 		return err
 	}

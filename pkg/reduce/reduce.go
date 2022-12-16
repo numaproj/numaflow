@@ -87,22 +87,17 @@ func NewDataForward(ctx context.Context,
 		windowingStrategy:   windowingStrategy,
 		keyed:               vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed,
 		log:                 logging.FromContext(ctx),
-		opts:                options}, nil
+		opts:                options}
+
+	return df, err
 }
 
 // Start starts forwarding messages to readloop
-func (d *DataForward) Start(ctx context.Context) {
-	err := d.readloop.Startup(ctx)
-	if err != nil {
-		d.log.Errorw("Failed to start the data forwarder in reduce vertex", zap.Error(err))
-	}
-	rCtx, rCancel := context.WithCancel(context.Background())
+func (d *DataForward) Start() {
 	for {
 		select {
-		case <-ctx.Done():
+		case <-d.ctx.Done():
 			d.log.Infow("Stopping reduce data forwarder...")
-			cctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
 
 			if err := d.fromBuffer.Close(); err != nil {
 				d.log.Errorw("Failed to close buffer reader, shutdown anyways...", zap.Error(err))
@@ -110,8 +105,9 @@ func (d *DataForward) Start(ctx context.Context) {
 				d.log.Infow("Closed buffer reader", zap.String("bufferFrom", d.fromBuffer.GetName()))
 			}
 
-			// cancel the readloop context so that all the messages are persisted and acked.
-			rCancel()
+			// hard shutdown after timeout
+			cctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
 			// allow readloop to clean itself up.
 			d.readloop.ShutDown(cctx)
 
@@ -139,7 +135,7 @@ func (d *DataForward) Start(ctx context.Context) {
 			// pass the child context so that the reader can be closed before the readloop
 			// this way we can avoid the race condition and have all the read messages persisted
 			// and acked.
-			d.forwardAChunk(rCtx)
+			d.forwardAChunk(d.ctx)
 		}
 	}
 }

@@ -26,13 +26,14 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
+	"github.com/stretchr/testify/assert"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
-	"github.com/stretchr/testify/assert"
 )
 
 type myForwardTest struct {
@@ -103,8 +104,7 @@ func TestOrderedProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// clean out the task queue before we start a run
-			op := newOrderedForwarder(ctx, "reduce", "test-pipeline")
-			op.startUp(ctx)
+			op := newOrderedForwarder(ctx)
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.
 			pbqManager, _ := pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(100)),
