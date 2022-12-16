@@ -33,7 +33,7 @@ spec:
 
 ## Watermark API
 
-When processing data in [User Defined Functions](./user-defined-functions.md), you can get the current watermark through
+When processing data in [User Defined Functions](user-defined-functions/map/map.md), you can get the current watermark through
 an API. Watermark API is supported in all our client SDKs.
 
 ### Example Golang
