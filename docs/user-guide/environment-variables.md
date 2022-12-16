@@ -2,7 +2,7 @@
 
 For the `numa` container of vertex pods, environment variable `NUMAFLOW_DEBUG` can be set to `true` for [debugging](../development/debugging.md).
 
-In [`udf`](./user-defined-functions.md) and [`udsink`](./sinks/user-defined-sinks.md) containers, there are some preset environment variables that can be used directly.
+In [`udf`](user-defined-functions/map/map.md) and [`udsink`](./sinks/user-defined-sinks.md) containers, there are some preset environment variables that can be used directly.
 
 - `NUMAFLOW_NAMESPACE` - Namespace.
 - `NUMAFLOW_POD` - Pod name.

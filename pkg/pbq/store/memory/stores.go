@@ -36,7 +36,7 @@ type memoryStores struct {
 
 func NewMemoryStores(opts ...Option) store.StoreProvider {
 	s := &memoryStores{
-		storeSize:  100,
+		storeSize:  100000,
 		partitions: make(map[partition.ID]*memoryStore),
 	}
 
@@ -66,6 +66,8 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 }
 
 func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
+	ms.RLock()
+	defer ms.RUnlock()
 	if ms.discoverFunc == nil {
 		partitionsIds := make([]partition.ID, 0)
 		for key := range ms.partitions {

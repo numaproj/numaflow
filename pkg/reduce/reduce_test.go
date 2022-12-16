@@ -105,7 +105,7 @@ type CounterReduceTest struct {
 }
 
 // Reduce returns a result with the count of messages
-func (f CounterReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	count := 0
 	for range messageStream {
 		count += 1
@@ -130,14 +130,14 @@ func (f CounterReduceTest) ApplyReduce(ctx context.Context, partitionID *partiti
 	}, nil
 }
 
-func (f CounterReduceTest) WhereTo(s string) ([]string, error) {
+func (f CounterReduceTest) WhereTo(_ string) ([]string, error) {
 	return []string{"reduce-to-buffer"}, nil
 }
 
 type SumReduceTest struct {
 }
 
-func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	sum := 0
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -167,7 +167,7 @@ func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.I
 type MaxReduceTest struct {
 }
 
-func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	mx := math.MinInt64
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -228,7 +228,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	var pbqManager *pbq.Manager
 
 	// create pbqManager
-	pbqManager, err = pbq.NewManager(child, memory.NewMemoryStores(memory.WithStoreSize(100)),
+	pbqManager, err = pbq.NewManager(child, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(100)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -244,7 +244,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
-	go reduceDataForwarder.Start(child)
+	go reduceDataForwarder.Start()
 
 	for to.IsEmpty() {
 		select {
@@ -298,7 +298,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(1000)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -314,7 +314,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	assert.NoError(t, err)
 
 	// start the forwarder
-	go reduceDataForward.Start(ctx)
+	go reduceDataForward.Start()
 
 	// start the producer
 	go publishMessages(ctx, startTime, messageValue, 300, 10, p[fromBuffer.GetName()], fromBuffer)
@@ -371,7 +371,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(1000)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -387,7 +387,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	assert.NoError(t, err)
 
 	// start the forwarder
-	go reduceDataForward.Start(ctx)
+	go reduceDataForward.Start()
 
 	// start the producer
 	go publishMessages(ctx, startTime, messageValue, 300, 10, p[fromBuffer.GetName()], fromBuffer)
@@ -444,7 +444,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(1000)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -460,7 +460,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	assert.NoError(t, err)
 
 	// start the forwarder
-	go reduceDataForward.Start(ctx)
+	go reduceDataForward.Start()
 
 	// start the producer
 	go publishMessages(ctx, startTime, messageValue, 600, 10, p[fromBuffer.GetName()], fromBuffer)
@@ -517,7 +517,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(1000)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -535,7 +535,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	assert.NoError(t, err)
 
 	// start the forwarder
-	go reduceDataForward.Start(ctx)
+	go reduceDataForward.Start()
 
 	// start the producer
 	go publishMessages(ctx, startTime, messages, 600, 10, p[fromBuffer.GetName()], fromBuffer)
@@ -598,7 +598,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(1000)),
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -614,7 +614,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	assert.NoError(t, err)
 
 	// start the forwarder
-	go reduceDataForward.Start(ctx)
+	go reduceDataForward.Start()
 
 	// start the producer
 	go publishMessages(ctx, startTime, messages, 600, 10, p[fromBuffer.GetName()], fromBuffer)
@@ -678,7 +678,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(cctx, storeProvider,
+	pbqManager, err = pbq.NewManager(cctx, "reduce", "test-pipeline", storeProvider,
 		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -694,13 +694,13 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	assert.NoError(t, err)
 
 	// start the forwarder
-	go reduceDataForward.Start(cctx)
+	go reduceDataForward.Start()
 	// window duration is 300s, we are sending only 200 messages with event time less than window end time, so the window will not be closed
 	publishMessages(cctx, startTime, messages, 200, 10, p[fromBuffer.GetName()], fromBuffer)
 	// wait for the partitions to be created
 	for {
 		partitionsList := pbqManager.ListPartitions()
-		if len(partitionsList) > 0 {
+		if len(partitionsList) > 1 {
 			childCancel()
 			break
 		}
@@ -717,7 +717,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	for {
 		discoveredPartitions, _ = storeProvider.DiscoverPartitions(ctx)
 
-		if len(discoveredPartitions) > 0 {
+		if len(discoveredPartitions) > 1 {
 			break
 		}
 		select {
@@ -770,9 +770,7 @@ func fetcherAndPublisher(ctx context.Context, toBuffers map[string]isb.BufferWri
 			case <-ctx.Done():
 				return
 			default:
-				for key := range publishers {
-					_ = hb.PutKV(ctx, key, []byte(fmt.Sprintf("%d", time.Now().Unix())))
-				}
+				_ = hb.PutKV(ctx, fromBuffer.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 				time.Sleep(time.Duration(1) * time.Second)
 			}
 		}

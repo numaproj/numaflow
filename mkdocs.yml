@@ -48,17 +48,22 @@ nav:
           - user-guide/sources/generator.md
           - user-guide/sources/http.md
           - user-guide/sources/kafka.md
+          - user-guide/sources/nats.md
       - Sinks:
           - user-guide/sinks/kafka.md
           - user-guide/sinks/log.md
           - user-guide/sinks/blackhole.md
           - User Defined Sinks: "user-guide/sinks/user-defined-sinks.md"
       - User Defined Functions:
-          - Overview: "user-guide/user-defined-functions.md"
-          - Built-in UDFs:
-              - Overview: "user-guide/builtin-functions/README.md"
-              - Cat: "user-guide/builtin-functions/cat.md"
-              - Filter: "user-guide/builtin-functions/filter.md"
+          - Overview: "user-guide/user-defined-functions/user-defined-functions.md"
+          - Map:
+              - Overview: "user-guide/user-defined-functions/map/map.md"
+              - Built-in UDFs:
+                  - Overview: "user-guide/user-defined-functions/map/builtin-functions/README.md"
+                  - Cat: "user-guide/user-defined-functions/map/builtin-functions/cat.md"
+                  - Filter: "user-guide/user-defined-functions/map/builtin-functions/filter.md"
+          - Reduce:
+              - Overview: "user-guide/user-defined-functions/reduce/reduce.md"
       - user-guide/pipeline-tuning.md
       - user-guide/conditional-forwarding.md
       - user-guide/autoscaling.md

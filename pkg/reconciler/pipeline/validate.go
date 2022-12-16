@@ -19,6 +19,8 @@ package pipeline
 import (
 	"fmt"
 
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
@@ -26,6 +28,11 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	if pl == nil {
 		return fmt.Errorf("nil pipeline")
 	}
+
+	if errs := k8svalidation.IsDNS1035Label(pl.Name); len(errs) > 0 {
+		return fmt.Errorf("invalid pipeline name %q, %v", pl.Name, errs)
+	}
+
 	if len(pl.Spec.Vertices) == 0 {
 		return fmt.Errorf("empty vertices")
 	}
@@ -164,11 +171,18 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		if err := validateVertex(v); err != nil {
 			return err
 		}
+		// The length of "{pipeline}-{vertex}-headless" can not be longer than 63.
+		if errs := k8svalidation.IsDNS1035Label(fmt.Sprintf("%s-%s-headless", pl.Name, v.Name)); len(errs) > 0 {
+			return fmt.Errorf("the length of the pipeline name plus the vertex name is over the max limit. (%s-%s), %v", pl.Name, v.Name, errs)
+		}
 	}
 	return nil
 }
 
 func validateVertex(v dfv1.AbstractVertex) error {
+	if errs := k8svalidation.IsDNS1035Label(v.Name); len(errs) > 0 {
+		return fmt.Errorf("invalid vertex name %q, %v", v.Name, errs)
+	}
 	min, max := int32(0), int32(dfv1.DefaultMaxReplicas)
 	if v.Scale.Min != nil {
 		min = *v.Scale.Min
@@ -203,12 +217,25 @@ func validateVertex(v dfv1.AbstractVertex) error {
 
 func validateUDF(udf dfv1.UDF) error {
 	if udf.GroupBy != nil {
-		if x := udf.GroupBy.Window.Fixed; x == nil {
+		f := udf.GroupBy.Window.Fixed
+		s := udf.GroupBy.Window.Sliding
+		if f == nil && s == nil {
 			return fmt.Errorf(`invalid "groupBy.window", no windowing strategy specified`)
-		} else {
-			if x.Length == nil {
-				return fmt.Errorf(`invalid "groupBy.window", "length" is missing`)
-			}
+		}
+
+		if f != nil && s != nil {
+			return fmt.Errorf(`invalid "groupBy.window", either fixed or sliding is allowed, not both`)
+		}
+
+		if f != nil && f.Length == nil {
+			return fmt.Errorf(`invalid "groupBy.window.fixed", "length" is missing`)
+		}
+
+		if s != nil && (s.Length == nil) {
+			return fmt.Errorf(`invalid "groupBy.window.sliding", "length" is missing`)
+		}
+		if s != nil && (s.Slide == nil) {
+			return fmt.Errorf(`invalid "groupBy.window.sliding", "slide" is missing`)
 		}
 	}
 	return nil

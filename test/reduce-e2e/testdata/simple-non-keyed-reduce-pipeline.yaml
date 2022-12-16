@@ -1,0 +1,42 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: reduce-sum
+spec:
+  limits:
+    readBatchSize: 50
+  vertices:
+    - name: in
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: atoi
+      scale:
+        min: 1
+      udf:
+        container:
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
+          image: quay.io/numaio/numaflow-go/map-even-odd
+    - name: compute-sum
+      udf:
+        container:
+          # compute the sum
+          image: quay.io/numaio/numaflow-go/reduce-sum
+        groupBy:
+          window:
+            fixed:
+              length: 10s
+          keyed: false
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: atoi
+    - from: atoi
+      to: compute-sum
+    - from: compute-sum
+      to: sink

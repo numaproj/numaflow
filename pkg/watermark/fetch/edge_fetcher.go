@@ -99,7 +99,9 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	for _, p := range allProcessors {
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
 		var t = p.offsetTimeline.GetEventTime(inputOffset)
-		if t != -1 && t < epoch {
+		if t == -1 { // watermark cannot be computed, perhaps a new processing unit was added or offset fell off the timeline
+			epoch = t
+		} else if t < epoch {
 			epoch = t
 		}
 		if p.IsDeleted() && (offset > p.offsetTimeline.GetHeadOffset()) {
@@ -107,7 +109,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 			e.processorManager.DeleteProcessor(p.entity.GetName())
 		}
 	}
-	// if the offset is smaller than every offset in the timeline, set the value to be -1
+	// if there are no processors
 	if epoch == math.MaxInt64 {
 		epoch = -1
 	}

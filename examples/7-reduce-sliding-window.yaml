@@ -1,0 +1,58 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: reduce-sliding-pipeline
+  annotations:
+    loglevel: "true"
+spec:
+  limits:
+    readBatchSize: 50
+  vertices:
+    - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+      source:
+        http: {}
+    - name: map
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+      scale:
+        min: 1
+        max: 1
+      udf:
+        container:
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
+          image: quay.io/numaio/numaflow-go/map-even-odd
+    - name: reduce-sliding
+      udf:
+        container:
+          # compute the sum
+          image: quay.io/numaio/numaflow-go/reduce-sum
+        groupBy:
+          window:
+            sliding:
+              length: 10s
+              slide: 5s
+          keyed: true
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+    - name: sink
+      scale:
+        min: 1
+        max: 5
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: map
+    - from: map
+      to: reduce-sliding
+      parallelism: 2
+    - from: reduce-sliding
+      to: sink

@@ -27,7 +27,6 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1/sinkmock"
 	"github.com/numaproj/numaflow-go/pkg/sink/clienttest"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -55,22 +54,6 @@ func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {
 	u := NewMockUDSGRPCBasedUDF(mockClient)
 	err := u.WaitUntilReady(ctx)
 	assert.NoError(t, err)
-}
-
-type rpcMsg struct {
-	msg proto.Message
-}
-
-func (r *rpcMsg) Matches(msg interface{}) bool {
-	m, ok := msg.(proto.Message)
-	if !ok {
-		return false
-	}
-	return proto.Equal(m, r.msg)
-}
-
-func (r *rpcMsg) String() string {
-	return fmt.Sprintf("is %s", r.msg)
 }
 
 func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
@@ -106,13 +89,14 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			},
 		}
 
-		mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
-
-		mockClient.EXPECT().SinkFn(gomock.Any(), &rpcMsg{msg: &sinkpb.DatumList{
-			Elements: testDatumList,
-		}}).Return(&sinkpb.ResponseList{
+		mockSinkClient := sinkmock.NewMockUserDefinedSink_SinkFnClient(ctrl)
+		mockSinkClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
+		mockSinkClient.EXPECT().CloseAndRecv().Return(&sinkpb.ResponseList{
 			Responses: testResponseList,
 		}, nil)
+
+		mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
+		mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkClient, nil)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -150,13 +134,11 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			},
 		}
 
-		mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
+		mockSinkErrClient := sinkmock.NewMockUserDefinedSink_SinkFnClient(ctrl)
+		mockSinkErrClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 
-		mockClient.EXPECT().SinkFn(gomock.Any(), &rpcMsg{msg: &sinkpb.DatumList{
-			Elements: testDatumList,
-		}}).Return(&sinkpb.ResponseList{
-			Responses: nil,
-		}, fmt.Errorf("mock error"))
+		mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
+		mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkErrClient, fmt.Errorf("mock SinkFn error"))
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -172,7 +154,7 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 		expectedErrList := []error{
 			ApplyUDSinkErr{
 				UserUDSinkErr: false,
-				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock error",
+				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock SinkFn error",
 				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
@@ -180,7 +162,7 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			},
 			ApplyUDSinkErr{
 				UserUDSinkErr: false,
-				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock error",
+				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock SinkFn error",
 				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,

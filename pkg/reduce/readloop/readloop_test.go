@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/pbq"
@@ -14,7 +16,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"github.com/stretchr/testify/assert"
 )
 
 // PayloadForTest is a dummy payload for testing.
@@ -26,11 +27,11 @@ type PayloadForTest struct {
 type SumReduceTest struct {
 }
 
-func (s *SumReduceTest) WhereTo(s2 string) ([]string, error) {
+func (s *SumReduceTest) WhereTo(_ string) ([]string, error) {
 	return []string{"reduce-buffer"}, nil
 }
 
-func (s *SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s *SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	sum := 0
 	for msg := range messageStream {
 		var payload PayloadForTest
@@ -70,6 +71,11 @@ func TestReadLoop_Startup(t *testing.T) {
 			Key:   "even",
 		},
 		{
+			Start: time.Unix(60, 0),
+			End:   time.Unix(120, 0),
+			Key:   "odd",
+		},
+		{
 			Start: time.Unix(120, 0),
 			End:   time.Unix(180, 0),
 			Key:   "odd",
@@ -102,9 +108,9 @@ func TestReadLoop_Startup(t *testing.T) {
 		}
 	}
 
-	pManager, _ := pbq.NewManager(ctx, memStoreProvider, pbq.WithChannelBufferSize(10))
+	pManager, _ := pbq.NewManager(ctx, "reduce", "test-pipeline", memStoreProvider, pbq.WithChannelBufferSize(10))
 
-	to1 := simplebuffer.NewInMemoryBuffer("reduce-buffer", 3)
+	to1 := simplebuffer.NewInMemoryBuffer("reduce-buffer", 4)
 	toSteps := map[string]isb.BufferWriter{
 		"reduce-buffer": to1,
 	}
@@ -113,9 +119,9 @@ func TestReadLoop_Startup(t *testing.T) {
 
 	window := fixed.NewFixed(60 * time.Second)
 
-	rl := NewReadLoop(ctx, &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
-
-	err := rl.Startup(ctx)
+	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
+	assert.NoError(t, err)
+	err = rl.Startup(ctx)
 	assert.NoError(t, err)
 
 	// send a message with the higher watermark so that the windows will be closed
@@ -148,29 +154,33 @@ func TestReadLoop_Startup(t *testing.T) {
 		}
 	}
 
-	msgs, readErr := to1.Read(ctx, 3)
+	msgs, readErr := to1.Read(ctx, 4)
 	assert.Nil(t, readErr)
-	assert.Len(t, msgs, 3)
+	assert.Len(t, msgs, 4)
 
 	// since we have 3 partitions we should have 3 different outputs
 	var readMessagePayload1 PayloadForTest
 	var readMessagePayload2 PayloadForTest
 	var readMessagePayload3 PayloadForTest
+	var readMessagePayload4 PayloadForTest
 	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload1)
 	_ = json.Unmarshal(msgs[1].Payload, &readMessagePayload2)
 	_ = json.Unmarshal(msgs[2].Payload, &readMessagePayload3)
+	_ = json.Unmarshal(msgs[3].Payload, &readMessagePayload4)
 	// since we had 10 messages in the store with value 2 and 3
 	// the expected value is 20 and 30, since the reduce operation is sum
-	assert.Contains(t, []int{20, 30, 20}, readMessagePayload1.Value)
-	assert.Contains(t, []int{20, 30, 20}, readMessagePayload2.Value)
-	assert.Contains(t, []int{20, 30, 20}, readMessagePayload3.Value)
+	assert.Contains(t, []int{20, 30, 20, 30}, readMessagePayload1.Value)
+	assert.Contains(t, []int{20, 30, 20, 30}, readMessagePayload2.Value)
+	assert.Contains(t, []int{20, 30, 20, 30}, readMessagePayload3.Value)
+	assert.Contains(t, []int{20, 30, 20, 30}, readMessagePayload4.Value)
 	assert.Equal(t, "sum", readMessagePayload1.Key)
 	assert.Equal(t, "sum", readMessagePayload2.Key)
 	assert.Equal(t, "sum", readMessagePayload3.Key)
+	assert.Equal(t, "sum", readMessagePayload4.Key)
 
 }
 
-func createStoreMessages(ctx context.Context, key string, value int, eventTime time.Time, count int) []*isb.ReadMessage {
+func createStoreMessages(_ context.Context, key string, value int, eventTime time.Time, count int) []*isb.ReadMessage {
 	readMessages := make([]*isb.ReadMessage, count)
 	for j := 0; j < count; j++ {
 		result, _ := json.Marshal(PayloadForTest{

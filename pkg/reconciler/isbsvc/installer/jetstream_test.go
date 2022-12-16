@@ -161,8 +161,9 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 		assert.NotNil(t, c.JetStream)
 		assert.NotEmpty(t, c.JetStream.URL)
 		assert.NotNil(t, c.JetStream.Auth)
-		assert.NotNil(t, c.JetStream.Auth.User)
-		assert.NotNil(t, c.JetStream.Auth.Password)
+		assert.NotNil(t, c.JetStream.Auth.Basic)
+		assert.NotNil(t, c.JetStream.Auth.Basic.User)
+		assert.NotNil(t, c.JetStream.Auth.Basic.Password)
 		assert.True(t, testJetStreamIsbSvc.Status.IsReady())
 		assert.False(t, c.JetStream.TLSEnabled)
 		svc := &corev1.Service{}

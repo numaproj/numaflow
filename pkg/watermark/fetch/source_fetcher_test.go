@@ -1,5 +1,3 @@
-//go:build isb_jetstream
-
 /*
 Copyright 2022 The Numaproj Authors.
 

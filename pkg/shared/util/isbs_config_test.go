@@ -80,18 +80,20 @@ func TestGetJSIsbSvcEnvVars(t *testing.T) {
 			URL:          "xxx",
 			TLSEnabled:   false,
 			BufferConfig: "",
-			Auth: &dfv1.NATSAuth{
-				User: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: "test-user",
+			Auth: &dfv1.NatsAuth{
+				Basic: &dfv1.BasicAuth{
+					User: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "test-user",
+						},
+						Key: "test-key",
 					},
-					Key: "test-key",
-				},
-				Password: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: "test-pass",
+					Password: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "test-pass",
+						},
+						Key: "test-key",
 					},
-					Key: "test-key",
 				},
 			},
 		},

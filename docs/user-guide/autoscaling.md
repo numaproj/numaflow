@@ -62,6 +62,14 @@ spec:
         disabled: true
 ```
 
+**Notes**
+
+Numaflow autoscaling does not apply to reduce vertices, and following source vertices which do not have a way to calculate their pending messages.
+
+- Generator
+- HTTP
+- Nats
+
 ### Kubernetes HPA
 
 [Kubernetes HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) is supported in Numaflow for any type of Vertex. To use HPA, remember to point the `scaleTargetRef` to the vertex as below, and disable Numaflow autoscaling in your Pipeline spec.
@@ -110,4 +118,12 @@ spec:
 
 ## Vertical Pod Autoscaling
 
-TBD.
+`Vertical Pod Autoscaling` can be achieved by setting the `targetRef` to `Vertex` objects as following.
+
+```yaml
+spec:
+  targetRef:
+    apiVersion: numaflow.numaproj.io/v1alpha1
+    kind: Vertex
+    name: my-vertex
+```
