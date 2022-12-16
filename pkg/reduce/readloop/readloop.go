@@ -73,7 +73,7 @@ func NewReadLoop(ctx context.Context,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
-) *ReadLoop {
+) (*ReadLoop, error) {
 	op := newOrderedForwarder(ctx, vertexName, pipelineName)
 
 	rl := &ReadLoop{

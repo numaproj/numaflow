@@ -58,7 +58,7 @@ type orderedForwarder struct {
 
 // newOrderedForwarder returns an orderedForwarder.
 func newOrderedForwarder(ctx context.Context, vertexName string, pipelineName string) *orderedForwarder {
-	return &orderedForwarder{
+	of := &orderedForwarder{
 		vertexName:   vertexName,
 		pipelineName: pipelineName,
 		taskDone:     make(chan struct{}),

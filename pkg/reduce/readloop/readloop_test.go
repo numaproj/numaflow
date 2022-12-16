@@ -119,9 +119,9 @@ func TestReadLoop_Startup(t *testing.T) {
 
 	window := fixed.NewFixed(60 * time.Second)
 
-	rl := NewReadLoop(ctx, "reduce", "test-pipeline", &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
-
-	err := rl.Startup(ctx)
+	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
+	assert.NoError(t, err)
+	err = rl.Startup(ctx)
 	assert.NoError(t, err)
 
 	// send a message with the higher watermark so that the windows will be closed
