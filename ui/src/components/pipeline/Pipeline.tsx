@@ -134,7 +134,7 @@ export function Pipeline() {
                   .then((json) => {
                     json.map((vertex) => {
                       const vertexWatermark = {} as VertexWatermark;
-                      vertexWatermark.disabled = vertex["disabled"];
+                      vertexWatermark.isWaterMarkEnabled = vertex["isWatermarkEnabled"];
                       vertexWatermark.watermark = vertex["watermark"];
                       vertexWatermark.watermarkLocalTime = new Date(
                           vertexWatermark.watermark

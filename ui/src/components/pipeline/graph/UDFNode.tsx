@@ -25,7 +25,7 @@ const UDFNode = ({
           fontSize: "0.50rem",
         }}
       >
-        {data?.vertexWatermark?.disabled === false && (
+        {data?.vertexWatermark?.isWaterMarkEnabled && (
           <Tooltip
             title={
               <div className={"node-tooltip"}>
