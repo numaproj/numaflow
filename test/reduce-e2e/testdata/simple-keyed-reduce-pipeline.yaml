@@ -4,7 +4,7 @@ metadata:
   name: even-odd-sum
 spec:
   limits:
-    readBatchSize: 10
+    readBatchSize: 50
   vertices:
     - name: in
       scale:

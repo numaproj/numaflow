@@ -117,10 +117,9 @@ func TestOrderedProcessing(t *testing.T) {
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
 			count := 0
-			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
+			for e := op.taskQueue.Back(); e != nil; e = e.Prev() {
 				pfTask := e.Value.(*task)
-				partitionKey := pfTask.pf.PartitionID
-				assert.Equal(t, partition.ID{Key: fmt.Sprintf("partition-%d", count)}, partitionKey)
+				assert.Equal(t, partition.ID{Key: fmt.Sprintf("partition-%d", count)}, pfTask.pf.PartitionID)
 				count = count + 1
 			}
 

@@ -66,6 +66,36 @@ func newOrderedForwarder(ctx context.Context) *orderedForwarder {
 	return of
 }
 
+func (of *orderedForwarder) insertTask(tx context.Context, t *task) {
+	of.Lock()
+	defer of.Unlock()
+
+	if of.taskQueue.Len() == 0 {
+		of.taskQueue.PushBack(t)
+		return
+	}
+
+	earliestTask := of.taskQueue.Front().Value.(*task)
+	recentTask := of.taskQueue.Back().Value.(*task)
+
+	// late arrival
+	if !earliestTask.pf.PartitionID.End.Before(t.pf.PartitionID.End) {
+		of.taskQueue.PushFront(t)
+	} else if !recentTask.pf.PartitionID.End.After(t.pf.PartitionID.End) {
+		// early arrival
+		of.taskQueue.PushBack(t)
+	} else {
+		// a task in the middle
+		for e := of.taskQueue.Back(); e != nil; e = e.Prev() {
+			_task := e.Value.(*task)
+			if !_task.pf.PartitionID.End.After(t.pf.PartitionID.End) {
+				of.taskQueue.InsertAfter(t, e)
+				break
+			}
+		}
+	}
+}
+
 // schedulePnF creates and schedules the PnF routine.
 func (of *orderedForwarder) schedulePnF(ctx context.Context,
 	udf applier.ReduceApplier,
@@ -82,9 +112,7 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 		pf:     pf,
 	}
 
-	of.Lock()
-	defer of.Unlock()
-	of.taskQueue.PushBack(t)
+	of.insertTask(ctx, t)
 
 	// invoke the reduce function
 	go of.reduceOp(ctx, t)
