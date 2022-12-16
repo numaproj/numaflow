@@ -62,6 +62,8 @@ nav:
                   - Overview: "user-guide/user-defined-functions/map/builtin-functions/README.md"
                   - Cat: "user-guide/user-defined-functions/map/builtin-functions/cat.md"
                   - Filter: "user-guide/user-defined-functions/map/builtin-functions/filter.md"
+          - Reduce:
+              - Overview: "user-guide/user-defined-functions/reduce/reduce.md"
       - user-guide/pipeline-tuning.md
       - user-guide/conditional-forwarding.md
       - user-guide/autoscaling.md
