@@ -16,13 +16,13 @@ spec:
         min: 1
       udf:
         container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
-          image: quay.io/numaio/go-even-odd-example
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
+          image: quay.io/numaio/numaflow-go/map-even-odd
     - name: keyed-fixed-sum
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/go-integer-sum-example
+          image: quay.io/numaio/numaflow-go/reduce-sum
         groupBy:
           window:
             fixed:
@@ -32,7 +32,7 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/go-integer-sum-example
+          image: quay.io/numaio/numaflow-go/reduce-sum
         groupBy:
           window:
             fixed:
