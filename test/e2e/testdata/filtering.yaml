@@ -17,7 +17,7 @@ spec:
       sink:
         udsink:
           container:
-            image: quay.io/keranyang/numaflow/sink-go-redis:v1
+            image: quay.io/numaio/numaflow-go/sink-redis:latest
   edges:
     - from: in
       to: p1
