@@ -206,7 +206,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// to all the elements in the batch. If we were to assign last element's watermark, we will wronly mark on-time data
 	// as πlate date.
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
-	isdf.opts.logger.Debugw("Watermark fetched inside forwardAChunk", zap.Int64("watermark", processorWM.UnixMilli()), zap.String("offset", readMessages[0].ReadOffset.String()))
 	for _, m := range readMessages {
 		readBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
 		m.Watermark = time.Time(processorWM)
@@ -286,7 +285,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
-					isdf.opts.logger.Debugw("Watermark published inside forwardAChunk", zap.Int64("watermark", processorWM.UnixMilli()), zap.String("offset", offsets[len(offsets)-1].String()))
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 				// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)

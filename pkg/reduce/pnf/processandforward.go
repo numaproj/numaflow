@@ -209,7 +209,6 @@ func (p *ProcessAndForward) publishWM(wm processor.Watermark, writeOffsets map[s
 		if publisher, ok := p.publishWatermark[bufferName]; ok {
 			if len(offsets) > 0 {
 				publisher.PublishWatermark(wm, offsets[len(offsets)-1])
-				p.log.Debugw("Watermark published inside pnf", zap.Int64("watermark", wm.UnixMilli()), zap.String("offset", offsets[len(offsets)-1].String()))
 			}
 		}
 	}

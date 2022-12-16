@@ -150,7 +150,6 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
-	d.log.Debugw("Watermark fetched inside forwardAChunk", zap.Int64("watermark", processorWM.UnixMilli()), zap.String("offset", readMessages[0].ReadOffset.String()))
 	for _, m := range readMessages {
 		if !d.vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed {
 			m.Key = dfv1.DefaultKeyForNonKeyedData

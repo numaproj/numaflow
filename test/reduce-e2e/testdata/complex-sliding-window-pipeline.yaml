@@ -18,7 +18,7 @@ spec:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
           image: quay.io/numaio/go-even-odd-example
-    - name: first-aggregation
+    - name: keyed-fixed-sum
       udf:
         container:
           # compute the sum
@@ -28,7 +28,7 @@ spec:
             fixed:
               length: 5s
           keyed: true
-    - name: second-aggregation
+    - name: non-keyed-fixed-sum
       udf:
         container:
           # compute the sum
@@ -38,7 +38,7 @@ spec:
             fixed:
               length: 10s
           keyed: false
-    - name: third-aggregation
+    - name: non-keyed-sliding-sum
       udf:
         container:
           # compute the sum
@@ -60,9 +60,9 @@ spec:
     - from: atoi
       to: first-aggregation
       parallelism: 2
-    - from: first-aggregation
-      to: second-aggregation
-    - from: second-aggregation
-      to: third-aggregation
-    - from: third-aggregation
+    - from: keyed-fixed-sum
+      to: non-keyed-fixed-sum
+    - from: non-keyed-fixed-sum
+      to: non-keyed-sliding-sum
+    - from: non-keyed-sliding-sum
       to: sink

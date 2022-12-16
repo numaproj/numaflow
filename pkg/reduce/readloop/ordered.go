@@ -85,7 +85,7 @@ func (of *orderedForwarder) insertTask(tx context.Context, t *task) {
 		// early arrival
 		of.taskQueue.PushBack(t)
 	} else {
-		// a window in the middle
+		// a task in the middle
 		for e := of.taskQueue.Back(); e != nil; e = e.Prev() {
 			_task := e.Value.(*task)
 			if !_task.pf.PartitionID.End.After(t.pf.PartitionID.End) {
