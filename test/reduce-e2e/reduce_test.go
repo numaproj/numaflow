@@ -231,11 +231,9 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 			Status(204)
 	}
 
-	// since the key can be even or odd and the first window duration is 10s(which is keyed)
-	// and the second window duration is 60s(non-keyed)
-	// the sum should be 180(60 + 120)
 	w.Expect().VertexPodLogContains("sink", "Payload -  15  Key -  NON_KEYED_STREAM  Start -  20000  End -  80000")
-	w.Expect().VertexPodLogContains("sink", "Payload -  35  Key -  NON_KEYED_STREAM  Start -  30000  End -  90000")
+	w.Expect().VertexPodLogContains("sink", "Payload -  45  Key -  NON_KEYED_STREAM  Start -  30000  End -  90000")
+	w.Expect().VertexPodLogContains("sink", "Payload -  180  Key -  NON_KEYED_STREAM  Start -  80000  End -  140000")
 }
 
 func TestReduceSuite(t *testing.T) {
