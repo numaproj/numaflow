@@ -4,7 +4,7 @@ metadata:
   name: complex-sum
 spec:
   limits:
-    readBatchSize: 1
+    readBatchSize: 50
   vertices:
     - name: in
       scale:
@@ -18,7 +18,7 @@ spec:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
           image: quay.io/numaio/go-even-odd-example
-    - name: first-aggregation
+    - name: keyed-fixed-sum
       udf:
         container:
           # compute the sum
@@ -28,7 +28,7 @@ spec:
             fixed:
               length: 10s
           keyed: true
-    - name: second-aggregation
+    - name: non-keyed-fixed-sum
       udf:
         container:
           # compute the sum
@@ -47,9 +47,9 @@ spec:
     - from: in
       to: atoi
     - from: atoi
-      to: first-aggregation
+      to: keyed-fixed-sum
       parallelism: 2
-    - from: first-aggregation
-      to: second-aggregation
-    - from: second-aggregation
+    - from: keyed-fixed-sum
+      to: non-keyed-fixed-sum
+    - from: non-keyed-fixed-sum
       to: sink
