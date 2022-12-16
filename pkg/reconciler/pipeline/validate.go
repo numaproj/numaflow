@@ -171,6 +171,10 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		if err := validateVertex(v); err != nil {
 			return err
 		}
+		// The length of "{pipeline}-{vertex}-headless" can not be longer than 63.
+		if errs := k8svalidation.IsDNS1035Label(fmt.Sprintf("%s-%s-headless", pl.Name, v.Name)); len(errs) > 0 {
+			return fmt.Errorf("the length of the pipeline name plus the vertex name is over the max limit. (%s-%s), %v", pl.Name, v.Name, errs)
+		}
 	}
 	return nil
 }
