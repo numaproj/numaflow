@@ -1,6 +1,6 @@
 # Volumes
 
-`Volumes` can be mounted to [`udf`](./user-defined-functions.md) or [`udsink`](./sinks/user-defined-sinks.md) containers.
+`Volumes` can be mounted to [`udf`](user-defined-functions/map/map.md) or [`udsink`](./sinks/user-defined-sinks.md) containers.
 
 Following example shows how to mount a ConfigMap to an `udf` vertex and an `udsink` vertex.
 

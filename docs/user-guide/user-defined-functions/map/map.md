@@ -1,14 +1,10 @@
-# User Defined Functions
+# Map UDF
 
-A `Pipeline` consists of multiple vertices, `Source`, `Sink` and `UDF(User Defined Functions)`.
-
-UDF runs as a sidecar container in a Vertex Pod, processes the received data. The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.
-
-Data processing in the UDF is supposed to be idempotent.
+Map in a Map vertex takes an input and returns 0, 1, or more outputs. Map is an element wise operator.
 
 ## Builtin UDF
 
-There are some [Built-in Functions](./builtin-functions/README.md) that can be used directly.
+There are some [Built-in Functions](builtin-functions/README.md) that can be used directly.
 
 ## Build Your Own UDF
 
@@ -65,8 +61,8 @@ Some environment variables are available in the user defined function Pods, they
 
 Configuration data can be provided to the UDF container at runtime multiple ways.
 
-* [`environment variables`](./environment-variables.md)
+* [`environment variables`](../../environment-variables.md)
 * `args`
 * `command`
-* [`volumes`](./volumes.md)
-* [`init containers`](./init-containers.md)
+* [`volumes`](../../volumes.md)
+* [`init containers`](../../init-containers.md)
