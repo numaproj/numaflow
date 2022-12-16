@@ -11,13 +11,13 @@ spec:
       udf:
         container:
           # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/flatmap
-          image: quay.io/numaio/flatmap-example:go
+          image: quay.io/numaio/numaflow-go/map-flatmap:latest
     - name: go-udsink
       sink:
         udsink:
           container:
-            # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/udsink_log
-            image: quay.io/numaio/simplesink-example:go
+            # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/log
+            image: quay.io/numaio/numaflow-go/sink-log:latest
     - name: python-split
       udf:
         container:
@@ -25,7 +25,7 @@ spec:
             - python
             - example.py
           # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/function/flatmap
-          image: quay.io/numaio/flatmap-example:python
+          image: quay.io/numaio/numaflow-python/map-flatmap:latest
     - name: python-udsink
       sink:
         udsink:
@@ -33,8 +33,8 @@ spec:
             args:
             - python
             - example.py
-            # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/simplesink
-            image: quay.io/numaio/simplesink-example:python
+            # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
+            image: quay.io/numaio/numaflow-python/sink-log:latest
   edges:
     - from: in
       to: go-split

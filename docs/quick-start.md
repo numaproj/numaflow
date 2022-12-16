@@ -114,7 +114,7 @@ kubectl logs -f even-odd-odd-sink-0-a6p0n
 View the UI for the advanced pipeline at https://localhost:8443/
 ![Numaflow UI](assets/numaflow-ui-advanced-pipeline.png)
 
-The source code of the `even-odd` [User Defined Function](user-guide/user-defined-functions/map/map.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd). You also can replace the [Log](./user-guide/sinks/log.md) Sink with some other sinks like [Kafka](./user-guide/sinks/kafka.md) to forward the data to Kafka topics.
+The source code of the `even-odd` [User Defined Function](user-guide/user-defined-functions/map/map.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd). You also can replace the [Log](./user-guide/sinks/log.md) Sink with some other sinks like [Kafka](./user-guide/sinks/kafka.md) to forward the data to Kafka topics.
 
 The pipeline can be deleted by
 
