@@ -731,7 +731,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../user-defined-functions/" class="md-nav__link">
+      <a href="../user-defined-functions/user-defined-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -754,12 +754,52 @@
       
       
         <label class="md-nav__link" for="__nav_3_4_2">
+          Map
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Map" data-md-level="3">
+        <label class="md-nav__title" for="__nav_3_4_2">
+          <span class="md-nav__icon md-icon"></span>
+          Map
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-defined-functions/map/map/" class="md-nav__link">
+        Overview
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_4_2_2" type="checkbox" id="__nav_3_4_2_2" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_4_2_2">
           Built-in UDFs
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <nav class="md-nav" aria-label="Built-in UDFs" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_4_2">
+      <nav class="md-nav" aria-label="Built-in UDFs" data-md-level="4">
+        <label class="md-nav__title" for="__nav_3_4_2_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in UDFs
         </label>
@@ -771,7 +811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../builtin-functions/" class="md-nav__link">
+      <a href="../user-defined-functions/map/builtin-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -785,7 +825,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../builtin-functions/cat/" class="md-nav__link">
+      <a href="../user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
         Cat
       </a>
     </li>
@@ -799,8 +839,62 @@
   
   
     <li class="md-nav__item">
-      <a href="../builtin-functions/filter/" class="md-nav__link">
+      <a href="../user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
         Filter
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_4_3" type="checkbox" id="__nav_3_4_3" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_4_3">
+          Reduce
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Reduce" data-md-level="3">
+        <label class="md-nav__title" for="__nav_3_4_3">
+          <span class="md-nav__icon md-icon"></span>
+          Reduce
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-defined-functions/reduce/reduce/" class="md-nav__link">
+        Overview
       </a>
     </li>
   
@@ -1331,7 +1425,7 @@
 
 
 <h1 id="volumes">Volumes<a class="headerlink" href="#volumes" title="Permanent link">&para;</a></h1>
-<p><code>Volumes</code> can be mounted to <a href="../user-defined-functions/"><code>udf</code></a> or <a href="../sinks/user-defined-sinks/"><code>udsink</code></a> containers.</p>
+<p><code>Volumes</code> can be mounted to <a href="../user-defined-functions/map/map/"><code>udf</code></a> or <a href="../sinks/user-defined-sinks/"><code>udsink</code></a> containers.</p>
 <p>Following example shows how to mount a ConfigMap to an <code>udf</code> vertex and an <code>udsink</code> vertex.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>

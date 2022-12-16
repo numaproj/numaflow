@@ -800,7 +800,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../user-guide/user-defined-functions/" class="md-nav__link">
+      <a href="../user-guide/user-defined-functions/user-defined-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -823,12 +823,52 @@
       
       
         <label class="md-nav__link" for="__nav_3_4_2">
+          Map
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Map" data-md-level="3">
+        <label class="md-nav__title" for="__nav_3_4_2">
+          <span class="md-nav__icon md-icon"></span>
+          Map
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/user-defined-functions/map/map/" class="md-nav__link">
+        Overview
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_4_2_2" type="checkbox" id="__nav_3_4_2_2" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_4_2_2">
           Built-in UDFs
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <nav class="md-nav" aria-label="Built-in UDFs" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_4_2">
+      <nav class="md-nav" aria-label="Built-in UDFs" data-md-level="4">
+        <label class="md-nav__title" for="__nav_3_4_2_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in UDFs
         </label>
@@ -840,7 +880,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../user-guide/builtin-functions/" class="md-nav__link">
+      <a href="../user-guide/user-defined-functions/map/builtin-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -854,7 +894,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../user-guide/builtin-functions/cat/" class="md-nav__link">
+      <a href="../user-guide/user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
         Cat
       </a>
     </li>
@@ -868,8 +908,62 @@
   
   
     <li class="md-nav__item">
-      <a href="../user-guide/builtin-functions/filter/" class="md-nav__link">
+      <a href="../user-guide/user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
         Filter
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_4_3" type="checkbox" id="__nav_3_4_3" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_4_3">
+          Reduce
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Reduce" data-md-level="3">
+        <label class="md-nav__title" for="__nav_3_4_3">
+          <span class="md-nav__icon md-icon"></span>
+          Reduce
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/user-defined-functions/reduce/reduce/" class="md-nav__link">
+        Overview
       </a>
     </li>
   
@@ -1487,7 +1581,7 @@ kubectl -n numaflow-system port-forward deployment/numaflow-server <span class="
 <div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 </code></pre></div>
 <h2 id="an-advanced-pipeline">An Advanced Pipeline<a class="headerlink" href="#an-advanced-pipeline" title="Permanent link">&para;</a></h2>
-<p>In this example, there are five vertices in a pipeline. An <a href="../user-guide/sources/http/">HTTP</a> source vertex which serves an HTTP endpoint to receive numbers as source data, a <a href="../user-guide/user-defined-functions/">UDF</a> vertex to tag the ingested numbers with the key <code>even</code> or <code>odd</code>, three <a href="../user-guide/sinks/log/">Log</a> sinks, one to print the <code>even</code> numbers, one to print the <code>odd</code> numbers, and the other one to print both the even and odd numbers.</p>
+<p>In this example, there are five vertices in a pipeline. An <a href="../user-guide/sources/http/">HTTP</a> source vertex which serves an HTTP endpoint to receive numbers as source data, a <a href="../user-guide/user-defined-functions/map/map/">UDF</a> vertex to tag the ingested numbers with the key <code>even</code> or <code>odd</code>, three <a href="../user-guide/sinks/log/">Log</a> sinks, one to print the <code>even</code> numbers, one to print the <code>odd</code> numbers, and the other one to print both the even and odd numbers.</p>
 <p><img alt="Pipeline Diagram" src="../assets/even-odd.png" /></p>
 <p>Create the <code>even-odd</code> pipeline.</p>
 <div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
@@ -1526,13 +1620,13 @@ kubectl logs -f even-odd-odd-sink-0-a6p0n
 </code></pre></div>
 <p>View the UI for the advanced pipeline at https://localhost:8443/
 <img alt="Numaflow UI" src="../assets/numaflow-ui-advanced-pipeline.png" /></p>
-<p>The source code of the <code>even-odd</code> <a href="../user-guide/user-defined-functions/">User Defined Function</a> can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd">here</a>. You also can replace the <a href="../user-guide/sinks/log/">Log</a> Sink with some other sinks like <a href="../user-guide/sinks/kafka/">Kafka</a> to forward the data to Kafka topics.</p>
+<p>The source code of the <code>even-odd</code> <a href="../user-guide/user-defined-functions/map/map/">User Defined Function</a> can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd">here</a>. You also can replace the <a href="../user-guide/sinks/log/">Log</a> Sink with some other sinks like <a href="../user-guide/sinks/kafka/">Kafka</a> to forward the data to Kafka topics.</p>
 <p>The pipeline can be deleted by</p>
 <div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
 </code></pre></div>
 <h2 id="whats-next">What's Next<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h2>
 <p>Try more examples in the <a href="https://github.com/numaproj/numaflow/tree/main/examples"><code>examples</code></a> directory.</p>
-<p>After exploring how Numaflow pipeline run, you can check what data <a href="../user-guide/sources/generator/">Sources</a> and <a href="../user-guide/sinks/kafka/">Sinks</a> Numaflow supports out of the box, or learn how to write <a href="../user-guide/user-defined-functions/">User Defined Functions</a>.</p>
+<p>After exploring how Numaflow pipeline run, you can check what data <a href="../user-guide/sources/generator/">Sources</a> and <a href="../user-guide/sinks/kafka/">Sinks</a> Numaflow supports out of the box, or learn how to write <a href="../user-guide/user-defined-functions/map/map/">User Defined Functions</a>.</p>
 
               
             </article>
