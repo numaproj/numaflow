@@ -56,10 +56,12 @@ nav:
           - User Defined Sinks: "user-guide/sinks/user-defined-sinks.md"
       - User Defined Functions:
           - Overview: "user-guide/user-defined-functions/user-defined-functions.md"
-          - Built-in UDFs:
-              - Overview: "user-guide/user-defined-functions/builtin-functions/README.md"
-              - Cat: "user-guide/user-defined-functions/builtin-functions/cat.md"
-              - Filter: "user-guide/user-defined-functions/builtin-functions/filter.md"
+          - Map:
+              - Overview: "user-guide/user-defined-functions/map/map.md"
+              - Built-in UDFs:
+                  - Overview: "user-guide/user-defined-functions/map/builtin-functions/README.md"
+                  - Cat: "user-guide/user-defined-functions/map/builtin-functions/cat.md"
+                  - Filter: "user-guide/user-defined-functions/map/builtin-functions/filter.md"
       - user-guide/pipeline-tuning.md
       - user-guide/conditional-forwarding.md
       - user-guide/autoscaling.md
