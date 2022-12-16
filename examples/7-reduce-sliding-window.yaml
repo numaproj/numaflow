@@ -6,7 +6,7 @@ metadata:
     loglevel: "true"
 spec:
   limits:
-    readBatchSize: 1
+    readBatchSize: 50
   vertices:
     - name: in
       containerTemplate:
@@ -30,9 +30,6 @@ spec:
     - name: reduce-sliding
       udf:
         container:
-          env:
-            - name: NUMAFLOW_DEBUG
-              value: "true"
           # compute the sum
           image: quay.io/numaio/numaflow-go/reduce-sum
         groupBy:
