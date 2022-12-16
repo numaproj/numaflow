@@ -162,6 +162,14 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Error(t, err)
 	})
 
+	t.Run("test pipeline name too long", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Name = "very-very-very-loooooooooooooooooooooooooooooooooooog"
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "over the max limit")
+	})
+
 	t.Run("parallelism on non-reduce vertex", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Edges[0].Parallelism = pointer.Int32(3)
