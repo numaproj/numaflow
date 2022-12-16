@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -90,7 +90,7 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 	of.Lock()
 	defer of.Unlock()
 	of.taskQueue.PushBack(t)
-	partitionsInFlight.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Inc()
+	partitionsInFlight.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Inc()
 
 	// invoke the reduce function
 	go of.reduceOp(ctx, t)
@@ -107,7 +107,7 @@ func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 		if err == nil {
 			break
 		} else if err == ctx.Err() {
-			udfError.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Inc()
+			udfError.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Inc()
 			of.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
 			return
 		}
@@ -179,7 +179,7 @@ func (of *orderedForwarder) forward(ctx context.Context) {
 				rm := currElement
 				currElement = currElement.Next()
 				of.taskQueue.Remove(rm)
-				partitionsInFlight.With(map[string]string{metricspkg.LabelVertex: of.vertexName, metricspkg.LabelPipeline: of.pipelineName}).Dec()
+				partitionsInFlight.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Dec()
 				of.log.Debugw("Removing task post forward call", zap.String("partitionID", t.pf.PartitionID.String()))
 				of.Unlock()
 			case <-ctx.Done():

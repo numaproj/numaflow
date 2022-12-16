@@ -66,7 +66,7 @@ func (p *PBQ) Write(ctx context.Context, message *isb.ReadMessage) error {
 		close(p.output)
 		writeErr = ctx.Err()
 	}
-	pbqChannelSize.With(map[string]string{metrics.LabelVertex: p.vertexName, metrics.LabelPipeline: p.pipelineName}).Observe(float64(len(p.output)))
+	pbqChannelSize.With(map[string]string{metrics.LabelVertex: p.vertexName, metrics.LabelPipeline: p.pipelineName}).Set(float64(len(p.output)))
 	return writeErr
 }
 
