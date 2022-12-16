@@ -58,7 +58,7 @@ spec:
     - from: in
       to: atoi
     - from: atoi
-      to: first-aggregation
+      to: keyed-fixed-sum
       parallelism: 2
     - from: keyed-fixed-sum
       to: non-keyed-fixed-sum
