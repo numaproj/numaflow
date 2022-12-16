@@ -104,10 +104,10 @@ func TestOrderedProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// clean out the task queue before we start a run
-			op := newOrderedForwarder(ctx)
+			op := newOrderedForwarder(ctx, "reduce", "test-pipeline")
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.
-			pbqManager, _ := pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(100)),
+			pbqManager, _ := pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(100)),
 				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 			cCtx, cancelFn := context.WithCancel(ctx)
 			defer cancelFn()

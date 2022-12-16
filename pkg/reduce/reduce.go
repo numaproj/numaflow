@@ -23,6 +23,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -40,13 +41,15 @@ import (
 // DataForward reads data from isb and forwards them to readloop
 type DataForward struct {
 	ctx                 context.Context
-	vertexInstance      *dfv1.VertexInstance
+	vertexName          string
+	pipelineName        string
 	fromBuffer          isb.BufferReader
 	toBuffers           map[string]isb.BufferWriter
 	readloop            *readloop.ReadLoop
 	watermarkFetcher    fetch.Fetcher
 	watermarkPublishers map[string]publish.Publisher
 	windowingStrategy   window.Windower
+	keyed               bool
 	opts                *Options
 	log                 *zap.SugaredLogger
 }
@@ -71,16 +74,20 @@ func NewDataForward(ctx context.Context,
 		}
 	}
 
-	rl, err := readloop.NewReadLoop(ctx, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
+	rl, err := readloop.NewReadLoop(ctx, vertexInstance.Vertex.Spec.Name, vertexInstance.Vertex.Spec.PipelineName,
+		udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
+
 	df := &DataForward{
 		ctx:                 ctx,
-		vertexInstance:      vertexInstance,
+		vertexName:          vertexInstance.Vertex.Spec.Name,
+		pipelineName:        vertexInstance.Vertex.Spec.PipelineName,
 		fromBuffer:          fromBuffer,
 		toBuffers:           toBuffers,
 		readloop:            rl,
 		watermarkFetcher:    fw,
 		watermarkPublishers: watermarkPublishers,
 		windowingStrategy:   windowingStrategy,
+		keyed:               vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed,
 		log:                 logging.FromContext(ctx),
 		opts:                options}
 
@@ -139,24 +146,27 @@ func (d *DataForward) Start() {
 // and forwards the messages to readloop
 func (d *DataForward) forwardAChunk(ctx context.Context) {
 	readMessages, err := d.fromBuffer.Read(ctx, d.opts.readBatchSize)
+	totalBytes := 0
 	if err != nil {
 		d.log.Errorw("Failed to read from isb", zap.Error(err))
+		readMessagesError.With(map[string]string{metrics.LabelVertex: d.vertexName, metrics.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Inc()
 	}
 
 	if len(readMessages) == 0 {
 		return
 	}
-
+	readMessagesCount.With(map[string]string{metrics.LabelVertex: d.vertexName, metrics.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Add(float64(len(readMessages)))
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
-		if !d.vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed {
+		if !d.keyed {
 			m.Key = dfv1.DefaultKeyForNonKeyedData
 			m.Message.Key = dfv1.DefaultKeyForNonKeyedData
 		}
 		m.Watermark = time.Time(processorWM)
+		totalBytes += len(m.Payload)
 	}
-
+	readBytesCount.With(map[string]string{metrics.LabelVertex: d.vertexName, metrics.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Add(float64(totalBytes))
 	d.readloop.Process(ctx, readMessages)
 }

@@ -14,5 +14,5 @@ You can customize your own dashboard by selecting metrics that best describe the
 ![](../assets/sample-dashboard-img-1.png)
 ![](../assets/sample-dashboard-img-2.png)
 
-To use the sample dashboard, download the corresponding [sample dashboard template](example-dashboard-template.json), import it to Grafana and use the dropdown menu at top-left of the dashboard to choose which pipeline/vertex/buffer metrics to display.
+To use the sample dashboard, download the corresponding [sample dashboard template](example-dashboard-template.json), import(before importing change the uid of the datasource in json, issue [link](https://community.grafana.com/t/json-loaded-dashboard-does-not-show-data-in-panel-until-edit-each-panel-and-apply-changes/65792/4)) it to Grafana and use the dropdown menu at top-left of the dashboard to choose which pipeline/vertex/buffer metrics to display.
 
