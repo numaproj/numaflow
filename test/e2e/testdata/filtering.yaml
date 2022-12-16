@@ -6,8 +6,7 @@ spec:
   vertices:
     - name: in
       source:
-        http:
-          service: true
+        http: {}
     - name: p1
       udf:
         builtin:
@@ -16,7 +15,9 @@ spec:
             expression: int(json(payload).id) < 100 && json(payload).msg == 'hello' && sprig.contains('good', string(json(payload).desc))
     - name: out
       sink:
-        redis: {}
+        udsink:
+          container:
+            image: quay.io/keranyang/numaflow/sink-go-redis:v0
   edges:
     - from: in
       to: p1

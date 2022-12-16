@@ -3162,18 +3162,6 @@ config
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.RedisSink">
-RedisSink
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
-</p>
-<p>
-<p>
-RedisSink is a sink for publishing to Redis
-</p>
-</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Scale">
 Scale
 </h3>
@@ -3352,14 +3340,6 @@ Log </a> </em>
 <td>
 <code>blackhole</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Blackhole"> Blackhole </a> </em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>redis</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisSink"> RedisSink </a> </em>
 </td>
 <td>
 </td>

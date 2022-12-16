@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -30,7 +32,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-//go:generate kubectl -n numaflow-system delete statefulset redis-cluster --ignore-not-found=true
+//go:generate kubectl -n numaflow-system delete statefulset redis --ignore-not-found=true
 //go:generate kubectl apply -k ../../config/apps/redis -n numaflow-system
 type FunctionalSuite struct {
 	E2ESuite
@@ -113,18 +115,15 @@ func (s *FunctionalSuite) TestFiltering() {
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
 		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("out", LogSinkVertexStarted)
+		VertexPodLogContains("out", LogSinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
-	// To ensure the source vertex http service is up and running and ready to receive POST requests.
-	time.Sleep(time.Minute * 1)
+	w.SendMessageTo(pipelineName, "in", []byte(`{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`)).
+		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`)).
+		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`)).
+		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`)).
+		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`))
 
-	w.SendMessageTo(pipelineName, "in", []byte(`{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`))
-	w.SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`))
-	w.SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`))
-	w.SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`))
-	w.SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`))
-
-	// Wait for data to reach sink vertex. TODO - Delegate this wait time to RedisCheckOptionWithTimeout?
+	// Wait for data to reach sink vertex.
 	time.Sleep(time.Second * 5)
 
 	w.Expect().RedisContains("out", "expect[3-4]", RedisCheckOptionWithCount(2))
@@ -135,8 +134,8 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	w := s.Given().Pipeline("@testdata/even-odd.yaml").
 		When().
 		CreatePipelineAndWait()
+
 	defer w.DeletePipelineAndWait()
-	pipelineName := "even-odd"
 
 	w.Expect().
 		VertexPodsRunning().
@@ -146,27 +145,30 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 		VertexPodLogContains("odd-sink", LogSinkVertexStarted).
 		VertexPodLogContains("number-sink", LogSinkVertexStarted)
 
-	// To ensure the source vertex http service is up and running and ready to receive POST requests.
-	time.Sleep(time.Minute * 1)
+	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
+		TerminateAllPodPortForwards()
 
-	w.SendMessageTo(pipelineName, "in", []byte(`888888`))
-	w.SendMessageTo(pipelineName, "in", []byte(`888889`))
-	w.SendMessageTo(pipelineName, "in", []byte(`not an integer`))
+	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("888888")).
+		Expect().
+		Status(204)
+	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("888889")).
+		Expect().
+		Status(204)
+	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("not an integer")).
+		Expect().
+		Status(204)
 
-	// Wait for data to reach sink vertex. TODO - Delegate this wait time to RedisCheckOptionWithTimeout?
-	time.Sleep(time.Second * 5)
+	w.Expect().VertexPodLogContains("even-sink", "888888")
+	w.Expect().VertexPodLogNotContains("even-sink", "888889", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().VertexPodLogNotContains("even-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
 
-	w.Expect().RedisContains("even-sink", "888888")
-	w.Expect().RedisNotContains("even-sink", "888889")
-	w.Expect().RedisNotContains("even-sink", "not an integer")
+	w.Expect().VertexPodLogContains("odd-sink", "888889")
+	w.Expect().VertexPodLogNotContains("odd-sink", "888888", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().VertexPodLogNotContains("odd-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
 
-	w.Expect().RedisContains("odd-sink", "888889")
-	w.Expect().RedisNotContains("odd-sink", "888888")
-	w.Expect().RedisNotContains("odd-sink", "not an integer")
-
-	w.Expect().RedisContains("number-sink", "888888")
-	w.Expect().RedisContains("number-sink", "888889")
-	w.Expect().RedisNotContains("number-sink", "not an integer")
+	w.Expect().VertexPodLogContains("number-sink", "888888")
+	w.Expect().VertexPodLogContains("number-sink", "888889")
+	w.Expect().VertexPodLogNotContains("number-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
 }
 
 func (s *FunctionalSuite) TestWatermarkEnabled() {

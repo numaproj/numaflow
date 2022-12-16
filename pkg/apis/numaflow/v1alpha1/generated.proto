@@ -810,10 +810,6 @@ message RedisSettings {
   optional string sentinel = 4;
 }
 
-// RedisSink is a sink for publishing to Redis
-message RedisSink {
-}
-
 // Scale defines the parameters for autoscaling.
 message Scale {
   // Whether to disable autoscaling.
@@ -866,9 +862,7 @@ message Sink {
 
   optional Blackhole blackhole = 3;
 
-  optional RedisSink redis = 4;
-
-  optional UDSink udsink = 5;
+  optional UDSink udsink = 4;
 }
 
 message Source {

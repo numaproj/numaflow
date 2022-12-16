@@ -42,10 +42,20 @@ type When struct {
 	portForwarderStopChannels map[string]chan struct{}
 }
 
-// SendMessageTo sends msg to a http source vertex.
+// SendMessageTo sends msg to one of the pods in http source vertex.
 func (w *When) SendMessageTo(pipelineName string, vertexName string, msg []byte) *When {
 	w.t.Helper()
-	err := SendMessageTo(pipelineName, vertexName, msg)
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
+	ctx := context.Background()
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting vertex pod list: %v", err)
+	}
+	if len(podList.Items) == 0 {
+		w.t.Fatalf("No running pod found in pipeline %s, vertex: %s", pipelineName, vertexName)
+	}
+	pod := podList.Items[0]
+	err = SendMessageTo(pod.Status.PodIP, vertexName, msg)
 	if err != nil {
 		w.t.Fatal(err)
 	}

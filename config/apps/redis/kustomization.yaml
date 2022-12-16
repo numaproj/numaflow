@@ -1,3 +1,4 @@
+# redis-minimal.yaml is used in E2E testing to create a redis instance before we start a test pipeline which writes to redis.
 resources:
   - redis-minimal.yaml
 

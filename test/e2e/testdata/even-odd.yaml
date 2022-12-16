@@ -6,8 +6,7 @@ spec:
   vertices:
     - name: in
       source:
-        http:
-          service: true
+        http: {}
     - name: even-or-odd
       udf:
         container:
@@ -15,13 +14,13 @@ spec:
           image: quay.io/numaio/go-even-odd-example
     - name: even-sink
       sink:
-        redis: {}
+        log: {}
     - name: odd-sink
       sink:
-        redis: {}
+        log: {}
     - name: number-sink
       sink:
-        redis: {}
+        log: {}
   edges:
     - from: in
       to: even-or-odd

@@ -20,14 +20,14 @@ import (
 	"log"
 )
 
-// SendMessageTo sends msg to a http source vertex.
-func SendMessageTo(pipelineName string, vertexName string, msg []byte) (err error) {
+// SendMessageTo sends msg to a pod in http source vertex.
+func SendMessageTo(podIp string, vertexName string, msg []byte) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
 		}
 	}()
-	log.Printf("Sending msg %v to pipeline %s, vertex %s\n", msg, pipelineName, vertexName)
-	InvokeE2EAPIPOST("/http/send-message?pipeline=%s&vertex=%s", string(msg[:]), pipelineName, vertexName)
+	log.Printf("Sending msg %v to podIp %s, vertex %s\n", msg, podIp, vertexName)
+	InvokeE2EAPIPOST("/http/send-message?podIp=%s&vertexName=%s", string(msg[:]), podIp, vertexName)
 	return
 }

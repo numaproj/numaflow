@@ -18,21 +18,19 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"net/http"
-	"time"
 )
 
 func init() {
+	// send-message API is used to post data to a http source vertex pod.
+	// The API takes in two parameters(podIp and vertexName) and constructs the target url as
+	// https://{podIp}:8443/vertices/{vertexName}.
 	http.HandleFunc("/http/send-message", func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.Background()
-		pName := r.URL.Query().Get("pipeline")
-		vName := r.URL.Query().Get("vertex")
-
+		podIp := r.URL.Query().Get("podIp")
+		vertexName := r.URL.Query().Get("vertexName")
 		buf, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(500)
@@ -46,24 +44,7 @@ func init() {
 			},
 		}
 
-		// Posting right after vertex creation sometimes gets the "dial tcp: connect: connection refused" error.
-		// Adding retry to mitigate such issue.
-		// 3 attempts with 2 second fixed wait time are tested sufficient for it.
-		var retryBackOff = wait.Backoff{
-			Factor:   1,
-			Jitter:   0,
-			Steps:    3,
-			Duration: time.Second * 2,
-		}
-
-		_ = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func() (done bool, err error) {
-			_, err = httpClient.Post(fmt.Sprintf("https://%s-%s:8443/vertices/%s", pName, vName, vName), "application/json", bytes.NewBuffer(buf))
-			if err == nil {
-				return true, nil
-			}
-			fmt.Printf("Got error %v, retrying.\n", err)
-			return false, nil
-		})
+		_, err = httpClient.Post(fmt.Sprintf("https://%s:8443/vertices/%s", podIp, vertexName), "application/json", bytes.NewBuffer(buf))
 
 		if err != nil {
 			w.WriteHeader(500)
