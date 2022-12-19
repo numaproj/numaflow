@@ -93,6 +93,7 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 		doneCh: doneCh,
 		pf:     pf,
 	}
+	partitionsInFlight.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Inc()
 	// invoke the reduce function
 	go of.reduceOp(ctx, t)
 	return t

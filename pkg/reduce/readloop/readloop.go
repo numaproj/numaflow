@@ -366,8 +366,8 @@ func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
 	for _, p := range partitions {
 		q := rl.pbqManager.GetPBQ(p)
 		rl.log.Infow("Close of book", zap.String("partitionID", p.String()))
+		// schedule the task for ordered processing.
 		rl.op.insertTask(rl.udfInvocationTracking[p])
-		partitionsInFlight.With(map[string]string{metrics.LabelVertex: rl.op.vertexName, metrics.LabelPipeline: rl.op.pipelineName}).Inc()
 		q.CloseOfBook()
 		delete(rl.udfInvocationTracking, p)
 	}
