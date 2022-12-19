@@ -33,9 +33,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/numaproj/numaflow/pkg/metrics"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -51,16 +52,17 @@ import (
 
 // ReadLoop is responsible for reading and forwarding the message from ISB to PBQ.
 type ReadLoop struct {
-	vertexName       string
-	pipelineName     string
-	UDF              applier.ReduceApplier
-	pbqManager       *pbq.Manager
-	windower         window.Windower
-	op               *orderedForwarder
-	log              *zap.SugaredLogger
-	toBuffers        map[string]isb.BufferWriter
-	whereToDecider   forward.ToWhichStepDecider
-	publishWatermark map[string]publish.Publisher
+	vertexName            string
+	pipelineName          string
+	UDF                   applier.ReduceApplier
+	pbqManager            *pbq.Manager
+	windower              window.Windower
+	op                    *orderedForwarder
+	log                   *zap.SugaredLogger
+	toBuffers             map[string]isb.BufferWriter
+	whereToDecider        forward.ToWhichStepDecider
+	publishWatermark      map[string]publish.Publisher
+	udfInvocationTracking map[partition.ID]*task
 }
 
 // NewReadLoop initializes  and returns ReadLoop.
@@ -77,16 +79,17 @@ func NewReadLoop(ctx context.Context,
 	op := newOrderedForwarder(ctx, vertexName, pipelineName)
 
 	rl := &ReadLoop{
-		vertexName:       vertexName,
-		pipelineName:     pipelineName,
-		UDF:              udf,
-		windower:         windowingStrategy,
-		pbqManager:       pbqManager,
-		op:               op,
-		log:              logging.FromContext(ctx),
-		toBuffers:        toBuffers,
-		whereToDecider:   whereToDecider,
-		publishWatermark: pw,
+		vertexName:            vertexName,
+		pipelineName:          pipelineName,
+		UDF:                   udf,
+		windower:              windowingStrategy,
+		pbqManager:            pbqManager,
+		op:                    op,
+		log:                   logging.FromContext(ctx),
+		toBuffers:             toBuffers,
+		whereToDecider:        whereToDecider,
+		publishWatermark:      pw,
+		udfInvocationTracking: make(map[partition.ID]*task),
 	}
 
 	err := rl.Startup(ctx)
@@ -319,7 +322,8 @@ func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partitio
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
-		rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
+		t := rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
+		rl.udfInvocationTracking[partitionID] = t
 		rl.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
 
@@ -362,6 +366,9 @@ func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
 	for _, p := range partitions {
 		q := rl.pbqManager.GetPBQ(p)
 		rl.log.Infow("Close of book", zap.String("partitionID", p.String()))
+		rl.op.insertTask(rl.udfInvocationTracking[p])
+		partitionsInFlight.With(map[string]string{metrics.LabelVertex: rl.op.vertexName, metrics.LabelPipeline: rl.op.pipelineName}).Inc()
 		q.CloseOfBook()
+		delete(rl.udfInvocationTracking, p)
 	}
 }

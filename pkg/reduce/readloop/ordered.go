@@ -22,8 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/metrics"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
@@ -71,34 +72,11 @@ func newOrderedForwarder(ctx context.Context, vertexName string, pipelineName st
 	return of
 }
 
-func (of *orderedForwarder) insertTask(tx context.Context, t *task) {
+func (of *orderedForwarder) insertTask(t *task) {
 	of.Lock()
 	defer of.Unlock()
 
-	if of.taskQueue.Len() == 0 {
-		of.taskQueue.PushBack(t)
-		return
-	}
-
-	earliestTask := of.taskQueue.Front().Value.(*task)
-	recentTask := of.taskQueue.Back().Value.(*task)
-
-	// late arrival
-	if !earliestTask.pf.PartitionID.End.Before(t.pf.PartitionID.End) {
-		of.taskQueue.PushFront(t)
-	} else if !recentTask.pf.PartitionID.End.After(t.pf.PartitionID.End) {
-		// early arrival
-		of.taskQueue.PushBack(t)
-	} else {
-		// a task in the middle
-		for e := of.taskQueue.Back(); e != nil; e = e.Prev() {
-			_task := e.Value.(*task)
-			if !_task.pf.PartitionID.End.After(t.pf.PartitionID.End) {
-				of.taskQueue.InsertAfter(t, e)
-				break
-			}
-		}
-	}
+	of.taskQueue.PushBack(t)
 }
 
 // schedulePnF creates and schedules the PnF routine.
@@ -108,7 +86,7 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 	partitionID partition.ID,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
-	pw map[string]publish.Publisher) {
+	pw map[string]publish.Publisher) *task {
 
 	pf := pnf.NewProcessAndForward(ctx, of.vertexName, of.pipelineName, partitionID, udf, pbq, toBuffers, whereToDecider, pw)
 	doneCh := make(chan struct{})
@@ -116,12 +94,9 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 		doneCh: doneCh,
 		pf:     pf,
 	}
-
-	of.insertTask(ctx, t)
-	partitionsInFlight.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Inc()
-
 	// invoke the reduce function
 	go of.reduceOp(ctx, t)
+	return t
 }
 
 // reduceOp invokes the reduce function. The reducer is a long running function since we stream in the data and it has
