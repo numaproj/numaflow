@@ -18,11 +18,17 @@ package fixtures
 
 import (
 	"context"
+	"time"
 )
+
+const timeout = time.Minute * 1
+const retryInterval = time.Second * 5
 
 // RedisNotContains verifies that there is no key in redis which contain a substring matching the targetRegex.
 func RedisNotContains(ctx context.Context, sinkName string, regex string) bool {
-	return !redisContains(ctx, sinkName, regex, 1)
+	return runChecks(func() bool {
+		return !redisContains(ctx, sinkName, regex, 1)
+	})
 }
 
 // RedisContains verifies that there are keys in redis which contain a substring matching the targetRegex.
@@ -33,8 +39,10 @@ func RedisContains(ctx context.Context, sinkName string, targetRegex string, opt
 			opt(o)
 		}
 	}
-	return redisContains(ctx, sinkName, targetRegex, o.count)
 
+	return runChecks(func() bool {
+		return redisContains(ctx, sinkName, targetRegex, o.count)
+	})
 }
 
 func redisContains(ctx context.Context, sinkName string, targetRegex string, expectedCount int) bool {
@@ -59,5 +67,33 @@ type RedisCheckOption func(*redisCheckOptions)
 func RedisCheckOptionWithCount(c int) RedisCheckOption {
 	return func(o *redisCheckOptions) {
 		o.count = c
+	}
+}
+
+type CheckFunc func() bool
+
+// runChecks executes a performChecks function with retry strategy (retryInterval with timeout).
+// If performChecks doesn't pass within timeout, runChecks returns false indicating the checks have failed.
+// This is to mitigate the problem that we don't know exactly when a numaflow pipeline finishes processing our test data.
+// Please notice such approach is not strictly accurate as there can be case where runChecks passes before pipeline finishes processing data.
+// Which could result in false positive test results. e.g. checking data doesn't exist can pass before data gets persisted to redis.
+func runChecks(performChecks CheckFunc) bool {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(retryInterval)
+	defer ticker.Stop()
+
+	for {
+		if performChecks() {
+			// All checks passed, so return true
+			return true
+		}
+
+		if time.Now().After(deadline) {
+			// Timeout reached, so return false
+			return false
+		}
+
+		// Wait for the next tick of the ticker
+		<-ticker.C
 	}
 }

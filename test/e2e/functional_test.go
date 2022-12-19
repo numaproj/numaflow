@@ -123,9 +123,6 @@ func (s *FunctionalSuite) TestFiltering() {
 		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`)).
 		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`))
 
-	// Wait for data to reach sink vertex.
-	time.Sleep(time.Second * 5)
-
 	w.Expect().RedisContains("out", "expect[3-4]", RedisCheckOptionWithCount(2))
 	w.Expect().RedisNotContains("out", "expect[0-2]")
 }
