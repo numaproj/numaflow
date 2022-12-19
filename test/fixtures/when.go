@@ -19,15 +19,14 @@ package fixtures
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/rest"
 	"testing"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
-	_ "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 type When struct {
@@ -41,7 +40,9 @@ type When struct {
 	kubeClient     kubernetes.Interface
 
 	portForwarderStopChannels map[string]chan struct{}
-	vertexToPodIpMapping      map[string]string
+	// Key: vertex label selector
+	// Value: the ip of, one of the pods matching the label selector
+	vertexToPodIpMapping map[string]string
 }
 
 // SendMessageTo sends msg to one of the pods in http source vertex.
@@ -51,7 +52,6 @@ func (w *When) SendMessageTo(pipelineName string, vertexName string, msg []byte)
 		w.vertexToPodIpMapping = make(map[string]string)
 	}
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
-
 	if w.vertexToPodIpMapping[labelSelector] == "" {
 		ctx := context.Background()
 		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
@@ -64,6 +64,8 @@ func (w *When) SendMessageTo(pipelineName string, vertexName string, msg []byte)
 		w.vertexToPodIpMapping[labelSelector] = podList.Items[0].Status.PodIP
 	}
 
+	// There could be a rare corner case when a previous added pod gets replaced by a new one, making the mapping entry no longer valid.
+	// Considering current e2e tests are all lightweight, we assume no such case for now.
 	SendMessageTo(w.vertexToPodIpMapping[labelSelector], vertexName, msg)
 	return w
 }
