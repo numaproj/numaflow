@@ -120,7 +120,8 @@ func Test_Multiple(t *testing.T) {
 	}
 
 	read := 0
-	timeout := time.After(4 * time.Second)
+	// default read timeout is 1 sec, and smaller values seems to be flaky
+	timeout := time.After(30 * time.Second)
 	for {
 		select {
 		case <-timeout:
