@@ -16,18 +16,7 @@ limitations under the License.
 
 package fixtures
 
-import (
-	"log"
-)
-
 // SendMessageTo sends msg to a pod in http source vertex.
-func SendMessageTo(podIp string, vertexName string, msg []byte) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = r.(error)
-		}
-	}()
-	log.Printf("Sending msg %v to podIp %s, vertex %s\n", msg, podIp, vertexName)
+func SendMessageTo(podIp string, vertexName string, msg []byte) {
 	InvokeE2EAPIPOST("/http/send-message?podIp=%s&vertexName=%s", string(msg[:]), podIp, vertexName)
-	return
 }

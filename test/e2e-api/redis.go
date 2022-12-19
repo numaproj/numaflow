@@ -25,7 +25,16 @@ import (
 	"net/url"
 )
 
+var redisClient *redis.Client
+
 func init() {
+
+	// When we use this API to validate e2e test result, we always assume a redis UDSink is used
+	// to persist data to a redis instance listening on port 6379.
+	redisClient = redis.NewClient(&redis.Options{
+		Addr: "redis:6379",
+	})
+
 	// get-msg-count-contains takes a targetRegex and returns number of keys in redis
 	// which contain a substring matching the targetRegex.
 	http.HandleFunc("/redis/get-msg-count-contains", func(w http.ResponseWriter, r *http.Request) {
@@ -38,15 +47,9 @@ func init() {
 			return
 		}
 
-		// When we use this API to validate e2e test result, we always assume a redis UDSink is used
-		// to persist data to a redis instance listening on port 6379.
-		client := redis.NewClient(&redis.Options{
-			Addr: "redis:6379",
-		})
-
 		// Redis Keys API uses scan to retrieve data, which is not best practice in terms of performance.
 		// TODO - Look into replacing it with a more efficient API or data structure.
-		keyList, err := client.Keys(context.Background(), fmt.Sprintf("*%s*", targetRegex)).Result()
+		keyList, err := redisClient.Keys(context.Background(), fmt.Sprintf("*%s*", targetRegex)).Result()
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(500)

@@ -24,7 +24,15 @@ import (
 	"net/http"
 )
 
+var httpClient *http.Client
+
 func init() {
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
 	// send-message API is used to post data to a http source vertex pod.
 	// The API takes in two parameters(podIp and vertexName) and constructs the target url as
 	// https://{podIp}:8443/vertices/{vertexName}.
@@ -35,13 +43,6 @@ func init() {
 		if err != nil {
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
-			panic(err)
-		}
-
-		httpClient := &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
 		}
 
 		_, err = httpClient.Post(fmt.Sprintf("https://%s:8443/vertices/%s", podIp, vertexName), "application/json", bytes.NewBuffer(buf))
@@ -49,7 +50,6 @@ func init() {
 		if err != nil {
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
-			panic(err)
 		}
 	})
 }

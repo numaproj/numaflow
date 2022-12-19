@@ -19,14 +19,15 @@ package fixtures
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/rest"
 	"testing"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
+	_ "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 type When struct {
@@ -40,25 +41,30 @@ type When struct {
 	kubeClient     kubernetes.Interface
 
 	portForwarderStopChannels map[string]chan struct{}
+	vertexToPodIpMapping      map[string]string
 }
 
 // SendMessageTo sends msg to one of the pods in http source vertex.
 func (w *When) SendMessageTo(pipelineName string, vertexName string, msg []byte) *When {
 	w.t.Helper()
+	if w.vertexToPodIpMapping == nil {
+		w.vertexToPodIpMapping = make(map[string]string)
+	}
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
-	ctx := context.Background()
-	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
-	if err != nil {
-		w.t.Fatalf("Error getting vertex pod list: %v", err)
+
+	if w.vertexToPodIpMapping[labelSelector] == "" {
+		ctx := context.Background()
+		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+		if err != nil {
+			w.t.Fatalf("Error getting vertex pod list: %v", err)
+		}
+		if len(podList.Items) == 0 {
+			w.t.Fatalf("No running pod found in pipeline %s, vertex: %s", pipelineName, vertexName)
+		}
+		w.vertexToPodIpMapping[labelSelector] = podList.Items[0].Status.PodIP
 	}
-	if len(podList.Items) == 0 {
-		w.t.Fatalf("No running pod found in pipeline %s, vertex: %s", pipelineName, vertexName)
-	}
-	pod := podList.Items[0]
-	err = SendMessageTo(pod.Status.PodIP, vertexName, msg)
-	if err != nil {
-		w.t.Fatal(err)
-	}
+
+	SendMessageTo(w.vertexToPodIpMapping[labelSelector], vertexName, msg)
 	return w
 }
 

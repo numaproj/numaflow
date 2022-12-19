@@ -20,10 +20,12 @@ import (
 	"context"
 )
 
+// RedisNotContains verifies that there is no key in redis which contain a substring matching the targetRegex.
 func RedisNotContains(ctx context.Context, sinkName string, regex string) bool {
 	return !redisContains(ctx, sinkName, regex, 1)
 }
 
+// RedisContains verifies that there are keys in redis which contain a substring matching the targetRegex.
 func RedisContains(ctx context.Context, sinkName string, targetRegex string, opts ...RedisCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
@@ -36,6 +38,7 @@ func RedisContains(ctx context.Context, sinkName string, targetRegex string, opt
 }
 
 func redisContains(ctx context.Context, sinkName string, targetRegex string, expectedCount int) bool {
+	// If number of matches is higher than expected, we treat it as passing the check.
 	return GetMsgCountContains(sinkName, targetRegex) >= expectedCount
 }
 
@@ -51,6 +54,8 @@ func defaultRedisCheckOptions() *redisCheckOptions {
 
 type RedisCheckOption func(*redisCheckOptions)
 
+// RedisCheckOptionWithCount updates the redisCheckOptions to specify count.
+// The count is the expected number of matches for the check.
 func RedisCheckOptionWithCount(c int) RedisCheckOption {
 	return func(o *redisCheckOptions) {
 		o.count = c

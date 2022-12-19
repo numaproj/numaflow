@@ -78,11 +78,3 @@ spec:
             items:
               - key: redis-config
                 path: redis.conf
-  volumeClaimTemplates:
-    - metadata:
-        name: redis-data-dir
-      spec:
-        accessModes: [ "ReadWriteOnce" ]
-        resources:
-          requests:
-            storage: 10Gi
