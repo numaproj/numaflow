@@ -36,7 +36,7 @@ type memoryStores struct {
 
 func NewMemoryStores(opts ...Option) store.StoreProvider {
 	s := &memoryStores{
-		storeSize:  100,
+		storeSize:  100000,
 		partitions: make(map[partition.ID]*memoryStore),
 	}
 

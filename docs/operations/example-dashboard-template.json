@@ -45,7 +45,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -122,7 +122,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_read_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -137,7 +137,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "description": "",
       "fieldConfig": {
@@ -215,7 +215,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_read_bytes_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -230,7 +230,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -307,7 +307,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_write_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -322,7 +322,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -399,7 +399,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_udf_read_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -414,7 +414,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "description": "",
       "fieldConfig": {
@@ -492,7 +492,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_udf_write_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -507,7 +507,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -584,7 +584,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_ack_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -612,7 +612,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -726,7 +726,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "histogram_quantile(0.9, rate(forwarder_concurrent_udf_processing_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])) / 1000000",
@@ -737,7 +737,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "histogram_quantile(0.95, rate(forwarder_udf_processing_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])) / 1000000",
@@ -749,7 +749,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "histogram_quantile(0.99, rate(forwarder_udf_processing_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])) / 1000000",
@@ -765,7 +765,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -879,7 +879,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "histogram_quantile(0.9, rate(forwarder_forward_chunk_processing_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])) / 1000000",
@@ -890,7 +890,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "histogram_quantile(0.95, rate(forwarder_forward_chunk_processing_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])) / 1000000",
@@ -902,7 +902,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "histogram_quantile(0.99, rate(forwarder_forward_chunk_processing_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])) / 1000000",
@@ -931,7 +931,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -1008,7 +1008,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_read_error_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -1023,7 +1023,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -1100,7 +1100,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_write_error_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -1115,7 +1115,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -1192,7 +1192,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_ack_error_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -1207,7 +1207,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -1284,7 +1284,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_udf_error_total{namespace=\"$namespace\", pipeline=\"$pipeline\"}[$__rate_interval])",
@@ -1299,7 +1299,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -1376,7 +1376,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(forwarder_platform_error_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
@@ -1404,7 +1404,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -1481,7 +1481,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "rate(isb_jetstream_isFull_total{buffer=\"$buffer\"}[$__rate_interval])",
@@ -1496,7 +1496,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -1573,7 +1573,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "isb_jetstream_buffer_soft_usage{buffer=\"$buffer\"}*100",
@@ -1588,7 +1588,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -1665,7 +1665,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "isb_jetstream_buffer_pending{buffer=\"$buffer\"}",
@@ -1680,7 +1680,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "Ub43gsvVk"
+        "uid": "eF7wTnc4k"
       },
       "fieldConfig": {
         "defaults": {
@@ -1757,7 +1757,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "Ub43gsvVk"
+            "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
           "expr": "isb_jetstream_buffer_ack_pending{buffer=\"$buffer\"}",
@@ -1784,7 +1784,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "Ub43gsvVk"
+          "uid": "eF7wTnc4k"
         },
         "definition": "label_values(namespace)",
         "hide": 0,
@@ -1810,7 +1810,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "Ub43gsvVk"
+          "uid": "eF7wTnc4k"
         },
         "definition": "label_values({namespace=~\"$namespace\"}, pipeline)",
         "hide": 0,
@@ -1836,7 +1836,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "Ub43gsvVk"
+          "uid": "eF7wTnc4k"
         },
         "definition": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\"}, vertex)",
         "hide": 0,
@@ -1862,7 +1862,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "Ub43gsvVk"
+          "uid": "eF7wTnc4k"
         },
         "definition": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\", vertex=~\"$vertex\"}, buffer)",
         "hide": 0,

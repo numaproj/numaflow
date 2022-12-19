@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
-
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -34,7 +34,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/pbq"
 	"github.com/numaproj/numaflow/pkg/pbq/store"
-	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/pbq/store/wal"
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -155,7 +154,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		storeProvider = memory.NewMemoryStores()
 	}
 
-	pbqManager, err := pbq.NewManager(ctx, storeProvider)
+	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, storeProvider)
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)

@@ -104,10 +104,10 @@ func TestOrderedProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// clean out the task queue before we start a run
-			op := newOrderedForwarder(ctx)
+			op := newOrderedForwarder(ctx, "reduce", "test-pipeline")
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.
-			pbqManager, _ := pbq.NewManager(ctx, memory.NewMemoryStores(memory.WithStoreSize(100)),
+			pbqManager, _ := pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(100)),
 				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 			cCtx, cancelFn := context.WithCancel(ctx)
 			defer cancelFn()
@@ -117,10 +117,9 @@ func TestOrderedProcessing(t *testing.T) {
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
 			count := 0
-			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
+			for e := op.taskQueue.Back(); e != nil; e = e.Prev() {
 				pfTask := e.Value.(*task)
-				partitionKey := pfTask.pf.PartitionID
-				assert.Equal(t, partition.ID{Key: fmt.Sprintf("partition-%d", count)}, partitionKey)
+				assert.Equal(t, partition.ID{Key: fmt.Sprintf("partition-%d", count)}, pfTask.pf.PartitionID)
 				count = count + 1
 			}
 

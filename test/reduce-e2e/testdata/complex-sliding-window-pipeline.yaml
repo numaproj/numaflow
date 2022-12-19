@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: complex-sum
+  name: complex-sliding-sum
 spec:
   limits:
     readBatchSize: 50
@@ -16,27 +16,38 @@ spec:
         min: 1
       udf:
         container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
+          image: quay.io/numaio/go-even-odd-example
     - name: keyed-fixed-sum
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum
+          image: quay.io/numaio/go-integer-sum-example
         groupBy:
           window:
             fixed:
-              length: 10s
+              length: 5s
           keyed: true
     - name: non-keyed-fixed-sum
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum
+          image: quay.io/numaio/go-integer-sum-example
         groupBy:
           window:
             fixed:
+              length: 10s
+          keyed: false
+    - name: non-keyed-sliding-sum
+      udf:
+        container:
+          # compute the sum
+          image: quay.io/numaio/go-integer-sum-example
+        groupBy:
+          window:
+            sliding:
               length: 60s
+              slide: 10s
           keyed: false
     - name: sink
       scale:
@@ -52,4 +63,6 @@ spec:
     - from: keyed-fixed-sum
       to: non-keyed-fixed-sum
     - from: non-keyed-fixed-sum
+      to: non-keyed-sliding-sum
+    - from: non-keyed-sliding-sum
       to: sink

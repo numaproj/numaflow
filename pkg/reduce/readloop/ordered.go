@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -47,6 +48,8 @@ type task struct {
 // orderedForwarder orders the forwarding of the result of the execution of the tasks, even though the tasks itself are
 // run concurrently in an out of ordered fashion.
 type orderedForwarder struct {
+	vertexName   string
+	pipelineName string
 	sync.RWMutex
 	taskDone  chan struct{}
 	taskQueue *list.List
@@ -54,16 +57,48 @@ type orderedForwarder struct {
 }
 
 // newOrderedForwarder returns an orderedForwarder.
-func newOrderedForwarder(ctx context.Context) *orderedForwarder {
+func newOrderedForwarder(ctx context.Context, vertexName string, pipelineName string) *orderedForwarder {
 	of := &orderedForwarder{
-		taskDone:  make(chan struct{}),
-		taskQueue: list.New(),
-		log:       logging.FromContext(ctx),
+		vertexName:   vertexName,
+		pipelineName: pipelineName,
+		taskDone:     make(chan struct{}),
+		taskQueue:    list.New(),
+		log:          logging.FromContext(ctx),
 	}
 
 	go of.forward(ctx)
 
 	return of
+}
+
+func (of *orderedForwarder) insertTask(tx context.Context, t *task) {
+	of.Lock()
+	defer of.Unlock()
+
+	if of.taskQueue.Len() == 0 {
+		of.taskQueue.PushBack(t)
+		return
+	}
+
+	earliestTask := of.taskQueue.Front().Value.(*task)
+	recentTask := of.taskQueue.Back().Value.(*task)
+
+	// late arrival
+	if !earliestTask.pf.PartitionID.End.Before(t.pf.PartitionID.End) {
+		of.taskQueue.PushFront(t)
+	} else if !recentTask.pf.PartitionID.End.After(t.pf.PartitionID.End) {
+		// early arrival
+		of.taskQueue.PushBack(t)
+	} else {
+		// a task in the middle
+		for e := of.taskQueue.Back(); e != nil; e = e.Prev() {
+			_task := e.Value.(*task)
+			if !_task.pf.PartitionID.End.After(t.pf.PartitionID.End) {
+				of.taskQueue.InsertAfter(t, e)
+				break
+			}
+		}
+	}
 }
 
 // schedulePnF creates and schedules the PnF routine.
@@ -75,16 +110,15 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher) {
 
-	pf := pnf.NewProcessAndForward(ctx, partitionID, udf, pbq, toBuffers, whereToDecider, pw)
+	pf := pnf.NewProcessAndForward(ctx, of.vertexName, of.pipelineName, partitionID, udf, pbq, toBuffers, whereToDecider, pw)
 	doneCh := make(chan struct{})
 	t := &task{
 		doneCh: doneCh,
 		pf:     pf,
 	}
 
-	of.Lock()
-	defer of.Unlock()
-	of.taskQueue.PushBack(t)
+	of.insertTask(ctx, t)
+	partitionsInFlight.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Inc()
 
 	// invoke the reduce function
 	go of.reduceOp(ctx, t)
@@ -93,7 +127,6 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 // reduceOp invokes the reduce function. The reducer is a long running function since we stream in the data and it has
 // to wait for the close-of-book on the PBQ to materialize the result.
 func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
-	// TODO: better logging with partitionID?
 	start := time.Now()
 	for {
 		// FIXME: this error handling won't work with streams. We cannot do infinite retries
@@ -102,6 +135,7 @@ func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 		if err == nil {
 			break
 		} else if err == ctx.Err() {
+			udfError.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Inc()
 			of.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
 			return
 		}
@@ -173,6 +207,7 @@ func (of *orderedForwarder) forward(ctx context.Context) {
 				rm := currElement
 				currElement = currElement.Next()
 				of.taskQueue.Remove(rm)
+				partitionsInFlight.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Dec()
 				of.log.Debugw("Removing task post forward call", zap.String("partitionID", t.pf.PartitionID.String()))
 				of.Unlock()
 			case <-ctx.Done():
