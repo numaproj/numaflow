@@ -27,7 +27,7 @@ import (
 var httpClient *http.Client
 
 func init() {
-	httpClient := &http.Client{
+	httpClient = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
