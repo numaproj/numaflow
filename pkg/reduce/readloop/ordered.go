@@ -75,7 +75,6 @@ func newOrderedForwarder(ctx context.Context, vertexName string, pipelineName st
 func (of *orderedForwarder) insertTask(t *task) {
 	of.Lock()
 	defer of.Unlock()
-
 	of.taskQueue.PushBack(t)
 }
 
