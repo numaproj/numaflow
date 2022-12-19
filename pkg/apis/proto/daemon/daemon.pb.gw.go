@@ -643,7 +643,7 @@ var (
 
 	pattern_DaemonService_GetVertexWatermark_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"api", "v1", "pipelines", "pipeline", "vertices", "vertex", "watermark"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_DaemonService_GetPipelineWatermarks_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "v1", "pipeline", "watermarks"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_DaemonService_GetPipelineWatermarks_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "pipelines", "pipeline", "watermarks"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (

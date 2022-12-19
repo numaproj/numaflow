@@ -124,6 +124,6 @@ service DaemonService {
 
   // GetPipelineWatermarks return the watermark of the given pipeline
   rpc GetPipelineWatermarks (GetPipelineWatermarksRequest) returns (GetPipelineWatermarksResponse) {
-    option (google.api.http).get = "/api/v1/pipeline/{pipeline}/watermarks";
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/watermarks";
   };
 }
