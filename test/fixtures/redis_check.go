@@ -21,13 +21,22 @@ import (
 	"time"
 )
 
-const timeout = time.Minute * 1
+// Retry checking redis every 5 seconds.
 const retryInterval = time.Second * 5
 
 // RedisNotContains verifies that there is no key in redis which contain a substring matching the targetRegex.
-func RedisNotContains(ctx context.Context, sinkName string, regex string) bool {
-	return runChecks(func() bool {
-		return !redisContains(ctx, sinkName, regex, 1)
+func RedisNotContains(ctx context.Context, sinkName string, regex string, opts ...RedisCheckOption) bool {
+	o := defaultRedisCheckOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, o.timeout)
+	defer cancel()
+
+	return runChecks(ctx, func() bool {
+		return !redisContains(sinkName, regex, 1)
 	})
 }
 
@@ -39,24 +48,28 @@ func RedisContains(ctx context.Context, sinkName string, targetRegex string, opt
 			opt(o)
 		}
 	}
+	ctx, cancel := context.WithTimeout(ctx, o.timeout)
+	defer cancel()
 
-	return runChecks(func() bool {
-		return redisContains(ctx, sinkName, targetRegex, o.count)
+	return runChecks(ctx, func() bool {
+		return redisContains(sinkName, targetRegex, o.count)
 	})
 }
 
-func redisContains(ctx context.Context, sinkName string, targetRegex string, expectedCount int) bool {
+func redisContains(sinkName string, targetRegex string, expectedCount int) bool {
 	// If number of matches is higher than expected, we treat it as passing the check.
 	return GetMsgCountContains(sinkName, targetRegex) >= expectedCount
 }
 
 type redisCheckOptions struct {
-	count int
+	count   int
+	timeout time.Duration
 }
 
 func defaultRedisCheckOptions() *redisCheckOptions {
 	return &redisCheckOptions{
-		count: 1,
+		count:   1,
+		timeout: defaultTimeout,
 	}
 }
 
@@ -70,6 +83,14 @@ func RedisCheckOptionWithCount(c int) RedisCheckOption {
 	}
 }
 
+// RedisCheckOptionWithTimeout updates the redisCheckOptions to specify timeout.
+// The timeout specifies how long the redis check will wait for expected data to be ready in redis.
+func RedisCheckOptionWithTimeout(t time.Duration) RedisCheckOption {
+	return func(o *redisCheckOptions) {
+		o.timeout = t
+	}
+}
+
 type CheckFunc func() bool
 
 // runChecks executes a performChecks function with retry strategy (retryInterval with timeout).
@@ -77,23 +98,20 @@ type CheckFunc func() bool
 // This is to mitigate the problem that we don't know exactly when a numaflow pipeline finishes processing our test data.
 // Please notice such approach is not strictly accurate as there can be case where runChecks passes before pipeline finishes processing data.
 // Which could result in false positive test results. e.g. checking data doesn't exist can pass before data gets persisted to redis.
-func runChecks(performChecks CheckFunc) bool {
-	deadline := time.Now().Add(timeout)
+func runChecks(ctx context.Context, performChecks CheckFunc) bool {
 	ticker := time.NewTicker(retryInterval)
 	defer ticker.Stop()
 
 	for {
-		if performChecks() {
-			// All checks passed, so return true
-			return true
-		}
-
-		if time.Now().After(deadline) {
-			// Timeout reached, so return false
+		select {
+		case <-ctx.Done():
+			// Timeout reached, meaning checks did not pass within timeout, return false
 			return false
+		case <-ticker.C:
+			if performChecks() {
+				// All checks passed, return true
+				return true
+			}
 		}
-
-		// Wait for the next tick of the ticker
-		<-ticker.C
 	}
 }
