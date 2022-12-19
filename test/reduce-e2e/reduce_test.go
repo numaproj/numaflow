@@ -54,7 +54,7 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
 		startTime := 60000
-		for i := 0; i < 300; i++ {
+		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():
 				return
