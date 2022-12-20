@@ -1584,7 +1584,7 @@
 
 <h1 id="http-source">HTTP Source<a class="headerlink" href="#http-source" title="Permanent link">&para;</a></h1>
 <p>HTTP Source starts an HTTP service with TLS enabled to accept POST request in the Vertex Pod. It listens to port 8443, with request URI <code>/vertices/{vertexName}</code>.</p>
-<p>An Pipeline with HTTP Source:</p>
+<p>A Pipeline with HTTP Source:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
 <span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
@@ -1673,7 +1673,7 @@ kubectl create secret generic http-source-token --from-file<span class="o">=</sp
 curl -kq -X POST -H <span class="s2">&quot;Authorization: </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span> -d <span class="s2">&quot;hello world&quot;</span> https://http-pipeline-in:8443/vertices/in
 </code></pre></div>
 <h2 id="health-check">Health Check<a class="headerlink" href="#health-check" title="Permanent link">&para;</a></h2>
-<p>The HTTP Source also has an endpoint <code>/health</code> created automatically, which is useful for for LoadBalancer or Ingress configuration, where a health check endpoint is often required by the cloud provider.</p>
+<p>The HTTP Source also has an endpoint <code>/health</code> created automatically, which is useful for LoadBalancer or Ingress configuration, where a health check endpoint is often required by the cloud provider.</p>
 
               
             </article>
