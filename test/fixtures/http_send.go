@@ -16,7 +16,48 @@ limitations under the License.
 
 package fixtures
 
-// SendMessageTo sends msg to a pod in http source vertex.
-func SendMessageTo(podIp string, vertexName string, msg []byte) {
-	InvokeE2EAPIPOST("/http/send-message?podIp=%s&vertexName=%s", string(msg[:]), podIp, vertexName)
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type HttpPostRequest struct {
+	Header map[string]string `json:"header"`
+	Body   []byte            `json:"body"`
+}
+
+type RequestBuilder struct {
+	request *HttpPostRequest
+}
+
+// NewRequestBuilder constructor for HttpPostRequest
+func NewRequestBuilder() *RequestBuilder {
+	return &RequestBuilder{request: &HttpPostRequest{}}
+}
+
+// Build builds a person from PersonBuilder
+func (b *RequestBuilder) Build() *HttpPostRequest {
+	return b.request
+}
+
+func (b *RequestBuilder) WithHeader(k, v string) *RequestBuilder {
+	if b.request.Header == nil {
+		b.request.Header = map[string]string{}
+	}
+	b.request.Header[k] = v
+	return b
+}
+
+func (b *RequestBuilder) WithBody(body []byte) *RequestBuilder {
+	b.request.Body = body
+	return b
+}
+
+// SendMessageTo sends a http post request to a pod in http source vertex.
+func SendMessageTo(podIp string, vertexName string, r HttpPostRequest) {
+	req, err := json.Marshal(r)
+	if err != nil {
+		panic(fmt.Sprintf("Failed serializing the request %v into json format. %v", r, err))
+	}
+	InvokeE2EAPIPOST("/http/send-message?podIp=%s&vertexName=%s", string(req[:]), podIp, vertexName)
 }

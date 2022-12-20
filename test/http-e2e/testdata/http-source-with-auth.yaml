@@ -13,7 +13,9 @@ spec:
               key: fake-token
     - name: out
       sink:
-        log: {}
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
       to: out

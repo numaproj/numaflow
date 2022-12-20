@@ -46,7 +46,7 @@ type When struct {
 }
 
 // SendMessageTo sends msg to one of the pods in http source vertex.
-func (w *When) SendMessageTo(pipelineName string, vertexName string, msg []byte) *When {
+func (w *When) SendMessageTo(pipelineName string, vertexName string, req HttpPostRequest) *When {
 	w.t.Helper()
 	if w.vertexToPodIpMapping == nil {
 		w.vertexToPodIpMapping = make(map[string]string)
@@ -66,7 +66,7 @@ func (w *When) SendMessageTo(pipelineName string, vertexName string, msg []byte)
 
 	// There could be a rare corner case when a previous added pod gets replaced by a new one, making the mapping entry no longer valid.
 	// Considering current e2e tests are all lightweight, we assume no such case for now.
-	SendMessageTo(w.vertexToPodIpMapping[labelSelector], vertexName, msg)
+	SendMessageTo(w.vertexToPodIpMapping[labelSelector], vertexName, req)
 	return w
 }
 

@@ -51,7 +51,7 @@ const (
 	defaultTimeout = 60 * time.Second
 
 	LogSourceVertexStarted    = "Start processing source messages"
-	LogSinkVertexStarted      = "Start processing sink messages"
+	SinkVertexStarted         = "Start processing sink messages"
 	LogUDFVertexStarted       = "Start processing udf messages"
 	LogReduceUDFVertexStarted = "Start processing reduce udf messages"
 	LogDaemonStarted          = "Daemon server started successfully"
