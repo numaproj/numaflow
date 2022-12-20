@@ -12,7 +12,8 @@ spec:
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+            # TODO - update the image path after keran make/merges corresponding changes in numaflow-sink
+            image: quay.io/numaio/numaflow-go/sink-redis:test-v1
   edges:
     - from: in
       to: out

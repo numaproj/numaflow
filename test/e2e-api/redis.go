@@ -39,12 +39,9 @@ func init() {
 	// which contain a substring matching the targetRegex.
 	http.HandleFunc("/redis/get-msg-count-contains", func(w http.ResponseWriter, r *http.Request) {
 		targetRegex, err := url.QueryUnescape(r.URL.Query().Get("targetRegex"))
-
-		log.Printf("Received target regex %v", targetRegex)
-
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
+			w.WriteHeader(400)
 			_, _ = w.Write([]byte(err.Error()))
 			return
 		}
@@ -52,9 +49,6 @@ func init() {
 		// Redis Keys API uses scan to retrieve data, which is not best practice in terms of performance.
 		// TODO - Look into replacing it with a more efficient API or data structure.
 		keyList, err := redisClient.Keys(context.Background(), fmt.Sprintf("*%s*", targetRegex)).Result()
-
-		log.Printf("Matching key list %v", keyList)
-
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(500)

@@ -35,7 +35,7 @@ func NewRequestBuilder() *RequestBuilder {
 	return &RequestBuilder{request: &HttpPostRequest{}}
 }
 
-// Build builds a person from PersonBuilder
+// Build builds a httpPostRequest from RequestBuilder
 func (b *RequestBuilder) Build() *HttpPostRequest {
 	return b.request
 }

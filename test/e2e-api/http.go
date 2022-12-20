@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/numaproj/numaflow/test/fixtures"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -42,26 +43,39 @@ func init() {
 		podIp := r.URL.Query().Get("podIp")
 		vertexName := r.URL.Query().Get("vertexName")
 		reqBytes, err := io.ReadAll(r.Body)
-		checkError(err, w)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
 
 		var req fixtures.HttpPostRequest
 		err = json.Unmarshal(reqBytes, &req)
-		checkError(err, w)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
 
 		postReq, err := http.NewRequest("POST", fmt.Sprintf("https://%s:8443/vertices/%s", podIp, vertexName), bytes.NewBuffer(req.Body))
-		checkError(err, w)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
 
 		for k, v := range req.Header {
 			postReq.Header.Add(k, v)
 		}
 		_, err = httpClient.Do(postReq)
-		checkError(err, w)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
 	})
-}
-
-func checkError(err error, w http.ResponseWriter) {
-	if err != nil {
-		w.WriteHeader(500)
-		_, _ = w.Write([]byte(err.Error()))
-	}
 }
