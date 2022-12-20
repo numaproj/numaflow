@@ -119,41 +119,46 @@ export function Pipeline() {
     return () => clearInterval(interval);
   }, [getMetrics]);
 
-  // This is used to obtain the watermark of a given vertex
-  const getWatermark = useCallback(() => {
+  // This is used to obtain the watermark of a given pipeline
+  const getPipelineWatermarks = useCallback(() => {
     const vertexToWatermarkMap = new Map();
     if (pipeline?.spec?.vertices) {
-      Promise.all(
-        pipeline?.spec?.vertices.map((vertex) => {
-          return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/watermark`
-          )
-            .then((response) => response.json())
-            .then((json) => {
-              const vertexWatermark = {} as VertexWatermark;
-              vertexWatermark.isWaterMarkEnabled = json["isWatermarkEnabled"];
-              vertexWatermark.watermark = json["watermark"];
-              vertexWatermark.watermarkLocalTime = new Date(
-                vertexWatermark.watermark
-              ).toISOString();
-              vertexToWatermarkMap.set(vertex.name, vertexWatermark);
-            });
-        })
-      )
-        .then(() => setVertexWatermark(vertexToWatermarkMap))
-        .catch(console.error);
+      if (pipeline?.spec?.watermark?.disabled && pipeline.spec.watermark.disabled === true) {
+        setVertexWatermark(vertexToWatermarkMap)
+      } else {
+        Promise.all( [
+              fetch(
+                  `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
+              )
+                  .then((response) => response.json())
+                  .then((json) => {
+                    json.map((vertex) => {
+                      const vertexWatermark = {} as VertexWatermark;
+                      vertexWatermark.isWaterMarkEnabled = vertex["isWatermarkEnabled"];
+                      vertexWatermark.watermark = vertex["watermark"];
+                      vertexWatermark.watermarkLocalTime = new Date(
+                          vertexWatermark.watermark
+                      ).toISOString();
+                      vertexToWatermarkMap.set(vertex.vertex, vertexWatermark);
+                    })
+                  })
+            ]
+        )
+            .then(() => setVertexWatermark(vertexToWatermarkMap))
+            .catch(console.error);
+      }
     }
   }, [pipeline]);
 
   // This useEffect is used to obtain watermark for a given vertex in a pipeline and refreshes every 1 minute
   useEffect(() => {
-    getWatermark();
+    getPipelineWatermarks();
     const interval = setInterval(() => {
-      getWatermark();
+      getPipelineWatermarks();
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [getWatermark]);
+  }, [getPipelineWatermarks]);
 
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];

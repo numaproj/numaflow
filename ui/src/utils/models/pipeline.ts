@@ -43,6 +43,7 @@ export interface Pipeline {
 export interface Spec {
   vertices: PipelineVertex[];
   edges: PipelineEdge[];
+  watermark: any,
 }
 
 export interface PipelineVertex {

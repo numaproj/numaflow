@@ -93,6 +93,15 @@ message GetVertexWatermarkRequest {
   required string vertex = 2;
 }
 
+message GetPipelineWatermarksResponse {
+  repeated VertexWatermark pipelineWatermarks = 1;
+}
+
+// GetPipelineWatermarksRequest requests for the watermark for a pipeline.
+message GetPipelineWatermarksRequest {
+  required string pipeline = 1;
+}
+
 // DaemonService is a grpc service that is used to provide APIs for giving any pipeline information.
 service DaemonService {
 
@@ -111,5 +120,10 @@ service DaemonService {
   // GetVertexWatermark return the watermark of the given vertex.
   rpc GetVertexWatermark (GetVertexWatermarkRequest) returns (GetVertexWatermarkResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/watermark";
+  };
+
+  // GetPipelineWatermarks return the watermark of the given pipeline
+  rpc GetPipelineWatermarks (GetPipelineWatermarksRequest) returns (GetPipelineWatermarksResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/watermarks";
   };
 }

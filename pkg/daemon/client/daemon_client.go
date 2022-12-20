@@ -109,3 +109,14 @@ func (dc *DaemonClient) GetVertexWatermark(ctx context.Context, pipeline, vertex
 		return rspn.VertexWatermark, nil
 	}
 }
+
+// GetPipelineWatermarks returns the []VertexWatermark response instance for GetPipelineWatermarksRequest
+func (dc *DaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.VertexWatermark, error) {
+	if rspn, err := dc.client.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{
+		Pipeline: &pipeline,
+	}); err != nil {
+		return nil, err
+	} else {
+		return rspn.PipelineWatermarks, nil
+	}
+}
