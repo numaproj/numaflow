@@ -322,6 +322,26 @@ func (h *handler) GetVertexWatermark(c *gin.Context) {
 	c.JSON(http.StatusOK, l)
 }
 
+// GetPipelineWatermarks is used to provide the head watermarks for a given pipeline
+func (h *handler) GetPipelineWatermarks(c *gin.Context) {
+	ns := c.Param("namespace")
+	pipeline := c.Param("pipeline")
+	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+	l, err := client.GetPipelineWatermarks(context.Background(), pipeline)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, l)
+}
+
 func daemonSvcAddress(ns, pipeline string) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
 }

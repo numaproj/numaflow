@@ -21,15 +21,15 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	. "github.com/numaproj/numaflow/test/fixtures"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
 )
 
 type FunctionalSuite struct {
@@ -217,33 +217,39 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	var wg sync.WaitGroup
-	for _, vertex := range vertexList {
-		wg.Add(1)
-		go func(vertex string) {
-			defer wg.Done()
-			// timeout for checking watermark progression
-			isProgressing, err := isWatermarkProgressing(ctx, client, pipelineName, vertex, 3)
-			assert.NoError(s.T(), err, "TestWatermarkEnabled failed %s\n", err)
-			assert.Truef(s.T(), isProgressing, "isWatermarkProgressing\n")
-		}(vertex)
-	}
-	wg.Wait()
+	isProgressing, err := isWatermarkProgressing(ctx, client, pipelineName, vertexList, 3)
+	assert.NoError(s.T(), err, "TestWatermarkEnabled failed %s\n", err)
+	assert.Truef(s.T(), isProgressing, "isWatermarkProgressing\n")
 }
 
-// isWatermarkProgressing checks whether the watermark for a given vertex is progressing monotonically.
+// isWatermarkProgressing checks whether the watermark for each vertex in a pipeline is progressing monotonically.
 // progressCount is the number of progressions the watermark value should undertake within the timeout deadline for it
-// to be considered as valid.
-func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClient, pipelineName string, vertexName string, progressCount int) (bool, error) {
-	prevWatermark := int64(-1)
+func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClient, pipelineName string, vertexList []string, progressCount int) (bool, error) {
+	prevWatermark := make([]int64, len(vertexList))
+	for i := 0; i < len(vertexList); i++ {
+		prevWatermark[i] = -1
+	}
 	for i := 0; i < progressCount; i++ {
 		currentWatermark := prevWatermark
-		for currentWatermark <= prevWatermark {
-			wm, err := client.GetVertexWatermark(ctx, pipelineName, vertexName)
+		for func(current []int64, prev []int64) bool {
+			for j := 0; j < len(current); j++ {
+				if current[j] > prev[j] {
+					return false
+				}
+			}
+			return true
+		}(currentWatermark, prevWatermark) {
+			wm, err := client.GetPipelineWatermarks(ctx, pipelineName)
 			if err != nil {
 				return false, err
 			}
-			currentWatermark = *wm.Watermark
+			pipelineWatermarks := make([]int64, len(vertexList))
+			idx := 0
+			for _, v := range wm {
+				pipelineWatermarks[idx] = *v.Watermark
+				idx++
+			}
+			currentWatermark = pipelineWatermarks
 			select {
 			case <-ctx.Done():
 				return false, ctx.Err()
