@@ -32,6 +32,8 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
+//go:generate kubectl -n numaflow-system delete statefulset redis --ignore-not-found=true
+//go:generate kubectl apply -k ../../config/apps/redis -n numaflow-system
 type FunctionalSuite struct {
 	E2ESuite
 }
@@ -41,7 +43,6 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-
 	pipelineName := "simple-pipeline"
 
 	w.Expect().
@@ -108,34 +109,22 @@ func (s *FunctionalSuite) TestFiltering() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
+	pipelineName := "filtering"
 
 	w.Expect().
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
 		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("out", LogSinkVertexStarted)
+		VertexPodLogContains("out", LogSinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
+	w.SendMessageTo(pipelineName, "in", []byte(`{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`)).
+		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`)).
+		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`)).
+		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`)).
+		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`))
 
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte(`{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`)).
-		Expect().
-		Status(204)
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte(`{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`)).
-		Expect().
-		Status(204)
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte(`{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`)).
-		Expect().
-		Status(204)
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`)).
-		Expect().
-		Status(204)
-
-	w.Expect().VertexPodLogContains("out", "expect3")
-	w.Expect().VertexPodLogNotContains("out", "expect[0-2]", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().RedisContains("out", "expect[3-4]", RedisCheckOptionWithCount(2))
+	w.Expect().RedisNotContains("out", "expect[0-2]")
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {
@@ -152,6 +141,7 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 		VertexPodLogContains("even-sink", LogSinkVertexStarted).
 		VertexPodLogContains("odd-sink", LogSinkVertexStarted).
 		VertexPodLogContains("number-sink", LogSinkVertexStarted)
+
 	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
 		TerminateAllPodPortForwards()
 

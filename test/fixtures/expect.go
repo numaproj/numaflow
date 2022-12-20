@@ -41,6 +41,26 @@ type Expect struct {
 	kubeClient     kubernetes.Interface
 }
 
+func (t *Expect) RedisContains(sinkName string, targetRegex string, opts ...RedisCheckOption) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	contains := RedisContains(ctx, sinkName, targetRegex, opts...)
+	if !contains {
+		t.t.Fatalf("Expected redis contains target regex %s populated by sink %s.", targetRegex, sinkName)
+	}
+	return t
+}
+
+func (t *Expect) RedisNotContains(sinkName string, targetRegex string) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	notContains := RedisNotContains(ctx, sinkName, targetRegex)
+	if !notContains {
+		t.t.Fatalf("Not expected redis contains target regex %s populated by sink %s.", targetRegex, sinkName)
+	}
+	return t
+}
+
 func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
