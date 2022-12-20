@@ -36,6 +36,13 @@ func newHttpLogger() *httpLogger {
 	}
 }
 
+var httpClient = &http.Client{
+	Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
 func (d *httpLogger) Logf(fmt string, args ...interface{}) {
 	d.log.Debugf(fmt, args...)
 }
@@ -48,12 +55,7 @@ func HTTPExpect(t require.TestingT, baseURL string) *httpexpect.Expect {
 			Printers: []httpexpect.Printer{
 				httpexpect.NewDebugPrinter(newHttpLogger(), true),
 			},
-			Client: &http.Client{
-				Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-				CheckRedirect: func(req *http.Request, via []*http.Request) error {
-					return http.ErrUseLastResponse
-				},
-			},
+			Client: httpClient,
 		}).
 		Builder(func(req *httpexpect.Request) {})
 }

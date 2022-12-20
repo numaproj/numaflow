@@ -113,11 +113,12 @@ func TestOrderedProcessing(t *testing.T) {
 			defer cancelFn()
 			for _, _partition := range tt.partitions {
 				p, _ := pbqManager.CreateNewPBQ(ctx, _partition)
-				op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
+				t := op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
+				op.insertTask(t)
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
 			count := 0
-			for e := op.taskQueue.Back(); e != nil; e = e.Prev() {
+			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
 				pfTask := e.Value.(*task)
 				assert.Equal(t, partition.ID{Key: fmt.Sprintf("partition-%d", count)}, pfTask.pf.PartitionID)
 				count = count + 1
