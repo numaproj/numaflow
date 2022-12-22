@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	. "github.com/numaproj/numaflow/test/fixtures"
 	"github.com/stretchr/testify/suite"
 )
@@ -39,18 +38,14 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	w := r.Given().Pipeline("@testdata/simple-keyed-reduce-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
+	pipelineName := "simple-sum"
 
 	// wait for all the pods to come up
 	w.Expect().
 		VertexPodsRunning()
 
-	// port forward source vertex(to publish messages)
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
 	done := make(chan struct{})
-
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
 		startTime := 60000
@@ -62,16 +57,9 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
+				w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).Build())
 			}
 		}
 	}()
@@ -90,16 +78,12 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 	w := r.Given().Pipeline("@testdata/simple-non-keyed-reduce-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
+	pipelineName := "reduce-sum"
 
 	// wait for all the pods to come up
-	w.Expect().
-		VertexPodsRunning()
+	w.Expect().VertexPodsRunning()
 
-	// port forward source vertex(to publish messages)
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
@@ -112,16 +96,9 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
+				w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).Build())
 			}
 		}
 	}()
@@ -139,18 +116,13 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 	w := r.Given().Pipeline("@testdata/complex-reduce-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
+	pipelineName := "complex-sum"
 
 	// wait for all the pods to come up
-	w.Expect().
-		VertexPodsRunning()
+	w.Expect().VertexPodsRunning()
 
-	// port forward source vertex(to publish messages)
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
 	done := make(chan struct{})
-
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
 		startTime := 60000
@@ -162,13 +134,8 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
+				w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).Build())
 			}
 		}
 	}()
@@ -183,24 +150,20 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-
 	w := r.Given().Pipeline("@testdata/simple-reduce-pipeline-wal.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-
 	pipelineName := "even-odd-sum"
 
+	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
 	w.Expect().
 		VertexPodLogContains("in", LogSourceVertexStarted).
 		VertexPodLogContains("atoi", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("sink", LogSinkVertexStarted).
+		VertexPodLogContains("sink", SinkVertexStarted).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted)
-
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
 
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=even-odd-sum,numaflow.numaproj.io/vertex-name=compute-sum"
@@ -218,24 +181,15 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 			case <-done:
 				return
 			default:
-				eventTime := startTime + (i * 1000)
+				eventTime := strconv.Itoa(startTime + (i * 1000))
 				if i == 5 {
 					// Kill the reducer pods during processing to trigger failover.
 					w.Expect().VertexPodsRunning()
 					w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 				}
-
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("X-Numaflow-Event-Time", strconv.Itoa(eventTime)).WithBytes([]byte("1")).
-					Expect().
-					Status(204)
-
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("X-Numaflow-Event-Time", strconv.Itoa(eventTime)).WithBytes([]byte("2")).
-					Expect().
-					Status(204)
-
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("X-Numaflow-Event-Time", strconv.Itoa(eventTime)).WithBytes([]byte("3")).
-					Expect().
-					Status(204)
+				w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).Build())
 			}
 		}
 	}()
@@ -262,19 +216,13 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	w := r.Given().Pipeline("@testdata/complex-sliding-window-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
+	pipelineName := "complex-sliding-sum"
 
 	// wait for all the pods to come up
-	w.Expect().
-		VertexPodsRunning()
-
-	// port forward source vertex(to publish messages)
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
+	w.Expect().VertexPodsRunning()
 
 	done := make(chan struct{})
-
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
 		startTime := 60000
@@ -287,13 +235,8 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
-				HTTPExpect(r.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).
-					Expect().
-					Status(204)
+				w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).Build())
 			}
 		}
 	}()

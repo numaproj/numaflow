@@ -49,7 +49,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		VertexPodsRunning().DaemonPodsRunning().
 		VertexPodLogContains("input", LogSourceVertexStarted).
 		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("output", LogSinkVertexStarted).
+		VertexPodLogContains("output", SinkVertexStarted).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
 		VertexPodLogContains("output", `"Data":".*","Createdts":.*`)
 
@@ -115,13 +115,13 @@ func (s *FunctionalSuite) TestFiltering() {
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
 		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("out", LogSinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+		VertexPodLogContains("out", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
-	w.SendMessageTo(pipelineName, "in", []byte(`{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`)).
-		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`)).
-		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`)).
-		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`)).
-		SendMessageTo(pipelineName, "in", []byte(`{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`))
+	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`)).Build())
 
 	w.Expect().RedisContains("out", "expect[3-4]", RedisCheckOptionWithCount(2))
 	w.Expect().RedisNotContains("out", "expect[0-2]")
@@ -131,29 +131,20 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	w := s.Given().Pipeline("@testdata/even-odd.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
+	pipelineName := "even-odd"
 
 	w.Expect().
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
 		VertexPodLogContains("even-or-odd", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("even-sink", LogSinkVertexStarted).
-		VertexPodLogContains("odd-sink", LogSinkVertexStarted).
-		VertexPodLogContains("number-sink", LogSinkVertexStarted)
+		VertexPodLogContains("even-sink", SinkVertexStarted).
+		VertexPodLogContains("odd-sink", SinkVertexStarted).
+		VertexPodLogContains("number-sink", SinkVertexStarted)
 
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("888888")).
-		Expect().
-		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("888889")).
-		Expect().
-		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("not an integer")).
-		Expect().
-		Status(204)
+	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("888888")).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("888889")).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("not an integer")).Build())
 
 	w.Expect().VertexPodLogContains("even-sink", "888888")
 	w.Expect().VertexPodLogNotContains("even-sink", "888889", PodLogCheckOptionWithTimeout(2*time.Second))
@@ -184,8 +175,8 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 		VertexPodLogContains("cat1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("cat2", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("cat3", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("output1", LogSinkVertexStarted).
-		VertexPodLogContains("output2", LogSinkVertexStarted).
+		VertexPodLogContains("output1", SinkVertexStarted).
+		VertexPodLogContains("output2", SinkVertexStarted).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
 		VertexPodLogContains("output1", `"Data":".*","Createdts":.*`).
 		VertexPodLogContains("output2", `"Data":".*","Createdts":.*`)

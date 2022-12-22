@@ -39,10 +39,9 @@ func init() {
 	// which contain a substring matching the targetRegex.
 	http.HandleFunc("/redis/get-msg-count-contains", func(w http.ResponseWriter, r *http.Request) {
 		targetRegex, err := url.QueryUnescape(r.URL.Query().Get("targetRegex"))
-
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
+			w.WriteHeader(400)
 			_, _ = w.Write([]byte(err.Error()))
 			return
 		}

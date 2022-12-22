@@ -19,8 +19,11 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"github.com/numaproj/numaflow/test/fixtures"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -39,17 +42,40 @@ func init() {
 	http.HandleFunc("/http/send-message", func(w http.ResponseWriter, r *http.Request) {
 		podIp := r.URL.Query().Get("podIp")
 		vertexName := r.URL.Query().Get("vertexName")
-		buf, err := io.ReadAll(r.Body)
+		reqBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			w.WriteHeader(500)
+			log.Println(err)
+			w.WriteHeader(400)
 			_, _ = w.Write([]byte(err.Error()))
+			return
 		}
 
-		_, err = httpClient.Post(fmt.Sprintf("https://%s:8443/vertices/%s", podIp, vertexName), "application/json", bytes.NewBuffer(buf))
-
+		var req fixtures.HttpPostRequest
+		err = json.Unmarshal(reqBytes, &req)
 		if err != nil {
+			log.Println(err)
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
+
+		postReq, err := http.NewRequest("POST", fmt.Sprintf("https://%s:8443/vertices/%s", podIp, vertexName), bytes.NewBuffer(req.Body))
+		if err != nil {
+			log.Println(err)
 			w.WriteHeader(500)
 			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
+
+		for k, v := range req.Header {
+			postReq.Header.Add(k, v)
+		}
+		_, err = httpClient.Do(postReq)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte(err.Error()))
+			return
 		}
 	})
 }
