@@ -40,9 +40,9 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
 		VertexPodLogContains("go-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("go-udsink", LogSinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("python-udsink", LogSinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
 	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
 		TerminateAllPodPortForwards()

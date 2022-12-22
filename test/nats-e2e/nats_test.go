@@ -30,7 +30,8 @@ import (
 //go:generate kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
 //go:generate kubectl apply -k ../../config/apps/nats -n numaflow-system
 //go:generate kubectl apply -f testdata/nats-auth-fake-token.yaml -n numaflow-system
-
+//go:generate kubectl -n numaflow-system delete statefulset redis --ignore-not-found=true
+//go:generate kubectl apply -k ../../config/apps/redis -n numaflow-system
 type NatsSuite struct {
 	fixtures.E2ESuite
 }
@@ -46,7 +47,7 @@ func (ns *NatsSuite) TestNatsSource() {
 		VertexPodsRunning()
 
 	fixtures.PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "my-prefix")
-	w.Expect().VertexPodLogContains("out", "my-prefix*", fixtures.PodLogCheckOptionWithCount(100))
+	w.Expect().RedisContains("out", "my-prefix*", fixtures.RedisCheckOptionWithCount(100))
 }
 
 func TestNatsSuite(t *testing.T) {
