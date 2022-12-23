@@ -25,7 +25,7 @@ import (
 const retryInterval = time.Second * 5
 
 // RedisNotContains verifies that there is no key in redis which contain a substring matching the targetRegex.
-func RedisNotContains(ctx context.Context, sinkName string, regex string, opts ...RedisCheckOption) bool {
+func RedisNotContains(ctx context.Context, sinkName string, regex string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -41,7 +41,7 @@ func RedisNotContains(ctx context.Context, sinkName string, regex string, opts .
 }
 
 // RedisContains verifies that there are keys in redis which contain a substring matching the targetRegex.
-func RedisContains(ctx context.Context, sinkName string, targetRegex string, opts ...RedisCheckOption) bool {
+func RedisContains(ctx context.Context, sinkName string, targetRegex string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -73,19 +73,19 @@ func defaultRedisCheckOptions() *redisCheckOptions {
 	}
 }
 
-type RedisCheckOption func(*redisCheckOptions)
+type SinkCheckOption func(*redisCheckOptions)
 
-// RedisCheckOptionWithCount updates the redisCheckOptions to specify count.
+// WithContainCount updates the redisCheckOptions to specify count.
 // The count is the expected number of matches for the check.
-func RedisCheckOptionWithCount(c int) RedisCheckOption {
+func WithContainCount(c int) SinkCheckOption {
 	return func(o *redisCheckOptions) {
 		o.count = c
 	}
 }
 
-// RedisCheckOptionWithTimeout updates the redisCheckOptions to specify timeout.
+// WithTimeout updates the redisCheckOptions to specify timeout.
 // The timeout specifies how long the redis check will wait for expected data to be ready in redis.
-func RedisCheckOptionWithTimeout(t time.Duration) RedisCheckOption {
+func WithTimeout(t time.Duration) SinkCheckOption {
 	return func(o *redisCheckOptions) {
 		o.timeout = t
 	}

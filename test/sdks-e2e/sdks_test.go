@@ -21,7 +21,6 @@ package sdks_e2e
 import (
 	"testing"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	. "github.com/numaproj/numaflow/test/fixtures"
 	"github.com/stretchr/testify/suite"
 )
@@ -35,6 +34,7 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
+	pipelineName := "flatmap"
 
 	w.Expect().
 		VertexPodsRunning().
@@ -44,15 +44,8 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("hello,hello")).
-		Expect().
-		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("hello")).
-		Expect().
-		Status(204)
+	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("hello,hello")).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("hello")).Build())
 
 	w.Expect().VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
 		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))

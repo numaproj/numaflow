@@ -43,11 +43,11 @@ func (ns *NatsSuite) TestNatsSource() {
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
 
-	w.Expect().
-		VertexPodsRunning()
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
 
 	fixtures.PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "my-prefix")
-	w.Expect().RedisContains("out", "my-prefix*", fixtures.RedisCheckOptionWithCount(100))
+	w.Expect().SinkContains("out", "my-prefix*", fixtures.WithContainCount(100))
 }
 
 func TestNatsSuite(t *testing.T) {
