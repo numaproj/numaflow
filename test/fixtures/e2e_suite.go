@@ -131,6 +131,13 @@ func (s *E2ESuite) SetupSuite() {
 	s.T().Log("ISB svc is ready")
 	err = PodPortForward(s.restConfig, Namespace, "e2e-api-pod", 8378, 8378, s.stopch)
 	s.CheckError(err)
+
+	// Create Redis resources used for sink data validation.
+	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
+	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, OutputRegexp(""))
+	createCMD := fmt.Sprintf("kubectl apply -k ../../config/apps/redis -n %s", Namespace)
+	s.Given().When().Exec("sh", []string{"-c", createCMD}, OutputRegexp("service/redis created"))
+	s.T().Log("Redis resources are ready")
 }
 
 func (s *E2ESuite) TearDownSuite() {
@@ -148,6 +155,9 @@ func (s *E2ESuite) TearDownSuite() {
 		Expect().
 		ISBSvcDeleted(1 * time.Minute)
 	s.T().Log("ISB svc is deleted")
+	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
+	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, OutputRegexp(`service "redis" deleted`))
+	s.T().Log("Redis resources are deleted")
 	close(s.stopch)
 }
 
