@@ -30,8 +30,6 @@ import (
 //go:generate kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
 //go:generate kubectl apply -k ../../config/apps/nats -n numaflow-system
 //go:generate kubectl apply -f testdata/nats-auth-fake-token.yaml -n numaflow-system
-//go:generate kubectl -n numaflow-system delete statefulset redis --ignore-not-found=true
-//go:generate kubectl apply -k ../../config/apps/redis -n numaflow-system
 type NatsSuite struct {
 	fixtures.E2ESuite
 }

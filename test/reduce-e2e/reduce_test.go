@@ -27,8 +27,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-//go:generate kubectl -n numaflow-system delete statefulset redis --ignore-not-found=true
-//go:generate kubectl apply -k ../../config/apps/redis -n numaflow-system
 type ReduceSuite struct {
 	E2ESuite
 }
