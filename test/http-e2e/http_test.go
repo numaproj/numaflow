@@ -40,10 +40,8 @@ func (s *HTTPSuite) TestHTTPSourcePipeline() {
 	defer w.DeletePipelineAndWait()
 	pipelineName := "http-source"
 
-	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("out", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
 
 	// Check Service
 	cmd := fmt.Sprintf("kubectl -n %s get svc -lnumaflow.numaproj.io/pipeline-name=%s,numaflow.numaproj.io/vertex-name=%s | grep -v CLUSTER-IP | grep -v headless", Namespace, "http-source", "in")
@@ -52,16 +50,16 @@ func (s *HTTPSuite) TestHTTPSourcePipeline() {
 	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("no-id")).Build()).
 		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("no-id")).Build())
 	// No x-numaflow-id, expect 2 outputs
-	w.Expect().RedisContains("out", "no-id", RedisCheckOptionWithCount(2))
+	w.Expect().SinkContains("out", "no-id", WithContainCount(2))
 
 	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("with-id")).WithHeader("x-numaflow-id", "101").Build()).
 		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("with-id")).WithHeader("x-numaflow-id", "101").Build())
 	// With same x-numaflow-id, expect 1 output
-	w.Expect().RedisContains("out", "with-id", RedisCheckOptionWithCount(1))
+	w.Expect().SinkContains("out", "with-id", WithContainCount(1))
 
 	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("with-id")).WithHeader("x-numaflow-id", "102").Build())
 	// With a new x-numaflow-id, expect 2 outputs
-	w.Expect().RedisContains("out", "with-id", RedisCheckOptionWithCount(2))
+	w.Expect().SinkContains("out", "with-id", WithContainCount(2))
 }
 
 func (s *HTTPSuite) TestHTTPSourceAuthPipeline() {
@@ -71,15 +69,13 @@ func (s *HTTPSuite) TestHTTPSourceAuthPipeline() {
 	defer w.DeletePipelineAndWait()
 	pipelineName := "http-auth-source"
 
-	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("out", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
 
 	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("no-auth")).Build()).
 		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("with-auth")).WithHeader("Authorization", "Bearer faketoken").Build())
-	w.Expect().RedisContains("out", "with-auth")
-	w.Expect().RedisNotContains("out", "no-auth")
+	w.Expect().SinkContains("out", "with-auth")
+	w.Expect().SinkNotContains("out", "no-auth")
 }
 
 func TestHTTPSuite(t *testing.T) {

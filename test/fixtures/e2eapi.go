@@ -51,12 +51,10 @@ func InvokeE2EAPI(format string, args ...interface{}) string {
 
 func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 	url := "http://127.0.0.1:8378" + fmt.Sprintf(format, args...)
-	log.Printf("Post %s\n", url)
 	resp, err := http.Post(url, "application/json", strings.NewReader(body))
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("> %s\n", resp.Status)
 	defer resp.Body.Close()
 	for s := bufio.NewScanner(resp.Body); s.Scan(); {
 		x := s.Text()

@@ -32,7 +32,9 @@ spec:
       scale:
         min: 1
       sink:
-        log: {}
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
       to: atoi
