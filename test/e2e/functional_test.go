@@ -32,8 +32,6 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
-//go:generate kubectl -n numaflow-system delete statefulset redis --ignore-not-found=true
-//go:generate kubectl apply -k ../../config/apps/redis -n numaflow-system
 type FunctionalSuite struct {
 	E2ESuite
 }

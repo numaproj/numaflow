@@ -27,8 +27,6 @@ import (
 )
 
 //go:generate kubectl apply -f testdata/http-auth-fake-secret.yaml -n numaflow-system
-//go:generate kubectl -n numaflow-system delete statefulset redis --ignore-not-found=true
-//go:generate kubectl apply -k ../../config/apps/redis -n numaflow-system
 type HTTPSuite struct {
 	E2ESuite
 }
