@@ -110,14 +110,23 @@ func (s *FunctionalSuite) TestFiltering() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`)).Build())
+	expect0 := `{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`
+	expect1 := `{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`
+	expect2 := `{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`
+	expect3 := `{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`
+	expect4 := `{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`
 
-	w.Expect().SinkContains("out", "expect[3-4]", WithContainCount(2))
-	w.Expect().SinkNotContains("out", "expect[0-2]")
+	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect0)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect1)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect2)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect3)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect4)).Build())
+
+	w.Expect().SinkContains("out", expect3)
+	w.Expect().SinkContains("out", expect4)
+	w.Expect().SinkNotContains("out", expect0)
+	w.Expect().SinkNotContains("out", expect1)
+	w.Expect().SinkNotContains("out", expect2)
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {

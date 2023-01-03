@@ -44,7 +44,7 @@ spec:
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+            image: quay.io/numaio/numaflow-go/sink-redis:test-v3
   edges:
     - from: in
       to: atoi
