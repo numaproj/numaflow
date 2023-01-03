@@ -17,9 +17,10 @@ limitations under the License.
 package wal
 
 import (
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 )
 
 const (

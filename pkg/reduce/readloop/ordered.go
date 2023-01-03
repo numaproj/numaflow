@@ -25,13 +25,13 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 
-	"github.com/numaproj/numaflow/pkg/pbq"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"

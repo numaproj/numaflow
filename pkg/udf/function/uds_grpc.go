@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"

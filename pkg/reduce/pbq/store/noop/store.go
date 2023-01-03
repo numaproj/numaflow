@@ -18,7 +18,7 @@ package noop
 
 import (
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 // PBQNoOpStore is a no-op pbq store which does not do any operation but can be safely invoked.

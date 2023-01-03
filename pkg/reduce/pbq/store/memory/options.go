@@ -19,7 +19,7 @@ package memory
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 type Option func(stores *memoryStores)

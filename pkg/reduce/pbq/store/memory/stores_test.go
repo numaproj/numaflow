@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 func TestMemoryStores(t *testing.T) {
