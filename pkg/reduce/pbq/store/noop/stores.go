@@ -19,8 +19,8 @@ package noop
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 type noopStores struct {

@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 // ReduceApplier applies the HTTPBasedUDF on the read message and gives back a new message. Any UserError will be retried here, while

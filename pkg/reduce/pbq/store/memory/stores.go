@@ -22,8 +22,8 @@ import (
 	"sync"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 

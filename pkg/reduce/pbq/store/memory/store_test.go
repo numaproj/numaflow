@@ -23,7 +23,8 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+
 	"github.com/stretchr/testify/assert"
 )
 

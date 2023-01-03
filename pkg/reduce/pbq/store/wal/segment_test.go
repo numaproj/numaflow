@@ -28,7 +28,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 var vi = &dfv1.VertexInstance{

@@ -29,7 +29,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 const (
