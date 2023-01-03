@@ -1585,27 +1585,27 @@
 <h1 id="http-source">HTTP Source<a class="headerlink" href="#http-source" title="Permanent link">&para;</a></h1>
 <p>HTTP Source starts an HTTP service with TLS enabled to accept POST request in the Vertex Pod. It listens to port 8443, with request URI <code>/vertices/{vertexName}</code>.</p>
 <p>A Pipeline with HTTP Source:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"></span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">builtin</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span><span class="w"></span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w"></span>
-<span class="w">  </span><span class="nt">edges</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"></span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">builtin</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
 <h2 id="sending-data">Sending Data<a class="headerlink" href="#sending-data" title="Permanent link">&para;</a></h2>
 <p>Data could be sent to an HTTP source through:</p>
@@ -1616,61 +1616,61 @@
 </ul>
 <h3 id="clusterip-service">ClusterIP Service<a class="headerlink" href="#clusterip-service" title="Permanent link">&para;</a></h3>
 <p>An HTTP Source Vertex can generate a <code>ClusterIP</code> Service if <code>service: true</code> is specified, the service name is in the format of <code>{pipelineName}-{vertexName}</code>, so the HTTP Source can be accessed through <code>https://{pipelineName}-{vertexName}.{namespace}.svc.cluster.local:8443/vertices/{vertexName}</code> within the cluster.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"></span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">http</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">service</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">http</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">service</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
 <h3 id="loadbalancer-service-or-ingress">LoadBalancer Service or Ingress<a class="headerlink" href="#loadbalancer-service-or-ingress" title="Permanent link">&para;</a></h3>
 <p>To create a <code>LoadBalander</code> type Service, or a <code>NodePort</code> one for Ingress, you need to do it by you own. Just remember to use <code>selector</code> like following in the Service:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">numaflow.numaproj.io/pipeline-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-pipeline</span><span class="w"> </span><span class="c1"># pipeline name</span><span class="w"></span>
-<span class="nt">numaflow.numaproj.io/vertex-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"> </span><span class="c1"># vertex name</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">numaflow.numaproj.io/pipeline-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-pipeline</span><span class="w"> </span><span class="c1"># pipeline name</span>
+<span class="nt">numaflow.numaproj.io/vertex-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"> </span><span class="c1"># vertex name</span>
 </code></pre></div>
 <h3 id="port-forwarding">Port-forwarding<a class="headerlink" href="#port-forwarding" title="Permanent link">&para;</a></h3>
 <p>To test an HTTP source, you can do it from your local through port-forwarding.</p>
-<div class="highlight"><pre><span></span><code>kubectl port-forward pod <span class="si">${</span><span class="nv">pod</span><span class="p">-name</span><span class="si">}</span> <span class="m">8443</span>
-curl -kq -X POST -d <span class="s2">&quot;hello world&quot;</span> https://localhost:8443/vertices/in
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>port-forward<span class="w"> </span>pod<span class="w"> </span><span class="si">${</span><span class="nv">pod</span><span class="p">-name</span><span class="si">}</span><span class="w"> </span><span class="m">8443</span>
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello world&quot;</span><span class="w"> </span>https://localhost:8443/vertices/in
 </code></pre></div>
 <h2 id="x-numaflow-id">x-numaflow-id<a class="headerlink" href="#x-numaflow-id" title="Permanent link">&para;</a></h2>
 <p>When posting data to the HTTP Source, an optional HTTP header <code>x-numaflow-id</code> can be specified, which will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.</p>
-<div class="highlight"><pre><span></span><code>curl -kq -X POST -H <span class="s2">&quot;x-numaflow-id: </span><span class="si">${</span><span class="nv">id</span><span class="si">}</span><span class="s2">&quot;</span> -d <span class="s2">&quot;hello world&quot;</span> <span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-id: </span><span class="si">${</span><span class="nv">id</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello world&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 </code></pre></div>
 <h2 id="x-numaflow-event-time">x-numaflow-event-time<a class="headerlink" href="#x-numaflow-event-time" title="Permanent link">&para;</a></h2>
 <p>By default, the time of the date coming to the HTTP source is used as the event time, it could be set by putting an HTTP header <code>x-numaflow-event-time</code> with value of the number of milliseconds elapsed since January 1, 1970 UTC.</p>
-<div class="highlight"><pre><span></span><code>curl -kq -X POST -H <span class="s2">&quot;x-numaflow-event-time: 1663006726000&quot;</span> -d <span class="s2">&quot;hello world&quot;</span> <span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 1663006726000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello world&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 </code></pre></div>
 <h2 id="auth">Auth<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h2>
 <p>A <code>Bearer</code> token can be configured to prevent the HTTP Source from being accessed by unexpected clients. To do so, a Kubernetes Secret needs to be created to store the token, and the valid clients also need to include the token in its HTTP request header.</p>
 <p>Firstly, create a k8s secret containing your token.</p>
-<div class="highlight"><pre><span></span><code><span class="nb">echo</span> -n <span class="s1">&#39;tr3qhs321fjglwf1e2e67dfda4tr&#39;</span> &gt; ./token.txt
+<div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;tr3qhs321fjglwf1e2e67dfda4tr&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>./token.txt
 
-kubectl create secret generic http-source-token --from-file<span class="o">=</span>my-token<span class="o">=</span>./token.txt
+kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>http-source-token<span class="w"> </span>--from-file<span class="o">=</span>my-token<span class="o">=</span>./token.txt
 </code></pre></div>
 <p>Then add <code>auth</code>to the Source Vertex:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"></span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">http</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">auth</span><span class="p">:</span><span class="w"></span>
-<span class="w">            </span><span class="nt">token</span><span class="p">:</span><span class="w"></span>
-<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-source-token</span><span class="w"></span>
-<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-token</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">http</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">auth</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">token</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-source-token</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-token</span>
 </code></pre></div>
 <p>When the clients post data to the Source Vertex, add <code>Authorization: Bearer tr3qhs321fjglwf1e2e67dfda4tr</code> to the header, for example:</p>
 <div class="highlight"><pre><span></span><code><span class="nv">TOKEN</span><span class="o">=</span><span class="s2">&quot;Bearer tr3qhs321fjglwf1e2e67dfda4tr&quot;</span>
 <span class="c1"># Post data from a Pod in the same namespace of the cluster</span>
-curl -kq -X POST -H <span class="s2">&quot;Authorization: </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span> -d <span class="s2">&quot;hello world&quot;</span> https://http-pipeline-in:8443/vertices/in
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello world&quot;</span><span class="w"> </span>https://http-pipeline-in:8443/vertices/in
 </code></pre></div>
 <h2 id="health-check">Health Check<a class="headerlink" href="#health-check" title="Permanent link">&para;</a></h2>
 <p>The HTTP Source also has an endpoint <code>/health</code> created automatically, which is useful for LoadBalancer or Ingress configuration, where a health check endpoint is often required by the cloud provider.</p>

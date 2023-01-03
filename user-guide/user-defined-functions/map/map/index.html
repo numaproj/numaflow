@@ -1534,23 +1534,23 @@
 <p>There are some <a href="../builtin-functions/">Built-in Functions</a> that can be used directly.</p>
 <h2 id="build-your-own-udf">Build Your Own UDF<a class="headerlink" href="#build-your-own-udf" title="Permanent link">&para;</a></h2>
 <p>You can build your own UDF in multiple languages. A User Defined Function could be as simple as below in Golang.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">package</span><span class="w"> </span><span class="nx">main</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
-<span class="w">    </span><span class="s">&quot;context&quot;</span><span class="w"></span>
+<span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="s">&quot;context&quot;</span>
 
-<span class="w">    </span><span class="nx">functionsdk</span><span class="w"> </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/function&quot;</span><span class="w"></span>
-<span class="w">    </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/function/server&quot;</span><span class="w"></span>
-<span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="nx">functionsdk</span><span class="w"> </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/function&quot;</span>
+<span class="w">    </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/function/server&quot;</span>
+<span class="p">)</span>
 
-<span class="kd">func</span><span class="w"> </span><span class="nx">mapHandle</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="c1">// Directly forward the input to the output</span><span class="w"></span>
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MessageToAll</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">Value</span><span class="p">()))</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">mapHandle</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Directly forward the input to the output</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MessageToAll</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">Value</span><span class="p">()))</span>
+<span class="p">}</span>
 
-<span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="nx">server</span><span class="p">.</span><span class="nx">New</span><span class="p">().</span><span class="nx">RegisterMapper</span><span class="p">(</span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MapFunc</span><span class="p">(</span><span class="nx">mapHandle</span><span class="p">)).</span><span class="nx">Start</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">server</span><span class="p">.</span><span class="nx">New</span><span class="p">().</span><span class="nx">RegisterMapper</span><span class="p">(</span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MapFunc</span><span class="p">(</span><span class="nx">mapHandle</span><span class="p">)).</span><span class="nx">Start</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span>
+<span class="p">}</span>
 </code></pre></div>
 <p>Check the links below to see the UDF examples for different languages.</p>
 <ul>
@@ -1559,12 +1559,12 @@
 <li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function">Java</a></li>
 </ul>
 <p>After building a docker image for the written UDF, specify the image as below in the vertex spec.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span><span class="w"></span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-python-udf-example:latest</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-python-udf-example:latest</span>
 </code></pre></div>
 <h3 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h3>
 <p>Some environment variables are available in the user defined function Pods, they might be useful in you own UDF implementation.</p>

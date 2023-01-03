@@ -1476,13 +1476,13 @@
 <p>A <code>Pipeline</code> may have multiple Sinks, those sinks could either be a pre-defined sink such as <code>kafka</code>, <code>log</code>, etc, or a <code>User Defined Sink</code>.</p>
 <p>A pre-defined sink vertex runs single-container pods, a user defined sink runs two-container pods.</p>
 <p>A user defined sink vertex looks like below.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">output</span><span class="w"></span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">udsink</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
-<span class="w">            </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">output</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">udsink</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span>
 </code></pre></div>
 <h2 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h2>
 <p>Some environment variables are available in the user defined sink Pods:</p>

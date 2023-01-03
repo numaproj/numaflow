@@ -1553,12 +1553,12 @@ is often used to filter the number of messages that are passed to next vertices.
 <li><code>int(json(sprig.b64dec(payload)).id) &lt; 100</code></li>
 </ul>
 <h3 id="filter-spec">Filter Spec<a class="headerlink" href="#filter-spec" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filter-vertex</span><span class="w"></span>
-<span class="w">  </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">builtin</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filter</span><span class="w"></span>
-<span class="w">      </span><span class="nt">kwargs</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">expression</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int(json(payload).id) &lt; 100</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filter-vertex</span>
+<span class="w">  </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">builtin</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filter</span>
+<span class="w">      </span><span class="nt">kwargs</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">expression</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int(json(payload).id) &lt; 100</span>
 </code></pre></div>
 
               

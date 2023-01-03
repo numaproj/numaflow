@@ -1472,41 +1472,41 @@
 
 <h1 id="how-to-debug">How To Debug<a class="headerlink" href="#how-to-debug" title="Permanent link">&para;</a></h1>
 <p>To enable debug logs in a Vertex Pod, set environment variable <code>NUMAFLOW_DEBUG</code> to <code>true</code> for the Vertex. For example:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"></span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">generator</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">rpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span><span class="w"></span>
-<span class="w">          </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">builtin</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span><span class="w"></span>
-<span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">env</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NUMAFLOW_DEBUG</span><span class="w"></span>
-<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="w"> </span><span class="c1"># DO NOT forget the double quotes!!!</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span><span class="w"></span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w"></span>
-<span class="w">  </span><span class="nt">edges</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"></span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">generator</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">rpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+<span class="w">          </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">builtin</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
+<span class="w">      </span><span class="nt">containerTemplate</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NUMAFLOW_DEBUG</span>
+<span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="w"> </span><span class="c1"># DO NOT forget the double quotes!!!</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
 <h2 id="profiling">Profiling<a class="headerlink" href="#profiling" title="Permanent link">&para;</a></h2>
 <p>Setting <code>NUMAFLOW_DEBUG</code> to <code>true</code> also enables <code>pprof</code> in the Vertex Pod.</p>
 <p>For example, run the commands like below to profile memory usage for a Vertex Pod, a web page displaying the memory information will be automatically opened.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Port-forward</span>
-kubectl port-forward simple-pipeline-p1-0-7jzbn <span class="m">2469</span>
+kubectl<span class="w"> </span>port-forward<span class="w"> </span>simple-pipeline-p1-0-7jzbn<span class="w"> </span><span class="m">2469</span>
 
-go tool pprof -http localhost:8081 https+insecure://localhost:2469/debug/pprof/heap
+go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>-http<span class="w"> </span>localhost:8081<span class="w"> </span>https+insecure://localhost:2469/debug/pprof/heap
 </code></pre></div>
 
               

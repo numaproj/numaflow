@@ -1433,32 +1433,32 @@
 <li>A list of <code>edges</code>, which are used to describe the relationship between the vertices.</li>
 </ol>
 <p>The <code>Pipeline</code> is abstracted as a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Kubernetes Custom Resource</a>. A <code>Pipeline</code> spec looks like below.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"></span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">generator</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">rpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span><span class="w"></span>
-<span class="w">          </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span><span class="w"></span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">builtin</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span><span class="w"></span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w"></span>
-<span class="w">  </span><span class="nt">edges</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span><span class="w"></span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span><span class="w"></span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">generator</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">rpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<span class="w">          </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">builtin</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
 <p>To query <code>Pipeline</code> objects with <code>kubectl</code>:</p>
-<div class="highlight"><pre><span></span><code>kubectl get pipeline <span class="c1"># or &quot;pl&quot; as a short name</span>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>pipeline<span class="w"> </span><span class="c1"># or &quot;pl&quot; as a short name</span>
 </code></pre></div>
 
               

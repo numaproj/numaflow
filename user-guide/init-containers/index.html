@@ -1427,45 +1427,45 @@
 <h1 id="init-containers">Init Containers<a class="headerlink" href="#init-containers" title="Permanent link">&para;</a></h1>
 <p><a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">Init Containers</a> can be provided for all the types of vertices.</p>
 <p>The following example shows how to add an init-container to a <code>udf</code> vertex.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span><span class="w"></span>
-<span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-init</span><span class="w"></span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">busybox:latest</span><span class="w"></span>
-<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;echo</span><span class="nv"> </span><span class="s">\&quot;my-init</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">running!\&quot;</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">sleep</span><span class="nv"> </span><span class="s">60&quot;</span><span class="p p-Indicator">]</span><span class="w"></span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
+<span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-init</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">busybox:latest</span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;echo</span><span class="nv"> </span><span class="s">\&quot;my-init</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">running!\&quot;</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">sleep</span><span class="nv"> </span><span class="s">60&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span>
 </code></pre></div>
 <p>The following example shows how to use init-containers and <a href="../volumes/"><code>volumes</code></a> together to provide a <code>udf</code> container files on startup.
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span><span class="w"></span>
-<span class="w">      </span><span class="nt">volumes</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-data</span><span class="w"></span>
-<span class="w">          </span><span class="nt">emptyDir</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w"></span>
-<span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-init</span><span class="w"></span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">amazon/aws-cli:latest</span><span class="w"></span>
-<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;aws</span><span class="nv"> </span><span class="s">s3</span><span class="nv"> </span><span class="s">sync</span><span class="nv"> </span><span class="s">s3://path/to/my-s3-data</span><span class="nv"> </span><span class="s">/path/to/my-init-data&quot;</span><span class="p p-Indicator">]</span><span class="w"></span>
-<span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span><span class="w"></span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-init-data</span><span class="w"></span>
-<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-data</span><span class="w"></span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span><span class="w"></span>
-<span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span><span class="w"></span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-data</span><span class="w"></span>
-<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-data</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
+<span class="w">      </span><span class="nt">volumes</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-data</span>
+<span class="w">          </span><span class="nt">emptyDir</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-init</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">amazon/aws-cli:latest</span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;aws</span><span class="nv"> </span><span class="s">s3</span><span class="nv"> </span><span class="s">sync</span><span class="nv"> </span><span class="s">s3://path/to/my-s3-data</span><span class="nv"> </span><span class="s">/path/to/my-init-data&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-init-data</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-data</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span>
+<span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-data</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-data</span>
 </code></pre></div></p>
 
               

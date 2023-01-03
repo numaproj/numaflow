@@ -1437,7 +1437,7 @@
 <p>We have defined a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Kubernetes Custom Resource</a> defined for <code>Vertex</code>. A <code>Pipeline</code> containing multiple vertices will automatically generate multiple <code>Vertex</code> objects by the controller. As a user, you should NOT create a <code>Vertex</code> object directly.</p>
 <p>In a <code>Pipeline</code>, the vertices are not connected directly, but through <a href="../inter-step-buffer/">Inter-Step Buffers</a>.</p>
 <p>To query <code>Vertex</code> objects with <code>kubectl</code>:</p>
-<div class="highlight"><pre><span></span><code>kubectl get vertex <span class="c1"># or &quot;vtx&quot; as a short name</span>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>vertex<span class="w"> </span><span class="c1"># or &quot;vtx&quot; as a short name</span>
 </code></pre></div>
 
               

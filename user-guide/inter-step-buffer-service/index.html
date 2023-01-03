@@ -1723,25 +1723,25 @@
 <h1 id="inter-step-buffer-service">Inter-Step Buffer Service<a class="headerlink" href="#inter-step-buffer-service" title="Permanent link">&para;</a></h1>
 <p>Inter-Step Buffer Service is the service to provide <a href="../inter-step-buffer/">Inter-Step Buffers</a>.</p>
 <p>An Inter-Step Buffer Service is describe by a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>, it is required to be existing in a namespace before Pipeline objects are created. A sample <code>InterStepBufferService</code> with JetStream implementation looks like below.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use &quot;latest&quot; but a specific version in your real deployment</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use &quot;latest&quot; but a specific version in your real deployment</span>
 </code></pre></div>
 <p><code>InterStepBufferService</code> is a namespaced object, it can be used by all the Pipelines in the same namespace. By default, Pipeline objects look for an <code>InterStepBufferService</code> named <code>default</code>, so a common practice is to create an <code>InterStepBufferService</code> with the name <code>default</code>. If you give the <code>InterStepBufferService</code> a name other than <code>default</code>, then you need to give the same name in the Pipeline spec.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="c1"># Optional, if not specified, defaults to &quot;default&quot;</span><span class="w"></span>
-<span class="w">  </span><span class="nt">interStepBufferServiceName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">different-name</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># Optional, if not specified, defaults to &quot;default&quot;</span>
+<span class="w">  </span><span class="nt">interStepBufferServiceName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">different-name</span>
 </code></pre></div>
 <p>To query <code>Inter-Step Buffer Service</code> objects with <code>kubectl</code>:</p>
-<div class="highlight"><pre><span></span><code>kubectl get isbsvc
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>isbsvc
 </code></pre></div>
 <h2 id="jetstream">JetStream<a class="headerlink" href="#jetstream" title="Permanent link">&para;</a></h2>
 <p><code>JetStream</code> is one of the supported <code>Inter-Step Buffer Service</code> implementations. A keyword <code>jetstream</code> under <code>spec</code> means a JetStream cluster will be created in the namespace.</p>
@@ -1753,17 +1753,17 @@
 <p>An optional property <code>spec.jetstream.replicas</code> (defaults to 3) can be specified, which gives the total number of nodes. An odd number 3 or 5 is suggested. If the given number &lt; 3, 3 will be used.</p>
 <h3 id="persistence">Persistence<a class="headerlink" href="#persistence" title="Permanent link">&para;</a></h3>
 <p>Following example shows a JetStream <code>InterStepBufferService</code> with persistence.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use &quot;latest&quot; but a specific version in your real deployment</span><span class="w"></span>
-<span class="w">    </span><span class="nt">persistence</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="nt">storageClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span><span class="w"> </span><span class="c1"># Optional, will use K8s cluster default storage class if not specified</span><span class="w"></span>
-<span class="w">      </span><span class="nt">accessMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOnce</span><span class="w"> </span><span class="c1"># Optional, defaults to ReadWriteOnce</span><span class="w"></span>
-<span class="w">      </span><span class="nt">volumeSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10Gi</span><span class="w"> </span><span class="c1"># Optional, defaults to 20Gi</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use &quot;latest&quot; but a specific version in your real deployment</span>
+<span class="w">    </span><span class="nt">persistence</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">storageClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span><span class="w"> </span><span class="c1"># Optional, will use K8s cluster default storage class if not specified</span>
+<span class="w">      </span><span class="nt">accessMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOnce</span><span class="w"> </span><span class="c1"># Optional, defaults to ReadWriteOnce</span>
+<span class="w">      </span><span class="nt">volumeSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10Gi</span><span class="w"> </span><span class="c1"># Optional, defaults to 20Gi</span>
 </code></pre></div>
 <h3 id="jetstream-settings">JetStream Settings<a class="headerlink" href="#jetstream-settings" title="Permanent link">&para;</a></h3>
 <p>There are 2 places to configure JetStream settings:</p>
@@ -1795,22 +1795,22 @@ max_file_store: 1TB
 </ul>
 <p>This optional field can be used to customize the stream and consumer properties of that particular <code>InterStepBufferService</code>, and the configuration will be merged into the default one from the ConfigMap <code>numaflow-controller-config</code>. For example, if you only want to change <code>maxMsgs</code> for created streams, then you only need to give <code>stream.maxMsgs</code> in the field, all the rest config will still go with the default values in the control plane ConfigMap.</p>
 <p>Both these 2 places expect a YAML format configuration like below:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">bufferConfig</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span><span class="w"></span>
-<span class="w">  </span><span class="no"># The properties of the buffers (streams) to be created in this JetStream service</span><span class="w"></span>
-<span class="w">  </span><span class="no">stream:</span><span class="w"></span>
-<span class="w">    </span><span class="no"># 0: Limits, 1: Interest, 2: WorkQueue</span><span class="w"></span>
-<span class="w">    </span><span class="no">retention: 1</span><span class="w"></span>
-<span class="w">    </span><span class="no">maxMsgs: 30000</span><span class="w"></span>
-<span class="w">    </span><span class="no">maxAge: 168h</span><span class="w"></span>
-<span class="w">    </span><span class="no">maxBytes: -1</span><span class="w"></span>
-<span class="w">    </span><span class="no"># 0: File, 1: Memory</span><span class="w"></span>
-<span class="w">    </span><span class="no">storage: 0</span><span class="w"></span>
-<span class="w">    </span><span class="no">replicas: 3</span><span class="w"></span>
-<span class="w">    </span><span class="no">duplicates: 60s</span><span class="w"></span>
-<span class="w">  </span><span class="no"># The consumer properties for the created streams</span><span class="w"></span>
-<span class="w">  </span><span class="no">consumer:</span><span class="w"></span>
-<span class="w">    </span><span class="no">ackWait: 60s</span><span class="w"></span>
-<span class="w">    </span><span class="no">maxAckPending: 20000</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">bufferConfig</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">  </span><span class="no"># The properties of the buffers (streams) to be created in this JetStream service</span>
+<span class="w">  </span><span class="no">stream:</span>
+<span class="w">    </span><span class="no"># 0: Limits, 1: Interest, 2: WorkQueue</span>
+<span class="w">    </span><span class="no">retention: 1</span>
+<span class="w">    </span><span class="no">maxMsgs: 30000</span>
+<span class="w">    </span><span class="no">maxAge: 168h</span>
+<span class="w">    </span><span class="no">maxBytes: -1</span>
+<span class="w">    </span><span class="no"># 0: File, 1: Memory</span>
+<span class="w">    </span><span class="no">storage: 0</span>
+<span class="w">    </span><span class="no">replicas: 3</span>
+<span class="w">    </span><span class="no">duplicates: 60s</span>
+<span class="w">  </span><span class="no"># The consumer properties for the created streams</span>
+<span class="w">  </span><span class="no">consumer:</span>
+<span class="w">    </span><span class="no">ackWait: 60s</span>
+<span class="w">    </span><span class="no">maxAckPending: 20000</span>
 </code></pre></div>
 <p><strong>Note</strong></p>
 <p>Changing the buffer configuration either in the control plane ConfigMap or in the <code>InterStepBufferService</code> object does <strong>NOT</strong> make any change to the buffers (streams) already existing.</p>
@@ -1827,21 +1827,21 @@ max_file_store: 1TB
 We also support external redis.</p>
 <h4 id="external-redis">External Redis<a class="headerlink" href="#external-redis" title="Permanent link">&para;</a></h4>
 <p>If you have a managed Redis, say in AWS, etc., we can make that Redis your ISB. All you need to do is provide the external Redis endpoint name.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">redis</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">external</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;external</span><span class="nv"> </span><span class="s">redis&gt;&quot;</span><span class="w"></span>
-<span class="w">      </span><span class="nt">user</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;default&quot;</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">redis</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">external</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;external</span><span class="nv"> </span><span class="s">redis&gt;&quot;</span>
+<span class="w">      </span><span class="nt">user</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;default&quot;</span>
 </code></pre></div>
 <h3 id="cluster-mode">Cluster Mode<a class="headerlink" href="#cluster-mode" title="Permanent link">&para;</a></h3>
 <p>We support <a href="https://redis.io/docs/reference/cluster-spec/">cluster mode</a>, only if the Redis is an external managed Redis.
 You will have to enter the <code>url</code> twice to indicate that the mode is cluster. This is because we use <code>Universal Client</code> which
 requires more than one address to indicate the Redis is in cluster mode.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;numaflow-redis-cluster-0.numaflow-redis-cluster-headless:6379,numaflow-redis-cluster-1.numaflow-redis-cluster-headless:6379&quot;</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;numaflow-redis-cluster-0.numaflow-redis-cluster-headless:6379,numaflow-redis-cluster-1.numaflow-redis-cluster-headless:6379&quot;</span>
 </code></pre></div>
 <h3 id="version_1">Version<a class="headerlink" href="#version_1" title="Permanent link">&para;</a></h3>
 <p>Property <code>spec.redis.native.version</code> is required for a <code>native</code> Redis <code>InterStepBufferService</code>. Supported versions can be found from the ConfigMap <code>numaflow-controller-config</code> in the control plane namespace.</p>
@@ -1849,18 +1849,18 @@ requires more than one address to indicate the Redis is in cluster mode.</p>
 <p>An optional property <code>spec.redis.native.replicas</code> (defaults to 3) can be specified, which gives the total number of nodes (including master and replicas). An odd number &gt;= 3 is suggested. If the given number &lt; 3, 3 will be used.</p>
 <h3 id="persistence_1">Persistence<a class="headerlink" href="#persistence_1" title="Permanent link">&para;</a></h3>
 <p>Following example shows an <code>native</code> Redis <code>InterStepBufferService</code> with persistence.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">redis</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">native</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6.2.6</span><span class="w"></span>
-<span class="w">      </span><span class="nt">persistence</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">storageClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span><span class="w"> </span><span class="c1"># Optional, will use K8s cluster default storage class if not specified</span><span class="w"></span>
-<span class="w">        </span><span class="nt">accessMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOnce</span><span class="w"> </span><span class="c1"># Optional, defaults to ReadWriteOnce</span><span class="w"></span>
-<span class="w">        </span><span class="nt">volumeSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10Gi</span><span class="w"> </span><span class="c1"># Optional, defaults to 20Gi</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">redis</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">native</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6.2.6</span>
+<span class="w">      </span><span class="nt">persistence</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">storageClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span><span class="w"> </span><span class="c1"># Optional, will use K8s cluster default storage class if not specified</span>
+<span class="w">        </span><span class="nt">accessMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOnce</span><span class="w"> </span><span class="c1"># Optional, defaults to ReadWriteOnce</span>
+<span class="w">        </span><span class="nt">volumeSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10Gi</span><span class="w"> </span><span class="c1"># Optional, defaults to 20Gi</span>
 </code></pre></div>
 <h3 id="redis-configuration">Redis Configuration<a class="headerlink" href="#redis-configuration" title="Permanent link">&para;</a></h3>
 <p>Redis configuration includes:</p>

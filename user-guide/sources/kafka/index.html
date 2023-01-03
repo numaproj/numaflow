@@ -1428,27 +1428,27 @@
 
 <h1 id="kafka-source">Kafka Source<a class="headerlink" href="#kafka-source" title="Permanent link">&para;</a></h1>
 <p>A <code>Kafka</code> source is used to ingest the messages from a Kafka topic.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input</span><span class="w"></span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">kafka</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">brokers</span><span class="p">:</span><span class="w"></span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-broker1:19700</span><span class="w"></span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-broker2:19700</span><span class="w"></span>
-<span class="w">          </span><span class="nt">topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-topic</span><span class="w"></span>
-<span class="w">          </span><span class="nt">consumerGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-consumer-group</span><span class="w"></span>
-<span class="w">          </span><span class="nt">tls</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional.</span><span class="w"></span>
-<span class="w">            </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, where to skip TLS verification. Default to false.</span><span class="w"></span>
-<span class="w">            </span><span class="nt">caCertSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, a secret reference, which contains the CA Cert.</span><span class="w"></span>
-<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert</span><span class="w"></span>
-<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert-key</span><span class="w"></span>
-<span class="w">            </span><span class="nt">certSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Cert.</span><span class="w"></span>
-<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert</span><span class="w"></span>
-<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert-key</span><span class="w"></span>
-<span class="w">            </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Private Key.</span><span class="w"></span>
-<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk</span><span class="w"></span>
-<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk-key</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">kafka</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">brokers</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-broker1:19700</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-broker2:19700</span>
+<span class="w">          </span><span class="nt">topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-topic</span>
+<span class="w">          </span><span class="nt">consumerGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-consumer-group</span>
+<span class="w">          </span><span class="nt">tls</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional.</span>
+<span class="w">            </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, where to skip TLS verification. Default to false.</span>
+<span class="w">            </span><span class="nt">caCertSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, a secret reference, which contains the CA Cert.</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert-key</span>
+<span class="w">            </span><span class="nt">certSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Cert.</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert-key</span>
+<span class="w">            </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Private Key.</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk-key</span>
 </code></pre></div>
 
               

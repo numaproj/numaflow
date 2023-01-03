@@ -1487,17 +1487,17 @@
 <h1 id="conditional-forwarding">Conditional Forwarding<a class="headerlink" href="#conditional-forwarding" title="Permanent link">&para;</a></h1>
 <p>After processing the data, conditional forwarding is doable based on the <code>Key</code> returned in the result.</p>
 <p>For example, there's a UDF used to process numbers, and forward the result to different vertices based on the number is even or odd. In this case, you can set the <code>key</code> to <code>even</code> or <code>odd</code> in each of the returned messages, and define the edges as below:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">edges</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
-<span class="w">    </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">even-vertex</span><span class="w"></span>
-<span class="w">    </span><span class="nt">conditions</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="nt">keyIn</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">even</span><span class="w"></span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span><span class="w"></span>
-<span class="w">    </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">odd-vertex</span><span class="w"></span>
-<span class="w">    </span><span class="nt">conditions</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="nt">keyIn</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">odd</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">edges</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
+<span class="w">    </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">even-vertex</span>
+<span class="w">    </span><span class="nt">conditions</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">keyIn</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">even</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
+<span class="w">    </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">odd-vertex</span>
+<span class="w">    </span><span class="nt">conditions</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">keyIn</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">odd</span>
 </code></pre></div>
 <h3 id="u005c__all__"><code>U+005C__ALL__</code><a class="headerlink" href="#u005c__all__" title="Permanent link">&para;</a></h3>
 <p>If the returned <code>key</code> is <code>U+005C__ALL__</code>, the data will be forwarded to all the connected vertices no matter what kind of conditions is defined in the spec.</p>

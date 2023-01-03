@@ -1553,23 +1553,23 @@
 <li>Kafka</li>
 </ul>
 <p>Numaflow autoscaling is enabled by default, there are some parameters can be tuned to achieve better results.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span><span class="w"></span>
-<span class="w">      </span><span class="nt">scale</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">disabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># Optional, defaults to false.</span><span class="w"></span>
-<span class="w">        </span><span class="nt">min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w"> </span><span class="c1"># Optional, minimum replicas, defaults to 0.</span><span class="w"></span>
-<span class="w">        </span><span class="nt">max</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w"> </span><span class="c1"># Optional, maximum replicas, defaults to 50.</span><span class="w"></span>
-<span class="w">        </span><span class="nt">lookbackSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">180</span><span class="w"> </span><span class="c1"># Optional, defaults to 180.</span><span class="w"></span>
-<span class="w">        </span><span class="nt">cooldownSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">90</span><span class="w"> </span><span class="c1"># Optional, defaults to 90.</span><span class="w"></span>
-<span class="w">        </span><span class="nt">zeroReplicaSleepSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">180</span><span class="w"> </span><span class="c1"># Optional, defaults to 180.</span><span class="w"></span>
-<span class="w">        </span><span class="nt">targetProcessingSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w"> </span><span class="c1"># Optional, defaults to 20.</span><span class="w"></span>
-<span class="w">        </span><span class="nt">targetBufferUsage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span><span class="w"> </span><span class="c1"># Optional, defaults to 50.</span><span class="w"></span>
-<span class="w">        </span><span class="nt">replicasPerScale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># Optional, defaults to 2.</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
+<span class="w">      </span><span class="nt">scale</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">disabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># Optional, defaults to false.</span>
+<span class="w">        </span><span class="nt">min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w"> </span><span class="c1"># Optional, minimum replicas, defaults to 0.</span>
+<span class="w">        </span><span class="nt">max</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w"> </span><span class="c1"># Optional, maximum replicas, defaults to 50.</span>
+<span class="w">        </span><span class="nt">lookbackSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">180</span><span class="w"> </span><span class="c1"># Optional, defaults to 180.</span>
+<span class="w">        </span><span class="nt">cooldownSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">90</span><span class="w"> </span><span class="c1"># Optional, defaults to 90.</span>
+<span class="w">        </span><span class="nt">zeroReplicaSleepSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">180</span><span class="w"> </span><span class="c1"># Optional, defaults to 180.</span>
+<span class="w">        </span><span class="nt">targetProcessingSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w"> </span><span class="c1"># Optional, defaults to 20.</span>
+<span class="w">        </span><span class="nt">targetBufferUsage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span><span class="w"> </span><span class="c1"># Optional, defaults to 50.</span>
+<span class="w">        </span><span class="nt">replicasPerScale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># Optional, defaults to 2.</span>
 </code></pre></div>
 <ul>
 <li><code>disabled</code> - Whether to disable Numaflow autoscaling, defaults to <code>false</code>.</li>
@@ -1583,15 +1583,15 @@
 <li><code>replicasPerScale</code> - Maximum number of replicas change happens in one scale up or down operation, defaults to <code>2</code>. For example, if current replica number is 3, the calculated desired replica number is 8; instead of scaling up the vertex to 8, it only does 5.</li>
 </ul>
 <p>To disable Numaflow autoscaling, set <code>disabled: true</code> as following.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span><span class="w"></span>
-<span class="w">      </span><span class="nt">scale</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">disabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
+<span class="w">      </span><span class="nt">scale</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">disabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
 <p><strong>Notes</strong></p>
 <p>Numaflow autoscaling does not apply to reduce vertices, and following source vertices which do not have a way to calculate their pending messages.</p>
@@ -1602,46 +1602,46 @@
 </ul>
 <h3 id="kubernetes-hpa">Kubernetes HPA<a class="headerlink" href="#kubernetes-hpa" title="Permanent link">&para;</a></h3>
 <p><a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Kubernetes HPA</a> is supported in Numaflow for any type of Vertex. To use HPA, remember to point the <code>scaleTargetRef</code> to the vertex as below, and disable Numaflow autoscaling in your Pipeline spec.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">autoscaling/v2beta1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HorizontalPodAutoscaler</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex-hpa</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span><span class="w"></span>
-<span class="w">  </span><span class="nt">maxReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w"></span>
-<span class="w">  </span><span class="nt">metrics</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">resource</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cpu</span><span class="w"></span>
-<span class="w">        </span><span class="nt">targetAverageUtilization</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span><span class="w"></span>
-<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Resource</span><span class="w"></span>
-<span class="w">  </span><span class="nt">scaleTargetRef</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vertex</span><span class="w"></span>
-<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">autoscaling/v2beta1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HorizontalPodAutoscaler</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex-hpa</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">  </span><span class="nt">maxReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">  </span><span class="nt">metrics</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">resource</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cpu</span>
+<span class="w">        </span><span class="nt">targetAverageUtilization</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Resource</span>
+<span class="w">  </span><span class="nt">scaleTargetRef</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vertex</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
 </code></pre></div>
 <p>With the configuration above, Kubernetes HPA controller will keep the target utilization of the pods of the Vertex at 50%.</p>
 <p>Kubernetes HPA autoscaling is useful for those Source vertices not able to count pending messages, such as <a href="../sources/http/">HTTP</a>.</p>
 <h3 id="third-party-autoscaling">Third Party Autoscaling<a class="headerlink" href="#third-party-autoscaling" title="Permanent link">&para;</a></h3>
 <p>Third party autoscaling tools like <a href="https://keda.sh/">KEDA</a> are also supported in Numaflow, which can be used to autoscale any type of vertex with the scalers it supports.</p>
 <p>To use KEDA for vertex autoscaling, same as Kubernetes HPA, point the <code>scaleTargetRef</code> to your vertex, and disable Numaflow autoscaling in your Pipeline spec.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keda.sh/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ScaledObject</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-keda-scaler</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">scaleTargetRef</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vertex</span><span class="w"></span>
-<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span><span class="w"></span>
-<span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">... ...</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keda.sh/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ScaledObject</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-keda-scaler</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">scaleTargetRef</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vertex</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
+<span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">... ...</span>
 </code></pre></div>
 <h2 id="vertical-pod-autoscaling">Vertical Pod Autoscaling<a class="headerlink" href="#vertical-pod-autoscaling" title="Permanent link">&para;</a></h2>
 <p><code>Vertical Pod Autoscaling</code> can be achieved by setting the <code>targetRef</code> to <code>Vertex</code> objects as following.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">targetRef</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vertex</span><span class="w"></span>
-<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">targetRef</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vertex</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
 </code></pre></div>
 
               

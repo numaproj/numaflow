@@ -1483,32 +1483,32 @@
 <p>For setting environment variables on pods not owned by a vertex, see <a href="../pipeline-customization/">Pipeline Customization</a>.</p>
 <h2 id="your-own-environment-variables">Your Own Environment Variables<a class="headerlink" href="#your-own-environment-variables" title="Permanent link">&para;</a></h2>
 <p>To add your own environment variables to <code>udf</code> or <code>udsink</code> containers, check the example below.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span><span class="w"></span>
-<span class="w">      </span><span class="nt">udf</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span><span class="w"></span>
-<span class="w">          </span><span class="nt">env</span><span class="p">:</span><span class="w"></span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env01</span><span class="w"></span>
-<span class="w">              </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">value01</span><span class="w"></span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env02</span><span class="w"></span>
-<span class="w">              </span><span class="nt">valueFrom</span><span class="p">:</span><span class="w"></span>
-<span class="w">                </span><span class="nt">secretKeyRef</span><span class="p">:</span><span class="w"></span>
-<span class="w">                  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-secret</span><span class="w"></span>
-<span class="w">                  </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-key</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink</span><span class="w"></span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">udsink</span><span class="p">:</span><span class="w"></span>
-<span class="w">          </span><span class="nt">container</span><span class="p">:</span><span class="w"></span>
-<span class="w">            </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span><span class="w"></span>
-<span class="w">            </span><span class="nt">env</span><span class="p">:</span><span class="w"></span>
-<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env03</span><span class="w"></span>
-<span class="w">                </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">value03</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span>
+<span class="w">          </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env01</span>
+<span class="w">              </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">value01</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env02</span>
+<span class="w">              </span><span class="nt">valueFrom</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">secretKeyRef</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-secret</span>
+<span class="w">                  </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-key</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">udsink</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span>
+<span class="w">            </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env03</span>
+<span class="w">                </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">value03</span>
 </code></pre></div>
 
               

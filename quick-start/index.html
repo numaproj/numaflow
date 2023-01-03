@@ -1540,89 +1540,89 @@
 </ul>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
 <p>Run the following command lines to install Numaflow and start the Inter-Step Buffer Service that handles communication between vertices.</p>
-<div class="highlight"><pre><span></span><code>kubectl create ns numaflow-system
-kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
-kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>create<span class="w"> </span>ns<span class="w"> </span>numaflow-system
+kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
+kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
 <h2 id="a-simple-pipeline">A Simple Pipeline<a class="headerlink" href="#a-simple-pipeline" title="Permanent link">&para;</a></h2>
 <p>Create a <code>simple pipeline</code>, which contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages.</p>
-<div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
-kubectl get pipeline <span class="c1"># or &quot;pl&quot; as a short name</span>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
+kubectl<span class="w"> </span>get<span class="w"> </span>pipeline<span class="w"> </span><span class="c1"># or &quot;pl&quot; as a short name</span>
 
 <span class="c1"># Wait for pods to be ready</span>
-kubectl get pods
-NAME                                         READY   STATUS      RESTARTS   AGE
-isbsvc-default-js-0                          <span class="m">3</span>/3     Running     <span class="m">0</span>          19s
-isbsvc-default-js-1                          <span class="m">3</span>/3     Running     <span class="m">0</span>          19s
-isbsvc-default-js-2                          <span class="m">3</span>/3     Running     <span class="m">0</span>          19s
-simple-pipeline-daemon-78b798fb98-qf4t4      <span class="m">1</span>/1     Running     <span class="m">0</span>          10s
-simple-pipeline-out-0-xc0pf                  <span class="m">1</span>/1     Running     <span class="m">0</span>          10s
-simple-pipeline-cat-0-kqrhy                  <span class="m">2</span>/2     Running     <span class="m">0</span>          10s
-simple-pipeline-in-0-rhpjm                   <span class="m">1</span>/1     Running     <span class="m">0</span>          11s
+kubectl<span class="w"> </span>get<span class="w"> </span>pods
+NAME<span class="w">                                         </span>READY<span class="w">   </span>STATUS<span class="w">      </span>RESTARTS<span class="w">   </span>AGE
+isbsvc-default-js-0<span class="w">                          </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>19s
+isbsvc-default-js-1<span class="w">                          </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>19s
+isbsvc-default-js-2<span class="w">                          </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>19s
+simple-pipeline-daemon-78b798fb98-qf4t4<span class="w">      </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>10s
+simple-pipeline-out-0-xc0pf<span class="w">                  </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>10s
+simple-pipeline-cat-0-kqrhy<span class="w">                  </span><span class="m">2</span>/2<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>10s
+simple-pipeline-in-0-rhpjm<span class="w">                   </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>11s
 
 <span class="c1"># Watch the log for the `output` vertex</span>
-kubectl logs -f simple-pipeline-out-0-xxxx
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:38 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;VT+G+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707552597<span class="o">}</span>
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:38 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;0TaH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707615953<span class="o">}</span>
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:38 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;EEGH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707618576<span class="o">}</span>
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:38 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;WESH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707619416<span class="o">}</span>
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:38 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;YEaH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707619936<span class="o">}</span>
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:39 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;qfomN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707942057<span class="o">}</span>
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:39 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;aUcnN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707961705<span class="o">}</span>
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:39 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;iUonN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707962505<span class="o">}</span>
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:39 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;mkwnN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707963034<span class="o">}</span>
-<span class="m">2022</span>/08/25 <span class="m">23</span>:59:39 <span class="o">(</span>out<span class="o">)</span> <span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;jk4nN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707963534<span class="o">}</span>
+kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>simple-pipeline-out-0-xxxx
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:38<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;VT+G+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707552597<span class="o">}</span>
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:38<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;0TaH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707615953<span class="o">}</span>
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:38<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;EEGH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707618576<span class="o">}</span>
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:38<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;WESH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707619416<span class="o">}</span>
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:38<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;YEaH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707619936<span class="o">}</span>
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;qfomN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707942057<span class="o">}</span>
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;aUcnN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707961705<span class="o">}</span>
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;iUonN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707962505<span class="o">}</span>
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;mkwnN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707963034<span class="o">}</span>
+<span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;jk4nN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707963534<span class="o">}</span>
 
 <span class="c1"># Port forward the UI to https://localhost:8443/</span>
-kubectl -n numaflow-system port-forward deployment/numaflow-server <span class="m">8443</span>:8443
+kubectl<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span class="w"> </span>port-forward<span class="w"> </span>deployment/numaflow-server<span class="w"> </span><span class="m">8443</span>:8443
 </code></pre></div>
 <p><img alt="Numaflow UI" src="../assets/numaflow-ui-simple-pipeline.png" /></p>
 <p>The pipeline can be deleted by</p>
-<div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 </code></pre></div>
 <h2 id="an-advanced-pipeline">An Advanced Pipeline<a class="headerlink" href="#an-advanced-pipeline" title="Permanent link">&para;</a></h2>
 <p>In this example, there are five vertices in a pipeline. An <a href="../user-guide/sources/http/">HTTP</a> source vertex which serves an HTTP endpoint to receive numbers as source data, a <a href="../user-guide/user-defined-functions/map/map/">UDF</a> vertex to tag the ingested numbers with the key <code>even</code> or <code>odd</code>, three <a href="../user-guide/sinks/log/">Log</a> sinks, one to print the <code>even</code> numbers, one to print the <code>odd</code> numbers, and the other one to print both the even and odd numbers.</p>
 <p><img alt="Pipeline Diagram" src="../assets/even-odd.png" /></p>
 <p>Create the <code>even-odd</code> pipeline.</p>
-<div class="highlight"><pre><span></span><code>kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
 
 <span class="c1"># Wait for pods to be ready</span>
-kubectl get pods
-NAME                               READY   STATUS    RESTARTS   AGE
-even-odd-daemon-64d65c945d-vjs9f   <span class="m">1</span>/1     Running   <span class="m">0</span>          5m3s
-even-odd-even-or-odd-0-pr4ze       <span class="m">2</span>/2     Running   <span class="m">0</span>          30s
-even-odd-even-sink-0-unffo         <span class="m">1</span>/1     Running   <span class="m">0</span>          22s
-even-odd-in-0-a7iyd                <span class="m">1</span>/1     Running   <span class="m">0</span>          5m3s
-even-odd-number-sink-0-zmg2p       <span class="m">1</span>/1     Running   <span class="m">0</span>          7s
-even-odd-odd-sink-0-2736r          <span class="m">1</span>/1     Running   <span class="m">0</span>          15s
-isbsvc-default-js-0                <span class="m">3</span>/3     Running   <span class="m">0</span>          10m
-isbsvc-default-js-1                <span class="m">3</span>/3     Running   <span class="m">0</span>          10m
-isbsvc-default-js-2                <span class="m">3</span>/3     Running   <span class="m">0</span>          10m
+kubectl<span class="w"> </span>get<span class="w"> </span>pods
+NAME<span class="w">                               </span>READY<span class="w">   </span>STATUS<span class="w">    </span>RESTARTS<span class="w">   </span>AGE
+even-odd-daemon-64d65c945d-vjs9f<span class="w">   </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>5m3s
+even-odd-even-or-odd-0-pr4ze<span class="w">       </span><span class="m">2</span>/2<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>30s
+even-odd-even-sink-0-unffo<span class="w">         </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>22s
+even-odd-in-0-a7iyd<span class="w">                </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>5m3s
+even-odd-number-sink-0-zmg2p<span class="w">       </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>7s
+even-odd-odd-sink-0-2736r<span class="w">          </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>15s
+isbsvc-default-js-0<span class="w">                </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>10m
+isbsvc-default-js-1<span class="w">                </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>10m
+isbsvc-default-js-2<span class="w">                </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>10m
 
 <span class="c1"># Port-forward the HTTP endpoint so we can post data from the laptop</span>
-kubectl port-forward even-odd-in-0-xxxx <span class="m">8444</span>:8443
+kubectl<span class="w"> </span>port-forward<span class="w"> </span>even-odd-in-0-xxxx<span class="w"> </span><span class="m">8444</span>:8443
 
 <span class="c1"># Post data to the HTTP endpoint</span>
-curl -kq -X POST -d <span class="s2">&quot;101&quot;</span> https://localhost:8444/vertices/in
-curl -kq -X POST -d <span class="s2">&quot;102&quot;</span> https://localhost:8444/vertices/in
-curl -kq -X POST -d <span class="s2">&quot;103&quot;</span> https://localhost:8444/vertices/in
-curl -kq -X POST -d <span class="s2">&quot;104&quot;</span> https://localhost:8444/vertices/in
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;101&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;102&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;103&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;104&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
 
 <span class="c1"># Watch the log for the even vertex</span>
-kubectl logs -f even-odd-even-sink-0-nf2ql
-<span class="m">2022</span>/09/07 <span class="m">22</span>:29:40 <span class="o">(</span>even-sink<span class="o">)</span> <span class="m">102</span>
-<span class="m">2022</span>/09/07 <span class="m">22</span>:29:40 <span class="o">(</span>even-sink<span class="o">)</span> <span class="m">104</span>
+kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>even-odd-even-sink-0-nf2ql
+<span class="m">2022</span>/09/07<span class="w"> </span><span class="m">22</span>:29:40<span class="w"> </span><span class="o">(</span>even-sink<span class="o">)</span><span class="w"> </span><span class="m">102</span>
+<span class="m">2022</span>/09/07<span class="w"> </span><span class="m">22</span>:29:40<span class="w"> </span><span class="o">(</span>even-sink<span class="o">)</span><span class="w"> </span><span class="m">104</span>
 
 <span class="c1"># Watch the log for the odd vertex</span>
-kubectl logs -f even-odd-odd-sink-0-a6p0n
-<span class="m">2022</span>/09/07 <span class="m">22</span>:30:19 <span class="o">(</span>odd-sink<span class="o">)</span> <span class="m">101</span>
-<span class="m">2022</span>/09/07 <span class="m">22</span>:30:19 <span class="o">(</span>odd-sink<span class="o">)</span> <span class="m">103</span>
+kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>even-odd-odd-sink-0-a6p0n
+<span class="m">2022</span>/09/07<span class="w"> </span><span class="m">22</span>:30:19<span class="w"> </span><span class="o">(</span>odd-sink<span class="o">)</span><span class="w"> </span><span class="m">101</span>
+<span class="m">2022</span>/09/07<span class="w"> </span><span class="m">22</span>:30:19<span class="w"> </span><span class="o">(</span>odd-sink<span class="o">)</span><span class="w"> </span><span class="m">103</span>
 </code></pre></div>
 <p>View the UI for the advanced pipeline at https://localhost:8443/
 <img alt="Numaflow UI" src="../assets/numaflow-ui-advanced-pipeline.png" /></p>
 <p>The source code of the <code>even-odd</code> <a href="../user-guide/user-defined-functions/map/map/">User Defined Function</a> can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd">here</a>. You also can replace the <a href="../user-guide/sinks/log/">Log</a> Sink with some other sinks like <a href="../user-guide/sinks/kafka/">Kafka</a> to forward the data to Kafka topics.</p>
 <p>The pipeline can be deleted by</p>
-<div class="highlight"><pre><span></span><code>kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
 </code></pre></div>
 <h2 id="whats-next">What's Next<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h2>
 <p>Try more examples in the <a href="https://github.com/numaproj/numaflow/tree/main/examples"><code>examples</code></a> directory.</p>

@@ -2065,51 +2065,51 @@
 <p>You can follow the <a href="https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md">prometheus operator</a> setup guide if you would like to use prometheus operator configured in your cluster.</p>
 <p>You can also set up prometheus operator via <a href="https://bitnami.com/stack/prometheus-operator/helm">helm</a>.</p>
 <h3 id="configure-the-below-service-monitors-for-scraping-your-pipeline-metrics">Configure the below Service Monitors for scraping your pipeline metrics:<a class="headerlink" href="#configure-the-below-service-monitors-for-scraping-your-pipeline-metrics" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">labels</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-pipeline-metrics</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https</span><span class="w"></span>
-<span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics</span><span class="w"></span>
-<span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2469</span><span class="w"></span>
-<span class="w">      </span><span class="nt">tlsConfig</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"></span>
-<span class="w">  </span><span class="nt">selector</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vertex</span><span class="w"></span>
-<span class="w">      </span><span class="nt">app.kubernetes.io/managed-by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vertex-controller</span><span class="w"></span>
-<span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span><span class="w"></span>
-<span class="w">    </span><span class="nt">matchExpressions</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/pipeline-name</span><span class="w"></span>
-<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span><span class="w"></span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/vertex-name</span><span class="w"></span>
-<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-pipeline-metrics</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https</span>
+<span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics</span>
+<span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2469</span>
+<span class="w">      </span><span class="nt">tlsConfig</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">selector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vertex</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/managed-by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vertex-controller</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">    </span><span class="nt">matchExpressions</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/pipeline-name</span>
+<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/vertex-name</span>
+<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
 </code></pre></div>
 <h3 id="configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics">Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:<a class="headerlink" href="#configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span><span class="w"></span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span><span class="w"></span>
-<span class="nt">metadata</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">labels</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span><span class="w"></span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-isbsvc-jetstream-metrics</span><span class="w"></span>
-<span class="nt">spec</span><span class="p">:</span><span class="w"></span>
-<span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http</span><span class="w"></span>
-<span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics</span><span class="w"></span>
-<span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7777</span><span class="w"></span>
-<span class="w">  </span><span class="nt">selector</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">isbsvc</span><span class="w"></span>
-<span class="w">      </span><span class="nt">app.kubernetes.io/managed-by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">isbsvc-controller</span><span class="w"></span>
-<span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span><span class="w"></span>
-<span class="w">      </span><span class="nt">numaflow.numaproj.io/isbsvc-type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jetstream</span><span class="w"></span>
-<span class="w">    </span><span class="nt">matchExpressions</span><span class="p">:</span><span class="w"></span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/isbsvc-name</span><span class="w"></span>
-<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span><span class="w"></span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-isbsvc-jetstream-metrics</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http</span>
+<span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics</span>
+<span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7777</span>
+<span class="w">  </span><span class="nt">selector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">isbsvc</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/managed-by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">isbsvc-controller</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">      </span><span class="nt">numaflow.numaproj.io/isbsvc-type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jetstream</span>
+<span class="w">    </span><span class="nt">matchExpressions</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/isbsvc-name</span>
+<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
 </code></pre></div>
 
               
