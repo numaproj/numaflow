@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 // Store provides methods to read, write and delete data from the store.

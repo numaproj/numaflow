@@ -19,7 +19,7 @@ package window
 import (
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 // AlignedKeyedWindower represents a bounded window (i.e., it will have a definite start and end time), and the
