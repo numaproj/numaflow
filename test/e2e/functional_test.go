@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 

@@ -41,12 +41,12 @@ type Expect struct {
 	kubeClient     kubernetes.Interface
 }
 
-func (t *Expect) SinkContains(sinkName string, targetRegex string, opts ...SinkCheckOption) *Expect {
+func (t *Expect) SinkContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	contains := RedisContains(ctx, sinkName, targetRegex, opts...)
+	contains := RedisContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...)
 	if !contains {
-		t.t.Fatalf("Expected redis contains target regex %s populated by sink %s.", targetRegex, sinkName)
+		t.t.Fatalf("Expected redis contains target string %s populated by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
 	}
 	return t
 }
@@ -54,7 +54,7 @@ func (t *Expect) SinkContains(sinkName string, targetRegex string, opts ...SinkC
 func (t *Expect) SinkNotContains(sinkName string, targetRegex string) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	notContains := RedisNotContains(ctx, sinkName, targetRegex)
+	notContains := RedisNotContains(ctx, t.pipeline.Name, sinkName, targetRegex)
 	if !notContains {
 		t.t.Fatalf("Not expected redis contains target regex %s populated by sink %s.", targetRegex, sinkName)
 	}
