@@ -25,6 +25,9 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	pbq2 "github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	memory2 "github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -39,9 +42,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/pbq"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/pbq/store/memory"
 	udfcall "github.com/numaproj/numaflow/pkg/udf/function"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 )
@@ -88,14 +88,14 @@ func TestProcessAndForward_Process(t *testing.T) {
 		Key:   "partition-1",
 	}
 	var err error
-	var pbqManager *pbq.Manager
+	var pbqManager *pbq2.Manager
 
-	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores(memory.WithStoreSize(100)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(100)),
+		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create a pbq for a partition
-	var simplePbq pbq.ReadWriteCloser
+	var simplePbq pbq2.ReadWriteCloser
 	simplePbq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 
@@ -145,9 +145,9 @@ func TestProcessAndForward_Process(t *testing.T) {
 func TestProcessAndForward_Forward(t *testing.T) {
 	ctx := context.Background()
 
-	var pbqManager *pbq.Manager
+	var pbqManager *pbq2.Manager
 
-	pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", memory.NewMemoryStores())
+	pbqManager, _ = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores())
 
 	test1Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
 	test1Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
@@ -245,7 +245,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 	}
 }
 
-func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string]isb.BufferWriter) ProcessAndForward {
+func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq2.Manager, toBuffers map[string]isb.BufferWriter) ProcessAndForward {
 
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
@@ -255,7 +255,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 
 	// create a pbq for a partition
 	pw := buildPublisherMap(toBuffers)
-	var simplePbq pbq.Reader
+	var simplePbq pbq2.Reader
 	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition)
 
 	resultPayload, _ := json.Marshal(PayloadForTest{

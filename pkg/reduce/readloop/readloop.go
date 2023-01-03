@@ -37,11 +37,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/metrics"
+	pbq2 "github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/forward"
-	"github.com/numaproj/numaflow/pkg/pbq"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -55,7 +55,7 @@ type ReadLoop struct {
 	vertexName            string
 	pipelineName          string
 	UDF                   applier.ReduceApplier
-	pbqManager            *pbq.Manager
+	pbqManager            *pbq2.Manager
 	windower              window.Windower
 	op                    *orderedForwarder
 	log                   *zap.SugaredLogger
@@ -70,7 +70,7 @@ func NewReadLoop(ctx context.Context,
 	vertexName string,
 	pipelineName string,
 	udf applier.ReduceApplier,
-	pbqManager *pbq.Manager,
+	pbqManager *pbq2.Manager,
 	windowingStrategy window.Windower,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
@@ -296,7 +296,7 @@ func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage
 
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
 // it to the partition.
-func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
+func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partition.ID) pbq2.ReadWriteCloser {
 	// look for existing pbq
 	q := rl.pbqManager.GetPBQ(partitionID)
 

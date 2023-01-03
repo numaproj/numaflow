@@ -2,11 +2,12 @@ package wal
 
 import (
 	"context"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+
 	"github.com/stretchr/testify/assert"
 )
 
