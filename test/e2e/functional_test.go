@@ -136,17 +136,17 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("888889")).Build()).
 		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("not an integer")).Build())
 
-	w.Expect().VertexPodLogContains("even-sink", "888888")
-	w.Expect().VertexPodLogNotContains("even-sink", "888889", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("even-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("even-sink", "888888")
+	w.Expect().SinkNotContains("even-sink", "888889")
+	w.Expect().SinkNotContains("even-sink", "not an integer")
 
-	w.Expect().VertexPodLogContains("odd-sink", "888889")
-	w.Expect().VertexPodLogNotContains("odd-sink", "888888", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("odd-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("odd-sink", "888889")
+	w.Expect().SinkNotContains("odd-sink", "888888")
+	w.Expect().SinkNotContains("odd-sink", "not an integer")
 
-	w.Expect().VertexPodLogContains("number-sink", "888888")
-	w.Expect().VertexPodLogContains("number-sink", "888889")
-	w.Expect().VertexPodLogNotContains("number-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("number-sink", "888888")
+	w.Expect().SinkContains("number-sink", "888889")
+	w.Expect().SinkNotContains("number-sink", "not an integer")
 }
 
 func (s *FunctionalSuite) TestWatermarkEnabled() {
