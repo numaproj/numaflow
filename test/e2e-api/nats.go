@@ -35,6 +35,12 @@ func init() {
 		subject := r.URL.Query().Get("subject")
 		msg := r.URL.Query().Get("msg")
 		size, err := strconv.Atoi(r.URL.Query().Get("size"))
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
 		duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
 		if err != nil {
 			log.Println(err)
@@ -49,6 +55,7 @@ func init() {
 		}
 		n, err := strconv.Atoi(ns)
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(400)
 			_, _ = w.Write([]byte(err.Error()))
 			return
