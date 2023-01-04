@@ -7,6 +7,8 @@ overlap. The element which belongs to one window will not belong to any other tu
 For example, a window size of 20 seconds will include all entities of the stream which came in a 
 certain 20-second interval.
 
+![plot](../../../../assets/fixed.png)
+
 To enable Fixed widow, we use `fixed` under `window` section.
 
 ```yaml
@@ -30,6 +32,4 @@ window:
   fixed:
     length:  60s
 ```
-
-![plot](fixed.png)
 

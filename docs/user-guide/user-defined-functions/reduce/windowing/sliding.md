@@ -6,6 +6,8 @@ more than one window. The additional window slide parameter controls how frequen
 is started. Hence, sliding windows will be overlapping and the slide should be smaller than the window
 length.
 
+![plot](../../../../assets/sliding.png)
+
 ```yaml
 window:
   sliding:
@@ -36,4 +38,3 @@ window:
     slide: 30s
 ```
 
-![plot](sliding.png)
