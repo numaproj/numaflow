@@ -5,8 +5,21 @@ of grouping data using temporal boundaries. We use event-time to discover
 temporal boundaries on an unbounded, infinite stream and [Watermark](../../../watermarks.md) to ensure 
 the datasets within the boundaries are complete. The [reduce](../reduce.md) is 
 applied on these grouped datasets.
+Example, when we say, we want to find number of users online per minute, we use
+windowing to group the users into one minute buckets.
 
-Numaflow support the following types of windows
+The entirety of windowing is under the `groupBy` section.
+```yaml
+groupBy:
+  window:
+      ...
+  keyed: ...
+```
+
+Under the `window` section we will define different types of windows.
+
+## Window Types
+Numaflow supports the following types of windows
   * [Fixed](fixed.md)
   * [Sliding](sliding.md)
 
@@ -36,14 +49,15 @@ to a set of keyed problems and apply a non-keyed function at the end. This will
 help solve the original problem in a scalable manner without affecting the 
 result's completeness and/or accuracy.
 
-### Example
+### Usage
 
 Numaflow support both Keyed and Non-Keyed windows. We set `keyed` to either 
-`true` (keyed) or `false` (non-keyed).
+`true` (keyed) or `false` (non-keyed). Please note that the non-keyed windows
+are not horizontally scalable as mentioned above.
 
 ```yaml
 groupBy:
   window:
     ...
-  keyed: false
+  keyed: false # or true
 ```
