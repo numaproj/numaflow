@@ -44,8 +44,8 @@ func (ns *NatsSuite) TestNatsSource() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	fixtures.PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "my-prefix")
-	w.Expect().SinkContains("out", "my-prefix*", fixtures.WithContainCount(100))
+	fixtures.PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "test-message")
+	w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(100))
 }
 
 func TestNatsSuite(t *testing.T) {
