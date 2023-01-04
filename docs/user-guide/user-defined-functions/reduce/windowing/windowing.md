@@ -41,7 +41,8 @@ only one partition exists.
 
 A non-keyed partition is usually used after aggregation and is hardly seen at
 the head section of any data processing pipeline.
-(There is a concept called Global Window where there is no windowing, but let us table that for later).
+(There is a concept called Global Window where there is no windowing, but
+let us table that for later).
 
 ### Keyed
 
