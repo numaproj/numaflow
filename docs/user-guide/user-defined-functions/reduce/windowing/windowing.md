@@ -38,7 +38,7 @@ A `keyed` partition is a partition where the partition boundary is a composite k
 
 Keyed partitions are heavily used to aggregate data and are frequently seen throughout the processing pipeline. We could also convert and non-keyed problem to a set of keyed problems and apply a non-keyed function at the end. This will help solve the original problem in a scalable manner without affecting the result's completeness and/or accuracy.
 
-When a `keyed` windowing is used, an optional `parallelism` can be specified in the `edge` leading to the vertex for parallel processing.
+When a `keyed` window is used, an optional `parallelism` can be specified in the `edge` leading to the vertex for parallel processing.
 
 ### Usage
 
