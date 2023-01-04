@@ -19,7 +19,10 @@ limitations under the License.
 package sdks_e2e
 
 import (
+	"context"
+	"strconv"
 	"testing"
+	"time"
 
 	. "github.com/numaproj/numaflow/test/fixtures"
 	"github.com/stretchr/testify/suite"
@@ -48,7 +51,45 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("hello")).Build())
 
 	w.Expect().VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
-		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
+		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
+		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
+}
+
+func (s *SDKsSuite) TestReduceSDK() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	w := s.Given().Pipeline("@testdata/simple-keyed-reduce-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "even-odd-sum"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	done := make(chan struct{})
+	go func() {
+		// publish messages to source vertex, with event time starting from 60000
+		startTime := 60000
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				eventTime := strconv.Itoa(startTime + i*1000)
+				w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
+					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).Build())
+			}
+		}
+	}()
+
+	w.Expect().
+		VertexPodLogContains("java-udsink", "120", PodLogCheckOptionWithContainer("udsink")).
+		VertexPodLogContains("java-udsink", "240", PodLogCheckOptionWithContainer("udsink"))
+	done <- struct{}{}
 }
 
 func TestHTTPSuite(t *testing.T) {
