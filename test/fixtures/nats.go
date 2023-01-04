@@ -24,14 +24,14 @@ import (
 
 func PumpNatsSubject(subject string, n int, opts ...interface{}) {
 	var sleep time.Duration
-	var prefix string
+	var msg string
 	var size int
 	for _, opt := range opts {
 		switch v := opt.(type) {
 		case time.Duration:
 			sleep = v
 		case string:
-			prefix = v
+			msg = v
 		case int:
 			size = v
 		default:
@@ -39,5 +39,5 @@ func PumpNatsSubject(subject string, n int, opts ...interface{}) {
 		}
 	}
 	log.Printf("Pumping Nats subject %q sleeping %v with %d messages sized %d\n", subject, sleep, n, size)
-	InvokeE2EAPI("/nats/pump-subject?subject=%s&sleep=%v&n=%d&prefix=%s&size=%d", subject, sleep, n, prefix, size)
+	InvokeE2EAPI("/nats/pump-subject?subject=%s&sleep=%v&n=%d&msg=%s&size=%d", subject, sleep, n, msg, size)
 }

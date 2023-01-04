@@ -35,15 +35,13 @@ func init() {
 		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer admin.Close()
 		if err = admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: 1, ReplicationFactor: 1}, true); err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(201)
@@ -54,14 +52,12 @@ func init() {
 		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer admin.Close()
 		if err = admin.DeleteTopic(topic); err != nil {
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(201)
@@ -70,16 +66,14 @@ func init() {
 		consumer, err := sarama.NewConsumer(brokers, sarama.NewConfig())
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer consumer.Close()
 		topics, err := consumer.Topics()
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(200)
@@ -91,22 +85,19 @@ func init() {
 		count, err := strconv.Atoi(r.URL.Query().Get("count"))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		consumer, err := sarama.NewConsumer(brokers, sarama.NewConfig())
 		if err != nil {
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer consumer.Close()
 		pConsumer, err := consumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		msgCount := 0
@@ -129,8 +120,7 @@ func init() {
 		buf, err := io.ReadAll(r.Body)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -140,8 +130,7 @@ func init() {
 		syncProducer, err := sarama.NewSyncProducer(brokers, config)
 
 		if err != nil {
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer syncProducer.Close()
@@ -161,8 +150,7 @@ func init() {
 		duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -172,8 +160,7 @@ func init() {
 		}
 		n, err := strconv.Atoi(ns)
 		if err != nil {
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -186,8 +173,8 @@ func init() {
 		syncProducer, err := sarama.NewSyncProducer(brokers, config)
 
 		if err != nil {
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer syncProducer.Close()

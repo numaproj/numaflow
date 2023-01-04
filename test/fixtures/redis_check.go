@@ -24,8 +24,8 @@ import (
 // Retry checking redis every 5 seconds.
 const retryInterval = time.Second * 5
 
-// RedisNotContains verifies that there is no key in redis which contain a substring matching the targetRegex.
-func RedisNotContains(ctx context.Context, sinkName string, regex string, opts ...SinkCheckOption) bool {
+// RedisNotContains verifies that there is no occurrence of targetStr in redis that is written by pipelineName, sinkName.
+func RedisNotContains(ctx context.Context, pipelineName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -36,12 +36,12 @@ func RedisNotContains(ctx context.Context, sinkName string, regex string, opts .
 	defer cancel()
 
 	return runChecks(ctx, func() bool {
-		return !redisContains(sinkName, regex, 1)
+		return !redisContains(pipelineName, sinkName, targetStr, 1)
 	})
 }
 
-// RedisContains verifies that there are keys in redis which contain a substring matching the targetRegex.
-func RedisContains(ctx context.Context, sinkName string, targetRegex string, opts ...SinkCheckOption) bool {
+// RedisContains verifies that there are targetStr in redis written by pipelineName, sinkName.
+func RedisContains(ctx context.Context, pipelineName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -52,13 +52,13 @@ func RedisContains(ctx context.Context, sinkName string, targetRegex string, opt
 	defer cancel()
 
 	return runChecks(ctx, func() bool {
-		return redisContains(sinkName, targetRegex, o.count)
+		return redisContains(pipelineName, sinkName, targetStr, o.count)
 	})
 }
 
-func redisContains(sinkName string, targetRegex string, expectedCount int) bool {
+func redisContains(pipelineName, sinkName, targetStr string, expectedCount int) bool {
 	// If number of matches is higher than expected, we treat it as passing the check.
-	return GetMsgCountContains(sinkName, targetRegex) >= expectedCount
+	return GetMsgCountContains(pipelineName, sinkName, targetStr) >= expectedCount
 }
 
 type redisCheckOptions struct {
