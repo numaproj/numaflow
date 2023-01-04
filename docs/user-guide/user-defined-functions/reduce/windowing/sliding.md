@@ -32,6 +32,8 @@ snippet.
 ```yaml
 window:
   sliding:
-    length: 1m
-    slide: 10s
+    length: 60s
+    slide: 30s
 ```
+
+![plot](sliding.png)

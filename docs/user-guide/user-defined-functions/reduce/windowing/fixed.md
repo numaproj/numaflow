@@ -28,5 +28,8 @@ A 10-second window size can be defined as follows.
 ```yaml
 window:
   fixed:
-    length:  10s
+    length:  60s
 ```
+
+![plot](fixed.png)
+
