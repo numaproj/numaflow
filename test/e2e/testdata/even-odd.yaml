@@ -16,17 +16,17 @@ spec:
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-go/sink-redis:test-v3
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
     - name: odd-sink
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-go/sink-redis:test-v3
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
     - name: number-sink
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-go/sink-redis:test-v3
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
       to: even-or-odd
