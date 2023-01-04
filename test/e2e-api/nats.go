@@ -37,15 +37,13 @@ func init() {
 		size, err := strconv.Atoi(r.URL.Query().Get("size"))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -56,8 +54,7 @@ func init() {
 		n, err := strconv.Atoi(ns)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -68,8 +65,7 @@ func init() {
 		nc, err := natslib.Connect(url, opts...)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer nc.Close()

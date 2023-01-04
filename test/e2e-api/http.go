@@ -45,8 +45,7 @@ func init() {
 		reqBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -54,16 +53,14 @@ func init() {
 		err = json.Unmarshal(reqBytes, &req)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		postReq, err := http.NewRequest("POST", fmt.Sprintf("https://%s:8443/vertices/%s", podIp, vertexName), bytes.NewBuffer(req.Body))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -73,8 +70,7 @@ func init() {
 		_, err = httpClient.Do(postReq)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	})

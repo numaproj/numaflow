@@ -42,8 +42,7 @@ func init() {
 		targetStr, err := url.QueryUnescape(r.URL.Query().Get("targetStr"))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 

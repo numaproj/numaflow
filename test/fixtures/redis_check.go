@@ -24,7 +24,7 @@ import (
 // Retry checking redis every 5 seconds.
 const retryInterval = time.Second * 5
 
-// RedisNotContains verifies that there is no key in redis which contain a substring matching the targetRegex.
+// RedisNotContains verifies that there is no occurrence of targetStr in redis that is written by pipelineName, sinkName.
 func RedisNotContains(ctx context.Context, pipelineName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
@@ -40,7 +40,7 @@ func RedisNotContains(ctx context.Context, pipelineName, sinkName, targetStr str
 	})
 }
 
-// RedisContains verifies that there are keys in redis which contain a substring matching the targetStr.
+// RedisContains verifies that there are targetStr in redis written by pipelineName, sinkName.
 func RedisContains(ctx context.Context, pipelineName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
