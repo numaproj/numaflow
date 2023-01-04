@@ -51,10 +51,11 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("hello")).Build())
 
 	w.Expect().VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
-		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
+		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
+		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
 }
 
-func (s *SDKsSuite) TestJavaSdk() {
+func (s *SDKsSuite) TestReduceSDK() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := s.Given().Pipeline("@testdata/simple-keyed-reduce-pipeline.yaml").
