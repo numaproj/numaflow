@@ -118,11 +118,11 @@ func (s *FunctionalSuite) TestFiltering() {
 	expect3 := `{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`
 	expect4 := `{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`
 
-	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect0)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect1)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect2)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect3)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect4)).Build())
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect0))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect1))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect2))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect3))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect4)))
 
 	w.Expect().SinkContains("out", expect3)
 	w.Expect().SinkContains("out", expect4)
@@ -141,9 +141,9 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("888888")).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("888889")).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("not an integer")).Build())
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888888"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888889"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("not an integer")))
 
 	w.Expect().SinkContains("even-sink", "888888")
 	w.Expect().SinkNotContains("even-sink", "888889")
