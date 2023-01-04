@@ -1608,32 +1608,37 @@
 
 
 <h1 id="sliding">Sliding<a class="headerlink" href="#sliding" title="Permanent link">&para;</a></h1>
-<p>Sliding window is similar to a Fixed windows, the size of the windows is measured in time and is fixed.
+<p>Sliding windows are similar to Fixed windows, the size of the windows is measured in time and is fixed.
 The important difference from the Fixed window is the fact that it allows an element to be present in
 more than one window. The additional window slide parameter controls how frequently a sliding window
 is started. Hence, sliding windows will be overlapping and the slide should be smaller than the window
 length.</p>
 <p><img alt="plot" src="../../../../../assets/sliding.png" /></p>
-<div class="highlight"><pre><span></span><code><span class="nt">groupBy</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">window</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">sliding</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">duration</span>
-<span class="w">      </span><span class="nt">slide</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">duration</span>
+<div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
+<span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">groupBy</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">window</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">sliding</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">duration</span>
+<span class="w">            </span><span class="nt">slide</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">duration</span>
 </code></pre></div>
 <p>NOTE: A duration string is a possibly signed sequence of decimal numbers, each with optional fraction
-and a unit suffix, such as "300ms", "-1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".</p>
+and a unit suffix, such as "300ms", "1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".</p>
 <h2 id="length">Length<a class="headerlink" href="#length" title="Permanent link">&para;</a></h2>
 <p>The <code>length</code> is the window size of the fixed window.</p>
 <h2 id="slide">Slide<a class="headerlink" href="#slide" title="Permanent link">&para;</a></h2>
 <p><code>slide</code> is the slide parameter that controls the frequency at which the sliding window is created.</p>
 <h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
-<p>To create a sliding window of length 1-minute which slides every 10-seconds, we can use the following
-snippet.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">groupBy</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">window</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">sliding</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span>
-<span class="w">      </span><span class="nt">slide</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
+<p>To create a sliding window of length 1 minute which slides every 10 seconds, we can use the following snippet.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
+<span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">groupBy</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">window</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">sliding</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span>
+<span class="w">            </span><span class="nt">slide</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
 </code></pre></div>
 
               
