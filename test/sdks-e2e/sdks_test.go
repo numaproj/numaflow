@@ -87,7 +87,7 @@ func (s *SDKsSuite) TestJavaSdk() {
 
 	w.Expect().
 		VertexPodLogContains("java-udsink", "120", PodLogCheckOptionWithContainer("udsink")).
-		VertexPodLogContains("java-udsink", "120", PodLogCheckOptionWithContainer("udsink"))
+		VertexPodLogContains("java-udsink", "240", PodLogCheckOptionWithContainer("udsink"))
 	done <- struct{}{}
 }
 
