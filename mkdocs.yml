@@ -64,6 +64,10 @@ nav:
                   - Filter: "user-guide/user-defined-functions/map/builtin-functions/filter.md"
           - Reduce:
               - Overview: "user-guide/user-defined-functions/reduce/reduce.md"
+              - Windowing:
+                  - Overview: "user-guide/user-defined-functions/reduce/windowing/windowing.md"
+                  - Fixed: "user-guide/user-defined-functions/reduce/windowing/fixed.md"
+                  - Sliding: "user-guide/user-defined-functions/reduce/windowing/sliding.md"
       - user-guide/pipeline-tuning.md
       - user-guide/conditional-forwarding.md
       - user-guide/autoscaling.md
