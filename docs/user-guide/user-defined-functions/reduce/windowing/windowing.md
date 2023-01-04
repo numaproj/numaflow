@@ -16,6 +16,9 @@ groupBy:
   keyed: ...
 ```
 
+Since a window can be [Non-Keyed v/s Keyed](#non-keyed-vs-keyed-windows), 
+we have an explicit field called `keyed`to differentiate between both (see below).
+
 Under the `window` section we will define different types of windows.
 
 ## Window Types

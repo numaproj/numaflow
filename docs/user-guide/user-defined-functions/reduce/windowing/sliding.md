@@ -9,10 +9,11 @@ length.
 ![plot](../../../../assets/sliding.png)
 
 ```yaml
-window:
-  sliding:
-    length: duration
-    slide: duration
+groupBy:
+  window:
+    sliding:
+      length: duration
+      slide: duration
 ```
 
 NOTE: A duration string is a possibly signed sequence of decimal numbers, each with optional fraction
@@ -32,9 +33,10 @@ To create a sliding window of length 1-minute which slides every 10-seconds, we 
 snippet.
 
 ```yaml
-window:
-  sliding:
-    length: 60s
-    slide: 30s
+groupBy:
+  window:
+    sliding:
+      length: 60s
+      slide: 30s
 ```
 

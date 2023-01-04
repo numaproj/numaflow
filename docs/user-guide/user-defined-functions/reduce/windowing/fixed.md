@@ -12,9 +12,10 @@ certain 20-second interval.
 To enable Fixed widow, we use `fixed` under `window` section.
 
 ```yaml
-window:
-  fixed:
-    length:  duration
+groupBy:
+  window:
+    fixed:
+      length:  duration
 ```
 
 NOTE: A duration string is a possibly signed sequence of decimal numbers, each with optional fraction
@@ -28,8 +29,9 @@ The `length` is the window size of the fixed window.
 
 A 10-second window size can be defined as follows.
 ```yaml
-window:
-  fixed:
-    length:  60s
+groupBy:
+  window:
+    fixed:
+      length:  60s
 ```
 
