@@ -47,8 +47,8 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
-	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("hello,hello")).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("hello")).Build())
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
 
 	w.Expect().VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
 		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
@@ -79,9 +79,9 @@ func (s *SDKsSuite) TestReduceSDK() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
-					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime).Build()).
-					SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime).Build())
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
 			}
 		}
 	}()

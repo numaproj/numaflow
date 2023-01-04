@@ -26,30 +26,21 @@ type HttpPostRequest struct {
 	Body   []byte            `json:"body"`
 }
 
-type RequestBuilder struct {
-	request *HttpPostRequest
+// NewHttpPostRequest constructor for HttpPostRequest
+func NewHttpPostRequest() HttpPostRequest {
+	return HttpPostRequest{}
 }
 
-// NewRequestBuilder constructor for HttpPostRequest
-func NewRequestBuilder() *RequestBuilder {
-	return &RequestBuilder{request: &HttpPostRequest{}}
-}
-
-// Build builds a httpPostRequest from RequestBuilder
-func (b *RequestBuilder) Build() *HttpPostRequest {
-	return b.request
-}
-
-func (b *RequestBuilder) WithHeader(k, v string) *RequestBuilder {
-	if b.request.Header == nil {
-		b.request.Header = map[string]string{}
+func (b HttpPostRequest) WithHeader(k, v string) HttpPostRequest {
+	if b.Header == nil {
+		b.Header = map[string]string{}
 	}
-	b.request.Header[k] = v
+	b.Header[k] = v
 	return b
 }
 
-func (b *RequestBuilder) WithBody(body []byte) *RequestBuilder {
-	b.request.Body = body
+func (b HttpPostRequest) WithBody(body []byte) HttpPostRequest {
+	b.Body = body
 	return b
 }
 
