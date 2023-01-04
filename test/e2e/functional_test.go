@@ -112,14 +112,23 @@ func (s *FunctionalSuite) TestFiltering() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`)).Build()).
-		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(`{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`)).Build())
+	expect0 := `{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`
+	expect1 := `{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`
+	expect2 := `{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`
+	expect3 := `{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`
+	expect4 := `{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`
 
-	w.Expect().SinkContains("out", "expect[3-4]", WithContainCount(2))
-	w.Expect().SinkNotContains("out", "expect[0-2]")
+	w.SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect0)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect1)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect2)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect3)).Build()).
+		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte(expect4)).Build())
+
+	w.Expect().SinkContains("out", expect3)
+	w.Expect().SinkContains("out", expect4)
+	w.Expect().SinkNotContains("out", expect0)
+	w.Expect().SinkNotContains("out", expect1)
+	w.Expect().SinkNotContains("out", expect2)
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {
@@ -136,17 +145,17 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("888889")).Build()).
 		SendMessageTo(pipelineName, "in", *NewRequestBuilder().WithBody([]byte("not an integer")).Build())
 
-	w.Expect().VertexPodLogContains("even-sink", "888888")
-	w.Expect().VertexPodLogNotContains("even-sink", "888889", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("even-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("even-sink", "888888")
+	w.Expect().SinkNotContains("even-sink", "888889")
+	w.Expect().SinkNotContains("even-sink", "not an integer")
 
-	w.Expect().VertexPodLogContains("odd-sink", "888889")
-	w.Expect().VertexPodLogNotContains("odd-sink", "888888", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("odd-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("odd-sink", "888889")
+	w.Expect().SinkNotContains("odd-sink", "888888")
+	w.Expect().SinkNotContains("odd-sink", "not an integer")
 
-	w.Expect().VertexPodLogContains("number-sink", "888888")
-	w.Expect().VertexPodLogContains("number-sink", "888889")
-	w.Expect().VertexPodLogNotContains("number-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("number-sink", "888888")
+	w.Expect().SinkContains("number-sink", "888889")
+	w.Expect().SinkNotContains("number-sink", "not an integer")
 }
 
 func (s *FunctionalSuite) TestWatermarkEnabled() {

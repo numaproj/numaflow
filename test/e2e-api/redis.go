@@ -35,28 +35,28 @@ func init() {
 		Addr: "redis:6379",
 	})
 
-	// get-msg-count-contains takes a targetRegex and returns number of keys in redis
-	// which contain a substring matching the targetRegex.
+	// get-msg-count-contains returns no. of occurrences of the targetStr in redis that are written by pipelineName and sinkName.
 	http.HandleFunc("/redis/get-msg-count-contains", func(w http.ResponseWriter, r *http.Request) {
-		targetRegex, err := url.QueryUnescape(r.URL.Query().Get("targetRegex"))
+		pipelineName := r.URL.Query().Get("pipelineName")
+		sinkName := r.URL.Query().Get("sinkName")
+		targetStr, err := url.QueryUnescape(r.URL.Query().Get("targetStr"))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		// Redis Keys API uses scan to retrieve data, which is not best practice in terms of performance.
-		// TODO - Look into replacing it with a more efficient API or data structure.
-		keyList, err := redisClient.Keys(context.Background(), fmt.Sprintf("*%s*", targetRegex)).Result()
+		count, err := redisClient.HGet(context.Background(), fmt.Sprintf("%s:%s", pipelineName, sinkName), targetStr).Result()
+
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			// If targetStr doesn't exist in the hash, HGet returns an error, meaning count is 0.
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte("0"))
 			return
 		}
 
 		w.WriteHeader(200)
-		_, _ = w.Write([]byte(fmt.Sprint(len(keyList))))
+		_, _ = w.Write([]byte(count))
 	})
 }

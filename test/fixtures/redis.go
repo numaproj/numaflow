@@ -22,9 +22,9 @@ import (
 	"strconv"
 )
 
-// GetMsgCountContains returns number of keys in redis which contain a substring matching the targetRegex.
-func GetMsgCountContains(sinkName string, targetRegex string) int {
-	str := InvokeE2EAPI("/redis/get-msg-count-contains?sinkName=%s&targetRegex=%s", sinkName, url.QueryEscape(targetRegex))
+// GetMsgCountContains returns number of occurrences of the targetStr in redis that are written by pipelineName, sinkName.
+func GetMsgCountContains(pipelineName, sinkName, targetStr string) int {
+	str := InvokeE2EAPI("/redis/get-msg-count-contains?pipelineName=%s&sinkName=%s&targetStr=%s", pipelineName, sinkName, url.QueryEscape(targetStr))
 	count, err := strconv.Atoi(str)
 	if err != nil {
 		panic(fmt.Sprintf("Can't parse string %s to an integer.", str))

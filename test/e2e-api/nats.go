@@ -33,12 +33,17 @@ func init() {
 
 	http.HandleFunc("/nats/pump-subject", func(w http.ResponseWriter, r *http.Request) {
 		subject := r.URL.Query().Get("subject")
-		mf := newMessageFactory(r.URL.Query())
+		msg := r.URL.Query().Get("msg")
+		size, err := strconv.Atoi(r.URL.Query().Get("size"))
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -48,8 +53,8 @@ func init() {
 		}
 		n, err := strconv.Atoi(ns)
 		if err != nil {
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -60,27 +65,26 @@ func init() {
 		nc, err := natslib.Connect(url, opts...)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer nc.Close()
 
 		start := time.Now()
-		_, _ = fmt.Fprintf(w, "sending %d messages of size %d to %q\n", n, mf.size, subject)
+		_, _ = fmt.Fprintf(w, "sending %d messages of size %d to %q\n", n, size, subject)
 
 		for i := 0; i < n || n < 0; i++ {
 			select {
 			case <-r.Context().Done():
 				return
 			default:
-				err := nc.Publish(subject, []byte(mf.newMessage(i)))
+				err := nc.Publish(subject, []byte(msg))
 				if err != nil {
 					_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
 				}
 				time.Sleep(duration)
 			}
 		}
-		_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", n, mf.size, float64(n)/time.Since(start).Seconds(), subject)
+		_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", n, size, float64(n)/time.Since(start).Seconds(), subject)
 	})
 }
