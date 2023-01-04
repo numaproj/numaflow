@@ -86,8 +86,9 @@ nav:
       - development/development.md
       - Specifications:
           - Overview: "specifications/overview.md"
-          - specifications/edges-and-buffers.md
+          - specifications/controllers.md
           - specifications/autoscaling.md
+          - specifications/edges-and-buffers.md
       - development/debugging.md
       - development/static-code-analysis.md
       - development/releasing.md
