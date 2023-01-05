@@ -50,7 +50,6 @@ func New(args map[string]string) (functionsdk.MapFunc, error) {
 }
 
 func (f filter) apply(msg []byte) (functionsdk.Message, error) {
-
 	result, err := expr.EvalBool(f.expression, msg)
 	if err != nil {
 		return functionsdk.MessageToDrop(), err

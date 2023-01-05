@@ -239,7 +239,7 @@ func (b *InMemoryBuffer) Ack(_ context.Context, offsets []isb.Offset) []error {
 			errs[index] = isb.MessageAckErr{
 				Name:    b.name,
 				Message: fmt.Sprintf("given index (%d) >= size of the buffer (%d)", intOffset, b.size),
-				Offset:  isb.Offset(offset),
+				Offset:  offset,
 			}
 			continue
 		}

@@ -121,11 +121,6 @@ func (r *KafkaSource) GetName() string {
 	return r.name
 }
 
-// Read reads a chunk of messages and returns at the first occurrence of an error. Error does not indicate that the
-// array of result is empty, the callee should process all the elements in the array even if the error is set. Read
-// will not mark the message in the buffer as "READ" if the read for that index is erring.
-// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
-// at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages.
 func (r *KafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	// It stores latest timestamps for different partitions
 	oldestTimestamps := make(map[int32]time.Time)

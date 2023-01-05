@@ -203,8 +203,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
 	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
-	// to all the elements in the batch. If we were to assign last element's watermark, we will wronly mark on-time data
-	// as πlate date.
+	// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
 		readBytesCount.With(map[string]string{metricspkg.LabelVertex: isdf.vertexName, metricspkg.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
@@ -294,7 +293,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	// let us ack the only if we have successfully forwarded all the messages.
+	// let us ack the chunk only if we have successfully forwarded all the messages.
 	// we need the readOffsets to acknowledge later
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range udfResults {
@@ -315,7 +314,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 // ackFromBuffer acknowledges an array of offsets back to fromBuffer and is a blocking call or until shutdown has been initiated.
 func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) error {
-
 	var ackRetryBackOff = wait.Backoff{
 		Factor:   1,
 		Jitter:   0.1,
