@@ -66,7 +66,7 @@ This is a simple reduce pipeline that just does summation (sum of numbers) but u
 The snippet for the reduce vertex is as follows. [6-reduce-fixed-window.yaml](....)  has the 
 complete pipeline definition.
 
-TODO: put in the image
+![plot](../../../assets/simple-reduce.png)
 
 ```yaml
     - name: compute-sum
@@ -94,16 +94,71 @@ keyed window.
 kubectl apply -f https://github.com/numaproj/numaflow/blob/main/examples/examples/6-reduce-fixed-window.yaml
 ```
 
-TODO: copy paste the log.. no need to put the command for getting logs.
+Output :
+```text
+2023/01/05 11:54:41 (sink)  Payload -  300  Key -  odd  Start -  60000  End -  120000
+2023/01/05 11:54:41 (sink)  Payload -  600  Key -  even  Start -  60000  End -  120000
+2023/01/05 11:54:41 (sink)  Payload -  300  Key -  odd  Start -  120000  End -  180000
+2023/01/05 11:54:41 (sink)  Payload -  600  Key -  even  Start -  120000  End -  180000
+2023/01/05 11:54:42 (sink)  Payload -  600  Key -  even  Start -  180000  End -  240000
+2023/01/05 11:54:42 (sink)  Payload -  300  Key -  odd  Start -  180000  End -  240000
+```
 
-TODO: explain the result.
+In our example, input is an HTTP source producing 2 messages each second with values 5 and 10,
+and the event time starts from 60000. Since we have considered a fixed window of length 60s,
+and also we are producing two messages with different keys "even" and "odd". Numaflow will create
+two different windows with a start time of 60000 and an end time of 120000. So the output will be
+300(5 * 60) and 600(10 * 60).
+
+If we had used a non keyed window (`keyed: false`), we would have seen one single output with value
+of 900(300 of odd + 600 of even) for each window.
 
 ## sum pipeline using sliding window
-This is a simple reduce pipeline that just does summation (sum of numbers).
+This is a simple reduce pipeline that just does summation (sum of numbers) but uses sliding window. 
+The snippet for the reduce vertex is as follows. [7-reduce-sliding-window.yaml](https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml) has the 
+complete pipeline definition
+
+![plot](../../../assets/simple-reduce.png)
+
+```yaml
+    - name: compute-sum
+      udf:
+        container:
+          # compute the sum
+          image: quay.io/numaio/numaflow-go/reduce-sum
+        groupBy:
+          window:
+            sliding:
+              length: 10s
+              slide: 5s
+          keyed: true
+```
 
 ```shell
-kubectl apply -f https://github.com/numaproj/numaflow/blob/main/examples/examples/6-reduce-fixed-window.yaml
+kubectl apply -f https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml
 ```
+Output:
+```text
+2023/01/05 15:13:15 (sink)  Payload -  50  Key -  odd  Start -  10000  End -  70000
+2023/01/05 15:13:16 (sink)  Payload -  100  Key -  odd  Start -  20000  End -  80000
+2023/01/05 15:13:16 (sink)  Payload -  100  Key -  even  Start -  10000  End -  70000
+2023/01/05 15:13:16 (sink)  Payload -  200  Key -  even  Start -  20000  End -  80000
+2023/01/05 15:13:16 (sink)  Payload -  300  Key -  even  Start -  30000  End -  90000
+2023/01/05 15:13:16 (sink)  Payload -  400  Key -  even  Start -  40000  End -  100000
+2023/01/05 15:13:16 (sink)  Payload -  150  Key -  odd  Start -  30000  End -  90000
+2023/01/05 15:13:16 (sink)  Payload -  200  Key -  odd  Start -  40000  End -  100000
+2023/01/05 15:13:16 (sink)  Payload -  250  Key -  odd  Start -  50000  End -  110000
+2023/01/05 15:13:16 (sink)  Payload -  300  Key -  odd  Start -  60000  End -  120000
+2023/01/05 15:13:16 (sink)  Payload -  500  Key -  even  Start -  50000  End -  110000
+2023/01/05 15:13:16 (sink)  Payload -  600  Key -  even  Start -  60000  End -  120000
+```
+
+In our example, input is an HTTP source producing 2 messages each second with values 5 and 10,
+and the event time starts from 60000. Since we have considered a sliding window of length 60s
+and slide 10s, and also we are producing two messages with different keys "even" and "odd".
+
+`Payload -  50  Key -  odd  Start -  10000  End -  70000`, we see 50 here for odd because the 
+first window has only 10 elements 
 
 ## complex reduce pipeline
 
@@ -112,4 +167,21 @@ In the complex reduce example, we will
 * use both fixed and sliding windows
 * use keyed and non-keyed windowing
 
-TODO: draw the diagram, no need of snippets
+![plot](../../../assets/complex-reduce.png)
+
+```shell
+kubectl apply -f https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml
+```
+
+Output:
+```text
+2023/01/05 12:08:59 (sink)  Payload -  15  Key -  NON_KEYED_STREAM  Start -  20000  End -  80000
+2023/01/05 12:08:59 (sink)  Payload -  45  Key -  NON_KEYED_STREAM  Start -  30000  End -  90000
+2023/01/05 12:08:59 (sink)  Payload -  75  Key -  NON_KEYED_STREAM  Start -  40000  End -  100000
+2023/01/05 12:08:59 (sink)  Payload -  105  Key -  NON_KEYED_STREAM  Start -  50000  End -  110000
+2023/01/05 12:08:59 (sink)  Payload -  135  Key -  NON_KEYED_STREAM  Start -  60000  End -  120000
+2023/01/05 12:08:59 (sink)  Payload -  165  Key -  NON_KEYED_STREAM  Start -  70000  End -  130000
+2023/01/05 12:08:59 (sink)  Payload -  180  Key -  NON_KEYED_STREAM  Start -  80000  End -  140000
+2023/01/05 12:08:59 (sink)  Payload -  180  Key -  NON_KEYED_STREAM  Start -  90000  End -  150000
+2023/01/05 12:08:59 (sink)  Payload -  180  Key -  NON_KEYED_STREAM  Start -  100000  End -  160000
+```
