@@ -144,7 +144,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}()
 	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer.Name))
 
-	fmt.Println("storage inside reduce udf - ", u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.String())
 	storeProvider := wal2.NewWALStores(u.VertexInstance, wal2.WithStorePath(dfv1.DefaultStorePath), wal2.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal2.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 
 	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, storeProvider)
