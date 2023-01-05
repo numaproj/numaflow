@@ -23,14 +23,11 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	wal2 "github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
+	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -147,13 +144,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}()
 	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer.Name))
 
-	var storeProvider store.StoreProvider
-	if storage := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage; storage != nil && storage.PersistentVolumeClaim != nil {
-		storeProvider = wal2.NewWALStores(u.VertexInstance, wal2.WithStorePath(dfv1.DefaultStorePath), wal2.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal2.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
-	} else {
-		// use in memory type by default
-		storeProvider = memory.NewMemoryStores()
-	}
+	fmt.Println("storage inside reduce udf - ", u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.String())
+	storeProvider := wal2.NewWALStores(u.VertexInstance, wal2.WithStorePath(dfv1.DefaultStorePath), wal2.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal2.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 
 	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, storeProvider)
 	if err != nil {

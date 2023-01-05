@@ -120,36 +120,34 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 	desiredReplicas := vertex.GetReplicas()
 
-	// Create PVC if needed for reduce vertices
+	// Create PVC for reduce vertices
 	if vertex.IsReduceUDF() {
-		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PersistentVolumeClaim != nil {
-			for i := 0; i < desiredReplicas; i++ {
-				newPvc, err := r.buildReduceVertexPVCSpec(vertex, i)
-				if err != nil {
-					log.Errorw("Error building a PVC spec", zap.Error(err))
-					vertex.Status.MarkPhaseFailed("BuildPVCSpecFailed", err.Error())
+		for i := 0; i < desiredReplicas; i++ {
+			newPvc, err := r.buildReduceVertexPVCSpec(vertex, i)
+			if err != nil {
+				log.Errorw("Error building a PVC spec", zap.Error(err))
+				vertex.Status.MarkPhaseFailed("BuildPVCSpecFailed", err.Error())
+				return ctrl.Result{}, err
+			}
+			hash := sharedutil.MustHash(newPvc.Spec)
+			newPvc.SetAnnotations(map[string]string{dfv1.KeyHash: hash})
+			existingPvc := &corev1.PersistentVolumeClaim{}
+			if err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: newPvc.Name}, existingPvc); err != nil {
+				if !apierrors.IsNotFound(err) {
+					log.Errorw("Error finding existing PVC", zap.Error(err))
+					vertex.Status.MarkPhaseFailed("FindExistingPVCFailed", err.Error())
 					return ctrl.Result{}, err
 				}
-				hash := sharedutil.MustHash(newPvc.Spec)
-				newPvc.SetAnnotations(map[string]string{dfv1.KeyHash: hash})
-				existingPvc := &corev1.PersistentVolumeClaim{}
-				if err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: newPvc.Name}, existingPvc); err != nil {
-					if !apierrors.IsNotFound(err) {
-						log.Errorw("Error finding existing PVC", zap.Error(err))
-						vertex.Status.MarkPhaseFailed("FindExistingPVCFailed", err.Error())
-						return ctrl.Result{}, err
-					}
-					if err := r.client.Create(ctx, newPvc); err != nil && !apierrors.IsAlreadyExists(err) {
-						log.Errorw("Error creating a PVC", zap.Error(err))
-						vertex.Status.MarkPhaseFailed("CreatePVCFailed", err.Error())
-						return ctrl.Result{}, err
-					}
-				} else {
-					if existingPvc.GetAnnotations()[dfv1.KeyHash] != hash {
-						// TODO: deal with spec difference
-						if false {
-							log.Debug("TODO: check spec difference")
-						}
+				if err := r.client.Create(ctx, newPvc); err != nil && !apierrors.IsAlreadyExists(err) {
+					log.Errorw("Error creating a PVC", zap.Error(err))
+					vertex.Status.MarkPhaseFailed("CreatePVCFailed", err.Error())
+					return ctrl.Result{}, err
+				}
+			} else {
+				if existingPvc.GetAnnotations()[dfv1.KeyHash] != hash {
+					// TODO: deal with spec difference
+					if false {
+						log.Debug("TODO: check spec difference")
 					}
 				}
 			}
@@ -305,14 +303,20 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 }
 
 func (r *vertexReconciler) buildReduceVertexPVCSpec(vertex *dfv1.Vertex, replicaIndex int) (*corev1.PersistentVolumeClaim, error) {
-	if !vertex.IsReduceUDF() {
-		return nil, fmt.Errorf("not a reduce UDF")
-	}
+	// if not specified use default storage
 	if x := vertex.Spec.UDF.GroupBy.Storage; x == nil {
-		return nil, fmt.Errorf("storage is not configured for the reduce UDF")
-	} else if x.PersistentVolumeClaim == nil {
-		return nil, fmt.Errorf("persistentVolumeClaim is not configured for the reduce UDF storge")
+		// Default volume size
+		volSize := dfv1.DefaultVolumeSize
+		// Default to ReadWriteOnce
+		accessMode := dfv1.DefaultAccessMode
+
+		vertex.Spec.UDF.GroupBy.Storage = &dfv1.PBQStorage{PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+			StorageClassName: nil,
+			AccessMode:       &accessMode,
+			VolumeSize:       &volSize,
+		}}
 	}
+
 	pvcName := dfv1.GeneratePBQStoragePVCName(vertex.Spec.PipelineName, vertex.Spec.Name, replicaIndex)
 	newPvc := vertex.Spec.UDF.GroupBy.Storage.PersistentVolumeClaim.GetPVCSpec(pvcName)
 	newPvc.SetNamespace(vertex.Namespace)
@@ -346,21 +350,19 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 
 	if vertex.IsReduceUDF() {
 		// Add pvc for reduce vertex pods
-		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PersistentVolumeClaim != nil {
-			volName := "pbq-vol"
-			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-				Name: volName,
-				VolumeSource: corev1.VolumeSource{
-					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-						ClaimName: dfv1.GeneratePBQStoragePVCName(vertex.Spec.PipelineName, vertex.Spec.Name, replicaIndex),
-					},
+		volName := "pbq-vol"
+		podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+			Name: volName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: dfv1.GeneratePBQStoragePVCName(vertex.Spec.PipelineName, vertex.Spec.Name, replicaIndex),
 				},
-			})
-			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
-				Name:      volName,
-				MountPath: dfv1.PathPBQMount,
-			})
-		}
+			},
+		})
+		podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      volName,
+			MountPath: dfv1.PathPBQMount,
+		})
 	}
 
 	bfs := []string{}
