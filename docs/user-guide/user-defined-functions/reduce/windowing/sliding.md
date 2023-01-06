@@ -47,11 +47,24 @@ vertices:
 
 The yaml snippet above contains an example spec of a _reduce_ vertex that uses sliding window aggregation. As we can see, 
 the length of the window is 60s and sliding frequency is once every 10s. This means there will be multiple windows
-active at any point in time. lets examine in detail
-  
-The first window always ends after _sliding_ seconds after the start time. The start time itself will depend on the
+active at any point in time. 
+
+considering for example `time.now` in the pipeline gives a time of `2031-09-29T18:46:30Z`. accordingly the active window
+boundaries will be 
+
+`2031-09-29T18:45:40Z-2031-09-29T18:46:40Z`
+`2031-09-29T18:45:50Z-2031-09-29T18:46:50Z`
+`2031-09-29T18:46:00Z-2031-09-29T18:47:00Z`
+`2031-09-29T18:46:10Z-2031-09-29T18:47:10Z`
+`2031-09-29T18:46:20Z-2031-09-29T18:47:20Z`
+`2031-09-29T18:46:30Z-2031-09-29T18:47:30Z`
+
+the window start time is always left inclusive and right exclusive. That is why `2031-09-29T18:45:30Z-2031-09-29T18:46:30Z` window is not considered active.
+likewise, `2031-09-29T18:46:30Z-2031-09-29T18:47:30Z` is considered active for the same reason.
+
+The first window always ends after _sliding_ seconds after the `time.now()` time. The start time itself will depend on the
 time characteristics of the pipeline (ex: event time, system time etc.). This means the first window has its start time 
-in the past roughly given by `present - length + sliding`. So the first window starts in the past and ends _sliding_ 
+in the past roughly given by `time.now() - duration(length) + duration(sliding)`. So the first window starts in the past and ends _sliding_ 
 duration (based on time progression in the pipeline and not the wall time) from present. It is important to note that 
 regardless of the window boundary (starting in the past or ending in the future) the target element set totally depends
 on the matching time (in case of event time, all the elements with the time that falls with in the boundaries of the window,
@@ -60,17 +73,7 @@ and in case of system time, all the elements that arrive from the `present` unti
 From the point above, it follows then that immediately upon startup, for the first window, fewer elements may get aggregated
 depending on the current _lateness_ of the data stream.
 
-coming back to the question of active windows, for example, if the `present` time is 60 then the set of windows that will 
-be active can be given by 
 
-`10-70`
-`20-80`
-`30-90`
-`40-100`
-`50-110`
-`60-120`
 
-the window start time is always left inclusive and right exclusive. That is why `0-59` window is not considered active. 
-likewise, `60-120` is considered active for the same reason. 
 
 
