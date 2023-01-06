@@ -88,6 +88,13 @@ var (
 									},
 								},
 							},
+							Storage: &dfv1.PBQStorage{
+								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+									StorageClassName: nil,
+									AccessMode:       &dfv1.DefaultAccessMode,
+									VolumeSize:       &dfv1.DefaultVolumeSize,
+								},
+							},
 						},
 					},
 				},
@@ -104,6 +111,9 @@ var (
 										Duration: time.Duration(60 * time.Second),
 									},
 								},
+							},
+							Storage: &dfv1.PBQStorage{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
 						},
 					},
@@ -123,6 +133,13 @@ var (
 									Slide: &metav1.Duration{
 										Duration: time.Duration(30 * time.Second),
 									},
+								},
+							},
+							Storage: &dfv1.PBQStorage{
+								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+									StorageClassName: nil,
+									AccessMode:       &dfv1.DefaultAccessMode,
+									VolumeSize:       &dfv1.DefaultVolumeSize,
 								},
 							},
 						},
@@ -348,6 +365,34 @@ func TestValidateReducePipeline(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `"keyed" should not be true for a reduce vertex which has data coming from a source vertex`)
 	})
+
+	t.Run("no storage", func(t *testing.T) {
+		testObj := testReducePipeline.DeepCopy()
+		testObj.Spec.Vertices[1].UDF.GroupBy.Storage = nil
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `"storage" is missing`)
+	})
+
+	t.Run("no storage type", func(t *testing.T) {
+		testObj := testReducePipeline.DeepCopy()
+		testObj.Spec.Vertices[1].UDF.GroupBy.Storage = &dfv1.PBQStorage{}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `type of storage to use is missing`)
+	})
+
+	t.Run("both pvc and emptyDir", func(t *testing.T) {
+		testObj := testReducePipeline.DeepCopy()
+		testObj.Spec.Vertices[1].UDF.GroupBy.Storage = &dfv1.PBQStorage{
+			PersistentVolumeClaim: &dfv1.PersistenceStrategy{},
+			EmptyDir:              &corev1.EmptyDirVolumeSource{},
+		}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `either emptyDir or persistentVolumeClaim is allowed, not both`)
+	})
+
 }
 
 func TestValidateVertex(t *testing.T) {

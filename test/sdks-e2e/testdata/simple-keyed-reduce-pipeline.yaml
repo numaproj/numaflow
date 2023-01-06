@@ -24,6 +24,8 @@ spec:
             fixed:
               length: 60s
           keyed: true
+          storage:
+            emptyDir: {}
     - name: java-udsink
       sink:
         udsink:

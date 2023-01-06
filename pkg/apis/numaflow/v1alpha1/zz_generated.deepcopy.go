@@ -1148,6 +1148,11 @@ func (in *PBQStorage) DeepCopyInto(out *PBQStorage) {
 		*out = new(PersistenceStrategy)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.EmptyDir != nil {
+		in, out := &in.EmptyDir, &out.EmptyDir
+		*out = new(v1.EmptyDirVolumeSource)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
