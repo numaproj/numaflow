@@ -28,6 +28,8 @@ spec:
             fixed:
               length: 10s
           keyed: true
+          storage:
+            emptyDir: {}
     - name: non-keyed-fixed-sum
       udf:
         container:
@@ -38,6 +40,8 @@ spec:
             fixed:
               length: 60s
           keyed: false
+          storage:
+            emptyDir: {}
     - name: sink
       scale:
         min: 1

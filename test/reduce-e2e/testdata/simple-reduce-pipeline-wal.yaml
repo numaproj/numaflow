@@ -30,7 +30,6 @@ spec:
             persistentVolumeClaim:
               volumeSize: 10Gi
               accessMode: ReadWriteOnce
-            emptyDir: {}
     - name: sink
       scale:
         min: 1

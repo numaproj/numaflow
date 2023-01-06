@@ -238,7 +238,6 @@ func validateUDF(udf dfv1.UDF) error {
 		if s != nil && (s.Slide == nil) {
 			return fmt.Errorf(`invalid "groupBy.window.sliding", "slide" is missing`)
 		}
-		fmt.Println(storage.String())
 		if storage == nil {
 			return fmt.Errorf(`invalid "groupBy", "storage" is missing`)
 		}
