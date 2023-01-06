@@ -63,7 +63,7 @@ kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exam
 
 ## sum pipeline using fixed window
 This is a simple reduce pipeline that just does summation (sum of numbers) but uses fixed window.
-The snippet for the reduce vertex is as follows. [6-reduce-fixed-window.yaml](....)  has the 
+The snippet for the reduce vertex is as follows. [6-reduce-fixed-window.yaml](https://github.com/numaproj/numaflow/blob/main/examples/6-reduce-fixed-window.yaml)  has the 
 complete pipeline definition.
 
 ![plot](../../../assets/simple-reduce.png)
