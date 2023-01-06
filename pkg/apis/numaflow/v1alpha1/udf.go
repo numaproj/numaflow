@@ -139,7 +139,8 @@ type SlidingWindow struct {
 
 // PBQStorage defines the persistence configuration for a vertex.
 type PBQStorage struct {
-	PersistentVolumeClaim *PersistenceStrategy `json:"persistentVolumeClaim,omitempty" protobuf:"bytes,1,opt,name=persistentVolumeClaim"`
+	PersistentVolumeClaim *PersistenceStrategy         `json:"persistentVolumeClaim,omitempty" protobuf:"bytes,1,opt,name=persistentVolumeClaim"`
+	EmptyDir              *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty" protobuf:"bytes,2,opt,name=emptyDir"`
 }
 
 // GeneratePBQStoragePVCName generates pvc name used by reduce vertex.

@@ -18474,6 +18474,9 @@
       "description": "PBQStorage defines the persistence configuration for a vertex.",
       "type": "object",
       "properties": {
+        "emptyDir": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.EmptyDirVolumeSource"
+        },
         "persistentVolumeClaim": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PersistenceStrategy"
         }

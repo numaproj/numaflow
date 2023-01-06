@@ -120,9 +120,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 	desiredReplicas := vertex.GetReplicas()
 
-	// Create PVC if needed for reduce vertices
 	if vertex.IsReduceUDF() {
-		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PersistentVolumeClaim != nil {
+		if x := vertex.Spec.UDF.GroupBy.Storage; x.PersistentVolumeClaim != nil {
 			for i := 0; i < desiredReplicas; i++ {
 				newPvc, err := r.buildReduceVertexPVCSpec(vertex, i)
 				if err != nil {
@@ -308,11 +307,7 @@ func (r *vertexReconciler) buildReduceVertexPVCSpec(vertex *dfv1.Vertex, replica
 	if !vertex.IsReduceUDF() {
 		return nil, fmt.Errorf("not a reduce UDF")
 	}
-	if x := vertex.Spec.UDF.GroupBy.Storage; x == nil {
-		return nil, fmt.Errorf("storage is not configured for the reduce UDF")
-	} else if x.PersistentVolumeClaim == nil {
-		return nil, fmt.Errorf("persistentVolumeClaim is not configured for the reduce UDF storge")
-	}
+
 	pvcName := dfv1.GeneratePBQStoragePVCName(vertex.Spec.PipelineName, vertex.Spec.Name, replicaIndex)
 	newPvc := vertex.Spec.UDF.GroupBy.Storage.PersistentVolumeClaim.GetPVCSpec(pvcName)
 	newPvc.SetNamespace(vertex.Namespace)
@@ -346,8 +341,9 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 
 	if vertex.IsReduceUDF() {
 		// Add pvc for reduce vertex pods
-		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PersistentVolumeClaim != nil {
-			volName := "pbq-vol"
+		storage := vertex.Spec.UDF.GroupBy.Storage
+		volName := "pbq-vol"
+		if storage.PersistentVolumeClaim != nil {
 			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
 				Name: volName,
 				VolumeSource: corev1.VolumeSource{
@@ -356,11 +352,18 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 					},
 				},
 			})
-			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
-				Name:      volName,
-				MountPath: dfv1.PathPBQMount,
+		}
+		// Add emptyDir for reduce vertex pods
+		if storage.EmptyDir != nil {
+			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+				Name:         volName,
+				VolumeSource: corev1.VolumeSource{EmptyDir: storage.EmptyDir},
 			})
 		}
+		podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      volName,
+			MountPath: dfv1.PathPBQMount,
+		})
 	}
 
 	bfs := []string{}

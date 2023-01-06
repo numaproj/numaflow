@@ -670,6 +670,8 @@ message NatsSource {
 // PBQStorage defines the persistence configuration for a vertex.
 message PBQStorage {
   optional PersistenceStrategy persistentVolumeClaim = 1;
+
+  optional k8s.io.api.core.v1.EmptyDirVolumeSource emptyDir = 2;
 }
 
 // PersistenceStrategy defines the strategy of persistence

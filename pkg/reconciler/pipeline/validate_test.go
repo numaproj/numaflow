@@ -88,6 +88,13 @@ var (
 									},
 								},
 							},
+							Storage: &dfv1.PBQStorage{
+								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+									StorageClassName: nil,
+									AccessMode:       &dfv1.DefaultAccessMode,
+									VolumeSize:       &dfv1.DefaultVolumeSize,
+								},
+							},
 						},
 					},
 				},
@@ -103,6 +110,13 @@ var (
 									Length: &metav1.Duration{
 										Duration: time.Duration(60 * time.Second),
 									},
+								},
+							},
+							Storage: &dfv1.PBQStorage{
+								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+									StorageClassName: nil,
+									AccessMode:       &dfv1.DefaultAccessMode,
+									VolumeSize:       &dfv1.DefaultVolumeSize,
 								},
 							},
 						},
@@ -123,6 +137,13 @@ var (
 									Slide: &metav1.Duration{
 										Duration: time.Duration(30 * time.Second),
 									},
+								},
+							},
+							Storage: &dfv1.PBQStorage{
+								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+									StorageClassName: nil,
+									AccessMode:       &dfv1.DefaultAccessMode,
+									VolumeSize:       &dfv1.DefaultVolumeSize,
 								},
 							},
 						},

@@ -2621,6 +2621,15 @@ PersistenceStrategy </a> </em>
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>emptyDir</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#emptydirvolumesource-v1-core">
+Kubernetes core/v1.EmptyDirVolumeSource </a> </em>
+</td>
+<td>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.PersistenceStrategy">
