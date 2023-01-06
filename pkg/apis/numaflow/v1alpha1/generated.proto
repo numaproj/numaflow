@@ -394,7 +394,6 @@ message GroupBy {
   optional bool keyed = 2;
 
   // Storage is used to define the PBQ storage for a reduce vertex.
-  // +optional
   optional PBQStorage storage = 3;
 }
 
@@ -669,7 +668,11 @@ message NatsSource {
 
 // PBQStorage defines the persistence configuration for a vertex.
 message PBQStorage {
+  // +optional
   optional PersistenceStrategy persistentVolumeClaim = 1;
+
+  // +optional
+  optional k8s.io.api.core.v1.EmptyDirVolumeSource emptyDir = 2;
 }
 
 // PersistenceStrategy defines the strategy of persistence

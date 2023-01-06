@@ -219,6 +219,7 @@ func validateUDF(udf dfv1.UDF) error {
 	if udf.GroupBy != nil {
 		f := udf.GroupBy.Window.Fixed
 		s := udf.GroupBy.Window.Sliding
+		storage := udf.GroupBy.Storage
 		if f == nil && s == nil {
 			return fmt.Errorf(`invalid "groupBy.window", no windowing strategy specified`)
 		}
@@ -236,6 +237,15 @@ func validateUDF(udf dfv1.UDF) error {
 		}
 		if s != nil && (s.Slide == nil) {
 			return fmt.Errorf(`invalid "groupBy.window.sliding", "slide" is missing`)
+		}
+		if storage == nil {
+			return fmt.Errorf(`invalid "groupBy", "storage" is missing`)
+		}
+		if storage.PersistentVolumeClaim == nil && storage.EmptyDir == nil {
+			return fmt.Errorf(`invalid "groupBy.storage", type of storage to use is missing`)
+		}
+		if storage.PersistentVolumeClaim != nil && storage.EmptyDir != nil {
+			return fmt.Errorf(`invalid "groupBy.storage", either emptyDir or persistentVolumeClaim is allowed, not both`)
 		}
 	}
 	return nil

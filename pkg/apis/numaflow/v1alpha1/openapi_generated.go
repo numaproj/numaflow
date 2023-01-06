@@ -2411,11 +2411,16 @@ func schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref common.ReferenceCallback) 
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy"),
 						},
 					},
+					"emptyDir": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/api/core/v1.EmptyDirVolumeSource"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy", "k8s.io/api/core/v1.EmptyDirVolumeSource"},
 	}
 }
 
