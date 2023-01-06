@@ -121,7 +121,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	desiredReplicas := vertex.GetReplicas()
 
 	if vertex.IsReduceUDF() {
-		if x := vertex.Spec.UDF.GroupBy.Storage; x.PersistentVolumeClaim != nil {
+		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PersistentVolumeClaim != nil {
 			for i := 0; i < desiredReplicas; i++ {
 				newPvc, err := r.buildReduceVertexPVCSpec(vertex, i)
 				if err != nil {
@@ -352,9 +352,7 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 					},
 				},
 			})
-		}
-		// Add emptyDir for reduce vertex pods
-		if storage.EmptyDir != nil {
+		} else if storage.EmptyDir != nil { // Add emptyDir for reduce vertex pods
 			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
 				Name:         volName,
 				VolumeSource: corev1.VolumeSource{EmptyDir: storage.EmptyDir},

@@ -114,7 +114,6 @@ type GroupBy struct {
 	// +optional
 	Keyed bool `json:"keyed" protobuf:"bytes,2,opt,name=keyed"`
 	// Storage is used to define the PBQ storage for a reduce vertex.
-	// +optional
 	Storage *PBQStorage `json:"storage,omitempty" protobuf:"bytes,3,opt,name=storage"`
 }
 
@@ -139,8 +138,10 @@ type SlidingWindow struct {
 
 // PBQStorage defines the persistence configuration for a vertex.
 type PBQStorage struct {
-	PersistentVolumeClaim *PersistenceStrategy         `json:"persistentVolumeClaim,omitempty" protobuf:"bytes,1,opt,name=persistentVolumeClaim"`
-	EmptyDir              *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty" protobuf:"bytes,2,opt,name=emptyDir"`
+	// +optional
+	PersistentVolumeClaim *PersistenceStrategy `json:"persistentVolumeClaim,omitempty" protobuf:"bytes,1,opt,name=persistentVolumeClaim"`
+	// +optional
+	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty" protobuf:"bytes,2,opt,name=emptyDir"`
 }
 
 // GeneratePBQStoragePVCName generates pvc name used by reduce vertex.
