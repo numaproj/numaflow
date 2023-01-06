@@ -38,6 +38,10 @@ spec:
               length: 10s
               slide: 5s
           keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 10Gi
+              accessMode: ReadWriteOnce
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG

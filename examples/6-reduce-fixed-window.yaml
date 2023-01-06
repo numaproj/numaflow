@@ -24,6 +24,10 @@ spec:
             fixed:
               length: 60s
           keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 10Gi
+              accessMode: ReadWriteOnce
     - name: sink
       scale:
         min: 1

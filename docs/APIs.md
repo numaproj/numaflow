@@ -1522,7 +1522,6 @@ Window describes the windowing strategy.
 </em>
 </td>
 <td>
-<em>(Optional)</em>
 <p>
 Storage is used to define the PBQ storage for a reduce vertex.
 </p>
@@ -2619,6 +2618,17 @@ Description
 PersistenceStrategy </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>emptyDir</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#emptydirvolumesource-v1-core">
+Kubernetes core/v1.EmptyDirVolumeSource </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>
