@@ -53,7 +53,8 @@ func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.W
 	}
 }
 
-// GetHeadWatermark returns the watermark using the HeadOffset (the latest offset among all processors). This
+// GetHeadWatermark returns the latest watermark for a vertex (the latest watermark among all the processors)
+// this guarantees monotonic watermark progression in the UI.
 // can be used in showing the watermark progression for a vertex when not consuming the messages
 // directly (eg. UX, tests)
 // NOTE
@@ -61,25 +62,16 @@ func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.W
 //   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
 //     Meaning, in the UX (daemon service) we never delete any processor.
 func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
-	var debugString strings.Builder
-	var headOffset int64 = math.MinInt64
-	var epoch int64 = math.MaxInt64
-	var allProcessors = e.processorManager.GetAllProcessors()
-	// get the head offset of each processor
-	for _, p := range allProcessors {
+	var epoch int64 = math.MinInt64
+	for _, p := range e.processorManager.GetAllProcessors() {
 		if !p.IsActive() {
 			continue
 		}
-		var o = p.offsetTimeline.GetHeadOffset()
-		e.log.Debugf("Processor: %v (headoffset:%d)", p, o)
-		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headoffset:%d) \n", p, o))
-		if o != -1 && o > headOffset {
-			headOffset = o
-			epoch = p.offsetTimeline.GetEventTimeFromInt64(o)
+		if p.offsetTimeline.GetHeadWatermark() > epoch {
+			epoch = p.offsetTimeline.GetHeadWatermark()
 		}
 	}
-	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
-	if epoch == math.MaxInt64 {
+	if epoch == math.MinInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
 		return processor.Watermark(time.UnixMilli(-1))
 	}
