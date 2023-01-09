@@ -22,13 +22,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// MapApplier applies the HTTPBasedUDF on the read message and gives back a new message. Any UserError will be retried here, while
+// MapApplier applies the UDF on the read message and gives back a new message. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type MapApplier interface {
 	ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error)
 }
 
-// ApplyFunc utility function used to create an Applier implementation
+// ApplyMapFunc utility function used to create an Applier implementation
 type ApplyMapFunc func(context.Context, *isb.ReadMessage) ([]*isb.Message, error)
 
 func (a ApplyMapFunc) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
