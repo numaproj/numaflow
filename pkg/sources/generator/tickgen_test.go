@@ -165,13 +165,13 @@ func TestUnparseableTime(t *testing.T) {
 
 func TestTimeForValidTime(t *testing.T) {
 	nanotime := time.Now().UnixNano()
-	parsedtime := timefromNanos(nanotime)
+	parsedtime := timeFromNanos(nanotime)
 	assert.Equal(t, nanotime, parsedtime.UnixNano())
 }
 
 func TestTimeForInvalidTime(t *testing.T) {
 	nanotime := int64(-1)
-	parsedtime := timefromNanos(nanotime)
+	parsedtime := timeFromNanos(nanotime)
 	assert.True(t, parsedtime.UnixNano() > 0)
 }
 
