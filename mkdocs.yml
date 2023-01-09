@@ -74,6 +74,7 @@ nav:
       - user-guide/container-resources.md
       - user-guide/volumes.md
       - user-guide/environment-variables.md
+      - user-guide/labels-and-annotations.md
       - user-guide/init-containers.md
       - user-guide/sidecar-containers.md
       - user-guide/pipeline-customization.md
