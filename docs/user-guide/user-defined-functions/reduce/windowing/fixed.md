@@ -41,3 +41,25 @@ vertices:
           fixed:
             length: 60s
 ```
+
+The yaml snippet above contains an example spec of a _reduce_ vertex that uses fixed window 
+aggregation. As we can see, the length of the window is 60s. This means only one window will be 
+active at any point in time. It is also possible to have multiple inactive and non-empty windows
+(based on out-of-order arrival of elements).
+
+The window boundaries for the first window (post bootstrap) are determined by rounding down from
+`time.now()` to the nearest multiple of `length` of the window. So considering the above example,
+if the `time.now()` corresponds to `2031-09-29T18:46:30Z`, then the start-time of the window will
+be adjusted to `2031-09-29T18:46:00Z` and the end-time is set accordingly to `2031-09-29T18:47:00Z`.
+Windows are left inclusive and right exclusive which means an element with event time (considering
+event time characteristic) of `2031-09-29T18:47:00Z` will belong to the window with boundaries
+`[2031-09-29T18:47:00Z, 2031-09-29T18:48:00Z)`
+
+It is important to note that because of this property, for a constant throughput, the first window 
+may contain fewer elements than other windows. 
+
+
+
+
+
+
