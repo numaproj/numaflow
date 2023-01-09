@@ -215,7 +215,6 @@ func (mg *memgen) IsEmpty() bool {
 	return len(mg.srcchan) == 0
 }
 
-// The context passed to read should be different from the lifecycle context that is used by this vertex.
 func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := make([]*isb.ReadMessage, 0, count)
 	// timeout should not be re-triggered for every run of the for loop. it is for the entire Read() call.
