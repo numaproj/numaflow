@@ -1624,6 +1624,19 @@ and a unit suffix, such as "300ms", "1.5h" or "2h45m". Valid time units are "ns"
 <span class="w">          </span><span class="nt">fixed</span><span class="p">:</span>
 <span class="w">            </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span>
 </code></pre></div>
+<p>The yaml snippet above contains an example spec of a <em>reduce</em> vertex that uses fixed window 
+aggregation. As we can see, the length of the window is 60s. This means only one window will be 
+active at any point in time. It is also possible to have multiple inactive and non-empty windows
+(based on out-of-order arrival of elements).</p>
+<p>The window boundaries for the first window (post bootstrap) are determined by rounding down from
+<code>time.now()</code> to the nearest multiple of <code>length</code> of the window. So considering the above example,
+if the <code>time.now()</code> corresponds to <code>2031-09-29T18:46:30Z</code>, then the start-time of the window will
+be adjusted to <code>2031-09-29T18:46:00Z</code> and the end-time is set accordingly to <code>2031-09-29T18:47:00Z</code>.
+Windows are left inclusive and right exclusive which means an element with event time (considering
+event time characteristic) of <code>2031-09-29T18:47:00Z</code> will belong to the window with boundaries
+<code>[2031-09-29T18:47:00Z, 2031-09-29T18:48:00Z)</code></p>
+<p>It is important to note that because of this property, for a constant throughput, the first window 
+may contain fewer elements than other windows. </p>
 
               
             </article>

@@ -1532,17 +1532,150 @@
 
 
 <h1 id="reduce-udf">Reduce UDF<a class="headerlink" href="#reduce-udf" title="Permanent link">&para;</a></h1>
-<p>Reduce is one of the most commonly used abstractions in a stream processing pipeline 
-to define aggregation functions on a stream of data. It is the reduce feature
-that helps us solve problems like "performs a summary operation (such as 
-counting the number of occurrence of a key, yielding user login frequencies), etc."
-Since the input an unbounded stream (with infinite entries), we need an
-additional parameter to convert the unbounded problem to a bounded problem
-and provide results on that. That bounding condition is "time", eg, "number
-of users logged in per minute". 
-So while processing an unbounded stream of data, we need a way to group elements 
-into finite chunks using time. To build these chunks the reduce function is applied to the 
-set of records produced using the concept of <a href="../windowing/windowing/">windowing</a>.</p>
+<p>Reduce is one of the most commonly used abstractions in a stream processing pipeline to define 
+aggregation functions on a stream of data. It is the reduce feature that helps us solve problems like 
+"performs a summary operation(such as counting the number of occurrence of a key, yielding user login 
+frequencies), etc."Since the input an unbounded stream (with infinite entries), we need an additional
+parameter to convert the unbounded problem to a bounded problem and provide results on that. That
+bounding condition is "time", eg, "number of users logged in per minute". So while processing an 
+unbounded stream of data, we need a way to group elements into finite chunks using time. To build these
+chunks the reduce function is applied to the set of records produced using the concept of <a href="../windowing/windowing/">windowing</a>.</p>
+<p>Unlike in <em>map</em> vertex where only an element is given to user-defined function, in <em>reduce</em> since
+there is a group of elements, an iterator is passed to the reduce function.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># counter counts the number of elements in the array</span>
+<span class="c1"># e.g. use-case of counter is counting number of users online per minute</span>
+<span class="k">def</span> <span class="nf">counter</span><span class="p">(</span><span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">datums</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Datum</span><span class="p">],</span> <span class="n">md</span><span class="p">:</span> <span class="n">Metadata</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Messages</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">datums</span><span class="p">:</span>
+        <span class="n">counter</span> <span class="o">+=</span> <span class="mi">1</span>
+     <span class="k">return</span> <span class="n">Messages</span><span class="p">(</span><span class="n">Message</span><span class="o">.</span><span class="n">to_vtx</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">str</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">msg</span><span class="p">)))</span>
+</code></pre></div>
+<p>The structure for defining a reduce vertex is as follows.
+<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-udf</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-udf:latest</span>
+<span class="w">        </span><span class="nt">groupBy</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">window</span><span class="p">:</span>
+<span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+<span class="w">          </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+</code></pre></div></p>
+<p>The reduce spec adds a new section called <code>groupBy</code> and this how we differentiate a <em>map</em> vertex
+from <em>reduce</em> vertex. There are two important fields, the <a href="../windowing/windowing/"><em>window</em></a>
+and <a href="../windowing/windowing/#non-keyed-vs-keyed-windows"><em>keyed</em></a>. These two fields play an
+important role in grouping the data together and pass it to the user-defined reduce code.</p>
+<p>The reduce supports a parallelism value while defining the edge. This is because auto-scaling is 
+not supported in reduce vertex. If <code>parallelism</code> is not defined default of one will be used.</p>
+<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">edge1</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-reduce</span>
+<span class="w">      </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
+</code></pre></div>
+<p>It is wrong to give a <code>parallelism</code> &gt; <code>1</code> if it is a <em>non-keyed</em> vertex (<code>keyed: false</code>).</p>
+<h1 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h1>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<p>Install the ISB</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
+</code></pre></div>
+<h2 id="sum-pipeline-using-fixed-window">sum pipeline using fixed window<a class="headerlink" href="#sum-pipeline-using-fixed-window" title="Permanent link">&para;</a></h2>
+<p>This is a simple reduce pipeline that just does summation (sum of numbers) but uses fixed window.
+The snippet for the reduce vertex is as follows.</p>
+<p><img alt="plot" src="../../../../assets/simple-reduce.png" /></p>
+<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="c1"># compute the sum</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaio/numaflow-go/reduce-sum</span>
+<span class="w">        </span><span class="nt">groupBy</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">window</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">fixed</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span>
+<span class="w">          </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/6-reduce-fixed-window.yaml">6-reduce-fixed-window.yaml</a>
+has the complete pipeline definition.</p>
+<p>In this example we use a <code>parallelism</code> of <code>2</code>. We are setting a parallelism &gt; 1 because it is a 
+keyed window.</p>
+<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">atoi</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
+<span class="w">      </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/examples/examples/6-reduce-fixed-window.yaml
+</code></pre></div>
+<p>Output :
+<div class="highlight"><pre><span></span><code>2023/01/05 11:54:41 (sink)  Payload -  300  Key -  odd  Start -  60000  End -  120000
+2023/01/05 11:54:41 (sink)  Payload -  600  Key -  even  Start -  60000  End -  120000
+2023/01/05 11:54:41 (sink)  Payload -  300  Key -  odd  Start -  120000  End -  180000
+2023/01/05 11:54:41 (sink)  Payload -  600  Key -  even  Start -  120000  End -  180000
+2023/01/05 11:54:42 (sink)  Payload -  600  Key -  even  Start -  180000  End -  240000
+2023/01/05 11:54:42 (sink)  Payload -  300  Key -  odd  Start -  180000  End -  240000
+</code></pre></div></p>
+<p>In our example, input is an HTTP source producing 2 messages each second with values 5 and 10,
+and the event time starts from 60000. Since we have considered a fixed window of length 60s,
+and also we are producing two messages with different keys "even" and "odd". Numaflow will create
+two different windows with a start time of 60000 and an end time of 120000. So the output will be
+300(5 * 60) and 600(10 * 60).</p>
+<p>If we had used a non keyed window (<code>keyed: false</code>), we would have seen one single output with value
+of 900(300 of odd + 600 of even) for each window.</p>
+<h2 id="sum-pipeline-using-sliding-window">sum pipeline using sliding window<a class="headerlink" href="#sum-pipeline-using-sliding-window" title="Permanent link">&para;</a></h2>
+<p>This is a simple reduce pipeline that just does summation (sum of numbers) but uses sliding window. 
+The snippet for the reduce vertex is as follows.</p>
+<p><img alt="plot" src="../../../../assets/simple-reduce.png" /></p>
+<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="c1"># compute the sum</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaio/numaflow-go/reduce-sum</span>
+<span class="w">        </span><span class="nt">groupBy</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">window</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">sliding</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">              </span><span class="nt">slide</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
+<span class="w">          </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml">7-reduce-sliding-window.yaml</a>
+has the complete pipeline definition</p>
+<p><div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml
+</code></pre></div>
+Output:
+<div class="highlight"><pre><span></span><code>2023/01/05 15:13:16 (sink)  Payload -  300  Key -  odd  Start -  60000  End -  120000
+2023/01/05 15:13:16 (sink)  Payload -  600  Key -  even  Start -  60000  End -  120000
+2023/01/05 15:13:16 (sink)  Payload -  300  Key -  odd  Start -  70000  End -  130000
+2023/01/05 15:13:16 (sink)  Payload -  600  Key -  even  Start -  700000  End -  1300000
+2023/01/05 15:13:16 (sink)  Payload -  300  Key -  odd  Start -  80000  End -  140000
+2023/01/05 15:13:16 (sink)  Payload -  600  Key -  even  Start -  80000  End -  140000
+</code></pre></div></p>
+<p>In our example, input is an HTTP source producing 2 messages each second with values 5 and 10,
+and the event time starts from 60000. Since we have considered a sliding window of length 60s
+and slide 10s, and also we are producing two messages with different keys "even" and "odd".
+Numaflow will create two different windows with a start time of 60000 and an end time of 120000,
+and because the slide duration is 10s, a next set of windows will be created with start time of 
+70000 and an end time of 130000. Since its a sum operation the output will be 300(5 * 60) and 600(10 * 60).</p>
+<p><code>Payload -  50  Key -  odd  Start -  10000  End -  70000</code>, we see 50 here for odd because the 
+first window has only 10 elements </p>
+<h2 id="complex-reduce-pipeline">complex reduce pipeline<a class="headerlink" href="#complex-reduce-pipeline" title="Permanent link">&para;</a></h2>
+<p>In the complex reduce example, we will 
+* chain of reduce functions
+* use both fixed and sliding windows
+* use keyed and non-keyed windowing</p>
+<p><img alt="plot" src="../../../../assets/complex-reduce.png" /></p>
+<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml">7-reduce-sliding-window.yaml</a>
+has the complete pipeline definition</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml
+</code></pre></div>
+<p>Output:
+<div class="highlight"><pre><span></span><code>2023/01/05 15:33:55 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  80000  End -  140000
+2023/01/05 15:33:55 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  90000  End -  150000
+2023/01/05 15:33:55 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  100000  End -  160000
+2023/01/05 15:33:56 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  110000  End -  170000
+2023/01/05 15:33:56 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  120000  End -  180000
+2023/01/05 15:33:56 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  130000  End -  190000
+</code></pre></div></p>
+<p>In our example, First we have the reduce vertex with a fixed window of duration 5s, Since the input is 5
+and 10, the output from the first reduce vertex will be 25 and 50, and this will be passed to the next
+non keyed reduce vertex with the fixed window duration of 10s, since its non keyed it will combine the 
+inputs and produce the output of 150(25 * 2 + 50 * 2), which will be passed to the reduce vertex with 
+a sliding window of duration 60s and with the slide duration of 10s, Hence the final output will be 
+900(150 * 6).</p>
 
               
             </article>
