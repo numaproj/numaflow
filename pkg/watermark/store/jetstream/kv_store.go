@@ -22,6 +22,8 @@ package jetstream
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
@@ -36,6 +38,7 @@ type jetStreamStore struct {
 	pipelineName string
 	conn         *jsclient.NatsConn
 	kv           nats.KeyValue
+	kvLock       sync.Mutex
 	js           *jsclient.JetStreamContext
 	log          *zap.SugaredLogger
 }
@@ -45,7 +48,20 @@ var _ store.WatermarkKVStorer = (*jetStreamStore)(nil)
 // NewKVJetStreamKVStore returns KVJetStreamStore.
 func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client jsclient.JetStreamClient, opts ...JSKVStoreOption) (store.WatermarkKVStorer, error) {
 	var err error
-	conn, err := client.Connect(ctx)
+	var j *jetStreamStore
+	conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(_ *jsclient.NatsConn) {
+		if j != nil && j.js != nil {
+			// create a new KV
+			kv, err := j.js.KeyValue(bucketName)
+			// keep looping because the watermark won't work without a watcher
+			for err != nil {
+				j.log.Errorw("Failed to create JetStream KeyValue", zap.Error(err))
+				kv, err = j.js.KeyValue(bucketName)
+				time.Sleep(100 * time.Millisecond)
+			}
+			j.kv = kv
+		}
+	}))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nats connection, %w", err)
 	}
@@ -53,13 +69,11 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 	// do we need to specify any opts? if yes, send it via options.
 	js, err := conn.JetStream(nats.PublishAsyncMaxPending(256))
 	if err != nil {
-		if !conn.IsClosed() {
-			conn.Close()
-		}
+		conn.Close()
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
 	}
 
-	j := &jetStreamStore{
+	j = &jetStreamStore{
 		pipelineName: pipelineName,
 		conn:         conn,
 		js:           js,
@@ -87,7 +101,8 @@ type JSKVStoreOption func(*jetStreamStore) error
 
 // GetAllKeys returns all the keys in the key-value store.
 func (kv *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
-	// TODO: retry if nats is reconnected
+	kv.kvLock.Lock()
+	defer kv.kvLock.Unlock()
 	keys, err := kv.kv.Keys()
 	if err != nil {
 		return nil, err
@@ -97,6 +112,8 @@ func (kv *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
 
 // GetValue returns the value for a given key.
 func (kv *jetStreamStore) GetValue(_ context.Context, k string) ([]byte, error) {
+	kv.kvLock.Lock()
+	defer kv.kvLock.Unlock()
 	kvEntry, err := kv.kv.Get(k)
 	if err != nil {
 		return []byte(""), err
@@ -108,17 +125,23 @@ func (kv *jetStreamStore) GetValue(_ context.Context, k string) ([]byte, error) 
 
 // GetStoreName returns the store name.
 func (kv *jetStreamStore) GetStoreName() string {
+	kv.kvLock.Lock()
+	defer kv.kvLock.Unlock()
 	return kv.kv.Bucket()
 }
 
 // DeleteKey deletes the key from the JS key-value store.
 func (kv *jetStreamStore) DeleteKey(_ context.Context, k string) error {
+	kv.kvLock.Lock()
+	defer kv.kvLock.Unlock()
 	// will return error if nats connection is closed
 	return kv.kv.Delete(k)
 }
 
 // PutKV puts an element to the JS key-value store.
 func (kv *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
+	kv.kvLock.Lock()
+	defer kv.kvLock.Unlock()
 	// will return error if nats connection is closed
 	_, err := kv.kv.Put(k, v)
 	return err
@@ -126,6 +149,8 @@ func (kv *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
 
 // Close closes the jetstream connection.
 func (kv *jetStreamStore) Close() {
+	kv.kvLock.Lock()
+	defer kv.kvLock.Unlock()
 	if !kv.conn.IsClosed() {
 		kv.conn.Close()
 	}
