@@ -250,7 +250,7 @@ pre-push: codegen lint
 
 .PHONY: checksums
 checksums:
-	for f in ./dist/$(BINARY_NAME)-*.gz; do openssl dgst -sha256 "$$f" | awk ' { print $$2 }' > "$$f".sha256 ; done
+	sha256sum ./dist/$(BINARY_NAME)-*.gz | awk -F './dist/' '{print $$1 $$2}' > ./dist/$(BINARY_NAME)-checksums.txt
 
 # release - targets only available on release branch
 ifneq ($(findstring release,$(GIT_BRANCH)),)
