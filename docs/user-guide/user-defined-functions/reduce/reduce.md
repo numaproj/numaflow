@@ -24,14 +24,14 @@ def counter(key: str, datums: Iterator[Datum], md: Metadata) -> Messages:
 
 The structure for defining a reduce vertex is as follows.
 ```yaml
-    - name: my-reduce-udf
-      udf:
-        container:
-          image: my-reduce-udf:latest
-        groupBy:
-          window:
-            ...
-          keyed: ...
+- name: my-reduce-udf
+  udf:
+    container:
+      image: my-reduce-udf:latest
+    groupBy:
+      window:
+        ...
+      keyed: ...
 ```
 
 The reduce spec adds a new section called `groupBy` and this how we differentiate a _map_ vertex
@@ -43,9 +43,9 @@ The reduce supports a parallelism value while defining the edge. This is because
 not supported in reduce vertex. If `parallelism` is not defined default of one will be used.
 
 ```yaml
-    - from: edge1
-      to: my-reduce-reduce
-      parallelism: integer
+- from: edge1
+  to: my-reduce-reduce
+  parallelism: integer
 ```
 
 It is wrong to give a `parallelism` > `1` if it is a _non-keyed_ vertex (`keyed: false`).
@@ -68,16 +68,16 @@ The snippet for the reduce vertex is as follows.
 ![plot](../../../assets/simple-reduce.png)
 
 ```yaml
-    - name: compute-sum
-      udf:
-        container:
-          # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum
-        groupBy:
-          window:
-            fixed:
-              length: 60s
-          keyed: true
+- name: compute-sum
+  udf:
+    container:
+      # compute the sum
+      image: quay.io/numaio/numaflow-go/reduce-sum
+    groupBy:
+      window:
+        fixed:
+          length: 60s
+      keyed: true
 ```
 
 [6-reduce-fixed-window.yaml](https://github.com/numaproj/numaflow/blob/main/examples/6-reduce-fixed-window.yaml)
@@ -87,9 +87,9 @@ In this example we use a `parallelism` of `2`. We are setting a parallelism > 1 
 keyed window.
 
 ```yaml
-    - from: atoi
-      to: compute-sum
-      parallelism: 2
+- from: atoi
+  to: compute-sum
+  parallelism: 2
 ```
 
 ```shell
@@ -122,17 +122,17 @@ The snippet for the reduce vertex is as follows.
 ![plot](../../../assets/simple-reduce.png)
 
 ```yaml
-    - name: compute-sum
-      udf:
-        container:
-          # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum
-        groupBy:
-          window:
-            sliding:
-              length: 10s
-              slide: 5s
-          keyed: true
+- name: compute-sum
+  udf:
+    container:
+      # compute the sum
+      image: quay.io/numaio/numaflow-go/reduce-sum
+    groupBy:
+      window:
+        sliding:
+          length: 10s
+          slide: 5s
+      keyed: true
 ```
 
 [7-reduce-sliding-window.yaml](https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml)
@@ -170,7 +170,7 @@ In the complex reduce example, we will
 
 ![plot](../../../assets/complex-reduce.png)
 
-[7-reduce-sliding-window.yaml](https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml)
+[8-reduce-complex-pipeline.yaml](https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml)
 has the complete pipeline definition
 
 ```shell
@@ -187,9 +187,9 @@ Output:
 2023/01/05 15:33:56 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  130000  End -  190000
 ```
 
-In our example, First we have the reduce vertex with a fixed window of duration 5s, Since the input is 5
-and 10, the output from the first reduce vertex will be 25 and 50, and this will be passed to the next
-non keyed reduce vertex with the fixed window duration of 10s, since its non keyed it will combine the 
-inputs and produce the output of 150(25 * 2 + 50 * 2), which will be passed to the reduce vertex with 
-a sliding window of duration 60s and with the slide duration of 10s, Hence the final output will be 
-900(150 * 6).
+In our example, first we have the reduce vertex with a fixed window of duration 5s. Since the input is 5
+and 10, the output from the first reduce vertex will be 25 (5 * 5) and 50 (5 * 10). This will be passed
+to the next non-keyed reduce vertex with the fixed window duration of 10s. This being a non-keyed, it will 
+combine the inputs and produce the output of 150(25 * 2 + 50 * 2), which will be passed to the reduce
+vertex with a sliding window of duration 60s and with the slide duration of 10s. Hence the final output
+will be 900(150 * 6).
