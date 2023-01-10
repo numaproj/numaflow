@@ -175,7 +175,7 @@ jobs:
             dist/numaflow-checksums.txt
             dist/numaflow-checksums.sig
             dist/numaflow-cosign.pub
-            manifests/*.yaml
+            config/*.yaml
             /tmp/sbom.tar.gz
             /tmp/sbom.tar.gz.sig
         env:
