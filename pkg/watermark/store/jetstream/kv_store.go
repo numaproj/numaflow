@@ -97,7 +97,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 	return j, nil
 }
 
-// JSKVStoreOption is to pass in Jetstream options.
+// JSKVStoreOption is to pass in JetStream options.
 type JSKVStoreOption func(*jetStreamStore) error
 
 // GetAllKeys returns all the keys in the key-value store.
@@ -148,7 +148,7 @@ func (kv *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
 	return err
 }
 
-// Close closes the jetstream connection.
+// Close closes the JetStream connection.
 func (kv *jetStreamStore) Close() {
 	kv.kvLock.Lock()
 	defer kv.kvLock.Unlock()
