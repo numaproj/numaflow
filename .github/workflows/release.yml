@@ -174,9 +174,9 @@ jobs:
             dist/*.gz
             dist/numaflow-checksums.txt
             dist/numaflow-checksums.sig
+            dist/numaflow-cosign.pub
             manifests/*.yaml
             /tmp/sbom.tar.gz
             /tmp/sbom.tar.gz.sig
-            /dist/numaflow-cosign.pub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
