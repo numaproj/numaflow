@@ -87,6 +87,7 @@ type JSKVStoreOption func(*jetStreamStore) error
 
 // GetAllKeys returns all the keys in the key-value store.
 func (kv *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
+	// TODO: retry if nats is reconnected
 	keys, err := kv.kv.Keys()
 	if err != nil {
 		return nil, err
