@@ -59,6 +59,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 				kv, err = j.js.KeyValue(bucketName)
 				time.Sleep(100 * time.Millisecond)
 			}
+			j.log.Infow("Succeeded to recreate JetStream KeyValue store")
 			j.kv = kv
 		}
 	}))
