@@ -65,7 +65,7 @@ func (isc *inClusterJetStreamClient) connect(ctx context.Context) (*nats.Conn, e
 	return natsJetStreamConnection(ctx, url, natsOpts)
 }
 
-// Connect is used to establish an incluster NATS jetstream connection
+// Connect is used to establish an inCluster NATS JetStream connection
 func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStreamClientOption) (*NatsConn, error) {
 	options := defaultJetStreamClientOptions()
 	for _, o := range opts {
