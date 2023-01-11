@@ -11,22 +11,10 @@ spec:
           rpu: 5
           duration: 1s
     - name: cat
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: "true"
-      scale:
-        min: 1 # Minimum replicas
       udf:
         builtin:
           name: cat # A built-in UDF which simply cats the message
     - name: out
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: "true"
-      scale:
-        min: 1 # Minimum replicas
       sink:
         # A simple log printing sink
         log: {}

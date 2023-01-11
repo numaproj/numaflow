@@ -9,5 +9,3 @@ metadata:
 spec:
   jetstream:
     version: latest # Do NOT use "latest" in real deployment, check "numaflow-controller-config" ConfigMap to get available versions.
-    persistence:
-      volumeSize: 1Gi
