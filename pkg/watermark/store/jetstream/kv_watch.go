@@ -161,7 +161,7 @@ func (jsWatch *jetStreamWatch) newWatcher() nats.KeyWatcher {
 	kv, err := jsWatch.js.KeyValue(jsWatch.kvBucketName)
 	// keep looping because the watermark won't work without a watcher
 	for err != nil {
-		jsWatch.log.Errorw("Failed to create JetStream KeyValue", zap.String("kvBucketName", jsWatch.kvBucketName), zap.String("watcher", jsWatch.GetKVName()), zap.Error(err))
+		jsWatch.log.Errorw("Failed to bind to the JetStream KeyValue store", zap.String("kvBucketName", jsWatch.kvBucketName), zap.String("watcher", jsWatch.GetKVName()), zap.Error(err))
 		kv, err = jsWatch.js.KeyValue(jsWatch.kvBucketName)
 		time.Sleep(100 * time.Millisecond)
 	}

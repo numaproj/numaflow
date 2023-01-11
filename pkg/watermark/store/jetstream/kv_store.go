@@ -51,15 +51,15 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 	var j *jetStreamStore
 	conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(_ *jsclient.NatsConn) {
 		if j != nil && j.js != nil {
-			// create a new KV
+			// re-bind to an existing KeyValue store
 			kv, err := j.js.KeyValue(bucketName)
 			// keep looping because the watermark won't work without a watcher
 			for err != nil {
-				j.log.Errorw("Failed to recreate JetStream KeyValue", zap.Error(err))
+				j.log.Errorw("Failed to rebind to the JetStream KeyValue store ", zap.Error(err))
 				kv, err = j.js.KeyValue(bucketName)
 				time.Sleep(100 * time.Millisecond)
 			}
-			j.log.Infow("Succeeded to recreate JetStream KeyValue store")
+			j.log.Infow("Succeeded to rebind to JetStream KeyValue store")
 			j.kv = kv
 		}
 	}))
