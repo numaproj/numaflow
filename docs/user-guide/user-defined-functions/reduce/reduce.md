@@ -66,7 +66,7 @@ chaining of windows, keyed streams, etc.
 ## Storage
 
 Reduce unlike map requires persistence. To support persistence user has to define the 
-`persistence` configuration. We replay the data stored in this storage on pod startup if there has
+`storage` configuration. We replay the data stored in this storage on pod startup if there has
 been a restart of the reduce pod caused due to pod migrations, etc.
 
 ```yaml
@@ -80,9 +80,9 @@ vertices:
 
 ### Persistent Volume Claim (PVC)
 
-`persistentVolumeClaim` has two fields, `volumeSize` and `accessMode`. As name suggests,
-`volumeSize` specifies the size of the volume. `accessMode` can be of many types, but for reduce
-usecase we need only `ReadWriteOnce`. `storageClassName` can also be provided, more info on storage class
+`persistentVolumeClaim` supports the following fields, `volumeSize`, `storageClassName`, and`accessMode`.
+As name suggests,`volumeSize` specifies the size of the volume. `accessMode` can be of many types, but for 
+reduce usecase we need only `ReadWriteOnce`. `storageClassName` can also be provided, more info on storage class
 can be found [here](https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1). The default
 value of `storageClassName` is `default` which is default StorageClass may be deployed to a Kubernetes 
 cluster by addon manager during installation.
