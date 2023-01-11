@@ -38,7 +38,7 @@ type jetStreamStore struct {
 	pipelineName string
 	conn         *jsclient.NatsConn
 	kv           nats.KeyValue
-	kvLock       sync.Mutex
+	kvLock       sync.RWMutex
 	js           *jsclient.JetStreamContext
 	log          *zap.SugaredLogger
 }
@@ -48,19 +48,21 @@ var _ store.WatermarkKVStorer = (*jetStreamStore)(nil)
 // NewKVJetStreamKVStore returns KVJetStreamStore.
 func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client jsclient.JetStreamClient, opts ...JSKVStoreOption) (store.WatermarkKVStorer, error) {
 	var err error
-	var j *jetStreamStore
+	var jsStore *jetStreamStore
 	conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(_ *jsclient.NatsConn) {
-		if j != nil && j.js != nil {
+		if jsStore != nil && jsStore.js != nil {
 			// re-bind to an existing KeyValue store
-			kv, err := j.js.KeyValue(bucketName)
+			kv, err := jsStore.js.KeyValue(bucketName)
 			// keep looping because the watermark won't work without the store
 			for err != nil {
-				j.log.Errorw("Failed to rebind to the JetStream KeyValue store ", zap.Error(err))
-				kv, err = j.js.KeyValue(bucketName)
+				jsStore.log.Errorw("Failed to rebind to the JetStream KeyValue store ", zap.Error(err))
+				kv, err = jsStore.js.KeyValue(bucketName)
 				time.Sleep(100 * time.Millisecond)
 			}
-			j.log.Infow("Succeeded to rebind to JetStream KeyValue store")
-			j.kv = kv
+			jsStore.log.Infow("Succeeded to rebind to JetStream KeyValue store")
+			jsStore.kvLock.Lock()
+			defer jsStore.kvLock.Unlock()
+			jsStore.kv = kv
 		}
 	}))
 	if err != nil {
@@ -74,7 +76,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
 	}
 
-	j = &jetStreamStore{
+	jsStore = &jetStreamStore{
 		pipelineName: pipelineName,
 		conn:         conn,
 		js:           js,
@@ -82,29 +84,29 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 	}
 
 	// for JetStream KeyValue store, the bucket should have been created in advance
-	j.kv, err = j.js.KeyValue(bucketName)
+	jsStore.kv, err = jsStore.js.KeyValue(bucketName)
 	if err != nil {
-		j.Close()
+		jsStore.Close()
 		return nil, err
 	}
 	// options if any
 	for _, o := range opts {
-		if err := o(j); err != nil {
-			j.Close()
+		if err := o(jsStore); err != nil {
+			jsStore.Close()
 			return nil, err
 		}
 	}
-	return j, nil
+	return jsStore, nil
 }
 
 // JSKVStoreOption is to pass in JetStream options.
 type JSKVStoreOption func(*jetStreamStore) error
 
 // GetAllKeys returns all the keys in the key-value store.
-func (kv *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
-	keys, err := kv.kv.Keys()
+func (jss *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
+	jss.kvLock.RLock()
+	defer jss.kvLock.RUnlock()
+	keys, err := jss.kv.Keys()
 	if err != nil {
 		return nil, err
 	}
@@ -112,10 +114,10 @@ func (kv *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
 }
 
 // GetValue returns the value for a given key.
-func (kv *jetStreamStore) GetValue(_ context.Context, k string) ([]byte, error) {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
-	kvEntry, err := kv.kv.Get(k)
+func (jss *jetStreamStore) GetValue(_ context.Context, k string) ([]byte, error) {
+	jss.kvLock.RLock()
+	defer jss.kvLock.RUnlock()
+	kvEntry, err := jss.kv.Get(k)
 	if err != nil {
 		return []byte(""), err
 	}
@@ -125,34 +127,34 @@ func (kv *jetStreamStore) GetValue(_ context.Context, k string) ([]byte, error) 
 }
 
 // GetStoreName returns the store name.
-func (kv *jetStreamStore) GetStoreName() string {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
-	return kv.kv.Bucket()
+func (jss *jetStreamStore) GetStoreName() string {
+	jss.kvLock.RLock()
+	defer jss.kvLock.RUnlock()
+	return jss.kv.Bucket()
 }
 
 // DeleteKey deletes the key from the JS key-value store.
-func (kv *jetStreamStore) DeleteKey(_ context.Context, k string) error {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
+func (jss *jetStreamStore) DeleteKey(_ context.Context, k string) error {
+	jss.kvLock.RLock()
+	defer jss.kvLock.RUnlock()
 	// will return error if nats connection is closed
-	return kv.kv.Delete(k)
+	return jss.kv.Delete(k)
 }
 
 // PutKV puts an element to the JS key-value store.
-func (kv *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
+func (jss *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
+	jss.kvLock.RLock()
+	defer jss.kvLock.RUnlock()
 	// will return error if nats connection is closed
-	_, err := kv.kv.Put(k, v)
+	_, err := jss.kv.Put(k, v)
 	return err
 }
 
 // Close closes the JetStream connection.
-func (kv *jetStreamStore) Close() {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
-	if !kv.conn.IsClosed() {
-		kv.conn.Close()
+func (jss *jetStreamStore) Close() {
+	jss.kvLock.RLock()
+	defer jss.kvLock.RUnlock()
+	if !jss.conn.IsClosed() {
+		jss.conn.Close()
 	}
 }

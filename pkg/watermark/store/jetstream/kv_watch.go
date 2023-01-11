@@ -102,22 +102,22 @@ func (k kvEntry) Operation() store.KVWatchOp {
 }
 
 // Watch watches the key-value store (aka bucket).
-func (jsWatch *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
+func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
 	var err error
-	kvWatcher := jsWatch.newWatcher()
+	kvWatcher := jsw.newWatcher()
 	var updates = make(chan store.WatermarkKVEntry)
 	var stopped = make(chan struct{})
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				jsWatch.log.Infow("stopping WatchAll", zap.String("watcher", jsWatch.GetKVName()))
+				jsw.log.Infow("stopping WatchAll", zap.String("watcher", jsw.GetKVName()))
 				// call JetStream watcher stop
 				err = kvWatcher.Stop()
 				if err != nil {
-					jsWatch.log.Errorw("Failed to stop", zap.String("watcher", jsWatch.GetKVName()), zap.Error(err))
+					jsw.log.Errorw("Failed to stop", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
 				} else {
-					jsWatch.log.Infow("WatchAll successfully stopped", zap.String("watcher", jsWatch.GetKVName()))
+					jsw.log.Infow("WatchAll successfully stopped", zap.String("watcher", jsw.GetKVName()))
 				}
 				close(updates)
 				close(stopped)
@@ -127,14 +127,14 @@ func (jsWatch *jetStreamWatch) Watch(ctx context.Context) (<-chan store.Watermar
 					// there are no more values to receive and the channel is closed, but context is not done yet
 					// meaning: there could be an auto reconnection to JetStream while the service is still running
 					// therefore, recreate the kvWatcher using the new JetStream context
-					kvWatcher = jsWatch.newWatcher()
-					jsWatch.log.Infow("Succeeded to recreate the watcher")
+					kvWatcher = jsw.newWatcher()
+					jsw.log.Infow("Succeeded to recreate the watcher")
 				}
 				if value == nil {
 					// watcher initialization and subscription send nil value
 					continue
 				}
-				jsWatch.log.Debug(value.Key(), value.Value(), value.Operation())
+				jsw.log.Debug(value.Key(), value.Value(), value.Operation())
 				switch value.Operation() {
 				case nats.KeyValuePut:
 					updates <- kvEntry{
@@ -157,18 +157,18 @@ func (jsWatch *jetStreamWatch) Watch(ctx context.Context) (<-chan store.Watermar
 	return updates, stopped
 }
 
-func (jsWatch *jetStreamWatch) newWatcher() nats.KeyWatcher {
-	kv, err := jsWatch.js.KeyValue(jsWatch.kvBucketName)
+func (jsw *jetStreamWatch) newWatcher() nats.KeyWatcher {
+	kv, err := jsw.js.KeyValue(jsw.kvBucketName)
 	// keep looping because the watermark won't work without a watcher
 	for err != nil {
-		jsWatch.log.Errorw("Failed to bind to the JetStream KeyValue store", zap.String("kvBucketName", jsWatch.kvBucketName), zap.String("watcher", jsWatch.GetKVName()), zap.Error(err))
-		kv, err = jsWatch.js.KeyValue(jsWatch.kvBucketName)
+		jsw.log.Errorw("Failed to bind to the JetStream KeyValue store", zap.String("kvBucketName", jsw.kvBucketName), zap.String("watcher", jsw.GetKVName()), zap.Error(err))
+		kv, err = jsw.js.KeyValue(jsw.kvBucketName)
 		time.Sleep(100 * time.Millisecond)
 	}
 	kvWatcher, err := kv.WatchAll(nats.IncludeHistory())
 	// keep looping because the watermark won't work without a watcher
 	for err != nil {
-		jsWatch.log.Errorw("WatchAll failed", zap.String("watcher", jsWatch.GetKVName()), zap.Error(err))
+		jsw.log.Errorw("WatchAll failed", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
 		kvWatcher, err = kv.WatchAll(nats.IncludeHistory())
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -176,15 +176,15 @@ func (jsWatch *jetStreamWatch) newWatcher() nats.KeyWatcher {
 }
 
 // GetKVName returns the KV store (bucket) name.
-func (jsWatch *jetStreamWatch) GetKVName() string {
-	return jsWatch.kvBucketName
+func (jsw *jetStreamWatch) GetKVName() string {
+	return jsw.kvBucketName
 }
 
 // Close closes the connection.
-func (jsWatch *jetStreamWatch) Close() {
+func (jsw *jetStreamWatch) Close() {
 	// need to cancel the `Watch` ctx before calling Close()
 	// otherwise `kvWatcher.Stop()` will raise the nats connection is closed error
-	if !jsWatch.conn.IsClosed() {
-		jsWatch.conn.Close()
+	if !jsw.conn.IsClosed() {
+		jsw.conn.Close()
 	}
 }
