@@ -66,7 +66,8 @@ chaining of windows, keyed streams, etc.
 ## Storage
 
 Reduce unlike map requires persistence. To support persistence user has to define the 
-`persistence` field.
+`persistence` configuration. We replay the data stored in this store on pod startup if there has
+been a restart of the reduce pod caused due to pod migrations, etc.
 
 ```yaml
 vertices:
@@ -98,7 +99,8 @@ vertices:
 ### EmptyDir 
 
 We also support `emptyDir` for quick experimentation. We do not recommend this in production
-setup. If we use `emptyDir`, we will end up in data loss if there are pod migrations.
+setup. If we use `emptyDir`, we will end up in data loss if there are pod migrations. `emptyDir` 
+also takes an optional `sizeLimit`.
 
 #### Example
 
