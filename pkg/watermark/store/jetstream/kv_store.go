@@ -53,7 +53,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 		if j != nil && j.js != nil {
 			// re-bind to an existing KeyValue store
 			kv, err := j.js.KeyValue(bucketName)
-			// keep looping because the watermark won't work without a watcher
+			// keep looping because the watermark won't work without the store
 			for err != nil {
 				j.log.Errorw("Failed to rebind to the JetStream KeyValue store ", zap.Error(err))
 				kv, err = j.js.KeyValue(bucketName)
