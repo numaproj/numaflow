@@ -32,8 +32,8 @@ import (
 // jetStreamWatch implements the watermark's KV store backed up by Jetstream.
 type jetStreamWatch struct {
 	pipelineName string
+	kvBucketName string
 	conn         *jsclient.NatsConn
-	kv           nats.KeyValue
 	js           *jsclient.JetStreamContext
 	log          *zap.SugaredLogger
 }
@@ -58,17 +58,10 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 
 	j := &jetStreamWatch{
 		pipelineName: pipelineName,
+		kvBucketName: kvBucketName,
 		conn:         conn,
 		js:           js,
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("kvBucketName", kvBucketName),
-	}
-
-	j.kv, err = j.js.KeyValue(kvBucketName)
-	if err != nil {
-		if !conn.IsClosed() {
-			conn.Close()
-		}
-		return nil, err
 	}
 
 	// At this point, kvWatcher of type nats.KeyWatcher is nil
@@ -76,9 +69,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 	// options if any
 	for _, o := range opts {
 		if err := o(j); err != nil {
-			if !conn.IsClosed() {
-				conn.Close()
-			}
+			j.Close()
 			return nil, err
 		}
 	}
@@ -111,37 +102,39 @@ func (k kvEntry) Operation() store.KVWatchOp {
 }
 
 // Watch watches the key-value store (aka bucket).
-func (k *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
-	kvWatcher, err := k.kv.WatchAll(nats.IncludeHistory())
-	for err != nil {
-		k.log.Errorw("WatchAll failed", zap.String("watcher", k.GetKVName()), zap.Error(err))
-		kvWatcher, err = k.kv.WatchAll(nats.IncludeHistory())
-		time.Sleep(100 * time.Millisecond)
-	}
-
+func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
+	var err error
+	kvWatcher := jsw.newWatcher()
 	var updates = make(chan store.WatermarkKVEntry)
 	var stopped = make(chan struct{})
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				k.log.Infow("stopping WatchAll", zap.String("watcher", k.GetKVName()))
-				// call jetstream watch stop
+				jsw.log.Infow("stopping WatchAll", zap.String("watcher", jsw.GetKVName()))
+				// call JetStream watcher stop
 				err = kvWatcher.Stop()
 				if err != nil {
-					k.log.Errorw("Failed to stop", zap.String("watcher", k.GetKVName()), zap.Error(err))
+					jsw.log.Errorw("Failed to stop", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
 				} else {
-					k.log.Infow("WatchAll successfully stopped", zap.String("watcher", k.GetKVName()))
+					jsw.log.Infow("WatchAll successfully stopped", zap.String("watcher", jsw.GetKVName()))
 				}
 				close(updates)
 				close(stopped)
 				return
-			case value := <-kvWatcher.Updates():
-				// if channel is closed, nil could come in
+			case value, ok := <-kvWatcher.Updates():
+				if !ok {
+					// there are no more values to receive and the channel is closed, but context is not done yet
+					// meaning: there could be an auto reconnection to JetStream while the service is still running
+					// therefore, recreate the kvWatcher using the new JetStream context
+					kvWatcher = jsw.newWatcher()
+					jsw.log.Infow("Succeeded to recreate the watcher")
+				}
 				if value == nil {
+					// watcher initialization and subscription send nil value
 					continue
 				}
-				k.log.Debug(value.Key(), value.Value(), value.Operation())
+				jsw.log.Debug(value.Key(), value.Value(), value.Operation())
 				switch value.Operation() {
 				case nats.KeyValuePut:
 					updates <- kvEntry{
@@ -164,16 +157,34 @@ func (k *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEnt
 	return updates, stopped
 }
 
+func (jsw *jetStreamWatch) newWatcher() nats.KeyWatcher {
+	kv, err := jsw.js.KeyValue(jsw.kvBucketName)
+	// keep looping because the watermark won't work without a watcher
+	for err != nil {
+		jsw.log.Errorw("Failed to bind to the JetStream KeyValue store", zap.String("kvBucketName", jsw.kvBucketName), zap.String("watcher", jsw.GetKVName()), zap.Error(err))
+		kv, err = jsw.js.KeyValue(jsw.kvBucketName)
+		time.Sleep(100 * time.Millisecond)
+	}
+	kvWatcher, err := kv.WatchAll(nats.IncludeHistory())
+	// keep looping because the watermark won't work without a watcher
+	for err != nil {
+		jsw.log.Errorw("WatchAll failed", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
+		kvWatcher, err = kv.WatchAll(nats.IncludeHistory())
+		time.Sleep(100 * time.Millisecond)
+	}
+	return kvWatcher
+}
+
 // GetKVName returns the KV store (bucket) name.
-func (k *jetStreamWatch) GetKVName() string {
-	return k.kv.Bucket()
+func (jsw *jetStreamWatch) GetKVName() string {
+	return jsw.kvBucketName
 }
 
 // Close closes the connection.
-func (k *jetStreamWatch) Close() {
+func (jsw *jetStreamWatch) Close() {
 	// need to cancel the `Watch` ctx before calling Close()
 	// otherwise `kvWatcher.Stop()` will raise the nats connection is closed error
-	if !k.conn.IsClosed() {
-		k.conn.Close()
+	if !jsw.conn.IsClosed() {
+		jsw.conn.Close()
 	}
 }

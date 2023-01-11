@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	forward2 "github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -50,7 +50,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex.GetToBuffers()))
-	toKafka.isdf, err = forward2.NewInterStepDataForward(vertex, fromStep, map[string]isb.BufferWriter{"name": toKafka}, forward2.All, applier.Terminal, fetchWatermark, publishWatermark)
+	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, map[string]isb.BufferWriter{"name": toKafka}, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
 	toKafka.name = "Test"
@@ -103,7 +103,7 @@ func TestWriteFailureToKafka(t *testing.T) {
 	}}
 	toSteps := map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: toKafka}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	toKafka.isdf, err = forward2.NewInterStepDataForward(vertex, fromStep, toSteps, forward2.All, applier.Terminal, fetchWatermark, publishWatermark)
+	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"

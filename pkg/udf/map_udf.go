@@ -25,7 +25,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	forward2 "github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -82,7 +82,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	conditionalForwarder := forward2.GoWhere(func(key string) ([]string, error) {
+	conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
 		result := []string{}
 		if key == dfv1.MessageKeyDrop {
 			return result, nil
@@ -117,15 +117,15 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	}()
 	log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
 
-	opts := []forward2.Option{forward2.WithVertexType(dfv1.VertexTypeMapUDF), forward2.WithLogger(log)}
+	opts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeMapUDF), forward.WithLogger(log)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			opts = append(opts, forward2.WithReadBatchSize(int64(*x.ReadBatchSize)))
-			opts = append(opts, forward2.WithUDFConcurrency(int(*x.ReadBatchSize)))
+			opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			opts = append(opts, forward.WithUDFConcurrency(int(*x.ReadBatchSize)))
 		}
 	}
 
-	forwarder, err := forward2.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, opts...)
+	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, opts...)
 	if err != nil {
 		return err
 	}
