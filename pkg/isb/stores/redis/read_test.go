@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	forward2 "github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	"github.com/go-redis/redis/v8"
@@ -42,7 +42,7 @@ import (
 
 var (
 	redisOptions = &redis.UniversalOptions{
-		//Addrs: []string{":7000", ":7001", ":7002", ":7003", ":7004", ":7005"}
+		// Addrs: []string{":7000", ":7001", ":7002", ":7003", ":7004", ":7005"}
 		Addrs: []string{":6379"},
 	}
 
@@ -132,7 +132,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 		"to1": rqw,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward2.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, forward2.WithReadBatchSize(10))
+	f, err := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(10))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -283,7 +283,7 @@ type ReadWritePerformance struct {
 	rclient        *redisclient.RedisClient
 	rqr            *BufferRead
 	rqw            *BufferWrite
-	isdf           *forward2.InterStepDataForward
+	isdf           *forward.InterStepDataForward
 	count          int64
 	withPipelining bool
 	cancel         context.CancelFunc
@@ -324,7 +324,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	isdf, _ := forward2.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
+	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -412,7 +412,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 		"to1": suite.rqw,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	suite.isdf, _ = forward2.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
+	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)
@@ -491,7 +491,7 @@ func generateLatencySlice(xMessages []redis.XMessage, suite *ReadWritePerformanc
 		suite.NoError(err)
 
 		// We store a difference of the id and the offset in the to stream.
-		//This gives us a difference between the time it was  read that is stored in ID of the Header and the time it was written as stored in the ID.
+		// This gives us a difference between the time it was  read that is stored in ID of the Header and the time it was written as stored in the ID.
 		latency[idx] = float64(id - offset)
 	}
 

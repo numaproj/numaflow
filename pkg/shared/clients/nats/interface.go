@@ -18,7 +18,7 @@ package nats
 
 import "context"
 
-// JetStreamClient is used to provide a jetstream client
+// JetStreamClient is used to provide a JetStream client
 type JetStreamClient interface {
 	Connect(ctx context.Context, opts ...JetStreamClientOption) (*NatsConn, error)
 }
