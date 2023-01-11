@@ -19,9 +19,11 @@ limitations under the License.
 package sdks_e2e
 
 import (
+	"context"
+	"strconv"
 	"testing"
+	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	. "github.com/numaproj/numaflow/test/fixtures"
 	"github.com/stretchr/testify/suite"
 )
@@ -35,27 +37,59 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
+	pipelineName := "flatmap"
 
 	w.Expect().
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
 		VertexPodLogContains("go-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("go-udsink", LogSinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("python-udsink", LogSinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("hello,hello")).
-		Expect().
-		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("hello")).
-		Expect().
-		Status(204)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
 
 	w.Expect().VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
-		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
+		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
+		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
+}
+
+func (s *SDKsSuite) TestReduceSDK() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	w := s.Given().Pipeline("@testdata/simple-keyed-reduce-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "even-odd-sum"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	done := make(chan struct{})
+	go func() {
+		// publish messages to source vertex, with event time starting from 60000
+		startTime := 60000
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				eventTime := strconv.Itoa(startTime + i*1000)
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+			}
+		}
+	}()
+
+	w.Expect().
+		VertexPodLogContains("java-udsink", "120", PodLogCheckOptionWithContainer("udsink")).
+		VertexPodLogContains("java-udsink", "240", PodLogCheckOptionWithContainer("udsink"))
+	done <- struct{}{}
 }
 
 func TestHTTPSuite(t *testing.T) {

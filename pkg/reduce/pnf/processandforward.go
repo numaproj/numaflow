@@ -28,6 +28,9 @@ import (
 	"time"
 
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -39,8 +42,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/pbq"
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 )
 

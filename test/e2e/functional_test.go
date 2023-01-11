@@ -41,14 +41,13 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-
 	pipelineName := "simple-pipeline"
 
 	w.Expect().
 		VertexPodsRunning().DaemonPodsRunning().
 		VertexPodLogContains("input", LogSourceVertexStarted).
 		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("output", LogSinkVertexStarted).
+		VertexPodLogContains("output", SinkVertexStarted).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
 		VertexPodLogContains("output", `"Data":".*","Createdts":.*`)
 
@@ -108,74 +107,55 @@ func (s *FunctionalSuite) TestFiltering() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
+	pipelineName := "filtering"
 
-	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("out", LogSinkVertexStarted)
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
 
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
+	expect0 := `{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`
+	expect1 := `{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`
+	expect2 := `{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`
+	expect3 := `{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`
+	expect4 := `{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`
 
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte(`{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`)).
-		Expect().
-		Status(204)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect0))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect1))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect2))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect3))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect4)))
 
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte(`{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`)).
-		Expect().
-		Status(204)
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte(`{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`)).
-		Expect().
-		Status(204)
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte(`{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`)).
-		Expect().
-		Status(204)
-
-	w.Expect().VertexPodLogContains("out", "expect3")
-	w.Expect().VertexPodLogNotContains("out", "expect[0-2]", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("out", expect3)
+	w.Expect().SinkContains("out", expect4)
+	w.Expect().SinkNotContains("out", expect0)
+	w.Expect().SinkNotContains("out", expect1)
+	w.Expect().SinkNotContains("out", expect2)
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {
 	w := s.Given().Pipeline("@testdata/even-odd.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
+	pipelineName := "even-odd"
 
-	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("even-or-odd", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("even-sink", LogSinkVertexStarted).
-		VertexPodLogContains("odd-sink", LogSinkVertexStarted).
-		VertexPodLogContains("number-sink", LogSinkVertexStarted)
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
 
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("888888")).
-		Expect().
-		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("888889")).
-		Expect().
-		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("not an integer")).
-		Expect().
-		Status(204)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888888"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888889"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("not an integer")))
 
-	w.Expect().VertexPodLogContains("even-sink", "888888")
-	w.Expect().VertexPodLogNotContains("even-sink", "888889", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("even-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("even-sink", "888888")
+	w.Expect().SinkNotContains("even-sink", "888889")
+	w.Expect().SinkNotContains("even-sink", "not an integer")
 
-	w.Expect().VertexPodLogContains("odd-sink", "888889")
-	w.Expect().VertexPodLogNotContains("odd-sink", "888888", PodLogCheckOptionWithTimeout(2*time.Second))
-	w.Expect().VertexPodLogNotContains("odd-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("odd-sink", "888889")
+	w.Expect().SinkNotContains("odd-sink", "888888")
+	w.Expect().SinkNotContains("odd-sink", "not an integer")
 
-	w.Expect().VertexPodLogContains("number-sink", "888888")
-	w.Expect().VertexPodLogContains("number-sink", "888889")
-	w.Expect().VertexPodLogNotContains("number-sink", "not an integer", PodLogCheckOptionWithTimeout(2*time.Second))
+	w.Expect().SinkContains("number-sink", "888888")
+	w.Expect().SinkContains("number-sink", "888889")
+	w.Expect().SinkNotContains("number-sink", "not an integer")
 }
 
 func (s *FunctionalSuite) TestWatermarkEnabled() {
@@ -188,17 +168,8 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	// TODO: Any way to extract the list from suite
 	vertexList := []string{"input", "cat1", "cat2", "cat3", "output1", "output2"}
 
-	w.Expect().
-		VertexPodsRunning().DaemonPodsRunning().
-		VertexPodLogContains("input", LogSourceVertexStarted).
-		VertexPodLogContains("cat1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("cat2", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("cat3", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("output1", LogSinkVertexStarted).
-		VertexPodLogContains("output2", LogSinkVertexStarted).
-		DaemonPodLogContains(pipelineName, LogDaemonStarted).
-		VertexPodLogContains("output1", `"Data":".*","Createdts":.*`).
-		VertexPodLogContains("output2", `"Data":".*","Createdts":.*`)
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning().DaemonPodsRunning()
 
 	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
 		TerminateAllPodPortForwards()

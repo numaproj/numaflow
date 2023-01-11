@@ -28,6 +28,8 @@ spec:
             fixed:
               length: 10s
           keyed: true
+          storage:
+            emptyDir: {}
     - name: non-keyed-fixed-sum
       udf:
         container:
@@ -38,11 +40,15 @@ spec:
             fixed:
               length: 60s
           keyed: false
+          storage:
+            emptyDir: {}
     - name: sink
       scale:
         min: 1
       sink:
-        log: {}
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
       to: atoi

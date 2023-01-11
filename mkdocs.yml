@@ -64,12 +64,17 @@ nav:
                   - Filter: "user-guide/user-defined-functions/map/builtin-functions/filter.md"
           - Reduce:
               - Overview: "user-guide/user-defined-functions/reduce/reduce.md"
+              - Windowing:
+                  - Overview: "user-guide/user-defined-functions/reduce/windowing/windowing.md"
+                  - Fixed: "user-guide/user-defined-functions/reduce/windowing/fixed.md"
+                  - Sliding: "user-guide/user-defined-functions/reduce/windowing/sliding.md"
       - user-guide/pipeline-tuning.md
       - user-guide/conditional-forwarding.md
       - user-guide/autoscaling.md
       - user-guide/container-resources.md
       - user-guide/volumes.md
       - user-guide/environment-variables.md
+      - user-guide/labels-and-annotations.md
       - user-guide/init-containers.md
       - user-guide/sidecar-containers.md
       - user-guide/pipeline-customization.md
@@ -86,7 +91,9 @@ nav:
       - development/development.md
       - Specifications:
           - Overview: "specifications/overview.md"
-          - "specifications/autoscaling.md"
+          - specifications/controllers.md
+          - specifications/autoscaling.md
+          - specifications/edges-and-buffers.md
       - development/debugging.md
       - development/static-code-analysis.md
       - development/releasing.md

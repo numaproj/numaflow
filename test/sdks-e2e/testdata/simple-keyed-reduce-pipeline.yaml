@@ -1,0 +1,42 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: even-odd-sum
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: atoi
+      scale:
+        min: 1
+      udf:
+        container:
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/evenodd
+          image: quay.io/numaio/numaflow-java/even-odd
+    - name: compute-sum
+      udf:
+        container:
+          # compute the sum, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/sum
+          image: quay.io/numaio/numaflow-java/reduce-sum
+        groupBy:
+          window:
+            fixed:
+              length: 60s
+          keyed: true
+          storage:
+            emptyDir: {}
+    - name: java-udsink
+      sink:
+        udsink:
+          container:
+            # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
+            image: quay.io/numaio/numaflow-java/simple-sink
+  edges:
+    - from: in
+      to: atoi
+    - from: atoi
+      to: compute-sum
+      parallelism: 2
+    - from: compute-sum
+      to: java-udsink

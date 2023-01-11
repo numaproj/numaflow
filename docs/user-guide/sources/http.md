@@ -2,7 +2,7 @@
 
 HTTP Source starts an HTTP service with TLS enabled to accept POST request in the Vertex Pod. It listens to port 8443, with request URI `/vertices/{vertexName}`.
 
-An Pipeline with HTTP Source:
+A Pipeline with HTTP Source:
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -127,4 +127,4 @@ curl -kq -X POST -H "Authorization: $TOKEN" -d "hello world" https://http-pipeli
 
 ## Health Check
 
-The HTTP Source also has an endpoint `/health` created automatically, which is useful for for LoadBalancer or Ingress configuration, where a health check endpoint is often required by the cloud provider.
+The HTTP Source also has an endpoint `/health` created automatically, which is useful for LoadBalancer or Ingress configuration, where a health check endpoint is often required by the cloud provider.

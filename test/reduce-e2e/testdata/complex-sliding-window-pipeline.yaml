@@ -17,43 +17,51 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
-          image: quay.io/numaio/go-even-odd-example
+          image: quay.io/numaio/numaflow-go/map-even-odd
     - name: keyed-fixed-sum
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/go-integer-sum-example
+          image: quay.io/numaio/numaflow-go/reduce-sum
         groupBy:
           window:
             fixed:
               length: 5s
           keyed: true
+          storage:
+            emptyDir: {}
     - name: non-keyed-fixed-sum
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/go-integer-sum-example
+          image: quay.io/numaio/numaflow-go/reduce-sum
         groupBy:
           window:
             fixed:
               length: 10s
           keyed: false
+          storage:
+            emptyDir: {}
     - name: non-keyed-sliding-sum
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/go-integer-sum-example
+          image: quay.io/numaio/numaflow-go/reduce-sum
         groupBy:
           window:
             sliding:
               length: 60s
               slide: 10s
           keyed: false
+          storage:
+            emptyDir: {}
     - name: sink
       scale:
         min: 1
       sink:
-        log: {}
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
       to: atoi

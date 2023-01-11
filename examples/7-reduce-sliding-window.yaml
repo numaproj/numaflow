@@ -35,9 +35,13 @@ spec:
         groupBy:
           window:
             sliding:
-              length: 10s
-              slide: 5s
+              length: 60s
+              slide: 10s
           keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 10Gi
+              accessMode: ReadWriteOnce
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG

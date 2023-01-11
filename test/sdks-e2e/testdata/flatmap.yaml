@@ -8,17 +8,23 @@ spec:
       source:
         http: {}
     - name: go-split
+      scale:
+        min: 1
       udf:
         container:
           # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/flatmap
           image: quay.io/numaio/numaflow-go/map-flatmap:latest
     - name: go-udsink
+      scale:
+        min: 1
       sink:
         udsink:
           container:
             # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/log
             image: quay.io/numaio/numaflow-go/sink-log:latest
     - name: python-split
+      scale:
+        min: 1
       udf:
         container:
           args:
@@ -27,6 +33,8 @@ spec:
           # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/function/flatmap
           image: quay.io/numaio/numaflow-python/map-flatmap:latest
     - name: python-udsink
+      scale:
+        min: 1
       sink:
         udsink:
           container:
@@ -35,6 +43,21 @@ spec:
             - example.py
             # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
             image: quay.io/numaio/numaflow-python/sink-log:latest
+    - name: java-split
+      scale:
+        min: 1
+      udf:
+        container:
+          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/flatmap
+          image: quay.io/numaio/numaflow-java/map-flatmap
+    - name: java-udsink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
+            image: quay.io/numaio/numaflow-java/simple-sink
   edges:
     - from: in
       to: go-split
@@ -44,3 +67,7 @@ spec:
       to: python-split
     - from: python-split
       to: python-udsink
+    - from: in
+      to: java-split
+    - from: java-split
+      to: java-udsink

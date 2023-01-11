@@ -22,6 +22,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var DefaultVolumeSize = apiresource.MustParse("20Gi")
+var DefaultAccessMode = corev1.ReadWriteOnce
+
 // PersistenceStrategy defines the strategy of persistence
 type PersistenceStrategy struct {
 	// Name of the StorageClass required by the claim.
@@ -39,12 +42,12 @@ type PersistenceStrategy struct {
 func (ps PersistenceStrategy) GetPVCSpec(name string) corev1.PersistentVolumeClaim {
 	volMode := corev1.PersistentVolumeFilesystem
 	// Default volume size
-	volSize := apiresource.MustParse("20Gi")
+	volSize := DefaultVolumeSize
 	if ps.VolumeSize != nil {
 		volSize = *ps.VolumeSize
 	}
 	// Default to ReadWriteOnce
-	accessMode := corev1.ReadWriteOnce
+	accessMode := DefaultAccessMode
 	if ps.AccessMode != nil {
 		accessMode = *ps.AccessMode
 	}

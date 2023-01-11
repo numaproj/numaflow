@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
@@ -123,7 +123,7 @@ func (u *udsGRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 
 // should we pass metadata information ?
 
-// Reduce accepts a channel of isbMessages and returns the aggregated result
+// ApplyReduce accepts a channel of isbMessages and returns the aggregated result
 func (u *udsGRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	datumCh := make(chan *functionpb.Datum)
 	var wg sync.WaitGroup
