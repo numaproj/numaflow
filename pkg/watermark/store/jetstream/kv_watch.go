@@ -128,7 +128,7 @@ func (jsWatch *jetStreamWatch) Watch(ctx context.Context) (<-chan store.Watermar
 					// meaning: there could be an auto reconnection to JetStream while the service is still running
 					// therefore, recreate the kvWatcher using the new JetStream context
 					kvWatcher = jsWatch.newWatcher()
-					jsWatch.log.Infow("Successfully recreated the watcher")
+					jsWatch.log.Infow("Succeeded to recreate the watcher")
 				}
 				if value == nil {
 					// watcher initialization and subscription send nil value

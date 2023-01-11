@@ -55,7 +55,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 			kv, err := j.js.KeyValue(bucketName)
 			// keep looping because the watermark won't work without a watcher
 			for err != nil {
-				j.log.Errorw("Failed to create JetStream KeyValue", zap.Error(err))
+				j.log.Errorw("Failed to recreate JetStream KeyValue", zap.Error(err))
 				kv, err = j.js.KeyValue(bucketName)
 				time.Sleep(100 * time.Millisecond)
 			}
