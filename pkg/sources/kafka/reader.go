@@ -29,7 +29,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	forward2 "github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -53,7 +53,7 @@ type KafkaSource struct {
 	// kafka brokers
 	brokers []string
 	// forwarder that writes the consumed data to destination
-	forwarder *forward2.InterStepDataForward
+	forwarder *forward.InterStepDataForward
 	// context cancel function
 	cancelfn context.CancelFunc
 	// lifecycle context
@@ -322,13 +322,13 @@ func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWri
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward2.Option{forward2.WithVertexType(dfv1.VertexTypeSource), forward2.WithLogger(kafkasource.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(kafkasource.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward2.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward2.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, destinations, forward2.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

@@ -24,7 +24,7 @@ import (
 	"github.com/Shopify/sarama"
 	"go.uber.org/zap"
 
-	forward2 "github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -43,7 +43,7 @@ type ToKafka struct {
 	producer     sarama.AsyncProducer
 	connected    bool
 	topic        string
-	isdf         *forward2.InterStepDataForward
+	isdf         *forward.InterStepDataForward
 	kafkaSink    *dfv1.KafkaSink
 	log          *zap.SugaredLogger
 }
@@ -61,14 +61,14 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*ToKafka, error) {
 	kafkaSink := vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
-	//apply options for kafka sink
+	// apply options for kafka sink
 	for _, o := range opts {
 		if err := o(toKafka); err != nil {
 			return nil, err
 		}
 	}
 
-	//set default logger
+	// set default logger
 	if toKafka.log == nil {
 		toKafka.log = logging.NewLogger()
 	}
@@ -78,14 +78,14 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark
 	toKafka.topic = kafkaSink.Topic
 	toKafka.kafkaSink = kafkaSink
 
-	forwardOpts := []forward2.Option{forward2.WithVertexType(dfv1.VertexTypeSink), forward2.WithLogger(toKafka.log)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSink), forward.WithLogger(toKafka.log)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward2.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
-	f, err := forward2.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: toKafka}, forward2.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: toKafka}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
