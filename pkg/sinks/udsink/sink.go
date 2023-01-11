@@ -109,9 +109,9 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 	return nil, s.udsink.Apply(ctx, msgs)
 }
 
-func (br *UserDefinedSink) Close() error {
-	if br.udsink != nil {
-		return br.udsink.CloseConn(context.Background())
+func (s *UserDefinedSink) Close() error {
+	if s.udsink != nil {
+		return s.udsink.CloseConn(context.Background())
 	}
 	return nil
 }
