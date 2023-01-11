@@ -66,7 +66,7 @@ chaining of windows, keyed streams, etc.
 ## Storage
 
 Reduce unlike map requires persistence. To support persistence user has to define the 
-`persistence` configuration. We replay the data stored in this store on pod startup if there has
+`persistence` configuration. We replay the data stored in this storage on pod startup if there has
 been a restart of the reduce pod caused due to pod migrations, etc.
 
 ```yaml
@@ -82,7 +82,10 @@ vertices:
 
 `persistentVolumeClaim` has two fields, `volumeSize` and `accessMode`. As name suggests,
 `volumeSize` specifies the size of the volume. `accessMode` can be of many types, but for reduce
-usecase we need only `ReadWriteOnce`.
+usecase we need only `ReadWriteOnce`. `storageClassName` can also be provided, more info on storage class
+can be found [here](https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1). The default
+value of `storageClassName` is `default` which is default StorageClass may be deployed to a Kubernetes 
+cluster by addon manager during installation.
 
 #### Example
 ```yaml
@@ -100,7 +103,10 @@ vertices:
 
 We also support `emptyDir` for quick experimentation. We do not recommend this in production
 setup. If we use `emptyDir`, we will end up in data loss if there are pod migrations. `emptyDir` 
-also takes an optional `sizeLimit`.
+also takes an optional `sizeLimit`. `medium` field controls where emptyDir volumes are stored.
+By default emptyDir volumes are stored on whatever medium that backs the node such as disk, SSD, 
+or network storage, depending on your environment. If you set the `medium` field to `"Memory"`, 
+Kubernetes mounts a tmpfs (RAM-backed filesystem) for you instead.
 
 #### Example
 
