@@ -13,7 +13,7 @@
     
     
       
-        <title>Overview - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Examples - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#reduce-udf" class="md-skip">
+        <a href="#reduce-examples" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Overview
+              Examples
             
           </span>
         </div>
@@ -895,98 +895,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Overview
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../reduce/" class="md-nav__link">
         Overview
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#storage" class="md-nav__link">
-    Storage
-  </a>
-  
-    <nav class="md-nav" aria-label="Storage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#persistent-volume-claim-pvc" class="md-nav__link">
-    Persistent Volume Claim (PVC)
-  </a>
-  
-    <nav class="md-nav" aria-label="Persistent Volume Claim (PVC)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
-    Example
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#emptydir" class="md-nav__link">
-    EmptyDir
-  </a>
-  
-    <nav class="md-nav" aria-label="EmptyDir">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example_1" class="md-nav__link">
-    Example
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1071,11 +984,73 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../examples/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Examples
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Examples
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    Prerequisites
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sum-pipeline-using-fixed-window" class="md-nav__link">
+    sum pipeline using fixed window
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sum-pipeline-using-sliding-window" class="md-nav__link">
+    sum pipeline using sliding window
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complex-reduce-pipeline" class="md-nav__link">
+    complex reduce pipeline
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1627,55 +1602,30 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#storage" class="md-nav__link">
-    Storage
-  </a>
-  
-    <nav class="md-nav" aria-label="Storage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#persistent-volume-claim-pvc" class="md-nav__link">
-    Persistent Volume Claim (PVC)
-  </a>
-  
-    <nav class="md-nav" aria-label="Persistent Volume Claim (PVC)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
-    Example
+  <a href="#prerequisites" class="md-nav__link">
+    Prerequisites
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#emptydir" class="md-nav__link">
-    EmptyDir
-  </a>
-  
-    <nav class="md-nav" aria-label="EmptyDir">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example_1" class="md-nav__link">
-    Example
+      
+        <li class="md-nav__item">
+  <a href="#sum-pipeline-using-fixed-window" class="md-nav__link">
+    sum pipeline using fixed window
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#sum-pipeline-using-sliding-window" class="md-nav__link">
+    sum pipeline using sliding window
+  </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#complex-reduce-pipeline" class="md-nav__link">
+    complex reduce pipeline
+  </a>
   
 </li>
       
@@ -1691,107 +1641,117 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/user-defined-functions/reduce/reduce.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/user-defined-functions/reduce/examples.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="reduce-udf">Reduce UDF<a class="headerlink" href="#reduce-udf" title="Permanent link">&para;</a></h1>
-<p>Reduce is one of the most commonly used abstractions in a stream processing pipeline to define 
-aggregation functions on a stream of data. It is the reduce feature that helps us solve problems like 
-"performs a summary operation(such as counting the number of occurrence of a key, yielding user login 
-frequencies), etc."Since the input an unbounded stream (with infinite entries), we need an additional
-parameter to convert the unbounded problem to a bounded problem and provide results on that. That
-bounding condition is "time", eg, "number of users logged in per minute". So while processing an 
-unbounded stream of data, we need a way to group elements into finite chunks using time. To build these
-chunks the reduce function is applied to the set of records produced using the concept of <a href="../windowing/windowing/">windowing</a>.</p>
-<p>Unlike in <em>map</em> vertex where only an element is given to user-defined function, in <em>reduce</em> since
-there is a group of elements, an iterator is passed to the reduce function. The following is a generic
-outlook of a reduce function. I have written the pseudo-code using the accumulator to show that very
-powerful functions can be applied using this reduce semantics.</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># reduceFn func is a generic reduce function that processes a set of elements</span>
-<span class="k">def</span> <span class="nf">reduceFn</span><span class="p">(</span><span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">datums</span><span class="p">:</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Datum</span><span class="p">],</span> <span class="n">md</span><span class="p">:</span> <span class="n">Metadata</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Messages</span><span class="p">:</span>
-    <span class="c1"># initialize_accumalor could be any function that starts of with an empty</span>
-    <span class="c1"># state. eg, accumulator = 0</span>
-    <span class="n">accumulator</span> <span class="o">=</span> <span class="n">initialize_accumalor</span><span class="p">()</span>
-    <span class="c1"># we are iterating on the input set of elements</span>
-    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">datums</span><span class="p">:</span>
-        <span class="c1"># accumulator.add_input() can be any function. </span>
-        <span class="c1"># e.g., it could be as simple as accumulator += 1</span>
-        <span class="n">accumulator</span><span class="o">.</span><span class="n">add_input</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
-    <span class="c1"># once we are done with iterating on the elements, we return the result</span>
-    <span class="c1"># acumulator.result() can be str.encode(accumulator)</span>
-    <span class="k">return</span> <span class="n">Messages</span><span class="p">(</span><span class="n">Message</span><span class="o">.</span><span class="n">to_vtx</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">acumulator</span><span class="o">.</span><span class="n">result</span><span class="p">()))</span>
+<h1 id="reduce-examples">Reduce Examples<a class="headerlink" href="#reduce-examples" title="Permanent link">&para;</a></h1>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<p>Install the ISB</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
-<p>The structure for defining a reduce vertex is as follows.
-<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-udf</span>
+<h2 id="sum-pipeline-using-fixed-window">sum pipeline using fixed window<a class="headerlink" href="#sum-pipeline-using-fixed-window" title="Permanent link">&para;</a></h2>
+<p>This is a simple reduce pipeline that just does summation (sum of numbers) but uses fixed window.
+The snippet for the reduce vertex is as follows.</p>
+<p><img alt="plot" src="../../../../assets/simple-reduce.png" /></p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
 <span class="w">  </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-udf:latest</span>
+<span class="w">      </span><span class="c1"># compute the sum</span>
+<span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaio/numaflow-go/reduce-sum</span>
 <span class="w">    </span><span class="nt">groupBy</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">window</span><span class="p">:</span>
-<span class="w">        </span><span class="l l-Scalar l-Scalar-Plain">...</span>
-<span class="w">      </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">...</span>
-<span class="w">      </span><span class="nt">storage</span><span class="p">:</span>
-<span class="w">        </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+<span class="w">        </span><span class="nt">fixed</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span>
+<span class="w">      </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/6-reduce-fixed-window.yaml">6-reduce-fixed-window.yaml</a>
+has the complete pipeline definition.</p>
+<p>In this example we use a <code>parallelism</code> of <code>2</code>. We are setting a parallelism &gt; 1 because it is a
+keyed window.</p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">atoi</span>
+<span class="w">  </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
+<span class="w">  </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/examples/examples/6-reduce-fixed-window.yaml
+</code></pre></div>
+<p>Output :
+<div class="highlight"><pre><span></span><code>2023/01/05 11:54:41 (sink)  Payload -  300  Key -  odd  Start -  60000  End -  120000
+2023/01/05 11:54:41 (sink)  Payload -  600  Key -  even  Start -  60000  End -  120000
+2023/01/05 11:54:41 (sink)  Payload -  300  Key -  odd  Start -  120000  End -  180000
+2023/01/05 11:54:41 (sink)  Payload -  600  Key -  even  Start -  120000  End -  180000
+2023/01/05 11:54:42 (sink)  Payload -  600  Key -  even  Start -  180000  End -  240000
+2023/01/05 11:54:42 (sink)  Payload -  300  Key -  odd  Start -  180000  End -  240000
 </code></pre></div></p>
-<p>The reduce spec adds a new section called <code>groupBy</code> and this how we differentiate a <em>map</em> vertex
-from <em>reduce</em> vertex. There are two important fields, the <a href="../windowing/windowing/"><em>window</em></a>
-and <a href="../windowing/windowing/#non-keyed-vs-keyed-windows"><em>keyed</em></a>. These two fields play an
-important role in grouping the data together and pass it to the user-defined reduce code.</p>
-<p>The reduce supports a parallelism value while defining the edge. This is because auto-scaling is 
-not supported in reduce vertex. If <code>parallelism</code> is not defined default of one will be used.</p>
-<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">edge1</span>
-<span class="w">  </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-reduce</span>
-<span class="w">  </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
+<p>In our example, input is an HTTP source producing 2 messages each second with values 5 and 10,
+and the event time starts from 60000. Since we have considered a fixed window of length 60s,
+and also we are producing two messages with different keys "even" and "odd". Numaflow will create
+two different windows with a start time of 60000 and an end time of 120000. So the output will be
+300(5 * 60) and 600(10 * 60).</p>
+<p>If we had used a non keyed window (<code>keyed: false</code>), we would have seen one single output with value
+of 900(300 of odd + 600 of even) for each window.</p>
+<h2 id="sum-pipeline-using-sliding-window">sum pipeline using sliding window<a class="headerlink" href="#sum-pipeline-using-sliding-window" title="Permanent link">&para;</a></h2>
+<p>This is a simple reduce pipeline that just does summation (sum of numbers) but uses sliding window.
+The snippet for the reduce vertex is as follows.</p>
+<p><img alt="plot" src="../../../../assets/simple-reduce.png" /></p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
+<span class="w">  </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">      </span><span class="c1"># compute the sum</span>
+<span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaio/numaflow-go/reduce-sum</span>
+<span class="w">    </span><span class="nt">groupBy</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">window</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">sliding</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">          </span><span class="nt">slide</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
+<span class="w">      </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
-<p>It is wrong to give a <code>parallelism</code> &gt; <code>1</code> if it is a <em>non-keyed</em> vertex (<code>keyed: false</code>).</p>
-<p>There are a couple of <a href="../examples/">examples</a> that demonstrates Fixed windows, Sliding windows,
-chaining of windows, keyed streams, etc.</p>
-<h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
-<p>Reduce unlike map requires persistence. To support persistence user has to define the 
-<code>storage</code> configuration. We replay the data stored in this storage on pod startup if there has
-been a restart of the reduce pod caused due to pod migrations, etc.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
-<span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">groupBy</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">storage</span><span class="p">:</span>
-<span class="w">           </span><span class="l l-Scalar l-Scalar-Plain">....</span>
+<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml">7-reduce-sliding-window.yaml</a>
+has the complete pipeline definition</p>
+<p><div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml
 </code></pre></div>
-<h3 id="persistent-volume-claim-pvc">Persistent Volume Claim (PVC)<a class="headerlink" href="#persistent-volume-claim-pvc" title="Permanent link">&para;</a></h3>
-<p><code>persistentVolumeClaim</code> supports the following fields, <code>volumeSize</code>, <code>storageClassName</code>, and<code>accessMode</code>.
-As name suggests,<code>volumeSize</code> specifies the size of the volume. <code>accessMode</code> can be of many types, but for 
-reduce usecase we need only <code>ReadWriteOnce</code>. <code>storageClassName</code> can also be provided, more info on storage class
-can be found <a href="https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1">here</a>. The default
-value of <code>storageClassName</code> is <code>default</code> which is default StorageClass may be deployed to a Kubernetes 
-cluster by addon manager during installation.</p>
-<h4 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
-<span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">groupBy</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">storage</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">persistentVolumeClaim</span><span class="p">:</span>
-<span class="w">            </span><span class="nt">volumeSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10Gi</span>
-<span class="w">            </span><span class="nt">accessMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOnce</span>
+Output:
+<div class="highlight"><pre><span></span><code>2023/01/05 15:13:16 (sink)  Payload -  300  Key -  odd  Start -  60000  End -  120000
+2023/01/05 15:13:16 (sink)  Payload -  600  Key -  even  Start -  60000  End -  120000
+2023/01/05 15:13:16 (sink)  Payload -  300  Key -  odd  Start -  70000  End -  130000
+2023/01/05 15:13:16 (sink)  Payload -  600  Key -  even  Start -  700000  End -  1300000
+2023/01/05 15:13:16 (sink)  Payload -  300  Key -  odd  Start -  80000  End -  140000
+2023/01/05 15:13:16 (sink)  Payload -  600  Key -  even  Start -  80000  End -  140000
+</code></pre></div></p>
+<p>In our example, input is an HTTP source producing 2 messages each second with values 5 and 10,
+and the event time starts from 60000. Since we have considered a sliding window of length 60s
+and slide 10s, and also we are producing two messages with different keys "even" and "odd".
+Numaflow will create two different windows with a start time of 60000 and an end time of 120000,
+and because the slide duration is 10s, a next set of windows will be created with start time of
+70000 and an end time of 130000. Since its a sum operation the output will be 300(5 * 60) and 600(10 * 60).</p>
+<p><code>Payload -  50  Key -  odd  Start -  10000  End -  70000</code>, we see 50 here for odd because the
+first window has only 10 elements</p>
+<h2 id="complex-reduce-pipeline">complex reduce pipeline<a class="headerlink" href="#complex-reduce-pipeline" title="Permanent link">&para;</a></h2>
+<p>In the complex reduce example, we will
+* chain of reduce functions
+* use both fixed and sliding windows
+* use keyed and non-keyed windowing</p>
+<p><img alt="plot" src="../../../../assets/complex-reduce.png" /></p>
+<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml">8-reduce-complex-pipeline.yaml</a>
+has the complete pipeline definition</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml
 </code></pre></div>
-<h3 id="emptydir">EmptyDir<a class="headerlink" href="#emptydir" title="Permanent link">&para;</a></h3>
-<p>We also support <code>emptyDir</code> for quick experimentation. We do not recommend this in production
-setup. If we use <code>emptyDir</code>, we will end up in data loss if there are pod migrations. <code>emptyDir</code> 
-also takes an optional <code>sizeLimit</code>. <code>medium</code> field controls where emptyDir volumes are stored.
-By default emptyDir volumes are stored on whatever medium that backs the node such as disk, SSD, 
-or network storage, depending on your environment. If you set the <code>medium</code> field to <code>"Memory"</code>, 
-Kubernetes mounts a tmpfs (RAM-backed filesystem) for you instead.</p>
-<h4 id="example_1">Example<a class="headerlink" href="#example_1" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
-<span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">groupBy</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">storage</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">emptyDir</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
-</code></pre></div>
+<p>Output:
+<div class="highlight"><pre><span></span><code>2023/01/05 15:33:55 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  80000  End -  140000
+2023/01/05 15:33:55 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  90000  End -  150000
+2023/01/05 15:33:55 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  100000  End -  160000
+2023/01/05 15:33:56 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  110000  End -  170000
+2023/01/05 15:33:56 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  120000  End -  180000
+2023/01/05 15:33:56 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  130000  End -  190000
+</code></pre></div></p>
+<p>In our example, first we have the reduce vertex with a fixed window of duration 5s. Since the input is 5
+and 10, the output from the first reduce vertex will be 25 (5 * 5) and 50 (5 * 10). This will be passed
+to the next non-keyed reduce vertex with the fixed window duration of 10s. This being a non-keyed, it will
+combine the inputs and produce the output of 150(25 * 2 + 50 * 2), which will be passed to the reduce
+vertex with a sliding window of duration 60s and with the slide duration of 10s. Hence the final output
+will be 900(150 * 6).</p>
 
               
             </article>
@@ -1812,7 +1772,7 @@ Kubernetes mounts a tmpfs (RAM-backed filesystem) for you instead.</p>
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../../map/builtin-functions/filter/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Filter" rel="prev">
+        <a href="../windowing/sliding/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Sliding" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -1821,20 +1781,20 @@ Kubernetes mounts a tmpfs (RAM-backed filesystem) for you instead.</p>
               <span class="md-footer__direction">
                 Previous
               </span>
-              Filter
+              Sliding
             </div>
           </div>
         </a>
       
       
         
-        <a href="../windowing/windowing/" class="md-footer__link md-footer__link--next" aria-label="Next: Overview" rel="next">
+        <a href="../../../pipeline-tuning/" class="md-footer__link md-footer__link--next" aria-label="Next: Pipeline Tuning" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Overview
+              Pipeline Tuning
             </div>
           </div>
           <div class="md-footer__button md-icon">
