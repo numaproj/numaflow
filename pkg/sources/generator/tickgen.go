@@ -30,8 +30,8 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	forward2 "github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
@@ -91,7 +91,7 @@ type memgen struct {
 	// once terminated the source will not generate any more records.
 	cancel context.CancelFunc
 	// forwarder to read from the source and write to the interstep buffer.
-	forwarder *forward.InterStepDataForward
+	forwarder *forward2.InterStepDataForward
 	// lifecycleCtx context is used to control the lifecycle of this instance.
 	lifecycleCtx context.Context
 	// read timeout for the reader
@@ -180,10 +180,10 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(gensrc.logger)}
+	forwardOpts := []forward2.Option{forward2.WithVertexType(dfv1.VertexTypeSource), forward2.WithLogger(gensrc.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, forward2.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
@@ -191,7 +191,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward2.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, forward2.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
