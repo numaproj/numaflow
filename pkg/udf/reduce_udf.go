@@ -23,8 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
@@ -32,7 +34,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
