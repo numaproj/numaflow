@@ -19,6 +19,7 @@ package blackhole
 import (
 	"context"
 
+	forward2 "github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
@@ -29,7 +30,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 )
 
@@ -37,7 +37,7 @@ import (
 type Blackhole struct {
 	name         string
 	pipelineName string
-	isdf         *forward.InterStepDataForward
+	isdf         *forward2.InterStepDataForward
 	logger       *zap.SugaredLogger
 }
 
@@ -66,14 +66,14 @@ func NewBlackhole(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWaterma
 		bh.logger = logging.NewLogger()
 	}
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSink), forward.WithLogger(bh.logger)}
+	forwardOpts := []forward2.Option{forward2.WithVertexType(dfv1.VertexTypeSink), forward2.WithLogger(bh.logger)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, forward2.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: bh}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward2.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: bh}, forward2.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

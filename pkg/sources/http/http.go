@@ -29,8 +29,8 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	forward2 "github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
@@ -51,7 +51,7 @@ type httpSource struct {
 	messages     chan *isb.ReadMessage
 	logger       *zap.SugaredLogger
 
-	forwarder *forward.InterStepDataForward
+	forwarder *forward2.InterStepDataForward
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
 	// context cancel function
@@ -186,13 +186,13 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(h.logger)}
+	forwardOpts := []forward2.Option{forward2.WithVertexType(dfv1.VertexTypeSource), forward2.WithLogger(h.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, forward2.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward2.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, forward2.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

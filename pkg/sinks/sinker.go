@@ -17,8 +17,8 @@ limitations under the License.
 package sinks
 
 import (
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 )
 
 // Sinker interface defines what a Sink should implement.
