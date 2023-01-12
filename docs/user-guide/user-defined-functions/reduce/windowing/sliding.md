@@ -1,5 +1,7 @@
 # Sliding
 
+## Overview
+
 Sliding windows are similar to Fixed windows, the size of the windows is measured in time and is fixed.
 The important difference from the Fixed window is the fact that it allows an element to be present in
 more than one window. The additional window slide parameter controls how frequently a sliding window
@@ -22,11 +24,11 @@ vertices:
 NOTE: A duration string is a possibly signed sequence of decimal numbers, each with optional fraction
 and a unit suffix, such as "300ms", "1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
-## Length
+### Length
 
 The `length` is the window size of the fixed window.
 
-## Slide
+### Slide
 
 `slide` is the slide parameter that controls the frequency at which the sliding window is created.
 

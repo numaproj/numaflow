@@ -1,5 +1,7 @@
 # Windowing
 
+## Overview
+
 In the world of data processing on an unbounded stream, Windowing is a concept
 of grouping data using temporal boundaries. We use event-time to discover
 temporal boundaries on an unbounded, infinite stream and [Watermark](../../../watermarks.md) to ensure
