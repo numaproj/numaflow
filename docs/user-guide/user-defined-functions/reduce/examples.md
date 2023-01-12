@@ -1,5 +1,7 @@
 # Reduce Examples
 
+Please read [reduce](./reduce.md) to get the best out these examples.
+
 ## Prerequisites
 
 Install the ISB
