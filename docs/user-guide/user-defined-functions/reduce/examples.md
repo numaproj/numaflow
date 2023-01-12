@@ -1,6 +1,6 @@
 # Reduce Examples
 
-Please read [reduce](./reduce.md) to get the best out these examples.
+Please read [reduce](./reduce.md) to get the best out of these examples.
 
 ## Prerequisites
 
