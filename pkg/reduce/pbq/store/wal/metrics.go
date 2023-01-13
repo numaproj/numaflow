@@ -20,7 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
 const (
@@ -33,53 +33,53 @@ var entriesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_entries_total",
 	Help:      "Total number of entries written",
-}, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, metricspkg.LabelVertexReplicaIndex})
+}, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
 var entriesBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_entries_bytes_total",
 	Help:      "Total number of bytes written to WAL",
-}, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline, metricspkg.LabelVertexReplicaIndex})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
 
 var filesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_files_total",
 	Help:      "Total number of wal files/partitions (including both active and closed)",
-}, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, metricspkg.LabelVertexReplicaIndex})
+}, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
 var activeFilesCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "pbq_wal",
 	Name:      "active_wal_files_total",
 	Help:      "Total number of active wal files/partitions",
-}, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, metricspkg.LabelVertexReplicaIndex})
+}, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
 var garbageCollectingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_garbage_collecting_time",
 	Help:      "Garbage Collecting time of a pbq wal (100 to 5000 microseconds)",
 	Buckets:   prometheus.ExponentialBucketsRange(100, 5000, 5),
-}, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, metricspkg.LabelVertexReplicaIndex})
+}, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
 var fileSyncWaitTime = promauto.NewSummaryVec(prometheus.SummaryOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_file_sync_wait_time",
 	Help:      "File Sync wait time",
-}, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, metricspkg.LabelVertexReplicaIndex})
+}, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
 var entryWriteLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_entry_write_latency",
 	Help:      "Entry write time to WAL",
-}, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, metricspkg.LabelVertexReplicaIndex})
+}, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
 var entryEncodeLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_entry_encode_latency",
 	Help:      "Time taken to encode an Entry",
-}, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, metricspkg.LabelVertexReplicaIndex})
+}, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
 var walErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_errors",
 	Help:      "Errors encountered",
-}, []string{metricspkg.LabelPipeline, metricspkg.LabelVertex, metricspkg.LabelVertexReplicaIndex, labelErrorKind})
+}, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex, labelErrorKind})

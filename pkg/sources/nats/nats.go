@@ -28,7 +28,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
@@ -220,7 +220,7 @@ loop:
 				oldest = m.EventTime
 			}
 			msgs = append(msgs, m)
-			natsSourceReadCount.With(map[string]string{metricspkg.LabelVertex: ns.name, metricspkg.LabelPipeline: ns.pipelineName}).Inc()
+			natsSourceReadCount.With(map[string]string{metrics.LabelVertex: ns.name, metrics.LabelPipeline: ns.pipelineName}).Inc()
 		case <-timeout:
 			ns.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", ns.readTimeout), zap.Int("read", len(msgs)))
 			break loop

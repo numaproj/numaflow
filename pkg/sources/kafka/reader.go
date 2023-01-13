@@ -31,7 +31,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
@@ -130,7 +130,7 @@ loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-r.handler.messages:
-			kafkaSourceReadCount.With(map[string]string{metricspkg.LabelVertex: r.name, metricspkg.LabelPipeline: r.pipelineName}).Inc()
+			kafkaSourceReadCount.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
 			_m := toReadMessage(m)
 			msgs = append(msgs, _m)
 			// Get latest timestamps for different partitions
@@ -173,14 +173,14 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	for _, offset := range offsets {
 		topic, partition, poffset, err := offsetFrom(offset.String())
 		if err != nil {
-			kafkaSourceOffsetAckErrors.With(map[string]string{metricspkg.LabelVertex: r.name, metricspkg.LabelPipeline: r.pipelineName}).Inc()
+			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
 			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("suppliedoffset", offset.String()), zap.Error(err))
 			continue
 		}
 
 		// we need to mark the offset of the next message to read
 		r.handler.sess.MarkOffset(topic, partition, poffset+1, "")
-		kafkaSourceAckCount.With(map[string]string{metricspkg.LabelVertex: r.name, metricspkg.LabelPipeline: r.pipelineName}).Inc()
+		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
 
 	}
 	// How come it does not return errors at all?

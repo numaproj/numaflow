@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 
@@ -204,9 +204,9 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 		m.pbqMap[partitionID.String()] = p
 	}
 	activePartitionCount.With(map[string]string{
-		metricspkg.LabelVertex:             m.vertexName,
-		metricspkg.LabelPipeline:           m.pipelineName,
-		metricspkg.LabelVertexReplicaIndex: strconv.Itoa(int(m.vertexReplica)),
+		metrics.LabelVertex:             m.vertexName,
+		metrics.LabelPipeline:           m.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(m.vertexReplica)),
 	}).Inc()
 
 }
@@ -218,9 +218,9 @@ func (m *Manager) deregister(partitionID partition.ID) error {
 	defer m.Unlock()
 	delete(m.pbqMap, partitionID.String())
 	activePartitionCount.With(map[string]string{
-		metricspkg.LabelVertex:             m.vertexName,
-		metricspkg.LabelPipeline:           m.pipelineName,
-		metricspkg.LabelVertexReplicaIndex: strconv.Itoa(int(m.vertexReplica)),
+		metrics.LabelVertex:             m.vertexName,
+		metrics.LabelPipeline:           m.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(m.vertexReplica)),
 	}).Dec()
 	return m.storeProvider.DeleteStore(partitionID)
 }
