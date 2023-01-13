@@ -108,7 +108,7 @@ func TestReadLoop_Startup(t *testing.T) {
 		}
 	}
 
-	pManager, _ := pbq2.NewManager(ctx, "reduce", "test-pipeline", memStoreProvider, pbq2.WithChannelBufferSize(10))
+	pManager, _ := pbq2.NewManager(ctx, "reduce", "test-pipeline", 0, memStoreProvider, pbq2.WithChannelBufferSize(10))
 
 	to1 := simplebuffer.NewInMemoryBuffer("reduce-buffer", 4)
 	toSteps := map[string]isb.BufferWriter{
@@ -119,7 +119,7 @@ func TestReadLoop_Startup(t *testing.T) {
 
 	window := fixed.NewFixed(60 * time.Second)
 
-	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
+	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", 0, &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
 	assert.NoError(t, err)
 	err = rl.Startup(ctx)
 	assert.NoError(t, err)

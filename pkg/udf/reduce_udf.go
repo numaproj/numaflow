@@ -136,7 +136,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 	// Readiness check
 	if err := udfHandler.WaitUntilReady(ctx); err != nil {
-		return fmt.Errorf("failed on UDF readiness check, %w", err)
+		return fmt.Errorf("failed on FIXED_AGGREGATION readiness check, %w", err)
 	}
 	defer func() {
 		err = udfHandler.CloseConn(ctx)
@@ -148,7 +148,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	storeProvider := wal.NewWALStores(u.VertexInstance, wal.WithStorePath(dfv1.DefaultStorePath), wal.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 
-	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, storeProvider)
+	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeProvider)
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)

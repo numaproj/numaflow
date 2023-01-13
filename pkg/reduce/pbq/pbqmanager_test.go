@@ -37,7 +37,7 @@ func TestManager_ListPartitions(t *testing.T) {
 	size := int64(100)
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(size)),
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(size)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -75,7 +75,7 @@ func TestManager_GetPBQ(t *testing.T) {
 	size := int64(100)
 	var pb1, pb2 ReadWriteCloser
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(size)),
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(size)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -99,7 +99,7 @@ func TestPBQFlow(t *testing.T) {
 	size := int64(100)
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(size)),
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(size)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 	testPartition := partition.ID{
@@ -159,7 +159,7 @@ func TestPBQFlow(t *testing.T) {
 func TestPBQFlowWithNoOpStore(t *testing.T) {
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", noop.NewNoopStores(),
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, noop.NewNoopStores(),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 	testPartition := partition.ID{
@@ -217,7 +217,7 @@ func TestManager_Replay(t *testing.T) {
 	size := int64(100)
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(size)),
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(size)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
 	assert.NoError(t, err)
 	testPartition := partition.ID{
@@ -291,7 +291,7 @@ func TestManager_StartUp(t *testing.T) {
 	}
 	stores := memory2.NewMemoryStores(memory2.WithStoreSize(size), memory2.WithDiscoverer(dp))
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", stores,
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, stores,
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
 	assert.NoError(t, err)
 	ids, err := pbqManager.GetExistingPartitions(ctx)

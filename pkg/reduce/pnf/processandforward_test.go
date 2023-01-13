@@ -90,7 +90,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	var err error
 	var pbqManager *pbq2.Manager
 
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(100)),
+	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(100)),
 		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -135,7 +135,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	assert.NoError(t, err)
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
 	// create pf using key and reducer
-	pf := NewProcessAndForward(ctx, "reduce", "test-pipeline", testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{}, publishWatermark)
+	pf := NewProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{}, publishWatermark)
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)
@@ -147,7 +147,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 
 	var pbqManager *pbq2.Manager
 
-	pbqManager, _ = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores())
+	pbqManager, _ = pbq2.NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores())
 
 	test1Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
 	test1Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)

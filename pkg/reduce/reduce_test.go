@@ -228,7 +228,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	var pbqManager *pbq2.Manager
 
 	// create pbqManager
-	pbqManager, err = pbq2.NewManager(child, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(100)),
+	pbqManager, err = pbq2.NewManager(child, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(100)),
 		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -298,7 +298,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
+	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
 		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -371,7 +371,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
+	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
 		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -444,7 +444,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
+	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
 		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -517,7 +517,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
+	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
 		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -598,7 +598,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
+	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
 		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -678,7 +678,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	// create pbq manager
 	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(cctx, "reduce", "test-pipeline", storeProvider,
+	pbqManager, err = pbq2.NewManager(cctx, "reduce", "test-pipeline", 0, storeProvider,
 		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 

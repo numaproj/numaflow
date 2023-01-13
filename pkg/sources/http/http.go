@@ -222,6 +222,7 @@ loop:
 				oldest = m.EventTime
 			}
 			msgs = append(msgs, m)
+			fmt.Println("got a message to read")
 			httpSourceReadCount.With(map[string]string{metricspkg.LabelVertex: h.name, metricspkg.LabelPipeline: h.pipelineName}).Inc()
 		case <-timeout:
 			h.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", h.readTimeout), zap.Int("read", len(msgs)))

@@ -41,7 +41,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 
 	ctx := context.Background()
 
-	qManager, _ := NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(storeSize)), WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
+	qManager, _ := NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(storeSize)), WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
 
 	// write 10 isb messages to persisted store
 	msgCount := 10
@@ -102,7 +102,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 
 	ctx := context.Background()
 
-	qManager, err = NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(storeSize)), WithChannelBufferSize(int64(bufferSize)), WithReadTimeout(1*time.Second))
+	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(storeSize)), WithChannelBufferSize(int64(bufferSize)), WithReadTimeout(1*time.Second))
 
 	assert.NoError(t, err)
 
@@ -168,7 +168,7 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	var err error
 	ctx := context.Background()
 
-	qManager, err = NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(storeSize)), WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
+	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory2.NewMemoryStores(memory2.WithStoreSize(storeSize)), WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
 	assert.NoError(t, err)
 
 	// write 101 isb messages to pbq, but the store size is 100, we should get store is full error

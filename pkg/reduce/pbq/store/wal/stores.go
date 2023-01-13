@@ -90,14 +90,14 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 			return nil, err
 		}
 		filesCount.With(map[string]string{
-			metricspkg.LabelPipeline: ws.pipelineName,
-			metricspkg.LabelVertex:   ws.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+			metricspkg.LabelPipeline:           ws.pipelineName,
+			metricspkg.LabelVertex:             ws.vertexName,
+			metricspkg.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Inc()
 		activeFilesCount.With(map[string]string{
-			metricspkg.LabelPipeline: ws.pipelineName,
-			metricspkg.LabelVertex:   ws.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+			metricspkg.LabelPipeline:           ws.pipelineName,
+			metricspkg.LabelVertex:             ws.vertexName,
+			metricspkg.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Inc()
 		wal = &WAL{
 			fp:                fp,
@@ -207,10 +207,10 @@ func (ws *walStores) DeleteStore(partitionID partition.ID) error {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metricspkg.LabelPipeline: ws.pipelineName,
-				metricspkg.LabelVertex:   ws.vertexName,
-				labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
-				labelErrorKind:           "gc",
+				metricspkg.LabelPipeline:           ws.pipelineName,
+				metricspkg.LabelVertex:             ws.vertexName,
+				metricspkg.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
+				labelErrorKind:                     "gc",
 			}).Inc()
 		}
 	}()
@@ -228,14 +228,14 @@ func (ws *walStores) DeleteStore(partitionID partition.ID) error {
 
 	if err == nil {
 		garbageCollectingTime.With(map[string]string{
-			metricspkg.LabelPipeline: ws.pipelineName,
-			metricspkg.LabelVertex:   ws.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+			metricspkg.LabelPipeline:           ws.pipelineName,
+			metricspkg.LabelVertex:             ws.vertexName,
+			metricspkg.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Observe(float64(time.Since(start).Microseconds()))
 		activeFilesCount.With(map[string]string{
-			metricspkg.LabelPipeline: ws.pipelineName,
-			metricspkg.LabelVertex:   ws.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+			metricspkg.LabelPipeline:           ws.pipelineName,
+			metricspkg.LabelVertex:             ws.vertexName,
+			metricspkg.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Dec()
 	}
 	return err
