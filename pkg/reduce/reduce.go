@@ -21,6 +21,7 @@ package reduce
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -44,6 +45,7 @@ type DataForward struct {
 	ctx                 context.Context
 	vertexName          string
 	pipelineName        string
+	vertexReplica       int32
 	fromBuffer          isb.BufferReader
 	toBuffers           map[string]isb.BufferWriter
 	readloop            *readloop.ReadLoop
@@ -76,12 +78,13 @@ func NewDataForward(ctx context.Context,
 	}
 
 	rl, err := readloop.NewReadLoop(ctx, vertexInstance.Vertex.Spec.Name, vertexInstance.Vertex.Spec.PipelineName,
-		udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
+		vertexInstance.Replica, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
 
 	df := &DataForward{
 		ctx:                 ctx,
 		vertexName:          vertexInstance.Vertex.Spec.Name,
 		pipelineName:        vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica:       vertexInstance.Replica,
 		fromBuffer:          fromBuffer,
 		toBuffers:           toBuffers,
 		readloop:            rl,
@@ -150,13 +153,22 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	totalBytes := 0
 	if err != nil {
 		d.log.Errorw("Failed to read from isb", zap.Error(err))
-		readMessagesError.With(map[string]string{metrics.LabelVertex: d.vertexName, metrics.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Inc()
+		readMessagesError.With(map[string]string{
+			metrics.LabelVertex:             d.vertexName,
+			metrics.LabelPipeline:           d.pipelineName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(d.vertexReplica)),
+			"buffer":                        d.fromBuffer.GetName()}).Inc()
 	}
 
 	if len(readMessages) == 0 {
 		return
 	}
-	readMessagesCount.With(map[string]string{metrics.LabelVertex: d.vertexName, metrics.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Add(float64(len(readMessages)))
+	readMessagesCount.With(map[string]string{
+		metrics.LabelVertex:             d.vertexName,
+		metrics.LabelPipeline:           d.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(d.vertexReplica)),
+		"buffer":                        d.fromBuffer.GetName(),
+	}).Add(float64(len(readMessages)))
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
@@ -168,6 +180,11 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 		m.Watermark = time.Time(processorWM)
 		totalBytes += len(m.Payload)
 	}
-	readBytesCount.With(map[string]string{metrics.LabelVertex: d.vertexName, metrics.LabelPipeline: d.pipelineName, "buffer": d.fromBuffer.GetName()}).Add(float64(totalBytes))
+	readBytesCount.With(map[string]string{
+		metrics.LabelVertex:             d.vertexName,
+		metrics.LabelPipeline:           d.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(d.vertexReplica)),
+		"buffer":                        d.fromBuffer.GetName(),
+	}).Add(float64(totalBytes))
 	d.readloop.Process(ctx, readMessages)
 }
