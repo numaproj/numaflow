@@ -30,7 +30,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -98,7 +98,7 @@ func (s *ToLog) IsFull() bool {
 func (s *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	prefix := "(" + s.GetName() + ")"
 	for _, message := range messages {
-		logSinkWriteCount.With(map[string]string{metricspkg.LabelVertex: s.name, metricspkg.LabelPipeline: s.pipelineName}).Inc()
+		logSinkWriteCount.With(map[string]string{metrics.LabelVertex: s.name, metrics.LabelPipeline: s.pipelineName}).Inc()
 		log.Println(prefix, " Payload - ", string(message.Payload), " Key - ", message.Key, " Start - ", message.StartTime.UnixMilli(), " End - ", message.EndTime.UnixMilli())
 	}
 	return nil, make([]error, len(messages))

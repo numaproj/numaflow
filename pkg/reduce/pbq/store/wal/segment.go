@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
@@ -79,10 +79,10 @@ func (w *WAL) writeHeader() (err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metricspkg.LabelPipeline: w.walStores.pipelineName,
-				metricspkg.LabelVertex:   w.walStores.vertexName,
-				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-				labelErrorKind:           "writeHeader",
+				metrics.LabelPipeline:           w.walStores.pipelineName,
+				metrics.LabelVertex:             w.walStores.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:                  "writeHeader",
 			}).Inc()
 		}
 	}()
@@ -126,10 +126,10 @@ func (w *WAL) encodeHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metricspkg.LabelPipeline: w.walStores.pipelineName,
-				metricspkg.LabelVertex:   w.walStores.vertexName,
-				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-				labelErrorKind:           "encodeHeader",
+				metrics.LabelPipeline:           w.walStores.pipelineName,
+				metrics.LabelVertex:             w.walStores.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:                  "encodeHeader",
 			}).Inc()
 		}
 	}()
@@ -156,10 +156,10 @@ func (w *WAL) encodeEntry(message *isb.ReadMessage) (buf *bytes.Buffer, err erro
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metricspkg.LabelPipeline: w.walStores.pipelineName,
-				metricspkg.LabelVertex:   w.walStores.vertexName,
-				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-				labelErrorKind:           "encodeEntry",
+				metrics.LabelPipeline:           w.walStores.pipelineName,
+				metrics.LabelVertex:             w.walStores.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:                  "encodeEntry",
 			}).Inc()
 		}
 	}()
@@ -214,10 +214,10 @@ func (w *WAL) encodeEntryHeader(message *isb.ReadMessage, messageLen int64, chec
 	err = binary.Write(buf, binary.LittleEndian, entryHeader)
 	if err != nil {
 		walErrors.With(map[string]string{
-			metricspkg.LabelPipeline: w.walStores.pipelineName,
-			metricspkg.LabelVertex:   w.walStores.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-			labelErrorKind:           "encodeEntryHeader",
+			metrics.LabelPipeline:           w.walStores.pipelineName,
+			metrics.LabelVertex:             w.walStores.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+			labelErrorKind:                  "encodeEntryHeader",
 		}).Inc()
 		return nil, err
 	}
@@ -230,10 +230,10 @@ func (w *WAL) encodeEntryBody(message *isb.ReadMessage) (*bytes.Buffer, error) {
 	err := enc.Encode(message.Message)
 	if err != nil {
 		walErrors.With(map[string]string{
-			metricspkg.LabelPipeline: w.walStores.pipelineName,
-			metricspkg.LabelVertex:   w.walStores.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-			labelErrorKind:           "encodeEntryBody",
+			metrics.LabelPipeline:           w.walStores.pipelineName,
+			metrics.LabelVertex:             w.walStores.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+			labelErrorKind:                  "encodeEntryBody",
 		}).Inc()
 		return nil, fmt.Errorf("entry body encountered encode err: %w", err)
 	}
@@ -256,19 +256,19 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metricspkg.LabelPipeline: w.walStores.pipelineName,
-				metricspkg.LabelVertex:   w.walStores.vertexName,
-				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-				labelErrorKind:           "write",
+				metrics.LabelPipeline:           w.walStores.pipelineName,
+				metrics.LabelVertex:             w.walStores.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:                  "write",
 			}).Inc()
 		}
 	}()
 	encodeStart := time.Now()
 	entry, err := w.encodeEntry(message)
 	entryEncodeLatency.With(map[string]string{
-		metricspkg.LabelPipeline: w.walStores.pipelineName,
-		metricspkg.LabelVertex:   w.walStores.vertexName,
-		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.walStores.pipelineName,
+		metrics.LabelVertex:             w.walStores.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
 	}).Observe(float64(time.Since(encodeStart).Milliseconds()))
 	if err != nil {
 		return err
@@ -277,9 +277,9 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	writeStart := time.Now()
 	wrote, err := w.fp.WriteAt(entry.Bytes(), w.wOffset)
 	entryWriteLatency.With(map[string]string{
-		metricspkg.LabelPipeline: w.walStores.pipelineName,
-		metricspkg.LabelVertex:   w.walStores.vertexName,
-		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.walStores.pipelineName,
+		metrics.LabelVertex:             w.walStores.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
 	}).Observe(float64(time.Since(writeStart).Milliseconds()))
 	if wrote != entry.Len() {
 		return fmt.Errorf("expected to write %d, but wrote only %d, %w", entry.Len(), wrote, err)
@@ -292,14 +292,14 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	// Only increase the write offset when we successfully write for atomicity.
 	w.wOffset += int64(wrote)
 	entriesBytesCount.With(map[string]string{
-		metricspkg.LabelPipeline: w.walStores.pipelineName,
-		metricspkg.LabelVertex:   w.walStores.vertexName,
-		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.walStores.pipelineName,
+		metrics.LabelVertex:             w.walStores.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
 	}).Add(float64(wrote))
 	entriesCount.With(map[string]string{
-		metricspkg.LabelPipeline: w.walStores.pipelineName,
-		metricspkg.LabelVertex:   w.walStores.vertexName,
-		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.walStores.pipelineName,
+		metrics.LabelVertex:             w.walStores.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
 	}).Inc()
 	currentTime := time.Now()
 
@@ -309,9 +309,9 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 		fSyncStart := time.Now()
 		err = w.fp.Sync()
 		fileSyncWaitTime.With(map[string]string{
-			metricspkg.LabelPipeline: w.walStores.pipelineName,
-			metricspkg.LabelVertex:   w.walStores.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+			metrics.LabelPipeline:           w.walStores.pipelineName,
+			metrics.LabelVertex:             w.walStores.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
 		}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
 		w.numOfUnsyncedMsgs = 0
 		return err
@@ -324,19 +324,19 @@ func (w *WAL) Close() (err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metricspkg.LabelPipeline: w.walStores.pipelineName,
-				metricspkg.LabelVertex:   w.walStores.vertexName,
-				labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
-				labelErrorKind:           "close",
+				metrics.LabelPipeline:           w.walStores.pipelineName,
+				metrics.LabelVertex:             w.walStores.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				labelErrorKind:                  "close",
 			}).Inc()
 		}
 	}()
 	start := time.Now()
 	err = w.fp.Sync()
 	fileSyncWaitTime.With(map[string]string{
-		metricspkg.LabelPipeline: w.walStores.pipelineName,
-		metricspkg.LabelVertex:   w.walStores.vertexName,
-		labelVertexReplicaIndex:  strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.walStores.pipelineName,
+		metrics.LabelVertex:             w.walStores.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
 	}).Observe(float64(time.Since(start).Milliseconds()))
 
 	if err != nil {

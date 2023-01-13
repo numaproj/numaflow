@@ -32,7 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
@@ -177,12 +177,12 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		}
 
 		// Check if the resultant metrics list contains the processingRate, if it does look for the period label
-		if value, ok := result[metricspkg.VertexProcessingRate]; ok {
-			metrics := value.GetMetric()
-			for _, metric := range metrics {
+		if value, ok := result[metrics.VertexProcessingRate]; ok {
+			metricsList := value.GetMetric()
+			for _, metric := range metricsList {
 				labels := metric.GetLabel()
 				for _, label := range labels {
-					if label.GetName() == metricspkg.LabelPeriod {
+					if label.GetName() == metrics.LabelPeriod {
 						lookback := label.GetValue()
 						processingRates[lookback] = metric.Gauge.GetValue()
 					}
@@ -190,12 +190,12 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 			}
 		}
 
-		if value, ok := result[metricspkg.VertexPendingMessages]; ok {
-			metrics := value.GetMetric()
-			for _, metric := range metrics {
+		if value, ok := result[metrics.VertexPendingMessages]; ok {
+			metricsList := value.GetMetric()
+			for _, metric := range metricsList {
 				labels := metric.GetLabel()
 				for _, label := range labels {
-					if label.GetName() == metricspkg.LabelPeriod {
+					if label.GetName() == metrics.LabelPeriod {
 						lookback := label.GetValue()
 						pendings[lookback] = int64(metric.Gauge.GetValue())
 					}
