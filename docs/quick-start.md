@@ -122,8 +122,14 @@ The pipeline can be deleted by
 kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
 ```
 
+## A pipeline with reduce (aggregation)
+
+[Reduce Examples](user-guide/user-defined-functions/reduce/examples.md)
+
 ## What's Next
 
 Try more examples in the [`examples`](https://github.com/numaproj/numaflow/tree/main/examples) directory.
 
-After exploring how Numaflow pipeline run, you can check what data [Sources](./user-guide/sources/generator.md) and [Sinks](./user-guide/sinks/kafka.md) Numaflow supports out of the box, or learn how to write [User Defined Functions](user-guide/user-defined-functions/map/map.md).
+After exploring how Numaflow pipeline run, you can check what data [Sources](./user-guide/sources/generator.md) 
+and [Sinks](./user-guide/sinks/kafka.md) Numaflow supports out of the box, or learn how to write 
+[User Defined Functions](user-guide/user-defined-functions/user-defined-functions.md).

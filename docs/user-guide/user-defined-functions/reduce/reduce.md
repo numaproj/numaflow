@@ -1,5 +1,7 @@
 # Reduce UDF
 
+## Overview 
+
 Reduce is one of the most commonly used abstractions in a stream processing pipeline to define 
 aggregation functions on a stream of data. It is the reduce feature that helps us solve problems like 
 "performs a summary operation(such as counting the number of occurrence of a key, yielding user login 
@@ -9,6 +11,7 @@ bounding condition is "time", eg, "number of users logged in per minute". So whi
 unbounded stream of data, we need a way to group elements into finite chunks using time. To build these
 chunks the reduce function is applied to the set of records produced using the concept of [windowing](./windowing/windowing.md).
 
+## Reduce Pseudo code
 Unlike in _map_ vertex where only an element is given to user-defined function, in _reduce_ since
 there is a group of elements, an iterator is passed to the reduce function. The following is a generic
 outlook of a reduce function. I have written the pseudo-code using the accumulator to show that very
@@ -29,6 +32,8 @@ def reduceFn(key: str, datums: Iterator[Datum], md: Metadata) -> Messages:
     # acumulator.result() can be str.encode(accumulator)
     return Messages(Message.to_vtx(key, acumulator.result()))
 ```
+
+## Specification
 
 The structure for defining a reduce vertex is as follows.
 ```yaml
