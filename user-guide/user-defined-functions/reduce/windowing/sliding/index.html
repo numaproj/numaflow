@@ -1001,16 +1001,29 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    Overview
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#length" class="md-nav__link">
     Length
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#slide" class="md-nav__link">
     Slide
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1597,16 +1610,29 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    Overview
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#length" class="md-nav__link">
     Length
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#slide" class="md-nav__link">
     Slide
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1636,6 +1662,7 @@
 
 
 <h1 id="sliding">Sliding<a class="headerlink" href="#sliding" title="Permanent link">&para;</a></h1>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>Sliding windows are similar to Fixed windows, the size of the windows is measured in time and is fixed.
 The important difference from the Fixed window is the fact that it allows an element to be present in
 more than one window. The additional window slide parameter controls how frequently a sliding window
@@ -1653,9 +1680,9 @@ length.</p>
 </code></pre></div>
 <p>NOTE: A duration string is a possibly signed sequence of decimal numbers, each with optional fraction
 and a unit suffix, such as "300ms", "1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".</p>
-<h2 id="length">Length<a class="headerlink" href="#length" title="Permanent link">&para;</a></h2>
+<h3 id="length">Length<a class="headerlink" href="#length" title="Permanent link">&para;</a></h3>
 <p>The <code>length</code> is the window size of the fixed window.</p>
-<h2 id="slide">Slide<a class="headerlink" href="#slide" title="Permanent link">&para;</a></h2>
+<h3 id="slide">Slide<a class="headerlink" href="#slide" title="Permanent link">&para;</a></h3>
 <p><code>slide</code> is the slide parameter that controls the frequency at which the sliding window is created.</p>
 <h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
 <p>To create a sliding window of length 1 minute which slides every 10 seconds, we can use the following snippet.</p>

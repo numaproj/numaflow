@@ -931,6 +931,27 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    Overview
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reduce-pseudo-code" class="md-nav__link">
+    Reduce Pseudo code
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#specification" class="md-nav__link">
+    Specification
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#storage" class="md-nav__link">
     Storage
   </a>
@@ -1627,6 +1648,27 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    Overview
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reduce-pseudo-code" class="md-nav__link">
+    Reduce Pseudo code
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#specification" class="md-nav__link">
+    Specification
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#storage" class="md-nav__link">
     Storage
   </a>
@@ -1698,6 +1740,7 @@
 
 
 <h1 id="reduce-udf">Reduce UDF<a class="headerlink" href="#reduce-udf" title="Permanent link">&para;</a></h1>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>Reduce is one of the most commonly used abstractions in a stream processing pipeline to define 
 aggregation functions on a stream of data. It is the reduce feature that helps us solve problems like 
 "performs a summary operation(such as counting the number of occurrence of a key, yielding user login 
@@ -1706,6 +1749,7 @@ parameter to convert the unbounded problem to a bounded problem and provide resu
 bounding condition is "time", eg, "number of users logged in per minute". So while processing an 
 unbounded stream of data, we need a way to group elements into finite chunks using time. To build these
 chunks the reduce function is applied to the set of records produced using the concept of <a href="../windowing/windowing/">windowing</a>.</p>
+<h2 id="reduce-pseudo-code">Reduce Pseudo code<a class="headerlink" href="#reduce-pseudo-code" title="Permanent link">&para;</a></h2>
 <p>Unlike in <em>map</em> vertex where only an element is given to user-defined function, in <em>reduce</em> since
 there is a group of elements, an iterator is passed to the reduce function. The following is a generic
 outlook of a reduce function. I have written the pseudo-code using the accumulator to show that very
@@ -1724,6 +1768,7 @@ powerful functions can be applied using this reduce semantics.</p>
     <span class="c1"># acumulator.result() can be str.encode(accumulator)</span>
     <span class="k">return</span> <span class="n">Messages</span><span class="p">(</span><span class="n">Message</span><span class="o">.</span><span class="n">to_vtx</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">acumulator</span><span class="o">.</span><span class="n">result</span><span class="p">()))</span>
 </code></pre></div>
+<h2 id="specification">Specification<a class="headerlink" href="#specification" title="Permanent link">&para;</a></h2>
 <p>The structure for defining a reduce vertex is as follows.
 <div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-udf</span>
 <span class="w">  </span><span class="nt">udf</span><span class="p">:</span>
