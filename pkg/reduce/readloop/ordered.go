@@ -19,6 +19,7 @@ package readloop
 import (
 	"container/list"
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -49,8 +50,9 @@ type task struct {
 // orderedForwarder orders the forwarding of the result of the execution of the tasks, even though the tasks itself are
 // run concurrently in an out of ordered fashion.
 type orderedForwarder struct {
-	vertexName   string
-	pipelineName string
+	vertexName    string
+	pipelineName  string
+	vertexReplica int32
 	sync.RWMutex
 	taskDone  chan struct{}
 	taskQueue *list.List
@@ -58,13 +60,14 @@ type orderedForwarder struct {
 }
 
 // newOrderedForwarder returns an orderedForwarder.
-func newOrderedForwarder(ctx context.Context, vertexName string, pipelineName string) *orderedForwarder {
+func newOrderedForwarder(ctx context.Context, vertexName string, pipelineName string, vr int32) *orderedForwarder {
 	of := &orderedForwarder{
-		vertexName:   vertexName,
-		pipelineName: pipelineName,
-		taskDone:     make(chan struct{}),
-		taskQueue:    list.New(),
-		log:          logging.FromContext(ctx),
+		vertexName:    vertexName,
+		pipelineName:  pipelineName,
+		vertexReplica: vr,
+		taskDone:      make(chan struct{}),
+		taskQueue:     list.New(),
+		log:           logging.FromContext(ctx),
 	}
 
 	go of.forward(ctx)
@@ -87,13 +90,18 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher) *task {
 
-	pf := pnf.NewProcessAndForward(ctx, of.vertexName, of.pipelineName, partitionID, udf, pbq, toBuffers, whereToDecider, pw)
+	pf := pnf.NewProcessAndForward(ctx, of.vertexName, of.pipelineName, of.vertexReplica, partitionID, udf, pbq, toBuffers, whereToDecider, pw)
 	doneCh := make(chan struct{})
 	t := &task{
 		doneCh: doneCh,
 		pf:     pf,
 	}
-	partitionsInFlight.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Inc()
+	partitionsInFlight.With(map[string]string{
+		metrics.LabelVertex:             of.vertexName,
+		metrics.LabelPipeline:           of.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(of.vertexReplica)),
+	}).Inc()
+
 	// invoke the reduce function
 	go of.reduceOp(ctx, t)
 	return t
@@ -110,7 +118,11 @@ func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 		if err == nil {
 			break
 		} else if err == ctx.Err() {
-			udfError.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Inc()
+			udfError.With(map[string]string{
+				metrics.LabelVertex:             of.vertexName,
+				metrics.LabelPipeline:           of.pipelineName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(of.vertexReplica)),
+			}).Inc()
 			of.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
 			return
 		}
@@ -182,7 +194,12 @@ func (of *orderedForwarder) forward(ctx context.Context) {
 				rm := currElement
 				currElement = currElement.Next()
 				of.taskQueue.Remove(rm)
-				partitionsInFlight.With(map[string]string{metrics.LabelVertex: of.vertexName, metrics.LabelPipeline: of.pipelineName}).Dec()
+				partitionsInFlight.With(map[string]string{
+					metrics.LabelVertex:             of.vertexName,
+					metrics.LabelPipeline:           of.pipelineName,
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(of.vertexReplica)),
+				}).Dec()
+
 				of.log.Debugw("Removing task post forward call", zap.String("partitionID", t.pf.PartitionID.String()))
 				of.Unlock()
 			case <-ctx.Done():

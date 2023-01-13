@@ -26,7 +26,7 @@ import (
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
@@ -90,14 +90,14 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 			return nil, err
 		}
 		filesCount.With(map[string]string{
-			metricspkg.LabelPipeline: ws.pipelineName,
-			metricspkg.LabelVertex:   ws.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+			metrics.LabelPipeline:           ws.pipelineName,
+			metrics.LabelVertex:             ws.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Inc()
 		activeFilesCount.With(map[string]string{
-			metricspkg.LabelPipeline: ws.pipelineName,
-			metricspkg.LabelVertex:   ws.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+			metrics.LabelPipeline:           ws.pipelineName,
+			metrics.LabelVertex:             ws.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Inc()
 		wal = &WAL{
 			fp:                fp,
@@ -207,10 +207,10 @@ func (ws *walStores) DeleteStore(partitionID partition.ID) error {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metricspkg.LabelPipeline: ws.pipelineName,
-				metricspkg.LabelVertex:   ws.vertexName,
-				labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
-				labelErrorKind:           "gc",
+				metrics.LabelPipeline:           ws.pipelineName,
+				metrics.LabelVertex:             ws.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
+				labelErrorKind:                  "gc",
 			}).Inc()
 		}
 	}()
@@ -228,14 +228,14 @@ func (ws *walStores) DeleteStore(partitionID partition.ID) error {
 
 	if err == nil {
 		garbageCollectingTime.With(map[string]string{
-			metricspkg.LabelPipeline: ws.pipelineName,
-			metricspkg.LabelVertex:   ws.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+			metrics.LabelPipeline:           ws.pipelineName,
+			metrics.LabelVertex:             ws.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Observe(float64(time.Since(start).Microseconds()))
 		activeFilesCount.With(map[string]string{
-			metricspkg.LabelPipeline: ws.pipelineName,
-			metricspkg.LabelVertex:   ws.vertexName,
-			labelVertexReplicaIndex:  strconv.Itoa(int(ws.replicaIndex)),
+			metrics.LabelPipeline:           ws.pipelineName,
+			metrics.LabelVertex:             ws.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Dec()
 	}
 	return err

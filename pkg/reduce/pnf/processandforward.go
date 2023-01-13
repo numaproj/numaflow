@@ -24,11 +24,12 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/forward"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 
@@ -50,6 +51,7 @@ import (
 type ProcessAndForward struct {
 	vertexName       string
 	pipelineName     string
+	vertexReplica    int32
 	PartitionID      partition.ID
 	UDF              applier.ReduceApplier
 	result           []*isb.Message
@@ -64,6 +66,7 @@ type ProcessAndForward struct {
 func NewProcessAndForward(ctx context.Context,
 	vertexName string,
 	pipelineName string,
+	vr int32,
 	partitionID partition.ID,
 	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
@@ -72,6 +75,7 @@ func NewProcessAndForward(ctx context.Context,
 	return &ProcessAndForward{
 		vertexName:       vertexName,
 		pipelineName:     pipelineName,
+		vertexReplica:    vr,
 		PartitionID:      partitionID,
 		UDF:              udf,
 		pbqReader:        pbqReader,
@@ -86,7 +90,12 @@ func NewProcessAndForward(ctx context.Context,
 func (p *ProcessAndForward) Process(ctx context.Context) error {
 	var err error
 	startTime := time.Now()
-	defer reduceProcessTime.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Observe(float64(time.Since(startTime).Milliseconds()))
+	defer reduceProcessTime.With(map[string]string{
+		metrics.LabelVertex:             p.vertexName,
+		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+	}).Observe(float64(time.Since(startTime).Milliseconds()))
+
 	// blocking call, only returns the result after it has read all the messages from pbq
 	p.result, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 	return err
@@ -96,13 +105,22 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	// extract window end time from the partitionID, which will be used for watermark
 	startTime := time.Now()
-	defer reduceForwardTime.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Observe(float64(time.Since(startTime).Microseconds()))
+	defer reduceForwardTime.With(map[string]string{
+		metrics.LabelVertex:             p.vertexName,
+		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+	}).Observe(float64(time.Since(startTime).Microseconds()))
+
 	processorWM := processor.Watermark(p.PartitionID.End)
 
 	// decide which ISB to write to
 	to, err := p.whereToDecider.WhereTo(p.PartitionID.Key)
 	if err != nil {
-		platformError.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Inc()
+		platformError.With(map[string]string{
+			metrics.LabelVertex:             p.vertexName,
+			metrics.LabelPipeline:           p.pipelineName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+		}).Inc()
 		return err
 	}
 	messagesToStep := p.whereToStep(to)
@@ -209,14 +227,27 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		if len(failedMessages) > 0 {
 			p.log.Warnw("Failed to write messages to isb inside pnf", zap.Errors("errors", writeErrs))
 			writeMessages = failedMessages
-			writeMessagesError.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName}).Add(float64(len(failedMessages)))
+			writeMessagesError.With(map[string]string{
+				metrics.LabelVertex:             p.vertexName,
+				metrics.LabelPipeline:           p.pipelineName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+				"buffer":                        bufferID}).Add(float64(len(failedMessages)))
 			return false, nil
 		}
 		return true, nil
 	})
 
-	writeMessagesCount.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName, "buffer": bufferID}).Add(float64(len(resultMessages)))
-	writeBytesCount.With(map[string]string{metricspkg.LabelVertex: p.vertexName, metricspkg.LabelPipeline: p.pipelineName, "buffer": bufferID}).Add(totalBytes)
+	writeMessagesCount.With(map[string]string{
+		metrics.LabelVertex:             p.vertexName,
+		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+		"buffer":                        bufferID}).Add(float64(len(resultMessages)))
+
+	writeBytesCount.With(map[string]string{
+		metrics.LabelVertex:             p.vertexName,
+		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+		"buffer":                        bufferID}).Add(totalBytes)
 	return offsets, ctxClosedErr
 }
 

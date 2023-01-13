@@ -38,9 +38,10 @@ import (
 )
 
 const (
-	LabelPipeline = "pipeline"
-	LabelVertex   = "vertex"
-	LabelPeriod   = "period"
+	LabelPipeline           = "pipeline"
+	LabelVertex             = "vertex"
+	LabelPeriod             = "period"
+	LabelVertexReplicaIndex = "replica"
 
 	VertexProcessingRate  = "vertex_processing_rate"
 	VertexPendingMessages = "vertex_pending_messages"

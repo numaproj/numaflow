@@ -30,7 +30,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
 // Blackhole is a sink to emulate /dev/null
@@ -95,7 +95,7 @@ func (b *Blackhole) IsFull() bool {
 
 // Write writes to the blackhole.
 func (b *Blackhole) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	sinkWriteCount.With(map[string]string{metricspkg.LabelVertex: b.name, metricspkg.LabelPipeline: b.pipelineName}).Add(float64(len(messages)))
+	sinkWriteCount.With(map[string]string{metrics.LabelVertex: b.name, metrics.LabelPipeline: b.pipelineName}).Add(float64(len(messages)))
 
 	return nil, make([]error, len(messages))
 }

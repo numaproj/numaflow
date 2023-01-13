@@ -20,7 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
 // natsSourceReadCount is used to indicate the number of messages read by the nats source vertex
@@ -28,4 +28,4 @@ var natsSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "nats_source",
 	Name:      "read_total",
 	Help:      "Total number of messages read",
-}, []string{metricspkg.LabelVertex, metricspkg.LabelPipeline})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline})

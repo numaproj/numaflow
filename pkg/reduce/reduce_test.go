@@ -31,9 +31,9 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
-	pbq2 "github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	memory2 "github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -225,11 +225,11 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	}
 
 	var err error
-	var pbqManager *pbq2.Manager
+	var pbqManager *pbq.Manager
 
 	// create pbqManager
-	pbqManager, err = pbq2.NewManager(child, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(100)),
-		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
+	pbqManager, err = pbq.NewManager(child, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	publisher := map[string]publish.Publisher{
@@ -297,9 +297,9 @@ func TestReduceDataForward_Count(t *testing.T) {
 	}
 
 	// create pbq manager
-	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
-		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -370,9 +370,9 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	}
 
 	// create pbq manager
-	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
-		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -443,9 +443,9 @@ func TestReduceDataForward_Max(t *testing.T) {
 	}
 
 	// create pbq manager
-	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
-		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -516,9 +516,9 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	}
 
 	// create pbq manager
-	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
-		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -597,9 +597,9 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	}
 
 	// create pbq manager
-	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(1000)),
-		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -674,12 +674,12 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	}
 
 	// create a store provider
-	storeProvider := memory2.NewMemoryStores(memory2.WithStoreSize(1000))
+	storeProvider := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
-	var pbqManager *pbq2.Manager
-	pbqManager, err = pbq2.NewManager(cctx, "reduce", "test-pipeline", storeProvider,
-		pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(cctx, "reduce", "test-pipeline", 0, storeProvider,
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
