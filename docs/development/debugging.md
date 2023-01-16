@@ -44,3 +44,9 @@ kubectl port-forward simple-pipeline-p1-0-7jzbn 2469
 
 go tool pprof -http localhost:8081 https+insecure://localhost:2469/debug/pprof/heap
 ```
+
+## Debug Inside the Container
+
+When doing local [development](development.md) using command lines such as `make start`, or `make image`, the built `numaflow` docker image is based on `alpine`, which allows you to execute into the container for debugging with `kubectl exec -it {pod-name} -c {container-name} -- sh`.
+
+This is not allowed when running pipelines with official released images, as they are based on `scratch`.
