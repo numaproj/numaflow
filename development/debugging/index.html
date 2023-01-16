@@ -1492,6 +1492,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#debug-inside-the-container" class="md-nav__link">
+    Debug Inside the Container
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1583,6 +1590,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#debug-inside-the-container" class="md-nav__link">
+    Debug Inside the Container
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1639,6 +1653,9 @@ kubectl<span class="w"> </span>port-forward<span class="w"> </span>simple-pipeli
 
 go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>-http<span class="w"> </span>localhost:8081<span class="w"> </span>https+insecure://localhost:2469/debug/pprof/heap
 </code></pre></div>
+<h2 id="debug-inside-the-container">Debug Inside the Container<a class="headerlink" href="#debug-inside-the-container" title="Permanent link">&para;</a></h2>
+<p>When doing local <a href="../development/">development</a> using command lines such as <code>make start</code>, or <code>make image</code>, the built <code>numaflow</code> docker image is based on <code>alpine</code>, which allows you to execute into the container for debugging with <code>kubectl exec -it {pod-name} -c {container-name} -- sh</code>.</p>
+<p>This is not allowed when running pipelines with official released images, as they are based on <code>scratch</code>.</p>
 
               
             </article>
