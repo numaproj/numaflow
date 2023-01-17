@@ -68,9 +68,9 @@ func (s *Sliding) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindowe
 	windows := make([]window.AlignedKeyedWindower, 0)
 
 	// use the highest integer multiple of slide length which is less than the eventTime
-	// as the start time for the window. For example if the eventTime is 810, use 770 as
-	// the startTime of the window. In that way we can be guarantee consistency while
-	// assigning the messages to the windows.
+	// as the start time for the window. For example if the eventTime is 810 and slide
+	// length is 70, use 770 as the startTime of the window. In that way we can be guarantee
+	// consistency while assigning the messages to the windows.
 	startTime := time.UnixMilli((eventTime.UnixMilli() / s.Slide.Milliseconds()) * s.Slide.Milliseconds())
 	endTime := startTime.Add(s.Length)
 
