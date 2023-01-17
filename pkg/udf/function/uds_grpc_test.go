@@ -38,9 +38,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
-func NewMockUDSGRPCBasedUDF(mockClient *funcmock.MockUserDefinedFunctionClient) *udsGRPCBasedUDF {
+func NewMockUDSGRPCBasedUDF(mockClient *funcmock.MockUserDefinedFunctionClient) *UdsGRPCBasedUDF {
 	c, _ := clienttest.New(mockClient)
-	return &udsGRPCBasedUDF{c}
+	return &UdsGRPCBasedUDF{c}
 }
 
 func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {

@@ -71,6 +71,10 @@ func (v Vertex) IsASource() bool {
 	return v.Spec.Source != nil
 }
 
+func (v Vertex) SpecifyUDTransformer() bool {
+	return v.Spec.Source != nil && v.Spec.Source.UdTransformer != nil
+}
+
 func (v Vertex) IsASink() bool {
 	return v.Spec.Sink != nil
 }
@@ -224,7 +228,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		TimeoutSeconds:      1,
 	}
 
-	if len(containers) > 1 { // udf and udsink
+	if len(containers) > 1 { // udf, udsink or source vertex specifies a udtransformer
 		containers[1].Env = append(containers[1].Env, v.commonEnvs()...)
 	}
 

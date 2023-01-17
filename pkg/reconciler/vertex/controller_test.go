@@ -206,6 +206,30 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 	})
 
+	t.Run("test source user defined transformer", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := &vertexReconciler{
+			client: cl,
+			scheme: scheme.Scheme,
+			config: fakeConfig,
+			image:  testFlowImage,
+			logger: zaptest.NewLogger(t).Sugar(),
+		}
+		testObj := testSrcVertex.DeepCopy()
+		testObj.Spec.Source = &dfv1.Source{
+			HTTP: &dfv1.HTTPSource{},
+			UdTransformer: &dfv1.UDTransformer{
+				Container: &dfv1.Container{
+					Image: "my-image",
+				},
+			},
+		}
+		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 2)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(spec.InitContainers))
+		assert.Equal(t, 2, len(spec.Containers))
+	})
+
 	t.Run("test sink", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		r := &vertexReconciler{
@@ -384,6 +408,11 @@ func Test_reconcile(t *testing.T) {
 			HTTP: &dfv1.HTTPSource{
 				Service: true,
 			},
+			UdTransformer: &dfv1.UDTransformer{
+				Container: &dfv1.Container{
+					Image: "my-image",
+				},
+			},
 		}
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
@@ -393,7 +422,7 @@ func Test_reconcile(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
-		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, 2, len(pods.Items[0].Spec.Containers))
 		svcs := &corev1.ServiceList{}
 		err = r.client.List(ctx, svcs, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
 		assert.NoError(t, err)

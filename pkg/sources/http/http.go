@@ -35,7 +35,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/shuffle"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -51,12 +53,15 @@ type httpSource struct {
 	messages     chan *isb.ReadMessage
 	logger       *zap.SugaredLogger
 
-	forwarder *forward.InterStepDataForward
+	forwarder     *forward.InterStepDataForward
+	udtransformer *function.UdsGRPCBasedUDF
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
 	// context cancel function
 	cancelFunc context.CancelFunc
-	shutdown   func(context.Context) error
+	// lifecycleCtx context is used to control the lifecycle of this instance.
+	lifecycleCtx context.Context
+	shutdown     func(context.Context) error
 }
 
 type Option func(*httpSource) error
@@ -192,17 +197,53 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
+
+	if vertexInstance.Vertex.SpecifyUDTransformer() {
+		h.udtransformer, err = function.NewUDSGRPCBasedUDF()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create gRPC client, %w", err)
+		}
+
+		// Populate shuffle function map
+		shuffleFuncMap := make(map[string]*shuffle.Shuffle)
+		for _, edge := range vertexInstance.Vertex.Spec.ToEdges {
+			if edge.Parallelism != nil && *edge.Parallelism > 1 {
+				s := shuffle.NewShuffle(dfv1.GenerateEdgeBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, edge))
+				shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
+			}
+		}
+
+		conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
+			result := []string{}
+			if key == dfv1.MessageKeyDrop {
+				return result, nil
+			}
+			for _, edge := range vertexInstance.Vertex.Spec.ToEdges {
+				// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
+				if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key) {
+					if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
+					} else {
+						result = append(result, dfv1.GenerateEdgeBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, edge)...)
+					}
+				}
+			}
+			return result, nil
+		})
+		h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, conditionalForwarder, h.udtransformer, fetchWM, publishWM, forwardOpts...)
+	} else {
+		h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
+	}
+
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
-	h.forwarder = forwarder
-	ctx, cancel := context.WithCancel(context.Background())
-	h.cancelFunc = cancel
+
+	h.lifecycleCtx, h.cancelFunc = context.WithCancel(context.Background())
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	h.sourcePublishWM = publish.NewPublish(h.lifecycleCtx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 	return h, nil
 }
 
@@ -256,7 +297,13 @@ func (h *httpSource) Close() error {
 
 func (h *httpSource) Stop() {
 	h.logger.Info("Stopping http reader...")
-	h.ready = false
+	defer func() { h.ready = false }()
+	if h.udtransformer != nil {
+		err := h.udtransformer.CloseConn(h.lifecycleCtx)
+		if err != nil {
+			h.logger.Warnw(fmt.Sprintf("Failed to close gRPC client conn: %v", zap.Error(err)))
+		}
+	}
 	h.forwarder.Stop()
 }
 
@@ -266,5 +313,11 @@ func (h *httpSource) ForceStop() {
 
 func (h *httpSource) Start() <-chan struct{} {
 	defer func() { h.ready = true }()
+	if h.udtransformer != nil {
+		// Readiness check
+		if err := h.udtransformer.WaitUntilReady(h.lifecycleCtx); err != nil {
+			panic("failed on UDTransformer readiness check, %w")
+		}
+	}
 	return h.forwarder.Start()
 }
