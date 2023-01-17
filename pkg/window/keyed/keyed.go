@@ -93,6 +93,7 @@ func (kw *AlignedKeyedWindow) Keys() []string {
 	idx := 0
 	for k := range kw.keys {
 		keys[idx] = k
+		idx++
 	}
 
 	return keys
