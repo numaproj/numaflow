@@ -47,10 +47,8 @@ type Sliding struct {
 	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
 	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 	// from the Head.
-	entries      *list.List
-	lock         sync.RWMutex
-	minStartTime time.Time
-	maxStartTime time.Time
+	entries *list.List
+	lock    sync.RWMutex
 }
 
 var _ window.Windower = (*Sliding)(nil)
