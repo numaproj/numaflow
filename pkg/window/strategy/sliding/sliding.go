@@ -47,8 +47,10 @@ type Sliding struct {
 	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
 	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 	// from the Head.
-	entries *list.List
-	lock    sync.RWMutex
+	entries      *list.List
+	lock         sync.RWMutex
+	minStartTime time.Time
+	maxStartTime time.Time
 }
 
 var _ window.Windower = (*Sliding)(nil)
@@ -65,47 +67,26 @@ func NewSliding(length time.Duration, slide time.Duration) *Sliding {
 
 // AssignWindow returns a set of windows that contain the element based on event time
 func (s *Sliding) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower {
-	// start time of the window in to which this element certainly belongs.
-	startTime := eventTime.Truncate(s.Length)
-	// end time of the window in to which this element certainly belongs.
-	endTime := startTime.Add(s.Length)
-
-	// we have to find the boundaries of the sliding windows that are possible
-	// first lets consider end time as fixed, find the min start and end times
-	minEndTime := startTime.Add(s.Length % s.Slide)
-	minStartTime := minEndTime.Add(-s.Length)
-
-	// lets consider start time as fixed and find the max start and end times.
-	maxStartTime := endTime.Add(-(s.Length % s.Slide))
-	maxEndTime := maxStartTime.Add(s.Length)
-
-	// now all the windows should fall in between maxend and minend times.
-	// one could consider min start and max start times as well.
-	wCount := int((maxEndTime.Sub(minEndTime)) / s.Slide)
 	windows := make([]window.AlignedKeyedWindower, 0)
 
-	for i := 0; i < wCount; i++ {
-		// we make the windows left aligned since the original truncation operation
-		// is left aligned.
-		st := minStartTime.Add(time.Duration(i) * s.Slide)
-		et := st.Add(s.Length)
+	// start time of the window in to which this element certainly belongs.
+	startTime := time.UnixMilli((eventTime.UnixMilli() / s.Slide.Milliseconds()) * s.Slide.Milliseconds())
+	endTime := startTime.Add(s.Length)
 
-		// since there is overlap at the boundaries
-		// we attribute the element to the window to the right (higher)
-		// of the boundary
-		// left exclusive and right inclusive
-		// so given windows 500-600 and 600-700 and the event time is 600
-		// we will add the element to 600-700 window and not to the 500-600 window.
-		if eventTime.Before(st) || !eventTime.Before(et) {
-			continue
-		}
-
-		akw := keyed.NewKeyedWindow(st, et)
-
-		windows = append(windows, akw)
+	// since there is overlap at the boundaries
+	// we attribute the element to the window to the right (higher)
+	// of the boundary
+	// left exclusive and right inclusive
+	// so given windows 500-600 and 600-700 and the event time is 600
+	// we will add the element to 600-700 window and not to the 500-600 window.
+	for !startTime.After(eventTime) && endTime.After(eventTime) {
+		windows = append(windows, keyed.NewKeyedWindow(startTime, endTime))
+		startTime = startTime.Add(-s.Slide)
+		endTime = endTime.Add(-s.Slide)
 	}
 
 	return windows
+
 }
 
 // InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window
