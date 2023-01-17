@@ -67,9 +67,15 @@ func NewSliding(length time.Duration, slide time.Duration) *Sliding {
 func (s *Sliding) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower {
 	windows := make([]window.AlignedKeyedWindower, 0)
 
-	// start time of the window in to which this element certainly belongs.
+	// use the highest integer multiple of slide length which is less than the eventTime
+	// as the start time for the window. For example if the eventTime is 810, use 770 as
+	// the startTime of the window. In that way we can be guarantee consistency while
+	// assigning the messages to the windows.
 	startTime := time.UnixMilli((eventTime.UnixMilli() / s.Slide.Milliseconds()) * s.Slide.Milliseconds())
 	endTime := startTime.Add(s.Length)
+
+	// startTime and endTime will be the largest timestamp window for the given eventTime,
+	// using that we can create other windows by subtracting the slide length
 
 	// since there is overlap at the boundaries
 	// we attribute the element to the window to the right (higher)
