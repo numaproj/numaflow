@@ -7,7 +7,7 @@ spec:
     - name: in
       source:
         http: {}
-        udtransformer:
+        transformer:
           container:
             image: quay.io/numaio/numaflow-go/map-even-odd
     - name: even-sink
