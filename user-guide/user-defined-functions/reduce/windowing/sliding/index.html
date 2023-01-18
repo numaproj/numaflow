@@ -1710,10 +1710,9 @@ are total of 6 windows <code>60s/10s</code>)</p>
 <p>The window start time is always be left inclusive and right exclusive. That is why <code>[2031-09-29T18:45:30Z, 2031-09-29T18:46:30Z)</code> 
 window is not considered active (it fell on the previous window, right exclusive) but <code>[2031-09-29T18:46:30Z, 2031-09-29T18:47:30Z)</code> 
 is an active (left inclusive).</p>
-<p>The first window always ends after <em>sliding</em> seconds after the <code>time.now()</code> time. The start time itself will depend on the
-time characteristics of the pipeline (event time, system time, etc.). This means the first window has its start time 
-in the past roughly given by <code>time.now() - duration(length) + duration(sliding)</code>. So the first window starts in the past 
-and ends _sliding_duration (based on time progression in the pipeline and not the wall time) from present. It is 
+<p>The first window always ends after the sliding seconds from the <code>time.Now()</code>, the start time of the window will be the 
+nearest integer multiple of the slide which is less than the message's event time. So the first window starts in the 
+past and ends _sliding_duration (based on time progression in the pipeline and not the wall time) from present. It is 
 important to note that regardless of the window boundary (starting in the past or ending in the future) the target element 
 set totally depends on the matching time (in case of event time, all the elements with the time that falls with in the 
 boundaries of the window, and in case of system time, all the elements that arrive from the <code>present</code> until the end of 
