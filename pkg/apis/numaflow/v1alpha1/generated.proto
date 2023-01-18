@@ -924,7 +924,7 @@ message Source {
   optional NatsSource nats = 4;
 
   // +optional
-  optional UDTransformer udtransformer = 5;
+  optional UDTransformer transformer = 5;
 }
 
 // Status is a common structure which can be used for Status field.

@@ -2400,7 +2400,7 @@ spec:
                     - subject
                     - url
                     type: object
-                  udtransformer:
+                  transformer:
                     properties:
                       container:
                         properties:

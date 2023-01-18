@@ -36,7 +36,6 @@ import (
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
-	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -44,15 +43,14 @@ import (
 )
 
 type httpSource struct {
-	name           string
-	pipelineName   string
-	hasTransformer bool
-	ready          bool
-	readTimeout    time.Duration
-	bufferSize     int
-	messages       chan *isb.ReadMessage
-	logger         *zap.SugaredLogger
-	forwarder      *forward.InterStepDataForward
+	name         string
+	pipelineName string
+	ready        bool
+	readTimeout  time.Duration
+	bufferSize   int
+	messages     chan *isb.ReadMessage
+	logger       *zap.SugaredLogger
+	forwarder    *forward.InterStepDataForward
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
 	// context cancel function
@@ -98,12 +96,11 @@ func New(
 	opts ...Option) (*httpSource, error) {
 
 	h := &httpSource{
-		name:           vertexInstance.Vertex.Spec.Name,
-		pipelineName:   vertexInstance.Vertex.Spec.PipelineName,
-		hasTransformer: vertexInstance.Vertex.HasUDTransformer(),
-		ready:          false,
-		bufferSize:     1000,            // default size
-		readTimeout:    1 * time.Second, // default timeout
+		name:         vertexInstance.Vertex.Spec.Name,
+		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
+		ready:        false,
+		bufferSize:   1000,            // default size
+		readTimeout:  1 * time.Second, // default timeout
 	}
 	for _, o := range opts {
 		operr := o(h)
@@ -207,7 +204,6 @@ func New(
 	}
 
 	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
-
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -271,16 +267,6 @@ func (h *httpSource) Close() error {
 func (h *httpSource) Stop() {
 	h.logger.Info("Stopping http reader...")
 	defer func() { h.ready = false }()
-	if h.hasTransformer {
-		grpcClient, ok := h.forwarder.UDF.(*function.UdsGRPCBasedUDF)
-		if !ok {
-			h.logger.Warnw("Can not convert the user defined transformer interface to a concrete gRPC client implementation.")
-		} else {
-			if err := grpcClient.CloseConn(h.lifecycleCtx); err != nil {
-				h.logger.Warnw(fmt.Sprintf("Failed to close gRPC client conn: %v", zap.Error(err)))
-			}
-		}
-	}
 	h.forwarder.Stop()
 }
 
@@ -290,15 +276,5 @@ func (h *httpSource) ForceStop() {
 
 func (h *httpSource) Start() <-chan struct{} {
 	defer func() { h.ready = true }()
-	if h.hasTransformer {
-		grpcClient, ok := h.forwarder.UDF.(*function.UdsGRPCBasedUDF)
-		if !ok {
-			panic("Can not convert the user defined transformer interface to a concrete gRPC client implementation.")
-		} else {
-			if err := grpcClient.WaitUntilReady(h.lifecycleCtx); err != nil {
-				panic("Failed on user defined transformer readiness check, %w")
-			}
-		}
-	}
 	return h.forwarder.Start()
 }

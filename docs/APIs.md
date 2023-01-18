@@ -3619,7 +3619,7 @@ GeneratorSource </a> </em>
 </tr>
 <tr>
 <td>
-<code>udtransformer</code></br> <em>
+<code>transformer</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDTransformer"> UDTransformer
 </a> </em>
 </td>
