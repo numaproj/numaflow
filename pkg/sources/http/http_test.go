@@ -21,8 +21,10 @@ import (
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
@@ -66,7 +68,7 @@ func Test_NewHTTP(t *testing.T) {
 	dest := []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("test", 100)}
 	publishWMStores := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
-	h, err := New(vi, dest, fetchWatermark, publishWatermark, publishWMStores)
+	h, err := New(vi, dest, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores)
 	assert.NoError(t, err)
 	assert.False(t, h.ready)
 	assert.Equal(t, v.Spec.Name, h.GetName())

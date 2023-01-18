@@ -24,6 +24,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
@@ -32,10 +33,14 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/shuffle"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
 	"github.com/numaproj/numaflow/pkg/sources/nats"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
@@ -159,7 +164,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 // getSourcer is used to send the sourcer information
 func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, logger *zap.SugaredLogger) (Sourcer, error) {
 	src := sp.VertexInstance.Vertex.Spec.Source
-
 	if x := src.Generator; x != nil {
 		readOptions := []generator.Option{
 			generator.WithLogger(logger),
@@ -178,7 +182,14 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		}
 		return kafka.NewKafkaSource(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.HTTP; x != nil {
-		return http.New(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
+		if sp.VertexInstance.Vertex.HasUDTransformer() {
+			udtransformer, err := function.NewUDSGRPCBasedUDF()
+			if err != nil {
+				return nil, fmt.Errorf("failed to create gRPC client, %w", err)
+			}
+			return http.New(sp.VertexInstance, writers, sp.getTransformerGoWhereDecider(), udtransformer, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
+		}
+		return http.New(sp.VertexInstance, writers, forward.All, applier.Terminal, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
 	} else if x := src.Nats; x != nil {
 		readOptions := []nats.Option{
 			nats.WithLogger(logger),
@@ -189,4 +200,32 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		return nats.New(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
+}
+
+func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
+	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
+	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
+		if edge.Parallelism != nil && *edge.Parallelism > 1 {
+			s := shuffle.NewShuffle(dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge))
+			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
+		}
+	}
+	fsd := forward.GoWhere(func(key string) ([]string, error) {
+		result := []string{}
+		if key == dfv1.MessageKeyDrop {
+			return result, nil
+		}
+		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
+			// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
+			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key) {
+				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
+				} else {
+					result = append(result, dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+				}
+			}
+		}
+		return result, nil
+	})
+	return fsd
 }

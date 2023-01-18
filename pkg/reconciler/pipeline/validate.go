@@ -86,7 +86,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 
 	for k, s := range sources {
-		if s.Source.UdTransformer != nil && s.Source.UdTransformer.Container != nil && s.Source.UdTransformer.Container.Image == "" {
+		if s.Source.UDTransformer != nil && s.Source.UDTransformer.Container != nil && s.Source.UDTransformer.Container.Image == "" {
 			return fmt.Errorf("invalid vertex %q, can not specify an empty image for a customized source data transformer", k)
 		}
 	}

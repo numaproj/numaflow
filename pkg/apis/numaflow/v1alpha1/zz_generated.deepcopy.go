@@ -1583,8 +1583,8 @@ func (in *Source) DeepCopyInto(out *Source) {
 		*out = new(NatsSource)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.UdTransformer != nil {
-		in, out := &in.UdTransformer, &out.UdTransformer
+	if in.UDTransformer != nil {
+		in, out := &in.UDTransformer, &out.UDTransformer
 		*out = new(UDTransformer)
 		(*in).DeepCopyInto(*out)
 	}

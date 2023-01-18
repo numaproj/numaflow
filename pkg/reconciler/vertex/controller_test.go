@@ -218,7 +218,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj := testSrcVertex.DeepCopy()
 		testObj.Spec.Source = &dfv1.Source{
 			HTTP: &dfv1.HTTPSource{},
-			UdTransformer: &dfv1.UDTransformer{
+			UDTransformer: &dfv1.UDTransformer{
 				Container: &dfv1.Container{
 					Image: "my-image",
 				},
@@ -408,7 +408,7 @@ func Test_reconcile(t *testing.T) {
 			HTTP: &dfv1.HTTPSource{
 				Service: true,
 			},
-			UdTransformer: &dfv1.UDTransformer{
+			UDTransformer: &dfv1.UDTransformer{
 				Container: &dfv1.Container{
 					Image: "my-image",
 				},

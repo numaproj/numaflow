@@ -71,8 +71,8 @@ func (v Vertex) IsASource() bool {
 	return v.Spec.Source != nil
 }
 
-func (v Vertex) SpecifyUDTransformer() bool {
-	return v.Spec.Source != nil && v.Spec.Source.UdTransformer != nil
+func (v Vertex) HasUDTransformer() bool {
+	return v.Spec.Source != nil && v.Spec.Source.UDTransformer != nil
 }
 
 func (v Vertex) IsASink() bool {

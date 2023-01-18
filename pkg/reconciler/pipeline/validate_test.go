@@ -223,7 +223,7 @@ func TestValidatePipeline(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[0].Source = &dfv1.Source{
 			HTTP: &dfv1.HTTPSource{},
-			UdTransformer: &dfv1.UDTransformer{
+			UDTransformer: &dfv1.UDTransformer{
 				Container: &dfv1.Container{
 					Image: "",
 				},

@@ -35,8 +35,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/pkg/shuffle"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
+	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -45,16 +44,15 @@ import (
 )
 
 type httpSource struct {
-	name         string
-	pipelineName string
-	ready        bool
-	readTimeout  time.Duration
-	bufferSize   int
-	messages     chan *isb.ReadMessage
-	logger       *zap.SugaredLogger
-
-	forwarder     *forward.InterStepDataForward
-	udtransformer *function.UdsGRPCBasedUDF
+	name           string
+	pipelineName   string
+	hasTransformer bool
+	ready          bool
+	readTimeout    time.Duration
+	bufferSize     int
+	messages       chan *isb.ReadMessage
+	logger         *zap.SugaredLogger
+	forwarder      *forward.InterStepDataForward
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
 	// context cancel function
@@ -89,13 +87,23 @@ func WithBufferSize(s int) Option {
 	}
 }
 
-func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, opts ...Option) (*httpSource, error) {
+func New(
+	vertexInstance *dfv1.VertexInstance,
+	writers []isb.BufferWriter,
+	fsd forward.ToWhichStepDecider,
+	mapApplier udfapplier.MapApplier,
+	fetchWM fetch.Fetcher,
+	publishWM map[string]publish.Publisher,
+	publishWMStores store.WatermarkStorer,
+	opts ...Option) (*httpSource, error) {
+
 	h := &httpSource{
-		name:         vertexInstance.Vertex.Spec.Name,
-		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
-		ready:        false,
-		bufferSize:   1000,            // default size
-		readTimeout:  1 * time.Second, // default timeout
+		name:           vertexInstance.Vertex.Spec.Name,
+		pipelineName:   vertexInstance.Vertex.Spec.PipelineName,
+		hasTransformer: vertexInstance.Vertex.HasUDTransformer(),
+		ready:          false,
+		bufferSize:     1000,            // default size
+		readTimeout:    1 * time.Second, // default timeout
 	}
 	for _, o := range opts {
 		operr := o(h)
@@ -198,42 +206,7 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 		}
 	}
 
-	if vertexInstance.Vertex.SpecifyUDTransformer() {
-		h.udtransformer, err = function.NewUDSGRPCBasedUDF()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create gRPC client, %w", err)
-		}
-
-		// Populate shuffle function map
-		shuffleFuncMap := make(map[string]*shuffle.Shuffle)
-		for _, edge := range vertexInstance.Vertex.Spec.ToEdges {
-			if edge.Parallelism != nil && *edge.Parallelism > 1 {
-				s := shuffle.NewShuffle(dfv1.GenerateEdgeBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, edge))
-				shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
-			}
-		}
-
-		conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
-			result := []string{}
-			if key == dfv1.MessageKeyDrop {
-				return result, nil
-			}
-			for _, edge := range vertexInstance.Vertex.Spec.ToEdges {
-				// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
-				if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key) {
-					if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
-						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
-					} else {
-						result = append(result, dfv1.GenerateEdgeBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, edge)...)
-					}
-				}
-			}
-			return result, nil
-		})
-		h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, conditionalForwarder, h.udtransformer, fetchWM, publishWM, forwardOpts...)
-	} else {
-		h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
-	}
+	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
@@ -298,10 +271,14 @@ func (h *httpSource) Close() error {
 func (h *httpSource) Stop() {
 	h.logger.Info("Stopping http reader...")
 	defer func() { h.ready = false }()
-	if h.udtransformer != nil {
-		err := h.udtransformer.CloseConn(h.lifecycleCtx)
-		if err != nil {
-			h.logger.Warnw(fmt.Sprintf("Failed to close gRPC client conn: %v", zap.Error(err)))
+	if h.hasTransformer {
+		grpcClient, ok := h.forwarder.UDF.(*function.UdsGRPCBasedUDF)
+		if !ok {
+			h.logger.Warnw(fmt.Sprintf("Can not convert the user defined transformer interface to a concrete gRPC client implementation."))
+		} else {
+			if err := grpcClient.CloseConn(h.lifecycleCtx); err != nil {
+				h.logger.Warnw(fmt.Sprintf("Failed to close gRPC client conn: %v", zap.Error(err)))
+			}
 		}
 	}
 	h.forwarder.Stop()
@@ -313,10 +290,14 @@ func (h *httpSource) ForceStop() {
 
 func (h *httpSource) Start() <-chan struct{} {
 	defer func() { h.ready = true }()
-	if h.udtransformer != nil {
-		// Readiness check
-		if err := h.udtransformer.WaitUntilReady(h.lifecycleCtx); err != nil {
-			panic("failed on UDTransformer readiness check, %w")
+	if h.hasTransformer {
+		grpcClient, ok := h.forwarder.UDF.(*function.UdsGRPCBasedUDF)
+		if !ok {
+			h.logger.Warnw(fmt.Sprintf("Can not convert the user defined transformer interface to a concrete gRPC client implementation."))
+		} else {
+			if err := grpcClient.WaitUntilReady(h.lifecycleCtx); err != nil {
+				panic("Failed on user defined transformer readiness check, %w")
+			}
 		}
 	}
 	return h.forwarder.Start()

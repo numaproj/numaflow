@@ -30,14 +30,14 @@ type Source struct {
 	// +optional
 	Nats *NatsSource `json:"nats,omitempty" protobuf:"bytes,4,opt,name=nats"`
 	// +optional
-	UdTransformer *UDTransformer `json:"udtransformer,omitempty" protobuf:"bytes,5,opt,name=udtransformer"`
+	UDTransformer *UDTransformer `json:"udtransformer,omitempty" protobuf:"bytes,5,opt,name=udtransformer"`
 }
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
 	containers := []corev1.Container{
 		s.getMainContainer(req),
 	}
-	if s.UdTransformer != nil {
+	if s.UDTransformer != nil {
 		containers = append(containers, s.getUDTransformerContainer(req))
 	}
 	return containers, nil
@@ -52,7 +52,7 @@ func (s Source) getUDTransformerContainer(req getContainerReq) corev1.Container 
 		init(req).
 		name(CtrUdtransformer)
 	c.Env = nil
-	x := s.UdTransformer.Container
+	x := s.UDTransformer.Container
 	c = c.image(x.Image)
 	if len(x.Command) > 0 {
 		c = c.command(x.Command...)
