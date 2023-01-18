@@ -293,7 +293,7 @@ func (h *httpSource) Start() <-chan struct{} {
 	if h.hasTransformer {
 		grpcClient, ok := h.forwarder.UDF.(*function.UdsGRPCBasedUDF)
 		if !ok {
-			h.logger.Warnw("Can not convert the user defined transformer interface to a concrete gRPC client implementation.")
+			panic("Can not convert the user defined transformer interface to a concrete gRPC client implementation.")
 		} else {
 			if err := grpcClient.WaitUntilReady(h.lifecycleCtx); err != nil {
 				panic("Failed on user defined transformer readiness check, %w")
