@@ -18,6 +18,7 @@ package sliding
 
 import (
 	"container/list"
+	"fmt"
 	"testing"
 	"time"
 
@@ -133,11 +134,46 @@ func TestSliding_AssignWindow(t *testing.T) {
 				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
 			},
 		},
+		{
+			name:      "length not divisible by slide test 1",
+			length:    time.Second * 600,
+			slide:     70 * time.Second,
+			eventTime: baseTime.Add(210 * time.Second), // 810
+			expected: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(770, 0), time.Unix(1370, 0)),
+				keyed.NewKeyedWindow(time.Unix(700, 0), time.Unix(1300, 0)),
+				keyed.NewKeyedWindow(time.Unix(630, 0), time.Unix(1230, 0)),
+				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(1160, 0)),
+				keyed.NewKeyedWindow(time.Unix(490, 0), time.Unix(1090, 0)),
+				keyed.NewKeyedWindow(time.Unix(420, 0), time.Unix(1020, 0)),
+				keyed.NewKeyedWindow(time.Unix(350, 0), time.Unix(950, 0)),
+				keyed.NewKeyedWindow(time.Unix(280, 0), time.Unix(880, 0)),
+			},
+		},
+		{
+			name:      "length not divisible by slide test 2",
+			length:    time.Second * 600,
+			slide:     70 * time.Second,
+			eventTime: baseTime.Add(610 * time.Second), // 1210
+			expected: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(1190, 0), time.Unix(1790, 0)),
+				keyed.NewKeyedWindow(time.Unix(1120, 0), time.Unix(1720, 0)),
+				keyed.NewKeyedWindow(time.Unix(1050, 0), time.Unix(1650, 0)),
+				keyed.NewKeyedWindow(time.Unix(910, 0), time.Unix(1510, 0)),
+				keyed.NewKeyedWindow(time.Unix(840, 0), time.Unix(1440, 0)),
+				keyed.NewKeyedWindow(time.Unix(770, 0), time.Unix(1370, 0)),
+				keyed.NewKeyedWindow(time.Unix(700, 0), time.Unix(1300, 0)),
+				keyed.NewKeyedWindow(time.Unix(630, 0), time.Unix(1230, 0)),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := NewSliding(tt.length, tt.slide)
 			got := s.AssignWindow(tt.eventTime)
+			for _, win := range got {
+				fmt.Println(win.StartTime().UnixMilli(), " ", win.EndTime().UnixMilli())
+			}
 			assert.Len(t, got, len(tt.expected))
 			assert.Equal(t, tt.expected, got)
 		})
