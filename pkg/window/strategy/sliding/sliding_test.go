@@ -18,7 +18,6 @@ package sliding
 
 import (
 	"container/list"
-	"fmt"
 	"testing"
 	"time"
 
@@ -159,6 +158,7 @@ func TestSliding_AssignWindow(t *testing.T) {
 				keyed.NewKeyedWindow(time.Unix(1190, 0), time.Unix(1790, 0)),
 				keyed.NewKeyedWindow(time.Unix(1120, 0), time.Unix(1720, 0)),
 				keyed.NewKeyedWindow(time.Unix(1050, 0), time.Unix(1650, 0)),
+				keyed.NewKeyedWindow(time.Unix(980, 0), time.Unix(1580, 0)),
 				keyed.NewKeyedWindow(time.Unix(910, 0), time.Unix(1510, 0)),
 				keyed.NewKeyedWindow(time.Unix(840, 0), time.Unix(1440, 0)),
 				keyed.NewKeyedWindow(time.Unix(770, 0), time.Unix(1370, 0)),
@@ -171,9 +171,6 @@ func TestSliding_AssignWindow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := NewSliding(tt.length, tt.slide)
 			got := s.AssignWindow(tt.eventTime)
-			for _, win := range got {
-				fmt.Println(win.StartTime().UnixMilli(), " ", win.EndTime().UnixMilli())
-			}
 			assert.Len(t, got, len(tt.expected))
 			assert.Equal(t, tt.expected, got)
 		})
