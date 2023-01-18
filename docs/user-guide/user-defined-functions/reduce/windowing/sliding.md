@@ -67,10 +67,9 @@ The window start time is always be left inclusive and right exclusive. That is w
 window is not considered active (it fell on the previous window, right exclusive) but `[2031-09-29T18:46:30Z, 2031-09-29T18:47:30Z)` 
 is an active (left inclusive).
 
-The first window always ends after _sliding_ seconds after the `time.now()` time. The start time itself will depend on the
-time characteristics of the pipeline (event time, system time, etc.). This means the first window has its start time 
-in the past roughly given by `time.now() - duration(length) + duration(sliding)`. So the first window starts in the past 
-and ends _sliding_duration (based on time progression in the pipeline and not the wall time) from present. It is 
+The first window always ends after the sliding seconds from the `time.Now()`, the start time of the window will be the 
+nearest integer multiple of the slide which is less than the message's event time. So the first window starts in the 
+past and ends _sliding_duration (based on time progression in the pipeline and not the wall time) from present. It is 
 important to note that regardless of the window boundary (starting in the past or ending in the future) the target element 
 set totally depends on the matching time (in case of event time, all the elements with the time that falls with in the 
 boundaries of the window, and in case of system time, all the elements that arrive from the `present` until the end of 
