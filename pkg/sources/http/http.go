@@ -55,9 +55,7 @@ type httpSource struct {
 	sourcePublishWM publish.Publisher
 	// context cancel function
 	cancelFunc context.CancelFunc
-	// lifecycleCtx context is used to control the lifecycle of this instance.
-	lifecycleCtx context.Context
-	shutdown     func(context.Context) error
+	shutdown   func(context.Context) error
 }
 
 type Option func(*httpSource) error
@@ -209,10 +207,11 @@ func New(
 		return nil, err
 	}
 
-	h.lifecycleCtx, h.cancelFunc = context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	h.cancelFunc = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	h.sourcePublishWM = publish.NewPublish(h.lifecycleCtx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 	return h, nil
 }
 

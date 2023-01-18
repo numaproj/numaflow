@@ -34,7 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
+	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -257,7 +257,16 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 }
 
 // NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
-func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, opts ...Option) (*KafkaSource, error) {
+func NewKafkaSource(
+	vertexInstance *dfv1.VertexInstance,
+	writers []isb.BufferWriter,
+	fsd forward.ToWhichStepDecider,
+	mapApplier udfapplier.MapApplier,
+	fetchWM fetch.Fetcher,
+	publishWM map[string]publish.Publisher,
+	publishWMStores store.WatermarkStorer,
+	opts ...Option) (*KafkaSource, error) {
+
 	source := vertexInstance.Vertex.Spec.Source.Kafka
 	kafkasource := &KafkaSource{
 		name:               vertexInstance.Vertex.Spec.Name,
@@ -328,7 +337,7 @@ func NewKafkaSource(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWri
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

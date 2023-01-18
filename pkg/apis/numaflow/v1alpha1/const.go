@@ -66,7 +66,7 @@ const (
 	CtrMain          = "numa"
 	CtrUdf           = "udf"
 	CtrUdsink        = "udsink"
-	CtrUdtransformer = "udtransformer"
+	CtrUdtransformer = "transformer"
 
 	// components
 	ComponentISBSvc = "isbsvc"

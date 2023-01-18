@@ -203,7 +203,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, generator.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return generator.NewMemGen(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
+		return generator.NewMemGen(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.Kafka; x != nil {
 		readOptions := []kafka.Option{
 			kafka.WithGroupName(x.ConsumerGroupName),
@@ -212,7 +212,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, kafka.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return kafka.NewKafkaSource(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
+		return kafka.NewKafkaSource(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.HTTP; x != nil {
 		return http.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
 	} else if x := src.Nats; x != nil {
@@ -222,7 +222,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return nats.New(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
+		return nats.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }

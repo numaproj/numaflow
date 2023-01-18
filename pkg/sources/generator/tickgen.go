@@ -34,7 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
+	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -122,16 +122,14 @@ func WithReadTimeout(timeout time.Duration) Option {
 	}
 }
 
-// NewMemGen function creates an instance of generator.
-// ctx  - context passed by the cmd/start.go a new context with cancel
-//
-//	is created for use by this vertex.
-//
-// name - name of this vertex
-// writers - destinations to write to
-func NewMemGen(vertexInstance *dfv1.VertexInstance,
+func NewMemGen(
+	vertexInstance *dfv1.VertexInstance,
 	writers []isb.BufferWriter,
-	fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, // watermarks
+	fsd forward.ToWhichStepDecider,
+	mapApplier udfapplier.MapApplier,
+	fetchWM fetch.Fetcher,
+	publishWM map[string]publish.Publisher,
+	publishWMStores store.WatermarkStorer, // watermarks
 	opts ...Option) (*memgen, error) {
 
 	// minimal CRDs don't have defaults
@@ -191,7 +189,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -355,5 +353,4 @@ func parseTime(payload []byte) int64 {
 	} else {
 		return 0
 	}
-
 }
