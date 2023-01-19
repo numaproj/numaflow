@@ -169,6 +169,17 @@ func (rl *ReadLoop) writeMessagesToWindows(ctx context.Context, messages []*isb.
 
 messagesLoop:
 	for _, message := range messages {
+		// drop the late messages
+		if message.IsLate {
+			rl.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+			droppedMessagesCount.With(map[string]string{
+				metrics.LabelVertex:             rl.vertexName,
+				metrics.LabelPipeline:           rl.pipelineName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+				LabelReason:                     "late"}).Inc()
+			continue
+		}
+
 		// NOTE(potential bug): if we get a message where the event time is < watermark, skip processing the message.
 		// This could be due to a couple of problem, eg. ack was not registered, etc.
 		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
@@ -368,16 +379,6 @@ func (rl *ReadLoop) ShutDown(ctx context.Context) {
 // upsertWindowsAndKeys will create or assigns (if already present) a window to the message. It is an upsert operation
 // because windows are created out of order, but they will be closed in-order.
 func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKeyedWindower {
-	// drop the late messages
-	if m.IsLate {
-		rl.log.Warnw("Dropping the late message", zap.Time("eventTime", m.EventTime), zap.Time("watermark", m.Watermark))
-		droppedMessagesCount.With(map[string]string{
-			metrics.LabelVertex:             rl.vertexName,
-			metrics.LabelPipeline:           rl.pipelineName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
-			LabelReason:                     "late"}).Inc()
-		return []window.AlignedKeyedWindower{}
-	}
 
 	processingWindows := rl.windower.AssignWindow(m.EventTime)
 	var kWindows []window.AlignedKeyedWindower
