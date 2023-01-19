@@ -35,7 +35,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -87,7 +86,7 @@ func New(
 	vertexInstance *dfv1.VertexInstance,
 	writers []isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier udfapplier.MapApplier,
+	mapApplier forward.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
 	publishWMStores store.WatermarkStorer,
@@ -265,7 +264,7 @@ func (h *httpSource) Close() error {
 
 func (h *httpSource) Stop() {
 	h.logger.Info("Stopping http reader...")
-	defer func() { h.ready = false }()
+	h.ready = false
 	h.forwarder.Stop()
 }
 

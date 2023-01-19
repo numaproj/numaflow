@@ -29,15 +29,13 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	udfapplier "github.com/numaproj/numaflow/pkg/udf/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
 // InterStepDataForward forwards the data from previous step to the current step via inter-step buffer.
@@ -50,7 +48,7 @@ type InterStepDataForward struct {
 	fromBuffer       isb.BufferReader
 	toBuffers        map[string]isb.BufferWriter
 	FSD              ToWhichStepDecider
-	UDF              udfapplier.MapApplier
+	UDF              MapApplier
 	fetchWatermark   fetch.Fetcher
 	publishWatermark map[string]publish.Publisher
 	opts             options
@@ -64,7 +62,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
 	toSteps map[string]isb.BufferWriter,
 	fsd ToWhichStepDecider,
-	applyUDF udfapplier.MapApplier,
+	applyUDF MapApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*InterStepDataForward, error) {

@@ -14,36 +14,35 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package function
+package transformer
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
 	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-
-	"github.com/golang/mock/gomock"
+	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/stretchr/testify/assert"
+
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func NewMockUDSGRPCBasedUDF(mockClient *funcmock.MockUserDefinedFunctionClient) *udsGRPCBasedUDF {
+func NewMockGRPCBasedTransformer(mockClient *funcmock.MockUserDefinedFunctionClient) *gRPCBasedTransformer {
 	c, _ := clienttest.New(mockClient)
-	return &udsGRPCBasedUDF{c}
+	return &gRPCBasedTransformer{c}
 }
 
-func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {
+func TestGRPCBasedTransformer_WaitUntilReadyWithMockClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -59,7 +58,7 @@ func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {
 		}
 	}()
 
-	u := NewMockUDSGRPCBasedUDF(mockClient)
+	u := NewMockGRPCBasedTransformer(mockClient)
 	err := u.WaitUntilReady(ctx)
 	assert.NoError(t, err)
 }
@@ -80,7 +79,7 @@ func (r *rpcMsg) String() string {
 	return fmt.Sprintf("is %s", r.msg)
 }
 
-func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
+func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 	t.Run("test success", func(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
@@ -93,6 +92,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 		}
+		// TODO - change to MapTFn once numaflow-go sdk changes merge in.
 		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
@@ -111,7 +111,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSGRPCBasedUDF(mockClient)
+		u := NewMockGRPCBasedTransformer(mockClient)
 		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
@@ -144,6 +144,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 		}
+		// TODO - change to MapTFn once numaflow-go sdk changes merge in.
 		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -155,7 +156,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSGRPCBasedUDF(mockClient)
+		u := NewMockGRPCBasedTransformer(mockClient)
 		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
@@ -172,10 +173,10 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, function.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
+			InternalErr: function.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
@@ -183,7 +184,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 	})
 }
 
-func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
+func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
 	multiplyBy2 := func(body []byte) interface{} {
 		var result testutils.PayloadForTest
 		_ = json.Unmarshal(body, &result)
@@ -195,6 +196,7 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
+	// TODO - change to MapTFn once numaflow-go sdk changes merge in.
 	mockClient.EXPECT().MapFn(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
 			var originalValue testutils.PayloadForTest
@@ -228,7 +230,7 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 		}
 	}()
 
-	u := NewMockUDSGRPCBasedUDF(mockClient)
+	u := NewMockGRPCBasedTransformer(mockClient)
 
 	var count = int64(10)
 	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
@@ -260,223 +262,4 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 	assert.Equal(t, expectedKeys, resultKeys)
 }
 
-func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
-	t.Run("test success", func(t *testing.T) {
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
-
-		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-		mockReduceClient.EXPECT().CloseAndRecv().Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
-				{
-					Key:   "reduced_result_key",
-					Value: []byte(`forward_message`),
-				},
-			},
-		}, nil)
-
-		messageCh := make(chan *isb.ReadMessage)
-
-		mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockUDSGRPCBasedUDF(mockClient)
-		messages := testutils.BuildTestReadMessages(10, time.Now())
-
-		go func() {
-			for index := range messages {
-				messageCh <- &messages[index]
-			}
-			close(messageCh)
-		}()
-
-		partitionID := &partition.ID{
-			Start: time.Unix(60, 0),
-			End:   time.Unix(120, 0),
-			Key:   "test",
-		}
-
-		got, err := u.ApplyReduce(ctx, partitionID, messageCh)
-
-		assert.Len(t, got, 1)
-		assert.NoError(t, err)
-	})
-
-	t.Run("test error", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
-		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-		mockReduceClient.EXPECT().CloseAndRecv().Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
-				{
-					Key:   "reduced_result_key",
-					Value: []byte(`forward_message`),
-				},
-			},
-		}, errors.New("mock error for reduce"))
-
-		mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockUDSGRPCBasedUDF(mockClient)
-
-		messageCh := make(chan *isb.ReadMessage)
-		messages := testutils.BuildTestReadMessages(10, time.Now())
-
-		go func() {
-			for index := range messages {
-				messageCh <- &messages[index]
-			}
-			close(messageCh)
-		}()
-
-		partitionID := &partition.ID{
-			Start: time.Unix(60, 0),
-			End:   time.Unix(120, 0),
-			Key:   "test",
-		}
-
-		_, err := u.ApplyReduce(ctx, partitionID, messageCh)
-
-		assert.ErrorIs(t, err, ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
-		})
-	})
-
-	t.Run("test context close", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
-		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-		mockReduceClient.EXPECT().CloseAndRecv().Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
-				{
-					Key:   "reduced_result_key",
-					Value: []byte(`forward_message`),
-				},
-			},
-		}, nil).AnyTimes()
-
-		mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-
-		u := NewMockUDSGRPCBasedUDF(mockClient)
-
-		messageCh := make(chan *isb.ReadMessage)
-
-		partitionID := &partition.ID{
-			Start: time.Unix(60, 0),
-			End:   time.Unix(120, 0),
-			Key:   "test",
-		}
-		_, err := u.ApplyReduce(ctx, partitionID, messageCh)
-
-		assert.Error(t, err, ctx.Err())
-	})
-}
-
-func TestHGRPCBasedUDF_Reduce(t *testing.T) {
-	sumFunc := func(dataStreamCh <-chan *functionpb.Datum) interface{} {
-		var sum testutils.PayloadForTest
-		for datum := range dataStreamCh {
-			var payLoad testutils.PayloadForTest
-			_ = json.Unmarshal(datum.GetValue(), &payLoad)
-			sum.Value += payLoad.Value
-		}
-		return sum
-	}
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	messageCh := make(chan *isb.ReadMessage, 10)
-	datumStreamCh := make(chan *functionpb.Datum, 10)
-	messages := testutils.BuildTestReadMessages(10, time.Now())
-
-	go func() {
-		for index := range messages {
-			messageCh <- &messages[index]
-			datumStreamCh <- createDatum(&messages[index])
-		}
-		close(messageCh)
-		close(datumStreamCh)
-	}()
-
-	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-	mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
-	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().CloseAndRecv().DoAndReturn(
-		func() (*functionpb.DatumList, error) {
-			result := sumFunc(datumStreamCh)
-			sumValue, _ := json.Marshal(result.(testutils.PayloadForTest))
-			var elements []*functionpb.Datum
-			elements = append(elements, &functionpb.Datum{
-				Key:   "sum",
-				Value: sumValue,
-			})
-			datumList := &functionpb.DatumList{
-				Elements: elements,
-			}
-			return datumList, nil
-		}).AnyTimes()
-
-	mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-		}
-	}()
-
-	u := NewMockUDSGRPCBasedUDF(mockClient)
-
-	partitionID := &partition.ID{
-		Start: time.Unix(60, 0),
-		End:   time.Unix(120, 0),
-		Key:   "test",
-	}
-
-	result, err := u.ApplyReduce(ctx, partitionID, messageCh)
-
-	var resultPayload testutils.PayloadForTest
-	_ = json.Unmarshal(result[0].Payload, &resultPayload)
-
-	assert.NoError(t, err)
-	assert.Equal(t, result[0].Key, "sum")
-	assert.Equal(t, resultPayload.Value, int64(45))
-}
+// TODO - test changing event time
