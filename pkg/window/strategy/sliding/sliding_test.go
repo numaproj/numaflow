@@ -297,6 +297,27 @@ func TestAligned_CreateWindow(t *testing.T) {
 	}
 }
 
+func TestSliding_RemoveWindows(t *testing.T) {
+	var (
+		length          = time.Second * 60
+		slide           = time.Second * 10
+		slidWin         = NewSliding(length, slide)
+		eventTime       = time.Unix(60, 0)
+		expectedWindows = []window.AlignedKeyedWindower{
+			keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
+			keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+			keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
+		}
+	)
+	for i := 0; i < 10000; i++ {
+		win := keyed.NewKeyedWindow(eventTime, eventTime.Add(length))
+		slidWin.InsertIfNotPresent(win)
+		eventTime = eventTime.Add(length)
+	}
+	closeWin := slidWin.RemoveWindows(time.Unix(300, 0))
+	assert.Equal(t, closeWin, expectedWindows)
+}
+
 func setup(windows *Sliding, wins []*keyed.AlignedKeyedWindow) {
 	windows.entries = list.New()
 	for _, win := range wins {

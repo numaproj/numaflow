@@ -161,6 +161,8 @@ func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 		if win.EndTime().Before(wm) {
 			s.entries.Remove(e)
 			closedWindows = append(closedWindows, win)
+		} else {
+			break
 		}
 		e = next
 	}
