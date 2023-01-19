@@ -57,7 +57,7 @@ func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) store.Sto
 	return s
 }
 
-func (ws *walStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+func (ws *walStores) CreateStore(_ context.Context, partitionID partition.ID) (store.Store, error) {
 	// Create wal dir if not exist
 	var err error
 	if _, err = os.Stat(ws.storePath); os.IsNotExist(err) {
@@ -77,6 +77,17 @@ func (ws *walStores) CreateStore(ctx context.Context, partitionID partition.ID) 
 func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 	var err error
 
+	defer func() {
+		// increment active WAL count only if we are able to successfully create/open one.
+		if err == nil {
+			activeFilesCount.With(map[string]string{
+				metrics.LabelPipeline:           ws.pipelineName,
+				metrics.LabelVertex:             ws.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
+			}).Inc()
+		}
+	}()
+
 	filePath := getSegmentFilePath(id, ws.storePath)
 	stat, err := os.Stat(filePath)
 
@@ -89,12 +100,8 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 		if err != nil {
 			return nil, err
 		}
+		// we are interested only in the number of new files created
 		filesCount.With(map[string]string{
-			metrics.LabelPipeline:           ws.pipelineName,
-			metrics.LabelVertex:             ws.vertexName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
-		}).Inc()
-		activeFilesCount.With(map[string]string{
 			metrics.LabelPipeline:           ws.pipelineName,
 			metrics.LabelVertex:             ws.vertexName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
@@ -151,7 +158,7 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 	return wal, err
 }
 
-func (ws *walStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
+func (ws *walStores) DiscoverPartitions(_ context.Context) ([]partition.ID, error) {
 	files, err := os.ReadDir(ws.storePath)
 	if os.IsNotExist(err) {
 		return []partition.ID{}, nil
