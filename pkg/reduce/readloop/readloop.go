@@ -65,6 +65,7 @@ type ReadLoop struct {
 	whereToDecider        forward.ToWhichStepDecider
 	publishWatermark      map[string]publish.Publisher
 	udfInvocationTracking map[partition.ID]*task
+	latestWatermark       processor.Watermark
 }
 
 // NewReadLoop initializes  and returns ReadLoop.
@@ -94,6 +95,7 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:        whereToDecider,
 		publishWatermark:      pw,
 		udfInvocationTracking: make(map[partition.ID]*task),
+		latestWatermark:       processor.Watermark(time.Time{}),
 	}
 
 	err := rl.Startup(ctx)
@@ -150,8 +152,15 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	// for each successfully written message,
 	for _, m := range successfullyWrittenMessages {
 		// close any windows that need to be closed.
+		var closedWindows []window.AlignedKeyedWindower
 		wm := processor.Watermark(m.Watermark)
-		closedWindows := rl.windower.RemoveWindows(time.Time(wm))
+
+		// check to see if any windows can be closed, when the watermark is moved
+		if wm.After(time.Time(rl.latestWatermark)) {
+			closedWindows = rl.windower.RemoveWindows(time.Time(wm))
+			rl.latestWatermark = wm
+		}
+
 		rl.log.Debugw("Windows eligible for closing", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
 
 		for _, cw := range closedWindows {
