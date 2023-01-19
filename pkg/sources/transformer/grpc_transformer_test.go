@@ -262,4 +262,44 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
 	assert.Equal(t, expectedKeys, resultKeys)
 }
 
-// TODO - test changing event time
+func TestGRPCBasedTransformer_ApplyWithMockClient_ChangeEventTime(t *testing.T) {
+	testEventTime := time.Date(1992, 2, 8, 0, 0, 0, 100, time.UTC)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
+	// TODO - change to MapTFn once numaflow-go sdk changes merge in.
+	mockClient.EXPECT().MapFn(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
+			var elements []*functionpb.Datum
+			elements = append(elements, &functionpb.Datum{
+				Key:       "even",
+				Value:     datum.Value,
+				EventTime: &functionpb.EventTime{EventTime: timestamppb.New(testEventTime)},
+			})
+			datumList := &functionpb.DatumList{
+				Elements: elements,
+			}
+			return datumList, nil
+		},
+	).AnyTimes()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+		}
+	}()
+
+	u := NewMockGRPCBasedTransformer(mockClient)
+
+	var count = int64(2)
+	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
+	for _, readMessage := range readMessages {
+		apply, err := u.ApplyMap(ctx, &readMessage)
+		assert.NoError(t, err)
+		assert.Equal(t, testEventTime, apply[0].EventTime)
+	}
+}
