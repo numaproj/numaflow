@@ -2,6 +2,8 @@ module github.com/numaproj/numaflow
 
 go 1.19
 
+replace github.com/numaproj/numaflow-go => github.com/KeranYang/numaflow-go v1.0.0
+
 require (
 	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/Shopify/sarama v1.30.1

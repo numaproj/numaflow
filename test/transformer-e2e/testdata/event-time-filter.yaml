@@ -1,0 +1,40 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: event-time-filter
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+        transformer:
+          container:
+            image: quay.io/numaio/numaflow-go/event-time-filter:v1
+    - name: sink-within-2022
+      scale:
+        min: 1
+      sink:
+        log: {}
+    - name: sink-after-2022
+      scale:
+        min: 1
+      sink:
+        log: {}
+    - name: sink-all
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: sink-within-2022
+      conditions:
+        keyIn:
+          - within_year_2022
+    - from: in
+      to: sink-after-2022
+      conditions:
+        keyIn:
+          - after_year_2022
+    - from: in
+      to: sink-all

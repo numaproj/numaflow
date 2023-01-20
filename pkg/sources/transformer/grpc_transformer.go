@@ -88,11 +88,11 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 
 	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: key}))
 	// TODO - change to MapTFn once numaflow-go sdk changes merge in.
-	datumList, err := u.client.MapFn(ctx, d)
+	datumList, err := u.client.MapTFn(ctx, d)
 	if err != nil {
 		return nil, function.ApplyUDFErr{
 			UserUDFErr: false,
-			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+			Message:    fmt.Sprintf("gRPC client.MapTFn failed, %s", err),
 			InternalErr: function.InternalErr{
 				Flag:        true,
 				MainCarDown: false,

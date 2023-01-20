@@ -158,25 +158,6 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	w.Expect().SinkNotContains("number-sink", "not an integer")
 }
 
-func (s *FunctionalSuite) TestSourceDataTransform() {
-	w := s.Given().Pipeline("@testdata/source-data-transform.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "source-data-transform"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("88"))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("89"))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("not an integer")))
-
-	w.Expect().SinkContains("even-sink", "88")
-	w.Expect().SinkNotContains("even-sink", "89")
-	w.Expect().SinkNotContains("even-sink", "not an integer")
-}
-
 func (s *FunctionalSuite) TestWatermarkEnabled() {
 	w := s.Given().Pipeline("@testdata/watermark.yaml").
 		When().

@@ -92,8 +92,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 		}
-		// TODO - change to MapTFn once numaflow-go sdk changes merge in.
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
+		mockClient.EXPECT().MapTFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
 					Key:   "test_success_key",
@@ -144,8 +143,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 		}
-		// TODO - change to MapTFn once numaflow-go sdk changes merge in.
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
+		mockClient.EXPECT().MapTFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -196,8 +194,7 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-	// TODO - change to MapTFn once numaflow-go sdk changes merge in.
-	mockClient.EXPECT().MapFn(gomock.Any(), gomock.Any()).DoAndReturn(
+	mockClient.EXPECT().MapTFn(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
 			var originalValue testutils.PayloadForTest
 			_ = json.Unmarshal(datum.GetValue(), &originalValue)
@@ -268,8 +265,7 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangeEventTime(t *testing.T) 
 	defer ctrl.Finish()
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-	// TODO - change to MapTFn once numaflow-go sdk changes merge in.
-	mockClient.EXPECT().MapFn(gomock.Any(), gomock.Any()).DoAndReturn(
+	mockClient.EXPECT().MapTFn(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
 			var elements []*functionpb.Datum
 			elements = append(elements, &functionpb.Datum{
