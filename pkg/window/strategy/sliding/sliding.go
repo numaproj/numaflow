@@ -144,9 +144,6 @@ func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 
 	closedWindows := make([]window.AlignedKeyedWindower, 0)
 
-	if s.entries.Len() == 0 {
-		return closedWindows
-	}
 	// examine the earliest window
 	earliestWindow := s.entries.Front().Value.(*keyed.AlignedKeyedWindow)
 	if earliestWindow.EndTime().After(wm) {
