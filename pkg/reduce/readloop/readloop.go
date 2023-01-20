@@ -65,7 +65,6 @@ type ReadLoop struct {
 	whereToDecider        forward.ToWhichStepDecider
 	publishWatermark      map[string]publish.Publisher
 	udfInvocationTracking map[partition.ID]*task
-	latestWatermark       processor.Watermark
 }
 
 // NewReadLoop initializes  and returns ReadLoop.
@@ -95,7 +94,6 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:        whereToDecider,
 		publishWatermark:      pw,
 		udfInvocationTracking: make(map[partition.ID]*task),
-		latestWatermark:       processor.Watermark(time.Time{}),
 	}
 
 	err := rl.Startup(ctx)
@@ -146,28 +144,26 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		rl.log.Errorw("Failed to write messages", zap.Int("totalMessages", len(messages)), zap.Int("writtenMessage", len(successfullyWrittenMessages)))
 	}
 
+	if len(successfullyWrittenMessages) == 0 {
+		return
+	}
+
 	// ack successful messages
 	rl.ackMessages(ctx, successfullyWrittenMessages)
+	// close any windows that need to be closed.
+	// since the watermark will be same for all the messages in the batch
+	// we can invoke remove windows only once per batch
+	var closedWindows []window.AlignedKeyedWindower
+	wm := processor.Watermark(successfullyWrittenMessages[0].Watermark)
 
-	// for each successfully written message,
-	for _, m := range successfullyWrittenMessages {
-		// close any windows that need to be closed.
-		var closedWindows []window.AlignedKeyedWindower
-		wm := processor.Watermark(m.Watermark)
+	closedWindows = rl.windower.RemoveWindows(time.Time(wm))
 
-		// check to see if any windows can be closed, when the watermark is moved
-		if wm.After(time.Time(rl.latestWatermark)) {
-			closedWindows = rl.windower.RemoveWindows(time.Time(wm))
-			rl.latestWatermark = wm
-		}
+	rl.log.Debugw("Windows eligible for closing", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
 
-		rl.log.Debugw("Windows eligible for closing", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
-
-		for _, cw := range closedWindows {
-			partitions := cw.Partitions()
-			rl.closePartitions(partitions)
-			rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
-		}
+	for _, cw := range closedWindows {
+		partitions := cw.Partitions()
+		rl.closePartitions(partitions)
+		rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
 	}
 }
 
