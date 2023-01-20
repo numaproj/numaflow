@@ -154,7 +154,7 @@ ifdef IMAGE_IMPORT_CMD
 endif
 
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
-	$(DOCKER) buildx build --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" --tag $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file ./Dockerfile ${PUSH_OPTION} .
+	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" --tag $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file ./Dockerfile ${PUSH_OPTION} .
 
 set-qemu:
 	$(DOCKER) pull tonistiigi/binfmt:latest
