@@ -1646,7 +1646,8 @@
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
 <h2 id="profiling">Profiling<a class="headerlink" href="#profiling" title="Permanent link">&para;</a></h2>
-<p>Setting <code>NUMAFLOW_DEBUG</code> to <code>true</code> also enables <code>pprof</code> in the Vertex Pod.</p>
+<p>If your pipeline is running with <code>NUMAFLOW_DEBUG</code> then <code>pprof</code> is enabled in the Vertex Pod. You
+can also enable just <code>pprof</code> by setting <code>NUMAFLOW_PPROF</code> to <code>true</code>.</p>
 <p>For example, run the commands like below to profile memory usage for a Vertex Pod, a web page displaying the memory information will be automatically opened.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Port-forward</span>
 kubectl<span class="w"> </span>port-forward<span class="w"> </span>simple-pipeline-p1-0-7jzbn<span class="w"> </span><span class="m">2469</span>
