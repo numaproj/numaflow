@@ -27,12 +27,14 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1/sinkmock"
 	"github.com/numaproj/numaflow-go/pkg/sink/clienttest"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func NewMockUDSGRPCBasedUDF(mockClient *sinkmock.MockUserDefinedSinkClient) *udsGRPCBasedUDSink {
+func NewMockUDSGRPCBasedUDF(t *testing.T, mockClient *sinkmock.MockUserDefinedSinkClient) *udsGRPCBasedUDSink {
+	t.Helper()
 	c, _ := clienttest.New(mockClient)
-	return &udsGRPCBasedUDSink{c}
+	return &udsGRPCBasedUDSink{client: c, logger: zaptest.NewLogger(t).Sugar()}
 }
 
 func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {
@@ -51,7 +53,7 @@ func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {
 		}
 	}()
 
-	u := NewMockUDSGRPCBasedUDF(mockClient)
+	u := NewMockUDSGRPCBasedUDF(t, mockClient)
 	err := u.WaitUntilReady(ctx)
 	assert.NoError(t, err)
 }
@@ -107,11 +109,11 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSGRPCBasedUDF(mockClient)
+		u := NewMockUDSGRPCBasedUDF(t, mockClient)
 		gotErrList := u.Apply(ctx, testDatumList)
 		assert.Equal(t, 2, len(gotErrList))
 		assert.Equal(t, nil, gotErrList[0])
-		assert.Equal(t, fmt.Errorf("mock sink message error"), gotErrList[1])
+		assert.Equal(t, nil, gotErrList[1])
 	})
 
 	t.Run("test err", func(t *testing.T) {
@@ -149,7 +151,7 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSGRPCBasedUDF(mockClient)
+		u := NewMockUDSGRPCBasedUDF(t, mockClient)
 		gotErrList := u.Apply(ctx, testDatumList)
 		expectedErrList := []error{
 			ApplyUDSinkErr{

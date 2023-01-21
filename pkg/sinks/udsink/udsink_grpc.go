@@ -24,19 +24,21 @@ import (
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	sinksdk "github.com/numaproj/numaflow-go/pkg/sink"
 	"github.com/numaproj/numaflow-go/pkg/sink/client"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type udsGRPCBasedUDSink struct {
 	client sinksdk.Client
+	logger *zap.SugaredLogger
 }
 
-func NewUDSGRPCBasedUDSink() (*udsGRPCBasedUDSink, error) {
+func newUDSGRPCBasedUDSink(logger *zap.SugaredLogger) (*udsGRPCBasedUDSink, error) {
 	c, err := client.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
-	return &udsGRPCBasedUDSink{c}, nil
+	return &udsGRPCBasedUDSink{client: c, logger: logger}, nil
 }
 
 // CloseConn closes the gRPC client connection.
@@ -81,16 +83,20 @@ func (u *udsGRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.Datum) [
 	for _, res := range responseList {
 		resMap[res.GetId()] = res
 	}
-	for i, m := range dList {
+	for _, m := range dList {
 		if r, existing := resMap[m.GetId()]; !existing {
-			errs[i] = fmt.Errorf("not found in responseList")
+			// ignore if there's no response
+			u.logger.Warnf("ID %q not found in response list, ignored", m.GetId())
 		} else {
 			if !r.Success {
+				var msg string
 				if r.GetErrMsg() != "" {
-					errs[i] = fmt.Errorf(r.GetErrMsg())
+					msg = r.GetErrMsg()
 				} else {
-					errs[i] = fmt.Errorf("unsuccessful due to unknown reason")
+					msg = "unsuccessful due to unknown reason"
 				}
+				// ignore if it returns failure
+				u.logger.Warnf("Failure response for ID %s: %s", m.GetId(), msg)
 			}
 		}
 	}
