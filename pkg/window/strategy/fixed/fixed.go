@@ -143,11 +143,14 @@ func (f *Fixed) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 	for e := f.entries.Front(); e != nil; {
 		win := e.Value.(*keyed.AlignedKeyedWindow)
 		next := e.Next()
-		// remove window only after the watermark has passed the end of the window
-		if win.EndTime().Before(wm) {
-			f.entries.Remove(e)
-			closedWindows = append(closedWindows, win)
+
+		// break, if we find a window with end time > watermark
+		if !win.EndTime().Before(wm) {
+			break
 		}
+
+		f.entries.Remove(e)
+		closedWindows = append(closedWindows, win)
 		e = next
 	}
 
