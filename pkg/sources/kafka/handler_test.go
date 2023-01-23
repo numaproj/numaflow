@@ -19,6 +19,7 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"testing"
 	"time"
 
@@ -64,7 +65,7 @@ func TestMessageHandling(t *testing.T) {
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
-	ks, _ := NewKafkaSource(vi, dest, forward.All, forward.Terminal, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()),
+	ks, _ := NewKafkaSource(vi, dest, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()),
 		WithBufferSize(100), WithReadTimeOut(100*time.Millisecond))
 
 	msg := &sarama.ConsumerMessage{

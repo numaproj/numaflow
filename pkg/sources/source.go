@@ -19,6 +19,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"go.uber.org/zap"
 	"sync"
 	"time"
@@ -148,7 +149,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}))
 		sourcer, err = sp.getSourcer(writers, sp.getTransformerGoWhereDecider(), t, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	} else {
-		sourcer, err = sp.getSourcer(writers, forward.All, forward.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
+		sourcer, err = sp.getSourcer(writers, forward.All, applier.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	}
 
 	if err != nil {
@@ -192,7 +193,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 func (sp *SourceProcessor) getSourcer(
 	writers []isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier forward.MapApplier,
+	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
 	publishWMStores store.WatermarkStorer,

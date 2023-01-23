@@ -19,6 +19,7 @@ package udsink
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"time"
 
 	"go.uber.org/zap"
@@ -76,7 +77,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchW
 		return nil, fmt.Errorf("failed to create gRPC client, %w", err)
 	}
 	s.udsink = udsink
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: s}, forward.All, forward.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: s}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

@@ -18,6 +18,7 @@ package generator
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ func TestRead(t *testing.T) {
 		"writer": dest,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, forward.Terminal, fetchWatermark, publishWatermark, publishWMStore)
+	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -105,7 +106,7 @@ func TestStop(t *testing.T) {
 		"writer": dest,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, forward.Terminal, fetchWatermark, publishWatermark, publishWMStore)
+	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
@@ -200,7 +201,7 @@ func TestWatermark(t *testing.T) {
 		Replica:  0,
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, forward.Terminal, nil, nil, publishWMStore)
+	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, nil, nil, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

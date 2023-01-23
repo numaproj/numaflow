@@ -18,6 +18,7 @@ package blackhole
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"testing"
 	"time"
 
@@ -117,7 +118,7 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, forward.Terminal, fetchWatermark, publishWatermark)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := f.Start()

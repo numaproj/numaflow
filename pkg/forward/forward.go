@@ -22,6 +22,7 @@ package forward
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"math"
 	"sync"
 	"time"
@@ -48,7 +49,7 @@ type InterStepDataForward struct {
 	fromBuffer       isb.BufferReader
 	toBuffers        map[string]isb.BufferWriter
 	FSD              ToWhichStepDecider
-	UDF              MapApplier
+	UDF              applier.MapApplier
 	fetchWatermark   fetch.Fetcher
 	publishWatermark map[string]publish.Publisher
 	opts             options
@@ -62,7 +63,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
 	toSteps map[string]isb.BufferWriter,
 	fsd ToWhichStepDecider,
-	applyUDF MapApplier,
+	applyUDF applier.MapApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*InterStepDataForward, error) {

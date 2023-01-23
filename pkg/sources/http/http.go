@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"io"
 	"net/http"
 	"strconv"
@@ -86,7 +87,7 @@ func New(
 	vertexInstance *dfv1.VertexInstance,
 	writers []isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier forward.MapApplier,
+	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
 	publishWMStores store.WatermarkStorer,

@@ -19,6 +19,7 @@ package nats
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"testing"
 	"time"
 
@@ -64,7 +65,7 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 	dest := []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("test", 100)}
 	publishWMStores := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
-	return New(vi, dest, forward.All, forward.Terminal, fetchWatermark, publishWatermark, publishWMStores, WithReadTimeout(1*time.Second))
+	return New(vi, dest, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores, WithReadTimeout(1*time.Second))
 }
 
 func Test_Single(t *testing.T) {

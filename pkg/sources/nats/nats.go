@@ -19,6 +19,7 @@ package nats
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,7 +60,7 @@ func New(
 	vertexInstance *dfv1.VertexInstance,
 	writers []isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier forward.MapApplier,
+	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
 	publishWMStores store.WatermarkStorer,
