@@ -102,6 +102,7 @@ const (
 	EnvISBSvcJetStreamTLSEnabled      = "NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED"
 	EnvISBSvcConfig                   = "NUMAFLOW_ISBSVC_CONFIG"
 	EnvDebug                          = "NUMAFLOW_DEBUG"
+	EnvPPROF                          = "NUMAFLOW_PPROF"
 
 	PathVarRun            = "/var/run/numaflow"
 	VertexMetricsPort     = 2469

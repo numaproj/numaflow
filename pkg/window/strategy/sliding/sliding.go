@@ -144,9 +144,6 @@ func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 
 	closedWindows := make([]window.AlignedKeyedWindower, 0)
 
-	if s.entries.Len() == 0 {
-		return closedWindows
-	}
 	// examine the earliest window
 	earliestWindow := s.entries.Front().Value.(*keyed.AlignedKeyedWindow)
 	if earliestWindow.EndTime().After(wm) {
@@ -157,11 +154,14 @@ func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 	for e := s.entries.Front(); e != nil; {
 		win := e.Value.(*keyed.AlignedKeyedWindow)
 		next := e.Next()
-		// remove window only after the watermark has passed the end of the window
-		if win.EndTime().Before(wm) {
-			s.entries.Remove(e)
-			closedWindows = append(closedWindows, win)
+
+		// break, if we find a window with end time > watermark
+		if !win.EndTime().Before(wm) {
+			break
 		}
+
+		s.entries.Remove(e)
+		closedWindows = append(closedWindows, win)
 		e = next
 	}
 
