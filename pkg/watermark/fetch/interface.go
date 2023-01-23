@@ -30,4 +30,6 @@ type Fetcher interface {
 	GetWatermark(offset isb.Offset) processor.Watermark
 	// GetHeadWatermark returns the latest watermark based on the head offset
 	GetHeadWatermark() processor.Watermark
+	// GetPodWatermarks returns the watermarks for all the pods in a vertex
+	GetPodWatermarks() []processor.Watermark
 }

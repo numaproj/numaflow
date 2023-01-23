@@ -70,6 +70,27 @@ func (e *sourceFetcher) GetHeadWatermark() processor.Watermark {
 	return processor.Watermark(time.UnixMilli(epoch))
 }
 
+// GetPodWatermarks returns the list of watermarks of all pods in a vertex
+func (e *sourceFetcher) GetPodWatermarks() []processor.Watermark {
+	var podWatermarks []processor.Watermark
+	for _, p := range e.processorManager.GetAllProcessors() {
+		if !p.IsActive() {
+			continue
+		}
+		var epoch int64 = math.MinInt64
+		if p.offsetTimeline.GetHeadWatermark() != -1 {
+			epoch = p.offsetTimeline.GetHeadWatermark()
+		}
+		if epoch == math.MinInt64 {
+			// Use -1 as default watermark value to indicate there is no valid watermark yet.
+			podWatermarks = append(podWatermarks, processor.Watermark(time.UnixMilli(-1)))
+		} else {
+			podWatermarks = append(podWatermarks, processor.Watermark(time.UnixMilli(epoch)))
+		}
+	}
+	return podWatermarks
+}
+
 // GetWatermark returns the lowest of the latest watermark of all the processors,
 // it ignores the input offset.
 func (e *sourceFetcher) GetWatermark(_ isb.Offset) processor.Watermark {

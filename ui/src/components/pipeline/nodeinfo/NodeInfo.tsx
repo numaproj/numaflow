@@ -1,6 +1,6 @@
 import ReactJson from "react-json-view";
 import { a11yProps, handleCopy } from "../../../utils";
-import { Box, Tab, Tabs } from "@mui/material";
+import { Box, Tab, Tabs, Table, TableBody, TableCell, TableContainer, TableRow, TableHead, Paper } from "@mui/material";
 import { SyntheticEvent, useState } from "react";
 import TabPanel from "../tab-panel/TabPanel";
 import { Pods } from "../../pods/Pods";
@@ -54,6 +54,22 @@ export default function NodeInfo(props: NodeInfoProps) {
               {...a11yProps(1)}
             />
           )}
+          {node?.data?.vertexWatermark && (
+            <Tab
+              data-testid="watermarks"
+              style={{ fontWeight: "bold" }}
+              label="Watermarks"
+              {...a11yProps(2)}
+            />
+          )}
+          {node?.data?.vertexMetrics && (
+            <Tab
+                data-testid="processing-rates"
+                style={{ fontWeight: "bold"}}
+                label="Processing Rates"
+                {...a11yProps(3)}
+            />
+          )}
         </Tabs>
       </Box>
 
@@ -105,6 +121,69 @@ export default function NodeInfo(props: NodeInfoProps) {
                   fontFamily: "IBM Plex Sans",
                 }}
               />
+            )}
+          </TabPanel>
+          <TabPanel value={value} index={2}>
+            {node?.data?.vertexWatermark && (
+              <TableContainer
+                  component={Paper}
+                  sx={{ borderBottom: 1, borderColor: "divider", width: 200 }}
+              >
+                <Table aria-label="pod-watermark">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Pod</TableCell>
+                      <TableCell >Watermark</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {node?.data?.vertexWatermark?.podWatermarks &&
+                        node.data.vertexWatermark.podWatermarks.map((podWatermark, idx) => (
+                      <TableRow>
+                        <TableCell >Pod - {idx}</TableCell>
+                        <TableCell >{podWatermark}</TableCell>
+                      </TableRow>
+                      ))}
+                    {!node?.data?.vertexWatermark?.podWatermarks &&
+                        Array(node?.data?.podnum).fill(0).map((_, idx) => (
+                      <TableRow>
+                        <TableCell >Pod - {idx}</TableCell>
+                        <TableCell >-1</TableCell>
+                      </TableRow>
+                        ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </TabPanel>
+          <TabPanel value={value} index={3}>
+            {node?.data?.vertexMetrics && (
+              <TableContainer
+                  component={Paper}
+                  sx={{ borderBottom: 1, borderColor: "divider" }}
+              >
+                <Table aria-label="pod-backpressure">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Pod</TableCell>
+                      <TableCell >1m</TableCell>
+                      <TableCell >5m</TableCell>
+                      <TableCell >15m</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {node?.data?.vertexMetrics?.podMetrics &&
+                        node.data.vertexMetrics.podMetrics.map((podMetric, idx) => {
+                      return <TableRow>
+                        <TableCell>Pod - {idx}</TableCell>
+                        <TableCell>{podMetric["processingRates"]["1m"].toFixed(2)}</TableCell>
+                        <TableCell>{podMetric["processingRates"]["5m"].toFixed(2)}</TableCell>
+                        <TableCell>{podMetric["processingRates"]["15m"].toFixed(2)}</TableCell>
+                      </TableRow>
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </TabPanel>
         </>

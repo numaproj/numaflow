@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -140,11 +141,12 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("vertexKey", key)
 	log.Debugf("Working on key: %s", key)
 	strs := strings.Split(key, "/")
-	if len(strs) != 2 {
+	if len(strs) != 3 {
 		return fmt.Errorf("invalid key %q", key)
 	}
 	namespace := strs[0]
 	vertexFullName := strs[1]
+	pods, _ := strconv.ParseInt(strs[2], 10, 64)
 	vertex := &dfv1.Vertex{}
 	if err := s.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: vertexFullName}, vertex); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -210,17 +212,17 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	defer func() {
 		_ = dClient.Close()
 	}()
-	vMetrics, err := dClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
+	vMetrics, err := dClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name, pods)
 	if err != nil {
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
 	}
 	// Avg rate and pending for autoscaling are both in the map with key "default", see "pkg/metrics/metrics.go".
-	rate, existing := vMetrics.ProcessingRates["default"]
+	rate, existing := vMetrics.Vertex.ProcessingRates["default"]
 	if !existing || rate < 0 || rate == isb.RateNotAvailable { // Rate not available
 		log.Debugf("Vertex %s has no rate information, skip scaling", vertex.Name)
 		return nil
 	}
-	pending, existing := vMetrics.Pendings["default"]
+	pending, existing := vMetrics.Vertex.Pendings["default"]
 	if !existing || pending < 0 || pending == isb.PendingNotAvailable {
 		// Pending not available, we don't do anything
 		log.Debugf("Vertex %s has no pending messages information, skip scaling", vertex.Name)

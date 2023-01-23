@@ -123,6 +123,7 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		timeZero := time.Unix(0, 0).UnixMilli()
 		watermarkArr := make([]*daemon.VertexWatermark, len(ps.watermarkFetchers))
 		i := 0
+		var podWatermarks []int64
 		for k := range ps.watermarkFetchers {
 			vertexName := k
 			watermarkArr[i] = &daemon.VertexWatermark{
@@ -130,6 +131,7 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 				Vertex:             &vertexName,
 				Watermark:          &timeZero,
 				IsWatermarkEnabled: &isWatermarkEnabled,
+				PodWatermarks:      podWatermarks,
 			}
 			i++
 		}
@@ -142,10 +144,16 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 	i := 0
 	for k, vertexFetchers := range ps.watermarkFetchers {
 		var latestWatermark = int64(-1)
+		var podWatermarks []int64
 		for _, fetcher := range vertexFetchers {
 			watermark := fetcher.GetHeadWatermark().UnixMilli()
+			podWatermark := fetcher.GetPodWatermarks()
 			if watermark > latestWatermark {
 				latestWatermark = watermark
+				podWatermarks = nil
+				for _, v := range podWatermark {
+					podWatermarks = append(podWatermarks, v.UnixMilli())
+				}
 			}
 		}
 		vertexName := k
@@ -154,6 +162,7 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 			Vertex:             &vertexName,
 			Watermark:          &latestWatermark,
 			IsWatermarkEnabled: &isWatermarkEnabled,
+			PodWatermarks:      podWatermarks,
 		}
 		i++
 	}

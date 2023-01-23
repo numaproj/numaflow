@@ -86,6 +86,32 @@ func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
 	return processor.Watermark(time.UnixMilli(epoch))
 }
 
+// GetPodWatermarks gets the watermarks for all pods of a vertex
+func (e *edgeFetcher) GetPodWatermarks() []processor.Watermark {
+	var debugString strings.Builder
+	var allProcessors = e.processorManager.GetAllProcessors()
+	var podWatermarks []processor.Watermark
+	for _, p := range allProcessors {
+		if !p.IsActive() {
+			continue
+		}
+		var o = p.offsetTimeline.GetHeadOffset()
+		var epoch int64 = math.MaxInt64
+		e.log.Debugf("Processor: %v (headoffset:%d)", p, o)
+		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headoffset:%d) \n", p, o))
+		if o != -1 {
+			epoch = p.offsetTimeline.GetEventTimeFromInt64(o)
+		}
+		if epoch == math.MaxInt64 {
+			// Use -1 as default watermark value to indicate there is no valid watermark yet.
+			podWatermarks = append(podWatermarks, processor.Watermark(time.UnixMilli(-1)))
+		} else {
+			podWatermarks = append(podWatermarks, processor.Watermark(time.UnixMilli(epoch)))
+		}
+	}
+	return podWatermarks
+}
+
 // GetWatermark gets the smallest timestamp for the given offset
 func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	var offset, err = inputOffset.Sequence()

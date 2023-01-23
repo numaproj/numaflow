@@ -95,6 +95,10 @@ func (e *EventTypeWMProgressor) GetHeadWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
+func (e *EventTypeWMProgressor) GetPodWatermarks() []processor.Watermark {
+	return []processor.Watermark{}
+}
+
 // PayloadForTest is a dummy payload for testing.
 type PayloadForTest struct {
 	Key   string

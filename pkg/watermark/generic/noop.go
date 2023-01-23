@@ -56,6 +56,10 @@ func (n NoOpWMProgressor) GetHeadWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
+func (n NoOpWMProgressor) GetPodWatermarks() []processor.Watermark {
+	return []processor.Watermark{}
+}
+
 // Close stops the no-op progressor.
 func (n NoOpWMProgressor) Close() error {
 	return nil

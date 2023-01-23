@@ -4,12 +4,14 @@ export interface VertexMetrics {
   ratePerMin: number;
   ratePerFiveMin: number;
   ratePerFifteenMin: number;
+  podMetrics: any[];
 }
 
 export interface VertexWatermark {
   watermark: number;
   watermarkLocalTime: string;
   isWaterMarkEnabled: boolean;
+  podWatermarks: number[];
 }
 
 export interface EdgeInfo {

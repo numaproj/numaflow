@@ -77,29 +77,30 @@ export function Pipeline() {
   const getMetrics = useCallback(() => {
     const vertexToMetricsMap = new Map();
 
-    if (pipeline?.spec?.vertices) {
+    if (pipeline?.spec?.vertices && vertexPods) {
       Promise.all(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/metrics`
+            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/pods/${vertexPods.get(vertex.name)}/metrics`
           )
             .then((response) => response.json())
             .then((json) => {
-              const vertexMetrics = {ratePerMin: 0, ratePerFiveMin: 0, ratePerFifteenMin: 0} as VertexMetrics;
-              if ("processingRates" in json) {
-                if ("1m" in json["processingRates"]) {
+              const vertexMetrics = {ratePerMin: 0, ratePerFiveMin: 0, ratePerFifteenMin: 0, podMetrics: null} as VertexMetrics;
+              if ("processingRates" in json.vertex) {
+                if ("1m" in json.vertex["processingRates"]) {
                   vertexMetrics.ratePerMin =
-                  json["processingRates"]["1m"].toFixed(2);
+                  json.vertex["processingRates"]["1m"].toFixed(2);
                 }
-                if ("5m" in json["processingRates"]) {
+                if ("5m" in json.vertex["processingRates"]) {
                   vertexMetrics.ratePerFiveMin =
-                  json["processingRates"]["5m"].toFixed(2);
+                  json.vertex["processingRates"]["5m"].toFixed(2);
                 }
-                if ("15m" in json["processingRates"]) {
+                if ("15m" in json.vertex["processingRates"]) {
                   vertexMetrics.ratePerFifteenMin =
-                  json["processingRates"]["15m"].toFixed(2);
+                  json.vertex["processingRates"]["15m"].toFixed(2);
                 }
               }
+              vertexMetrics.podMetrics = json.podMetrics
               vertexToMetricsMap.set(vertex.name, vertexMetrics);
             });
         })
@@ -107,7 +108,7 @@ export function Pipeline() {
         .then(() => setVertexMetrics(vertexToMetricsMap))
         .catch(console.error);
     }
-  }, [pipeline]);
+  }, [pipeline, vertexPods]);
 
   // This useEffect is used to obtain metrics for a given vertex in a pipeline and refreshes every 5 minutes
   useEffect(() => {
@@ -139,6 +140,7 @@ export function Pipeline() {
                       vertexWatermark.watermarkLocalTime = new Date(
                           vertexWatermark.watermark
                       ).toISOString();
+                      vertexWatermark.podWatermarks = vertex["podWatermarks"];
                       vertexToWatermarkMap.set(vertex.vertex, vertexWatermark);
                     })
                   })

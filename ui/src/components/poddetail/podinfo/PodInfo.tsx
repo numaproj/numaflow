@@ -69,12 +69,14 @@ export function PodInfo({ pod, podDetail, containerName }: PodInfoProps) {
   if (resourceUsage.memoryPercent) {
     memPercent = `${resourceUsage.memoryPercent.toFixed(2)}%`;
   }
+  const podName = podDetail.name.slice(0, podDetail.name.lastIndexOf('-'));
+
   return (
     <Box data-testid="podInfo" sx={podInfoSx}>
       <Box sx={podDataColumnSx}>
         <Box sx={podDataRowSx}>
           <Box sx={podDataRowTagSx}>Name:</Box>
-          <Box>{podDetail.name}</Box>
+          <Box>{podName}</Box>
         </Box>
       </Box>
       <Box sx={podDataColumnSx}>
