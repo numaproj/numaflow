@@ -19,9 +19,9 @@ package sources
 import (
 	"context"
 	"fmt"
-	"sync"
-
 	"go.uber.org/zap"
+	"sync"
+	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -121,12 +121,16 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
 
-	t, err := transformer.NewGRPCBasedTransformer()
-	if err != nil {
-		return fmt.Errorf("failed to create gRPC client, %w", err)
+	metricsOpts := []metrics.Option{
+		metrics.WithLookbackSeconds(int64(sp.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds())),
 	}
 
+	var sourcer Sourcer
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
+		t, err := transformer.NewGRPCBasedTransformer()
+		if err != nil {
+			return fmt.Errorf("failed to create gRPC client, %w", err)
+		}
 		// Readiness check
 		if err = t.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on user defined transformer readiness check, %w", err)
@@ -134,13 +138,14 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		defer func() {
 			err = t.CloseConn(ctx)
 			if err != nil {
-				log.Warnw("failed to close gRPC client conn", zap.Error(err))
+				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
-	}
-
-	var sourcer Sourcer
-	if sp.VertexInstance.Vertex.HasUDTransformer() {
+		metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(func() error {
+			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			return t.WaitUntilReady(ctx)
+		}))
 		sourcer, err = sp.getSourcer(writers, sp.getTransformerGoWhereDecider(), t, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	} else {
 		sourcer, err = sp.getSourcer(writers, forward.All, forward.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
@@ -162,7 +167,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := []metrics.Option{metrics.WithLookbackSeconds(int64(sp.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds()))}
 	if x, ok := sourcer.(isb.LagReader); ok {
 		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
 	}

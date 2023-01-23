@@ -24,7 +24,6 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/function/client"
-	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 
@@ -37,8 +36,6 @@ import (
 type gRPCBasedTransformer struct {
 	client functionsdk.Client
 }
-
-var _ forward.MapApplier = (*gRPCBasedTransformer)(nil)
 
 // NewGRPCBasedTransformer returns a new gRPCBasedTransformer object.
 func NewGRPCBasedTransformer() (*gRPCBasedTransformer, error) {
