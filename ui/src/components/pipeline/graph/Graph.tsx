@@ -79,7 +79,7 @@ interface GraphProps {
 export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId } = props;
 
-  // ensuring all edges between same pair of vertices have same labels
+  // ensuring all edges between same pair of vertices have same labels which is sum of backpressure between vertices
   const edgeMap = new Map();
   data.edges.map((edge) => {
     if (edgeMap.get(edge.id) === undefined) edgeMap.set(edge.id, Number(edge.data.totalMessages));

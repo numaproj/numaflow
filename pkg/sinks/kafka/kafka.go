@@ -22,15 +22,16 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
-	metricspkg "github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -60,14 +61,14 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*ToKafka, error) {
 	kafkaSink := vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
-	//apply options for kafka sink
+	// apply options for kafka sink
 	for _, o := range opts {
 		if err := o(toKafka); err != nil {
 			return nil, err
 		}
 	}
 
-	//set default logger
+	// set default logger
 	if toKafka.log == nil {
 		toKafka.log = logging.NewLogger()
 	}
@@ -164,7 +165,7 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 				// Need to close and recreate later because the successes and errors channels might be unclean
 				_ = tk.producer.Close()
 				tk.connected = false
-				kafkaSinkWriteTimeouts.With(map[string]string{metricspkg.LabelVertex: tk.name, metricspkg.LabelPipeline: tk.pipelineName}).Inc()
+				kafkaSinkWriteTimeouts.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
 				close(done)
 				return
 			default:
@@ -182,9 +183,9 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 	<-done
 	for _, err := range errs {
 		if err != nil {
-			kafkaSinkWriteErrors.With(map[string]string{metricspkg.LabelVertex: tk.name, metricspkg.LabelPipeline: tk.pipelineName}).Inc()
+			kafkaSinkWriteErrors.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
 		} else {
-			kafkaSinkWriteCount.With(map[string]string{metricspkg.LabelVertex: tk.name, metricspkg.LabelPipeline: tk.pipelineName}).Inc()
+			kafkaSinkWriteCount.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
 		}
 	}
 	return nil, errs

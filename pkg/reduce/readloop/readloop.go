@@ -30,18 +30,19 @@ package readloop
 import (
 	"context"
 	"math"
+	"strconv"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/metrics"
-	pbq2 "github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -54,8 +55,9 @@ import (
 type ReadLoop struct {
 	vertexName            string
 	pipelineName          string
+	vertexReplica         int32
 	UDF                   applier.ReduceApplier
-	pbqManager            *pbq2.Manager
+	pbqManager            *pbq.Manager
 	windower              window.Windower
 	op                    *orderedForwarder
 	log                   *zap.SugaredLogger
@@ -69,18 +71,20 @@ type ReadLoop struct {
 func NewReadLoop(ctx context.Context,
 	vertexName string,
 	pipelineName string,
+	vr int32,
 	udf applier.ReduceApplier,
-	pbqManager *pbq2.Manager,
+	pbqManager *pbq.Manager,
 	windowingStrategy window.Windower,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
 ) (*ReadLoop, error) {
-	op := newOrderedForwarder(ctx, vertexName, pipelineName)
+	op := newOrderedForwarder(ctx, vertexName, pipelineName, vr)
 
 	rl := &ReadLoop{
 		vertexName:            vertexName,
 		pipelineName:          pipelineName,
+		vertexReplica:         vr,
 		UDF:                   udf,
 		windower:              windowingStrategy,
 		pbqManager:            pbqManager,
@@ -140,21 +144,26 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		rl.log.Errorw("Failed to write messages", zap.Int("totalMessages", len(messages)), zap.Int("writtenMessage", len(successfullyWrittenMessages)))
 	}
 
+	if len(successfullyWrittenMessages) == 0 {
+		return
+	}
+
 	// ack successful messages
 	rl.ackMessages(ctx, successfullyWrittenMessages)
+	// close any windows that need to be closed.
+	// since the watermark will be same for all the messages in the batch
+	// we can invoke remove windows only once per batch
+	var closedWindows []window.AlignedKeyedWindower
+	wm := processor.Watermark(successfullyWrittenMessages[0].Watermark)
 
-	// for each successfully written message,
-	for _, m := range successfullyWrittenMessages {
-		// close any windows that need to be closed.
-		wm := processor.Watermark(m.Watermark)
-		closedWindows := rl.windower.RemoveWindows(time.Time(wm))
-		rl.log.Debugw("Windows eligible for closing", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
+	closedWindows = rl.windower.RemoveWindows(time.Time(wm))
 
-		for _, cw := range closedWindows {
-			partitions := cw.Partitions()
-			rl.closePartitions(partitions)
-			rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
-		}
+	rl.log.Debugw("Windows eligible for closing", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
+
+	for _, cw := range closedWindows {
+		partitions := cw.Partitions()
+		rl.closePartitions(partitions)
+		rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
 	}
 }
 
@@ -165,6 +174,17 @@ func (rl *ReadLoop) writeMessagesToWindows(ctx context.Context, messages []*isb.
 
 messagesLoop:
 	for _, message := range messages {
+		// drop the late messages
+		if message.IsLate {
+			rl.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+			droppedMessagesCount.With(map[string]string{
+				metrics.LabelVertex:             rl.vertexName,
+				metrics.LabelPipeline:           rl.pipelineName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+				LabelReason:                     "late"}).Inc()
+			continue
+		}
+
 		// NOTE(potential bug): if we get a message where the event time is < watermark, skip processing the message.
 		// This could be due to a couple of problem, eg. ack was not registered, etc.
 		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
@@ -176,7 +196,11 @@ messagesLoop:
 			writtenMessages = append(writtenMessages, message)
 			// let's not continue processing this message, most likely the window has already been closed and the message
 			// won't be processed anyways.
-			droppedMessagesCount.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName, LabelReason: "watermark_issue"}).Inc()
+			droppedMessagesCount.With(map[string]string{
+				metrics.LabelVertex:             rl.vertexName,
+				metrics.LabelPipeline:           rl.pipelineName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+				LabelReason:                     "watermark_issue"}).Inc()
 			continue
 		}
 
@@ -211,7 +235,12 @@ messagesLoop:
 // error loop, and we have received ctx.Done() via SIGTERM.
 func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadMessage) error {
 	startTime := time.Now()
-	defer pbqWriteTime.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName}).Observe(float64(time.Since(startTime).Milliseconds()))
+	defer pbqWriteTime.With(map[string]string{
+		metrics.LabelVertex:             rl.vertexName,
+		metrics.LabelPipeline:           rl.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+	}).Observe(float64(time.Since(startTime).Milliseconds()))
+
 	var pbqWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
 		Duration: 1 * time.Second,
@@ -225,7 +254,11 @@ func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadM
 		rErr := q.Write(context.Background(), m)
 		if rErr != nil {
 			rl.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()), zap.Error(rErr))
-			pbqWriteErrorCount.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName}).Inc()
+			pbqWriteErrorCount.With(map[string]string{
+				metrics.LabelVertex:             rl.vertexName,
+				metrics.LabelPipeline:           rl.pipelineName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+			}).Inc()
 			// no point retrying if ctx.Done has been invoked
 			select {
 			case <-ctx.Done():
@@ -238,7 +271,11 @@ func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadM
 
 		}
 		// happy path
-		pbqWriteMessagesCount.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName}).Inc()
+		pbqWriteMessagesCount.With(map[string]string{
+			metrics.LabelVertex:             rl.vertexName,
+			metrics.LabelPipeline:           rl.pipelineName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+		}).Inc()
 		rl.log.Debugw("Successfully wrote the message", zap.String("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()))
 		return true, nil
 	})
@@ -267,7 +304,12 @@ func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage
 				rErr := o.AckIt()
 				attempt += 1
 				if rErr != nil {
-					ackMessageError.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName}).Inc()
+					ackMessageError.With(map[string]string{
+						metrics.LabelVertex:             rl.vertexName,
+						metrics.LabelPipeline:           rl.pipelineName,
+						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+					}).Inc()
+
 					rl.log.Errorw("Failed to ack message, retrying", zap.String("msgOffSet", o.String()), zap.Error(rErr), zap.Int("attempt", attempt))
 					// no point retrying if ctx.Done has been invoked
 					select {
@@ -280,7 +322,11 @@ func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage
 					}
 				}
 				rl.log.Debugw("Successfully acked message", zap.String("msgOffSet", o.String()))
-				ackMessagesCount.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName}).Inc()
+				ackMessagesCount.With(map[string]string{
+					metrics.LabelVertex:             rl.vertexName,
+					metrics.LabelPipeline:           rl.pipelineName,
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+				}).Inc()
 				return true, nil
 			})
 			// no point trying the rest of the message, most likely that will also fail
@@ -296,7 +342,7 @@ func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage
 
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
 // it to the partition.
-func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partition.ID) pbq2.ReadWriteCloser {
+func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
 	// look for existing pbq
 	q := rl.pbqManager.GetPBQ(partitionID)
 
@@ -338,21 +384,15 @@ func (rl *ReadLoop) ShutDown(ctx context.Context) {
 // upsertWindowsAndKeys will create or assigns (if already present) a window to the message. It is an upsert operation
 // because windows are created out of order, but they will be closed in-order.
 func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKeyedWindower {
-	// drop the late messages
-	if m.IsLate {
-		rl.log.Warnw("Dropping the late message", zap.Time("eventTime", m.EventTime), zap.Time("watermark", m.Watermark))
-		droppedMessagesCount.With(map[string]string{metrics.LabelVertex: rl.vertexName, metrics.LabelPipeline: rl.pipelineName, LabelReason: "late"}).Inc()
-		return []window.AlignedKeyedWindower{}
-	}
 
 	processingWindows := rl.windower.AssignWindow(m.EventTime)
 	var kWindows []window.AlignedKeyedWindower
 	for _, win := range processingWindows {
 		w, isPresent := rl.windower.InsertIfNotPresent(win)
 		if !isPresent {
-			rl.log.Debugw("Creating new keyed window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
+			rl.log.Debugw("Creating new keyed window", zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
 		} else {
-			rl.log.Debugw("Found an existing window", zap.Any("key", w.Keys()), zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
+			rl.log.Debugw("Found an existing window", zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
 		}
 		// track the key to window relationship
 		w.AddKey(m.Key)

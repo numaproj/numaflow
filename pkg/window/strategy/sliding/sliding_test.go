@@ -21,10 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestSliding_AssignWindow tests the assignment of element to a set of windows
@@ -44,9 +43,9 @@ func TestSliding_AssignWindow(t *testing.T) {
 			slide:     20 * time.Second,
 			eventTime: baseTime.Add(10 * time.Second),
 			expected: []window.AlignedKeyedWindower{
-				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
-				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
 				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
+				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
+				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
 			},
 		},
 		{
@@ -55,8 +54,8 @@ func TestSliding_AssignWindow(t *testing.T) {
 			slide:     40 * time.Second,
 			eventTime: baseTime.Add(10 * time.Second),
 			expected: []window.AlignedKeyedWindower{
-				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
 				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
+				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
 			},
 		},
 		{
@@ -65,8 +64,7 @@ func TestSliding_AssignWindow(t *testing.T) {
 			slide:     41 * time.Second,
 			eventTime: baseTime.Add(10 * time.Second),
 			expected: []window.AlignedKeyedWindower{
-				keyed.NewKeyedWindow(time.Unix(559, 0), time.Unix(619, 0)),
-				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
+				keyed.NewKeyedWindow(time.Unix(574, 0), time.Unix(634, 0)),
 			},
 		},
 		{
@@ -75,9 +73,9 @@ func TestSliding_AssignWindow(t *testing.T) {
 			slide:     20 * time.Second,
 			eventTime: baseTime,
 			expected: []window.AlignedKeyedWindower{
-				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
-				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
 				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
+				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
+				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
 			},
 		},
 		{
@@ -86,9 +84,9 @@ func TestSliding_AssignWindow(t *testing.T) {
 			slide:     20 * time.Second,
 			eventTime: baseTime.Add(time.Minute),
 			expected: []window.AlignedKeyedWindower{
-				keyed.NewKeyedWindow(time.Unix(620, 0), time.Unix(680, 0)),
-				keyed.NewKeyedWindow(time.Unix(640, 0), time.Unix(700, 0)),
 				keyed.NewKeyedWindow(time.Unix(660, 0), time.Unix(720, 0)),
+				keyed.NewKeyedWindow(time.Unix(640, 0), time.Unix(700, 0)),
+				keyed.NewKeyedWindow(time.Unix(620, 0), time.Unix(680, 0)),
 			},
 		},
 		{
@@ -97,9 +95,9 @@ func TestSliding_AssignWindow(t *testing.T) {
 			slide:     20 * time.Second,
 			eventTime: baseTime.Add(time.Nanosecond),
 			expected: []window.AlignedKeyedWindower{
-				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
-				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
 				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
+				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
+				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
 			},
 		},
 		{
@@ -108,9 +106,9 @@ func TestSliding_AssignWindow(t *testing.T) {
 			slide:     20 * time.Second,
 			eventTime: baseTime.Add(-time.Nanosecond),
 			expected: []window.AlignedKeyedWindower{
-				keyed.NewKeyedWindow(time.Unix(540, 0), time.Unix(600, 0)),
-				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
 				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
+				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
+				keyed.NewKeyedWindow(time.Unix(540, 0), time.Unix(600, 0)),
 			},
 		},
 		{
@@ -119,9 +117,9 @@ func TestSliding_AssignWindow(t *testing.T) {
 			slide:     20 * time.Second,
 			eventTime: baseTime.Add(20 * time.Second),
 			expected: []window.AlignedKeyedWindower{
-				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
-				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
 				keyed.NewKeyedWindow(time.Unix(620, 0), time.Unix(680, 0)),
+				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
+				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
 			},
 		},
 		{
@@ -130,9 +128,42 @@ func TestSliding_AssignWindow(t *testing.T) {
 			slide:     20 * time.Second,
 			eventTime: baseTime.Add(21 * time.Second),
 			expected: []window.AlignedKeyedWindower{
-				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
-				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
 				keyed.NewKeyedWindow(time.Unix(620, 0), time.Unix(680, 0)),
+				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
+				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
+			},
+		},
+		{
+			name:      "length not divisible by slide test 1",
+			length:    time.Second * 600,
+			slide:     70 * time.Second,
+			eventTime: baseTime.Add(210 * time.Second), // 810
+			expected: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(770, 0), time.Unix(1370, 0)),
+				keyed.NewKeyedWindow(time.Unix(700, 0), time.Unix(1300, 0)),
+				keyed.NewKeyedWindow(time.Unix(630, 0), time.Unix(1230, 0)),
+				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(1160, 0)),
+				keyed.NewKeyedWindow(time.Unix(490, 0), time.Unix(1090, 0)),
+				keyed.NewKeyedWindow(time.Unix(420, 0), time.Unix(1020, 0)),
+				keyed.NewKeyedWindow(time.Unix(350, 0), time.Unix(950, 0)),
+				keyed.NewKeyedWindow(time.Unix(280, 0), time.Unix(880, 0)),
+			},
+		},
+		{
+			name:      "length not divisible by slide test 2",
+			length:    time.Second * 600,
+			slide:     70 * time.Second,
+			eventTime: baseTime.Add(610 * time.Second), // 1210
+			expected: []window.AlignedKeyedWindower{
+				keyed.NewKeyedWindow(time.Unix(1190, 0), time.Unix(1790, 0)),
+				keyed.NewKeyedWindow(time.Unix(1120, 0), time.Unix(1720, 0)),
+				keyed.NewKeyedWindow(time.Unix(1050, 0), time.Unix(1650, 0)),
+				keyed.NewKeyedWindow(time.Unix(980, 0), time.Unix(1580, 0)),
+				keyed.NewKeyedWindow(time.Unix(910, 0), time.Unix(1510, 0)),
+				keyed.NewKeyedWindow(time.Unix(840, 0), time.Unix(1440, 0)),
+				keyed.NewKeyedWindow(time.Unix(770, 0), time.Unix(1370, 0)),
+				keyed.NewKeyedWindow(time.Unix(700, 0), time.Unix(1300, 0)),
+				keyed.NewKeyedWindow(time.Unix(630, 0), time.Unix(1230, 0)),
 			},
 		},
 	}
@@ -264,6 +295,27 @@ func TestAligned_CreateWindow(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSliding_RemoveWindows(t *testing.T) {
+	var (
+		length          = time.Second * 60
+		slide           = time.Second * 10
+		slidWin         = NewSliding(length, slide)
+		eventTime       = time.Unix(60, 0)
+		expectedWindows = []window.AlignedKeyedWindower{
+			keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
+			keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
+			keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
+		}
+	)
+	for i := 0; i < 10000; i++ {
+		win := keyed.NewKeyedWindow(eventTime, eventTime.Add(length))
+		slidWin.InsertIfNotPresent(win)
+		eventTime = eventTime.Add(length)
+	}
+	closeWin := slidWin.RemoveWindows(time.Unix(300, 0))
+	assert.Equal(t, closeWin, expectedWindows)
 }
 
 func setup(windows *Sliding, wins []*keyed.AlignedKeyedWindow) {

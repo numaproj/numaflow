@@ -22,15 +22,16 @@ import (
 	"time"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"go.uber.org/zap"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type UserDefinedSink struct {
@@ -108,9 +109,9 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 	return nil, s.udsink.Apply(ctx, msgs)
 }
 
-func (br *UserDefinedSink) Close() error {
-	if br.udsink != nil {
-		return br.udsink.CloseConn(context.Background())
+func (s *UserDefinedSink) Close() error {
+	if s.udsink != nil {
+		return s.udsink.CloseConn(context.Background())
 	}
 	return nil
 }
@@ -120,7 +121,7 @@ func (s *UserDefinedSink) Start() <-chan struct{} {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	if err := s.udsink.WaitUntilReady(ctx); err != nil {
-		s.logger.Fatalf("failed on UDSink readiness check, %w", err)
+		s.logger.Fatalf("failed on UDSink readiness check, %s", err)
 	}
 	return s.isdf.Start()
 }

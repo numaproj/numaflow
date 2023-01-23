@@ -24,9 +24,9 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	pbq2 "github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	memory2 "github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	"github.com/stretchr/testify/assert"
@@ -104,11 +104,11 @@ func TestOrderedProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// clean out the task queue before we start a run
-			op := newOrderedForwarder(ctx, "reduce", "test-pipeline")
+			op := newOrderedForwarder(ctx, "reduce", "test-pipeline", 0)
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.
-			pbqManager, _ := pbq2.NewManager(ctx, "reduce", "test-pipeline", memory2.NewMemoryStores(memory2.WithStoreSize(100)),
-				pbq2.WithReadTimeout(1*time.Second), pbq2.WithChannelBufferSize(10))
+			pbqManager, _ := pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
+				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 			cCtx, cancelFn := context.WithCancel(ctx)
 			defer cancelFn()
 			for _, _partition := range tt.partitions {

@@ -17,8 +17,8 @@ limitations under the License.
 package sources
 
 import (
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 )
 
 // Sourcer interface provides an isb.BufferReader abstraction over the underlying data source.

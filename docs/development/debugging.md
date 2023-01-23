@@ -34,7 +34,8 @@ spec:
 
 ## Profiling
 
-Setting `NUMAFLOW_DEBUG` to `true` also enables `pprof` in the Vertex Pod.
+If your pipeline is running with `NUMAFLOW_DEBUG` then `pprof` is enabled in the Vertex Pod. You
+can also enable just `pprof` by setting `NUMAFLOW_PPROF` to `true`.
 
 For example, run the commands like below to profile memory usage for a Vertex Pod, a web page displaying the memory information will be automatically opened.
 
@@ -44,3 +45,9 @@ kubectl port-forward simple-pipeline-p1-0-7jzbn 2469
 
 go tool pprof -http localhost:8081 https+insecure://localhost:2469/debug/pprof/heap
 ```
+
+## Debug Inside the Container
+
+When doing local [development](development.md) using command lines such as `make start`, or `make image`, the built `numaflow` docker image is based on `alpine`, which allows you to execute into the container for debugging with `kubectl exec -it {pod-name} -c {container-name} -- sh`.
+
+This is not allowed when running pipelines with official released images, as they are based on `scratch`.

@@ -19,6 +19,7 @@ package pbq
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
@@ -34,15 +35,16 @@ var ErrCOB = errors.New("error while writing to pbq, pbq is closed")
 // PBQ Buffer queue which is backed with a persisted store, each partition
 // will have a PBQ associated with it
 type PBQ struct {
-	vertexName   string
-	pipelineName string
-	store        store.Store
-	output       chan *isb.ReadMessage
-	cob          bool // cob to avoid panic in case writes happen after close of book
-	PartitionID  partition.ID
-	options      *options
-	manager      *Manager
-	log          *zap.SugaredLogger
+	vertexName    string
+	pipelineName  string
+	vertexReplica int32
+	store         store.Store
+	output        chan *isb.ReadMessage
+	cob           bool // cob to avoid panic in case writes happen after close of book
+	PartitionID   partition.ID
+	options       *options
+	manager       *Manager
+	log           *zap.SugaredLogger
 }
 
 var _ ReadWriteCloser = (*PBQ)(nil)
@@ -67,7 +69,11 @@ func (p *PBQ) Write(ctx context.Context, message *isb.ReadMessage) error {
 		close(p.output)
 		writeErr = ctx.Err()
 	}
-	pbqChannelSize.With(map[string]string{metrics.LabelVertex: p.vertexName, metrics.LabelPipeline: p.pipelineName}).Set(float64(len(p.output)))
+	pbqChannelSize.With(map[string]string{
+		metrics.LabelVertex:             p.vertexName,
+		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+	}).Set(float64(len(p.output)))
 	return writeErr
 }
 

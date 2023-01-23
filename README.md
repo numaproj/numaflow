@@ -37,7 +37,8 @@ full-featured stream processing platforms.
 
 ## Roadmap
 
-- Data aggregation (e.g. group-by)
+- User Defined Transformer at Source for better deserialization and filter for cost reduction (v0.8)
+- Multi partitioned edges for higher throughput (v0.9)
 
 ## Resources
 

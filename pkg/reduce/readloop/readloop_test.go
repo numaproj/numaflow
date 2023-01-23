@@ -11,9 +11,9 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
-	pbq2 "github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	memory2 "github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
@@ -87,7 +87,7 @@ func TestReadLoop_Startup(t *testing.T) {
 		},
 	}
 
-	memStoreProvider := memory2.NewMemoryStores(memory2.WithStoreSize(100))
+	memStoreProvider := memory.NewMemoryStores(memory.WithStoreSize(100))
 
 	for _, id := range partitionIds {
 		memStore, err := memStoreProvider.CreateStore(ctx, id)
@@ -108,7 +108,7 @@ func TestReadLoop_Startup(t *testing.T) {
 		}
 	}
 
-	pManager, _ := pbq2.NewManager(ctx, "reduce", "test-pipeline", memStoreProvider, pbq2.WithChannelBufferSize(10))
+	pManager, _ := pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memStoreProvider, pbq.WithChannelBufferSize(10))
 
 	to1 := simplebuffer.NewInMemoryBuffer("reduce-buffer", 4)
 	toSteps := map[string]isb.BufferWriter{
@@ -119,7 +119,7 @@ func TestReadLoop_Startup(t *testing.T) {
 
 	window := fixed.NewFixed(60 * time.Second)
 
-	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
+	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", 0, &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
 	assert.NoError(t, err)
 	err = rl.Startup(ctx)
 	assert.NoError(t, err)

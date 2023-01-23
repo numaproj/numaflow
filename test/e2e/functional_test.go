@@ -81,7 +81,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Status(200).Body().Contains("pipeline")
 
 	HTTPExpect(s.T(), "https://localhost:1234").
-		GET(fmt.Sprintf("/api/v1/pipelines/%s/vertices/%s/metrics", pipelineName, "p1")).
+		GET(fmt.Sprintf("/api/v1/pipelines/%s/vertices/%s/pods/%v/metrics", pipelineName, "p1", 1)).
 		Expect().
 		Status(200).Body().Contains("pipeline")
 
@@ -97,9 +97,9 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateEdgeBufferNames(Namespace, pipelineName, dfv1.Edge{From: "input", To: "p1"})[0])
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
-	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
+	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1", 1)
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), pipelineName, *m.Pipeline)
+	assert.Equal(s.T(), pipelineName, *m.Vertex.Pipeline)
 }
 
 func (s *FunctionalSuite) TestFiltering() {

@@ -38,9 +38,10 @@ import (
 )
 
 const (
-	LabelPipeline = "pipeline"
-	LabelVertex   = "vertex"
-	LabelPeriod   = "period"
+	LabelPipeline           = "pipeline"
+	LabelVertex             = "vertex"
+	LabelPeriod             = "period"
+	LabelVertexReplicaIndex = "replica"
 
 	VertexProcessingRate  = "vertex_processing_rate"
 	VertexPendingMessages = "vertex_pending_messages"
@@ -251,8 +252,8 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	debugEnabled := os.Getenv(dfv1.EnvDebug)
-	if debugEnabled == "true" {
+	pprofEnabled := os.Getenv(dfv1.EnvDebug) == "true" || os.Getenv(dfv1.EnvPPROF) == "true"
+	if pprofEnabled {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
 		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)

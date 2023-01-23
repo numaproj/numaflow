@@ -19,8 +19,10 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"testing"
+
+	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -31,7 +33,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 

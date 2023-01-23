@@ -18,18 +18,20 @@ package logger
 
 import (
 	"context"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"testing"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/udf/applier"
 
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
+	"github.com/stretchr/testify/assert"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/stretchr/testify/assert"
 )
 
 var (

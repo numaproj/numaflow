@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	"github.com/go-redis/redis/v8"
@@ -35,14 +36,13 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
 
 var (
 	redisOptions = &redis.UniversalOptions{
-		//Addrs: []string{":7000", ":7001", ":7002", ":7003", ":7004", ":7005"}
+		// Addrs: []string{":7000", ":7001", ":7002", ":7003", ":7004", ":7005"}
 		Addrs: []string{":6379"},
 	}
 
@@ -491,7 +491,7 @@ func generateLatencySlice(xMessages []redis.XMessage, suite *ReadWritePerformanc
 		suite.NoError(err)
 
 		// We store a difference of the id and the offset in the to stream.
-		//This gives us a difference between the time it was  read that is stored in ID of the Header and the time it was written as stored in the ID.
+		// This gives us a difference between the time it was  read that is stored in ID of the Header and the time it was written as stored in the ID.
 		latency[idx] = float64(id - offset)
 	}
 

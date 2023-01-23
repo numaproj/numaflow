@@ -106,8 +106,9 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 	}
 
 	vertex := "cat"
+	pods := int64(1)
 
-	req := &daemon.GetVertexMetricsRequest{Vertex: &vertex}
+	req := &daemon.GetVertexMetricsRequest{Vertex: &vertex, Pods: &pods}
 
 	resp, err := pipelineMetricsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)
