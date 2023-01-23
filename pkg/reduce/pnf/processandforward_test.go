@@ -269,7 +269,8 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 				PaneInfo: isb.PaneInfo{
 					EventTime: time.UnixMilli(60000),
 				},
-				ID: "1",
+				ID:  "1",
+				Key: key,
 			},
 			Body: isb.Body{Payload: resultPayload},
 		},

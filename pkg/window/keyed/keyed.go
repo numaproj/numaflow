@@ -72,16 +72,18 @@ func (kw *AlignedKeyedWindow) AddKey(key string) {
 
 // Partitions returns an array of partitions for a window
 func (kw *AlignedKeyedWindow) Partitions() []partition.ID {
-	kw.lock.RLock()
-	defer kw.lock.RUnlock()
+	//kw.lock.RLock()
+	//defer kw.lock.RUnlock()
+	//
+	//partitions := make([]partition.ID, len(kw.keys))
+	//idx := 0
+	//for k := range kw.keys {
+	//	partitions[idx] = partition.ID{Start: kw.StartTime(), End: kw.EndTime(), Key: k}
+	//	idx++
+	//}
 
-	partitions := make([]partition.ID, len(kw.keys))
-	idx := 0
-	for k := range kw.keys {
-		partitions[idx] = partition.ID{Start: kw.StartTime(), End: kw.EndTime(), Key: k}
-		idx++
-	}
-
+	partitions := make([]partition.ID, 1)
+	partitions[0] = partition.ID{Start: kw.StartTime(), End: kw.EndTime(), Key: "window"}
 	return partitions
 }
 

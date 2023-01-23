@@ -23,6 +23,7 @@ package pnf
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -113,7 +114,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 
 	processorWM := processor.Watermark(p.PartitionID.End)
 
-	// decide which ISB to write to
+	//decide which ISB to write to
 	to, err := p.whereToDecider.WhereTo(p.PartitionID.Key)
 	if err != nil {
 		platformError.With(map[string]string{
@@ -175,9 +176,14 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][]isb.Message)
-	writeMessages := make([]isb.Message, len(p.result))
-	for idx, msg := range p.result {
-		writeMessages[idx] = *msg
+
+	writeMessages := make([]isb.Message, 0)
+	// hacky
+	if sharedutil.StringSliceContains(to, dfv1.MessageKeyAll) || sharedutil.StringSliceContains(to, dfv1.MessageKeyDrop) {
+		writeMessages = make([]isb.Message, len(p.result))
+		for idx, msg := range p.result {
+			writeMessages[idx] = *msg
+		}
 	}
 
 	// if a message is mapped to an isb, all the messages will be mapped to same isb (key is same)
@@ -188,8 +194,24 @@ func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 		}
 	case sharedutil.StringSliceContains(to, dfv1.MessageKeyDrop):
 	default:
-		for _, bufferID := range to {
-			messagesToStep[bufferID] = writeMessages
+		var err error
+		for _, msg := range p.result {
+			to, err = p.whereToDecider.WhereTo(msg.Key)
+			if err != nil {
+				platformError.With(map[string]string{
+					metrics.LabelVertex:             p.vertexName,
+					metrics.LabelPipeline:           p.pipelineName,
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+				}).Inc()
+				continue // for now
+			}
+
+			for _, bufferID := range to {
+				if _, ok := messagesToStep[bufferID]; !ok {
+					messagesToStep[bufferID] = make([]isb.Message, 0)
+				}
+				messagesToStep[bufferID] = append(messagesToStep[bufferID], *msg)
+			}
 		}
 
 	}
@@ -208,6 +230,8 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 	}
 
 	writeMessages := resultMessages
+
+	fmt.Println(bufferID, len(resultMessages), resultMessages)
 
 	// write to isb with infinite exponential backoff (until shutdown is triggered)
 	var offsets []isb.Offset

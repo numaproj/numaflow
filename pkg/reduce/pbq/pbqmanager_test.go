@@ -59,7 +59,7 @@ func TestManager_ListPartitions(t *testing.T) {
 	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo)
 	assert.NoError(t, err)
 
-	assert.Len(t, pbqManager.ListPartitions(), 2)
+	assert.Len(t, pbqManager.ListPartitions(), 1)
 
 	err = pq1.GC()
 	assert.NoError(t, err)

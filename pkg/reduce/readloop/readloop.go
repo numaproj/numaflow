@@ -197,7 +197,7 @@ messagesLoop:
 			partitionID := partition.ID{
 				Start: kw.StartTime(),
 				End:   kw.EndTime(),
-				Key:   message.Key,
+				Key:   "window", // TODO revisit this later. for now hard coded to window
 			}
 
 			err := rl.writeToPBQ(ctx, partitionID, message)
@@ -389,7 +389,7 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 			rl.log.Debugw("Found an existing window", zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
 		}
 		// track the key to window relationship
-		w.AddKey(m.Key)
+		// w.AddKey(m.Key)
 		kWindows = append(kWindows, w)
 	}
 	return kWindows
