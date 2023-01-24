@@ -19,13 +19,14 @@ package sources
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
-	"go.uber.org/zap"
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
@@ -121,11 +122,9 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
-
 	metricsOpts := []metrics.Option{
 		metrics.WithLookbackSeconds(int64(sp.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds())),
 	}
-
 	var sourcer Sourcer
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		t, err := transformer.NewGRPCBasedTransformer()
@@ -151,7 +150,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	} else {
 		sourcer, err = sp.getSourcer(writers, forward.All, applier.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	}
-
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
 	}

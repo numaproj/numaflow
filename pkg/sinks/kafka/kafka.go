@@ -19,7 +19,6 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"time"
 
 	"github.com/Shopify/sarama"
@@ -27,6 +26,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"

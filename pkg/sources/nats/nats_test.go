@@ -19,7 +19,6 @@ package nats
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"testing"
 	"time"
 
@@ -28,6 +27,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
