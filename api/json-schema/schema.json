@@ -18821,6 +18821,9 @@
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
+        },
+        "transformer": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
         }
       },
       "type": "object"
@@ -18888,6 +18891,17 @@
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.UDSink": {
+      "properties": {
+        "container": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        }
+      },
+      "required": [
+        "container"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.UDTransformer": {
       "properties": {
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"

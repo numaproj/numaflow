@@ -30,12 +30,12 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -50,8 +50,7 @@ type httpSource struct {
 	bufferSize   int
 	messages     chan *isb.ReadMessage
 	logger       *zap.SugaredLogger
-
-	forwarder *forward.InterStepDataForward
+	forwarder    *forward.InterStepDataForward
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
 	// context cancel function
@@ -84,7 +83,16 @@ func WithBufferSize(s int) Option {
 	}
 }
 
-func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, opts ...Option) (*httpSource, error) {
+func New(
+	vertexInstance *dfv1.VertexInstance,
+	writers []isb.BufferWriter,
+	fsd forward.ToWhichStepDecider,
+	mapApplier applier.MapApplier,
+	fetchWM fetch.Fetcher,
+	publishWM map[string]publish.Publisher,
+	publishWMStores store.WatermarkStorer,
+	opts ...Option) (*httpSource, error) {
+
 	h := &httpSource{
 		name:         vertexInstance.Vertex.Spec.Name,
 		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
@@ -192,12 +200,13 @@ func New(vertexInstance *dfv1.VertexInstance, writers []isb.BufferWriter, fetchW
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, forward.All, applier.Terminal, fetchWM, publishWM, forwardOpts...)
+
+	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
-	h.forwarder = forwarder
+
 	ctx, cancel := context.WithCancel(context.Background())
 	h.cancelFunc = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
