@@ -20,10 +20,11 @@ package transformer_e2e
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/suite"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/suite"
 
 	. "github.com/numaproj/numaflow/test/fixtures"
 )

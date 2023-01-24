@@ -9,7 +9,7 @@ spec:
         http: {}
         transformer:
           container:
-            image: quay.io/numaio/numaflow-go/event-time-filter:v1
+            image: quay.io/numaio/numaflow-go/mapt-event-time-filter:latest
     - name: sink-within-2022
       scale:
         min: 1
