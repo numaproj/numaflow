@@ -18,14 +18,11 @@ package fixtures
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 func InvokeE2EAPI(format string, args ...interface{}) string {
@@ -54,32 +51,7 @@ func InvokeE2EAPI(format string, args ...interface{}) string {
 
 func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 	url := "http://127.0.0.1:8378" + fmt.Sprintf(format, args...)
-
-	var err error
-	var resp *http.Response
-	// Invoking POST can fail due to "500 Internal Server Error". It's because the server is still booting up and not ready to serve requests.
-	// To prevent such issue, we apply retry strategy.
-	// 3 attempts with 5 second fixed wait time are tested sufficient for it.
-	var retryBackOff = wait.Backoff{
-		Factor:   1,
-		Jitter:   0,
-		Steps:    3,
-		Duration: time.Second * 5,
-	}
-	_ = wait.ExponentialBackoffWithContext(context.Background(), retryBackOff, func() (done bool, err error) {
-		resp, err = http.Post(url, "application/json", strings.NewReader(body))
-		if err == nil {
-			return true, nil
-		}
-
-		fmt.Printf("Got error %v, retrying.\n", err)
-		return false, nil
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
+	resp, err := http.Post(url, "application/json", strings.NewReader(body))
 	if err != nil {
 		panic(err)
 	}
