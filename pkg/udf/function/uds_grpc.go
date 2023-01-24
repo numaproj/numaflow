@@ -23,17 +23,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
-
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/function/client"
+	map_applier "github.com/numaproj/numaflow/pkg/forward/applier"
+	"github.com/numaproj/numaflow/pkg/isb"
+	reduce_applier "github.com/numaproj/numaflow/pkg/reduce/applier"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-
-	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 // udsGRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
@@ -41,8 +40,8 @@ type udsGRPCBasedUDF struct {
 	client functionsdk.Client
 }
 
-var _ applier.MapApplier = (*udsGRPCBasedUDF)(nil)
-var _ applier.ReduceApplier = (*udsGRPCBasedUDF)(nil)
+var _ map_applier.MapApplier = (*udsGRPCBasedUDF)(nil)
+var _ reduce_applier.ReduceApplier = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
 func NewUDSGRPCBasedUDF() (*udsGRPCBasedUDF, error) {

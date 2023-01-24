@@ -20,10 +20,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
@@ -32,10 +35,13 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/shuffle"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
 	"github.com/numaproj/numaflow/pkg/sources/nats"
+	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
@@ -116,8 +122,34 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
-
-	sourcer, err := sp.getSourcer(writers, fetchWatermark, publishWatermark, sourcePublisherStores, log)
+	metricsOpts := []metrics.Option{
+		metrics.WithLookbackSeconds(int64(sp.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds())),
+	}
+	var sourcer Sourcer
+	if sp.VertexInstance.Vertex.HasUDTransformer() {
+		t, err := transformer.NewGRPCBasedTransformer()
+		if err != nil {
+			return fmt.Errorf("failed to create gRPC client, %w", err)
+		}
+		// Readiness check
+		if err = t.WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on user defined transformer readiness check, %w", err)
+		}
+		defer func() {
+			err = t.CloseConn(ctx)
+			if err != nil {
+				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+			}
+		}()
+		metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(func() error {
+			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			return t.WaitUntilReady(ctx)
+		}))
+		sourcer, err = sp.getSourcer(writers, sp.getTransformerGoWhereDecider(), t, fetchWatermark, publishWatermark, sourcePublisherStores, log)
+	} else {
+		sourcer, err = sp.getSourcer(writers, forward.All, applier.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
 	}
@@ -134,7 +166,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := []metrics.Option{metrics.WithLookbackSeconds(int64(sp.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds()))}
 	if x, ok := sourcer.(isb.LagReader); ok {
 		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
 	}
@@ -157,9 +188,16 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 }
 
 // getSourcer is used to send the sourcer information
-func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, publishWMStores store.WatermarkStorer, logger *zap.SugaredLogger) (Sourcer, error) {
-	src := sp.VertexInstance.Vertex.Spec.Source
+func (sp *SourceProcessor) getSourcer(
+	writers []isb.BufferWriter,
+	fsd forward.ToWhichStepDecider,
+	mapApplier applier.MapApplier,
+	fetchWM fetch.Fetcher,
+	publishWM map[string]publish.Publisher,
+	publishWMStores store.WatermarkStorer,
+	logger *zap.SugaredLogger) (Sourcer, error) {
 
+	src := sp.VertexInstance.Vertex.Spec.Source
 	if x := src.Generator; x != nil {
 		readOptions := []generator.Option{
 			generator.WithLogger(logger),
@@ -167,7 +205,7 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, generator.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return generator.NewMemGen(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
+		return generator.NewMemGen(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.Kafka; x != nil {
 		readOptions := []kafka.Option{
 			kafka.WithGroupName(x.ConsumerGroupName),
@@ -176,9 +214,9 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, kafka.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return kafka.NewKafkaSource(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
+		return kafka.NewKafkaSource(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.HTTP; x != nil {
-		return http.New(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
+		return http.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
 	} else if x := src.Nats; x != nil {
 		readOptions := []nats.Option{
 			nats.WithLogger(logger),
@@ -186,7 +224,35 @@ func (sp *SourceProcessor) getSourcer(writers []isb.BufferWriter, fetchWM fetch.
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return nats.New(sp.VertexInstance, writers, fetchWM, publishWM, publishWMStores, readOptions...)
+		return nats.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
+}
+
+func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
+	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
+	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
+		if edge.Parallelism != nil && *edge.Parallelism > 1 {
+			s := shuffle.NewShuffle(dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge))
+			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
+		}
+	}
+	fsd := forward.GoWhere(func(key string) ([]string, error) {
+		result := []string{}
+		if key == dfv1.MessageKeyDrop {
+			return result, nil
+		}
+		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
+			// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
+			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key) {
+				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
+				} else {
+					result = append(result, dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+				}
+			}
+		}
+		return result, nil
+	})
+	return fsd
 }

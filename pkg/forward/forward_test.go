@@ -23,20 +23,16 @@ import (
 	"testing"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
-
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-
-	"github.com/numaproj/numaflow/pkg/shared/logging"
-
 	"github.com/stretchr/testify/assert"
-
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
 )
 
 var (
@@ -265,7 +261,6 @@ func (f myForwardApplyUDFErrTest) WhereTo(_ string) ([]string, error) {
 }
 
 func (f myForwardApplyUDFErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
-
 	return nil, fmt.Errorf("UDF error")
 }
 
@@ -406,7 +401,7 @@ func TestNewInterStepDataForwardToOneStep(t *testing.T) {
 	_, errs = fromStep.Write(ctx, writeMessages[5:20])
 	assert.Equal(t, make([]error, 15), errs)
 
-	// stop will cancel the contexts and therefore the forwarder stops with out waiting
+	// stop will cancel the contexts and therefore the forwarder stops without waiting
 	f.Stop()
 
 	<-stopped

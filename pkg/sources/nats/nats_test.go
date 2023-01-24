@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
@@ -63,7 +65,7 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 	dest := []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("test", 100)}
 	publishWMStores := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
-	return New(vi, dest, fetchWatermark, publishWatermark, publishWMStores, WithReadTimeout(1*time.Second))
+	return New(vi, dest, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores, WithReadTimeout(1*time.Second))
 }
 
 func Test_Single(t *testing.T) {

@@ -23,14 +23,17 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/stretchr/testify/assert"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMessageHandling(t *testing.T) {
@@ -63,7 +66,7 @@ func TestMessageHandling(t *testing.T) {
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
-	ks, _ := NewKafkaSource(vi, dest, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()),
+	ks, _ := NewKafkaSource(vi, dest, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()),
 		WithBufferSize(100), WithReadTimeOut(100*time.Millisecond))
 
 	msg := &sarama.ConsumerMessage{
