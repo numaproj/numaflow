@@ -136,10 +136,10 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 7
       matrix:
         driver: [jetstream]
-        case: [e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-e2e]
+        case: [e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-e2e, transformer-e2e]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
