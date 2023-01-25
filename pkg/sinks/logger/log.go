@@ -20,18 +20,16 @@ import (
 	"context"
 	"log"
 
-	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-
 	"go.uber.org/zap"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
 // ToLog prints the output to a log sinks.
@@ -84,41 +82,41 @@ func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark f
 }
 
 // GetName returns the name.
-func (s *ToLog) GetName() string {
-	return s.name
+func (t *ToLog) GetName() string {
+	return t.name
 }
 
 // IsFull returns whether logging is full, which is never true.
-func (s *ToLog) IsFull() bool {
+func (t *ToLog) IsFull() bool {
 	// printing can never be full
 	return false
 }
 
 // Write writes to the log.
-func (s *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	prefix := "(" + s.GetName() + ")"
+func (t *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
+	prefix := "(" + t.GetName() + ")"
 	for _, message := range messages {
-		logSinkWriteCount.With(map[string]string{metrics.LabelVertex: s.name, metrics.LabelPipeline: s.pipelineName}).Inc()
-		log.Println(prefix, " Payload - ", string(message.Payload), " Key - ", message.Key, " Start - ", message.StartTime.UnixMilli(), " End - ", message.EndTime.UnixMilli())
+		logSinkWriteCount.With(map[string]string{metrics.LabelVertex: t.name, metrics.LabelPipeline: t.pipelineName}).Inc()
+		log.Println(prefix, " Payload - ", string(message.Payload), " Key - ", message.Key, " Start - ", message.StartTime.UnixMilli(), " End - ", message.EndTime.UnixMilli(), " EventTime - ", message.EventTime.UnixMilli())
 	}
 	return nil, make([]error, len(messages))
 }
 
-func (br *ToLog) Close() error {
+func (t *ToLog) Close() error {
 	return nil
 }
 
 // Start starts sinking to Log.
-func (s *ToLog) Start() <-chan struct{} {
-	return s.isdf.Start()
+func (t *ToLog) Start() <-chan struct{} {
+	return t.isdf.Start()
 }
 
 // Stop stops sinking
-func (s *ToLog) Stop() {
-	s.isdf.Stop()
+func (t *ToLog) Stop() {
+	t.isdf.Stop()
 }
 
 // ForceStop stops sinking
-func (s *ToLog) ForceStop() {
-	s.isdf.ForceStop()
+func (t *ToLog) ForceStop() {
+	t.isdf.ForceStop()
 }

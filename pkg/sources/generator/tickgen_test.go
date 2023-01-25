@@ -21,18 +21,17 @@ import (
 	"testing"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forward/applier"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-
 	"github.com/stretchr/testify/assert"
-
-	"github.com/numaproj/numaflow/pkg/isb"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestRead(t *testing.T) {
@@ -63,7 +62,7 @@ func TestRead(t *testing.T) {
 		"writer": dest,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, fetchWatermark, publishWatermark, publishWMStore)
+	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -107,7 +106,7 @@ func TestStop(t *testing.T) {
 		"writer": dest,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, fetchWatermark, publishWatermark, publishWMStore)
+	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
@@ -202,7 +201,7 @@ func TestWatermark(t *testing.T) {
 		Replica:  0,
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, nil, nil, publishWMStore)
+	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, nil, nil, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

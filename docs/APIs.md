@@ -533,7 +533,8 @@ Container
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.UDSink">UDSink</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.UDSink">UDSink</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
 </p>
 <p>
 </p>
@@ -3616,6 +3617,16 @@ GeneratorSource </a> </em>
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>transformer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UDTransformer"> UDTransformer
+</a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Status">
@@ -3836,6 +3847,37 @@ UDSink
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>container</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.UDTransformer">
+UDTransformer
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
 </p>
 <p>
 </p>
