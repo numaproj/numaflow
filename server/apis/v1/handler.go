@@ -285,7 +285,6 @@ func (h *handler) GetVertexMetrics(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
 	vertex := c.Param("vertex")
-	pods, _ := strconv.ParseInt(c.Param("podnum"), 10, 64)
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
@@ -294,7 +293,7 @@ func (h *handler) GetVertexMetrics(c *gin.Context) {
 	defer func() {
 		_ = client.Close()
 	}()
-	l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex, pods)
+	l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return

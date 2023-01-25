@@ -196,17 +196,6 @@ func request_DaemonService_GetVertexMetrics_0(ctx context.Context, marshaler run
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "vertex", err)
 	}
 
-	val, ok = pathParams["pods"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pods")
-	}
-
-	protoReq.Pods, err = runtime.Int64P(val)
-
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pods", err)
-	}
-
 	msg, err := client.GetVertexMetrics(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
@@ -243,17 +232,6 @@ func local_request_DaemonService_GetVertexMetrics_0(ctx context.Context, marshal
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "vertex", err)
-	}
-
-	val, ok = pathParams["pods"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pods")
-	}
-
-	protoReq.Pods, err = runtime.Int64P(val)
-
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pods", err)
 	}
 
 	msg, err := server.GetVertexMetrics(ctx, &protoReq)
@@ -661,7 +639,7 @@ var (
 
 	pattern_DaemonService_GetBuffer_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"api", "v1", "pipelines", "pipeline", "buffers", "buffer"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_DaemonService_GetVertexMetrics_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6, 1, 0, 4, 1, 5, 6, 2, 7}, []string{"api", "v1", "pipelines", "pipeline", "vertices", "vertex", "pods", "metrics"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_DaemonService_GetVertexMetrics_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"api", "v1", "pipelines", "pipeline", "vertices", "vertex", "metrics"}, "", runtime.AssumeColonVerbOpt(true)))
 
 	pattern_DaemonService_GetVertexWatermark_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5, 2, 6}, []string{"api", "v1", "pipelines", "pipeline", "vertices", "vertex", "watermark"}, "", runtime.AssumeColonVerbOpt(true)))
 

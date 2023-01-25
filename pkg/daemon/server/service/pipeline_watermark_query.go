@@ -27,6 +27,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 )
 
 // TODO - Write Unit Tests for this file
@@ -123,7 +124,6 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		timeZero := time.Unix(0, 0).UnixMilli()
 		watermarkArr := make([]*daemon.VertexWatermark, len(ps.watermarkFetchers))
 		i := 0
-		var podWatermarks []int64
 		for k := range ps.watermarkFetchers {
 			vertexName := k
 			watermarkArr[i] = &daemon.VertexWatermark{
@@ -131,7 +131,7 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 				Vertex:             &vertexName,
 				Watermark:          &timeZero,
 				IsWatermarkEnabled: &isWatermarkEnabled,
-				PodWatermarks:      podWatermarks,
+				PodWatermarks:      nil,
 			}
 			i++
 		}
@@ -144,19 +144,20 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 	i := 0
 	for k, vertexFetchers := range ps.watermarkFetchers {
 		var latestWatermark = int64(-1)
-		var podWatermarks []int64
+		var latestpodWatermarks []processor.Watermark
 		for _, fetcher := range vertexFetchers {
 			watermark := fetcher.GetHeadWatermark().UnixMilli()
 			podWatermark := fetcher.GetPodWatermarks()
 			if watermark > latestWatermark {
 				latestWatermark = watermark
-				podWatermarks = nil
-				for _, v := range podWatermark {
-					podWatermarks = append(podWatermarks, v.UnixMilli())
-				}
+				latestpodWatermarks = podWatermark
 			}
 		}
 		vertexName := k
+		var podWatermarks []int64
+		for _, v := range latestpodWatermarks {
+			podWatermarks = append(podWatermarks, v.UnixMilli())
+		}
 		watermarkArr[i] = &daemon.VertexWatermark{
 			Pipeline:           &ps.pipeline.Name,
 			Vertex:             &vertexName,

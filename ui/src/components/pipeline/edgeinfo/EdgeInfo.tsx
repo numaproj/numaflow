@@ -75,7 +75,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
             <Table aria-label="edge-info">
               <TableHead>
                 <TableRow>
-                  <TableCell>Edge</TableCell>
+                  <TableCell >Edge</TableCell>
                   <TableCell >isFull</TableCell>
                   <TableCell >AckPending</TableCell>
                   <TableCell >Pending</TableCell>

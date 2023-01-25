@@ -156,10 +156,12 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 			Name: vertexName,
 		},
 	}
-	podNum := req.GetPods()
-
-	processingRatesAvg := make(map[string]float64, 0)
-	pendingsAvg := make(map[string]int64, 0)
+	podNum := int64(1)
+	// for now only reduce has parallelism might have to modify later
+	obj := ps.pipeline.GetFromEdges(req.GetVertex())
+	if len(obj) > 0 && obj[0].Parallelism != nil {
+		podNum = int64(*obj[0].Parallelism)
+	}
 
 	// Get the headless service name
 	headlessServiceName := vertex.GetHeadlessServiceName()
@@ -217,32 +219,10 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 				ProcessingRates: processingRates,
 				Pendings:        pendings,
 			}
-
-			for k, v := range processingRates {
-				processingRatesAvg[k] += v
-			}
-
-			for k, v := range pendings {
-				pendingsAvg[k] += v
-			}
 		}
 	}
 
-	for k, v := range processingRatesAvg {
-		processingRatesAvg[k] = v / float64(podNum)
-	}
-	for k, v := range pendingsAvg {
-		pendingsAvg[k] = v / podNum
-	}
-
-	v := &daemon.VertexMetrics{
-		Pipeline:        &ps.pipeline.Name,
-		Vertex:          req.Vertex,
-		ProcessingRates: processingRatesAvg,
-		Pendings:        pendingsAvg,
-	}
-	resp.Vertex = v
-	resp.PodMetrics = metricsArr
+	resp.VertexMetrics = metricsArr
 	return resp, nil
 }
 
