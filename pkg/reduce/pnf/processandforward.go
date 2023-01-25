@@ -158,7 +158,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	return nil
 }
 
-// whereToStep assigns a message to the ISBs based on the Message.Key.
+// whereToStep assigns a message to the ISBs based on the Message.Slot.
 // TODO: we have to introduce support for shuffle, output of a reducer can be input to the next reducer.
 func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	// writer doesn't accept array of pointers

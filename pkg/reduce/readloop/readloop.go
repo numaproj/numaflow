@@ -123,7 +123,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 
 		// add key to the window, so that when a new message with the watermark greater than
 		// the window end time comes, key will not be lost and the windows will be closed as expected
-		keyedWindow.AddKey(p.Key)
+		keyedWindow.AddSlot(p.Slot)
 
 		// create and invoke process and forward for the partition
 		rl.associatePBQAndPnF(ctx, p)
@@ -212,7 +212,7 @@ messagesLoop:
 			partitionID := partition.ID{
 				Start: kw.StartTime(),
 				End:   kw.EndTime(),
-				Key:   "window", // TODO revisit this later. for now hard coded to window
+				Slot:  "slot-0", // FIXME: revisit this later. for now hard coded to slot-0
 			}
 
 			err := rl.writeToPBQ(ctx, partitionID, message)
@@ -394,7 +394,8 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 			rl.log.Debugw("Found an existing window", zap.String("msg.offset", m.ID), zap.Int64("startTime", w.StartTime().UnixMilli()), zap.Int64("endTime", w.EndTime().UnixMilli()))
 		}
 		// track the key to window relationship
-		// w.AddKey(m.Key)
+		// FIXME: create a slot from m.key
+		w.AddSlot("slot-0")
 		kWindows = append(kWindows, w)
 	}
 	return kWindows

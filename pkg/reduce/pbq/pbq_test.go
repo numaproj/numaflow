@@ -22,12 +22,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
-	"github.com/stretchr/testify/assert"
 )
 
 // test cases for PBQ (store type in-memory)
@@ -50,7 +51,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "new-partition",
+		Slot:  "new-partition",
 	}
 
 	pq, err := qManager.CreateNewPBQ(ctx, partitionID)
@@ -113,7 +114,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "new-partition",
+		Slot:  "new-partition",
 	}
 	var pq ReadWriteCloser
 	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
@@ -177,7 +178,7 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "new-partition",
+		Slot:  "new-partition",
 	}
 
 	var pq ReadWriteCloser

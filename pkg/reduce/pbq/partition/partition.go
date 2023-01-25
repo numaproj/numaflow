@@ -25,7 +25,8 @@ import (
 type ID struct {
 	Start time.Time
 	End   time.Time
-	Key   string
+	// Slot is a hash-range for keys (multiple keys can go to the same slot)
+	Slot string
 }
 
 func (p ID) String() string {

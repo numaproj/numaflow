@@ -74,22 +74,22 @@ func TestReadLoop_Startup(t *testing.T) {
 		{
 			Start: time.Unix(60, 0),
 			End:   time.Unix(120, 0),
-			Key:   "window",
+			Slot:  "window",
 		},
 		{
 			Start: time.Unix(60, 0),
 			End:   time.Unix(120, 0),
-			Key:   "window",
+			Slot:  "window",
 		},
 		{
 			Start: time.Unix(120, 0),
 			End:   time.Unix(180, 0),
-			Key:   "window",
+			Slot:  "window",
 		},
 		{
 			Start: time.Unix(180, 0),
 			End:   time.Unix(240, 0),
-			Key:   "window",
+			Slot:  "window",
 		},
 	}
 
@@ -100,14 +100,14 @@ func TestReadLoop_Startup(t *testing.T) {
 		assert.NoError(t, err)
 
 		var msgVal int
-		if id.Key == "even" {
+		if id.Slot == "even" {
 			msgVal = 2
 		} else {
 			msgVal = 3
 		}
 
 		// write messages to the store, which will be replayed
-		storeMessages := createStoreMessages(ctx, id.Key, msgVal, id.Start, 10)
+		storeMessages := createStoreMessages(ctx, id.Slot, msgVal, id.Start, 10)
 		for _, msg := range storeMessages {
 			err = memStore.Write(msg)
 			assert.NoError(t, err)

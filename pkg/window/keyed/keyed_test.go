@@ -51,9 +51,9 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			kw = NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
 			for k := range tt.given.keys {
-				kw.AddKey(k)
+				kw.AddSlot(k)
 			}
-			kw.AddKey(tt.input)
+			kw.AddSlot(tt.input)
 			assert.Equal(t, len(tt.expectedKeys), len(kw.keys))
 			for k := range tt.expectedKeys {
 				_, ok := kw.keys[k]
