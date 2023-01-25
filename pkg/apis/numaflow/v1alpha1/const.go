@@ -62,10 +62,11 @@ const (
 	JetStreamConfigMapKey                = "nats-js"              // key for nats-js.conf in the configmap
 
 	// container names.
-	CtrInit   = "init"
-	CtrMain   = "numa"
-	CtrUdf    = "udf"
-	CtrUdsink = "udsink"
+	CtrInit          = "init"
+	CtrMain          = "numa"
+	CtrUdf           = "udf"
+	CtrUdsink        = "udsink"
+	CtrUdtransformer = "transformer"
 
 	// components
 	ComponentISBSvc = "isbsvc"

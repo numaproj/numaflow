@@ -211,7 +211,7 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "duplicate vertex name")
 	})
 
-	t.Run("source and sink spedified", func(t *testing.T) {
+	t.Run("source and sink specified", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[0].Sink = &dfv1.Sink{}
 		err := ValidatePipeline(testObj)
@@ -219,7 +219,22 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "only one of")
 	})
 
-	t.Run("udf no image and builtin spedified", func(t *testing.T) {
+	t.Run("source data transformer not properly specified", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source = &dfv1.Source{
+			HTTP: &dfv1.HTTPSource{},
+			UDTransformer: &dfv1.UDTransformer{
+				Container: &dfv1.Container{
+					Image: "",
+				},
+			},
+		}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "can not specify an empty image")
+	})
+
+	t.Run("udf no image and builtin specified", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[1].UDF.Builtin = nil
 		err := ValidatePipeline(testObj)
@@ -227,7 +242,7 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "either specify a builtin function, or a customized image")
 	})
 
-	t.Run("udf both image and builtin spedified", func(t *testing.T) {
+	t.Run("udf both image and builtin specified", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[1].UDF.Container = &dfv1.Container{Image: "xxxx"}
 		err := ValidatePipeline(testObj)
@@ -316,12 +331,11 @@ func TestValidatePipeline(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("bad conditional forwarding", func(t *testing.T) {
+	t.Run("allow conditional forwarding from source vertex", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Edges[0].Conditions = &dfv1.ForwardConditions{KeyIn: []string{"hello"}}
 		err := ValidatePipeline(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid edge")
+		assert.NoError(t, err)
 	})
 }
 

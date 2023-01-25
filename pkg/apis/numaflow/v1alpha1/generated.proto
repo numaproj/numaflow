@@ -922,6 +922,9 @@ message Source {
 
   // +optional
   optional NatsSource nats = 4;
+
+  // +optional
+  optional UDTransformer transformer = 5;
 }
 
 // Status is a common structure which can be used for Status field.
@@ -972,6 +975,10 @@ message UDF {
 }
 
 message UDSink {
+  optional Container container = 1;
+}
+
+message UDTransformer {
   optional Container container = 1;
 }
 
