@@ -23,12 +23,12 @@ package pnf
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"strconv"
 	"sync"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
@@ -37,9 +37,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 
@@ -61,6 +59,7 @@ type ProcessAndForward struct {
 	toBuffers        map[string]isb.BufferWriter
 	whereToDecider   forward.ToWhichStepDecider
 	publishWatermark map[string]publish.Publisher
+	whereToCache     map[string][]string
 }
 
 // NewProcessAndForward will return a new ProcessAndForward instance
@@ -84,6 +83,7 @@ func NewProcessAndForward(ctx context.Context,
 		toBuffers:        toBuffers,
 		whereToDecider:   whereToDecider,
 		publishWatermark: pw,
+		whereToCache:     make(map[string][]string),
 	}
 }
 
@@ -114,17 +114,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 
 	processorWM := processor.Watermark(p.PartitionID.End)
 
-	//decide which ISB to write to
-	to, err := p.whereToDecider.WhereTo(p.PartitionID.Key)
-	if err != nil {
-		platformError.With(map[string]string{
-			metrics.LabelVertex:             p.vertexName,
-			metrics.LabelPipeline:           p.pipelineName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		}).Inc()
-		return err
-	}
-	messagesToStep := p.whereToStep(to)
+	messagesToStep := p.whereToStep()
 
 	// store write offsets to publish watermark
 	writeOffsets := make(map[string][]isb.Offset)
@@ -164,7 +154,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 
 	p.publishWM(processorWM, writeOffsets)
 	// delete the persisted messages
-	err = p.pbqReader.GC()
+	err := p.pbqReader.GC()
 	if err != nil {
 		return err
 	}
@@ -173,29 +163,17 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 
 // whereToStep assigns a message to the ISBs based on the Message.Key.
 // TODO: we have to introduce support for shuffle, output of a reducer can be input to the next reducer.
-func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
+func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][]isb.Message)
 
-	writeMessages := make([]isb.Message, 0)
-	// hacky
-	if sharedutil.StringSliceContains(to, dfv1.MessageKeyAll) || sharedutil.StringSliceContains(to, dfv1.MessageKeyDrop) {
-		writeMessages = make([]isb.Message, len(p.result))
-		for idx, msg := range p.result {
-			writeMessages[idx] = *msg
-		}
-	}
+	var to []string
+	var err error
+	for _, msg := range p.result {
+		if msg.Key == dfv1.MessageKeyAll {
 
-	// if a message is mapped to an isb, all the messages will be mapped to same isb (key is same)
-	switch {
-	case sharedutil.StringSliceContains(to, dfv1.MessageKeyAll):
-		for bufferID := range p.toBuffers {
-			messagesToStep[bufferID] = writeMessages
 		}
-	case sharedutil.StringSliceContains(to, dfv1.MessageKeyDrop):
-	default:
-		var err error
-		for _, msg := range p.result {
+		if _, ok := p.whereToCache[msg.Key]; !ok {
 			to, err = p.whereToDecider.WhereTo(msg.Key)
 			if err != nil {
 				platformError.With(map[string]string{
@@ -205,13 +183,20 @@ func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
 				}).Inc()
 				continue // for now
 			}
+			p.whereToCache[msg.Key] = to
+		} else {
+			to = p.whereToCache[msg.Key]
+		}
 
-			for _, bufferID := range to {
-				if _, ok := messagesToStep[bufferID]; !ok {
-					messagesToStep[bufferID] = make([]isb.Message, 0)
-				}
-				messagesToStep[bufferID] = append(messagesToStep[bufferID], *msg)
+		if len(to) == 0 {
+			continue
+		}
+
+		for _, bufferID := range to {
+			if _, ok := messagesToStep[bufferID]; !ok {
+				messagesToStep[bufferID] = make([]isb.Message, 0)
 			}
+			messagesToStep[bufferID] = append(messagesToStep[bufferID], *msg)
 		}
 
 	}
@@ -230,9 +215,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 	}
 
 	writeMessages := resultMessages
-
-	fmt.Println(bufferID, len(resultMessages), resultMessages)
-
+	
 	// write to isb with infinite exponential backoff (until shutdown is triggered)
 	var offsets []isb.Offset
 	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {

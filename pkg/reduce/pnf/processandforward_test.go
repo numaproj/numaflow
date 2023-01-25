@@ -40,22 +40,22 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
 	"github.com/stretchr/testify/assert"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	udfcall "github.com/numaproj/numaflow/pkg/udf/function"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type myForwardTest struct {
+	buffers []string
 }
 
 func (f myForwardTest) WhereTo(key string) ([]string, error) {
 	if strings.Compare(key, "test-forward-one") == 0 {
 		return []string{"buffer1"}, nil
 	} else if strings.Compare(key, "test-forward-all") == 0 {
-		return []string{dfv1.MessageKeyAll}, nil
+		return f.buffers, nil
 	}
-	return []string{dfv1.MessageKeyDrop}, nil
+	return []string{}, nil
 }
 
 func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
@@ -134,6 +134,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 
 	assert.NoError(t, err)
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
+
 	// create pf using key and reducer
 	pf := NewProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{}, publishWatermark)
 
@@ -276,6 +277,14 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 		},
 	}
 
+	buffers := make([]string, 0)
+	for k, _ := range toBuffers {
+		buffers = append(buffers, k)
+	}
+	whereto := &myForwardTest{
+		buffers: buffers,
+	}
+
 	pf := ProcessAndForward{
 		PartitionID:      testPartition,
 		UDF:              nil,
@@ -283,8 +292,9 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 		pbqReader:        simplePbq,
 		log:              logging.FromContext(ctx),
 		toBuffers:        toBuffers,
-		whereToDecider:   myForwardTest{},
+		whereToDecider:   whereto,
 		publishWatermark: pw,
+		whereToCache:     make(map[string][]string),
 	}
 
 	return pf
