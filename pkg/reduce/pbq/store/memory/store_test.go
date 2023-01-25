@@ -34,7 +34,7 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "new-partition",
+		Slot:  "new-partition",
 	}
 	// create a store of size 100 (it can store max 100 messages)
 	memStore, err := NewMemoryStores(WithStoreSize(100)).CreateStore(ctx, partitionID)
@@ -57,7 +57,7 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "new-partition",
+		Slot:  "new-partition",
 	}
 
 	// create a store of size 100 (it can store max 100 messages)
@@ -88,7 +88,7 @@ func TestEmptyStore_Read(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "new-partition",
+		Slot:  "new-partition",
 	}
 
 	memStore, err := NewMemoryStores(WithStoreSize(storeSize)).CreateStore(ctx, partitionID)
@@ -109,7 +109,7 @@ func TestFullStore_Write(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "new-partition",
+		Slot:  "new-partition",
 	}
 
 	memStore, err := NewMemoryStores(WithStoreSize(storeSize)).CreateStore(ctx, partitionID)

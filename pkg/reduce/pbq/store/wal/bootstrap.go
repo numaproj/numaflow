@@ -93,7 +93,7 @@ func decodeHeader(buf io.Reader) (*partition.ID, error) {
 	return &partition.ID{
 		Start: time.UnixMilli(hp.S).In(location),
 		End:   time.UnixMilli(hp.E).In(location),
-		Key:   string(key),
+		Slot:  string(key),
 	}, nil
 }
 

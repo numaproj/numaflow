@@ -85,7 +85,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
 		End:   time.UnixMilli(120000),
-		Key:   "partition-1",
+		Slot:  "partition-1",
 	}
 	var err error
 	var pbqManager *pbq.Manager
@@ -187,7 +187,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			id: partition.ID{
 				Start: time.UnixMilli(60000),
 				End:   time.UnixMilli(120000),
-				Key:   "test-forward-one",
+				Slot:  "test-forward-one",
 			},
 			buffers:  []*simplebuffer.InMemoryBuffer{test1Buffer1, test1Buffer2},
 			pf:       createProcessAndForward(ctx, "test-forward-one", pbqManager, toBuffers1),
@@ -202,7 +202,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			id: partition.ID{
 				Start: time.UnixMilli(60000),
 				End:   time.UnixMilli(120000),
-				Key:   "test-forward-all",
+				Slot:  "test-forward-all",
 			},
 			buffers:  []*simplebuffer.InMemoryBuffer{test2Buffer1, test2Buffer2},
 			pf:       createProcessAndForward(ctx, "test-forward-all", pbqManager, toBuffers2),
@@ -217,7 +217,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			id: partition.ID{
 				Start: time.UnixMilli(60000),
 				End:   time.UnixMilli(120000),
-				Key:   "test-drop-all",
+				Slot:  "test-drop-all",
 			},
 			buffers:  []*simplebuffer.InMemoryBuffer{test3Buffer1, test3Buffer2},
 			pf:       createProcessAndForward(ctx, "test-drop-all", pbqManager, toBuffers3),
@@ -251,7 +251,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
 		End:   time.UnixMilli(120000),
-		Key:   key,
+		Slot:  key,
 	}
 
 	// create a pbq for a partition

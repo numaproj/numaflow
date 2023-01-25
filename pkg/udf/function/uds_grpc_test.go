@@ -27,6 +27,7 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
 	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
@@ -305,7 +306,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		partitionID := &partition.ID{
 			Start: time.Unix(60, 0),
 			End:   time.Unix(120, 0),
-			Key:   "test",
+			Slot:  "test",
 		}
 
 		got, err := u.ApplyReduce(ctx, partitionID, messageCh)
@@ -356,7 +357,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		partitionID := &partition.ID{
 			Start: time.Unix(60, 0),
 			End:   time.Unix(120, 0),
-			Key:   "test",
+			Slot:  "test",
 		}
 
 		_, err := u.ApplyReduce(ctx, partitionID, messageCh)
@@ -399,7 +400,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		partitionID := &partition.ID{
 			Start: time.Unix(60, 0),
 			End:   time.Unix(120, 0),
-			Key:   "test",
+			Slot:  "test",
 		}
 		_, err := u.ApplyReduce(ctx, partitionID, messageCh)
 
@@ -468,7 +469,7 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 	partitionID := &partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "test",
+		Slot:  "test",
 	}
 
 	result, err := u.ApplyReduce(ctx, partitionID, messageCh)
