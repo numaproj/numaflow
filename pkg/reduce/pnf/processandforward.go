@@ -31,7 +31,6 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
@@ -168,9 +167,6 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	var to []string
 	var err error
 	for _, msg := range p.result {
-		if msg.Key == dfv1.MessageKeyAll {
-
-		}
 		if _, ok := p.whereToCache[msg.Key]; !ok {
 			to, err = p.whereToDecider.WhereTo(msg.Key)
 			if err != nil {

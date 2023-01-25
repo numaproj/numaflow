@@ -278,7 +278,7 @@ func createProcessAndForward(ctx context.Context, key string, pbqManager *pbq.Ma
 	}
 
 	buffers := make([]string, 0)
-	for k, _ := range toBuffers {
+	for k := range toBuffers {
 		buffers = append(buffers, k)
 	}
 	whereto := &myForwardTest{
