@@ -72,14 +72,8 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 		if err == nil {
 			return true, nil
 		}
-
-		if resp.StatusCode >= 500 {
-			fmt.Printf("Got server-side error %v, retrying.\n", err)
-			return false, nil
-		}
-
-		fmt.Printf("Got non-server-side error %v, skip retrying.\n", err)
-		return true, nil
+		fmt.Printf("Got error %v, retrying.\n", err)
+		return false, nil
 	})
 
 	if err != nil {
