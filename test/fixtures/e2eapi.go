@@ -69,10 +69,10 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 	}
 	_ = wait.ExponentialBackoffWithContext(context.Background(), retryBackOff, func() (done bool, err error) {
 		resp, err = http.Post(url, "application/json", strings.NewReader(body))
-		if err == nil {
+		if err == nil && resp.StatusCode < 300 {
 			return true, nil
 		}
-		fmt.Printf("Got error %v, retrying.\n", err)
+		fmt.Printf("Got error %v, response %v, retrying.\n", err, *resp)
 		return false, nil
 	})
 
