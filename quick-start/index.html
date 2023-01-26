@@ -1729,7 +1729,7 @@ kubectl<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span cl
 <p>In this example, there are five vertices in a pipeline. An <a href="../user-guide/sources/http/">HTTP</a> source vertex which serves an HTTP endpoint to receive numbers as source data, a <a href="../user-guide/user-defined-functions/map/map/">UDF</a> vertex to tag the ingested numbers with the key <code>even</code> or <code>odd</code>, three <a href="../user-guide/sinks/log/">Log</a> sinks, one to print the <code>even</code> numbers, one to print the <code>odd</code> numbers, and the other one to print both the even and odd numbers.</p>
 <p><img alt="Pipeline Diagram" src="../assets/even-odd.png" /></p>
 <p>Create the <code>even-odd</code> pipeline.</p>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/2-even-odd-pipeline.yaml
 
 <span class="c1"># Wait for pods to be ready</span>
 kubectl<span class="w"> </span>get<span class="w"> </span>pods
@@ -1767,7 +1767,7 @@ kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </
 <img alt="Numaflow UI" src="../assets/numaflow-ui-advanced-pipeline.png" /></p>
 <p>The source code of the <code>even-odd</code> <a href="../user-guide/user-defined-functions/map/map/">User Defined Function</a> can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd">here</a>. You also can replace the <a href="../user-guide/sinks/log/">Log</a> Sink with some other sinks like <a href="../user-guide/sinks/kafka/">Kafka</a> to forward the data to Kafka topics.</p>
 <p>The pipeline can be deleted by</p>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/2-even-odd-pipeline.yaml
 </code></pre></div>
 <h2 id="a-pipeline-with-reduce-aggregation">A pipeline with reduce (aggregation)<a class="headerlink" href="#a-pipeline-with-reduce-aggregation" title="Permanent link">&para;</a></h2>
 <p><a href="../user-guide/user-defined-functions/reduce/examples/">Reduce Examples</a></p>
