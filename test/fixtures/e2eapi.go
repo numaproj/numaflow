@@ -78,7 +78,7 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 			return false, nil
 		}
 
-		fmt.Printf("Got non-server-side error %v, stop retrying.\n", err)
+		fmt.Printf("Got non-server-side error %v, skip retrying.\n", err)
 		return true, nil
 	})
 
