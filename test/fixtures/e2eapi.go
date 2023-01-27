@@ -18,7 +18,6 @@ package fixtures
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -67,7 +66,7 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 		Steps:    3,
 		Duration: time.Second * 5,
 	}
-	_ = wait.ExponentialBackoffWithContext(context.Background(), retryBackOff, func() (done bool, err error) {
+	_ = wait.ExponentialBackoff(retryBackOff, func() (done bool, err error) {
 		resp, err = http.Post(url, "application/json", strings.NewReader(body))
 		if err == nil && resp.StatusCode < 300 {
 			return true, nil
