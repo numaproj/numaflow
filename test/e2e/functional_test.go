@@ -21,6 +21,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -102,12 +103,12 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	assert.Equal(s.T(), pipelineName, *m.Pipeline)
 }
 
-func (s *FunctionalSuite) TestFiltering() {
-	w := s.Given().Pipeline("@testdata/filtering.yaml").
+func (s *FunctionalSuite) TestUDFFiltering() {
+	w := s.Given().Pipeline("@testdata/udf-filtering.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "filtering"
+	pipelineName := "udf-filtering"
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
@@ -129,6 +130,54 @@ func (s *FunctionalSuite) TestFiltering() {
 	w.Expect().SinkNotContains("out", expect0)
 	w.Expect().SinkNotContains("out", expect1)
 	w.Expect().SinkNotContains("out", expect2)
+}
+
+func (s *FunctionalSuite) TestSourceFiltering() {
+	w := s.Given().Pipeline("@testdata/source-filtering.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "source-filtering"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	expect0 := `{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`
+	expect1 := `{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`
+	expect2 := `{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`
+	expect3 := `{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`
+	expect4 := `{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`
+
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect0))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect1))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect2))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect3))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect4)))
+
+	w.Expect().SinkContains("out", expect3)
+	w.Expect().SinkContains("out", expect4)
+	w.Expect().SinkNotContains("out", expect0)
+	w.Expect().SinkNotContains("out", expect1)
+	w.Expect().SinkNotContains("out", expect2)
+}
+
+func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
+	w := s.Given().Pipeline("@testdata/extract-event-time-from-payload.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "extract-event-time"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	// In this test, we send a message with event time being now, apply event time extractor and verify from log that the message event time gets updated.
+	timeNow := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	testMsg := `{"test": 21, "item": [{"id": 1, "name": "bala", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "bala", "time": "2021-02-18T21:54:42.123Z"}]}`
+
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsg)).WithHeader("X-Numaflow-Event-Time", timeNow))
+
+	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 2, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1))
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {

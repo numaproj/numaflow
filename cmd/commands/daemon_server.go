@@ -25,8 +25,10 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/daemon/server"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
+
 	"github.com/spf13/cobra"
+
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 func NewDaemonServerCommand() *cobra.Command {

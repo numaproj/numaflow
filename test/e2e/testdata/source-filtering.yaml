@@ -1,0 +1,22 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: source-filtering
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+        transformer:
+          builtin:
+            name: filter
+            kwargs:
+              expression: int(json(payload).id) < 100 && json(payload).msg == 'hello' && sprig.contains('good', string(json(payload).desc))
+    - name: out
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+  edges:
+    - from: in
+      to: out

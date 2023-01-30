@@ -23,12 +23,14 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/spf13/cobra"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sinks"
 	"github.com/numaproj/numaflow/pkg/sources"
 	"github.com/numaproj/numaflow/pkg/udf"
-	"github.com/spf13/cobra"
+
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
