@@ -76,7 +76,7 @@ In this example, there are five vertices in a pipeline. An [HTTP](./user-guide/s
 Create the `even-odd` pipeline.
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/2-even-odd-pipeline.yaml
 
 # Wait for pods to be ready
 kubectl get pods
@@ -119,7 +119,7 @@ The source code of the `even-odd` [User Defined Function](user-guide/user-define
 The pipeline can be deleted by
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/test/e2e/testdata/even-odd.yaml
+kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/2-even-odd-pipeline.yaml
 ```
 
 ## A pipeline with reduce (aggregation)
