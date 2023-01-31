@@ -3791,6 +3791,52 @@ JobTemplate is used to customize Jobs
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.Transformer">
+Transformer
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>args</code></br> <em> \[\]string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>kwargs</code></br> <em> map\[string\]string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.UDF">
 UDF
 </h3>
@@ -3899,6 +3945,17 @@ Description
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>builtin</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Transformer"> Transformer </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>

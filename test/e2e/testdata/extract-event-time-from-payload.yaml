@@ -1,0 +1,23 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: extract-event-time
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+        transformer:
+          builtin:
+            name: eventTimeExtractor
+            kwargs:
+              expression: json(payload).item[1].time
+              # Use RFC3339 time format for testing.
+              # More types of format in https://cs.opensource.google/go/go/+/refs/tags/go1.19.5:src/time/format.go
+              format: 2006-01-02T15:04:05Z07:00
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out

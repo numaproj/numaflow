@@ -41,6 +41,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 	names := make(map[string]bool)
 	sources := make(map[string]dfv1.AbstractVertex)
+	udTransformers := make(map[string]dfv1.AbstractVertex)
 	sinks := make(map[string]dfv1.AbstractVertex)
 	mapUdfs := make(map[string]dfv1.AbstractVertex)
 	reduceUdfs := make(map[string]dfv1.AbstractVertex)
@@ -58,6 +59,9 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
 			}
 			sources[v.Name] = v
+			if v.Source.UDTransformer != nil {
+				udTransformers[v.Name] = v
+			}
 		}
 		if v.Sink != nil {
 			if v.Source != nil || v.UDF != nil {
@@ -85,9 +89,17 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("pipeline has no sink, at least one vertex with 'sink' defined is required")
 	}
 
-	for k, s := range sources {
-		if x := s.Source.UDTransformer; x != nil && x.Container != nil && x.Container.Image == "" {
-			return fmt.Errorf("invalid vertex %q, can not specify an empty image for a customized source data transformer", k)
+	for k, t := range udTransformers {
+		transformer := t.Source.UDTransformer
+		if transformer.Container != nil {
+			if transformer.Container.Image == "" && transformer.Builtin == nil {
+				return fmt.Errorf("invalid source vertex %q, either specify a builtin transformer, or a customized image", k)
+			}
+			if transformer.Container.Image != "" && transformer.Builtin != nil {
+				return fmt.Errorf("invalid source vertex %q, can not specify both builtin transformer, and a customized image", k)
+			}
+		} else if transformer.Builtin == nil {
+			return fmt.Errorf("invalid source vertex %q, either specify a builtin transformer, or a customized image", k)
 		}
 	}
 

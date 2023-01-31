@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: filtering
+  name: udf-filtering
 spec:
   vertices:
     - name: in

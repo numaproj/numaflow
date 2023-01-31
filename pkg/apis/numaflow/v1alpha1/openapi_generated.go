@@ -86,6 +86,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Status":                         schema_pkg_apis_numaflow_v1alpha1_Status(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS":                            schema_pkg_apis_numaflow_v1alpha1_TLS(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates":                      schema_pkg_apis_numaflow_v1alpha1_Templates(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer":                    schema_pkg_apis_numaflow_v1alpha1_Transformer(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF":                            schema_pkg_apis_numaflow_v1alpha1_UDF(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink":                         schema_pkg_apis_numaflow_v1alpha1_UDSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer":                  schema_pkg_apis_numaflow_v1alpha1_UDTransformer(ref),
@@ -3144,6 +3145,55 @@ func schema_pkg_apis_numaflow_v1alpha1_Templates(ref common.ReferenceCallback) c
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_Transformer(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"args": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"kwargs": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_UDF(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3205,12 +3255,16 @@ func schema_pkg_apis_numaflow_v1alpha1_UDTransformer(ref common.ReferenceCallbac
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
 						},
 					},
+					"builtin": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer"),
+						},
+					},
 				},
-				Required: []string{"container"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer"},
 	}
 }
 

@@ -963,6 +963,17 @@ message Templates {
   optional JobTemplate job = 2;
 }
 
+message Transformer {
+  // +kubebuilder:validation:Enum=eventTimeExtractor;filter
+  optional string name = 1;
+
+  // +optional
+  repeated string args = 2;
+
+  // +optional
+  map<string, string> kwargs = 3;
+}
+
 message UDF {
   // +optional
   optional Container container = 1;
@@ -979,7 +990,11 @@ message UDSink {
 }
 
 message UDTransformer {
+  // +optional
   optional Container container = 1;
+
+  // +optional
+  optional Transformer builtin = 2;
 }
 
 // +genclient
