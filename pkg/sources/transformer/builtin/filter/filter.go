@@ -34,7 +34,7 @@ type filter struct {
 func New(args map[string]string) (functionsdk.MapTFunc, error) {
 	expr, existing := args["expression"]
 	if !existing {
-		return nil, fmt.Errorf("missing \"expression\"")
+		return nil, fmt.Errorf(`missing "expression"`)
 	}
 	f := filter{
 		expression: expr,

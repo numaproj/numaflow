@@ -39,7 +39,7 @@ type eventTimeExtractor struct {
 func New(args map[string]string) (functionsdk.MapTFunc, error) {
 	expr, existing := args["expression"]
 	if !existing {
-		return nil, fmt.Errorf("missing \"expression\"")
+		return nil, fmt.Errorf(`missing "expression"`)
 	}
 
 	format, existing := args["format"]
@@ -65,7 +65,7 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 // apply compiles the payload to extract the new event time. If there is any error during extraction,
 // we pass on the default event time. Otherwise, we assign the new event time to the message.
 func (e eventTimeExtractor) apply(et time.Time, payload []byte) (functionsdk.MessageT, error) {
-	timeStr, err := expr.Compile(e.expression, payload)
+	timeStr, err := expr.EvalStr(e.expression, payload)
 	if err != nil {
 		return functionsdk.MessageTToAll(et, payload), err
 	}

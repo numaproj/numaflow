@@ -24,14 +24,13 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sinks"
 	"github.com/numaproj/numaflow/pkg/sources"
 	"github.com/numaproj/numaflow/pkg/udf"
-
-	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
 func NewProcessorCommand() *cobra.Command {

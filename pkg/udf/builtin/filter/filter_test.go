@@ -26,7 +26,7 @@ import (
 )
 
 var _key = ""
-var jsonMsg = `{"test": 21, "item": [{"id": 1, "name": "bala"},{"id": 2, "name": "bala"}]}`
+var jsonMsg = `{"test": 21, "item": [{"id": 1, "name": "numa"},{"id": 2, "name": "numa"}]}`
 var strMsg = `welcome to numaflow`
 var base64Msg = base64.StdEncoding.EncodeToString([]byte(strMsg))
 

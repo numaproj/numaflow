@@ -173,7 +173,7 @@ func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
 
 	// In this test, we send a message with event time being now, apply event time extractor and verify from log that the message event time gets updated.
 	timeNow := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	testMsg := `{"test": 21, "item": [{"id": 1, "name": "bala", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "bala", "time": "2021-02-18T21:54:42.123Z"}]}`
+	testMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsg)).WithHeader("X-Numaflow-Event-Time", timeNow))
 

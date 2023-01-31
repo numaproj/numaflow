@@ -23,11 +23,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/daemon/server"
-
 	"github.com/spf13/cobra"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/daemon/server"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 

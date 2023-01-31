@@ -22,27 +22,27 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_compile_expression(t *testing.T) {
-	t.Run("test a simple compile case", func(t *testing.T) {
-		b, err := Compile(`json(payload).a`, []byte(`{"a": "b"}`))
+func Test_eval_expression(t *testing.T) {
+	t.Run("test a simple evaluation case", func(t *testing.T) {
+		b, err := EvalStr(`json(payload).a`, []byte(`{"a": "b"}`))
 		assert.NoError(t, err)
 		assert.Equal(t, "b", b)
 	})
 
-	t.Run("test nested json compile case", func(t *testing.T) {
-		c, err := Compile(`json(payload).a.b`, []byte(`{"a": {"b": "c"}}`))
+	t.Run("test nested json evaluation case", func(t *testing.T) {
+		c, err := EvalStr(`json(payload).a.b`, []byte(`{"a": {"b": "c"}}`))
 		assert.NoError(t, err)
 		assert.Equal(t, "c", c)
 	})
 
-	t.Run("test nested json compile case, list of items", func(t *testing.T) {
-		time, err := Compile(`json(payload).item[1].time`, []byte(`{"test": 21, "item": [{"id": 1, "name": "bala", "time": "2021-02-18T21:54:42.123Z"},{"id": 2, "name": "bala", "time": "2021-02-18T21:54:42.123Z"}]}`))
+	t.Run("test nested json evaluation case, list of items", func(t *testing.T) {
+		time, err := EvalStr(`json(payload).item[1].time`, []byte(`{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2021-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`))
 		assert.NoError(t, err)
 		assert.Equal(t, "2021-02-18T21:54:42.123Z", time)
 	})
 
 	t.Run("test invalid expression", func(t *testing.T) {
-		_, err := Compile(`ab\na`, []byte(`{"a": "b"}`))
+		_, err := EvalStr(`ab\na`, []byte(`{"a": "b"}`))
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unable to compile expression")
 	})
