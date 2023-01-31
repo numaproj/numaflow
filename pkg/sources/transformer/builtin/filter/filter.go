@@ -19,6 +19,7 @@ package filter
 import (
 	"context"
 	"fmt"
+	"time"
 
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 
@@ -30,7 +31,7 @@ type filter struct {
 	expression string
 }
 
-func New(args map[string]string) (functionsdk.MapFunc, error) {
+func New(args map[string]string) (functionsdk.MapTFunc, error) {
 	expr, existing := args["expression"]
 	if !existing {
 		return nil, fmt.Errorf(`missing "expression"`)
@@ -39,23 +40,23 @@ func New(args map[string]string) (functionsdk.MapFunc, error) {
 		expression: expr,
 	}
 
-	return func(ctx context.Context, key string, datum functionsdk.Datum) functionsdk.Messages {
+	return func(ctx context.Context, key string, datum functionsdk.Datum) functionsdk.MessageTs {
 		log := logging.FromContext(ctx)
-		resultMsg, err := f.apply(datum.Value())
+		resultMsg, err := f.apply(datum.EventTime(), datum.Value())
 		if err != nil {
 			log.Errorf("Filter map function apply got an error: %v", err)
 		}
-		return functionsdk.MessagesBuilder().Append(resultMsg)
+		return functionsdk.MessageTsBuilder().Append(resultMsg)
 	}, nil
 }
 
-func (f filter) apply(msg []byte) (functionsdk.Message, error) {
+func (f filter) apply(et time.Time, msg []byte) (functionsdk.MessageT, error) {
 	result, err := expr.EvalBool(f.expression, msg)
 	if err != nil {
-		return functionsdk.MessageToDrop(), err
+		return functionsdk.MessageTToDrop(), err
 	}
 	if result {
-		return functionsdk.MessageToAll(msg), nil
+		return functionsdk.MessageTToAll(et, msg), nil
 	}
-	return functionsdk.MessageToDrop(), nil
+	return functionsdk.MessageTToDrop(), nil
 }

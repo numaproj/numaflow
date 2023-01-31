@@ -125,4 +125,18 @@ func TestExpression(t *testing.T) {
 		assert.Equal(t, base64Msg, string(result.Items()[0].Value))
 	})
 
+	t.Run("event time unchanged", func(t *testing.T) {
+		args := map[string]string{"expression": "sprig.contains('numaflow', sprig.b64dec(payload))"}
+
+		handle, err := New(args)
+		assert.NoError(t, err)
+
+		testEventTime := time.Date(2022, 01, 01, 01, 01, 01, 01, time.UTC)
+		result := handle(context.Background(), _key, &testDatum{
+			value:     []byte(base64Msg),
+			eventTime: testEventTime,
+			watermark: time.Time{},
+		})
+		assert.Equal(t, testEventTime, result.Items()[0].EventTime)
+	})
 }

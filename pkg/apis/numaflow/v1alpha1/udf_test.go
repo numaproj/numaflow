@@ -94,4 +94,27 @@ func Test_getUDFContainer(t *testing.T) {
 		assert.Contains(t, envNames, "e")
 		assert.NotContains(t, envNames, "a")
 	})
+
+	t.Run("with built-in functions, with multiple KWArgs", func(t *testing.T) {
+		// This test verify when we have multiple KWArgs in map, after converting them to a single `--kwargs=a=x,b=y...` string, we maintain a consistent order.
+		x := UDF{
+			Builtin: &Function{
+				Name: "filter",
+				KWArgs: map[string]string{
+					"expression": "json(payload).a > 1",
+					"extra-arg1": "1",
+					"extra-arg2": "2",
+					"extra-arg3": "3",
+					"extra-arg4": "4",
+				},
+			},
+		}
+		c1 := x.getUDFContainer(getContainerReq{
+			image: "main-image",
+		})
+		c2 := x.getUDFContainer(getContainerReq{
+			image: "main-image",
+		})
+		assert.Equal(t, getKWArgs(c1), getKWArgs(c2))
+	})
 }

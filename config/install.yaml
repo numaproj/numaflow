@@ -6076,6 +6076,24 @@ spec:
                           type: object
                         transformer:
                           properties:
+                            builtin:
+                              properties:
+                                args:
+                                  items:
+                                    type: string
+                                  type: array
+                                kwargs:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                name:
+                                  enum:
+                                  - eventTimeExtractor
+                                  - filter
+                                  type: string
+                              required:
+                              - name
+                              type: object
                             container:
                               properties:
                                 args:
@@ -6188,8 +6206,6 @@ spec:
                                     type: object
                                   type: array
                               type: object
-                          required:
-                          - container
                           type: object
                       type: object
                     tolerations:
@@ -9569,6 +9585,24 @@ spec:
                     type: object
                   transformer:
                     properties:
+                      builtin:
+                        properties:
+                          args:
+                            items:
+                              type: string
+                            type: array
+                          kwargs:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          name:
+                            enum:
+                            - eventTimeExtractor
+                            - filter
+                            type: string
+                        required:
+                        - name
+                        type: object
                       container:
                         properties:
                           args:
@@ -9681,8 +9715,6 @@ spec:
                               type: object
                             type: array
                         type: object
-                    required:
-                    - container
                     type: object
                 type: object
               toEdges:

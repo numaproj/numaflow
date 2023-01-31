@@ -41,6 +41,7 @@ func init() {
 	rootCmd.AddCommand(NewISBSvcBufferDeleteCommand())
 	rootCmd.AddCommand(NewISBSvcBufferValidateCommand())
 	rootCmd.AddCommand(NewBuiltinUDFCommand())
+	rootCmd.AddCommand(NewBuiltinTransformerCommand())
 	rootCmd.AddCommand(NewDaemonServerCommand())
 	rootCmd.AddCommand(NewServerCommand())
 }

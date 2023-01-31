@@ -24,10 +24,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/udf/builtin"
+	"github.com/numaproj/numaflow/pkg/sources/transformer/builtin"
 )
 
-func NewBuiltinUDFCommand() *cobra.Command {
+func NewBuiltinTransformerCommand() *cobra.Command {
 	var (
 		name      string
 		cmdArgs   []string
@@ -35,12 +35,12 @@ func NewBuiltinUDFCommand() *cobra.Command {
 	)
 
 	command := &cobra.Command{
-		Use:   "builtin-udf",
-		Short: "Starts builtin udf functions",
+		Use:   "builtin-transformer",
+		Short: "Starts builtin transformers",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(name) == 0 {
 				cmd.HelpFunc()(cmd, args)
-				return fmt.Errorf("function name missing, use '--name to specify a builtin function")
+				return fmt.Errorf("transformer name missing, use '--name to specify a builtin transformer")
 			}
 			var decodedArgs []string
 			for _, arg := range cmdArgs {
@@ -65,13 +65,13 @@ func NewBuiltinUDFCommand() *cobra.Command {
 				Args:   decodedArgs,
 				KWArgs: decodedKWArgs,
 			}
-			log := logging.NewLogger().Named("builtin-udf")
+			log := logging.NewLogger().Named("builtin-transformer")
 			return b.Start(logging.WithLogger(signals.SetupSignalHandler(), log))
 		},
 	}
-	command.Flags().StringVarP(&name, "name", "n", "", "function name")
-	command.Flags().StringSliceVarP(&cmdArgs, "args", "a", []string{}, "function args")                   // --args=xxa,xxb --args=xxc
-	command.Flags().StringToStringVarP(&cmdKWArgs, "kwargs", "k", map[string]string{}, "function kwargs") // --kwargs=a=b,c=d
+	command.Flags().StringVarP(&name, "name", "n", "", "transformer name")
+	command.Flags().StringSliceVarP(&cmdArgs, "args", "a", []string{}, "transformer args")                   // --args=xxa,xxb --args=xxc
+	command.Flags().StringToStringVarP(&cmdKWArgs, "kwargs", "k", map[string]string{}, "transformer kwargs") // --kwargs=a=b,c=d
 
 	return command
 }

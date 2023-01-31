@@ -19,9 +19,10 @@ package expr
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+
 	"github.com/Masterminds/sprig/v3"
 	"github.com/antonmedv/expr"
-	"strconv"
 )
 
 var sprigFuncMap = sprig.GenericFuncMap()
