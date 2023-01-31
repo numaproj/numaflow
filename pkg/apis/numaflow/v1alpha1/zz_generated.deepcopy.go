@@ -69,6 +69,11 @@ func (in *AbstractPodTemplate) DeepCopyInto(out *AbstractPodTemplate) {
 		*out = new(v1.Affinity)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.RuntimeClassName != nil {
+		in, out := &in.RuntimeClassName, &out.RuntimeClassName
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 

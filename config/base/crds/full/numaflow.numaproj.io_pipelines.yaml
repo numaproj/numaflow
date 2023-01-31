@@ -810,6 +810,8 @@ spec:
                       replicas:
                         format: int32
                         type: integer
+                      runtimeClassName:
+                        type: string
                       securityContext:
                         properties:
                           fsGroup:
@@ -1423,6 +1425,8 @@ spec:
                         format: int32
                         type: integer
                       priorityClassName:
+                        type: string
+                      runtimeClassName:
                         type: string
                       securityContext:
                         properties:
@@ -2781,6 +2785,8 @@ spec:
                       format: int32
                       type: integer
                     priorityClassName:
+                      type: string
+                    runtimeClassName:
                       type: string
                     scale:
                       properties:
