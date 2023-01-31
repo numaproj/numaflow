@@ -233,19 +233,10 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 
 	spec := &corev1.PodSpec{
-		NodeSelector:       v.Spec.NodeSelector,
-		Tolerations:        v.Spec.Tolerations,
-		SecurityContext:    v.Spec.SecurityContext,
-		ImagePullSecrets:   v.Spec.ImagePullSecrets,
-		PriorityClassName:  v.Spec.PriorityClassName,
-		Priority:           v.Spec.Priority,
-		Affinity:           v.Spec.Affinity,
-		ServiceAccountName: v.Spec.ServiceAccountName,
-		RuntimeClassName:   v.Spec.RuntimeClassName,
-		Subdomain:          v.GetHeadlessServiceName(),
-		Volumes:            append(volumes, v.Spec.Volumes...),
-		InitContainers:     v.getInitContainers(req),
-		Containers:         append(containers, v.Spec.Sidecars...),
+		Subdomain:      v.GetHeadlessServiceName(),
+		Volumes:        append(volumes, v.Spec.Volumes...),
+		InitContainers: v.getInitContainers(req),
+		Containers:     append(containers, v.Spec.Sidecars...),
 	}
 	v.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
 	if v.Spec.ContainerTemplate != nil {

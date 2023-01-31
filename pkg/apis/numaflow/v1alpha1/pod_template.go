@@ -86,6 +86,7 @@ func (apt *AbstractPodTemplate) ApplyToPodSpec(ps *corev1.PodSpec) {
 	ps.Priority = apt.Priority
 	ps.Affinity = apt.Affinity
 	ps.ServiceAccountName = apt.ServiceAccountName
+	ps.RuntimeClassName = apt.RuntimeClassName
 }
 
 // ApplyToPodTemplateSpec updates the PodTemplateSpec with the values in the AbstractPodTemplate
