@@ -190,8 +190,30 @@ func TestGetPodSpec(t *testing.T) {
 	t.Run("test source", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{}
+		testObj.Spec.AbstractPodTemplate = AbstractPodTemplate{
+			NodeSelector:       map[string]string{"a": "b"},
+			Tolerations:        []corev1.Toleration{{Key: "key", Value: "val", Operator: corev1.TolerationOpEqual}},
+			SecurityContext:    &corev1.PodSecurityContext{},
+			ImagePullSecrets:   []corev1.LocalObjectReference{{Name: "name"}},
+			PriorityClassName:  "pname",
+			Priority:           pointer.Int32(111),
+			ServiceAccountName: "sa",
+			RuntimeClassName:   pointer.String("run"),
+		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
+		assert.NotNil(t, s.NodeSelector)
+		assert.Contains(t, s.NodeSelector, "a")
+		assert.NotNil(t, s.Tolerations)
+		assert.Equal(t, 1, len(s.Tolerations))
+		assert.NotNil(t, s.SecurityContext)
+		assert.Equal(t, 1, len(s.ImagePullSecrets))
+		assert.Equal(t, "pname", s.PriorityClassName)
+		assert.NotNil(t, s.Priority)
+		assert.Equal(t, int32(111), *s.Priority)
+		assert.Equal(t, "sa", s.ServiceAccountName)
+		assert.NotNil(t, s.RuntimeClassName)
+		assert.Equal(t, "run", *s.RuntimeClassName)
 		assert.Equal(t, 1, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)

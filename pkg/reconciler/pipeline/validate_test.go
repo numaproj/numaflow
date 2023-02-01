@@ -38,8 +38,11 @@ var (
 		Spec: dfv1.PipelineSpec{
 			Vertices: []dfv1.AbstractVertex{
 				{
-					Name:   "input",
-					Source: &dfv1.Source{},
+					Name: "input",
+					Source: &dfv1.Source{
+						UDTransformer: &dfv1.UDTransformer{
+							Builtin: &dfv1.Transformer{Name: "filter"},
+						}},
 				},
 				{
 					Name: "p1",
@@ -219,19 +222,20 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "only one of")
 	})
 
-	t.Run("source data transformer not properly specified", func(t *testing.T) {
+	t.Run("transformer no image and builtin specified", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[0].Source = &dfv1.Source{
-			HTTP: &dfv1.HTTPSource{},
-			UDTransformer: &dfv1.UDTransformer{
-				Container: &dfv1.Container{
-					Image: "",
-				},
-			},
-		}
+		testObj.Spec.Vertices[0].Source.UDTransformer.Builtin = nil
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "can not specify an empty image")
+		assert.Contains(t, err.Error(), "either specify a builtin transformer, or a customized image")
+	})
+
+	t.Run("transformer both image and builtin specified", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source.UDTransformer.Container = &dfv1.Container{Image: "xxxx"}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "can not specify both builtin transformer, and a customized image")
 	})
 
 	t.Run("udf no image and builtin specified", func(t *testing.T) {

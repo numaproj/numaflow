@@ -810,6 +810,8 @@ spec:
                       replicas:
                         format: int32
                         type: integer
+                      runtimeClassName:
+                        type: string
                       securityContext:
                         properties:
                           fsGroup:
@@ -1423,6 +1425,8 @@ spec:
                         format: int32
                         type: integer
                       priorityClassName:
+                        type: string
+                      runtimeClassName:
                         type: string
                       securityContext:
                         properties:
@@ -2782,6 +2786,8 @@ spec:
                       type: integer
                     priorityClassName:
                       type: string
+                    runtimeClassName:
+                      type: string
                     scale:
                       properties:
                         cooldownSeconds:
@@ -3830,6 +3836,24 @@ spec:
                           type: object
                         transformer:
                           properties:
+                            builtin:
+                              properties:
+                                args:
+                                  items:
+                                    type: string
+                                  type: array
+                                kwargs:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                name:
+                                  enum:
+                                  - eventTimeExtractor
+                                  - filter
+                                  type: string
+                              required:
+                              - name
+                              type: object
                             container:
                               properties:
                                 args:
@@ -3942,8 +3966,6 @@ spec:
                                     type: object
                                   type: array
                               type: object
-                          required:
-                          - container
                           type: object
                       type: object
                     tolerations:
