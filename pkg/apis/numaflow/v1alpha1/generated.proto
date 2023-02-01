@@ -87,6 +87,14 @@ message AbstractPodTemplate {
   // ServiceAccountName applied to the pod
   // +optional
   optional string serviceAccountName = 9;
+
+  // RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used
+  // to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run.
+  // If unset or empty, the "legacy" RuntimeClass will be used, which is an implicit class with an
+  // empty definition that uses the default runtime handler.
+  // More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class
+  // +optional
+  optional string runtimeClassName = 10;
 }
 
 message AbstractVertex {
