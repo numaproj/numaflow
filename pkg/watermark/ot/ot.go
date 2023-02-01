@@ -26,6 +26,7 @@ import (
 type Value struct {
 	Offset    int64
 	Watermark int64
+	Idle      bool
 }
 
 // EncodeToBytes encodes a Value object into byte array.
