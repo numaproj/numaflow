@@ -51,12 +51,8 @@ func (n NoOpWMProgressor) GetLatestWatermark() processor.Watermark {
 	return processor.Watermark{}
 }
 
-// GetHeadWatermark returns the default head watermark.
-func (n NoOpWMProgressor) GetHeadWatermark() processor.Watermark {
-	return processor.Watermark{}
-}
-
-func (n NoOpWMProgressor) GetPodWatermarks() []processor.Watermark {
+// GetHeadWatermarks returns the default head watermark.
+func (n NoOpWMProgressor) GetHeadWatermarks() []processor.Watermark {
 	return []processor.Watermark{}
 }
 

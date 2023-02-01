@@ -52,27 +52,9 @@ func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher
 	}
 }
 
-// GetHeadWatermark returns the latest watermark of all the processors.
-func (e *sourceFetcher) GetHeadWatermark() processor.Watermark {
-	var epoch int64 = math.MinInt64
-	for _, p := range e.processorManager.GetAllProcessors() {
-		if !p.IsActive() {
-			continue
-		}
-		if p.offsetTimeline.GetHeadWatermark() > epoch {
-			epoch = p.offsetTimeline.GetHeadWatermark()
-		}
-	}
-	if epoch == math.MinInt64 {
-		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return processor.Watermark(time.UnixMilli(-1))
-	}
-	return processor.Watermark(time.UnixMilli(epoch))
-}
-
-// GetPodWatermarks returns the list of watermarks of all pods in a vertex
-func (e *sourceFetcher) GetPodWatermarks() []processor.Watermark {
-	var podWatermarks []processor.Watermark
+// GetHeadWatermarks returns the latest watermark of all the processors.
+func (e *sourceFetcher) GetHeadWatermarks() []processor.Watermark {
+	var headWatermarks []processor.Watermark
 	for _, p := range e.processorManager.GetAllProcessors() {
 		if !p.IsActive() {
 			continue
@@ -83,12 +65,12 @@ func (e *sourceFetcher) GetPodWatermarks() []processor.Watermark {
 		}
 		if epoch == math.MinInt64 {
 			// Use -1 as default watermark value to indicate there is no valid watermark yet.
-			podWatermarks = append(podWatermarks, processor.Watermark(time.UnixMilli(-1)))
+			headWatermarks = append(headWatermarks, processor.Watermark(time.UnixMilli(-1)))
 		} else {
-			podWatermarks = append(podWatermarks, processor.Watermark(time.UnixMilli(epoch)))
+			headWatermarks = append(headWatermarks, processor.Watermark(time.UnixMilli(epoch)))
 		}
 	}
-	return podWatermarks
+	return headWatermarks
 }
 
 // GetWatermark returns the lowest of the latest watermark of all the processors,

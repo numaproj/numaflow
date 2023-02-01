@@ -215,31 +215,12 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
 	}
 	// Avg rate and pending for autoscaling are both in the map with key "default", see "pkg/metrics/metrics.go".
-	var rate float64
-	existing := true
-	// looping over all pods to perform summation of rate values
-	// also marking as non-existent even when missing in any one pod
-	for _, v := range vMetrics {
-		val, exist := v.ProcessingRates["default"]
-		if !exist {
-			existing = false
-		}
-		rate += val
-	}
+	rate, existing := vMetrics[0].ProcessingRates["default"]
 	if !existing || rate < 0 || rate == isb.RateNotAvailable { // Rate not available
 		log.Debugf("Vertex %s has no rate information, skip scaling", vertex.Name)
 		return nil
 	}
-
-	var pending int64
-	existing = true
-	for _, v := range vMetrics {
-		val, exist := v.Pendings["default"]
-		if !exist {
-			existing = false
-		}
-		pending += val
-	}
+	pending, existing := vMetrics[0].Pendings["default"]
 	if !existing || pending < 0 || pending == isb.PendingNotAvailable {
 		// Pending not available, we don't do anything
 		log.Debugf("Vertex %s has no pending messages information, skip scaling", vertex.Name)

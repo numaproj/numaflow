@@ -217,7 +217,7 @@ func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClie
 			pipelineWatermarks := make([]int64, len(vertexList))
 			idx := 0
 			for _, v := range wm {
-				pipelineWatermarks[idx] = *v.Watermark
+				pipelineWatermarks[idx] = v.Watermarks[0]
 				idx++
 			}
 			currentWatermark = pipelineWatermarks

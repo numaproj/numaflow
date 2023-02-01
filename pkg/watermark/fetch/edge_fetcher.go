@@ -53,44 +53,18 @@ func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.W
 	}
 }
 
-// GetHeadWatermark returns the watermark using the HeadOffset (the latest offset among all processors). This
+// GetHeadWatermarks returns the watermark using the HeadOffset (the latest offset among all processors). This
 // can be used in showing the watermark progression for a vertex when not consuming the messages
 // directly (eg. UX, tests)
 // NOTE
 //   - We don't use this function in the regular pods in the vertex.
 //   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
 //     Meaning, in the UX (daemon service) we never delete any processor.
-func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
+func (e *edgeFetcher) GetHeadWatermarks() []processor.Watermark {
 	var debugString strings.Builder
-	var headOffset int64 = math.MinInt64
-	var epoch int64 = math.MaxInt64
+	var headWatermarks []processor.Watermark
 	var allProcessors = e.processorManager.GetAllProcessors()
 	// get the head offset of each processor
-	for _, p := range allProcessors {
-		if !p.IsActive() {
-			continue
-		}
-		var o = p.offsetTimeline.GetHeadOffset()
-		e.log.Debugf("Processor: %v (headoffset:%d)", p, o)
-		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headoffset:%d) \n", p, o))
-		if o != -1 && o > headOffset {
-			headOffset = o
-			epoch = p.offsetTimeline.GetEventTimeFromInt64(o)
-		}
-	}
-	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
-	if epoch == math.MaxInt64 {
-		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return processor.Watermark(time.UnixMilli(-1))
-	}
-	return processor.Watermark(time.UnixMilli(epoch))
-}
-
-// GetPodWatermarks gets the watermarks for all pods of a vertex
-func (e *edgeFetcher) GetPodWatermarks() []processor.Watermark {
-	var debugString strings.Builder
-	var allProcessors = e.processorManager.GetAllProcessors()
-	var podWatermarks []processor.Watermark
 	for _, p := range allProcessors {
 		if !p.IsActive() {
 			continue
@@ -104,12 +78,12 @@ func (e *edgeFetcher) GetPodWatermarks() []processor.Watermark {
 		}
 		if epoch == math.MaxInt64 {
 			// Use -1 as default watermark value to indicate there is no valid watermark yet.
-			podWatermarks = append(podWatermarks, processor.Watermark(time.UnixMilli(-1)))
+			headWatermarks = append(headWatermarks, processor.Watermark(time.UnixMilli(-1)))
 		} else {
-			podWatermarks = append(podWatermarks, processor.Watermark(time.UnixMilli(epoch)))
+			headWatermarks = append(headWatermarks, processor.Watermark(time.UnixMilli(epoch)))
 		}
 	}
-	return podWatermarks
+	return headWatermarks
 }
 
 // GetWatermark gets the smallest timestamp for the given offset

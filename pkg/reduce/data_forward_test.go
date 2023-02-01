@@ -91,11 +91,7 @@ func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset) processor.Waterm
 	return e.watermarks[offset.String()]
 }
 
-func (e *EventTypeWMProgressor) GetHeadWatermark() processor.Watermark {
-	return processor.Watermark{}
-}
-
-func (e *EventTypeWMProgressor) GetPodWatermarks() []processor.Watermark {
+func (e *EventTypeWMProgressor) GetHeadWatermarks() []processor.Watermark {
 	return []processor.Watermark{}
 }
 

@@ -158,6 +158,9 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	}
 	podNum := int64(1)
 	// for now only reduce has parallelism might have to modify later
+	// checking parallelism for a vertex to identify reduce vertex
+	// replicas will have parallelism for reduce vertex else will be nil
+	// parallelism indicates replica count ~ multiple pods for a vertex here
 	obj := ps.pipeline.GetFromEdges(req.GetVertex())
 	if len(obj) > 0 && obj[0].Parallelism != nil {
 		podNum = int64(*obj[0].Parallelism)

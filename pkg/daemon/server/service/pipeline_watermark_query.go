@@ -20,6 +20,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -41,13 +44,17 @@ func GetVertexWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline
 	}
 
 	for _, vertex := range pipeline.Spec.Vertices {
+		// key for fetcher map ~ vertexName/replicas
+		replicas := int64(1)
 		if vertex.Sink != nil {
 			toBufferName := v1alpha1.GenerateSinkBufferName(pipeline.Namespace, pipeline.Name, vertex.Name)
 			wmFetcher, err := isbSvcClient.CreateWatermarkFetcher(ctx, toBufferName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create watermark fetcher, %w", err)
 			}
-			wmFetchers[vertex.Name] = []fetch.Fetcher{wmFetcher}
+			// for now only reduce has parallelism so not updating replicas for sink for now as done below
+			fetchersKey := vertex.Name + "/" + strconv.FormatInt(replicas, 10)
+			wmFetchers[fetchersKey] = []fetch.Fetcher{wmFetcher}
 		} else {
 			// If the vertex is not a sink, to fetch the watermark, we consult all out edges and grab the latest watermark among them.
 			var wmFetcherList []fetch.Fetcher
@@ -61,7 +68,16 @@ func GetVertexWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline
 					wmFetcherList = append(wmFetcherList, fetchWatermark)
 				}
 			}
-			wmFetchers[vertex.Name] = wmFetcherList
+			// for now only reduce has parallelism might have to modify later
+			// checking parallelism for a vertex to identify reduce vertex
+			// replicas will have parallelism for reduce vertex else will be nil
+			// parallelism indicates replica count ~ multiple pods for a vertex here
+			obj := pipeline.GetFromEdges(vertex.Name)
+			if len(obj) > 0 && obj[0].Parallelism != nil {
+				replicas = int64(*obj[0].Parallelism)
+			}
+			fetchersKey := vertex.Name + "/" + strconv.FormatInt(replicas, 10)
+			wmFetchers[fetchersKey] = wmFetcherList
 		}
 	}
 	return wmFetchers, nil
@@ -73,14 +89,27 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	resp := new(daemon.GetVertexWatermarkResponse)
 	vertexName := request.GetVertex()
 	isWatermarkEnabled := !ps.pipeline.Spec.Watermark.Disabled
+	// for now only reduce has parallelism might have to modify later
+	// checking parallelism for a vertex to identify reduce vertex
+	// parallelism is only supported by reduce vertex for now else will be nil
+	// parallelism indicates replica count ~ multiple pods for a vertex here
+	replicas := int64(1)
+	obj := ps.pipeline.GetFromEdges(vertexName)
+	if len(obj) > 0 && obj[0].Parallelism != nil {
+		replicas = int64(*obj[0].Parallelism)
+	}
 
 	// If watermark is not enabled, return time zero
 	if ps.pipeline.Spec.Watermark.Disabled {
 		timeZero := time.Unix(0, 0).UnixMilli()
+		watermarks := make([]int64, replicas)
+		for idx := range watermarks {
+			watermarks[idx] = timeZero
+		}
 		v := &daemon.VertexWatermark{
 			Pipeline:           &ps.pipeline.Name,
 			Vertex:             request.Vertex,
-			Watermark:          &timeZero,
+			Watermarks:         watermarks,
 			IsWatermarkEnabled: &isWatermarkEnabled,
 		}
 		resp.VertexWatermark = v
@@ -88,7 +117,8 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	}
 
 	// Watermark is enabled
-	vertexFetchers, ok := ps.watermarkFetchers[vertexName]
+	fetchersKey := vertexName + "/" + strconv.FormatInt(replicas, 10)
+	vertexFetchers, ok := ps.watermarkFetchers[fetchersKey]
 
 	// Vertex not found
 	if !ok {
@@ -97,17 +127,24 @@ func (ps *pipelineMetadataQuery) GetVertexWatermark(ctx context.Context, request
 	}
 
 	var latestWatermark = int64(-1)
+	var latestWatermarks []processor.Watermark
 	for _, fetcher := range vertexFetchers {
-		watermark := fetcher.GetHeadWatermark().UnixMilli()
-		if watermark > latestWatermark {
+		watermarks := fetcher.GetHeadWatermarks()
+		sort.Slice(watermarks, func(i, j int) bool { return watermarks[i].UnixMilli() > watermarks[j].UnixMilli() })
+		watermark := watermarks[0].UnixMilli()
+		if watermark >= latestWatermark {
 			latestWatermark = watermark
+			latestWatermarks = watermarks
 		}
 	}
-
+	var watermarks []int64
+	for _, v := range latestWatermarks {
+		watermarks = append(watermarks, v.UnixMilli())
+	}
 	v := &daemon.VertexWatermark{
 		Pipeline:           &ps.pipeline.Name,
 		Vertex:             request.Vertex,
-		Watermark:          &latestWatermark,
+		Watermarks:         watermarks,
 		IsWatermarkEnabled: &isWatermarkEnabled,
 	}
 	resp.VertexWatermark = v
@@ -125,13 +162,17 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		watermarkArr := make([]*daemon.VertexWatermark, len(ps.watermarkFetchers))
 		i := 0
 		for k := range ps.watermarkFetchers {
-			vertexName := k
+			vertexName := strings.Split(k, "/")[0]
+			replicas, _ := strconv.ParseInt(strings.Split(k, "/")[1], 10, 64)
+			watermarks := make([]int64, replicas)
+			for idx := range watermarks {
+				watermarks[idx] = timeZero
+			}
 			watermarkArr[i] = &daemon.VertexWatermark{
 				Pipeline:           &ps.pipeline.Name,
 				Vertex:             &vertexName,
-				Watermark:          &timeZero,
+				Watermarks:         watermarks,
 				IsWatermarkEnabled: &isWatermarkEnabled,
-				PodWatermarks:      nil,
 			}
 			i++
 		}
@@ -144,26 +185,26 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 	i := 0
 	for k, vertexFetchers := range ps.watermarkFetchers {
 		var latestWatermark = int64(-1)
-		var latestpodWatermarks []processor.Watermark
+		var latestWatermarks []processor.Watermark
 		for _, fetcher := range vertexFetchers {
-			watermark := fetcher.GetHeadWatermark().UnixMilli()
-			podWatermark := fetcher.GetPodWatermarks()
-			if watermark > latestWatermark {
+			watermarks := fetcher.GetHeadWatermarks()
+			sort.Slice(watermarks, func(i, j int) bool { return watermarks[i].UnixMilli() > watermarks[j].UnixMilli() })
+			watermark := watermarks[0].UnixMilli()
+			if watermark >= latestWatermark {
 				latestWatermark = watermark
-				latestpodWatermarks = podWatermark
+				latestWatermarks = watermarks
 			}
 		}
-		vertexName := k
-		var podWatermarks []int64
-		for _, v := range latestpodWatermarks {
-			podWatermarks = append(podWatermarks, v.UnixMilli())
+		vertexName := strings.Split(k, "/")[0]
+		var watermarks []int64
+		for _, v := range latestWatermarks {
+			watermarks = append(watermarks, v.UnixMilli())
 		}
 		watermarkArr[i] = &daemon.VertexWatermark{
 			Pipeline:           &ps.pipeline.Name,
 			Vertex:             &vertexName,
-			Watermark:          &latestWatermark,
+			Watermarks:         watermarks,
 			IsWatermarkEnabled: &isWatermarkEnabled,
-			PodWatermarks:      podWatermarks,
 		}
 		i++
 	}

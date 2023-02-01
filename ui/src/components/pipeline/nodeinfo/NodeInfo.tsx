@@ -144,13 +144,6 @@ export default function NodeInfo(props: NodeInfoProps) {
                         <TableCell >{podWatermark}</TableCell>
                       </TableRow>
                       ))}
-                    {!node?.data?.vertexWatermark?.podWatermarks &&
-                        Array(node?.data?.podnum).fill(0).map((_, idx) => (
-                      <TableRow>
-                        <TableCell >Pod - {idx}</TableCell>
-                        <TableCell >-1</TableCell>
-                      </TableRow>
-                        ))}
                   </TableBody>
                 </Table>
               </TableContainer>
