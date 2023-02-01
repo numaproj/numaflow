@@ -249,10 +249,15 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					v.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
 					continue
 				}
-				p.offsetTimeline.Put(OffsetWatermark{
-					watermark: otValue.Watermark,
-					offset:    otValue.Offset,
-				})
+				if otValue.Idle {
+					// TODO
+				} else {
+					// NOTE: currently, for source edges, the otValue.Idle is always false
+					p.offsetTimeline.Put(OffsetWatermark{
+						watermark: otValue.Watermark,
+						offset:    otValue.Offset,
+					})
+				}
 				v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 			case store.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
