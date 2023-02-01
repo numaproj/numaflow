@@ -78,7 +78,7 @@ message GetVertexMetricsResponse {
 message VertexWatermark {
   required string pipeline = 1;
   required string vertex = 2;
-  repeated int64 watermarks = 3;
+  required int64 watermark = 3;
   required bool isWatermarkEnabled = 4;
 }
 

@@ -140,11 +140,10 @@ export function Pipeline() {
                     json.map((vertex) => {
                       const vertexWatermark = {} as VertexWatermark;
                       vertexWatermark.isWaterMarkEnabled = vertex["isWatermarkEnabled"];
-                      vertexWatermark.watermark = vertex["watermarks"][0];
+                      vertexWatermark.watermark = vertex["watermark"];
                       vertexWatermark.watermarkLocalTime = new Date(
                           vertexWatermark.watermark
                       ).toISOString();
-                      vertexWatermark.podWatermarks = vertex["watermarks"];
                       vertexToWatermarkMap.set(vertex.vertex, vertexWatermark);
                     })
                   })

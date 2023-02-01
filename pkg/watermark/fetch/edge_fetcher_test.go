@@ -143,7 +143,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 				t.Errorf("GetWatermark() = %v, want %v", got, processor.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 14 because the timeline has been populated ahead of time
-			assert.Equal(t, time.Time(b.GetHeadWatermarks()[len(b.GetHeadWatermarks())-1]).In(location), time.UnixMilli(14).In(location))
+			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.UnixMilli(14).In(location))
 		})
 	}
 }

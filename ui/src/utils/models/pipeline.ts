@@ -11,7 +11,6 @@ export interface VertexWatermark {
   watermark: number;
   watermarkLocalTime: string;
   isWaterMarkEnabled: boolean;
-  podWatermarks: number[];
 }
 
 export interface EdgeInfo {

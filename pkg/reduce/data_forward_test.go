@@ -91,8 +91,8 @@ func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset) processor.Waterm
 	return e.watermarks[offset.String()]
 }
 
-func (e *EventTypeWMProgressor) GetHeadWatermarks() []processor.Watermark {
-	return []processor.Watermark{}
+func (e *EventTypeWMProgressor) GetHeadWatermark() processor.Watermark {
+	return processor.Watermark{}
 }
 
 // PayloadForTest is a dummy payload for testing.

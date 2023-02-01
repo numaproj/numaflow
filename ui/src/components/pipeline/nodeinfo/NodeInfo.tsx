@@ -54,20 +54,12 @@ export default function NodeInfo(props: NodeInfoProps) {
               {...a11yProps(1)}
             />
           )}
-          {node?.data?.vertexWatermark && (
-            <Tab
-              data-testid="watermarks"
-              style={{ fontWeight: "bold" }}
-              label="Watermarks"
-              {...a11yProps(2)}
-            />
-          )}
           {node?.data?.vertexMetrics && (
             <Tab
                 data-testid="processing-rates"
                 style={{ fontWeight: "bold"}}
                 label="Processing Rates"
-                {...a11yProps(3)}
+                {...a11yProps(2)}
             />
           )}
         </Tabs>
@@ -124,32 +116,6 @@ export default function NodeInfo(props: NodeInfoProps) {
             )}
           </TabPanel>
           <TabPanel value={value} index={2}>
-            {node?.data?.vertexWatermark && (
-              <TableContainer
-                  component={Paper}
-                  sx={{ borderBottom: 1, borderColor: "divider", width: 200 }}
-              >
-                <Table aria-label="pod-watermark">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Pod</TableCell>
-                      <TableCell >Watermark</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {node?.data?.vertexWatermark?.podWatermarks &&
-                        node.data.vertexWatermark.podWatermarks.map((podWatermark, idx) => (
-                      <TableRow>
-                        <TableCell >Pod - {idx}</TableCell>
-                        <TableCell >{podWatermark}</TableCell>
-                      </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </TabPanel>
-          <TabPanel value={value} index={3}>
             {node?.data?.vertexMetrics && (
               <TableContainer
                   component={Paper}
