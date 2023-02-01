@@ -1354,6 +1354,8 @@ spec:
                 default: 1
                 format: int32
                 type: integer
+              runtimeClassName:
+                type: string
               scale:
                 properties:
                   cooldownSeconds:
