@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: event-time-filter
+  name: event-time-filter-java
 spec:
   vertices:
     - name: in
@@ -9,7 +9,7 @@ spec:
         http: {}
         transformer:
           container:
-            image: quay.io/numaio/numaflow-go/mapt-event-time-filter:latest
+            image: quay.io/numaio/numaflow-java/mapt-event-time-filter-function:latest
     - name: sink-within-2022
       scale:
         min: 1
