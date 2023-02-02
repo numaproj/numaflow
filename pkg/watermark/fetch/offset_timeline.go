@@ -142,6 +142,16 @@ func (t *OffsetTimeline) GetTailOffset() int64 {
 	return t.watermarks.Back().Value.(OffsetWatermark).offset
 }
 
+// GetTailWatermark returns the tail watermark, which is the lowest one.
+func (t *OffsetTimeline) GetTailWatermark() int64 {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	if t.watermarks.Len() == 0 {
+		return 0
+	}
+	return t.watermarks.Back().Value.(OffsetWatermark).watermark
+}
+
 // GetOffset will return the offset for the given event-time.
 // TODO(jyu6): will make Watermark an interface make it easy to pass an Offset and return a Watermark?
 func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
@@ -170,18 +180,14 @@ func (t *OffsetTimeline) GetEventTimeFromInt64(inputOffsetInt64 int64) int64 {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	var (
-		offset    int64 = -1
-		eventTime int64 = -1
-	)
+	var eventTime int64 = -1
 
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
 		// get the event time has the closest offset to the input offset
 		// exclude the same offset because this offset may not finish processing yet
-		// offset < e.Value.(OffsetWatermark).offset: use < because we want the largest possible timestamp
-		if offset < e.Value.(OffsetWatermark).offset && e.Value.(OffsetWatermark).offset < inputOffsetInt64 {
-			offset = e.Value.(OffsetWatermark).offset
+		if e.Value.(OffsetWatermark).offset < inputOffsetInt64 {
 			eventTime = e.Value.(OffsetWatermark).watermark
+			break
 		}
 	}
 
