@@ -131,20 +131,11 @@ func (t *OffsetTimeline) GetHeadWatermark() int64 {
 	return t.watermarks.Front().Value.(OffsetWatermark).watermark
 }
 
-// GetTailOffsetWatermark returns the smallest offset with the smallest watermark.
-func (t *OffsetTimeline) GetTailOffsetWatermark() OffsetWatermark {
+// GetHeadOffsetWatermark returns the largest offset with the largest watermark.
+func (t *OffsetTimeline) GetHeadOffsetWatermark() OffsetWatermark {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	var ow = OffsetWatermark{
-		watermark: -1,
-		offset:    -1,
-	}
-	for e := t.watermarks.Back(); e != nil; e = e.Prev() {
-		if e.Value.(OffsetWatermark).offset != -1 {
-			return t.watermarks.Back().Value.(OffsetWatermark)
-		}
-	}
-	return ow
+	return t.watermarks.Front().Value.(OffsetWatermark)
 }
 
 // GetOffset will return the offset for the given event-time.

@@ -254,10 +254,10 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					for processorName, processor := range processors {
 						// skip the processor itself, only use other processors as reference
 						if processorName != value.Key() {
-							// any other Vn-1 processor's non-empty tail offsetWatermark can replace the idle watermark
+							// any other Vn-1 processor's non-empty head offsetWatermark can replace the idle watermark
 							// if all tail offsetWatermarks are empty, then it means there's no data flowing into
 							// this Vn processor, so it's safe to do nothing
-							watermarkOffset := processor.offsetTimeline.GetTailOffsetWatermark()
+							watermarkOffset := processor.offsetTimeline.GetHeadOffsetWatermark()
 							if watermarkOffset.offset != -1 {
 								p.offsetTimeline.Put(watermarkOffset)
 								break
