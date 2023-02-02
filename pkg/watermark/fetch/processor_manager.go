@@ -252,6 +252,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 				if otValue.Idle {
 					var processors = v.GetAllProcessors()
 					for processorName, processor := range processors {
+						// skip the processor itself, only use other processors as reference
 						if processorName != value.Key() {
 							// any other Vn-1 processor's non-empty tail offsetWatermark can replace the idle watermark
 							// if all tail offsetWatermarks are empty, then it means there's no data flowing into
