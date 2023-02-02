@@ -287,13 +287,14 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
+					activeWatermarkBuffers[bufferName] = true
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 				// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)
 			} else { // For Sink vertex, and it does not care about the offset during watermark publishing
 				publisher.PublishWatermark(processorWM, nil)
+				activeWatermarkBuffers[bufferName] = true
 			}
-			activeWatermarkBuffers[bufferName] = true
 		}
 	}
 	if len(activeWatermarkBuffers) < len(isdf.publishWatermark) {
