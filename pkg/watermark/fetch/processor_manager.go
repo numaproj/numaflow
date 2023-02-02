@@ -250,7 +250,19 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					continue
 				}
 				if otValue.Idle {
-					// TODO
+					var processors = v.GetAllProcessors()
+					for processorName, processor := range processors {
+						if processorName != value.Key() {
+							// any other Vn-1 processor's non-empty tail offsetWatermark can replace the idle watermark
+							// if all tail offsetWatermarks are empty, then it means there's no data flowing into
+							// this Vn processor, so it's safe to do nothing
+							watermarkOffset := processor.offsetTimeline.GetTailOffsetWatermark()
+							if watermarkOffset.offset != -1 {
+								p.offsetTimeline.Put(watermarkOffset)
+								break
+							}
+						}
+					}
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					p.offsetTimeline.Put(OffsetWatermark{

@@ -93,7 +93,6 @@ func (t *OffsetTimeline) Put(node OffsetWatermark) {
 				}
 				return
 			} else {
-				// TODO put panic: the new input offset should never be smaller than the existing offset
 				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
 					zap.Int64("existing offset", elementNode.offset), zap.Int64("input offset", node.offset))
 				return
@@ -132,24 +131,20 @@ func (t *OffsetTimeline) GetHeadWatermark() int64 {
 	return t.watermarks.Front().Value.(OffsetWatermark).watermark
 }
 
-// GetTailOffset returns the smallest offset with the smallest watermark.
-func (t *OffsetTimeline) GetTailOffset() int64 {
+// GetTailOffsetWatermark returns the smallest offset with the smallest watermark.
+func (t *OffsetTimeline) GetTailOffsetWatermark() OffsetWatermark {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	if t.watermarks.Len() == 0 {
-		return -1
+	var ow = OffsetWatermark{
+		watermark: -1,
+		offset:    -1,
 	}
-	return t.watermarks.Back().Value.(OffsetWatermark).offset
-}
-
-// GetTailWatermark returns the tail watermark, which is the lowest one.
-func (t *OffsetTimeline) GetTailWatermark() int64 {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	if t.watermarks.Len() == 0 {
-		return 0
+	for e := t.watermarks.Back(); e != nil; e = e.Prev() {
+		if e.Value.(OffsetWatermark).offset != -1 {
+			return t.watermarks.Back().Value.(OffsetWatermark)
+		}
 	}
-	return t.watermarks.Back().Value.(OffsetWatermark).watermark
+	return ow
 }
 
 // GetOffset will return the offset for the given event-time.
