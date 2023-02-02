@@ -881,6 +881,8 @@ spec:
                     default: 3
                     format: int32
                     type: integer
+                  runtimeClassName:
+                    type: string
                   securityContext:
                     properties:
                       fsGroup:
@@ -1844,6 +1846,8 @@ spec:
                         default: 3
                         format: int32
                         type: integer
+                      runtimeClassName:
+                        type: string
                       securityContext:
                         properties:
                           fsGroup:

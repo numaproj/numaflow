@@ -17,6 +17,11 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"encoding/base64"
+	"fmt"
+	"sort"
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -52,14 +57,36 @@ func (s Source) getUDTransformerContainer(req getContainerReq) corev1.Container 
 		init(req).
 		name(CtrUdtransformer)
 	c.Env = nil
-	x := s.UDTransformer.Container
-	c = c.image(x.Image)
-	if len(x.Command) > 0 {
-		c = c.command(x.Command...)
+	if x := s.UDTransformer.Container; x != nil && x.Image != "" { // customized image
+		c = c.image(x.Image)
+		if len(x.Command) > 0 {
+			c = c.command(x.Command...)
+		}
+		if len(x.Args) > 0 {
+			c = c.args(x.Args...)
+		}
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources)
+	} else { // built-in
+		args := []string{"builtin-transformer", "--name=" + s.UDTransformer.Builtin.Name}
+		for _, a := range s.UDTransformer.Builtin.Args {
+			args = append(args, "--args="+base64.StdEncoding.EncodeToString([]byte(a)))
+		}
+		var kwargs []string
+		for k, v := range s.UDTransformer.Builtin.KWArgs {
+			kwargs = append(kwargs, fmt.Sprintf("%s=%s", k, base64.StdEncoding.EncodeToString([]byte(v))))
+		}
+		if len(kwargs) > 0 {
+			// The order of the kwargs items is random because we construct it from an unordered map Builtin.KWArgs.
+			// We sort the kwargs first before converting it to a string argument to ensure consistency.
+			// This is important because in vertex controller we use hash on PodSpec to determine if a pod already exists, which requires the kwargs being consistent.
+			sort.Strings(kwargs)
+			args = append(args, "--kwargs="+strings.Join(kwargs, ","))
+		}
+
+		c = c.image(req.image).args(args...)
+		if x := s.UDTransformer.Container; x != nil {
+			c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources)
+		}
 	}
-	if len(x.Args) > 0 {
-		c = c.args(x.Args...)
-	}
-	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources)
 	return c.build()
 }

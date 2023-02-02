@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"encoding/base64"
 	"fmt"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -96,6 +97,10 @@ func (in UDF) getUDFContainer(req getContainerReq) corev1.Container {
 			kwargs = append(kwargs, fmt.Sprintf("%s=%s", k, base64.StdEncoding.EncodeToString([]byte(v))))
 		}
 		if len(kwargs) > 0 {
+			// The order of the kwargs items is random because we construct it from an unordered map Builtin.KWArgs.
+			// We sort the kwargs first before converting it to a string argument to ensure consistency.
+			// This is important because in vertex controller we use hash on PodSpec to determine if a pod already exists, which requires the kwargs being consistent.
+			sort.Strings(kwargs)
 			args = append(args, "--kwargs="+strings.Join(kwargs, ","))
 		}
 
