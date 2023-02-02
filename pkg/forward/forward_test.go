@@ -39,14 +39,14 @@ var (
 	testStartTime = time.Unix(1636470000, 0).UTC()
 )
 
-type forwardTest struct {
+type myForwardTest struct {
 }
 
-func (f forwardTest) WhereTo(_ string) ([]string, error) {
+func (f myForwardTest) WhereTo(_ string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f forwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -70,7 +70,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, forwardTest{}, forwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -101,14 +101,14 @@ func TestNewInterStepDataForward(t *testing.T) {
 	<-stopped
 }
 
-type forwardDropTest struct {
+type myForwardDropTest struct {
 }
 
-func (f forwardDropTest) WhereTo(_ string) ([]string, error) {
+func (f myForwardDropTest) WhereTo(_ string) ([]string, error) {
 	return []string{"__DROP__"}, nil
 }
 
-func (f forwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -130,7 +130,7 @@ func TestNewInterStepDataForward_drop(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, forwardDropTest{}, forwardDropTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -380,7 +380,7 @@ func TestNewInterStepDataForwardToOneStep(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, forwardTest{}, forwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -426,7 +426,7 @@ func TestWriteToBufferError(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, forwardTest{}, forwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
