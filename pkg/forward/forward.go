@@ -275,9 +275,12 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		return
 	}
 
+	// activeWatermarkBuffers records the buffers that the publisher has published
+	// a watermark in this batch processing cycle.
+	// it's used to determine which buffers should receive an idle watermark.
+	var activeWatermarkBuffers = make(map[string]bool)
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
-	var activeWatermarkBuffers = make(map[string]bool)
 	for bufferName, offsets := range writeOffsets {
 		if publisher, ok := isdf.publishWatermark[bufferName]; ok {
 			if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
@@ -294,7 +297,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 	if len(activeWatermarkBuffers) < len(isdf.publishWatermark) {
-		// if there's any idle watermark buffers
+		// if there's any buffers that haven't received any watermark during this
+		// batch processing cycle, send an idle watermark
 		for bufferName := range isdf.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
 				isdf.publishWatermark[bufferName].PublishIdleWatermark()
