@@ -87,14 +87,14 @@ func (dc *DaemonClient) GetPipelineBuffer(ctx context.Context, pipeline, buffer 
 	}
 }
 
-func (dc *DaemonClient) GetVertexMetrics(ctx context.Context, pipeline, vertex string) (*daemon.VertexMetrics, error) {
+func (dc *DaemonClient) GetVertexMetrics(ctx context.Context, pipeline, vertex string) ([]*daemon.VertexMetrics, error) {
 	if rspn, err := dc.client.GetVertexMetrics(ctx, &daemon.GetVertexMetricsRequest{
 		Pipeline: &pipeline,
 		Vertex:   &vertex,
 	}); err != nil {
 		return nil, err
 	} else {
-		return rspn.Vertex, nil
+		return rspn.VertexMetrics, nil
 	}
 }
 

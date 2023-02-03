@@ -67,11 +67,10 @@ message GetBufferResponse {
 message GetVertexMetricsRequest {
   required string pipeline = 2;
   required string vertex = 3;
-
 }
 
 message GetVertexMetricsResponse {
-  required VertexMetrics vertex = 1;
+  repeated VertexMetrics vertexMetrics = 1;
 }
 
 /* Watermark */

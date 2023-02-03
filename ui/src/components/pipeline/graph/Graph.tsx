@@ -3,6 +3,7 @@ import ReactFlow, {
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
+  Controls,
   Connection,
   Edge,
   EdgeChange,
@@ -79,6 +80,19 @@ export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId } = props;
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
+    // ensuring all edges between same pair of vertices have same labels
+    // 'label' for an edge is the sum of backpressure between vertices - the value we see on the edge
+    const edgeMap = new Map();
+
+    data.edges.forEach((edge) => {
+      if (edgeMap.get(edge.id) === undefined) edgeMap.set(edge.id, Number(edge.data.totalMessages));
+      else edgeMap.set(edge.id, edgeMap.get(edge.id) + Number(edge.data.totalMessages));
+    });
+
+    data.edges.forEach((edge) => {
+      edge.label = edgeMap.get(edge.id).toString();
+    });
+
     return getLayoutedElements(data.vertices, data.edges);
   }, [data]);
 
@@ -123,6 +137,7 @@ export default function Graph(props: GraphProps) {
       const edge = {} as Edge;
       if (dataEdge.id === edgeId) {
         edge.data = dataEdge.data;
+        edge.label = dataEdge.label;
         edge.id = dataEdge.id;
         setEdge(edge);
       }
@@ -131,14 +146,28 @@ export default function Graph(props: GraphProps) {
 
   const [nodeOpen, setNodeOpen] = useState(false);
 
+  const [nodeId, setNodeId] = useState<string>();
   const [node, setNode] = useState<Node>();
 
   const handleNodeClick = (event: MouseEvent, node: Node) => {
     setNodeOpen(true);
     setNode(node);
+    setNodeId(node.id);
     setShowSpec(false);
     setEdgeOpen(false);
   };
+
+  // This has been added to make sure that node container refreshes on nodes being refreshed
+  useEffect(() => {
+    nodes.forEach((dataNode) => {
+      const node = {} as Node;
+      if (dataNode.id === nodeId) {
+        node.data = dataNode.data;
+        node.id = dataNode.id;
+        setNode(node);
+      }
+    });
+  }, [nodes, nodeId]);
 
   const handlePaneClick = () => {
     setShowSpec(true);
@@ -161,6 +190,8 @@ export default function Graph(props: GraphProps) {
           width: "100%",
           height: 500,
           overflow: "scroll !important",
+          border: "2px solid",
+          borderColor: "whitesmoke",
         }}
       >
         <ReactFlow
@@ -177,7 +208,9 @@ export default function Graph(props: GraphProps) {
           fitView
           zoomOnScroll={true}
           panOnDrag={true}
-        />
+        >
+          <Controls/>
+        </ReactFlow>
       </div>
 
       <Card
@@ -186,7 +219,7 @@ export default function Graph(props: GraphProps) {
         variant={"outlined"}
       >
         {showSpec && <Spec pipeline={data.pipeline} />}
-        {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} />}
+        {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} edges={edges}/>}
         {nodeOpen && (
           <NodeInfo
             data-testid="node-info"

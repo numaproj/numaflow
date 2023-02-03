@@ -1,9 +1,10 @@
 import { Node, Edge } from "react-flow-renderer";
 
 export interface VertexMetrics {
-  ratePerMin: number;
-  ratePerFiveMin: number;
-  ratePerFifteenMin: number;
+  ratePerMin: string;
+  ratePerFiveMin: string;
+  ratePerFifteenMin: string;
+  podMetrics: any[];
 }
 
 export interface VertexWatermark {
