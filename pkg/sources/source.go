@@ -141,11 +141,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
-		metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(func() error {
-			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			defer cancel()
-			return t.WaitUntilReady(ctx)
-		}))
+		if sharedutil.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
+			metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(func() error {
+				ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+				defer cancel()
+				return t.WaitUntilReady(ctx)
+			}))
+		}
 		sourcer, err = sp.getSourcer(writers, sp.getTransformerGoWhereDecider(), t, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	} else {
 		sourcer, err = sp.getSourcer(writers, forward.All, applier.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
