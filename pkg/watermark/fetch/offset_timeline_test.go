@@ -22,9 +22,10 @@ import (
 	"testing"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestTimeline_GetEventTime(t1 *testing.T) {
+func TestTimeline_GetEventTime(t *testing.T) {
 	var (
 		ctx            = context.Background()
 		emptyTimeline  = NewOffsetTimeline(ctx, 5)
@@ -114,7 +115,7 @@ func TestTimeline_GetEventTime(t1 *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t1.Run(tt.name, func(t1 *testing.T) {
+		t.Run(tt.name, func(t1 *testing.T) {
 			if got := tt.args.timeline.GetEventTime(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.inputOffset, 10) })); got != tt.want {
 				t1.Errorf("GetEventTime() = %v, want %v", got, tt.want)
 			}
@@ -122,7 +123,7 @@ func TestTimeline_GetEventTime(t1 *testing.T) {
 	}
 }
 
-func TestOffsetTimeline_GetOffset(t1 *testing.T) {
+func TestOffsetTimeline_GetOffset(t *testing.T) {
 	var (
 		ctx            = context.Background()
 		testTimeline   = NewOffsetTimeline(ctx, 10)
@@ -210,10 +211,33 @@ func TestOffsetTimeline_GetOffset(t1 *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t1.Run(tt.name, func(t1 *testing.T) {
+		t.Run(tt.name, func(t1 *testing.T) {
 			if got := tt.args.timeline.GetOffset(tt.args.inputEventTime); got != tt.want {
 				t1.Errorf("GetOffset() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestOffsetTimeline_GetHeadOffsetWatermark(t *testing.T) {
+	var (
+		ctx            = context.Background()
+		testTimeline   = NewOffsetTimeline(ctx, 10)
+		testwatermarks = []OffsetWatermark{
+			{watermark: 10, offset: 9},
+			{watermark: 12, offset: 20},
+			{watermark: 13, offset: 21},
+			{watermark: 15, offset: 24},
+			{watermark: 20, offset: 26},
+			{watermark: 23, offset: 27},
+			{watermark: 28, offset: 30},
+			{watermark: 29, offset: 35},
+			{watermark: 32, offset: 36},
+		}
+	)
+
+	for _, watermark := range testwatermarks {
+		testTimeline.Put(watermark)
+		assert.Equal(t, testTimeline.GetHeadOffsetWatermark(), watermark)
 	}
 }
