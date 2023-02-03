@@ -260,8 +260,13 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
 			return
 		}
-		// update toBuffers
+
 		for _, message := range m.writeMessages {
+			// Update isLate to reflect the message event time change after being processed by source data transformer.
+			if isdf.opts.vertexType == dfv1.VertexTypeSource && processorWM.After(message.EventTime) {
+				message.IsLate = true
+			}
+			// update toBuffers
 			if err := isdf.whereToStep(message, messageToStep, m.readMessage); err != nil {
 				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
 				return
