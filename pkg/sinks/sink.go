@@ -32,6 +32,7 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/sinks/blackhole"
 	kafkasink "github.com/numaproj/numaflow/pkg/sinks/kafka"
 	logsink "github.com/numaproj/numaflow/pkg/sinks/logger"
@@ -120,7 +121,9 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		metricsOpts = append(metricsOpts, metrics.WithRater(x))
 	}
 	if x, ok := sinker.(*udsink.UserDefinedSink); ok {
-		metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(x.IsHealthy))
+		if sharedutil.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
+			metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(x.IsHealthy))
+		}
 	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {

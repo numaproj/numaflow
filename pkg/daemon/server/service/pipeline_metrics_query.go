@@ -156,61 +156,76 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 			Name: vertexName,
 		},
 	}
-
-	processingRates := make(map[string]float64, 0)
-	pendings := make(map[string]int64, 0)
+	podNum := int64(1)
+	// for now only reduce has parallelism might have to modify later
+	// checking parallelism for a vertex to identify reduce vertex
+	// replicas will have parallelism for reduce vertex else will be nil
+	// parallelism indicates replica count ~ multiple pods for a vertex here
+	obj := ps.pipeline.GetFromEdges(req.GetVertex())
+	if len(obj) > 0 && obj[0].Parallelism != nil {
+		podNum = int64(*obj[0].Parallelism)
+	}
 
 	// Get the headless service name
 	headlessServiceName := vertex.GetHeadlessServiceName()
-	// We can query the metrics endpoint of the 0th pod to obtain this value.
-	// example: https://simple-pipeline-in-0.simple-pipeline-in-headless.svc.cluster.local:2469/metrics
-	url := fmt.Sprintf("https://%s-0.%s.%s.svc.cluster.local:%v/metrics", vertexName, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
-	if res, err := ps.httpClient.Get(url); err != nil {
-		log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())
-	} else {
-		// expfmt Parser from prometheus to parse the metrics
-		textParser := expfmt.TextParser{}
-		result, err := textParser.TextToMetricFamilies(res.Body)
-		if err != nil {
-			log.Errorw("Error in parsing to prometheus metric families", zap.Error(err))
-			return nil, err
-		}
 
-		// Check if the resultant metrics list contains the processingRate, if it does look for the period label
-		if value, ok := result[metrics.VertexProcessingRate]; ok {
-			metricsList := value.GetMetric()
-			for _, metric := range metricsList {
-				labels := metric.GetLabel()
-				for _, label := range labels {
-					if label.GetName() == metrics.LabelPeriod {
-						lookback := label.GetValue()
-						processingRates[lookback] = metric.Gauge.GetValue()
+	metricsArr := make([]*daemon.VertexMetrics, podNum)
+	for i := int64(0); i < podNum; i++ {
+
+		processingRates := make(map[string]float64, 0)
+		pendings := make(map[string]int64, 0)
+
+		// We can query the metrics endpoint of the (i)th pod to obtain this value.
+		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.svc.cluster.local:2469/metrics
+		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+		if res, err := ps.httpClient.Get(url); err != nil {
+			log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())
+		} else {
+			// expfmt Parser from prometheus to parse the metrics
+			textParser := expfmt.TextParser{}
+			result, err := textParser.TextToMetricFamilies(res.Body)
+			if err != nil {
+				log.Errorw("Error in parsing to prometheus metric families", zap.Error(err))
+				return nil, err
+			}
+
+			// Check if the resultant metrics list contains the processingRate, if it does look for the period label
+			if value, ok := result[metrics.VertexProcessingRate]; ok {
+				metricsList := value.GetMetric()
+				for _, metric := range metricsList {
+					labels := metric.GetLabel()
+					for _, label := range labels {
+						if label.GetName() == metrics.LabelPeriod {
+							lookback := label.GetValue()
+							processingRates[lookback] = metric.Gauge.GetValue()
+						}
 					}
 				}
 			}
-		}
 
-		if value, ok := result[metrics.VertexPendingMessages]; ok {
-			metricsList := value.GetMetric()
-			for _, metric := range metricsList {
-				labels := metric.GetLabel()
-				for _, label := range labels {
-					if label.GetName() == metrics.LabelPeriod {
-						lookback := label.GetValue()
-						pendings[lookback] = int64(metric.Gauge.GetValue())
+			if value, ok := result[metrics.VertexPendingMessages]; ok {
+				metricsList := value.GetMetric()
+				for _, metric := range metricsList {
+					labels := metric.GetLabel()
+					for _, label := range labels {
+						if label.GetName() == metrics.LabelPeriod {
+							lookback := label.GetValue()
+							pendings[lookback] = int64(metric.Gauge.GetValue())
+						}
 					}
 				}
+			}
+
+			metricsArr[i] = &daemon.VertexMetrics{
+				Pipeline:        &ps.pipeline.Name,
+				Vertex:          req.Vertex,
+				ProcessingRates: processingRates,
+				Pendings:        pendings,
 			}
 		}
 	}
 
-	v := &daemon.VertexMetrics{
-		Pipeline:        &ps.pipeline.Name,
-		Vertex:          req.Vertex,
-		ProcessingRates: processingRates,
-		Pendings:        pendings,
-	}
-	resp.Vertex = v
+	resp.VertexMetrics = metricsArr
 	return resp, nil
 }
 
