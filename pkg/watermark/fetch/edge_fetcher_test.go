@@ -22,9 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
+
+	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"

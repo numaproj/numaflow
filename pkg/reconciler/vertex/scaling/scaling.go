@@ -215,12 +215,12 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
 	}
 	// Avg rate and pending for autoscaling are both in the map with key "default", see "pkg/metrics/metrics.go".
-	rate, existing := vMetrics.ProcessingRates["default"]
+	rate, existing := vMetrics[0].ProcessingRates["default"]
 	if !existing || rate < 0 || rate == isb.RateNotAvailable { // Rate not available
 		log.Debugf("Vertex %s has no rate information, skip scaling", vertex.Name)
 		return nil
 	}
-	pending, existing := vMetrics.Pendings["default"]
+	pending, existing := vMetrics[0].Pendings["default"]
 	if !existing || pending < 0 || pending == isb.PendingNotAvailable {
 		// Pending not available, we don't do anything
 		log.Debugf("Vertex %s has no pending messages information, skip scaling", vertex.Name)
