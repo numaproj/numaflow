@@ -98,6 +98,11 @@ func (t *OffsetTimeline) Put(node OffsetWatermark) {
 				return
 			}
 		} else if node.watermark > elementNode.watermark {
+			if node.offset < elementNode.offset {
+				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
+					zap.Int64("existing offset", elementNode.offset), zap.Int64("input offset", node.offset))
+				return
+			}
 			// our list is sorted by event time from highest to lowest
 			t.watermarks.InsertBefore(node, e)
 			// remove the last event time
