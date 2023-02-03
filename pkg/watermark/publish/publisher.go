@@ -143,6 +143,7 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	}
 }
 
+// PublishIdleWatermark publishes the idle watermark and will retry until it can succeed.
 func (p *publish) PublishIdleWatermark() {
 	var key = p.entity.GetName()
 	var otValue = ot.Value{
