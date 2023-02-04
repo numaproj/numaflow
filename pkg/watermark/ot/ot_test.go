@@ -40,6 +40,7 @@ func TestDecodeToOTValue(t *testing.T) {
 					v := Value{
 						Offset:    100,
 						Watermark: 1667495100000,
+						Idle:      false,
 					}
 					buf := new(bytes.Buffer)
 					_ = binary.Write(buf, binary.LittleEndian, v)
@@ -49,6 +50,7 @@ func TestDecodeToOTValue(t *testing.T) {
 			want: Value{
 				Offset:    100,
 				Watermark: 1667495100000,
+				Idle:      false,
 			},
 			wantErr: false,
 		},
@@ -70,7 +72,7 @@ func TestDecodeToOTValue(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "decode_success_using_2_field_struct",
+			name: "decode_failure_using_2_field_struct",
 			args: args{
 				b: func() []byte {
 					v := struct {
@@ -85,11 +87,8 @@ func TestDecodeToOTValue(t *testing.T) {
 					return buf.Bytes()
 				}(),
 			},
-			want: Value{
-				Offset:    100,
-				Watermark: 1667495100000,
-			},
-			wantErr: false,
+			want:    Value{},
+			wantErr: true,
 		},
 		{
 			name: "decode_success_using_3_field_struct",
@@ -98,11 +97,38 @@ func TestDecodeToOTValue(t *testing.T) {
 					v := struct {
 						Test0 int64
 						Test1 int64
-						Test2 int64 // should be ignored
+						Test2 bool
+					}{
+						Test0: 0,
+						Test1: 0,
+						Test2: true,
+					}
+					buf := new(bytes.Buffer)
+					_ = binary.Write(buf, binary.LittleEndian, v)
+					return buf.Bytes()
+				}(),
+			},
+			want: Value{
+				Offset:    0,
+				Watermark: 0,
+				Idle:      true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "decode_success_using_4_field_struct",
+			args: args{
+				b: func() []byte {
+					v := struct {
+						Test0 int64
+						Test1 int64
+						Test2 bool
+						Test3 int64 // should be ignored
 					}{
 						Test0: 100,
 						Test1: 1667495100000,
-						Test2: 200,
+						Test2: false,
+						Test3: 20,
 					}
 					buf := new(bytes.Buffer)
 					_ = binary.Write(buf, binary.LittleEndian, v)
@@ -112,6 +138,7 @@ func TestDecodeToOTValue(t *testing.T) {
 			want: Value{
 				Offset:    100,
 				Watermark: 1667495100000,
+				Idle:      false,
 			},
 			wantErr: false,
 		},
@@ -135,6 +162,7 @@ func TestOTValue_EncodeToBytes(t *testing.T) {
 	type fields struct {
 		Offset    int64
 		Watermark int64
+		Idle      bool
 	}
 	tests := []struct {
 		name    string
@@ -147,8 +175,9 @@ func TestOTValue_EncodeToBytes(t *testing.T) {
 			fields: fields{
 				Offset:    100,
 				Watermark: 1667495100000,
+				Idle:      false,
 			},
-			want:    []byte{100, 0, 0, 0, 0, 0, 0, 0, 96, 254, 115, 62, 132, 1, 0, 0},
+			want:    []byte{100, 0, 0, 0, 0, 0, 0, 0, 96, 254, 115, 62, 132, 1, 0, 0, 0},
 			wantErr: false,
 		},
 	}

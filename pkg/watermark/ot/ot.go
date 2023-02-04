@@ -26,6 +26,10 @@ import (
 type Value struct {
 	Offset    int64
 	Watermark int64
+	// Idle is set to true if the given processor entity hasn't published anything
+	// to the offset timeline bucket in a batch processing cycle.
+	// Idle is used to signal an idle watermark.
+	Idle bool
 }
 
 // EncodeToBytes encodes a Value object into byte array.

@@ -36,6 +36,8 @@ type Publisher interface {
 	io.Closer
 	// PublishWatermark publishes the watermark.
 	PublishWatermark(processor.Watermark, isb.Offset)
+	// PublishIdleWatermark publishes the idle watermark.
+	PublishIdleWatermark()
 	// GetLatestWatermark returns the latest published watermark.
 	GetLatestWatermark() processor.Watermark
 }
@@ -136,6 +138,32 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 			time.Sleep(time.Millisecond * 250)
 		} else {
 			p.log.Debugw("New watermark published with offset", zap.Int64("head", p.headWatermark.UnixMilli()), zap.Int64("new", wm.UnixMilli()), zap.Int64("offset", seq))
+			break
+		}
+	}
+}
+
+// PublishIdleWatermark publishes the idle watermark and will retry until it can succeed.
+func (p *publish) PublishIdleWatermark() {
+	var key = p.entity.GetName()
+	var otValue = ot.Value{
+		Offset:    0,
+		Watermark: 0,
+		Idle:      true,
+	}
+	value, err := otValue.EncodeToBytes()
+	if err != nil {
+		p.log.Errorw("Unable to publish idle watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+	}
+
+	for {
+		err := p.otStore.PutKV(p.ctx, key, value)
+		if err != nil {
+			p.log.Errorw("Unable to publish idle watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+			// TODO: better exponential backoff
+			time.Sleep(time.Millisecond * 250)
+		} else {
+			p.log.Debugw("New idle watermark published", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key))
 			break
 		}
 	}

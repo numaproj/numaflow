@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -94,6 +95,16 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 
 	head := p.GetLatestWatermark()
 	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
+
+	p.PublishIdleWatermark()
+	keys, err = p.otStore.GetAllKeys(p.ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"publisherTestPod1"}, keys)
+	otValue, err := p.otStore.GetValue(p.ctx, keys[0])
+	assert.NoError(t, err)
+	otDecode, err := ot.DecodeToOTValue(otValue)
+	assert.NoError(t, err)
+	assert.True(t, otDecode.Idle)
 
 	_ = p.Close()
 

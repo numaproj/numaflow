@@ -22,9 +22,10 @@ import (
 	"testing"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestTimeline_GetEventTime(t1 *testing.T) {
+func TestTimeline_GetEventTime(t *testing.T) {
 	var (
 		ctx            = context.Background()
 		emptyTimeline  = NewOffsetTimeline(ctx, 5)
@@ -114,7 +115,7 @@ func TestTimeline_GetEventTime(t1 *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t1.Run(tt.name, func(t1 *testing.T) {
+		t.Run(tt.name, func(t1 *testing.T) {
 			if got := tt.args.timeline.GetEventTime(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.inputOffset, 10) })); got != tt.want {
 				t1.Errorf("GetEventTime() = %v, want %v", got, tt.want)
 			}
@@ -122,7 +123,7 @@ func TestTimeline_GetEventTime(t1 *testing.T) {
 	}
 }
 
-func TestOffsetTimeline_GetOffset(t1 *testing.T) {
+func TestOffsetTimeline_GetOffset(t *testing.T) {
 	var (
 		ctx            = context.Background()
 		testTimeline   = NewOffsetTimeline(ctx, 10)
@@ -210,10 +211,52 @@ func TestOffsetTimeline_GetOffset(t1 *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t1.Run(tt.name, func(t1 *testing.T) {
+		t.Run(tt.name, func(t1 *testing.T) {
 			if got := tt.args.timeline.GetOffset(tt.args.inputEventTime); got != tt.want {
 				t1.Errorf("GetOffset() = %v, want %v", got, tt.want)
 			}
 		})
 	}
+}
+
+func TestOffsetTimeline(t *testing.T) {
+	var (
+		ctx            = context.Background()
+		testTimeline   = NewOffsetTimeline(ctx, 10)
+		testwatermarks = []OffsetWatermark{
+			{watermark: 10, offset: 9},
+			{watermark: 12, offset: 20},
+			{watermark: 13, offset: 21},
+			{watermark: 15, offset: 24},
+			{watermark: 15, offset: 25}, // will overwrite the previous one
+			{watermark: 20, offset: 26},
+			{watermark: 23, offset: 27},
+			{watermark: 28, offset: 30},
+			{watermark: 29, offset: 35},
+			{watermark: 32, offset: 36},
+		}
+	)
+
+	for _, watermark := range testwatermarks {
+		testTimeline.Put(watermark)
+		assert.Equal(t, watermark, testTimeline.GetHeadOffsetWatermark())
+		assert.Equal(t, watermark.watermark, testTimeline.GetHeadWatermark(), watermark.watermark)
+		assert.Equal(t, watermark.offset, testTimeline.GetHeadOffset())
+	}
+	assert.Equal(t, "[32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20] -> [10:9] -> [-1:-1]", testTimeline.Dump())
+
+	testTimeline.Put(OffsetWatermark{watermark: 33, offset: 36})
+	assert.Equal(t, "[33:36] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20] -> [10:9]", testTimeline.Dump())
+
+	testTimeline.Put(OffsetWatermark{watermark: 33, offset: 35})
+	// should be ignored
+	assert.Equal(t, "[33:36] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20] -> [10:9]", testTimeline.Dump())
+
+	testTimeline.Put(OffsetWatermark{watermark: 30, offset: 33})
+	// should be ignored
+	assert.Equal(t, "[33:36] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20] -> [10:9]", testTimeline.Dump())
+
+	testTimeline.Put(OffsetWatermark{watermark: 30, offset: 35})
+	assert.Equal(t, "[33:36] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
 }
