@@ -93,12 +93,16 @@ func (t *OffsetTimeline) Put(node OffsetWatermark) {
 				}
 				return
 			} else {
-				// TODO put panic: the new input offset should never be smaller than the existing offset
 				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
-					zap.Int64("existing offset", elementNode.offset), zap.Int64("input offset", node.offset))
+					zap.Int64("existingOffset", elementNode.offset), zap.Int64("inputOffset", node.offset))
 				return
 			}
 		} else if node.watermark > elementNode.watermark {
+			if node.offset < elementNode.offset {
+				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
+					zap.Int64("existingOffset", elementNode.offset), zap.Int64("inputOffset", node.offset))
+				return
+			}
 			// our list is sorted by event time from highest to lowest
 			t.watermarks.InsertBefore(node, e)
 			// remove the last event time
@@ -132,14 +136,11 @@ func (t *OffsetTimeline) GetHeadWatermark() int64 {
 	return t.watermarks.Front().Value.(OffsetWatermark).watermark
 }
 
-// GetTailOffset returns the smallest offset with the smallest watermark.
-func (t *OffsetTimeline) GetTailOffset() int64 {
+// GetHeadOffsetWatermark returns the largest offset with the largest watermark.
+func (t *OffsetTimeline) GetHeadOffsetWatermark() OffsetWatermark {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	if t.watermarks.Len() == 0 {
-		return -1
-	}
-	return t.watermarks.Back().Value.(OffsetWatermark).offset
+	return t.watermarks.Front().Value.(OffsetWatermark)
 }
 
 // GetOffset will return the offset for the given event-time.
@@ -170,18 +171,14 @@ func (t *OffsetTimeline) GetEventTimeFromInt64(inputOffsetInt64 int64) int64 {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	var (
-		offset    int64 = -1
-		eventTime int64 = -1
-	)
+	var eventTime int64 = -1
 
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
 		// get the event time has the closest offset to the input offset
 		// exclude the same offset because this offset may not finish processing yet
-		// offset < e.Value.(OffsetWatermark).offset: use < because we want the largest possible timestamp
-		if offset < e.Value.(OffsetWatermark).offset && e.Value.(OffsetWatermark).offset < inputOffsetInt64 {
-			offset = e.Value.(OffsetWatermark).offset
+		if e.Value.(OffsetWatermark).offset < inputOffsetInt64 {
 			eventTime = e.Value.(OffsetWatermark).watermark
+			break
 		}
 	}
 

@@ -144,14 +144,14 @@ loop:
 		}
 	}
 	for p, t := range oldestTimestamps {
-		publisher := r.loadSourceWartermarkPublisher(p)
+		publisher := r.loadSourceWatermarkPublisher(p)
 		publisher.PublishWatermark(processor.Watermark(t), nil) // Source publisher does not care about the offset
 	}
 	return msgs, nil
 }
 
-// loadSourceWartermarkPublisher does a lazy load on the wartermark publisher
-func (r *KafkaSource) loadSourceWartermarkPublisher(partitionID int32) publish.Publisher {
+// loadSourceWatermarkPublisher does a lazy load on the watermark publisher
+func (r *KafkaSource) loadSourceWatermarkPublisher(partitionID int32) publish.Publisher {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	if p, ok := r.sourcePublishWMs[partitionID]; ok {
