@@ -85,21 +85,26 @@ export function Pipeline() {
           )
             .then((response) => response.json())
             .then((json) => {
-              const vertexMetrics = {ratePerMin: 0, ratePerFiveMin: 0, ratePerFifteenMin: 0} as VertexMetrics;
-              if ("processingRates" in json) {
-                if ("1m" in json["processingRates"]) {
-                  vertexMetrics.ratePerMin =
-                  json["processingRates"]["1m"].toFixed(2);
+              const vertexMetrics = {ratePerMin: "0.00", ratePerFiveMin: "0.00", ratePerFifteenMin: "0.00", podMetrics: null} as VertexMetrics;
+              let ratePerMin = 0.0, ratePerFiveMin = 0.0, ratePerFifteenMin = 0.0;
+              // keeping processing rates as summation of pod values
+              json.map((pod) => {
+                if ("processingRates" in pod) {
+                  if ("1m" in pod["processingRates"]) {
+                    ratePerMin += pod["processingRates"]["1m"];
+                  }
+                  if ("5m" in pod["processingRates"]) {
+                    ratePerFiveMin += pod["processingRates"]["5m"];
+                  }
+                  if ("15m" in pod["processingRates"]) {
+                    ratePerFifteenMin += pod["processingRates"]["15m"];
+                  }
                 }
-                if ("5m" in json["processingRates"]) {
-                  vertexMetrics.ratePerFiveMin =
-                  json["processingRates"]["5m"].toFixed(2);
-                }
-                if ("15m" in json["processingRates"]) {
-                  vertexMetrics.ratePerFifteenMin =
-                  json["processingRates"]["15m"].toFixed(2);
-                }
-              }
+              })
+              vertexMetrics.ratePerMin = ratePerMin.toFixed(2);
+              vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
+              vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
+              vertexMetrics.podMetrics = json;
               vertexToMetricsMap.set(vertex.name, vertexMetrics);
             });
         })

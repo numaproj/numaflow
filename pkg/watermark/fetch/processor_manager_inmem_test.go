@@ -32,10 +32,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-func otValueToBytes(offset int64, watermark int64) ([]byte, error) {
+func otValueToBytes(offset int64, watermark int64, idle bool) ([]byte, error) {
 	otValue := ot.Value{
 		Offset:    offset,
 		Watermark: watermark,
+		Idle:      idle,
 	}
 	otValueByte, err := otValue.EncodeToBytes()
 	return otValueByte, err
@@ -61,14 +62,14 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.NoError(t, err)
 	defer otStore.Close()
 
-	otValueByte, err := otValueToBytes(testOffset, epoch)
+	otValueByte, err := otValueToBytes(testOffset, epoch, false)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
 
 	epoch += 60000
 
-	otValueByte, err = otValueToBytes(testOffset+5, epoch)
+	otValueByte, err = otValueToBytes(testOffset+5, epoch, false)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p2", otValueByte)
 	assert.NoError(t, err)
@@ -191,7 +192,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.Equal(t, int64(-1), p1.offsetTimeline.GetHeadOffset())
 
 	// publish a new watermark 101
-	otValueByte, err = otValueToBytes(testOffset+1, epoch)
+	otValueByte, err = otValueToBytes(testOffset+1, epoch, false)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)

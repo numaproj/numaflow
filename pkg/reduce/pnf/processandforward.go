@@ -254,10 +254,24 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 
 // publishWM publishes the watermark to each edge.
 func (p *ProcessAndForward) publishWM(wm processor.Watermark, writeOffsets map[string][]isb.Offset) {
+	// activeWatermarkBuffers records the buffers that the publisher has published
+	// a watermark in this batch processing cycle.
+	// it's used to determine which buffers should receive an idle watermark.
+	var activeWatermarkBuffers = make(map[string]bool)
 	for bufferName, offsets := range writeOffsets {
 		if publisher, ok := p.publishWatermark[bufferName]; ok {
 			if len(offsets) > 0 {
 				publisher.PublishWatermark(wm, offsets[len(offsets)-1])
+				activeWatermarkBuffers[bufferName] = true
+			}
+		}
+	}
+	if len(activeWatermarkBuffers) < len(p.publishWatermark) {
+		// if there's any buffers that haven't received any watermark during this
+		// batch processing cycle, send an idle watermark
+		for bufferName := range p.publishWatermark {
+			if !activeWatermarkBuffers[bufferName] {
+				p.publishWatermark[bufferName].PublishIdleWatermark()
 			}
 		}
 	}
