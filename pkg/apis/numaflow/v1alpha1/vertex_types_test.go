@@ -191,14 +191,15 @@ func TestGetPodSpec(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{}
 		testObj.Spec.AbstractPodTemplate = AbstractPodTemplate{
-			NodeSelector:       map[string]string{"a": "b"},
-			Tolerations:        []corev1.Toleration{{Key: "key", Value: "val", Operator: corev1.TolerationOpEqual}},
-			SecurityContext:    &corev1.PodSecurityContext{},
-			ImagePullSecrets:   []corev1.LocalObjectReference{{Name: "name"}},
-			PriorityClassName:  "pname",
-			Priority:           pointer.Int32(111),
-			ServiceAccountName: "sa",
-			RuntimeClassName:   pointer.String("run"),
+			NodeSelector:                 map[string]string{"a": "b"},
+			Tolerations:                  []corev1.Toleration{{Key: "key", Value: "val", Operator: corev1.TolerationOpEqual}},
+			SecurityContext:              &corev1.PodSecurityContext{},
+			ImagePullSecrets:             []corev1.LocalObjectReference{{Name: "name"}},
+			PriorityClassName:            "pname",
+			Priority:                     pointer.Int32(111),
+			ServiceAccountName:           "sa",
+			RuntimeClassName:             pointer.String("run"),
+			AutomountServiceAccountToken: pointer.Bool(true),
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
@@ -214,6 +215,8 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, "sa", s.ServiceAccountName)
 		assert.NotNil(t, s.RuntimeClassName)
 		assert.Equal(t, "run", *s.RuntimeClassName)
+		assert.NotNil(t, s.AutomountServiceAccountToken)
+		assert.True(t, *s.AutomountServiceAccountToken)
 		assert.Equal(t, 1, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)

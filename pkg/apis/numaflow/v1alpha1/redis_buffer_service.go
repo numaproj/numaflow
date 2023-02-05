@@ -143,6 +143,169 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 	if nr.MetricsContainerTemplate != nil {
 		metricsContainerPullPolicy = nr.MetricsContainerTemplate.ImagePullPolicy
 	}
+	podSpec := &corev1.PodSpec{
+		Volumes: []corev1.Volume{
+			{
+				Name: "start-scripts",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: req.ScriptsConfigMapName,
+						},
+						DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
+					},
+				},
+			},
+			{
+				Name: "health",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: req.HealthConfigMapName,
+						},
+						DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
+					},
+				},
+			},
+			{
+				Name: "config",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: req.ConfConfigMapName,
+						},
+						DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
+					},
+				},
+			},
+			{Name: "sentinel-tmp-conf", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			{Name: "redis-tmp-conf", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		},
+		Containers: []corev1.Container{
+			{
+				Name:            "redis",
+				Image:           req.RedisImage,
+				ImagePullPolicy: redisContainerPullPolicy,
+				Ports: []corev1.ContainerPort{
+					{Name: "redis", ContainerPort: req.RedisContainerPort},
+				},
+				Command: []string{"/bin/bash"},
+				Args:    []string{"-c", "/opt/bitnami/scripts/start-scripts/start-node.sh"},
+				Env: []corev1.EnvVar{
+					{Name: "BITNAMI_DEBUG", Value: "true"},
+					{Name: "REDIS_MASTER_PORT_NUMBER", Value: fmt.Sprint(req.RedisContainerPort)},
+					{Name: "ALLOW_EMPTY_PASSWORD", Value: "no"},
+					{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
+					{Name: "REDIS_MASTER_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
+					{Name: "REDIS_TLS_ENABLED", Value: "no"},
+					{Name: "REDIS_PORT", Value: fmt.Sprint(req.RedisContainerPort)},
+					{Name: "REDIS_DATA_DIR", Value: "/data"},
+				},
+				Lifecycle: &corev1.Lifecycle{
+					PreStop: &corev1.LifecycleHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"/bin/bash", "-c", "/opt/bitnami/scripts/start-scripts/prestop-redis.sh"},
+						},
+					},
+				},
+				VolumeMounts: []corev1.VolumeMount{
+					{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
+					{Name: "health", MountPath: "/health"},
+					{Name: "config", MountPath: "/opt/bitnami/redis/mounted-etc"},
+					{Name: "redis-tmp-conf", MountPath: "/opt/bitnami/redis/etc"},
+					{Name: "tmp", MountPath: "/tmp"},
+				},
+				LivenessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_liveness_local.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      5,
+					FailureThreshold:    5,
+				},
+				ReadinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_readiness_local.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      5,
+					FailureThreshold:    5,
+				},
+			},
+			{
+				Name:            "sentinel",
+				Image:           req.SentinelImage,
+				ImagePullPolicy: sentinelContainerPullPolicy,
+				Ports: []corev1.ContainerPort{
+					{Name: "sentinel", ContainerPort: req.SentinelContainerPort},
+				},
+				Command: []string{"/bin/bash"},
+				Args:    []string{"-c", "/opt/bitnami/scripts/start-scripts/start-sentinel.sh"},
+				Env: []corev1.EnvVar{
+					{Name: "BITNAMI_DEBUG", Value: "false"},
+					{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
+					{Name: "REDIS_SENTINEL_TLS_ENABLED", Value: "no"},
+					{Name: "REDIS_SENTINEL_PORT", Value: fmt.Sprint(req.SentinelContainerPort)},
+				},
+				Lifecycle: &corev1.Lifecycle{
+					PreStop: &corev1.LifecycleHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"/bin/bash", "-c", "/opt/bitnami/scripts/start-scripts/prestop-sentinel.sh"},
+						},
+					},
+				},
+				LivenessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      5,
+					FailureThreshold:    5,
+				},
+				ReadinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      5,
+					FailureThreshold:    5,
+				},
+				VolumeMounts: []corev1.VolumeMount{
+					{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
+					{Name: "health", MountPath: "/health"},
+					{Name: "config", MountPath: "/opt/bitnami/redis-sentinel/mounted-etc"},
+					{Name: "sentinel-tmp-conf", MountPath: "/opt/bitnami/redis-sentinel/etc"},
+				},
+			},
+			{
+				Name:            "metrics",
+				Image:           req.MetricsExporterImage,
+				ImagePullPolicy: metricsContainerPullPolicy,
+				Command: []string{"/bin/bash", "-c", `if [[ -f '/secrets/redis-password' ]]; then
+export REDIS_PASSWORD=$(cat /secrets/redis-password)
+fi
+redis_exporter`},
+				Ports: []corev1.ContainerPort{
+					{Name: "metrics", ContainerPort: req.RedisMetricsContainerPort},
+				},
+				Env: []corev1.EnvVar{
+					{Name: "REDIS_ALIAS", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+					{Name: "REDIS_USER", Value: "default"},
+					{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
+				},
+			},
+		},
+	}
+	nr.AbstractPodTemplate.ApplyToPodSpec(podSpec)
 	spec := appv1.StatefulSetSpec{
 		Replicas:    &replicas,
 		ServiceName: req.ServiceName,
@@ -154,176 +317,7 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: podTemplateLabels,
 			},
-			Spec: corev1.PodSpec{
-				NodeSelector:       nr.NodeSelector,
-				Tolerations:        nr.Tolerations,
-				SecurityContext:    nr.SecurityContext,
-				ImagePullSecrets:   nr.ImagePullSecrets,
-				PriorityClassName:  nr.PriorityClassName,
-				Priority:           nr.Priority,
-				ServiceAccountName: nr.ServiceAccountName,
-				Affinity:           nr.Affinity,
-				Volumes: []corev1.Volume{
-					{
-						Name: "start-scripts",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: req.ScriptsConfigMapName,
-								},
-								DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
-							},
-						},
-					},
-					{
-						Name: "health",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: req.HealthConfigMapName,
-								},
-								DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
-							},
-						},
-					},
-					{
-						Name: "config",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: req.ConfConfigMapName,
-								},
-								DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
-							},
-						},
-					},
-					{Name: "sentinel-tmp-conf", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-					{Name: "redis-tmp-conf", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-					{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-				},
-				Containers: []corev1.Container{
-					{
-						Name:            "redis",
-						Image:           req.RedisImage,
-						ImagePullPolicy: redisContainerPullPolicy,
-						Ports: []corev1.ContainerPort{
-							{Name: "redis", ContainerPort: req.RedisContainerPort},
-						},
-						Command: []string{"/bin/bash"},
-						Args:    []string{"-c", "/opt/bitnami/scripts/start-scripts/start-node.sh"},
-						Env: []corev1.EnvVar{
-							{Name: "BITNAMI_DEBUG", Value: "true"},
-							{Name: "REDIS_MASTER_PORT_NUMBER", Value: fmt.Sprint(req.RedisContainerPort)},
-							{Name: "ALLOW_EMPTY_PASSWORD", Value: "no"},
-							{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
-							{Name: "REDIS_MASTER_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
-							{Name: "REDIS_TLS_ENABLED", Value: "no"},
-							{Name: "REDIS_PORT", Value: fmt.Sprint(req.RedisContainerPort)},
-							{Name: "REDIS_DATA_DIR", Value: "/data"},
-						},
-						Lifecycle: &corev1.Lifecycle{
-							PreStop: &corev1.LifecycleHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"/bin/bash", "-c", "/opt/bitnami/scripts/start-scripts/prestop-redis.sh"},
-								},
-							},
-						},
-						VolumeMounts: []corev1.VolumeMount{
-							{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
-							{Name: "health", MountPath: "/health"},
-							{Name: "config", MountPath: "/opt/bitnami/redis/mounted-etc"},
-							{Name: "redis-tmp-conf", MountPath: "/opt/bitnami/redis/etc"},
-							{Name: "tmp", MountPath: "/tmp"},
-						},
-						LivenessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"sh", "-c", "/health/ping_liveness_local.sh 5"},
-								},
-							},
-							InitialDelaySeconds: 20,
-							TimeoutSeconds:      5,
-							FailureThreshold:    5,
-						},
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"sh", "-c", "/health/ping_readiness_local.sh 5"},
-								},
-							},
-							InitialDelaySeconds: 20,
-							TimeoutSeconds:      5,
-							FailureThreshold:    5,
-						},
-					},
-					{
-						Name:            "sentinel",
-						Image:           req.SentinelImage,
-						ImagePullPolicy: sentinelContainerPullPolicy,
-						Ports: []corev1.ContainerPort{
-							{Name: "sentinel", ContainerPort: req.SentinelContainerPort},
-						},
-						Command: []string{"/bin/bash"},
-						Args:    []string{"-c", "/opt/bitnami/scripts/start-scripts/start-sentinel.sh"},
-						Env: []corev1.EnvVar{
-							{Name: "BITNAMI_DEBUG", Value: "false"},
-							{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
-							{Name: "REDIS_SENTINEL_TLS_ENABLED", Value: "no"},
-							{Name: "REDIS_SENTINEL_PORT", Value: fmt.Sprint(req.SentinelContainerPort)},
-						},
-						Lifecycle: &corev1.Lifecycle{
-							PreStop: &corev1.LifecycleHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"/bin/bash", "-c", "/opt/bitnami/scripts/start-scripts/prestop-sentinel.sh"},
-								},
-							},
-						},
-						LivenessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
-								},
-							},
-							InitialDelaySeconds: 20,
-							TimeoutSeconds:      5,
-							FailureThreshold:    5,
-						},
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
-								},
-							},
-							InitialDelaySeconds: 20,
-							TimeoutSeconds:      5,
-							FailureThreshold:    5,
-						},
-						VolumeMounts: []corev1.VolumeMount{
-							{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
-							{Name: "health", MountPath: "/health"},
-							{Name: "config", MountPath: "/opt/bitnami/redis-sentinel/mounted-etc"},
-							{Name: "sentinel-tmp-conf", MountPath: "/opt/bitnami/redis-sentinel/etc"},
-						},
-					},
-					{
-						Name:            "metrics",
-						Image:           req.MetricsExporterImage,
-						ImagePullPolicy: metricsContainerPullPolicy,
-						Command: []string{"/bin/bash", "-c", `if [[ -f '/secrets/redis-password' ]]; then
-  export REDIS_PASSWORD=$(cat /secrets/redis-password)
-fi
-redis_exporter`},
-						Ports: []corev1.ContainerPort{
-							{Name: "metrics", ContainerPort: req.RedisMetricsContainerPort},
-						},
-						Env: []corev1.EnvVar{
-							{Name: "REDIS_ALIAS", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
-							{Name: "REDIS_USER", Value: "default"},
-							{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
-						},
-					},
-				},
-			},
+			Spec: *podSpec,
 		},
 	}
 	if nr.Metadata != nil {

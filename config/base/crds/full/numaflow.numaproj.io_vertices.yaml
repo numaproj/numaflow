@@ -399,6 +399,8 @@ spec:
                         type: array
                     type: object
                 type: object
+              automountServiceAccountToken:
+                type: boolean
               containerTemplate:
                 properties:
                   env:

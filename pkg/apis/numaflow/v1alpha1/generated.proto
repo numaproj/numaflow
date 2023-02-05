@@ -95,6 +95,10 @@ message AbstractPodTemplate {
   // More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class
   // +optional
   optional string runtimeClassName = 10;
+
+  // AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.
+  // +optional
+  optional bool automountServiceAccountToken = 11;
 }
 
 message AbstractVertex {
