@@ -74,6 +74,9 @@ type AbstractPodTemplate struct {
 	// More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class
 	// +optional
 	RuntimeClassName *string `json:"runtimeClassName,omitempty" protobuf:"bytes,10,opt,name=runtimeClassName"`
+	// AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.
+	// +optional
+	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty" protobuf:"bytes,11,opt,name=automountServiceAccountToken"`
 }
 
 // ApplyToPodSpec updates the PodSpec with the values in the AbstractPodTemplate
@@ -87,6 +90,7 @@ func (apt *AbstractPodTemplate) ApplyToPodSpec(ps *corev1.PodSpec) {
 	ps.Affinity = apt.Affinity
 	ps.ServiceAccountName = apt.ServiceAccountName
 	ps.RuntimeClassName = apt.RuntimeClassName
+	ps.AutomountServiceAccountToken = apt.AutomountServiceAccountToken
 }
 
 // ApplyToPodTemplateSpec updates the PodTemplateSpec with the values in the AbstractPodTemplate

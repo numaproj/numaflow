@@ -490,6 +490,8 @@ spec:
                                 type: array
                             type: object
                         type: object
+                      automountServiceAccountToken:
+                        type: boolean
                       containerTemplate:
                         properties:
                           env:
@@ -1251,6 +1253,8 @@ spec:
                                 type: array
                             type: object
                         type: object
+                      automountServiceAccountToken:
+                        type: boolean
                       backoffLimit:
                         format: int32
                         type: integer
@@ -1872,6 +1876,8 @@ spec:
                               type: array
                           type: object
                       type: object
+                    automountServiceAccountToken:
+                      type: boolean
                     containerTemplate:
                       properties:
                         env:

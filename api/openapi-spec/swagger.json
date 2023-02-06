@@ -17265,6 +17265,10 @@
           "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
         },
+        "automountServiceAccountToken": {
+          "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+          "type": "boolean"
+        },
         "imagePullSecrets": {
           "description": "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
           "type": "array",
@@ -17324,6 +17328,10 @@
         "affinity": {
           "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
+        },
+        "automountServiceAccountToken": {
+          "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+          "type": "boolean"
         },
         "containerTemplate": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
@@ -17538,6 +17546,10 @@
         "affinity": {
           "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
+        },
+        "automountServiceAccountToken": {
+          "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+          "type": "boolean"
         },
         "containerTemplate": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
@@ -18087,6 +18099,10 @@
           "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
         },
+        "automountServiceAccountToken": {
+          "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+          "type": "boolean"
+        },
         "bufferConfig": {
           "description": "Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config. It accepts a YAML format configuration, it may include 4 sections, \"stream\", \"consumer\", \"otBucket\" and \"procBucket\". Available fields under \"stream\" include \"retention\" (e.g. interest, limits, workerQueue), \"maxMsgs\", \"maxAge\" (e.g. 72h), \"replicas\" (1, 3, 5), \"duplicates\" (e.g. 5m). Available fields under \"consumer\" include \"ackWait\" (e.g. 60s) Available fields under \"otBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5). Available fields under \"procBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5).",
           "type": "string"
@@ -18209,6 +18225,10 @@
         "affinity": {
           "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
+        },
+        "automountServiceAccountToken": {
+          "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+          "type": "boolean"
         },
         "backoffLimit": {
           "description": "Specifies the number of retries before marking this job failed. More info: https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-backoff-failure-policy Numaflow defaults to 20",
@@ -18364,6 +18384,10 @@
         "affinity": {
           "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
+        },
+        "automountServiceAccountToken": {
+          "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+          "type": "boolean"
         },
         "imagePullSecrets": {
           "description": "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
@@ -19035,6 +19059,10 @@
         "affinity": {
           "description": "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity"
+        },
+        "automountServiceAccountToken": {
+          "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+          "type": "boolean"
         },
         "containerTemplate": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"

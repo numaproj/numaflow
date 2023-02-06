@@ -397,6 +397,8 @@ spec:
                             type: array
                         type: object
                     type: object
+                  automountServiceAccountToken:
+                    type: boolean
                   bufferConfig:
                     type: string
                   containerTemplate:
@@ -1366,6 +1368,8 @@ spec:
                                 type: array
                             type: object
                         type: object
+                      automountServiceAccountToken:
+                        type: boolean
                       imagePullSecrets:
                         items:
                           properties:
@@ -2740,6 +2744,8 @@ spec:
                                 type: array
                             type: object
                         type: object
+                      automountServiceAccountToken:
+                        type: boolean
                       containerTemplate:
                         properties:
                           env:
@@ -3501,6 +3507,8 @@ spec:
                                 type: array
                             type: object
                         type: object
+                      automountServiceAccountToken:
+                        type: boolean
                       backoffLimit:
                         format: int32
                         type: integer
@@ -4122,6 +4130,8 @@ spec:
                               type: array
                           type: object
                       type: object
+                    automountServiceAccountToken:
+                      type: boolean
                     containerTemplate:
                       properties:
                         env:
@@ -7592,6 +7602,8 @@ spec:
                         type: array
                     type: object
                 type: object
+              automountServiceAccountToken:
+                type: boolean
               containerTemplate:
                 properties:
                   env:

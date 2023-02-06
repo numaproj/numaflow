@@ -74,6 +74,11 @@ func (in *AbstractPodTemplate) DeepCopyInto(out *AbstractPodTemplate) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.AutomountServiceAccountToken != nil {
+		in, out := &in.AutomountServiceAccountToken, &out.AutomountServiceAccountToken
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 

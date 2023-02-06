@@ -398,6 +398,8 @@ spec:
                             type: array
                         type: object
                     type: object
+                  automountServiceAccountToken:
+                    type: boolean
                   bufferConfig:
                     type: string
                   containerTemplate:
@@ -1367,6 +1369,8 @@ spec:
                                 type: array
                             type: object
                         type: object
+                      automountServiceAccountToken:
+                        type: boolean
                       imagePullSecrets:
                         items:
                           properties:
