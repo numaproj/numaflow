@@ -115,6 +115,34 @@ func (t *OffsetTimeline) Put(node OffsetWatermark) {
 	}
 }
 
+// PutIdle inserts the assumed OffsetWatermark which replaces the idle watermark into list. It ensures that the list will remain sorted after the insert.
+func (t *OffsetTimeline) PutIdle(node OffsetWatermark) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	// when inserting an assumed OffsetWatermark, we only need to compare with the head
+	// and can safely skip insertion when any condition doesn't meet
+	if e := t.watermarks.Front(); e != nil {
+		var elementNode = e.Value.(OffsetWatermark)
+		if node.watermark > elementNode.watermark {
+			if node.offset > elementNode.offset {
+				t.watermarks.InsertBefore(node, e)
+				t.watermarks.Remove(t.watermarks.Back())
+				return
+			}
+		} else if node.watermark == elementNode.watermark {
+			if node.offset > elementNode.offset {
+				e.Value = OffsetWatermark{
+					watermark: node.watermark,
+					offset:    node.offset,
+				}
+				return
+			}
+		} else {
+			return
+		}
+	}
+}
+
 // GetHeadOffset returns the head offset, that is the most recent offset which will have the highest
 // Watermark.
 func (t *OffsetTimeline) GetHeadOffset() int64 {
