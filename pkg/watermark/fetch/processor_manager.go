@@ -259,7 +259,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 							// this Vn processor, so it's safe to do nothing
 							watermarkOffset := processor.offsetTimeline.GetHeadOffsetWatermark()
 							if watermarkOffset.offset != -1 {
-								p.offsetTimeline.Put(watermarkOffset)
+								p.offsetTimeline.PutIdle(watermarkOffset)
 								break
 							}
 						}
