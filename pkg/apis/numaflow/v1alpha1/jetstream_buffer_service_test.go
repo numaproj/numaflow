@@ -86,20 +86,22 @@ func TestJetStreamGetStatefulSetSpec(t *testing.T) {
 		assert.Equal(t, 7, len(spec.Template.Spec.Volumes[1].VolumeSource.Projected.Sources[1].Secret.Items))
 	})
 
-	t.Run("with container resources", func(t *testing.T) {
+	t.Run("with customized containers", func(t *testing.T) {
 		r := corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
 				corev1.ResourceMemory: resource.MustParse("100Mi"),
 			},
 		}
 		s := &JetStreamBufferService{
-			ContainerTemplate:         &ContainerTemplate{Resources: r},
-			ReloaderContainerTemplate: &ContainerTemplate{Resources: r},
-			MetricsContainerTemplate:  &ContainerTemplate{Resources: r},
+			ContainerTemplate:         &ContainerTemplate{Resources: r, SecurityContext: &corev1.SecurityContext{}, ImagePullPolicy: corev1.PullNever},
+			ReloaderContainerTemplate: &ContainerTemplate{Resources: r, SecurityContext: &corev1.SecurityContext{}, ImagePullPolicy: corev1.PullNever},
+			MetricsContainerTemplate:  &ContainerTemplate{Resources: r, SecurityContext: &corev1.SecurityContext{}, ImagePullPolicy: corev1.PullNever},
 		}
 		spec := s.GetStatefulSetSpec(req)
 		for _, c := range spec.Template.Spec.Containers {
 			assert.Equal(t, c.Resources, r)
+			assert.NotNil(t, c.SecurityContext)
+			assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
 		}
 	})
 }

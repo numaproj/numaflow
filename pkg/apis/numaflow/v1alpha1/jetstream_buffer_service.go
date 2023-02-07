@@ -111,20 +111,6 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 	for k, v := range req.Labels {
 		podTemplateLabels[k] = v
 	}
-	var jsContainerPullPolicy, reloaderContainerPullPolicy, metricsContainerPullPolicy corev1.PullPolicy
-	var jsContainerSecurityContext, reloaderContainerSecurityContext, metricsContainerSecurityContext *corev1.SecurityContext
-	if j.ContainerTemplate != nil {
-		jsContainerPullPolicy = j.ContainerTemplate.ImagePullPolicy
-		jsContainerSecurityContext = j.ContainerTemplate.SecurityContext
-	}
-	if j.ReloaderContainerTemplate != nil {
-		reloaderContainerPullPolicy = j.ReloaderContainerTemplate.ImagePullPolicy
-		reloaderContainerSecurityContext = j.ReloaderContainerTemplate.SecurityContext
-	}
-	if j.MetricsContainerTemplate != nil {
-		metricsContainerPullPolicy = j.MetricsContainerTemplate.ImagePullPolicy
-		metricsContainerSecurityContext = j.MetricsContainerTemplate.SecurityContext
-	}
 	projectedSecretKeyToPaths := []corev1.KeyToPath{
 		{
 			Key:  JetStreamServerSecretAuthKey,
@@ -196,9 +182,8 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 		},
 		Containers: []corev1.Container{
 			{
-				Name:            "main",
-				Image:           req.NatsImage,
-				ImagePullPolicy: jsContainerPullPolicy,
+				Name:  "main",
+				Image: req.NatsImage,
 				Ports: []corev1.ContainerPort{
 					{Name: "client", ContainerPort: req.ClientPort},
 					{Name: "cluster", ContainerPort: req.ClusterPort},
@@ -218,7 +203,6 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 					{Name: "config-volume", MountPath: "/etc/nats-config"},
 					{Name: "pid", MountPath: "/var/run/nats"},
 				},
-				SecurityContext: jsContainerSecurityContext,
 				StartupProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
@@ -250,25 +234,21 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 				},
 			},
 			{
-				Name:            "reloader",
-				Image:           req.ConfigReloaderImage,
-				ImagePullPolicy: reloaderContainerPullPolicy,
-				SecurityContext: reloaderContainerSecurityContext,
-				Command:         []string{"nats-server-config-reloader", "-pid", "/var/run/nats/nats.pid", "-config", "/etc/nats-config/nats-js.conf"},
+				Name:    "reloader",
+				Image:   req.ConfigReloaderImage,
+				Command: []string{"nats-server-config-reloader", "-pid", "/var/run/nats/nats.pid", "-config", "/etc/nats-config/nats-js.conf"},
 				VolumeMounts: []corev1.VolumeMount{
 					{Name: "config-volume", MountPath: "/etc/nats-config"},
 					{Name: "pid", MountPath: "/var/run/nats"},
 				},
 			},
 			{
-				Name:            "metrics",
-				Image:           req.MetricsExporterImage,
-				ImagePullPolicy: metricsContainerPullPolicy,
+				Name:  "metrics",
+				Image: req.MetricsExporterImage,
 				Ports: []corev1.ContainerPort{
 					{Name: "metrics", ContainerPort: req.MetricsPort},
 				},
-				Args:            []string{"-connz", "-routez", "-subz", "-varz", "-prefix=nats", "-use_internal_server_id", "-jsz=all", fmt.Sprintf("http://localhost:%s", strconv.Itoa(int(req.MonitorPort)))},
-				SecurityContext: metricsContainerSecurityContext,
+				Args: []string{"-connz", "-routez", "-subz", "-varz", "-prefix=nats", "-use_internal_server_id", "-jsz=all", fmt.Sprintf("http://localhost:%s", strconv.Itoa(int(req.MonitorPort)))},
 			},
 		},
 	}
@@ -291,13 +271,13 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 		spec.Template.SetAnnotations(j.Metadata.Annotations)
 	}
 	if j.ContainerTemplate != nil {
-		spec.Template.Spec.Containers[0].Resources = j.ContainerTemplate.Resources
+		j.ContainerTemplate.ApplyToContainer(&spec.Template.Spec.Containers[0])
 	}
 	if j.ReloaderContainerTemplate != nil {
-		spec.Template.Spec.Containers[1].Resources = j.ReloaderContainerTemplate.Resources
+		j.ReloaderContainerTemplate.ApplyToContainer(&spec.Template.Spec.Containers[1])
 	}
 	if j.MetricsContainerTemplate != nil {
-		spec.Template.Spec.Containers[2].Resources = j.MetricsContainerTemplate.Resources
+		j.MetricsContainerTemplate.ApplyToContainer(&spec.Template.Spec.Containers[2])
 	}
 	if j.Persistence != nil {
 		spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
