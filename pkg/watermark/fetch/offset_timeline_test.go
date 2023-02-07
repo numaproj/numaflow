@@ -259,4 +259,25 @@ func TestOffsetTimeline(t *testing.T) {
 	testTimeline.Put(OffsetWatermark{watermark: 30, offset: 35})
 	assert.Equal(t, "[33:36] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
 
+	testTimeline.PutIdle(OffsetWatermark{watermark: 32, offset: 36}) // ignored
+	assert.Equal(t, "[33:36] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(OffsetWatermark{watermark: 33, offset: 35}) // ignored
+	assert.Equal(t, "[33:36] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(OffsetWatermark{watermark: 33, offset: 36}) // ignored
+	assert.Equal(t, "[33:36] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(OffsetWatermark{watermark: 33, offset: 37}) // updated
+	assert.Equal(t, "[33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(OffsetWatermark{watermark: 34, offset: 36}) // ignored
+	assert.Equal(t, "[33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(OffsetWatermark{watermark: 34, offset: 37}) // ignored
+	assert.Equal(t, "[33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(OffsetWatermark{watermark: 34, offset: 38}) // inserted
+	assert.Equal(t, "[34:38] -> [33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21]", testTimeline.Dump())
+
 }
