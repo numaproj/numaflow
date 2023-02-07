@@ -186,6 +186,9 @@ func TestGetDaemonDeploy(t *testing.T) {
 				ContainerTemplate: &ContainerTemplate{
 					Resources: testResources,
 					Env:       []corev1.EnvVar{env},
+					SecurityContext: &corev1.SecurityContext{
+						Privileged: pointer.Bool(false),
+					},
 				},
 				InitContainerTemplate: &ContainerTemplate{
 					Resources: testResources,
@@ -210,6 +213,9 @@ func TestGetDaemonDeploy(t *testing.T) {
 		assert.Equal(t, 1, len(s.Spec.Template.Spec.Containers))
 		assert.Greater(t, len(s.Spec.Template.Spec.Containers[0].Env), 1)
 		assert.Contains(t, s.Spec.Template.Spec.Containers[0].Env, env)
+		assert.NotNil(t, s.Spec.Template.Spec.Containers[0].SecurityContext)
+		assert.NotNil(t, s.Spec.Template.Spec.Containers[0].SecurityContext.Privileged)
+		assert.False(t, *s.Spec.Template.Spec.Containers[0].SecurityContext.Privileged)
 		assert.Equal(t, 1, len(s.Spec.Template.Spec.InitContainers))
 		assert.Equal(t, s.Spec.Template.Spec.InitContainers[0].Resources, testResources)
 		assert.Contains(t, s.Spec.Template.Spec.InitContainers[0].Env, initEnv)
