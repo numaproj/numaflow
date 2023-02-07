@@ -56,7 +56,6 @@ type ProcessAndForward struct {
 	toBuffers        map[string]isb.BufferWriter
 	whereToDecider   forward.ToWhichStepDecider
 	publishWatermark map[string]publish.Publisher
-	whereToCache     map[string][]string
 }
 
 // NewProcessAndForward will return a new ProcessAndForward instance
