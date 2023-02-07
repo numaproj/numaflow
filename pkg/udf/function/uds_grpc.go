@@ -25,7 +25,6 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	"github.com/numaproj/numaflow-go/pkg/function/client"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -45,11 +44,7 @@ var _ map_applier.MapApplier = (*udsGRPCBasedUDF)(nil)
 var _ reduce_applier.ReduceApplier = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
-func NewUDSGRPCBasedUDF() (*udsGRPCBasedUDF, error) {
-	c, err := client.New() // Can we pass this as a parameter to the function?
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
-	}
+func NewUDSGRPCBasedUDF(c functionsdk.Client) (*udsGRPCBasedUDF, error) {
 	return &udsGRPCBasedUDF{c}, nil
 }
 
