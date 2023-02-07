@@ -341,7 +341,6 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		toBuffers:        toBuffers,
 		whereToDecider:   whereto,
 		publishWatermark: pw,
-		whereToCache:     make(map[string][]string),
 	}
 
 	return pf, otStore
