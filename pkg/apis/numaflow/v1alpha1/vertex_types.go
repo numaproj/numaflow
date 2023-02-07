@@ -266,6 +266,7 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 	}
 	return append(initContainers, v.Spec.InitContainers...)
 }
+
 func (vs VertexSpec) WithOutReplicas() VertexSpec {
 	zero := int32(0)
 	x := *vs.DeepCopy()

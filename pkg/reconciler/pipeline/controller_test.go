@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -228,6 +229,7 @@ func Test_buildISBBatchJob(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
 	})
+
 	t.Run("test build ISB batch job with pipeline overrides", func(t *testing.T) {
 		resources := corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
@@ -255,6 +257,9 @@ func Test_buildISBBatchJob(t *testing.T) {
 				ContainerTemplate: &dfv1.ContainerTemplate{
 					Resources: resources,
 					Env:       []corev1.EnvVar{env},
+					SecurityContext: &corev1.SecurityContext{
+						Privileged: pointer.Bool(false),
+					},
 				},
 				AbstractPodTemplate: dfv1.AbstractPodTemplate{
 					Metadata: &dfv1.Metadata{
@@ -273,6 +278,9 @@ func Test_buildISBBatchJob(t *testing.T) {
 		assert.Equal(t, j.Spec.Template.Spec.Containers[0].Resources, resources)
 		assert.Greater(t, len(j.Spec.Template.Spec.Containers[0].Env), 1)
 		assert.Contains(t, j.Spec.Template.Spec.Containers[0].Env, env)
+		assert.NotNil(t, j.Spec.Template.Spec.Containers[0].SecurityContext)
+		assert.NotNil(t, j.Spec.Template.Spec.Containers[0].SecurityContext.Privileged)
+		assert.False(t, *j.Spec.Template.Spec.Containers[0].SecurityContext.Privileged)
 		assert.Equal(t, j.Spec.Template.Labels["my-label-name"], podLabels["my-label-name"])
 		assert.Equal(t, j.Spec.Template.Annotations["my-annotation-name"], podAnnotations["my-annotation-name"])
 		assert.NotNil(t, j.Spec.TTLSecondsAfterFinished)
