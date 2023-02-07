@@ -111,20 +111,6 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 	for k, v := range req.Labels {
 		podTemplateLabels[k] = v
 	}
-	var jsContainerPullPolicy, reloaderContainerPullPolicy, metricsContainerPullPolicy corev1.PullPolicy
-	var jsContainerSecurityContext, reloaderContainerSecurityContext, metricsContainerSecurityContext *corev1.SecurityContext
-	if j.ContainerTemplate != nil {
-		jsContainerPullPolicy = j.ContainerTemplate.ImagePullPolicy
-		jsContainerSecurityContext = j.ContainerTemplate.SecurityContext
-	}
-	if j.ReloaderContainerTemplate != nil {
-		reloaderContainerPullPolicy = j.ReloaderContainerTemplate.ImagePullPolicy
-		reloaderContainerSecurityContext = j.ReloaderContainerTemplate.SecurityContext
-	}
-	if j.MetricsContainerTemplate != nil {
-		metricsContainerPullPolicy = j.MetricsContainerTemplate.ImagePullPolicy
-		metricsContainerSecurityContext = j.MetricsContainerTemplate.SecurityContext
-	}
 	projectedSecretKeyToPaths := []corev1.KeyToPath{
 		{
 			Key:  JetStreamServerSecretAuthKey,
@@ -157,6 +143,116 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 			Path: "cluster-ca-cert.pem",
 		})
 	}
+
+	podSpec := &corev1.PodSpec{
+		ShareProcessNamespace:         pointer.Bool(true),
+		TerminationGracePeriodSeconds: pointer.Int64(120),
+		Volumes: []corev1.Volume{
+			{Name: "pid", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			{
+				Name: "config-volume",
+				VolumeSource: corev1.VolumeSource{
+					Projected: &corev1.ProjectedVolumeSource{
+						Sources: []corev1.VolumeProjection{
+							{
+								ConfigMap: &corev1.ConfigMapProjection{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: req.ConfigMapName,
+									},
+									Items: []corev1.KeyToPath{
+										{
+											Key:  JetStreamConfigMapKey,
+											Path: "nats-js.conf",
+										},
+									},
+								},
+							},
+							{
+								Secret: &corev1.SecretProjection{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: req.ServerAuthSecretName,
+									},
+									Items: projectedSecretKeyToPaths,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Containers: []corev1.Container{
+			{
+				Name:  "main",
+				Image: req.NatsImage,
+				Ports: []corev1.ContainerPort{
+					{Name: "client", ContainerPort: req.ClientPort},
+					{Name: "cluster", ContainerPort: req.ClusterPort},
+					{Name: "monitor", ContainerPort: req.MonitorPort},
+				},
+				Command: []string{req.StartCommand, "--config", "/etc/nats-config/nats-js.conf"},
+				Args:    j.StartArgs,
+				Env: []corev1.EnvVar{
+					{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+					{Name: "SERVER_NAME", Value: "$(POD_NAME)"},
+					{Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
+					{Name: "CLUSTER_ADVERTISE", Value: "$(POD_NAME)." + req.ServiceName + ".$(POD_NAMESPACE).svc.cluster.local"},
+					{Name: "GOMEMLIMIT", ValueFrom: &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "main", Resource: "limits.memory"}}},
+					{Name: "JS_KEY", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.ServerEncryptionSecretName}, Key: JetStreamServerSecretEncryptionKey}}},
+				},
+				VolumeMounts: []corev1.VolumeMount{
+					{Name: "config-volume", MountPath: "/etc/nats-config"},
+					{Name: "pid", MountPath: "/var/run/nats"},
+				},
+				StartupProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Path: "/healthz",
+							Port: intstr.FromInt(int(req.MonitorPort)),
+						},
+					},
+					FailureThreshold:    30,
+					InitialDelaySeconds: 10,
+					TimeoutSeconds:      5,
+				},
+				LivenessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Path: "/",
+							Port: intstr.FromInt(int(req.MonitorPort)),
+						},
+					},
+					InitialDelaySeconds: 10,
+					PeriodSeconds:       30,
+					TimeoutSeconds:      5,
+				},
+				Lifecycle: &corev1.Lifecycle{
+					PreStop: &corev1.LifecycleHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{req.StartCommand, "-sl=ldm=/var/run/nats/nats.pid"},
+						},
+					},
+				},
+			},
+			{
+				Name:    "reloader",
+				Image:   req.ConfigReloaderImage,
+				Command: []string{"nats-server-config-reloader", "-pid", "/var/run/nats/nats.pid", "-config", "/etc/nats-config/nats-js.conf"},
+				VolumeMounts: []corev1.VolumeMount{
+					{Name: "config-volume", MountPath: "/etc/nats-config"},
+					{Name: "pid", MountPath: "/var/run/nats"},
+				},
+			},
+			{
+				Name:  "metrics",
+				Image: req.MetricsExporterImage,
+				Ports: []corev1.ContainerPort{
+					{Name: "metrics", ContainerPort: req.MetricsPort},
+				},
+				Args: []string{"-connz", "-routez", "-subz", "-varz", "-prefix=nats", "-use_internal_server_id", "-jsz=all", fmt.Sprintf("http://localhost:%s", strconv.Itoa(int(req.MonitorPort)))},
+			},
+		},
+	}
+	j.AbstractPodTemplate.ApplyToPodSpec(podSpec)
 	spec := appv1.StatefulSetSpec{
 		PodManagementPolicy: appv1.ParallelPodManagement,
 		Replicas:            &replicas,
@@ -168,141 +264,20 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: podTemplateLabels,
 			},
-			Spec: corev1.PodSpec{
-				NodeSelector:                  j.NodeSelector,
-				Tolerations:                   j.Tolerations,
-				SecurityContext:               j.SecurityContext,
-				ImagePullSecrets:              j.ImagePullSecrets,
-				PriorityClassName:             j.PriorityClassName,
-				Priority:                      j.Priority,
-				ServiceAccountName:            j.ServiceAccountName,
-				Affinity:                      j.Affinity,
-				ShareProcessNamespace:         pointer.Bool(true),
-				TerminationGracePeriodSeconds: pointer.Int64(120),
-				Volumes: []corev1.Volume{
-					{Name: "pid", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-					{
-						Name: "config-volume",
-						VolumeSource: corev1.VolumeSource{
-							Projected: &corev1.ProjectedVolumeSource{
-								Sources: []corev1.VolumeProjection{
-									{
-										ConfigMap: &corev1.ConfigMapProjection{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: req.ConfigMapName,
-											},
-											Items: []corev1.KeyToPath{
-												{
-													Key:  JetStreamConfigMapKey,
-													Path: "nats-js.conf",
-												},
-											},
-										},
-									},
-									{
-										Secret: &corev1.SecretProjection{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: req.ServerAuthSecretName,
-											},
-											Items: projectedSecretKeyToPaths,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				Containers: []corev1.Container{
-					{
-						Name:            "main",
-						Image:           req.NatsImage,
-						ImagePullPolicy: jsContainerPullPolicy,
-						Ports: []corev1.ContainerPort{
-							{Name: "client", ContainerPort: req.ClientPort},
-							{Name: "cluster", ContainerPort: req.ClusterPort},
-							{Name: "monitor", ContainerPort: req.MonitorPort},
-						},
-						Command: []string{req.StartCommand, "--config", "/etc/nats-config/nats-js.conf"},
-						Args:    j.StartArgs,
-						Env: []corev1.EnvVar{
-							{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
-							{Name: "SERVER_NAME", Value: "$(POD_NAME)"},
-							{Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
-							{Name: "CLUSTER_ADVERTISE", Value: "$(POD_NAME)." + req.ServiceName + ".$(POD_NAMESPACE).svc.cluster.local"},
-							{Name: "GOMEMLIMIT", ValueFrom: &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "main", Resource: "limits.memory"}}},
-							{Name: "JS_KEY", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.ServerEncryptionSecretName}, Key: JetStreamServerSecretEncryptionKey}}},
-						},
-						VolumeMounts: []corev1.VolumeMount{
-							{Name: "config-volume", MountPath: "/etc/nats-config"},
-							{Name: "pid", MountPath: "/var/run/nats"},
-						},
-						SecurityContext: jsContainerSecurityContext,
-						StartupProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{
-									Path: "/healthz",
-									Port: intstr.FromInt(int(req.MonitorPort)),
-								},
-							},
-							FailureThreshold:    30,
-							InitialDelaySeconds: 10,
-							TimeoutSeconds:      5,
-						},
-						LivenessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{
-									Path: "/",
-									Port: intstr.FromInt(int(req.MonitorPort)),
-								},
-							},
-							InitialDelaySeconds: 10,
-							PeriodSeconds:       30,
-							TimeoutSeconds:      5,
-						},
-						Lifecycle: &corev1.Lifecycle{
-							PreStop: &corev1.LifecycleHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{req.StartCommand, "-sl=ldm=/var/run/nats/nats.pid"},
-								},
-							},
-						},
-					},
-					{
-						Name:            "reloader",
-						Image:           req.ConfigReloaderImage,
-						ImagePullPolicy: reloaderContainerPullPolicy,
-						SecurityContext: reloaderContainerSecurityContext,
-						Command:         []string{"nats-server-config-reloader", "-pid", "/var/run/nats/nats.pid", "-config", "/etc/nats-config/nats-js.conf"},
-						VolumeMounts: []corev1.VolumeMount{
-							{Name: "config-volume", MountPath: "/etc/nats-config"},
-							{Name: "pid", MountPath: "/var/run/nats"},
-						},
-					},
-					{
-						Name:            "metrics",
-						Image:           req.MetricsExporterImage,
-						ImagePullPolicy: metricsContainerPullPolicy,
-						Ports: []corev1.ContainerPort{
-							{Name: "metrics", ContainerPort: req.MetricsPort},
-						},
-						Args:            []string{"-connz", "-routez", "-subz", "-varz", "-prefix=nats", "-use_internal_server_id", "-jsz=all", fmt.Sprintf("http://localhost:%s", strconv.Itoa(int(req.MonitorPort)))},
-						SecurityContext: metricsContainerSecurityContext,
-					},
-				},
-			},
+			Spec: *podSpec,
 		},
 	}
 	if j.Metadata != nil {
 		spec.Template.SetAnnotations(j.Metadata.Annotations)
 	}
 	if j.ContainerTemplate != nil {
-		spec.Template.Spec.Containers[0].Resources = j.ContainerTemplate.Resources
+		j.ContainerTemplate.ApplyToContainer(&spec.Template.Spec.Containers[0])
 	}
 	if j.ReloaderContainerTemplate != nil {
-		spec.Template.Spec.Containers[1].Resources = j.ReloaderContainerTemplate.Resources
+		j.ReloaderContainerTemplate.ApplyToContainer(&spec.Template.Spec.Containers[1])
 	}
 	if j.MetricsContainerTemplate != nil {
-		spec.Template.Spec.Containers[2].Resources = j.MetricsContainerTemplate.Resources
+		j.MetricsContainerTemplate.ApplyToContainer(&spec.Template.Spec.Containers[2])
 	}
 	if j.Persistence != nil {
 		spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{

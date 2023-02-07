@@ -8,18 +8,26 @@ spec:
       source:
         http: {}
     - name: even-or-odd
+      scale:
+        min: 1
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd
     - name: even-sink
+      scale:
+        min: 1
       sink:
         # A simple log printing sink
         log: {}
     - name: odd-sink
+      scale:
+        min: 1
       sink:
         log: {}
     - name: number-sink
+      scale:
+        min: 1
       sink:
         log: {}
   edges:
