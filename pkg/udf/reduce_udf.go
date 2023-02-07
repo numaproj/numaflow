@@ -19,13 +19,10 @@ package udf
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/function/client"
 	"go.uber.org/zap"
 
@@ -135,18 +132,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	log = log.With("protocol", "uds-grpc-reduce-udf")
 
-	var c functionsdk.Client
-	maxMessageSizeStr, defined := os.LookupEnv(dfv1.EnvGRPCMaxMessageSize)
-	if defined {
-		var maxMessageSize int
-		maxMessageSize, err = strconv.Atoi(maxMessageSizeStr)
-		if err != nil {
-			return fmt.Errorf("invalid gRPC max message size %q", maxMessageSizeStr)
-		}
-		c, err = client.New(client.WithMaxMessageSize(maxMessageSize))
-	} else {
-		c, err = client.New()
-	}
+	maxMessageSize := sharedutil.LookupEnvInt64Or(dfv1.EnvGRPCMaxMessageSize, dfv1.DefautlGRPCMaxMessageSize)
+	c, err := client.New(client.WithMaxMessageSize(maxMessageSize))
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
