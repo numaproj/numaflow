@@ -102,7 +102,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	})
 
 	log = log.With("protocol", "uds-grpc-map-udf")
-	maxMessageSize := sharedutil.LookupEnvInt64Or(dfv1.EnvGRPCMaxMessageSize, dfv1.DefautlGRPCMaxMessageSize)
+	maxMessageSize := sharedutil.LookupEnvInt64Or(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
 	c, err := client.New(client.WithMaxMessageSize(maxMessageSize))
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
