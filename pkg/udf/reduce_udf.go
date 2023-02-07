@@ -132,7 +132,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	log = log.With("protocol", "uds-grpc-reduce-udf")
 
-	maxMessageSize := sharedutil.LookupEnvInt64Or(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
 	c, err := client.New(client.WithMaxMessageSize(maxMessageSize))
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)

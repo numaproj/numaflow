@@ -30,7 +30,7 @@ func LookupEnvStringOr(key, defaultValue string) string {
 	}
 }
 
-func LookupEnvInt64Or(key string, defaultValue int) int {
+func LookupEnvIntOr(key string, defaultValue int) int {
 	if valStr, existing := os.LookupEnv(key); existing && valStr != "" {
 		val, err := strconv.Atoi(valStr)
 		if err != nil {
