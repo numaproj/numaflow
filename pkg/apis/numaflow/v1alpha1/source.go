@@ -52,11 +52,11 @@ func (s Source) getMainContainer(req getContainerReq) corev1.Container {
 	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
-func (s Source) getUDTransformerContainer(req getContainerReq) corev1.Container {
+func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
-		init(req).
-		name(CtrUdtransformer)
-	c.Env = nil
+		name(CtrUdtransformer).
+		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
+		appendVolumeMounts(mainContainerReq.volumeMounts...)
 	if x := s.UDTransformer.Container; x != nil && x.Image != "" { // customized image
 		c = c.image(x.Image)
 		if len(x.Command) > 0 {
@@ -65,7 +65,6 @@ func (s Source) getUDTransformerContainer(req getContainerReq) corev1.Container 
 		if len(x.Args) > 0 {
 			c = c.args(x.Args...)
 		}
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources)
 	} else { // built-in
 		args := []string{"builtin-transformer", "--name=" + s.UDTransformer.Builtin.Name}
 		for _, a := range s.UDTransformer.Builtin.Args {
@@ -83,10 +82,10 @@ func (s Source) getUDTransformerContainer(req getContainerReq) corev1.Container 
 			args = append(args, "--kwargs="+strings.Join(kwargs, ","))
 		}
 
-		c = c.image(req.image).args(args...)
-		if x := s.UDTransformer.Container; x != nil {
-			c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources)
-		}
+		c = c.image(mainContainerReq.image).args(args...) // Use the same image as the main container
+	}
+	if x := s.UDTransformer.Container; x != nil {
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext)
 	}
 	return c.build()
 }

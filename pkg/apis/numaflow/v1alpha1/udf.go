@@ -26,21 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type Container struct {
-	// +optional
-	Image string `json:"image" protobuf:"bytes,1,opt,name=image"`
-	// +optional
-	Command []string `json:"command,omitempty" protobuf:"bytes,2,rep,name=command"`
-	// +optional
-	Args []string `json:"args,omitempty" protobuf:"bytes,3,rep,name=args"`
-	// +optional
-	Env []corev1.EnvVar `json:"env,omitempty" protobuf:"bytes,4,rep,name=env"`
-	// +optional
-	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty" protobuf:"bytes,5,rep,name=volumeMounts"`
-	// +optional
-	Resources corev1.ResourceRequirements `json:"resources,omitempty" protobuf:"bytes,6,opt,name=resources"`
-}
-
 type Function struct {
 	// +kubebuilder:validation:Enum=cat;filter
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
@@ -73,11 +58,11 @@ func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
 		init(req).args("processor", "--type="+string(VertexTypeReduceUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
-func (in UDF) getUDFContainer(req getContainerReq) corev1.Container {
+func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
-		init(req).
-		name(CtrUdf)
-	c.Env = nil
+		name(CtrUdf).
+		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as main container
+		appendVolumeMounts(mainContainerReq.volumeMounts...)
 	if x := in.Container; x != nil && x.Image != "" { // customized image
 		c = c.image(x.Image)
 		if len(x.Command) > 0 {
@@ -86,7 +71,6 @@ func (in UDF) getUDFContainer(req getContainerReq) corev1.Container {
 		if len(x.Args) > 0 {
 			c = c.args(x.Args...)
 		}
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources)
 	} else { // built-in
 		args := []string{"builtin-udf", "--name=" + in.Builtin.Name}
 		for _, a := range in.Builtin.Args {
@@ -103,11 +87,10 @@ func (in UDF) getUDFContainer(req getContainerReq) corev1.Container {
 			sort.Strings(kwargs)
 			args = append(args, "--kwargs="+strings.Join(kwargs, ","))
 		}
-
-		c = c.image(req.image).args(args...)
-		if x := in.Container; x != nil {
-			c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources)
-		}
+		c = c.image(mainContainerReq.image).args(args...) // Use the same image as the main container
+	}
+	if x := in.Container; x != nil {
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext)
 	}
 	return c.build()
 }
