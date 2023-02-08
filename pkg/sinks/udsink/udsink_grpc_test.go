@@ -35,7 +35,7 @@ func NewMockUDSgRPCBasedUDSink(mockClient *sinkmock.MockUserDefinedSinkClient) *
 	return &UDSgRPCBasedUDSink{c}
 }
 
-func TestgRPCBasedUDSink_WaitUntilReadyWithMockClient(t *testing.T) {
+func Test_gRPCBasedUDSink_WaitUntilReadyWithMockClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -56,7 +56,7 @@ func TestgRPCBasedUDSink_WaitUntilReadyWithMockClient(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestgRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
+func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 	t.Run("test success", func(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
