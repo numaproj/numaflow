@@ -27,25 +27,27 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-type udsGRPCBasedUDSink struct {
+// UDSgRPCBasedUDSink applies user defined sink over gRPC (over Unix Domain Socket) client/server where server is the UDSink.
+type UDSgRPCBasedUDSink struct {
 	client sinksdk.Client
 }
 
-func NewUDSGRPCBasedUDSink() (*udsGRPCBasedUDSink, error) {
+// NewUDSgRPCBasedUDSink returns UDSgRPCBasedUDSink
+func NewUDSgRPCBasedUDSink() (*UDSgRPCBasedUDSink, error) {
 	c, err := client.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
-	return &udsGRPCBasedUDSink{c}, nil
+	return &UDSgRPCBasedUDSink{c}, nil
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *udsGRPCBasedUDSink) CloseConn(ctx context.Context) error {
+func (u *UDSgRPCBasedUDSink) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // WaitUntilReady waits until the client is connected.
-func (u *udsGRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
+func (u *UDSgRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -59,7 +61,7 @@ func (u *udsGRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *udsGRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.Datum) []error {
+func (u *UDSgRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.Datum) []error {
 	errs := make([]error, len(dList))
 
 	responseList, err := u.client.SinkFn(ctx, dList)

@@ -39,9 +39,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func NewMockUDSGRPCBasedUDF(mockClient *funcmock.MockUserDefinedFunctionClient) *udsGRPCBasedUDF {
+func NewMockUDSGRPCBasedUDF(mockClient *funcmock.MockUserDefinedFunctionClient) *UDSgRPCBasedUDF {
 	c, _ := clienttest.New(mockClient)
-	return &udsGRPCBasedUDF{c}
+	return &UDSgRPCBasedUDF{c}
 }
 
 func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {

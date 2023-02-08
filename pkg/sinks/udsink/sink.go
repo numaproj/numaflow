@@ -40,7 +40,7 @@ type UserDefinedSink struct {
 	pipelineName string
 	isdf         *forward.InterStepDataForward
 	logger       *zap.SugaredLogger
-	udsink       *udsGRPCBasedUDSink
+	udsink       *UDSgRPCBasedUDSink
 }
 
 type Option func(*UserDefinedSink) error
@@ -73,7 +73,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchW
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	udsink, err := NewUDSGRPCBasedUDSink()
+	udsink, err := NewUDSgRPCBasedUDSink()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC client, %w", err)
 	}

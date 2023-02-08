@@ -30,12 +30,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func NewMockUDSGRPCBasedUDF(mockClient *sinkmock.MockUserDefinedSinkClient) *udsGRPCBasedUDSink {
+func NewMockUDSgRPCBasedUDSink(mockClient *sinkmock.MockUserDefinedSinkClient) *UDSgRPCBasedUDSink {
 	c, _ := clienttest.New(mockClient)
-	return &udsGRPCBasedUDSink{c}
+	return &UDSgRPCBasedUDSink{c}
 }
 
-func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {
+func Test_gRPCBasedUDSink_WaitUntilReadyWithMockClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -51,12 +51,12 @@ func TestGRPCBasedUDF_WaitUntilReadyWithMockClient(t *testing.T) {
 		}
 	}()
 
-	u := NewMockUDSGRPCBasedUDF(mockClient)
+	u := NewMockUDSgRPCBasedUDSink(mockClient)
 	err := u.WaitUntilReady(ctx)
 	assert.NoError(t, err)
 }
 
-func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
+func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 	t.Run("test success", func(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
@@ -107,7 +107,7 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSGRPCBasedUDF(mockClient)
+		u := NewMockUDSgRPCBasedUDSink(mockClient)
 		gotErrList := u.Apply(ctx, testDatumList)
 		assert.Equal(t, 2, len(gotErrList))
 		assert.Equal(t, nil, gotErrList[0])
@@ -149,7 +149,7 @@ func TestGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSGRPCBasedUDF(mockClient)
+		u := NewMockUDSgRPCBasedUDSink(mockClient)
 		gotErrList := u.Apply(ctx, testDatumList)
 		expectedErrList := []error{
 			ApplyUDSinkErr{
