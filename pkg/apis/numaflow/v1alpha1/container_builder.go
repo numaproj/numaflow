@@ -40,6 +40,16 @@ func (b containerBuilder) image(x string) containerBuilder {
 	return b
 }
 
+func (b containerBuilder) imagePullPolicy(policy corev1.PullPolicy) containerBuilder {
+	b.ImagePullPolicy = policy
+	return b
+}
+
+func (b containerBuilder) securityContext(ctx *corev1.SecurityContext) containerBuilder {
+	b.SecurityContext = ctx
+	return b
+}
+
 func (b containerBuilder) name(x string) containerBuilder {
 	b.Name = x
 	return b

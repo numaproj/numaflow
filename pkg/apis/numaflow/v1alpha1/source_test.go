@@ -62,22 +62,29 @@ func Test_getTransformerContainer(t *testing.T) {
 			HTTP: &HTTPSource{},
 			UDTransformer: &UDTransformer{
 				Container: &Container{
-					Image: "my-image",
-					Args:  []string{"my-arg"},
+					Image:           "my-image",
+					Args:            []string{"my-arg"},
+					SecurityContext: &corev1.SecurityContext{},
 				},
 			},
 		}
 		c := x.getUDTransformerContainer(getContainerReq{
-			image: "main-image",
+			image:           "main-image",
+			imagePullPolicy: corev1.PullNever,
 		})
 		assert.Equal(t, "my-image", c.Image)
+		assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
 		assert.Contains(t, c.Args, "my-arg")
+		assert.NotNil(t, c.SecurityContext)
 	})
 
 	t.Run("with built-in transformers", func(t *testing.T) {
 		x := Source{
 			HTTP: &HTTPSource{},
 			UDTransformer: &UDTransformer{
+				Container: &Container{
+					SecurityContext: &corev1.SecurityContext{},
+				},
 				Builtin: &Transformer{
 					Name: "filter",
 					KWArgs: map[string]string{
@@ -86,12 +93,15 @@ func Test_getTransformerContainer(t *testing.T) {
 				},
 			}}
 		c := x.getUDTransformerContainer(getContainerReq{
-			image: "main-image",
+			image:           "main-image",
+			imagePullPolicy: corev1.PullNever,
 			env: []corev1.EnvVar{
 				{Name: "a", Value: "b"},
 			},
 		})
+		assert.NotNil(t, c.SecurityContext)
 		assert.Equal(t, "main-image", c.Image)
+		assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
 		assert.Contains(t, c.Args, "--name=filter")
 		// log.Print(c.Args)
 		envNames := []string{}
