@@ -44,7 +44,8 @@ func (s Sink) getMainContainer(req getContainerReq) corev1.Container {
 func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
 		name(CtrUdsink).
-		imagePullPolicy(mainContainerReq.imagePullPolicy) // Use the same image pull policy as the main container
+		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
+		appendVolumeMounts(mainContainerReq.volumeMounts...)
 	x := s.UDSink.Container
 	c = c.image(x.Image)
 	if len(x.Command) > 0 {

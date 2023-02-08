@@ -55,7 +55,8 @@ func (s Source) getMainContainer(req getContainerReq) corev1.Container {
 func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
 		name(CtrUdtransformer).
-		imagePullPolicy(mainContainerReq.imagePullPolicy) // Use the same image pull policy as the main container
+		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
+		appendVolumeMounts(mainContainerReq.volumeMounts...)
 	if x := s.UDTransformer.Container; x != nil && x.Image != "" { // customized image
 		c = c.image(x.Image)
 		if len(x.Command) > 0 {

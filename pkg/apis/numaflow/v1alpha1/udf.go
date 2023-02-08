@@ -61,7 +61,8 @@ func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
 func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
 		name(CtrUdf).
-		imagePullPolicy(mainContainerReq.imagePullPolicy) // Use the same image pull policy as main container
+		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as main container
+		appendVolumeMounts(mainContainerReq.volumeMounts...)
 	if x := in.Container; x != nil && x.Image != "" { // customized image
 		c = c.image(x.Image)
 		if len(x.Command) > 0 {
