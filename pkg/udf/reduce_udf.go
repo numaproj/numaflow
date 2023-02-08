@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
@@ -35,7 +36,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -154,6 +154,31 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}()
 	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer.Name))
 
+	// start metrics server
+	// TODO: make into a function
+	metricsOpts := []metrics.Option{
+		metrics.WithLookbackSeconds(int64(u.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds())),
+	}
+	if sharedutil.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
+		metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(func() error {
+			cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			return udfHandler.WaitUntilReady(cctx)
+		}))
+	}
+	if x, ok := reader.(isb.LagReader); ok {
+		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
+	}
+	if x, ok := reader.(isb.Ratable); ok {
+		metricsOpts = append(metricsOpts, metrics.WithRater(x))
+	}
+	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
+	if shutdown, err := ms.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start metrics server, error: %w", err)
+	} else {
+		defer func() { _ = shutdown(context.Background()) }()
+	}
+
 	storeProvider := wal.NewWALStores(u.VertexInstance, wal.WithStorePath(dfv1.DefaultStorePath), wal.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 
 	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeProvider)
@@ -179,29 +204,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		dataForwarder.Start()
 		log.Info("Forwarder stopped, exiting reduce udf data processor...")
 	}()
-
-	metricsOpts := []metrics.Option{
-		metrics.WithLookbackSeconds(int64(u.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds())),
-	}
-	if sharedutil.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
-		metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(func() error {
-			cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			defer cancel()
-			return udfHandler.WaitUntilReady(cctx)
-		}))
-	}
-	if x, ok := reader.(isb.LagReader); ok {
-		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
-	}
-	if x, ok := reader.(isb.Ratable); ok {
-		metricsOpts = append(metricsOpts, metrics.WithRater(x))
-	}
-	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
-	if shutdown, err := ms.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start metrics server, error: %w", err)
-	} else {
-		defer func() { _ = shutdown(context.Background()) }()
-	}
 
 	<-ctx.Done()
 	log.Info("SIGTERM, exiting...")
