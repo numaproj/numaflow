@@ -179,6 +179,7 @@ message BufferServiceConfig {
   optional JetStreamConfig jetstream = 2;
 }
 
+// Container is used to define the container properties for user defined functions, sinks, etc.
 message Container {
   // +optional
   optional string image = 1;
@@ -197,16 +198,23 @@ message Container {
 
   // +optional
   optional k8s.io.api.core.v1.ResourceRequirements resources = 6;
+
+  // +optional
+  optional k8s.io.api.core.v1.SecurityContext securityContext = 7;
 }
 
 // ContainerTemplate defines customized spec for a container
 message ContainerTemplate {
+  // +optional
   optional k8s.io.api.core.v1.ResourceRequirements resources = 1;
 
+  // +optional
   optional string imagePullPolicy = 2;
 
+  // +optional
   optional k8s.io.api.core.v1.SecurityContext securityContext = 3;
 
+  // +optional
   repeated k8s.io.api.core.v1.EnvVar env = 4;
 }
 
