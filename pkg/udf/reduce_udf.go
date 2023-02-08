@@ -138,7 +138,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
 
-	udfHandler, err := function.NewUDSGRPCBasedUDF(c)
+	udfHandler, err := function.NewUDSgRPCBasedUDF(c)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)
 	}

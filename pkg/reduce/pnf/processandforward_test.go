@@ -139,7 +139,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
 	c, _ := clienttest.New(mockClient)
-	client := udfcall.NewUdsGRPCBasedUDFWithClient(c)
+	client := udfcall.NewUDSgRPCBasedUDFWithClient(c)
 
 	assert.NoError(t, err)
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))

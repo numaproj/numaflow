@@ -35,31 +35,31 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
-// udsGRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
-type udsGRPCBasedUDF struct {
+// UDSgRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
+type UDSgRPCBasedUDF struct {
 	client functionsdk.Client
 }
 
-var _ map_applier.MapApplier = (*udsGRPCBasedUDF)(nil)
-var _ reduce_applier.ReduceApplier = (*udsGRPCBasedUDF)(nil)
+var _ map_applier.MapApplier = (*UDSgRPCBasedUDF)(nil)
+var _ reduce_applier.ReduceApplier = (*UDSgRPCBasedUDF)(nil)
 
-// NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
-func NewUDSGRPCBasedUDF(c functionsdk.Client) (*udsGRPCBasedUDF, error) {
-	return &udsGRPCBasedUDF{c}, nil
+// NewUDSgRPCBasedUDF returns a new UDSgRPCBasedUDF object.
+func NewUDSgRPCBasedUDF(c functionsdk.Client) (*UDSgRPCBasedUDF, error) {
+	return &UDSgRPCBasedUDF{c}, nil
 }
 
-// NewUdsGRPCBasedUDFWithClient need this for testing
-func NewUdsGRPCBasedUDFWithClient(client functionsdk.Client) *udsGRPCBasedUDF {
-	return &udsGRPCBasedUDF{client: client}
+// NewUDSgRPCBasedUDFWithClient need this for testing
+func NewUDSgRPCBasedUDFWithClient(client functionsdk.Client) *UDSgRPCBasedUDF {
+	return &UDSgRPCBasedUDF{client: client}
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *udsGRPCBasedUDF) CloseConn(ctx context.Context) error {
+func (u *UDSgRPCBasedUDF) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // WaitUntilReady waits until the client is connected.
-func (u *udsGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
+func (u *UDSgRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -73,7 +73,7 @@ func (u *udsGRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *udsGRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
+func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
 	key := readMessage.Key
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
@@ -119,7 +119,7 @@ func (u *udsGRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 // should we pass metadata information ?
 
 // ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *udsGRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (u *UDSgRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	datumCh := make(chan *functionpb.Datum)
 	var wg sync.WaitGroup
 	var result []*functionpb.Datum
