@@ -142,30 +142,36 @@ type SumReduceTest struct {
 }
 
 func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
-	sum := 0
+	sums := make(map[string]int)
+
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
-		sum += payload.Value
+		key := msg.Key
+		sums[key] += payload.Value
 	}
 
-	payload := PayloadForTest{Key: "sum", Value: sum}
-	b, _ := json.Marshal(payload)
-	ret := &isb.Message{
-		Header: isb.Header{
-			PaneInfo: isb.PaneInfo{
-				StartTime: partitionID.Start,
-				EndTime:   partitionID.End,
-				EventTime: partitionID.End,
+	msgs := make([]*isb.Message, 0)
+
+	for k, s := range sums {
+		payload := PayloadForTest{Key: k, Value: s}
+		b, _ := json.Marshal(payload)
+		msg := &isb.Message{
+			Header: isb.Header{
+				PaneInfo: isb.PaneInfo{
+					StartTime: partitionID.Start,
+					EndTime:   partitionID.End,
+					EventTime: partitionID.End,
+				},
+				ID:  "msgID",
+				Key: k,
 			},
-			ID:  "msgID",
-			Key: "result",
-		},
-		Body: isb.Body{Payload: b},
+			Body: isb.Body{Payload: b},
+		}
+		msgs = append(msgs, msg)
 	}
-	return []*isb.Message{
-		ret,
-	}, nil
+
+	return msgs, nil
 }
 
 type MaxReduceTest struct {
@@ -173,31 +179,40 @@ type MaxReduceTest struct {
 
 func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	mx := math.MinInt64
+	maxMap := make(map[string]int)
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
+		if max, ok := maxMap[msg.Key]; ok {
+			mx = max
+		}
 		if payload.Value > mx {
 			mx = payload.Value
+			maxMap[msg.Key] = mx
 		}
 	}
 
-	payload := PayloadForTest{Key: "max", Value: mx}
-	b, _ := json.Marshal(payload)
-	ret := &isb.Message{
-		Header: isb.Header{
-			PaneInfo: isb.PaneInfo{
-				StartTime: partitionID.Start,
-				EndTime:   partitionID.End,
-				EventTime: partitionID.End,
+	result := make([]*isb.Message, 0)
+	for k, max := range maxMap {
+		payload := PayloadForTest{Key: k, Value: max}
+		b, _ := json.Marshal(payload)
+		ret := &isb.Message{
+			Header: isb.Header{
+				PaneInfo: isb.PaneInfo{
+					StartTime: partitionID.Start,
+					EndTime:   partitionID.End,
+					EventTime: partitionID.End,
+				},
+				ID:  "msgID",
+				Key: k,
 			},
-			ID:  "msgID",
-			Key: "result",
-		},
-		Body: isb.Body{Payload: b},
+			Body: isb.Body{Payload: b},
+		}
+
+		result = append(result, ret)
 	}
-	return []*isb.Message{
-		ret,
-	}, nil
+
+	return result, nil
 }
 
 // read from simple buffer
@@ -418,7 +433,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
 	// since the window duration is 2 minutes and tps is 1, the sum should be 120  * 10
 	assert.Equal(t, int64(1200), int64(readMessagePayload.Value))
-	assert.Equal(t, "sum", readMessagePayload.Key)
+	assert.Equal(t, "even", readMessagePayload.Key)
 
 }
 
@@ -491,14 +506,14 @@ func TestReduceDataForward_Max(t *testing.T) {
 	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
 	// since all the messages have the same value the max should be 100
 	assert.Equal(t, int64(100), int64(readMessagePayload.Value))
-	assert.Equal(t, "max", readMessagePayload.Key)
+	assert.Equal(t, "even", readMessagePayload.Key)
 
 }
 
 // Max operation with 5 minutes window and two keys
 func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messages       = []int{100, 99}
@@ -538,11 +553,11 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	assert.NoError(t, err)
 
+	// start the producer
+	go publishMessages(ctx, startTime, messages, 650, 10, p[fromBuffer.GetName()], fromBuffer)
+
 	// start the forwarder
 	go reduceDataForward.Start()
-
-	// start the producer
-	go publishMessages(ctx, startTime, messages, 600, 10, p[fromBuffer.GetName()], fromBuffer)
 
 	// wait until there is data in to buffer
 	for buffer.IsEmpty() {
@@ -571,8 +586,8 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// we cant guarantee the order of the output
 	assert.Contains(t, []int{30000, 29700}, readMessagePayload1.Value)
 	assert.Contains(t, []int{30000, 29700}, readMessagePayload2.Value)
-	assert.Equal(t, "sum", readMessagePayload1.Key)
-	assert.Equal(t, "sum", readMessagePayload2.Key)
+	assert.Contains(t, []string{"even", "odd"}, readMessagePayload1.Key)
+	assert.Contains(t, []string{"even", "odd"}, readMessagePayload2.Key)
 
 }
 
@@ -647,7 +662,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	// 100 * 300 + 99 * 300
 	// we cant guarantee the order of the output
 	assert.Equal(t, 59700, readMessagePayload.Value)
-	assert.Equal(t, "sum", readMessagePayload.Key)
+	assert.Equal(t, dfv1.DefaultKeyForNonKeyedData, readMessagePayload.Key)
 
 }
 
@@ -704,7 +719,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// wait for the partitions to be created
 	for {
 		partitionsList := pbqManager.ListPartitions()
-		if len(partitionsList) > 1 {
+		if len(partitionsList) == 1 {
 			childCancel()
 			break
 		}
@@ -721,7 +736,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	for {
 		discoveredPartitions, _ = storeProvider.DiscoverPartitions(ctx)
 
-		if len(discoveredPartitions) > 1 {
+		if len(discoveredPartitions) == 1 {
 			break
 		}
 		select {
@@ -733,8 +748,8 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		}
 	}
 
-	// since we have 2 different keys
-	assert.Len(t, discoveredPartitions, 2)
+	// even though we have 2 different keys
+	assert.Len(t, discoveredPartitions, 1)
 
 }
 

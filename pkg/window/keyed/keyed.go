@@ -61,8 +61,8 @@ func (kw *AlignedKeyedWindow) EndTime() time.Time {
 	return kw.End
 }
 
-// AddKey adds a key to an existing window
-func (kw *AlignedKeyedWindow) AddKey(key string) {
+// AddSlot adds a slot to an existing window
+func (kw *AlignedKeyedWindow) AddSlot(key string) {
 	kw.lock.Lock()
 	defer kw.lock.Unlock()
 	if _, ok := kw.keys[key]; !ok {
@@ -78,7 +78,7 @@ func (kw *AlignedKeyedWindow) Partitions() []partition.ID {
 	partitions := make([]partition.ID, len(kw.keys))
 	idx := 0
 	for k := range kw.keys {
-		partitions[idx] = partition.ID{Start: kw.StartTime(), End: kw.EndTime(), Key: k}
+		partitions[idx] = partition.ID{Start: kw.StartTime(), End: kw.EndTime(), Slot: k}
 		idx++
 	}
 

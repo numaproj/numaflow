@@ -105,6 +105,7 @@ const (
 	EnvDebug                          = "NUMAFLOW_DEBUG"
 	EnvPPROF                          = "NUMAFLOW_PPROF"
 	EnvHealthCheckDisabled            = "NUMAFLOW_HEALTH_CHECK_DISABLED"
+	EnvGRPCMaxMessageSize             = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE"
 
 	PathVarRun            = "/var/run/numaflow"
 	VertexMetricsPort     = 2469
@@ -144,6 +145,9 @@ const (
 
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
+
+	// Default gRPC max message size
+	DefaultGRPCMaxMessageSize = 20 * 1024 * 1024
 )
 
 var (
