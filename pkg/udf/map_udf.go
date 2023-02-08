@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow-go/pkg/function/client"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -101,7 +102,13 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	})
 
 	log = log.With("protocol", "uds-grpc-map-udf")
-	udfHandler, err := function.NewUDSGRPCBasedUDF()
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
+	c, err := client.New(client.WithMaxMessageSize(maxMessageSize))
+	if err != nil {
+		return fmt.Errorf("failed to create a new gRPC client: %w", err)
+	}
+
+	udfHandler, err := function.NewUDSGRPCBasedUDF(c)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)
 	}

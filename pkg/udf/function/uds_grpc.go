@@ -25,14 +25,14 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	"github.com/numaproj/numaflow-go/pkg/function/client"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	map_applier "github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	reduce_applier "github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // udsGRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
@@ -44,11 +44,7 @@ var _ map_applier.MapApplier = (*udsGRPCBasedUDF)(nil)
 var _ reduce_applier.ReduceApplier = (*udsGRPCBasedUDF)(nil)
 
 // NewUDSGRPCBasedUDF returns a new udsGRPCBasedUDF object.
-func NewUDSGRPCBasedUDF() (*udsGRPCBasedUDF, error) {
-	c, err := client.New() // Can we pass this as a parameter to the function?
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
-	}
+func NewUDSGRPCBasedUDF(c functionsdk.Client) (*udsGRPCBasedUDF, error) {
 	return &udsGRPCBasedUDF{c}, nil
 }
 
@@ -131,7 +127,7 @@ func (u *udsGRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partitio
 
 	// pass key and window information inside the context
 	mdMap := map[string]string{
-		functionsdk.DatumKey:     partitionID.Key,
+		functionsdk.DatumKey:     partitionID.Slot,
 		functionsdk.WinStartTime: strconv.FormatInt(partitionID.Start.UnixMilli(), 10),
 		functionsdk.WinEndTime:   strconv.FormatInt(partitionID.End.UnixMilli(), 10),
 	}

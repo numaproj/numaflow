@@ -46,7 +46,7 @@ func Test_writeReadHeader(t *testing.T) {
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
-		Key:   "test1",
+		Slot:  "test1",
 	}
 
 	tmp := t.TempDir()
@@ -89,7 +89,7 @@ func Test_encodeDecodeHeader(t *testing.T) {
 			id: &partition.ID{
 				Start: time.Unix(1665109020, 0).In(location),
 				End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
-				Key:   "test1,test2",
+				Slot:  "test1,test2",
 			},
 		},
 		{
@@ -98,7 +98,7 @@ func Test_encodeDecodeHeader(t *testing.T) {
 			id: &partition.ID{
 				Start: time.Time{},
 				End:   time.Time{},
-				Key:   "",
+				Slot:  "",
 			},
 		},
 	}
@@ -126,7 +126,7 @@ func Test_writeReadEntry(t *testing.T) {
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
-		Key:   "test1",
+		Slot:  "test1",
 	}
 
 	tmp := t.TempDir()
@@ -234,7 +234,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
-		Key:   "test1",
+		Slot:  "test1",
 	}
 
 	tmp := t.TempDir()
@@ -299,7 +299,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
-		Key:   "test1",
+		Slot:  "test1",
 	}
 
 	tmp := t.TempDir()

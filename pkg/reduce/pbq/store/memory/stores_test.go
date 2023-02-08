@@ -19,17 +19,17 @@ func TestMemoryStores(t *testing.T) {
 		{
 			Start: time.Unix(60, 0),
 			End:   time.Unix(120, 0),
-			Key:   "test-1",
+			Slot:  "test-1",
 		},
 		{
 			Start: time.Unix(120, 0),
 			End:   time.Unix(180, 0),
-			Key:   "test-2",
+			Slot:  "test-2",
 		},
 		{
 			Start: time.Unix(180, 0),
 			End:   time.Unix(240, 0),
-			Key:   "test-3",
+			Slot:  "test-3",
 		},
 	}
 	storeProvider := NewMemoryStores(WithStoreSize(100))

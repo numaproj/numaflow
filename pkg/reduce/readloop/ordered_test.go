@@ -18,7 +18,6 @@ package readloop
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -47,7 +46,6 @@ func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*
 }
 
 func TestOrderedProcessing(t *testing.T) {
-
 	// Test Reducer returns the messages as is
 	identityReducer := applier.ApplyReduceFunc(func(ctx context.Context, partitionID *partition.ID, input <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 		messages := make([]*isb.Message, 0)
@@ -119,10 +117,9 @@ func TestOrderedProcessing(t *testing.T) {
 			count := 0
 			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
 				pfTask := e.Value.(*task)
-				assert.Equal(t, partition.ID{Key: fmt.Sprintf("partition-%d", count)}, pfTask.pf.PartitionID)
+				assert.Equal(t, partitionFor(count), pfTask.pf.PartitionID)
 				count = count + 1
 			}
-
 			for _, id := range tt.reduceOrder {
 				p := pbqManager.GetPBQ(id)
 				p.CloseOfBook()
@@ -153,7 +150,7 @@ func TestOrderedProcessing(t *testing.T) {
 func partitions(count int) []partition.ID {
 	partitions := make([]partition.ID, count)
 	for i := 0; i < count; i++ {
-		partitions[i] = partition.ID{Key: fmt.Sprintf("partition-%d", i)}
+		partitions[i] = partitionFor(i)
 	}
 	return partitions
 }
@@ -161,9 +158,14 @@ func partitions(count int) []partition.ID {
 func partitionsFor(partitionIdx []int) []partition.ID {
 	partitions := make([]partition.ID, len(partitionIdx))
 	for i, idx := range partitionIdx {
-		partitions[i] = partition.ID{Key: fmt.Sprintf("partition-%d", idx)}
+		partitions[i] = partitionFor(idx)
 	}
 	return partitions
+}
+
+func partitionFor(i int) partition.ID {
+	base := 10000
+	return partition.ID{Start: time.UnixMilli(int64(base * i)), End: time.UnixMilli(int64(base * (i + 1)))}
 }
 
 func taskForPartition(op *orderedForwarder, partitionId partition.ID) *task {

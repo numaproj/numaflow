@@ -17,12 +17,26 @@ limitations under the License.
 package util
 
 import (
+	"fmt"
 	"os"
+	"strconv"
 )
 
 func LookupEnvStringOr(key, defaultValue string) string {
 	if v, existing := os.LookupEnv(key); existing && v != "" {
 		return v
+	} else {
+		return defaultValue
+	}
+}
+
+func LookupEnvIntOr(key string, defaultValue int) int {
+	if valStr, existing := os.LookupEnv(key); existing && valStr != "" {
+		val, err := strconv.Atoi(valStr)
+		if err != nil {
+			panic(fmt.Errorf("invalid value for env variable %q, value %q", key, valStr))
+		}
+		return val
 	} else {
 		return defaultValue
 	}

@@ -31,7 +31,6 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
@@ -39,7 +38,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
@@ -111,17 +109,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 
 	processorWM := processor.Watermark(p.PartitionID.End)
 
-	// decide which ISB to write to
-	to, err := p.whereToDecider.WhereTo(p.PartitionID.Key)
-	if err != nil {
-		platformError.With(map[string]string{
-			metrics.LabelVertex:             p.vertexName,
-			metrics.LabelPipeline:           p.pipelineName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		}).Inc()
-		return err
-	}
-	messagesToStep := p.whereToStep(to)
+	messagesToStep := p.whereToStep()
 
 	// store write offsets to publish watermark
 	writeOffsets := make(map[string][]isb.Offset)
@@ -161,7 +149,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 
 	p.publishWM(processorWM, writeOffsets)
 	// delete the persisted messages
-	err = p.pbqReader.GC()
+	err := p.pbqReader.GC()
 	if err != nil {
 		return err
 	}
@@ -170,24 +158,33 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 
 // whereToStep assigns a message to the ISBs based on the Message.Key.
 // TODO: we have to introduce support for shuffle, output of a reducer can be input to the next reducer.
-func (p *ProcessAndForward) whereToStep(to []string) map[string][]isb.Message {
+func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][]isb.Message)
-	writeMessages := make([]isb.Message, len(p.result))
-	for idx, msg := range p.result {
-		writeMessages[idx] = *msg
-	}
 
-	// if a message is mapped to an isb, all the messages will be mapped to same isb (key is same)
-	switch {
-	case sharedutil.StringSliceContains(to, dfv1.MessageKeyAll):
-		for bufferID := range p.toBuffers {
-			messagesToStep[bufferID] = writeMessages
+	var to []string
+	var err error
+	for _, msg := range p.result {
+		to, err = p.whereToDecider.WhereTo(msg.Key)
+		if err != nil {
+			platformError.With(map[string]string{
+				metrics.LabelVertex:             p.vertexName,
+				metrics.LabelPipeline:           p.pipelineName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+			}).Inc()
+			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.String("key", msg.Key), zap.Error(err), zap.Any("partitionID", p.PartitionID))
+			continue
 		}
-	case sharedutil.StringSliceContains(to, dfv1.MessageKeyDrop):
-	default:
+
+		if len(to) == 0 {
+			continue
+		}
+
 		for _, bufferID := range to {
-			messagesToStep[bufferID] = writeMessages
+			if _, ok := messagesToStep[bufferID]; !ok {
+				messagesToStep[bufferID] = make([]isb.Message, 0)
+			}
+			messagesToStep[bufferID] = append(messagesToStep[bufferID], *msg)
 		}
 
 	}

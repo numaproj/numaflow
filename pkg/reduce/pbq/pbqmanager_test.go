@@ -45,12 +45,12 @@ func TestManager_ListPartitions(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "partition-1",
+		Slot:  "partition-1",
 	}
 	partitionTwo := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "partition-2",
+		Slot:  "partition-2",
 	}
 	var pq1, pq2 ReadWriteCloser
 	pq1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
@@ -59,7 +59,7 @@ func TestManager_ListPartitions(t *testing.T) {
 	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo)
 	assert.NoError(t, err)
 
-	assert.Len(t, pbqManager.ListPartitions(), 2)
+	assert.Len(t, pbqManager.ListPartitions(), 1)
 
 	err = pq1.GC()
 	assert.NoError(t, err)
@@ -83,7 +83,7 @@ func TestManager_GetPBQ(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "partition-1",
+		Slot:  "partition-1",
 	}
 	pb1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
@@ -105,7 +105,7 @@ func TestPBQFlow(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "partition-1",
+		Slot:  "partition-1",
 	}
 
 	var pq ReadWriteCloser
@@ -165,7 +165,7 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "partition-1",
+		Slot:  "partition-1",
 	}
 
 	// create a pbq backed with no op store
@@ -223,7 +223,7 @@ func TestManager_Replay(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Key:   "partition-1",
+		Slot:  "partition-1",
 	}
 
 	var pq ReadWriteCloser
@@ -277,13 +277,13 @@ func TestManager_StartUp(t *testing.T) {
 	pID1 := partition.ID{
 		Start: time.Now(),
 		End:   time.Now(),
-		Key:   "test-partition-1",
+		Slot:  "test-partition-1",
 	}
 
 	pID2 := partition.ID{
 		Start: time.Now(),
 		End:   time.Now(),
-		Key:   "test-partition-2",
+		Slot:  "test-partition-2",
 	}
 	dp := func(context.Context) ([]partition.ID, error) {
 		return []partition.ID{pID1,
