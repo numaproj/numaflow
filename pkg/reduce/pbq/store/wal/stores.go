@@ -150,8 +150,8 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 		if err != nil {
 			return nil, err
 		}
-		if id.Key != readPartition.Key {
-			return nil, fmt.Errorf("expected partition key %s, but got %s", id.Key, readPartition.Key)
+		if id.Slot != readPartition.Slot {
+			return nil, fmt.Errorf("expected partition key %s, but got %s", id.Slot, readPartition.Slot)
 		}
 	}
 

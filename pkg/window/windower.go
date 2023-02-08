@@ -29,8 +29,8 @@ type AlignedKeyedWindower interface {
 	StartTime() time.Time
 	// EndTime returns the end time of the window
 	EndTime() time.Time
-	// AddKey adds a key to the window
-	AddKey(string)
+	// AddSlot adds a slot to the window. Slots are hash-ranges for keys.
+	AddSlot(string)
 	// Partitions returns an array of partition ids
 	Partitions() []partition.ID
 	// Keys returns an array of keys

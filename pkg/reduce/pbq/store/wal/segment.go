@@ -137,7 +137,7 @@ func (w *WAL) encodeHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	hp := headerPreamble{
 		S:    id.Start.UnixMilli(),
 		E:    id.End.UnixMilli(),
-		KLen: int16(len(id.Key)),
+		KLen: int16(len(id.Slot)),
 	}
 
 	// write the fixed values
@@ -147,7 +147,7 @@ func (w *WAL) encodeHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	}
 
 	// write the variadic values
-	err = binary.Write(buf, binary.LittleEndian, []rune(id.Key))
+	err = binary.Write(buf, binary.LittleEndian, []rune(id.Slot))
 
 	return buf, err
 }
@@ -354,6 +354,6 @@ func (w *WAL) Close() (err error) {
 }
 
 func getSegmentFilePath(id *partition.ID, dir string) string {
-	filename := fmt.Sprintf("%s_%d.%d.%s", SegmentPrefix, id.Start.Unix(), id.End.Unix(), id.Key)
+	filename := fmt.Sprintf("%s_%d.%d.%s", SegmentPrefix, id.Start.Unix(), id.End.Unix(), id.Slot)
 	return filepath.Join(dir, filename)
 }

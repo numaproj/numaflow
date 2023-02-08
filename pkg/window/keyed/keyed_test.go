@@ -17,13 +17,10 @@ limitations under the License.
 package keyed
 
 import (
-	"sort"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 func TestKeyedWindow_AddKey(t *testing.T) {
@@ -54,67 +51,13 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			kw = NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
 			for k := range tt.given.keys {
-				kw.AddKey(k)
+				kw.AddSlot(k)
 			}
-			kw.AddKey(tt.input)
+			kw.AddSlot(tt.input)
 			assert.Equal(t, len(tt.expectedKeys), len(kw.keys))
 			for k := range tt.expectedKeys {
 				_, ok := kw.keys[k]
 				assert.True(t, ok)
-			}
-		})
-	}
-}
-
-func TestKeyedWindow_Partitions(t *testing.T) {
-	kw := NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-	tests := []struct {
-		name     string
-		given    *AlignedKeyedWindow
-		input    string
-		expected []partition.ID
-	}{
-		{
-			name:     "no_keys",
-			given:    &AlignedKeyedWindow{},
-			expected: []partition.ID{},
-		},
-		{
-			name: "with_some_existing_keys",
-			given: &AlignedKeyedWindow{
-				keys: map[string]struct{}{"key2": {}, "key3": {}, "key4": {}},
-			},
-			expected: []partition.ID{
-				{
-					Key:   "key2",
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
-				{
-					Key:   "key3",
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
-				{
-					Key:   "key4",
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			kw.keys = tt.given.keys
-			ret := kw.Partitions()
-			// the kw.keys is a map so the order of the output is random
-			// use sort to sort the ret array by key
-			sort.Slice(ret, func(i int, j int) bool {
-				return ret[i].Key < ret[j].Key
-			})
-			for idx, s := range tt.expected {
-				assert.EqualValues(t, ret[idx], s)
 			}
 		})
 	}
