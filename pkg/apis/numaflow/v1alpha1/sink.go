@@ -41,11 +41,11 @@ func (s Sink) getMainContainer(req getContainerReq) corev1.Container {
 	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
-func (s Sink) getUDSinkContainer(req getContainerReq) corev1.Container {
+func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
-		init(req).
-		name(CtrUdsink)
-	c.Env = nil
+		name(CtrUdsink).
+		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
+		appendVolumeMounts(mainContainerReq.volumeMounts...)
 	x := s.UDSink.Container
 	c = c.image(x.Image)
 	if len(x.Command) > 0 {
@@ -54,6 +54,6 @@ func (s Sink) getUDSinkContainer(req getContainerReq) corev1.Container {
 	if len(x.Args) > 0 {
 		c = c.args(x.Args...)
 	}
-	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources)
+	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext)
 	return c.build()
 }

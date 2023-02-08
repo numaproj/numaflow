@@ -40,3 +40,23 @@ func Test_Sink_getContainers(t *testing.T) {
 	assert.Equal(t, testFlowImage, c[0].Image)
 	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[0].Resources)
 }
+
+func Test_Sink_getUDSinkContainer(t *testing.T) {
+	x := Sink{
+		UDSink: &UDSink{
+			Container: Container{
+				Image:           "my-image",
+				Args:            []string{"my-arg"},
+				SecurityContext: &corev1.SecurityContext{},
+			},
+		},
+	}
+	c := x.getUDSinkContainer(getContainerReq{
+		image:           "main-image",
+		imagePullPolicy: corev1.PullNever,
+	})
+	assert.NotNil(t, c.SecurityContext)
+	assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
+	assert.Equal(t, "my-image", c.Image)
+	assert.Contains(t, c.Args, "my-arg")
+}

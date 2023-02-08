@@ -565,6 +565,10 @@ Container
 <a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
 </p>
 <p>
+<p>
+Container is used to define the container properties for user defined
+functions, sinks, etc.
+</p>
 </p>
 <table>
 <thead>
@@ -632,6 +636,16 @@ Kubernetes core/v1.ResourceRequirements </a> </em>
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>securityContext</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#securitycontext-v1-core">
+Kubernetes core/v1.SecurityContext </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.ContainerTemplate">
@@ -669,6 +683,7 @@ Description
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
 </td>
 </tr>
 <tr>
@@ -678,6 +693,7 @@ Kubernetes core/v1.ResourceRequirements </a> </em>
 Kubernetes core/v1.PullPolicy </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
 </td>
 </tr>
 <tr>
@@ -687,6 +703,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 Kubernetes core/v1.SecurityContext </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
 </td>
 </tr>
 <tr>
@@ -696,6 +713,7 @@ Kubernetes core/v1.SecurityContext </a> </em>
 \[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>

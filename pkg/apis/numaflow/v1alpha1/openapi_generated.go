@@ -544,7 +544,8 @@ func schema_pkg_apis_numaflow_v1alpha1_Container(ref common.ReferenceCallback) c
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "Container is used to define the container properties for user defined functions, sinks, etc.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"image": {
 						SchemaProps: spec.SchemaProps{
@@ -613,11 +614,16 @@ func schema_pkg_apis_numaflow_v1alpha1_Container(ref common.ReferenceCallback) c
 							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
+					"securityContext": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/api/core/v1.SecurityContext"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.VolumeMount"},
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.SecurityContext", "k8s.io/api/core/v1.VolumeMount"},
 	}
 }
 

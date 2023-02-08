@@ -57,14 +57,18 @@ func Test_getUDFContainer(t *testing.T) {
 	t.Run("with customized image", func(t *testing.T) {
 		x := UDF{
 			Container: &Container{
-				Image: "my-image",
-				Args:  []string{"my-arg"},
+				Image:           "my-image",
+				Args:            []string{"my-arg"},
+				SecurityContext: &corev1.SecurityContext{},
 			},
 		}
 		c := x.getUDFContainer(getContainerReq{
-			image: "main-image",
+			image:           "main-image",
+			imagePullPolicy: corev1.PullNever,
 		})
+		assert.NotNil(t, c.SecurityContext)
 		assert.Equal(t, "my-image", c.Image)
+		assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
 		assert.Contains(t, c.Args, "my-arg")
 	})
 
@@ -74,19 +78,23 @@ func Test_getUDFContainer(t *testing.T) {
 				Env: []corev1.EnvVar{
 					{Name: "e", Value: "f"},
 				},
+				SecurityContext: &corev1.SecurityContext{},
 			},
 			Builtin: &Function{
 				Name: "cat",
 			},
 		}
 		c := x.getUDFContainer(getContainerReq{
-			image: "main-image",
+			image:           "main-image",
+			imagePullPolicy: corev1.PullNever,
 			env: []corev1.EnvVar{
 				{Name: "a", Value: "b"},
 			},
 		})
 		assert.Equal(t, "main-image", c.Image)
 		assert.Contains(t, c.Args, "--name=cat")
+		assert.NotNil(t, c.SecurityContext)
+		assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
 		envNames := []string{}
 		for _, e := range c.Env {
 			envNames = append(envNames, e.Name)
