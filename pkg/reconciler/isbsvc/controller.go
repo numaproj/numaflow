@@ -65,7 +65,8 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
 	if r.needsUpdate(isbs, isbsCopy) {
-		if err := r.client.Update(ctx, isbsCopy); err != nil {
+		// Update with a DeepCopy because .Status will be cleaned up.
+		if err := r.client.Update(ctx, isbsCopy.DeepCopy()); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
