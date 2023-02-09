@@ -135,7 +135,7 @@ func (s *UserDefinedSink) ForceStop() {
 	s.isdf.ForceStop()
 }
 
-// WaitUntilReady checks if the udsink sidecar is healthy.
-func (s *UserDefinedSink) WaitUntilReady(ctx context.Context) error {
+// IsHealthy checks if the udsink sidecar is healthy.
+func (s *UserDefinedSink) IsHealthy(ctx context.Context) error {
 	return s.udsink.WaitUntilReady(ctx)
 }
