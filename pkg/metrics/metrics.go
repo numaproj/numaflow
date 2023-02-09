@@ -143,14 +143,11 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler u
 			metricsOpts = append(metricsOpts, WithLagReader(x))
 		}
 	}
-	if vertex.IsASource() {
-		if writer != nil {
-			if x, ok := writer.(isb.Ratable); ok {
-				metricsOpts = append(metricsOpts, WithRater(x))
-			}
+	if vertex.IsASource() && writer != nil {
+		if x, ok := writer.(isb.Ratable); ok {
+			metricsOpts = append(metricsOpts, WithRater(x))
 		}
-	} else {
-		if reader != nil {
+	} else if !vertex.IsASource() && reader != nil {
 			if x, ok := reader.(isb.Ratable); ok {
 				metricsOpts = append(metricsOpts, WithRater(x))
 			}
