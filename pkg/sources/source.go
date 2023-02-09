@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/shared/interfaces"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -122,7 +123,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
 	var sourcer Sourcer
-	var serverHandler sharedutil.ReadyChecker
+	var serverHandler interfaces.ReadyChecker
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		t, err := transformer.NewGRPCBasedTransformer()
 		if err != nil {
