@@ -40,6 +40,10 @@ type ToLog struct {
 	logger       *zap.SugaredLogger
 }
 
+func (t *ToLog) WaitUntilReady(_ context.Context) error {
+	return nil
+}
+
 type Option func(*ToLog) error
 
 func WithLogger(log *zap.SugaredLogger) Option {

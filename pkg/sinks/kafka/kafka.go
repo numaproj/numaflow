@@ -47,6 +47,10 @@ type ToKafka struct {
 	log          *zap.SugaredLogger
 }
 
+func (tk *ToKafka) WaitUntilReady(_ context.Context) error {
+	return nil
+}
+
 type Option func(*ToKafka) error
 
 func WithLogger(log *zap.SugaredLogger) Option {

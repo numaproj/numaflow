@@ -18,6 +18,7 @@ package blackhole
 
 import (
 	"context"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
@@ -36,6 +37,10 @@ type Blackhole struct {
 	pipelineName string
 	isdf         *forward.InterStepDataForward
 	logger       *zap.SugaredLogger
+}
+
+func (b *Blackhole) WaitUntilReady(_ context.Context) error {
+	return nil
 }
 
 type Option func(*Blackhole) error

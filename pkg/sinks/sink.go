@@ -32,7 +32,6 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/sinks/blackhole"
 	kafkasink "github.com/numaproj/numaflow/pkg/sinks/kafka"
 	logsink "github.com/numaproj/numaflow/pkg/sinks/logger"
@@ -113,18 +112,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := []metrics.Option{metrics.WithLookbackSeconds(int64(u.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds()))}
-	if x, ok := reader.(isb.LagReader); ok {
-		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
-	}
-	if x, ok := reader.(isb.Ratable); ok {
-		metricsOpts = append(metricsOpts, metrics.WithRater(x))
-	}
-	if x, ok := sinker.(*udsink.UserDefinedSink); ok {
-		if sharedutil.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
-			metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(x.IsHealthy))
-		}
-	}
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, sinker, reader, nil)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -126,6 +125,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		metrics.WithLookbackSeconds(int64(sp.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds())),
 	}
 	var sourcer Sourcer
+	var serverHandler sharedutil.ServerHandler
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		t, err := transformer.NewGRPCBasedTransformer()
 		if err != nil {
@@ -141,13 +141,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
-		if sharedutil.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
-			metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(func() error {
-				ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-				defer cancel()
-				return t.WaitUntilReady(ctx)
-			}))
-		}
+		serverHandler = t
 		sourcer, err = sp.getSourcer(writers, sp.getTransformerGoWhereDecider(), t, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	} else {
 		sourcer, err = sp.getSourcer(writers, forward.All, applier.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
@@ -174,6 +168,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	if x, ok := writers[0].(isb.Ratable); ok { // Only need to use the rate of one of the writer
 		metricsOpts = append(metricsOpts, metrics.WithRater(x))
 	}
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, serverHandler, sourcer, writers[0])
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
