@@ -2,6 +2,6 @@ package util
 
 import "context"
 
-type ServerHandler interface {
+type ReadyChecker interface {
 	WaitUntilReady(ctx context.Context) error
 }
