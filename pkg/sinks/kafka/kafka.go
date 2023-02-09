@@ -47,11 +47,6 @@ type ToKafka struct {
 	log          *zap.SugaredLogger
 }
 
-// WaitUntilReady always returns nil for builtin sink.
-func (tk *ToKafka) WaitUntilReady(_ context.Context) error {
-	return nil
-}
-
 type Option func(*ToKafka) error
 
 func WithLogger(log *zap.SugaredLogger) Option {
