@@ -7,9 +7,8 @@ export interface VertexMetrics {
   podMetrics: any[];
 }
 
-export interface VertexWatermark {
-  watermark: number;
-  watermarkLocalTime: string;
+export interface EdgeWatermark {
+  watermarks: any[];
   isWaterMarkEnabled: boolean;
 }
 

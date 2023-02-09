@@ -24,22 +24,6 @@ const SourceNode = ({
           fontSize: "0.50rem",
         }}
       >
-        {data?.vertexWatermark?.isWaterMarkEnabled && (
-          <Tooltip
-            title={
-              <div className={"node-tooltip"}>
-                <div className={"node-watermark-tooltip"}>Watermark</div>
-                <div>{data?.vertexWatermark?.watermarkLocalTime}</div>
-              </div>
-            }
-            arrow
-            placement={"top"}
-          >
-            <div className={"node-watermark"}>
-              {data?.vertexWatermark?.watermark}
-            </div>
-          </Tooltip>
-        )}
         <Tooltip
           title={
             <div className={"node-tooltip"}>

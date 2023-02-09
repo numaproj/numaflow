@@ -4,7 +4,7 @@ import { ConnectionLineType, Edge, Node } from "react-flow-renderer";
 import Graph from "./graph/Graph";
 import { usePipelineFetch } from "../../utils/fetchWrappers/pipelineFetch";
 import { useEdgesInfoFetch } from "../../utils/fetchWrappers/edgeInfoFetch";
-import { VertexMetrics, VertexWatermark } from "../../utils/models/pipeline";
+import { VertexMetrics, EdgeWatermark } from "../../utils/models/pipeline";
 import "./Pipeline.css";
 
 export function Pipeline() {
@@ -17,8 +17,8 @@ export function Pipeline() {
   const [vertexMetrics, setVertexMetrics] =
     useState<Map<string, VertexMetrics>>(null);
 
-  const [vertexWatermark, setVertexWatermark] =
-    useState<Map<string, VertexWatermark>>(null);
+  const [edgeWatermark, setEdgeWatermark] =
+    useState<Map<string, EdgeWatermark>>(null);
 
   const { pipeline, error: pipelineError } = usePipelineFetch(
     namespaceId,
@@ -126,10 +126,10 @@ export function Pipeline() {
 
   // This is used to obtain the watermark of a given pipeline
   const getPipelineWatermarks = useCallback(() => {
-    const vertexToWatermarkMap = new Map();
-    if (pipeline?.spec?.vertices) {
-      if (pipeline?.spec?.watermark?.disabled && pipeline.spec.watermark.disabled === true) {
-        setVertexWatermark(vertexToWatermarkMap)
+    const edgeToWatermarkMap = new Map();
+    if (pipeline?.spec?.edges) {
+      if (pipeline?.spec?.watermark?.disabled === true) {
+        setEdgeWatermark(edgeToWatermarkMap)
       } else {
         Promise.all( [
               fetch(
@@ -137,19 +137,16 @@ export function Pipeline() {
               )
                   .then((response) => response.json())
                   .then((json) => {
-                    json.map((vertex) => {
-                      const vertexWatermark = {} as VertexWatermark;
-                      vertexWatermark.isWaterMarkEnabled = vertex["isWatermarkEnabled"];
-                      vertexWatermark.watermark = vertex["watermark"];
-                      vertexWatermark.watermarkLocalTime = new Date(
-                          vertexWatermark.watermark
-                      ).toISOString();
-                      vertexToWatermarkMap.set(vertex.vertex, vertexWatermark);
+                    json.map((edge) => {
+                      const edgeWatermark = {} as EdgeWatermark;
+                      edgeWatermark.isWaterMarkEnabled = edge["isWatermarkEnabled"];
+                      edgeWatermark.watermarks = edge["watermarks"];
+                      edgeToWatermarkMap.set(edge.edge, edgeWatermark);
                     })
                   })
             ]
         )
-            .then(() => setVertexWatermark(vertexToWatermarkMap))
+            .then(() => setEdgeWatermark(edgeToWatermarkMap))
             .catch(console.error);
       }
     }
@@ -170,8 +167,7 @@ export function Pipeline() {
     if (
       pipeline?.spec?.vertices &&
       vertexPods &&
-      vertexMetrics &&
-      vertexWatermark
+      vertexMetrics
     ) {
       pipeline.spec.vertices.map((vertex) => {
         const newNode = {} as Node;
@@ -195,27 +191,39 @@ export function Pipeline() {
         newNode.data.vertexMetrics = vertexMetrics.has(vertex.name)
           ? vertexMetrics.get(vertex.name)
           : 0;
-        newNode.data.vertexWatermark = vertexWatermark.has(vertex.name)
-          ? vertexWatermark.get(vertex.name)
-          : 0;
         newVertices.push(newNode);
       });
     }
     return newVertices;
-  }, [pipeline, vertexPods, vertexMetrics, vertexWatermark]);
+  }, [pipeline, vertexPods, vertexMetrics]);
 
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];
-    if (pipeline?.spec?.edges && edgesInfo) {
+    if (
+        pipeline?.spec?.edges &&
+        edgesInfo &&
+        edgeWatermark
+    ) {
+      // ensuring all edges between same pair of vertices have same labels
+      // 'label' for an edge is the sum of backpressure between vertices - the value we see on the edge
+      const edgeLabels = new Map();
+
+      edgesInfo.forEach((edge) => {
+        const id = edge.fromVertex + "-" + edge.toVertex;
+        if (edgeLabels.get(id) === undefined) edgeLabels.set(id, Number(edge.totalMessages));
+        else edgeLabels.set(id, edgeLabels.get(id) + Number(edge.totalMessages));
+      });
+
       pipeline.spec.edges.map((edge) => {
         edgesInfo.map((edgeInfo) => {
           if (
             edgeInfo.fromVertex === edge.from &&
             edgeInfo.toVertex === edge.to
           ) {
-            const label = `${edgeInfo.ackPendingCount + edgeInfo.pendingCount}`;
+            const id = edge.from + "-" + edge.to;
+            const label = `${edgeLabels.get(id).toString()}`;
             const pipelineEdge = {
-              id: edge.from + "-" + edge.to,
+              id ,
               label,
               source: edge.from,
               target: edge.to,
@@ -233,6 +241,9 @@ export function Pipeline() {
                 bufferLength: edgeInfo.bufferLength,
               },
             } as Edge;
+            pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
+                ? edgeWatermark.get(pipelineEdge.id)
+                : 0;
             // Color the edge on isFull
             if (edgeInfo.isFull) {
               pipelineEdge.style = {
@@ -249,7 +260,7 @@ export function Pipeline() {
       });
     }
     return newEdges;
-  }, [pipeline, edgesInfo]);
+  }, [pipeline, edgesInfo, edgeWatermark]);
 
   if (pipelineError || edgesInfoError) {
     return <div>Error</div>;

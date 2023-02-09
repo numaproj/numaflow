@@ -80,19 +80,6 @@ export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId } = props;
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
-    // ensuring all edges between same pair of vertices have same labels
-    // 'label' for an edge is the sum of backpressure between vertices - the value we see on the edge
-    const edgeMap = new Map();
-
-    data.edges.forEach((edge) => {
-      if (edgeMap.get(edge.id) === undefined) edgeMap.set(edge.id, Number(edge.data.totalMessages));
-      else edgeMap.set(edge.id, edgeMap.get(edge.id) + Number(edge.data.totalMessages));
-    });
-
-    data.edges.forEach((edge) => {
-      edge.label = edgeMap.get(edge.id).toString();
-    });
-
     return getLayoutedElements(data.vertices, data.edges);
   }, [data]);
 
