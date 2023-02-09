@@ -126,7 +126,7 @@ func WithHealthCheckExecutor(f func() error) Option {
 }
 
 // NewMetricsOptions returns a metrics option list.
-func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler interfaces.ReadyChecker, reader isb.BufferReader, writer isb.BufferWriter) []Option {
+func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler interfaces.ConnectionChecker, reader isb.BufferReader, writer isb.BufferWriter) []Option {
 	metricsOpts := []Option{
 		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
 	}
@@ -135,6 +135,7 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler i
 			metricsOpts = append(metricsOpts, WithHealthCheckExecutor(func() error {
 				cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 				defer cancel()
+				// we use the WaitUntilReady to check if the user defined container is still connected
 				return serverHandler.WaitUntilReady(cctx)
 			}))
 		}

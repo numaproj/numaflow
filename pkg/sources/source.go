@@ -123,7 +123,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
 	var sourcer Sourcer
-	var readyChecker interfaces.ReadyChecker
+	var readyChecker interfaces.ConnectionChecker
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		t, err := transformer.NewGRPCBasedTransformer()
 		if err != nil {
