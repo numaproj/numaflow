@@ -46,7 +46,12 @@ func (u *UDSgRPCBasedUDSink) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
-// WaitUntilReady waits until the client is connected.
+// IsHealthy checks if the udsink is healthy.
+func (u *UDSgRPCBasedUDSink) IsHealthy(ctx context.Context) error {
+	return u.WaitUntilReady(ctx)
+}
+
+// WaitUntilReady waits until the udsink is connected.
 func (u *UDSgRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {

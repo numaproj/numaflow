@@ -58,7 +58,12 @@ func (u *UDSgRPCBasedUDF) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
-// WaitUntilReady waits until the client is connected.
+// IsHealthy checks if the udf is healthy.
+func (u *UDSgRPCBasedUDF) IsHealthy(ctx context.Context) error {
+	return u.WaitUntilReady(ctx)
+}
+
+// WaitUntilReady waits until the udf is connected.
 func (u *UDSgRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {

@@ -136,8 +136,6 @@ func (s *UserDefinedSink) ForceStop() {
 }
 
 // IsHealthy checks if the udsink sidecar is healthy.
-func (s *UserDefinedSink) IsHealthy() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+func (s *UserDefinedSink) IsHealthy(ctx context.Context) error {
 	return s.udsink.WaitUntilReady(ctx)
 }

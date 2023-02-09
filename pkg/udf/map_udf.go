@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/numaproj/numaflow-go/pkg/function/client"
 	"go.uber.org/zap"
@@ -149,22 +148,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := []metrics.Option{
-		metrics.WithLookbackSeconds(int64(u.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds())),
-	}
-	if sharedutil.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
-		metricsOpts = append(metricsOpts, metrics.WithHealthCheckExecutor(func() error {
-			cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			defer cancel()
-			return udfHandler.WaitUntilReady(cctx)
-		}))
-	}
-	if x, ok := reader.(isb.LagReader); ok {
-		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
-	}
-	if x, ok := reader.(isb.Ratable); ok {
-		metricsOpts = append(metricsOpts, metrics.WithRater(x))
-	}
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, reader, nil)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
