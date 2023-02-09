@@ -76,14 +76,14 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log := r.logger.With("namespace", pl.Namespace).With("pipeline", pl.Name)
 	plCopy := pl.DeepCopy()
 	ctx = logging.WithLogger(ctx, log)
-
 	result, reconcileErr := r.reconcile(ctx, plCopy)
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
 	plCopy.Status.LastUpdated = metav1.Now()
 	if needsUpdate(pl, plCopy) {
-		if err := r.client.Update(ctx, plCopy); err != nil {
+		// Update with a DeepCopy because .Status will be cleaned up.
+		if err := r.client.Update(ctx, plCopy.DeepCopy()); err != nil {
 			return result, err
 		}
 	}
