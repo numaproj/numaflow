@@ -138,19 +138,16 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler u
 			}))
 		}
 	}
-	if reader != nil {
-		if x, ok := reader.(isb.LagReader); ok {
-			metricsOpts = append(metricsOpts, WithLagReader(x))
-		}
+	if x, ok := reader.(isb.LagReader); ok {
+		metricsOpts = append(metricsOpts, WithLagReader(x))
 	}
-	if vertex.IsASource() && writer != nil {
+	if vertex.IsASource() {
 		if x, ok := writer.(isb.Ratable); ok {
 			metricsOpts = append(metricsOpts, WithRater(x))
 		}
-	} else if !vertex.IsASource() && reader != nil {
-			if x, ok := reader.(isb.Ratable); ok {
-				metricsOpts = append(metricsOpts, WithRater(x))
-			}
+	} else {
+		if x, ok := reader.(isb.Ratable); ok {
+			metricsOpts = append(metricsOpts, WithRater(x))
 		}
 	}
 	return metricsOpts
