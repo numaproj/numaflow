@@ -39,6 +39,7 @@ type Blackhole struct {
 	logger       *zap.SugaredLogger
 }
 
+// WaitUntilReady always returns nil for builtin sink.
 func (b *Blackhole) WaitUntilReady(_ context.Context) error {
 	return nil
 }

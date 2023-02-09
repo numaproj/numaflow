@@ -40,6 +40,7 @@ type ToLog struct {
 	logger       *zap.SugaredLogger
 }
 
+// WaitUntilReady always returns nil for builtin sink.
 func (t *ToLog) WaitUntilReady(_ context.Context) error {
 	return nil
 }
