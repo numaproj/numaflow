@@ -121,9 +121,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
-	metricsOpts := []metrics.Option{
-		metrics.WithLookbackSeconds(int64(sp.VertexInstance.Vertex.Spec.Scale.GetLookbackSeconds())),
-	}
 	var sourcer Sourcer
 	var serverHandler sharedutil.ServerHandler
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
@@ -162,12 +159,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	if x, ok := sourcer.(isb.LagReader); ok {
-		metricsOpts = append(metricsOpts, metrics.WithLagReader(x))
-	}
-	if x, ok := writers[0].(isb.Ratable); ok { // Only need to use the rate of one of the writer
-		metricsOpts = append(metricsOpts, metrics.WithRater(x))
-	}
 	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, serverHandler, sourcer, writers[0])
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
