@@ -104,7 +104,7 @@ func (so SimpleStringOffset) AckIt() error {
 	return nil
 }
 
-// SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
+// SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is an int64.
 type SimpleIntOffset func() int64
 
 func (si SimpleIntOffset) String() string {
@@ -117,4 +117,16 @@ func (si SimpleIntOffset) Sequence() (int64, error) {
 
 func (si SimpleIntOffset) AckIt() error {
 	return nil
+}
+
+// DeduplicateOffsets uses the return value of String() as offset identifier to de-deduplicate the input list of offsets.
+func DeduplicateOffsets(input []Offset) (output []Offset) {
+	set := make(map[string]bool)
+	for _, v := range input {
+		if ok := set[v.String()]; !ok {
+			set[v.String()] = true
+			output = append(output, v)
+		}
+	}
+	return
 }

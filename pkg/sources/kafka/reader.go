@@ -35,6 +35,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -80,7 +81,9 @@ type KafkaSource struct {
 	watermarkMaxDelay time.Duration
 	// source watermark publisher stores
 	srcPublishWMStores store.WatermarkStorer
-	lock               *sync.RWMutex
+	// source data transformer
+	transformer transformer.Transformer
+	lock        *sync.RWMutex
 }
 
 type Option func(*KafkaSource) error
@@ -121,9 +124,7 @@ func (r *KafkaSource) GetName() string {
 	return r.name
 }
 
-func (r *KafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
-	// It stores latest timestamps for different partitions
-	oldestTimestamps := make(map[int32]time.Time)
+func (r *KafkaSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := make([]*isb.ReadMessage, 0, count)
 	timeout := time.After(r.readTimeout)
 loop:
@@ -133,21 +134,34 @@ loop:
 			kafkaSourceReadCount.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
 			_m := toReadMessage(m)
 			msgs = append(msgs, _m)
-			// Get latest timestamps for different partitions
-			if t, ok := oldestTimestamps[m.Partition]; !ok || m.Timestamp.Before(t) {
-				oldestTimestamps[m.Partition] = m.Timestamp
-			}
 		case <-timeout:
 			// log that timeout has happened and don't return an error
 			r.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", r.readTimeout))
 			break loop
 		}
 	}
+	r.logger.Debugf("Read %d messages.", len(msgs))
+	// apply source data transformation.
+	transformedMsgs := r.transformer.Transform(ctx, msgs)
+	// Publish watermark to source.
+	r.PublishSourceWatermarks(transformedMsgs)
+	return transformedMsgs, nil
+}
+
+func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
+	// oldestTimestamps stores the latest timestamps for different partitions
+	oldestTimestamps := make(map[int32]time.Time)
+	for _, m := range msgs {
+		// Get latest timestamps for different partitions
+		_, partition, _, _ := offsetFrom(m.ReadOffset.String())
+		if t, ok := oldestTimestamps[partition]; !ok || m.EventTime.Before(t) {
+			oldestTimestamps[partition] = m.EventTime
+		}
+	}
 	for p, t := range oldestTimestamps {
 		publisher := r.loadSourceWatermarkPublisher(p)
 		publisher.PublishWatermark(processor.Watermark(t), nil) // Source publisher does not care about the offset
 	}
-	return msgs, nil
 }
 
 // loadSourceWatermarkPublisher does a lazy load on the watermark publisher
@@ -256,7 +270,7 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 	return totalPending, nil
 }
 
-// NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
+// NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group.
 func NewKafkaSource(
 	vertexInstance *dfv1.VertexInstance,
 	writers []isb.BufferWriter,
@@ -303,6 +317,7 @@ func NewKafkaSource(
 		}
 	}
 	kafkasource.config = config
+	kafkasource.transformer = transformer.New(mapApplier, kafkasource.logger)
 	// Best effort to initialize the clients for pending messages calculation
 	adminClient, err := sarama.NewClusterAdmin(kafkasource.brokers, config)
 	if err != nil {

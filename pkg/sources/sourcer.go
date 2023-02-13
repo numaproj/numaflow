@@ -26,4 +26,6 @@ import (
 type Sourcer interface {
 	isb.BufferReader
 	forward.StarterStopper
+	// PublishSourceWatermarks publish source watermarks based on a list of isb.ReadMessage
+	PublishSourceWatermarks([]*isb.ReadMessage)
 }

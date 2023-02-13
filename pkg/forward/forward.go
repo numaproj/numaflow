@@ -334,7 +334,10 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 		Steps:    math.MaxInt,
 		Duration: time.Millisecond * 10,
 	}
-	var ackOffsets = offsets
+
+	// we only need to acknowledge every distinct offset once, for now, we add de-duplication logics here before sending offsets to fromBuffer.Ack().
+	// as of now, we don't force fromBuffer to implement Ack() as an idempotent function, but we should for future implementations.
+	var ackOffsets = isb.DeduplicateOffsets(offsets)
 	attempt := 0
 
 	ctxClosedErr := wait.ExponentialBackoff(ackRetryBackOff, func() (done bool, err error) {

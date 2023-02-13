@@ -5,6 +5,8 @@ metadata:
 spec:
   vertices:
     - name: in
+      scale:
+        min: 1
       source:
         http: {}
         transformer:

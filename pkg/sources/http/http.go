@@ -36,6 +36,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -53,6 +54,8 @@ type httpSource struct {
 	forwarder    *forward.InterStepDataForward
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
+	// source data transformer
+	transformer transformer.Transformer
 	// context cancel function
 	cancelFunc context.CancelFunc
 	shutdown   func(context.Context) error
@@ -110,6 +113,7 @@ func New(
 		h.logger = logging.NewLogger()
 	}
 	h.messages = make(chan *isb.ReadMessage, h.bufferSize)
+	h.transformer = transformer.New(mapApplier, h.logger)
 
 	auth := ""
 	if x := vertexInstance.Vertex.Spec.Source.HTTP.Auth; x != nil && x.Token != nil {
@@ -201,7 +205,7 @@ func New(
 		}
 	}
 
-	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, fsd, applier.Terminal, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -219,30 +223,40 @@ func (h *httpSource) GetName() string {
 	return h.name
 }
 
-func (h *httpSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
-	msgs := []*isb.ReadMessage{}
-	var oldest time.Time
+func (h *httpSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
+	var msgs []*isb.ReadMessage
 	timeout := time.After(h.readTimeout)
 loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-h.messages:
-			if oldest.IsZero() || m.EventTime.Before(oldest) {
-				oldest = m.EventTime
-			}
-			msgs = append(msgs, m)
 			fmt.Println("got a message to read")
 			httpSourceReadCount.With(map[string]string{metrics.LabelVertex: h.name, metrics.LabelPipeline: h.pipelineName}).Inc()
+			msgs = append(msgs, m)
 		case <-timeout:
 			h.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", h.readTimeout), zap.Int("read", len(msgs)))
 			break loop
 		}
 	}
 	h.logger.Debugf("Read %d messages.", len(msgs))
+	// Apply source data transformation.
+	transformedMsgs := h.transformer.Transform(ctx, msgs)
+	// Publish watermark to source.
+	h.PublishSourceWatermarks(transformedMsgs)
+	return transformedMsgs, nil
+}
+
+func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
+	var oldest time.Time
+	for _, m := range msgs {
+		if oldest.IsZero() || m.EventTime.Before(oldest) {
+			oldest = m.EventTime
+		}
+	}
 	if len(msgs) > 0 && !oldest.IsZero() {
+		h.logger.Debugf("Publishing watermark %v to source, read offset %d\n", oldest, msgs[len(msgs)-1].ReadOffset)
 		h.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), msgs[len(msgs)-1].ReadOffset)
 	}
-	return msgs, nil
 }
 
 func (h *httpSource) Ack(_ context.Context, offsets []isb.Offset) []error {

@@ -35,6 +35,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -96,12 +97,13 @@ type memgen struct {
 	lifecycleCtx context.Context
 	// read timeout for the reader
 	readTimeout time.Duration
-
 	// vertex instance
 	vertexInstance *dfv1.VertexInstance
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
-
+	// source data transformer
+	transformer transformer.Transformer
+	// logger
 	logger *zap.SugaredLogger
 }
 
@@ -167,6 +169,7 @@ func NewMemGen(
 	if gensrc.logger == nil {
 		gensrc.logger = logging.NewLogger()
 	}
+	gensrc.transformer = transformer.New(mapApplier, gensrc.logger)
 
 	// this context is to be used internally for controlling the lifecycle of generator
 	cctx, cancel := context.WithCancel(context.Background())
@@ -190,7 +193,7 @@ func NewMemGen(
 	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, fsd, applier.Terminal, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -231,6 +234,14 @@ loop:
 			break loop
 		}
 	}
+	// Apply source data transformation.
+	transformedMsgs := mg.transformer.Transform(ctx, msgs)
+	// Publish watermark to source.
+	mg.PublishSourceWatermarks(transformedMsgs)
+	return transformedMsgs, nil
+}
+
+func (mg *memgen) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	if len(msgs) > 0 {
 		// publish the last message's offset with watermark, this is an optimization to avoid too many insert calls
 		// into the offset timeline store.
@@ -241,7 +252,6 @@ loop:
 		// remove the nanosecond precision
 		mg.sourcePublishWM.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
 	}
-	return msgs, nil
 }
 
 // Ack acknowledges an array of offset.

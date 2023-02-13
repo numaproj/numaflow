@@ -3,6 +3,9 @@ kind: Pipeline
 metadata:
   name: extract-event-time
 spec:
+  spec:
+    limits:
+      readBatchSize: 1
   vertices:
     - name: in
       source:
