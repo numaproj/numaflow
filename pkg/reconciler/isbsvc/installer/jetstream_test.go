@@ -26,6 +26,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -71,11 +72,12 @@ func TestJetStreamCreateObjects(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	ctx := context.TODO()
 	i := &jetStreamInstaller{
-		client: cl,
-		isbs:   testJetStreamIsbSvc,
-		config: fakeConfig,
-		labels: testLabels,
-		logger: zaptest.NewLogger(t).Sugar(),
+		client:     cl,
+		kubeClient: k8sfake.NewSimpleClientset(),
+		isbs:       testJetStreamIsbSvc,
+		config:     fakeConfig,
+		labels:     testLabels,
+		logger:     zaptest.NewLogger(t).Sugar(),
 	}
 
 	t.Run("test create sts", func(t *testing.T) {
@@ -148,11 +150,12 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	ctx := context.TODO()
 	i := &jetStreamInstaller{
-		client: cl,
-		isbs:   testJetStreamIsbSvc,
-		config: fakeConfig,
-		labels: testLabels,
-		logger: zaptest.NewLogger(t).Sugar(),
+		client:     cl,
+		kubeClient: k8sfake.NewSimpleClientset(),
+		isbs:       testJetStreamIsbSvc,
+		config:     fakeConfig,
+		labels:     testLabels,
+		logger:     zaptest.NewLogger(t).Sugar(),
 	}
 	t.Run("test install", func(t *testing.T) {
 		c, err := i.Install(ctx)

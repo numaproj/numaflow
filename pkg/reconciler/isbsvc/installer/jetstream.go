@@ -37,7 +37,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -55,20 +55,22 @@ var (
 )
 
 type jetStreamInstaller struct {
-	client client.Client
-	isbs   *dfv1.InterStepBufferService
-	config *reconciler.GlobalConfig
-	labels map[string]string
-	logger *zap.SugaredLogger
+	client     client.Client
+	kubeClient kubernetes.Interface
+	isbs       *dfv1.InterStepBufferService
+	config     *reconciler.GlobalConfig
+	labels     map[string]string
+	logger     *zap.SugaredLogger
 }
 
-func NewJetStreamInstaller(client client.Client, isbs *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
+func NewJetStreamInstaller(client client.Client, kubeClient kubernetes.Interface, isbs *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
 	return &jetStreamInstaller{
-		client: client,
-		isbs:   isbs,
-		config: config,
-		labels: labels,
-		logger: logger.With("isbs", isbs.Name),
+		client:     client,
+		kubeClient: kubeClient,
+		isbs:       isbs,
+		config:     config,
+		labels:     labels,
+		logger:     logger.With("isbs", isbs.Name),
 	}
 }
 
@@ -247,8 +249,8 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 	oldServerObjExisting, oldClientObjExisting := true, true
 
-	oldSObj := &corev1.Secret{}
-	if err := r.client.Get(ctx, types.NamespacedName{Namespace: r.isbs.Namespace, Name: generateJetStreamServerSecretName(r.isbs)}, oldSObj); err != nil {
+	oldSObj, err := r.kubeClient.CoreV1().Secrets(r.isbs.Namespace).Get(ctx, generateJetStreamServerSecretName(r.isbs), metav1.GetOptions{})
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			oldServerObjExisting = false
 		} else {
@@ -256,8 +258,8 @@ func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 		}
 	}
 
-	oldCObj := &corev1.Secret{}
-	if err := r.client.Get(ctx, types.NamespacedName{Namespace: r.isbs.Namespace, Name: generateJetStreamClientAuthSecretName(r.isbs)}, oldCObj); err != nil {
+	oldCObj, err := r.kubeClient.CoreV1().Secrets(r.isbs.Namespace).Get(ctx, generateJetStreamClientAuthSecretName(r.isbs), metav1.GetOptions{})
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			oldClientObjExisting = false
 		} else {

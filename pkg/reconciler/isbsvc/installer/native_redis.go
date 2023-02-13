@@ -32,6 +32,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -52,20 +53,22 @@ var (
 )
 
 type redisInstaller struct {
-	client client.Client
-	isbs   *dfv1.InterStepBufferService
-	config *reconciler.GlobalConfig
-	labels map[string]string
-	logger *zap.SugaredLogger
+	client     client.Client
+	kubeClient kubernetes.Interface
+	isbs       *dfv1.InterStepBufferService
+	config     *reconciler.GlobalConfig
+	labels     map[string]string
+	logger     *zap.SugaredLogger
 }
 
-func NewNativeRedisInstaller(client client.Client, isbs *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
+func NewNativeRedisInstaller(client client.Client, kubeClient kubernetes.Interface, isbs *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
 	return &redisInstaller{
-		client: client,
-		isbs:   isbs,
-		config: config,
-		labels: labels,
-		logger: logger.With("isbs", isbs.Name),
+		client:     client,
+		kubeClient: kubeClient,
+		isbs:       isbs,
+		config:     config,
+		labels:     labels,
+		logger:     logger.With("isbs", isbs.Name),
 	}
 }
 
@@ -148,8 +151,7 @@ func (r *redisInstaller) createAuthCredentialSecret(ctx context.Context) error {
 			dfv1.RedisAuthSecretKey: []byte(password),
 		},
 	}
-	old := &corev1.Secret{}
-	if err := r.client.Get(ctx, client.ObjectKeyFromObject(obj), old); err != nil {
+	if _, err := r.kubeClient.CoreV1().Secrets(r.isbs.Namespace).Get(ctx, generateRedisCredentialSecretName(r.isbs), metav1.GetOptions{}); err != nil {
 		if apierrors.IsNotFound(err) {
 			if err := r.client.Create(ctx, obj); err != nil {
 				return fmt.Errorf("failed to create redis auth credential secret, err: %w", err)
