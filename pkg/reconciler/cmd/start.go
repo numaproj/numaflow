@@ -31,6 +31,7 @@ import (
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -61,10 +62,13 @@ func Start(namespaced bool, managedNamespace string) {
 	if namespaced {
 		opts.Namespace = managedNamespace
 	}
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)
+	restConfig := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(restConfig, opts)
 	if err != nil {
 		logger.Fatalw("Unable to get a controller-runtime manager", zap.Error(err))
 	}
+
+	kubeClient := kubernetes.NewForConfigOrDie(restConfig)
 
 	// Readiness probe
 	if err := mgr.AddReadyzCheck("readiness", healthz.Ping); err != nil {
@@ -80,7 +84,7 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	isbSvcController, err := controller.New(dfv1.ControllerISBSvc, mgr, controller.Options{
-		Reconciler: isbsvcctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, logger),
+		Reconciler: isbsvcctrl.NewReconciler(mgr.GetClient(), kubeClient, mgr.GetScheme(), config, logger),
 	})
 	if err != nil {
 		logger.Fatalw("Unable to set up ISB controller", zap.Error(err))
@@ -96,11 +100,6 @@ func Start(namespaced bool, managedNamespace string) {
 	// Watch ConfigMaps with ResourceVersion changes, and enqueue owning InterStepBuffer key
 	if err := isbSvcController.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.InterStepBufferService{}, IsController: true}, predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch ConfigMaps", zap.Error(err))
-	}
-
-	// Watch Secrets with ResourceVersion changes, and enqueue owning InterStepBuffer key
-	if err := isbSvcController.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.InterStepBufferService{}, IsController: true}, predicate.ResourceVersionChangedPredicate{}); err != nil {
-		logger.Fatalw("Unable to watch Secrets", zap.Error(err))
 	}
 
 	// Watch StatefulSets with Generation changes, and enqueue owning InterStepBuffer key

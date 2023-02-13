@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -107,7 +108,8 @@ func init() {
 
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
-	r := NewReconciler(cl, scheme.Scheme, fakeConfig, zaptest.NewLogger(t).Sugar())
+	kubeClient := k8sfake.NewSimpleClientset()
+	r := NewReconciler(cl, kubeClient, scheme.Scheme, fakeConfig, zaptest.NewLogger(t).Sugar())
 	_, ok := r.(*interStepBufferServiceReconciler)
 	assert.True(t, ok)
 }
@@ -118,10 +120,11 @@ func TestReconcileNativeRedis(t *testing.T) {
 		ctx := context.TODO()
 		cl := fake.NewClientBuilder().Build()
 		r := &interStepBufferServiceReconciler{
-			client: cl,
-			scheme: scheme.Scheme,
-			config: fakeConfig,
-			logger: zaptest.NewLogger(t).Sugar(),
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			scheme:     scheme.Scheme,
+			config:     fakeConfig,
+			logger:     zaptest.NewLogger(t).Sugar(),
 		}
 		err := r.reconcile(ctx, testIsb)
 		assert.NoError(t, err)
@@ -157,10 +160,11 @@ func TestReconcileJetStream(t *testing.T) {
 		ctx := context.TODO()
 		cl := fake.NewClientBuilder().Build()
 		r := &interStepBufferServiceReconciler{
-			client: cl,
-			scheme: scheme.Scheme,
-			config: fakeConfig,
-			logger: zaptest.NewLogger(t).Sugar(),
+			client:     cl,
+			kubeClient: k8sfake.NewSimpleClientset(),
+			scheme:     scheme.Scheme,
+			config:     fakeConfig,
+			logger:     zaptest.NewLogger(t).Sugar(),
 		}
 		err := r.reconcile(ctx, testIsb)
 		assert.NoError(t, err)

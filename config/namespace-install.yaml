@@ -11120,7 +11120,6 @@ rules:
   - pods
   - pods/exec
   - configmaps
-  - secrets
   - services
   - persistentvolumeclaims
   verbs:
@@ -11128,6 +11127,17 @@ rules:
   - get
   - list
   - watch
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
   - update
   - patch
   - delete
