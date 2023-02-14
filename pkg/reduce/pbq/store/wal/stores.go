@@ -120,7 +120,7 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 			numOfUnsyncedMsgs: 0,
 		}
 
-		err = wal.writeHeader()
+		err = wal.writeWALHeader()
 		if err != nil {
 			return nil, err
 		}
@@ -146,7 +146,7 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 			walStores:         ws,
 			numOfUnsyncedMsgs: 0,
 		}
-		readPartition, err := wal.readHeader()
+		readPartition, err := wal.readWALHeader()
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +204,7 @@ func (ws *walStores) openWAL(filePath string) (*WAL, error) {
 		walStores: ws,
 	}
 
-	w.partitionID, err = w.readHeader()
+	w.partitionID, err = w.readWALHeader()
 
 	return w, err
 }
