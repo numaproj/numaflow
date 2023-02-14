@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Handle, NodeProps, Position } from "react-flow-renderer";
+import { Handle, NodeProps, Position } from "reactflow";
 import { Tooltip } from "@mui/material";
 import "./Node.css";
 import { GetNodeInfoValueComponent } from "./NodeUtil"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { ConnectionLineType, Edge, Node } from "react-flow-renderer";
+import { Edge, Node } from "reactflow";
 import Graph from "./graph/Graph";
 import { usePipelineFetch } from "../../utils/fetchWrappers/pipelineFetch";
 import { useEdgesInfoFetch } from "../../utils/fetchWrappers/edgeInfoFetch";
@@ -204,14 +204,14 @@ export function Pipeline() {
         edgesInfo &&
         edgeWatermark
     ) {
-      // ensuring all edges between same pair of vertices have same labels
-      // 'label' for an edge is the sum of backpressure between vertices - the value we see on the edge
-      const edgeLabels = new Map();
+      // for an edge it is the sum of backpressure between vertices - the value we see on the edge
+      // map from edge-id( from-Vertex - to-Vertex ) to sum of backpressure
+      const edgeBackpressureLabel = new Map();
 
       edgesInfo.forEach((edge) => {
         const id = edge.fromVertex + "-" + edge.toVertex;
-        if (edgeLabels.get(id) === undefined) edgeLabels.set(id, Number(edge.totalMessages));
-        else edgeLabels.set(id, edgeLabels.get(id) + Number(edge.totalMessages));
+        if (edgeBackpressureLabel.get(id) === undefined) edgeBackpressureLabel.set(id, Number(edge.totalMessages));
+        else edgeBackpressureLabel.set(id, edgeBackpressureLabel.get(id) + Number(edge.totalMessages));
       });
 
       pipeline.spec.edges.map((edge) => {
@@ -221,39 +221,25 @@ export function Pipeline() {
             edgeInfo.toVertex === edge.to
           ) {
             const id = edge.from + "-" + edge.to;
-            const label = `${edgeLabels.get(id).toString()}`;
             const pipelineEdge = {
-              id ,
-              label,
+              id,
               source: edge.from,
               target: edge.to,
-              labelStyle: {
-                cursor: "pointer",
-                fontFamily: "IBM Plex Sans",
-                fontWeight: 400,
-                fontSize: "0.50rem",
-              },
               data: {
                 ...edgeInfo,
                 conditions: edge.conditions,
                 pending: edgeInfo.pendingCount,
                 ackPending: edgeInfo.ackPendingCount,
                 bufferLength: edgeInfo.bufferLength,
+                isFull: edgeInfo.isFull,
+                backpressureLabel: edgeBackpressureLabel.get(id),
               },
             } as Edge;
             pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
                 ? edgeWatermark.get(pipelineEdge.id)
                 : 0;
-            // Color the edge on isFull
-            if (edgeInfo.isFull) {
-              pipelineEdge.style = {
-                stroke: "red",
-                strokeWidth: "4px",
-                fontWeight: 700,
-              };
-            }
             pipelineEdge.animated = true;
-            pipelineEdge.type = ConnectionLineType.SmoothStep;
+            pipelineEdge.type = 'custom';
             newEdges.push(pipelineEdge);
           }
         });

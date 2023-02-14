@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import TabPanel from "../tab-panel/TabPanel";
 import { SyntheticEvent, useState } from "react";
-import { Edge } from "react-flow-renderer";
+import { Edge } from "reactflow";
 import TableBody from "@mui/material/TableBody";
 
 interface EdgeInfoProps {
@@ -96,7 +96,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
               <TableBody>
                 {edges.map((singleEdge) => {
                   if (singleEdge?.source == edge?.data?.fromVertex && singleEdge?.target == edge?.data?.toVertex) {
-                    let isFull = "";
+                    let isFull;
                     if (singleEdge?.data?.isFull) {
                       isFull = "yes";
                     } else {
