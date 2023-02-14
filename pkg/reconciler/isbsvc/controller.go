@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -38,15 +39,16 @@ const (
 
 // interStepBufferReconciler reconciles an Inter-Step Buffer Service object.
 type interStepBufferServiceReconciler struct {
-	client client.Client
-	scheme *runtime.Scheme
+	client     client.Client
+	kubeClient kubernetes.Interface
+	scheme     *runtime.Scheme
 
 	config *reconciler.GlobalConfig
 	logger *zap.SugaredLogger
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &interStepBufferServiceReconciler{client: client, scheme: scheme, config: config, logger: logger}
+func NewReconciler(client client.Client, kubeClient kubernetes.Interface, scheme *runtime.Scheme, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) reconcile.Reconciler {
+	return &interStepBufferServiceReconciler{client: client, kubeClient: kubeClient, scheme: scheme, config: config, logger: logger}
 }
 
 func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -65,7 +67,8 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
 	if r.needsUpdate(isbs, isbsCopy) {
-		if err := r.client.Update(ctx, isbsCopy); err != nil {
+		// Update with a DeepCopy because .Status will be cleaned up.
+		if err := r.client.Update(ctx, isbsCopy.DeepCopy()); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -82,7 +85,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbs *
 		log.Info("Deleting isbs")
 		if controllerutil.ContainsFinalizer(isbs, finalizerName) {
 			// Finalizer logic should be added here.
-			if err := installer.Uninstall(ctx, isbs, r.client, r.config, log); err != nil {
+			if err := installer.Uninstall(ctx, isbs, r.client, r.kubeClient, r.config, log); err != nil {
 				log.Errorw("Failed to uninstall", zap.Error(err))
 				return err
 			}
@@ -102,7 +105,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbs *
 	} else {
 		isbs.Status.MarkConfigured()
 	}
-	return installer.Install(ctx, isbs, r.client, r.config, log)
+	return installer.Install(ctx, isbs, r.client, r.kubeClient, r.config, log)
 }
 
 func (r *interStepBufferServiceReconciler) needsUpdate(old, new *dfv1.InterStepBufferService) bool {

@@ -25,6 +25,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -121,6 +122,35 @@ func WithHealthCheckExecutor(f func() error) Option {
 	return func(m *metricsServer) {
 		m.healthCheckExecutors = append(m.healthCheckExecutors, f)
 	}
+}
+
+// NewMetricsOptions returns a metrics option list.
+func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler HealthChecker, reader isb.BufferReader, writer isb.BufferWriter) []Option {
+	metricsOpts := []Option{
+		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
+	}
+	if serverHandler != nil {
+		if util.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
+			metricsOpts = append(metricsOpts, WithHealthCheckExecutor(func() error {
+				cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+				defer cancel()
+				return serverHandler.IsHealthy(cctx)
+			}))
+		}
+	}
+	if x, ok := reader.(isb.LagReader); ok {
+		metricsOpts = append(metricsOpts, WithLagReader(x))
+	}
+	if vertex.IsASource() {
+		if x, ok := writer.(isb.Ratable); ok {
+			metricsOpts = append(metricsOpts, WithRater(x))
+		}
+	} else {
+		if x, ok := reader.(isb.Ratable); ok {
+			metricsOpts = append(metricsOpts, WithRater(x))
+		}
+	}
+	return metricsOpts
 }
 
 // NewMetricsServer returns a Prometheus metrics server instance, which can be used to start an HTTPS service to expose Prometheus metrics.

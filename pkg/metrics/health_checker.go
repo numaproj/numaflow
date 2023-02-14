@@ -14,22 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package simplebuffer
+package metrics
 
-import "time"
+import "context"
 
-// Options for simple buffer
-type options struct {
-	// readTimeOut is the timeout needed for read timeout
-	readTimeOut time.Duration
-}
-
-type Option func(options *options) error
-
-// WithReadTimeOut is used to set read timeout option
-func WithReadTimeOut(timeout time.Duration) Option {
-	return func(o *options) error {
-		o.readTimeOut = timeout
-		return nil
-	}
+// HealthChecker is the interface to check if the user defined container is connected and ready to use
+type HealthChecker interface {
+	// IsHealthy checks if the user defined container is healthy
+	IsHealthy(ctx context.Context) error
 }
