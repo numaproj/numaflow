@@ -121,10 +121,10 @@ func (si SimpleIntOffset) AckIt() error {
 
 // DeduplicateOffsets uses the return value of String() as offset identifier to de-deduplicate the input list of offsets.
 func DeduplicateOffsets(input []Offset) (output []Offset) {
-	set := make(map[string]bool)
+	set := make(map[string]struct{})
 	for _, v := range input {
-		if ok := set[v.String()]; !ok {
-			set[v.String()] = true
+		if _, ok := set[v.String()]; !ok {
+			set[v.String()] = struct{}{}
 			output = append(output, v)
 		}
 	}
