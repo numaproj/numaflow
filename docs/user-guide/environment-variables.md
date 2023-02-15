@@ -44,3 +44,29 @@ spec:
               - name: env03
                 value: value03
 ```
+
+Similarly, `envFrom` also can be specified in `udf` or `udsink` containers.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  vertices:
+    - name: my-udf
+      udf:
+        container:
+          image: my-function:latest
+          envFrom:
+            - configMapRef:
+                name: my-config
+    - name: my-sink
+      sink:
+        udsink:
+          container:
+            image: my-sink:latest
+            envFrom:
+              - secretRef:
+                  name: my-secret
+```
