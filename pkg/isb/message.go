@@ -76,3 +76,8 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 func (b *Body) UnmarshalBinary(data []byte) (err error) {
 	return json.Unmarshal(data, &b)
 }
+
+// ToReadMessage converts Message to a ReadMessage by providing the offset and watermark
+func (m *Message) ToReadMessage(ot Offset, wm time.Time) *ReadMessage {
+	return &ReadMessage{*m, ot, wm}
+}

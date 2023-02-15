@@ -93,7 +93,7 @@ func New(
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, n, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, n, destinations, fsd, mapApplier, n, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -218,28 +218,33 @@ func (ns *natsSource) GetName() string {
 }
 
 func (ns *natsSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
-	msgs := []*isb.ReadMessage{}
-	var oldest time.Time
+	var msgs []*isb.ReadMessage
 	timeout := time.After(ns.readTimeout)
 loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-ns.messages:
-			if oldest.IsZero() || m.EventTime.Before(oldest) {
-				oldest = m.EventTime
-			}
-			msgs = append(msgs, m)
 			natsSourceReadCount.With(map[string]string{metrics.LabelVertex: ns.name, metrics.LabelPipeline: ns.pipelineName}).Inc()
+			msgs = append(msgs, m)
 		case <-timeout:
 			ns.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", ns.readTimeout), zap.Int("read", len(msgs)))
 			break loop
 		}
 	}
 	ns.logger.Debugf("Read %d messages.", len(msgs))
+	return msgs, nil
+}
+
+func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
+	var oldest time.Time
+	for _, m := range msgs {
+		if oldest.IsZero() || m.EventTime.Before(oldest) {
+			oldest = m.EventTime
+		}
+	}
 	if len(msgs) > 0 && !oldest.IsZero() {
 		ns.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), msgs[len(msgs)-1].ReadOffset)
 	}
-	return msgs, nil
 }
 
 func (ns *natsSource) Ack(_ context.Context, offsets []isb.Offset) []error {

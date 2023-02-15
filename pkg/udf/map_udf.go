@@ -131,7 +131,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, opts...)
+	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, nil, fetchWatermark, publishWatermark, opts...)
 	if err != nil {
 		return err
 	}
