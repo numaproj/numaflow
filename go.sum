@@ -695,6 +695,8 @@ github.com/nats-io/nuid v1.0.1/go.mod h1:19wcPz3Ph3q0Jbyiqsd0kePYG7A95tJPxeL+1OS
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e/go.mod h1:zD1mROLANZcx1PVRCS0qkT7pwLkGfwJo4zjcN/Tysno=
 github.com/numaproj/numaflow-go v0.3.4-0.20230214063445-60d7fa03cdca h1:9YW1Ork0zMgRHmhTgqf/x89Mkss3nm6Ka4OviG1FASM=
 github.com/numaproj/numaflow-go v0.3.4-0.20230214063445-60d7fa03cdca/go.mod h1:U6a0JproBL8m/HT6Fh573WwMHG5kkX30ZB9i069uGWc=
+github.com/numaproj/numaflow-go v0.3.4-0.20230215061135-2e53e4003aec h1:2l4d/lwc3SQxx7wya5fmqsE4v4maQ8ufM4H/P+wwDZM=
+github.com/numaproj/numaflow-go v0.3.4-0.20230215061135-2e53e4003aec/go.mod h1:U6a0JproBL8m/HT6Fh573WwMHG5kkX30ZB9i069uGWc=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
