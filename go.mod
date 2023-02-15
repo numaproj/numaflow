@@ -26,7 +26,7 @@ require (
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe
 	github.com/nats-io/nats-server/v2 v2.7.5-0.20220415000625-a6b62f61a703
 	github.com/nats-io/nats.go v1.21.0
-	github.com/numaproj/numaflow-go v0.3.3
+	github.com/numaproj/numaflow-go v0.3.4-0.20230214063445-60d7fa03cdca
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/common v0.32.1
 	github.com/soheilhy/cmux v0.1.5
@@ -166,6 +166,7 @@ require (
 	golang.org/x/mod v0.5.1 // indirect
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
+	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect

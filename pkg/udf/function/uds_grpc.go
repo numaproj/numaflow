@@ -127,7 +127,7 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 func (u *UDSgRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
 	datumCh := make(chan *functionpb.Datum)
 	var wg sync.WaitGroup
-	var result []*functionpb.Datum
+	var result *functionpb.DatumList
 	var err error
 
 	// pass key and window information inside the context
@@ -184,7 +184,7 @@ readLoop:
 	}
 
 	writeMessages := make([]*isb.Message, 0)
-	for _, datum := range result {
+	for _, datum := range result.Elements {
 		key := datum.Key
 		writeMessage := &isb.Message{
 			Header: isb.Header{
