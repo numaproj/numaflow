@@ -71,7 +71,7 @@ The snippet for the reduce vertex is as follows.
 ![plot](../../../assets/simple-reduce.png)
 
 ```yaml
-- name: compute-sum
+- name: reduce-sliding
   udf:
     container:
       # compute the sum
@@ -79,8 +79,8 @@ The snippet for the reduce vertex is as follows.
     groupBy:
       window:
         sliding:
-          length: 10s
-          slide: 5s
+          length: 60s
+          slide: 10s
       keyed: true
 ```
 
