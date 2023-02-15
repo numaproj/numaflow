@@ -268,7 +268,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
 		if isdf.opts.srcWatermarkPublisher == nil {
-			isdf.opts.logger.Errorw("failed to publish source watermark because no publisher is assigned")
+			isdf.opts.logger.Errorw("Failed to publish source watermark because no publisher is assigned")
 			return
 		}
 
