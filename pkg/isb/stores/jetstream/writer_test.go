@@ -114,7 +114,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 		"to1": to1,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, nil, fetchWatermark, publishWatermark)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := f.Start()

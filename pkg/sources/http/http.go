@@ -194,14 +194,14 @@ func New(
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(h.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(h.logger), forward.WithSourceWatermarkPublisher(h)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
-	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, fsd, mapApplier, h, fetchWM, publishWM, forwardOpts...)
+	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -246,8 +246,8 @@ func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		h.logger.Debugf("Publishing watermark %v to source, read offset %d\n", oldest, msgs[len(msgs)-1].ReadOffset)
-		h.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), msgs[len(msgs)-1].ReadOffset)
+		h.logger.Debugf("Publishing watermark %v to source\n", oldest)
+		h.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), nil) // Source publisher does not care about the offset
 	}
 }
 

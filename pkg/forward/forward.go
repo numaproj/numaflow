@@ -45,17 +45,16 @@ type InterStepDataForward struct {
 	ctx context.Context
 	// cancelFn cancels our new context, our cancellation is little more complex and needs to be well orchestrated, hence
 	// we need something more than a cancel().
-	cancelFn              context.CancelFunc
-	fromBuffer            isb.BufferReader
-	toBuffers             map[string]isb.BufferWriter
-	FSD                   ToWhichStepDecider
-	UDF                   applier.MapApplier
-	srcWatermarkPublisher isb.SourceWatermarkPublisher
-	fetchWatermark        fetch.Fetcher
-	publishWatermark      map[string]publish.Publisher
-	opts                  options
-	vertexName            string
-	pipelineName          string
+	cancelFn         context.CancelFunc
+	fromBuffer       isb.BufferReader
+	toBuffers        map[string]isb.BufferWriter
+	FSD              ToWhichStepDecider
+	UDF              applier.MapApplier
+	fetchWatermark   fetch.Fetcher
+	publishWatermark map[string]publish.Publisher
+	opts             options
+	vertexName       string
+	pipelineName     string
 	Shutdown
 }
 
@@ -65,7 +64,6 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	toSteps map[string]isb.BufferWriter,
 	fsd ToWhichStepDecider,
 	applyUDF applier.MapApplier,
-	srcWatermarkPublisher isb.SourceWatermarkPublisher,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*InterStepDataForward, error) {
@@ -85,15 +83,14 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	ctx, cancel := context.WithCancel(context.Background())
 
 	isdf := InterStepDataForward{
-		ctx:                   ctx,
-		cancelFn:              cancel,
-		fromBuffer:            fromStep,
-		toBuffers:             toSteps,
-		FSD:                   fsd,
-		UDF:                   applyUDF,
-		srcWatermarkPublisher: srcWatermarkPublisher,
-		fetchWatermark:        fetchWatermark,
-		publishWatermark:      publishWatermark,
+		ctx:              ctx,
+		cancelFn:         cancel,
+		fromBuffer:       fromStep,
+		toBuffers:        toSteps,
+		FSD:              fsd,
+		UDF:              applyUDF,
+		fetchWatermark:   fetchWatermark,
+		publishWatermark: publishWatermark,
 		// should we do a check here for the values not being null?
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
@@ -270,11 +267,18 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
+		if isdf.opts.srcWatermarkPublisher == nil {
+			isdf.opts.logger.Errorw("failed to publish source watermark because no publisher is assigned")
+			return
+		}
+
 		var writeMessages []*isb.Message
 		var transformedReadMessages []*isb.ReadMessage
 		for _, m := range udfResults {
 			writeMessages = append(writeMessages, m.writeMessages...)
 			for _, message := range m.writeMessages {
+				// we convert each writeMessage to isb.ReadMessage by providing its parent ReadMessage's ReadOffset and Watermark.
+				// which is used later for publishing source watermark.
 				transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, m.readMessage.Watermark))
 			}
 		}
@@ -284,7 +288,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				m.IsLate = true
 			}
 		}
-		isdf.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
+		isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
 	}
 
 	// forward the message to the edge buffer (could be multiple edges)
