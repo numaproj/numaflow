@@ -132,7 +132,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
               <Table aria-label="buffer-watermark">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Buffer</TableCell>
+                    <TableCell>Partition</TableCell>
                     <TableCell >Watermark</TableCell>
                   </TableRow>
                 </TableHead>
@@ -140,8 +140,8 @@ export default function EdgeInfo(props: EdgeInfoProps) {
                   {edge?.data?.edgeWatermark?.watermarks &&
                       edge.data.edgeWatermark.watermarks.map((Watermark, idx) => (
                           <TableRow>
-                            <TableCell >{edge.id}-{idx}</TableCell>
-                            <TableCell >{Watermark}</TableCell>
+                            <TableCell >{idx}</TableCell>
+                            <TableCell >{Watermark} ({new Date(Watermark).toISOString()})</TableCell>
                           </TableRow>
                       ))}
                 </TableBody>

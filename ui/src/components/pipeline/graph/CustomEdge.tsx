@@ -55,7 +55,10 @@ const CustomEdge: FC<EdgeProps> = ({
                         <Tooltip
                             title={
                                 <div className={"edge-tooltip"}>
-                                    <div className={"edge-common-tooltip"}>Watermark</div>
+                                    <div className={"edge-common-tooltip"}>
+                                        <div>Watermark</div>
+                                        <div>{new Date(Math.min.apply(null, data.edgeWatermark.watermarks)).toISOString()}</div>
+                                    </div>
                                 </div>
                             }
                             arrow
@@ -69,7 +72,7 @@ const CustomEdge: FC<EdgeProps> = ({
                     <Tooltip
                         title={
                             <div className={"edge-tooltip"}>
-                                <div className={"edge-common-tooltip"}>Back-pressure</div>
+                                <div className={"edge-common-tooltip"}>Pending</div>
                             </div>
                         }
                         arrow
