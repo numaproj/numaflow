@@ -204,10 +204,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
 	// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
 	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
-	for _, m := range readMessages {
-		readBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
-		m.Watermark = time.Time(processorWM)
-	}
 
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][]isb.Message)
@@ -235,9 +231,13 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}()
 	}
 	concurrentUDFProcessingStart := time.Now()
-	// send UDF processing work to the channel
-	for idx, readMessage := range readMessages {
-		udfResults[idx].readMessage = readMessage
+	for idx, m := range readMessages {
+		// emit message size metric
+		readBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
+		// assign watermark to the message
+		m.Watermark = time.Time(processorWM)
+		// send UDF processing work to the channel
+		udfResults[idx].readMessage = m
 		udfCh <- &udfResults[idx]
 	}
 	// let the go routines know that there is no more work
@@ -247,25 +247,10 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	wg.Wait()
 	isdf.opts.logger.Debugw("concurrent applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
 	concurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
+	// UDF processing is done.
 
-	// Now that we know the UDF processing is done, let's figure out which vertex to send the results to.
-	// Update the toBuffer(s) with writeMessages.
-	for _, m := range udfResults {
-		// look for errors in udf processing, if we see even 1 error let's return. handling partial retrying is not worth ATM.
-		if m.udfError != nil {
-			udfError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
-			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
-			return
-		}
-		// update toBuffers
-		for _, message := range m.writeMessages {
-			if err := isdf.whereToStep(message, messageToStep, m.readMessage); err != nil {
-				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
-				return
-			}
-		}
-	}
-
+	// if vertex type is source, it means we have finished the source data transformation.
+	// let's publish source watermark and assign IsLate attribute based on new event time.
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
 		if isdf.opts.srcWatermarkPublisher == nil {
 			isdf.opts.logger.Errorw("Failed to publish source watermark because no publisher is assigned")
@@ -282,13 +267,35 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, m.readMessage.Watermark))
 			}
 		}
-		// Assign isLate and publish source watermark
+		// publish source watermark
+		isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
+		// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
+		// but ideally we should use the latest to determine the IsLate attribute.
+		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
+		// assign isLate
 		for _, m := range writeMessages {
 			if processorWM.After(m.EventTime) { // Set late data at source level
 				m.IsLate = true
 			}
 		}
-		isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
+	}
+
+	// let's figure out which vertex to send the results to.
+	// update the toBuffer(s) with writeMessages.
+	for _, m := range udfResults {
+		// look for errors in udf processing, if we see even 1 error let's return. handling partial retrying is not worth ATM.
+		if m.udfError != nil {
+			udfError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
+			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
+			return
+		}
+		// update toBuffers
+		for _, message := range m.writeMessages {
+			if err := isdf.whereToStep(message, messageToStep, m.readMessage); err != nil {
+				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
+				return
+			}
+		}
 	}
 
 	// forward the message to the edge buffer (could be multiple edges)
