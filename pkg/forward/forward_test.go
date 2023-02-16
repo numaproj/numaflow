@@ -135,7 +135,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 	<-stopped
 }
 
-// mySourceForwardTest tests source data transformer by updating message event time, then verifies new event time and IsLate assignments.
+// mySourceForwardTest tests source data transformer by updating message event time, and then verifying new event time and IsLate assignments.
 type mySourceForwardTest struct {
 }
 
@@ -158,6 +158,7 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 		_ = payload
 		// copy the payload
 		result := payload
+		// assign new event time
 		parentPaneInfo.EventTime = testSourceNewEventTime
 		var key string
 
@@ -219,7 +220,9 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Key, writeMessages[1].Header.Key}, []interface{}{readMessages[0].Header.Key, readMessages[1].Header.Key})
 	assert.Equal(t, []interface{}{writeMessages[0].Header.ID, writeMessages[1].Header.ID}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
+		// verify new event time gets assigned to messages.
 		assert.Equal(t, testSourceNewEventTime.UnixNano(), m.EventTime.UnixNano())
+		// verify messages are marked as late because of event time update.
 		assert.Equal(t, true, m.IsLate)
 	}
 	f.Stop()

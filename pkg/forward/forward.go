@@ -199,12 +199,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		return
 	}
 
-	// fetch watermark if available
-	// TODO: make it async (concurrent and wait later)
-	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
-	// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
-	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
-
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][]isb.Message)
 	var toBuffers string // logging purpose
@@ -231,6 +225,12 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}()
 	}
 	concurrentUDFProcessingStart := time.Now()
+
+	// fetch watermark if available
+	// TODO: make it async (concurrent and wait later)
+	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
+	// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
+	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
 	for idx, m := range readMessages {
 		// emit message size metric
 		readBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
@@ -263,7 +263,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			writeMessages = append(writeMessages, m.writeMessages...)
 			for _, message := range m.writeMessages {
 				// we convert each writeMessage to isb.ReadMessage by providing its parent ReadMessage's ReadOffset and Watermark.
-				// which is used later for publishing source watermark.
+				// which is used right below for publishing source watermark.
 				transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, m.readMessage.Watermark))
 			}
 		}
