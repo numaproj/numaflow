@@ -42,7 +42,7 @@ keyed window.
 ```
 
 ```shell
-kubectl apply -f  https://raw.githubusercontent.com/numaproj/numaflow/main/examples/6-reduce-fixed-window.yaml
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/6-reduce-fixed-window.yaml
 ```
 
 Output :
@@ -88,7 +88,7 @@ The snippet for the reduce vertex is as follows.
 has the complete pipeline definition
 
 ```shell
-kubectl apply -f  https://raw.githubusercontent.com/numaproj/numaflow/main/examples/7-reduce-sliding-window.yaml
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/7-reduce-sliding-window.yaml
 ```
 Output:
 ```text
@@ -123,7 +123,7 @@ In the complex reduce example, we will
 has the complete pipeline definition
 
 ```shell
-kubectl apply -f  https://raw.githubusercontent.com/numaproj/numaflow/main/examples/8-reduce-complex-pipeline.yaml
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/8-reduce-complex-pipeline.yaml
 ```
 
 Output:
