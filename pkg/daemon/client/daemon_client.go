@@ -98,20 +98,8 @@ func (dc *DaemonClient) GetVertexMetrics(ctx context.Context, pipeline, vertex s
 	}
 }
 
-// GetVertexWatermark returns the VertexWatermark response instance for GetVertexWatermarkRequest
-func (dc *DaemonClient) GetVertexWatermark(ctx context.Context, pipeline, vertex string) (*daemon.VertexWatermark, error) {
-	if rspn, err := dc.client.GetVertexWatermark(ctx, &daemon.GetVertexWatermarkRequest{
-		Pipeline: &pipeline,
-		Vertex:   &vertex,
-	}); err != nil {
-		return nil, err
-	} else {
-		return rspn.VertexWatermark, nil
-	}
-}
-
-// GetPipelineWatermarks returns the []VertexWatermark response instance for GetPipelineWatermarksRequest
-func (dc *DaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.VertexWatermark, error) {
+// GetPipelineWatermarks returns the []EdgeWatermark response instance for GetPipelineWatermarksRequest
+func (dc *DaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.EdgeWatermark, error) {
 	if rspn, err := dc.client.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{
 		Pipeline: &pipeline,
 	}); err != nil {

@@ -215,7 +215,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 
 	pipelineName := "simple-pipeline-watermark"
 	// TODO: Any way to extract the list from suite
-	vertexList := []string{"input", "cat1", "cat2", "cat3", "output1", "output2"}
+	edgeList := []string{"input-cat1", "input-cat2", "cat1-output1", "cat2-cat3", "cat3-output2"}
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning().DaemonPodsRunning()
@@ -237,16 +237,16 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	isProgressing, err := isWatermarkProgressing(ctx, client, pipelineName, vertexList, 3)
+	isProgressing, err := isWatermarkProgressing(ctx, client, pipelineName, edgeList, 3)
 	assert.NoError(s.T(), err, "TestWatermarkEnabled failed %s\n", err)
 	assert.Truef(s.T(), isProgressing, "isWatermarkProgressing\n")
 }
 
-// isWatermarkProgressing checks whether the watermark for each vertex in a pipeline is progressing monotonically.
+// isWatermarkProgressing checks whether the watermark for each edge in a pipeline is progressing monotonically.
 // progressCount is the number of progressions the watermark value should undertake within the timeout deadline for it
-func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClient, pipelineName string, vertexList []string, progressCount int) (bool, error) {
-	prevWatermark := make([]int64, len(vertexList))
-	for i := 0; i < len(vertexList); i++ {
+func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClient, pipelineName string, edgeList []string, progressCount int) (bool, error) {
+	prevWatermark := make([]int64, len(edgeList))
+	for i := 0; i < len(edgeList); i++ {
 		prevWatermark[i] = -1
 	}
 	for i := 0; i < progressCount; i++ {
@@ -263,10 +263,10 @@ func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClie
 			if err != nil {
 				return false, err
 			}
-			pipelineWatermarks := make([]int64, len(vertexList))
+			pipelineWatermarks := make([]int64, len(edgeList))
 			idx := 0
-			for _, v := range wm {
-				pipelineWatermarks[idx] = *v.Watermark
+			for _, e := range wm {
+				pipelineWatermarks[idx] = e.Watermarks[0]
 				idx++
 			}
 			currentWatermark = pipelineWatermarks
