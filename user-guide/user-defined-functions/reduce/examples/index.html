@@ -1676,7 +1676,7 @@ keyed window.</p>
 <span class="w">  </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
 <span class="w">  </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/examples/examples/6-reduce-fixed-window.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/6-reduce-fixed-window.yaml
 </code></pre></div>
 <p>Output :
 <div class="highlight"><pre><span></span><code>2023/01/05 11:54:41 (sink)  Payload -  300  Key -  odd  Start -  60000  End -  120000
@@ -1688,7 +1688,7 @@ keyed window.</p>
 </code></pre></div></p>
 <p>In our example, input is an HTTP source producing 2 messages each second with values 5 and 10,
 and the event time starts from 60000. Since we have considered a fixed window of length 60s,
-and also we are producing two messages with different keys "even" and "odd". Numaflow will create
+and also we are producing two messages with different keys "even" and "odd", Numaflow will create
 two different windows with a start time of 60000 and an end time of 120000. So the output will be
 300(5 * 60) and 600(10 * 60).</p>
 <p>If we had used a non keyed window (<code>keyed: false</code>), we would have seen one single output with value
@@ -1697,7 +1697,7 @@ of 900(300 of odd + 600 of even) for each window.</p>
 <p>This is a simple reduce pipeline that just does summation (sum of numbers) but uses sliding window.
 The snippet for the reduce vertex is as follows.</p>
 <p><img alt="plot" src="../../../../assets/simple-reduce.png" /></p>
-<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">reduce-sliding</span>
 <span class="w">  </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">      </span><span class="c1"># compute the sum</span>
@@ -1705,13 +1705,13 @@ The snippet for the reduce vertex is as follows.</p>
 <span class="w">    </span><span class="nt">groupBy</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">window</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">sliding</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
-<span class="w">          </span><span class="nt">slide</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
+<span class="w">          </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span>
+<span class="w">          </span><span class="nt">slide</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
 <span class="w">      </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
 <p><a href="https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml">7-reduce-sliding-window.yaml</a>
 has the complete pipeline definition</p>
-<p><div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml
+<p><div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/7-reduce-sliding-window.yaml
 </code></pre></div>
 Output:
 <div class="highlight"><pre><span></span><code>2023/01/05 15:13:16 (sink)  Payload -  300  Key -  odd  Start -  60000  End -  120000
@@ -1726,7 +1726,7 @@ and the event time starts from 60000. Since we have considered a sliding window 
 and slide 10s, and also we are producing two messages with different keys "even" and "odd".
 Numaflow will create two different windows with a start time of 60000 and an end time of 120000,
 and because the slide duration is 10s, a next set of windows will be created with start time of
-70000 and an end time of 130000. Since its a sum operation the output will be 300(5 * 60) and 600(10 * 60).</p>
+70000 and an end time of 130000. Since it's a sum operation the output will be 300(5 * 60) and 600(10 * 60).</p>
 <p><code>Payload -  50  Key -  odd  Start -  10000  End -  70000</code>, we see 50 here for odd because the
 first window has only 10 elements</p>
 <h2 id="complex-reduce-pipeline">complex reduce pipeline<a class="headerlink" href="#complex-reduce-pipeline" title="Permanent link">&para;</a></h2>
@@ -1737,7 +1737,7 @@ first window has only 10 elements</p>
 <p><img alt="plot" src="../../../../assets/complex-reduce.png" /></p>
 <p><a href="https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml">8-reduce-complex-pipeline.yaml</a>
 has the complete pipeline definition</p>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/8-reduce-complex-pipeline.yaml
 </code></pre></div>
 <p>Output:
 <div class="highlight"><pre><span></span><code>2023/01/05 15:33:55 (sink)  Payload -  900  Key -  NON_KEYED_STREAM  Start -  80000  End -  140000
