@@ -1,4 +1,4 @@
-import { Node, Edge } from "react-flow-renderer";
+import { Node, Edge } from "reactflow";
 
 export interface VertexMetrics {
   ratePerMin: string;
@@ -7,9 +7,8 @@ export interface VertexMetrics {
   podMetrics: any[];
 }
 
-export interface VertexWatermark {
-  watermark: number;
-  watermarkLocalTime: string;
+export interface EdgeWatermark {
+  watermarks: any[];
   isWaterMarkEnabled: boolean;
 }
 
