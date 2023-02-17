@@ -4,7 +4,7 @@ import { Box, Tab, Tabs, Table, TableBody, TableCell, TableContainer, TableRow, 
 import { SyntheticEvent, useState } from "react";
 import TabPanel from "../tab-panel/TabPanel";
 import { Pods } from "../../pods/Pods";
-import { Node } from "react-flow-renderer";
+import { Node } from "reactflow";
 
 interface NodeInfoProps {
   node: Node;

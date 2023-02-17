@@ -54,6 +54,6 @@ func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Contai
 	if len(x.Args) > 0 {
 		c = c.args(x.Args...)
 	}
-	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext)
+	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
 	return c.build()
 }
