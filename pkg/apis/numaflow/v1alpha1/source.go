@@ -85,7 +85,7 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 		c = c.image(mainContainerReq.image).args(args...) // Use the same image as the main container
 	}
 	if x := s.UDTransformer.Container; x != nil {
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext)
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
 	}
 	return c.build()
 }

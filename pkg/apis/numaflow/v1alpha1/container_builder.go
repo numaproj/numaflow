@@ -60,6 +60,11 @@ func (b containerBuilder) command(x ...string) containerBuilder {
 	return b
 }
 
+func (b containerBuilder) appendEnvFrom(x ...corev1.EnvFromSource) containerBuilder {
+	b.EnvFrom = append(b.EnvFrom, x...)
+	return b
+}
+
 func (b containerBuilder) appendEnv(x ...corev1.EnvVar) containerBuilder {
 	b.Env = append(b.Env, x...)
 	return b
