@@ -36,6 +36,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
@@ -226,15 +227,24 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	concurrentUDFProcessingStart := time.Now()
 
-	// fetch watermark if available
-	// TODO: make it async (concurrent and wait later)
-	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
-	// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
-	processorWM := isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
+	var processorWM processor.Watermark
+	if isdf.opts.vertexType == dfv1.VertexTypeSource {
+		// for source vertex, the udf is the source data transformer.
+		// in this case, we assign time.UnixMilli(-1) to processorWM.
+		// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
+		processorWM = processor.Watermark(time.UnixMilli(-1))
+	} else {
+		// fetch watermark if available
+		// TODO: make it async (concurrent and wait later)
+		// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
+		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
+		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
+	}
+
 	for idx, m := range readMessages {
 		// emit message size metric
 		readBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
-		// assign watermark to the message
+		// assign watermark to the message. assign time.UnixMilli(-1) as watermark when we are at source vertex.
 		m.Watermark = time.Time(processorWM)
 		// send UDF processing work to the channel
 		udfResults[idx].readMessage = m
@@ -262,9 +272,10 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		for _, m := range udfResults {
 			writeMessages = append(writeMessages, m.writeMessages...)
 			for _, message := range m.writeMessages {
-				// we convert each writeMessage to isb.ReadMessage by providing its parent ReadMessage's ReadOffset and Watermark.
-				// which is used right below for publishing source watermark.
-				transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, m.readMessage.Watermark))
+				// we convert each writeMessage to isb.ReadMessage by providing its parent ReadMessage's ReadOffset.
+				// since we use message event time instead of the watermark to determine and publish source watermarks, time.UnixMilli(-1) is assigned to the message watermark.
+				// transformedReadMessages are immediately used below for publishing source watermarks.
+				transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
 			}
 		}
 		// publish source watermark
