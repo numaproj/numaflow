@@ -55,5 +55,8 @@ func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Contai
 		c = c.args(x.Args...)
 	}
 	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+	if x.ImagePullPolicy != nil {
+		c = c.imagePullPolicy(*x.ImagePullPolicy)
+	}
 	return c.build()
 }

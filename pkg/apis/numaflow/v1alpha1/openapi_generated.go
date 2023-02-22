@@ -632,6 +632,12 @@ func schema_pkg_apis_numaflow_v1alpha1_Container(ref common.ReferenceCallback) c
 							Ref: ref("k8s.io/api/core/v1.SecurityContext"),
 						},
 					},
+					"imagePullPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 			},
 		},
