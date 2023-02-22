@@ -313,14 +313,12 @@ const (
 	_id        = "i"
 	_late      = "l"
 	_eventTime = "pev"
-	_startTime = "ps"
-	_endTime   = "pen"
 )
 
 func convert2NatsMsgHeader(header isb.Header) nats.Header {
 	r := nats.Header{}
 	r.Add(_id, header.ID)
-	r.Add(_key, string(header.Key))
+	r.Add(_key, header.Key)
 	if header.IsLate {
 		r.Add(_late, "1")
 	} else {
@@ -328,12 +326,6 @@ func convert2NatsMsgHeader(header isb.Header) nats.Header {
 	}
 	if !header.EventTime.IsZero() {
 		r.Add(_eventTime, fmt.Sprint(header.EventTime.UnixMilli()))
-	}
-	if !header.StartTime.IsZero() {
-		r.Add(_startTime, fmt.Sprint(header.StartTime.UnixMilli()))
-	}
-	if !header.EndTime.IsZero() {
-		r.Add(_endTime, fmt.Sprint(header.EndTime.UnixMilli()))
 	}
 	return r
 }
