@@ -1653,6 +1653,13 @@
 <p>Install the ISB</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
+<p>Source used in the examples is an HTTP source producing messages with value 5 and 10 with event time 
+starting from 60000. Please refer the doc <a href="../../../sources/http/">http source</a> on how to use an HTTP 
+source.
+An example will be as follows,</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;5&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;10&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+</code></pre></div>
 <h2 id="sum-pipeline-using-fixed-window">sum pipeline using fixed window<a class="headerlink" href="#sum-pipeline-using-fixed-window" title="Permanent link">&para;</a></h2>
 <p>This is a simple reduce pipeline that just does summation (sum of numbers) but uses fixed window.
 The snippet for the reduce vertex is as follows.</p>
@@ -1709,7 +1716,7 @@ The snippet for the reduce vertex is as follows.</p>
 <span class="w">          </span><span class="nt">slide</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
 <span class="w">      </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
-<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml">7-reduce-sliding-window.yaml</a>
+<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/7-reduce-sliding-window.yaml">7-reduce-sliding-window.yaml</a>
 has the complete pipeline definition</p>
 <p><div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/7-reduce-sliding-window.yaml
 </code></pre></div>
@@ -1735,7 +1742,7 @@ first window has only 10 elements</p>
 * use both fixed and sliding windows
 * use keyed and non-keyed windowing</p>
 <p><img alt="plot" src="../../../../assets/complex-reduce.png" /></p>
-<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml">8-reduce-complex-pipeline.yaml</a>
+<p><a href="https://github.com/numaproj/numaflow/blob/main/examples/8-reduce-complex-pipeline.yaml">8-reduce-complex-pipeline.yaml</a>
 has the complete pipeline definition</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/8-reduce-complex-pipeline.yaml
 </code></pre></div>
