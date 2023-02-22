@@ -306,6 +306,11 @@ func (in *Container) DeepCopyInto(out *Container) {
 		*out = new(v1.SecurityContext)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ImagePullPolicy != nil {
+		in, out := &in.ImagePullPolicy, &out.ImagePullPolicy
+		*out = new(v1.PullPolicy)
+		**out = **in
+	}
 	return
 }
 

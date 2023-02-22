@@ -36,4 +36,6 @@ type Container struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty" protobuf:"bytes,7,opt,name=resources"`
 	// +optional
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty" protobuf:"bytes,8,opt,name=securityContext"`
+	// +optional
+	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty" protobuf:"bytes,9,opt,name=imagePullPolicy,casttype=PullPolicy"`
 }

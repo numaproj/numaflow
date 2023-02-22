@@ -17515,6 +17515,9 @@
         "image": {
           "type": "string"
         },
+        "imagePullPolicy": {
+          "type": "string"
+        },
         "resources": {
           "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
