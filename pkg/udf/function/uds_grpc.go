@@ -189,9 +189,7 @@ readLoop:
 		writeMessage := &isb.Message{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{
-					EventTime: partitionID.End,
-					StartTime: partitionID.Start,
-					EndTime:   partitionID.End,
+					EventTime: partitionID.Start,
 					IsLate:    false,
 				},
 				Key: key,

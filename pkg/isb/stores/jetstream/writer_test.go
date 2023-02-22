@@ -269,8 +269,6 @@ func TestConvert2NatsMsgHeader(t *testing.T) {
 	isbHeader := isb.Header{
 		PaneInfo: isb.PaneInfo{
 			EventTime: time.Unix(1636470000, 0),
-			StartTime: time.Unix(1636470000, 0),
-			EndTime:   time.Unix(1636470060, 0),
 		},
 		ID: "1",
 	}

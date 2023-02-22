@@ -33,5 +33,5 @@ type Handler interface {
 	GetPodMetrics(c *gin.Context)
 	ListPipelineEdges(c *gin.Context)
 	GetPipelineEdge(c *gin.Context)
-	GetVertexWatermark(c *gin.Context)
+	GetPipelineWatermarks(c *gin.Context)
 }
