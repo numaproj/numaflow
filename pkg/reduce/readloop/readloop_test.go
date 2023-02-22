@@ -65,8 +65,6 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 		msg := &isb.Message{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{
-					StartTime: partitionID.Start,
-					EndTime:   partitionID.End,
 					EventTime: partitionID.End,
 				},
 				ID:  "msgID",
@@ -152,8 +150,6 @@ func TestReadLoop_Startup(t *testing.T) {
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{
 					EventTime: time.Unix(300, 0),
-					StartTime: time.Time{},
-					EndTime:   time.Time{},
 					IsLate:    false,
 				},
 				ID:  "",

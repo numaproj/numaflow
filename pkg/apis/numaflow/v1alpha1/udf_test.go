@@ -43,7 +43,8 @@ func TestUDF_getContainers(t *testing.T) {
 		},
 	}
 	c, err := x.getContainers(getContainerReq{
-		image: "main-image",
+		image:           "main-image",
+		imagePullPolicy: corev1.PullAlways,
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(c))
@@ -55,6 +56,13 @@ func TestUDF_getContainers(t *testing.T) {
 	assert.Equal(t, x.Container.Env, c[1].Env)
 	assert.Equal(t, 1, len(c[1].EnvFrom))
 	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[1].Resources)
+	assert.Equal(t, corev1.PullAlways, c[1].ImagePullPolicy)
+	x.Container.ImagePullPolicy = &testImagePullPolicy
+	c, _ = x.getContainers(getContainerReq{
+		image:           "main-image",
+		imagePullPolicy: corev1.PullAlways,
+	})
+	assert.Equal(t, testImagePullPolicy, c[1].ImagePullPolicy)
 }
 
 func Test_getUDFContainer(t *testing.T) {
@@ -67,6 +75,7 @@ func Test_getUDFContainer(t *testing.T) {
 				EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
 				}}},
+				ImagePullPolicy: &testImagePullPolicy,
 			},
 		}
 		c := x.getUDFContainer(getContainerReq{
@@ -78,6 +87,7 @@ func Test_getUDFContainer(t *testing.T) {
 		assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
 		assert.Contains(t, c.Args, "my-arg")
 		assert.Equal(t, 1, len(c.EnvFrom))
+		assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 	})
 
 	t.Run("with built-in functions", func(t *testing.T) {
