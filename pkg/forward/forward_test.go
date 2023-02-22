@@ -205,7 +205,7 @@ func TestSourceInterStepDataForward(t *testing.T) {
 
 	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
 	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
-	assert.Equal(t, nil, failedForwarder)
+	assert.True(t, failedForwarder == nil)
 	assert.Error(t, err)
 	assert.Equal(t, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder"), err)
 
