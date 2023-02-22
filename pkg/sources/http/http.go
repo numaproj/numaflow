@@ -246,7 +246,7 @@ func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		h.logger.Debugf("Publishing watermark %v to source\n", oldest)
+		h.logger.Debugf("Publishing watermark %v to source", oldest)
 		h.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), nil) // Source publisher does not care about the offset
 	}
 }

@@ -104,6 +104,12 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	// Add logger from parent ctx to child context.
 	isdf.ctx = logging.WithLogger(ctx, options.logger)
 
+	if isdf.opts.vertexType == dfv1.VertexTypeSource {
+		if isdf.opts.srcWatermarkPublisher == nil {
+			return nil, fmt.Errorf("failed to assign source watermark publisher for source vertex data forwarder")
+		}
+	}
+
 	return &isdf, nil
 }
 
@@ -262,11 +268,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// if vertex type is source, it means we have finished the source data transformation.
 	// let's publish source watermark and assign IsLate attribute based on new event time.
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
-		if isdf.opts.srcWatermarkPublisher == nil {
-			isdf.opts.logger.Errorw("Failed to publish source watermark because no publisher is assigned")
-			return
-		}
-
 		var writeMessages []*isb.Message
 		var transformedReadMessages []*isb.ReadMessage
 		for _, m := range udfResults {
