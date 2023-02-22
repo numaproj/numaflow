@@ -24,8 +24,6 @@ import (
 // PaneInfo is the time window of the payload.
 type PaneInfo struct {
 	EventTime time.Time
-	StartTime time.Time
-	EndTime   time.Time
 	// IsLate is used to indicate if it's a late data .
 	IsLate bool
 }

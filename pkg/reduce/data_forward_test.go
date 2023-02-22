@@ -120,8 +120,6 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 	ret := &isb.Message{
 		Header: isb.Header{
 			PaneInfo: isb.PaneInfo{
-				StartTime: partitionID.Start,
-				EndTime:   partitionID.End,
 				EventTime: partitionID.End,
 			},
 			ID:  "msgID",
@@ -159,8 +157,6 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 		msg := &isb.Message{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{
-					StartTime: partitionID.Start,
-					EndTime:   partitionID.End,
 					EventTime: partitionID.End,
 				},
 				ID:  "msgID",
@@ -199,8 +195,6 @@ func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 		ret := &isb.Message{
 			Header: isb.Header{
 				PaneInfo: isb.PaneInfo{
-					StartTime: partitionID.Start,
-					EndTime:   partitionID.End,
 					EventTime: partitionID.End,
 				},
 				ID:  "msgID",
