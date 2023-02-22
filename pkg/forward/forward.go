@@ -106,7 +106,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
 		if isdf.opts.srcWatermarkPublisher == nil {
-			return nil, fmt.Errorf("failed to assign source watermark publisher for source vertex data forwarder")
+			return nil, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder")
 		}
 	}
 
