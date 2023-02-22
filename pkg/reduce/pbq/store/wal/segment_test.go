@@ -252,14 +252,14 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	err = wal.Write(&message)
 	assert.NoError(t, err)
 
-	assert.Equal(t, tempWAL.prevSyncedWOffset, int64(0))
+	assert.Equal(t, int64(0), tempWAL.prevSyncedWOffset)
 	assert.NoError(t, err)
 
 	tempWAL.walStores.maxBatchSize = 10
 	assert.NoError(t, err)
 	err = wal.Write(&message)
 	assert.NoError(t, err)
-	assert.Equal(t, tempWAL.prevSyncedWOffset, int64(650))
+	assert.Equal(t, int64(408), tempWAL.prevSyncedWOffset)
 
 	err = wal.Close()
 	assert.NoError(t, err)
@@ -316,7 +316,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	message := writeMessages[0]
 	storePrevSyncedTime := tempWAL.prevSyncedTime
 	err = wal.Write(&message)
-	assert.Equal(t, tempWAL.prevSyncedWOffset, int64(344))
+	assert.Equal(t, tempWAL.prevSyncedWOffset, int64(223))
 	assert.NotEqual(t, storePrevSyncedTime, tempWAL.prevSyncedTime)
 	assert.NoError(t, err)
 

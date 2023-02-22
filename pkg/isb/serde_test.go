@@ -33,8 +33,6 @@ func TestPaneInfo_MarshalBinary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := PaneInfo{
 				EventTime: tt.fields.EventTime,
-				StartTime: tt.fields.StartTime,
-				EndTime:   tt.fields.EndTime,
 				IsLate:    tt.fields.IsLate,
 			}
 			gotData, _ := p.MarshalBinary()

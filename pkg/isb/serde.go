@@ -28,7 +28,7 @@ type paneInfoPreamble struct {
 	IsLate     bool
 }
 
-func (p *PaneInfo) MarshalBinary() (data []byte, err error) {
+func (p PaneInfo) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	var preamble = paneInfoPreamble{
 		EventEpoch: p.EventTime.UnixMilli(),
@@ -47,7 +47,7 @@ func (p *PaneInfo) UnmarshalBinary(data []byte) (err error) {
 	if err != nil {
 		return err
 	}
-	p.EventTime = time.UnixMilli(preamble.EventEpoch)
+	p.EventTime = time.UnixMilli(preamble.EventEpoch).UTC()
 	p.IsLate = preamble.IsLate
 	return nil
 }
@@ -59,7 +59,7 @@ type headerPreamble struct {
 }
 
 // MarshalBinary encodes header to a binary format
-func (h *Header) MarshalBinary() (data []byte, err error) {
+func (h Header) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	paneInfo, err := h.PaneInfo.MarshalBinary()
 	if err != nil {
@@ -125,7 +125,7 @@ type bodyPreamble struct {
 }
 
 // MarshalBinary encodes header to a binary format
-func (b *Body) MarshalBinary() (data []byte, err error) {
+func (b Body) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	var preamble = bodyPreamble{
 		PLen: int64(len(b.Payload)),
@@ -146,11 +146,13 @@ func (b *Body) UnmarshalBinary(data []byte) (err error) {
 	if err = binary.Read(r, binary.LittleEndian, preamble); err != nil {
 		return err
 	}
-	var Payload = make([]byte, preamble.PLen)
-	if err = binary.Read(r, binary.LittleEndian, Payload); err != nil {
-		return err
+	if preamble.PLen != 0 {
+		var Payload = make([]byte, preamble.PLen)
+		if err = binary.Read(r, binary.LittleEndian, Payload); err != nil {
+			return err
+		}
+		b.Payload = Payload
 	}
-	b.Payload = Payload
 	return err
 }
 
@@ -160,7 +162,7 @@ type messagePreamble struct {
 }
 
 // MarshalBinary encodes Message to the binary format
-func (m *Message) MarshalBinary() (data []byte, err error) {
+func (m Message) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	header, err := m.Header.MarshalBinary()
 	if err != nil {
@@ -234,7 +236,7 @@ type readMessagePreamble struct {
 }
 
 // MarshalBinary encodes ReadMessage to the binary format
-func (rm *ReadMessage) MarshalBinary() (data []byte, err error) {
+func (rm ReadMessage) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	message, err := rm.Message.MarshalBinary()
 	if err != nil {
@@ -290,6 +292,6 @@ func (rm *ReadMessage) UnmarshalBinary(data []byte) (err error) {
 	rm.ReadOffset = SimpleIntOffset(func() int64 {
 		return preamble.SimpleIntOffset
 	})
-	rm.Watermark = time.UnixMilli(preamble.WMEpoch)
+	rm.Watermark = time.UnixMilli(preamble.WMEpoch).UTC()
 	return err
 }
