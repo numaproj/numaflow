@@ -86,6 +86,9 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 	}
 	if x := s.UDTransformer.Container; x != nil {
 		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+		if x.ImagePullPolicy != nil {
+			c = c.imagePullPolicy(*x.ImagePullPolicy)
+		}
 	}
 	return c.build()
 }
