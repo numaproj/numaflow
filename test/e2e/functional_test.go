@@ -206,10 +206,11 @@ func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgFive)).WithHeader("X-Numaflow-Event-Time", timeNow))
 	time.Sleep(time.Second * 2)
 
-	wm, err := client.GetVertexWatermark(ctx, pipelineName, "in")
+	wm, err := client.GetPipelineWatermarks(ctx, pipelineName)
 	assert.NoError(s.T(), err)
+	edgeWM := wm[0].Watermarks[0]
 	// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark matches one of the assigned event times.
-	assert.True(s.T(), *wm.Watermark == time.Date(2021, 4, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || *wm.Watermark == time.Date(2021, 3, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || *wm.Watermark == time.Date(2021, 2, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli())
+	assert.True(s.T(), edgeWM == time.Date(2021, 4, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 3, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 2, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli())
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {
