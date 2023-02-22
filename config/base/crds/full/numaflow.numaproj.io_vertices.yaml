@@ -2192,6 +2192,8 @@ spec:
                             type: array
                           image:
                             type: string
+                          imagePullPolicy:
+                            type: string
                           resources:
                             properties:
                               limits:
@@ -2599,6 +2601,8 @@ spec:
                             type: array
                           image:
                             type: string
+                          imagePullPolicy:
+                            type: string
                           resources:
                             properties:
                               limits:
@@ -2863,6 +2867,8 @@ spec:
                           type: object
                         type: array
                       image:
+                        type: string
+                      imagePullPolicy:
                         type: string
                       resources:
                         properties:
