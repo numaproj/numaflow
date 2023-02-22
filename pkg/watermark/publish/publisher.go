@@ -115,9 +115,8 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 
 	// build value
 	var seq int64
-	if p.opts.isSource || p.opts.isSink || offset == nil {
-		// for source and sink publisher, we don't care about the offset, also the sequence of the offset might not be integer.
-		// offset being nil also indicates we don't care about it.
+	if p.opts.isSource || p.opts.isSink {
+		// For source and sink publisher, we don't care about the offset, also the sequence of the offset might not be integer.
 		seq = time.Now().UnixNano()
 	} else {
 		seq, _ = offset.Sequence()
