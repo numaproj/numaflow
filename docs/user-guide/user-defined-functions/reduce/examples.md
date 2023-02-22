@@ -10,6 +10,16 @@ Install the ISB
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 ```
 
+Source used in the examples is an HTTP source producing messages with value 5 and 10 with event time 
+starting from 60000. Please refer the doc [http source](../../sources/http.md) on how to use an HTTP 
+source.
+An example will be as follows,
+
+```sh
+curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "5" ${http-source-url}
+curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "10" ${http-source-url}
+```
+
 ## sum pipeline using fixed window
 This is a simple reduce pipeline that just does summation (sum of numbers) but uses fixed window.
 The snippet for the reduce vertex is as follows.
@@ -84,7 +94,7 @@ The snippet for the reduce vertex is as follows.
       keyed: true
 ```
 
-[7-reduce-sliding-window.yaml](https://github.com/numaproj/numaflow/blob/main/examples/examples/7-reduce-sliding-window.yaml)
+[7-reduce-sliding-window.yaml](https://github.com/numaproj/numaflow/blob/main/examples/7-reduce-sliding-window.yaml)
 has the complete pipeline definition
 
 ```shell
@@ -119,7 +129,7 @@ In the complex reduce example, we will
 
 ![plot](../../../assets/complex-reduce.png)
 
-[8-reduce-complex-pipeline.yaml](https://github.com/numaproj/numaflow/blob/main/examples/examples/8-reduce-complex-pipeline.yaml)
+[8-reduce-complex-pipeline.yaml](https://github.com/numaproj/numaflow/blob/main/examples/8-reduce-complex-pipeline.yaml)
 has the complete pipeline definition
 
 ```shell
