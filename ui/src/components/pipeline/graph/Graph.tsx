@@ -3,7 +3,6 @@ import ReactFlow, {
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
-  Controls,
   Connection,
   Edge,
   EdgeChange,
@@ -11,7 +10,10 @@ import ReactFlow, {
   NodeChange,
   NodeTypes,
   Position,
-} from "react-flow-renderer";
+  EdgeTypes,
+  Controls,
+} from "reactflow";
+import "reactflow/dist/style.css";
 import dagre from "dagre";
 import EdgeInfo from "../edgeinfo/EdgeInfo";
 import NodeInfo from "../nodeinfo/NodeInfo";
@@ -22,6 +24,7 @@ import { Card } from "@mui/material";
 import SourceNode from "./SourceNode";
 import UDFNode from "./UDFNode";
 import SinkNode from "./SinkNode";
+import CustomEdge from "./CustomEdge";
 
 const nodeWidth = 172;
 const nodeHeight = 36;
@@ -30,6 +33,10 @@ const defaultNodeTypes: NodeTypes = {
   udf: UDFNode,
   sink: SinkNode,
   source: SourceNode,
+};
+
+const defaultEdgeTypes: EdgeTypes = {
+  custom: CustomEdge,
 };
 
 const getLayoutedElements = (
@@ -80,19 +87,6 @@ export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId } = props;
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
-    // ensuring all edges between same pair of vertices have same labels
-    // 'label' for an edge is the sum of backpressure between vertices - the value we see on the edge
-    const edgeMap = new Map();
-
-    data.edges.forEach((edge) => {
-      if (edgeMap.get(edge.id) === undefined) edgeMap.set(edge.id, Number(edge.data.totalMessages));
-      else edgeMap.set(edge.id, edgeMap.get(edge.id) + Number(edge.data.totalMessages));
-    });
-
-    data.edges.forEach((edge) => {
-      edge.label = edgeMap.get(edge.id).toString();
-    });
-
     return getLayoutedElements(data.vertices, data.edges);
   }, [data]);
 
@@ -197,6 +191,7 @@ export default function Graph(props: GraphProps) {
         <ReactFlow
           preventScrolling={false}
           nodeTypes={defaultNodeTypes}
+          edgeTypes={defaultEdgeTypes}
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
