@@ -13,6 +13,7 @@ kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exam
 Source used in the examples is an HTTP source producing messages with value 5 and 10 with event time 
 starting from 60000. Please refer the doc [http source](../../sources/http.md) on how to use an HTTP 
 source.
+An example will be as follows,
 
 ```sh
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "5" ${http-source-url}
