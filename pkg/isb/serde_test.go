@@ -1,12 +1,12 @@
 package isb
 
 import (
-	"fmt"
+	"reflect"
 	"testing"
 	"time"
 )
 
-func TestPaneInfo_MarshalBinary(t *testing.T) {
+func TestPaneInfo(t *testing.T) {
 	type fields struct {
 		EventTime time.Time
 		StartTime time.Time
@@ -14,19 +14,37 @@ func TestPaneInfo_MarshalBinary(t *testing.T) {
 		IsLate    bool
 	}
 	tests := []struct {
-		name     string
-		fields   fields
-		wantData []byte
-		wantErr  bool
+		name               string
+		fields             fields
+		wantData           PaneInfo
+		wantMarshalError   bool
+		wantUnmarshalError bool
 	}{
 		{
 			name: "good",
 			fields: fields{
 				EventTime: time.UnixMilli(1676617200000),
+				IsLate:    false,
+			},
+			wantData: PaneInfo{
+				EventTime: time.UnixMilli(1676617200000).UTC(),
+				IsLate:    false,
+			},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
+		},
+		{
+			name: "good_is_late",
+			fields: fields{
+				EventTime: time.UnixMilli(1676617200000),
 				IsLate:    true,
 			},
-			wantData: nil,
-			wantErr:  false,
+			wantData: PaneInfo{
+				EventTime: time.UnixMilli(1676617200000).UTC(),
+				IsLate:    true,
+			},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
 		},
 	}
 	for _, tt := range tests {
@@ -35,33 +53,36 @@ func TestPaneInfo_MarshalBinary(t *testing.T) {
 				EventTime: tt.fields.EventTime,
 				IsLate:    tt.fields.IsLate,
 			}
-			gotData, _ := p.MarshalBinary()
-			fmt.Println(gotData)
-			// if (err != nil) != tt.wantErr {
-			// 	t.Errorf("MarshalBinary() error = %v, wantErr %v", err, tt.wantErr)
-			// 	return
-			// }
-			// if !reflect.DeepEqual(gotData, tt.wantData) {
-			// 	t.Errorf("MarshalBinary() gotData = %v, want %v", gotData, tt.wantData)
-			// }
+			gotData, err := p.MarshalBinary()
+			if (err != nil) != tt.wantMarshalError {
+				t.Errorf("MarshalBinary() error = %v, wantMarshalError %v", err, tt.wantMarshalError)
+				return
+			}
 			var newP = new(PaneInfo)
-			_ = newP.UnmarshalBinary(gotData)
-			fmt.Println(newP.EventTime, newP.IsLate)
+			err = newP.UnmarshalBinary(gotData)
+			if (err != nil) != tt.wantUnmarshalError {
+				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
+				return
+			}
+			if !reflect.DeepEqual(*newP, tt.wantData) {
+				t.Errorf("MarshalBinary() gotData = %v, want %v", newP, tt.wantData)
+			}
 		})
 	}
 }
 
-func TestHeader_MarshalBinary(t *testing.T) {
+func TestHeader(t *testing.T) {
 	type fields struct {
 		PaneInfo PaneInfo
 		ID       string
 		Key      string
 	}
 	tests := []struct {
-		name     string
-		fields   fields
-		wantData []byte
-		wantErr  bool
+		name               string
+		fields             fields
+		wantData           Header
+		wantMarshalError   bool
+		wantUnmarshalError bool
 	}{
 		{
 			name: "good",
@@ -73,8 +94,16 @@ func TestHeader_MarshalBinary(t *testing.T) {
 				ID:  "TestID",
 				Key: "TestKey",
 			},
-			wantData: nil,
-			wantErr:  false,
+			wantData: Header{
+				PaneInfo: PaneInfo{
+					EventTime: time.UnixMilli(1676617200000).UTC(),
+					IsLate:    true,
+				},
+				ID:  "TestID",
+				Key: "TestKey",
+			},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
 		},
 	}
 	for _, tt := range tests {
@@ -84,27 +113,91 @@ func TestHeader_MarshalBinary(t *testing.T) {
 				ID:       tt.fields.ID,
 				Key:      tt.fields.Key,
 			}
-			gotData, _ := h.MarshalBinary()
-			fmt.Println(gotData)
+			gotData, err := h.MarshalBinary()
+			if (err != nil) != tt.wantMarshalError {
+				t.Errorf("MarshalBinary() error = %v, wantMarshalError %v", err, tt.wantMarshalError)
+				return
+			}
 			var newH = new(Header)
-			_ = newH.UnmarshalBinary(gotData)
-			fmt.Println(newH.PaneInfo.EventTime, newH.PaneInfo.IsLate, newH.ID, newH.Key)
+			err = newH.UnmarshalBinary(gotData)
+			if (err != nil) != tt.wantUnmarshalError {
+				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
+				return
+			}
+			if !reflect.DeepEqual(*newH, tt.wantData) {
+				t.Errorf("MarshalBinary() gotData = %v, want %v", newH, tt.wantData)
+			}
 		})
 	}
 }
 
-func TestMessage_MarshalBinary(t *testing.T) {
+func TestBody(t *testing.T) {
+	type fields struct {
+		Payload []byte
+	}
+	tests := []struct {
+		name               string
+		fields             fields
+		wantData           Body
+		wantMarshalError   bool
+		wantUnmarshalError bool
+	}{
+		{
+			name: "good",
+			fields: fields{
+				Payload: []byte("TestBODY"),
+			},
+			wantData: Body{
+				Payload: []byte("TestBODY"),
+			},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
+		},
+		{
+			name:   "good_empty",
+			fields: fields{},
+			wantData: Body{
+				Payload: nil,
+			},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &Body{
+				Payload: tt.fields.Payload,
+			}
+			gotData, err := m.MarshalBinary()
+			if (err != nil) != tt.wantMarshalError {
+				t.Errorf("MarshalBinary() error = %v, wantMarshalError %v", err, tt.wantMarshalError)
+				return
+			}
+			var newB = new(Body)
+			err = newB.UnmarshalBinary(gotData)
+			if (err != nil) != tt.wantUnmarshalError {
+				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
+				return
+			}
+			if !reflect.DeepEqual(*newB, tt.wantData) {
+				t.Errorf("MarshalBinary() gotData = %v, want %v", newB, tt.wantData)
+			}
+		})
+	}
+}
+
+func TestMessage(t *testing.T) {
 	type fields struct {
 		Header Header
 		Body   Body
 	}
 	tests := []struct {
-		name     string
-		fields   fields
-		wantData []byte
-		wantErr  bool
+		name               string
+		fields             fields
+		wantData           Message
+		wantMarshalError   bool
+		wantUnmarshalError bool
 	}{
-		// TODO: Add test cases.
 		{
 			name: "good",
 			fields: fields{
@@ -120,8 +213,28 @@ func TestMessage_MarshalBinary(t *testing.T) {
 					Payload: []byte("TestBODY"),
 				},
 			},
-			wantData: nil,
-			wantErr:  false,
+			wantData: Message{
+				Header: Header{
+					PaneInfo: PaneInfo{
+						EventTime: time.UnixMilli(1676617200000).UTC(),
+						IsLate:    true,
+					},
+					ID:  "TestID",
+					Key: "TestKey",
+				},
+				Body: Body{
+					Payload: []byte("TestBODY"),
+				},
+			},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
+		},
+		{
+			name:               "good_empty",
+			fields:             fields{},
+			wantData:           Message{},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
 		},
 	}
 	for _, tt := range tests {
@@ -130,35 +243,37 @@ func TestMessage_MarshalBinary(t *testing.T) {
 				Header: tt.fields.Header,
 				Body:   tt.fields.Body,
 			}
-			gotData, _ := m.MarshalBinary()
-			fmt.Println(gotData)
-			// if (err != nil) != tt.wantErr {
-			// 	t.Errorf("MarshalBinary() error = %v, wantErr %v", err, tt.wantErr)
-			// 	return
-			// }
-			// if !reflect.DeepEqual(gotData, tt.wantData) {
-			// 	t.Errorf("MarshalBinary() gotData = %v, want %v", gotData, tt.wantData)
-			// }
-			var newMsg = new(Message)
-			_ = newMsg.UnmarshalBinary(gotData)
-			fmt.Println(newMsg.Header.PaneInfo.EventTime, newMsg.Header.PaneInfo.IsLate, newMsg.Header.ID, newMsg.Header.Key, string(newMsg.Body.Payload))
+			gotData, err := m.MarshalBinary()
+			if (err != nil) != tt.wantMarshalError {
+				t.Errorf("MarshalBinary() error = %v, wantMarshalError %v", err, tt.wantMarshalError)
+				return
+			}
+			var newM = new(Message)
+			err = newM.UnmarshalBinary(gotData)
+			if (err != nil) != tt.wantUnmarshalError {
+				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
+				return
+			}
+			if !reflect.DeepEqual(*newM, tt.wantData) {
+				t.Errorf("MarshalBinary() gotData = %v, want %v", newM, tt.wantData)
+			}
 		})
 	}
 }
 
-func TestReadMessage_MarshalBinary(t *testing.T) {
+func TestReadMessage(t *testing.T) {
 	type fields struct {
 		Message    Message
 		ReadOffset Offset
 		Watermark  time.Time
 	}
 	tests := []struct {
-		name     string
-		fields   fields
-		wantData []byte
-		wantErr  bool
+		name               string
+		fields             fields
+		wantData           ReadMessage
+		wantMarshalError   bool
+		wantUnmarshalError bool
 	}{
-		// TODO: Add test cases.
 		{
 			name: "good",
 			fields: fields{
@@ -180,8 +295,27 @@ func TestReadMessage_MarshalBinary(t *testing.T) {
 				}),
 				Watermark: time.UnixMilli(1676613600000),
 			},
-			wantData: nil,
-			wantErr:  false,
+			wantData: ReadMessage{
+				Message: Message{
+					Header: Header{
+						PaneInfo: PaneInfo{
+							EventTime: time.UnixMilli(1676617200000).UTC(),
+							IsLate:    true,
+						},
+						ID:  "TestID",
+						Key: "TestKey",
+					},
+					Body: Body{
+						Payload: []byte("TestBODY"),
+					},
+				},
+				ReadOffset: SimpleIntOffset(func() int64 {
+					return 123
+				}),
+				Watermark: time.UnixMilli(1676613600000).UTC(),
+			},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
 		},
 	}
 	for _, tt := range tests {
@@ -191,19 +325,22 @@ func TestReadMessage_MarshalBinary(t *testing.T) {
 				ReadOffset: tt.fields.ReadOffset,
 				Watermark:  tt.fields.Watermark,
 			}
-			gotData, _ := rm.MarshalBinary()
-			fmt.Println(gotData)
-			// if (err != nil) != tt.wantErr {
-			// 	t.Errorf("MarshalBinary() error = %v, wantErr %v", err, tt.wantErr)
-			// 	return
-			// }
-			// if !reflect.DeepEqual(gotData, tt.wantData) {
-			// 	t.Errorf("MarshalBinary() gotData = %v, want %v", gotData, tt.wantData)
-			// }
-			var newReadMsg = new(ReadMessage)
-			_ = newReadMsg.UnmarshalBinary(gotData)
-			offset, _ := newReadMsg.ReadOffset.Sequence()
-			fmt.Println(newReadMsg.Header.PaneInfo.EventTime, newReadMsg.Header.PaneInfo.IsLate, newReadMsg.Header.ID, newReadMsg.Header.Key, string(newReadMsg.Body.Payload), offset, newReadMsg.Watermark)
+			gotData, err := rm.MarshalBinary()
+			if (err != nil) != tt.wantMarshalError {
+				t.Errorf("MarshalBinary() error = %v, wantMarshalError %v", err, tt.wantMarshalError)
+				return
+			}
+			var newRM = new(ReadMessage)
+			err = newRM.UnmarshalBinary(gotData)
+			if (err != nil) != tt.wantUnmarshalError {
+				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
+				return
+			}
+			if !reflect.DeepEqual((*newRM).Message, tt.wantData.Message) &&
+				!reflect.DeepEqual((*newRM).Watermark, tt.wantData.Watermark) &&
+				!reflect.DeepEqual((*newRM).ReadOffset.String(), tt.wantData.ReadOffset.String()) {
+				t.Errorf("MarshalBinary() gotData = %v, want %v", newRM, tt.wantData)
+			}
 		})
 	}
 }
