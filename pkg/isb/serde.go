@@ -16,6 +16,8 @@ limitations under the License.
 
 package isb
 
+// TODO: integrate with the WAL segment and JetStream
+
 import (
 	"bytes"
 	"encoding/binary"
@@ -28,6 +30,7 @@ type paneInfoPreamble struct {
 	IsLate     bool
 }
 
+// MarshalBinary encodes PaneInfo to the binary format
 func (p PaneInfo) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	var preamble = paneInfoPreamble{
@@ -40,6 +43,7 @@ func (p PaneInfo) MarshalBinary() (data []byte, err error) {
 	return buf.Bytes(), nil
 }
 
+// UnmarshalBinary decodes PaneInfo from the binary format
 func (p *PaneInfo) UnmarshalBinary(data []byte) (err error) {
 	var r = bytes.NewReader(data)
 	var preamble = new(paneInfoPreamble)
@@ -58,7 +62,7 @@ type headerPreamble struct {
 	KeyLen int16
 }
 
-// MarshalBinary encodes header to a binary format
+// MarshalBinary encodes Header to a binary format
 func (h Header) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	paneInfo, err := h.PaneInfo.MarshalBinary()
@@ -88,7 +92,7 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 	return buf.Bytes(), nil
 }
 
-// UnmarshalBinary decodes header from the binary format
+// UnmarshalBinary decodes Header from the binary format
 func (h *Header) UnmarshalBinary(data []byte) (err error) {
 	var r = bytes.NewReader(data)
 	var preamble = new(headerPreamble)
@@ -124,7 +128,7 @@ type bodyPreamble struct {
 	PLen int64
 }
 
-// MarshalBinary encodes header to a binary format
+// MarshalBinary encodes Body to a binary format
 func (b Body) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	var preamble = bodyPreamble{
@@ -139,7 +143,7 @@ func (b Body) MarshalBinary() (data []byte, err error) {
 	return buf.Bytes(), nil
 }
 
-// UnmarshalBinary decodes header from the binary format
+// UnmarshalBinary decodes Body from the binary format
 func (b *Body) UnmarshalBinary(data []byte) (err error) {
 	var r = bytes.NewReader(data)
 	var preamble = new(bodyPreamble)
