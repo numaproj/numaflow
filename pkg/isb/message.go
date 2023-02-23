@@ -17,7 +17,6 @@ limitations under the License.
 package isb
 
 import (
-	"encoding/json"
 	"time"
 )
 
@@ -53,24 +52,4 @@ type ReadMessage struct {
 	Message
 	ReadOffset Offset
 	Watermark  time.Time
-}
-
-// MarshalBinary encodes header to a binary format
-func (h Header) MarshalBinary() (data []byte, err error) {
-	return json.Marshal(h)
-}
-
-// MarshalBinary encodes header to a binary format
-func (b Body) MarshalBinary() (data []byte, err error) {
-	return json.Marshal(b)
-}
-
-// UnmarshalBinary decodes header from the binary format
-func (h *Header) UnmarshalBinary(data []byte) (err error) {
-	return json.Unmarshal(data, &h)
-}
-
-// UnmarshalBinary decodes header from the binary format
-func (b *Body) UnmarshalBinary(data []byte) (err error) {
-	return json.Unmarshal(data, &b)
 }
