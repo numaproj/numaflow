@@ -316,7 +316,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	message := writeMessages[0]
 	storePrevSyncedTime := tempWAL.prevSyncedTime
 	err = wal.Write(&message)
-	assert.Equal(t, tempWAL.prevSyncedWOffset, int64(223))
+	assert.Equal(t, int64(223), tempWAL.prevSyncedWOffset)
 	assert.NotEqual(t, storePrevSyncedTime, tempWAL.prevSyncedTime)
 	assert.NoError(t, err)
 
