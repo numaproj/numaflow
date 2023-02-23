@@ -3502,8 +3502,8 @@ only effective for source vertices.
 <em>(Optional)</em>
 <p>
 TargetBufferUsage is used to define the target percentage of usage of
-the buffer to be read. A valid and meaningful value should be less than
-the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
+available buffer. A valid and meaningful value should be less than the
+BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
 example, 50. It only applies to UDF and Sink vertices as only they have
 buffers to read. Deprecated: use targetBufferAvailability instead. Will
 be removed in v0.9

@@ -3039,7 +3039,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"targetBufferUsage": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TargetBufferUsage is used to define the target percentage of usage of the buffer to be read. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read. Deprecated: use targetBufferAvailability instead. Will be removed in v0.9",
+							Description: "TargetBufferUsage is used to define the target percentage of usage of available buffer. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read. Deprecated: use targetBufferAvailability instead. Will be removed in v0.9",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
