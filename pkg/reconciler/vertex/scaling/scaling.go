@@ -239,7 +239,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 				return fmt.Errorf("invalid read buffer information of vertex %q, length or usage limit is missing", vertex.Name)
 			}
 			totalBufferLength = int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
-			targetAvailableBufferLength = int64(float64(*bInfo.BufferLength) * float64(vertex.Spec.Scale.GetTargetBufferUsage()) / 100)
+			targetAvailableBufferLength = int64(float64(*bInfo.BufferLength) * float64(vertex.Spec.Scale.GetTargetBufferAvailability()) / 100)
 			// Add to cache for back pressure calculation
 			_ = s.vertexMetricsCache.Add(*bInfo.BufferName+"/length", totalBufferLength)
 		}

@@ -1502,13 +1502,18 @@ func (in *Scale) DeepCopyInto(out *Scale) {
 		*out = new(uint32)
 		**out = **in
 	}
-	if in.TargetBufferUsage != nil {
-		in, out := &in.TargetBufferUsage, &out.TargetBufferUsage
+	if in.DeprecatedTargetBufferUsage != nil {
+		in, out := &in.DeprecatedTargetBufferUsage, &out.DeprecatedTargetBufferUsage
 		*out = new(uint32)
 		**out = **in
 	}
 	if in.ReplicasPerScale != nil {
 		in, out := &in.ReplicasPerScale, &out.ReplicasPerScale
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.TargetBufferAvailability != nil {
+		in, out := &in.TargetBufferAvailability, &out.TargetBufferAvailability
 		*out = new(uint32)
 		**out = **in
 	}
