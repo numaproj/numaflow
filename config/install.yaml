@@ -5067,6 +5067,9 @@ spec:
                         replicasPerScale:
                           format: int32
                           type: integer
+                        targetBufferAvailability:
+                          format: int32
+                          type: integer
                         targetBufferUsage:
                           format: int32
                           type: integer
@@ -8830,6 +8833,9 @@ spec:
                     format: int32
                     type: integer
                   replicasPerScale:
+                    format: int32
+                    type: integer
+                  targetBufferAvailability:
                     format: int32
                     type: integer
                   targetBufferUsage:
