@@ -1699,7 +1699,7 @@
 <span class="w">        </span><span class="nt">cooldownSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">90</span><span class="w"> </span><span class="c1"># Optional, defaults to 90.</span>
 <span class="w">        </span><span class="nt">zeroReplicaSleepSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">180</span><span class="w"> </span><span class="c1"># Optional, defaults to 180.</span>
 <span class="w">        </span><span class="nt">targetProcessingSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w"> </span><span class="c1"># Optional, defaults to 20.</span>
-<span class="w">        </span><span class="nt">targetBufferUsage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span><span class="w"> </span><span class="c1"># Optional, defaults to 50.</span>
+<span class="w">        </span><span class="nt">targetBufferAvailability</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span><span class="w"> </span><span class="c1"># Optional, defaults to 50.</span>
 <span class="w">        </span><span class="nt">replicasPerScale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># Optional, defaults to 2.</span>
 </code></pre></div>
 <ul>
@@ -1710,7 +1710,7 @@
 <li><code>cooldownSeconds</code> - After a scaling operation, how many seconds to wait before doing another scaling on the same vertex. This is to give some time for a vertex to stabilize, defaults to 90 seconds.</li>
 <li><code>zeroReplicaSleepSeconds</code> - How many seconds it will wait after scaling down to <code>0</code>, defaults to <code>180</code>. Numaflow autoscaler periodically scales up a vertex pod to "peek" the incoming data, this is the period of time to wait before peeking.</li>
 <li><code>targetProcessingSeconds</code> - It is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast you want the vertex to process all the pending messages, defaults to <code>20</code>. It is only effective for the <code>Source</code> vertices which support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.</li>
-<li><code>targetBufferUsage</code> - Targeted buffer usage percentage, defaults to <code>50</code>. It is only effective for <code>UDF</code> and <code>Sink</code> vertices, it also determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.</li>
+<li><code>targetBufferAvailability</code> - Targeted buffer availability in percentage, defaults to <code>50</code>. It is only effective for <code>UDF</code> and <code>Sink</code> vertices, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.</li>
 <li><code>replicasPerScale</code> - Maximum number of replicas change happens in one scale up or down operation, defaults to <code>2</code>. For example, if current replica number is 3, the calculated desired replica number is 8; instead of scaling up the vertex to 8, it only does 5.</li>
 </ul>
 <p>To disable Numaflow autoscaling, set <code>disabled: true</code> as following.</p>
