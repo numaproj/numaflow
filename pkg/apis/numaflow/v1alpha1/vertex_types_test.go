@@ -448,7 +448,7 @@ func Test_Scale_Parameters(t *testing.T) {
 	assert.Equal(t, DefaultCooldownSeconds, s.GetCooldownSeconds())
 	assert.Equal(t, DefaultLookbackSeconds, s.GetLookbackSeconds())
 	assert.Equal(t, DefaultReplicasPerScale, s.GetReplicasPerScale())
-	assert.Equal(t, DefaultTargetBufferUsage, s.GetTargetBufferUsage())
+	assert.Equal(t, DefaultTargetBufferAvailability, s.GetTargetBufferAvailability())
 	assert.Equal(t, DefaultTargetProcessingSeconds, s.GetTargetProcessingSeconds())
 	assert.Equal(t, DefaultZeroReplicaSleepSeconds, s.GetZeroReplicaSleepSeconds())
 	cds := uint32(100)
@@ -458,21 +458,21 @@ func Test_Scale_Parameters(t *testing.T) {
 	tbu := uint32(33)
 	zrss := uint32(44)
 	s = Scale{
-		Min:                     pointer.Int32(2),
-		Max:                     pointer.Int32(4),
-		CooldownSeconds:         &cds,
-		LookbackSeconds:         &lbs,
-		ReplicasPerScale:        &rps,
-		TargetProcessingSeconds: &tps,
-		TargetBufferUsage:       &tbu,
-		ZeroReplicaSleepSeconds: &zrss,
+		Min:                      pointer.Int32(2),
+		Max:                      pointer.Int32(4),
+		CooldownSeconds:          &cds,
+		LookbackSeconds:          &lbs,
+		ReplicasPerScale:         &rps,
+		TargetProcessingSeconds:  &tps,
+		TargetBufferAvailability: &tbu,
+		ZeroReplicaSleepSeconds:  &zrss,
 	}
 	assert.Equal(t, int32(2), s.GetMinReplicas())
 	assert.Equal(t, int32(4), s.GetMaxReplicas())
 	assert.Equal(t, int(cds), s.GetCooldownSeconds())
 	assert.Equal(t, int(lbs), s.GetLookbackSeconds())
 	assert.Equal(t, int(rps), s.GetReplicasPerScale())
-	assert.Equal(t, int(tbu), s.GetTargetBufferUsage())
+	assert.Equal(t, int(tbu), s.GetTargetBufferAvailability())
 	assert.Equal(t, int(tps), s.GetTargetProcessingSeconds())
 	assert.Equal(t, int(zrss), s.GetZeroReplicaSleepSeconds())
 	s.Max = pointer.Int32(500)

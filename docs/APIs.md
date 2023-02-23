@@ -3505,7 +3505,8 @@ TargetBufferUsage is used to define the target percentage of usage of
 the buffer to be read. A valid and meaningful value should be less than
 the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
 example, 50. It only applies to UDF and Sink vertices as only they have
-buffers to read.
+buffers to read. Deprecated: use targetBufferAvailability instead. Will
+be removed in v0.9
 </p>
 </td>
 </tr>
@@ -3518,6 +3519,21 @@ buffers to read.
 <p>
 ReplicasPerScale defines maximum replicas can be scaled up or down at
 once. The is use to prevent too aggressive scaling operations
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>targetBufferAvailability</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+TargetBufferAvailability is used to define the target percentage of
+available buffer. A valid and meaningful value should be less than the
+BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
+example, 50. It only applies to UDF and Sink vertices as only they have
+buffers to read.
 </p>
 </td>
 </tr>
