@@ -3501,12 +3501,12 @@ only effective for source vertices.
 <td>
 <em>(Optional)</em>
 <p>
-TargetBufferUsage is used to define the target percentage of usage of
-available buffer. A valid and meaningful value should be less than the
+TargetBufferUsage is used to define the target percentage of the buffer
+availability. A valid and meaningful value should be less than the
 BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
-example, 50. It only applies to UDF and Sink vertices as only they have
-buffers to read. Deprecated: use targetBufferAvailability instead. Will
-be removed in v0.9
+example, 50. It only applies to UDF and Sink vertices because only they
+have buffers to read. Deprecated: use targetBufferAvailability instead.
+Will be removed in v0.9
 </p>
 </td>
 </tr>
@@ -3529,11 +3529,11 @@ once. The is use to prevent too aggressive scaling operations
 <td>
 <em>(Optional)</em>
 <p>
-TargetBufferAvailability is used to define the target percentage of
-available buffer. A valid and meaningful value should be less than the
-BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
-example, 50. It only applies to UDF and Sink vertices as only they have
-buffers to read.
+TargetBufferAvailability is used to define the target percentage of the
+buffer availability. A valid and meaningful value should be less than
+the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
+example, 50. It only applies to UDF and Sink vertices because only they
+have buffers to read.
 </p>
 </td>
 </tr>

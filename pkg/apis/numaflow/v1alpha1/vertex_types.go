@@ -407,9 +407,9 @@ type Scale struct {
 	// rate, thus less replicas. It's only effective for source vertices.
 	// +optional
 	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
-	// TargetBufferUsage is used to define the target percentage of usage of available buffer.
+	// TargetBufferUsage is used to define the target percentage of the buffer availability.
 	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
-	// It only applies to UDF and Sink vertices as only they have buffers to read.
+	// It only applies to UDF and Sink vertices because only they have buffers to read.
 	// Deprecated: use targetBufferAvailability instead. Will be removed in v0.9
 	// +optional
 	DeprecatedTargetBufferUsage *uint32 `json:"targetBufferUsage,omitempty" protobuf:"varint,8,opt,name=targetBufferUsage"`
@@ -417,9 +417,9 @@ type Scale struct {
 	// The is use to prevent too aggressive scaling operations
 	// +optional
 	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
-	// TargetBufferAvailability is used to define the target percentage of available buffer.
+	// TargetBufferAvailability is used to define the target percentage of the buffer availability.
 	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
-	// It only applies to UDF and Sink vertices as only they have buffers to read.
+	// It only applies to UDF and Sink vertices because only they have buffers to read.
 	// +optional
 	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,10,opt,name=targetBufferAvailability"`
 }

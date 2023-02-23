@@ -3039,7 +3039,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"targetBufferUsage": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TargetBufferUsage is used to define the target percentage of usage of available buffer. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read. Deprecated: use targetBufferAvailability instead. Will be removed in v0.9",
+							Description: "TargetBufferUsage is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read. Deprecated: use targetBufferAvailability instead. Will be removed in v0.9",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3053,7 +3053,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"targetBufferAvailability": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TargetBufferAvailability is used to define the target percentage of available buffer. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read.",
+							Description: "TargetBufferAvailability is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
