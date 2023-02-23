@@ -11,8 +11,9 @@ describe("Namespaces screen", () => {
     it("Load namespaces screen", async () => {
         mockedUseNamespaceFetch.mockReturnValue({pipelines: ["simple-pipeline"], error: false, loading: false});
         render(<BrowserRouter><Namespaces/></BrowserRouter>)
-        expect(screen.getByText("Search for a namespace to get the pipelines")).toBeVisible();
         fireEvent.click(screen.getByTestId("namespace-search"))
+        await waitFor(() => expect(screen.getByTestId("namespace-row-content")).toBeVisible());
+        fireEvent.keyDown(screen.getByTestId("namespace-input"),{ key: "Enter"})
         await waitFor(() => expect(screen.getByTestId("namespace-row-content")).toBeVisible());
         fireEvent.click(screen.getByTestId("namespace-clear"))
     })

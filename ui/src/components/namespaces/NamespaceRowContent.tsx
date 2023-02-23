@@ -16,7 +16,6 @@ export function NamespaceRowContent(props: NamespaceRowContentProps) {
           <div className={"NamespaceRowContent"} data-testid="namespace-row-content">
               <Box
                   sx={{
-                      margin: 1,
                       fontWeight: 500,
                       fontSize: "1rem",
                   }}
@@ -35,7 +34,6 @@ export function NamespaceRowContent(props: NamespaceRowContentProps) {
           <div className={"NamespaceRowContent"} data-testid="namespace-row-content">
               <Box
                   sx={{
-                      margin: 1,
                       fontWeight: 500,
                       fontSize: "1rem",
                   }}
