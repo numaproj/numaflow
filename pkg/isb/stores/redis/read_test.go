@@ -20,7 +20,6 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -481,9 +480,9 @@ func writeTestMessages(ctx context.Context, client *redisclient.RedisClient, mes
 func generateLatencySlice(xMessages []redis.XMessage, suite *ReadWritePerformance) []float64 {
 	latency := make([]float64, suite.count)
 	for idx, xMessage := range xMessages {
-		m := isb.Header{}
+		var m = new(isb.Header)
 		for k := range xMessage.Values {
-			err := json.Unmarshal([]byte(k), &m)
+			err := m.UnmarshalBinary([]byte(k))
 			suite.NoError(err)
 		}
 		id, err := splitId(xMessage.ID)
