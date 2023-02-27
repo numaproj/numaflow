@@ -228,7 +228,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 	c.LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
-				Path:   "/healthz",
+				Path:   "/livez",
 				Port:   intstr.FromInt(DaemonServicePort),
 				Scheme: corev1.URISchemeHTTPS,
 			},

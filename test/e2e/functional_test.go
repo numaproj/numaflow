@@ -90,7 +90,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Expect().
 		Status(204)
 
-	HTTPExpect(s.T(), "https://localhost:1234").GET("/healthz").
+	HTTPExpect(s.T(), "https://localhost:1234").GET("/livez").
 		Expect().
 		Status(204)
 

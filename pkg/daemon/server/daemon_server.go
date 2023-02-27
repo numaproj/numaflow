@@ -178,7 +178,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.Handle("/metrics", promhttp.Handler())
