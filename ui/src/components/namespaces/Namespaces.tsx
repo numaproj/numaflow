@@ -1,7 +1,18 @@
 import {useEffect, useState} from "react";
 import { NamespaceRowContent } from "./NamespaceRowContent";
 import "./Namespaces.css";
-import {Button, TableBody, Table, TableCell, TableContainer, TableHead, TableRow, Paper, TextField} from "@mui/material";
+import {
+    Button,
+    TableBody,
+    Table,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Paper,
+    TextField,
+    Autocomplete
+} from "@mui/material";
 import ClearIcon from '@mui/icons-material/Clear'
 import SearchIcon from '@mui/icons-material/Search';
 
@@ -48,6 +59,19 @@ export function Namespaces() {
         setnsArr(ns_arr);
     }, []);
 
+    const ns_List = [];
+    nsArr.forEach((namespace) => (
+        ns_List.push({label: namespace})
+    ))
+
+    const handleKeyPress = e => {
+        if (e.key === 'Enter') {
+            handle(value);
+            setNamespace(value);
+            e.target.blur();
+        }
+    }
+
   return (
     <div className="Namespaces">
       <TableContainer component={Paper}>
@@ -57,33 +81,30 @@ export function Namespaces() {
               <TableCell
               >
                   <div style={{display: "flex", flexDirection: "row"}}>
-                  <TextField
-                      InputLabelProps={{ shrink: true }}
-                      inputProps={{
-                          list: "namespaces",
-                      }}
-                      autoComplete="off"
-                      label="Namespace"
-                      placeholder="enter a namespace"
-                      variant="standard"
-                      style={{width: "200px"}}
-                      value={value}
-                      onChange={e => {setValue(e.target.value)}}
-                      onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                              handle(value);
-                              setNamespace(value);
-                          }
-                      }}
+                  <Autocomplete
                       data-testid="namespace-input"
+                      freeSolo
+                      disableClearable
+                      id="curr_ns"
+                      options={ns_List}
+                      sx={{ width: 250, margin: "0 10px" }}
+                      filterOptions={(x) => x}
+                      value={value}
+                      onChange={(e, v) => {
+                          setValue(v.label);
+                      }}
+                      renderInput={(params) => {
+                          params.inputProps.onKeyPress = handleKeyPress;
+                          return <TextField
+                              {...params}
+                              autoComplete="off"
+                              label="Namespace"
+                              placeholder="enter a namespace"
+                              InputLabelProps={{ shrink: true }}
+                              onChange={e => {setValue(e.target.value)}}
+                          />
+                      }}
                   />
-                  <datalist id="namespaces">
-                      {nsArr &&
-                          nsArr.map((namespace) => (
-                              <option key={namespace}>{namespace}</option>
-                          ))
-                      }
-                  </datalist>
                   <Button
                       data-testid="namespace-search"
                       onClick={() => {
