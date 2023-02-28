@@ -84,6 +84,7 @@ export function Namespaces() {
                   <Autocomplete
                       data-testid="namespace-input"
                       freeSolo
+                      blurOnSelect
                       disableClearable
                       id="curr_ns"
                       options={ns_List}
@@ -92,6 +93,8 @@ export function Namespaces() {
                       value={value}
                       onChange={(e, v) => {
                           setValue(v.label);
+                          handle(v.label);
+                          setNamespace(v.label);
                       }}
                       renderInput={(params) => {
                           params.inputProps.onKeyPress = handleKeyPress;
