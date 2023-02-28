@@ -182,7 +182,7 @@ func (t *OffsetTimeline) GetReferredWatermark(eventTime int64) OffsetWatermark {
 	}
 	// otherwise, find the OffsetWatermark which watermark is <= the eventTime
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		if eventTime <= e.Value.(OffsetWatermark).watermark {
+		if eventTime >= e.Value.(OffsetWatermark).watermark {
 			return e.Value.(OffsetWatermark)
 		}
 	}
