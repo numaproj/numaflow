@@ -377,11 +377,6 @@ func TestValidateReducePipeline(t *testing.T) {
 		err = ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `"parallelism" is < 1`)
-		testObj.Spec.Edges[0].Parallelism = pointer.Int32(1)
-		testObj.Spec.Vertices[1].UDF.GroupBy.Keyed = true
-		err = ValidatePipeline(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), `"keyed" should not be true for a reduce vertex which has data coming from a source vertex`)
 	})
 
 	t.Run("no storage", func(t *testing.T) {
