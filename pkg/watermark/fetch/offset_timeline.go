@@ -171,6 +171,27 @@ func (t *OffsetTimeline) GetHeadOffsetWatermark() OffsetWatermark {
 	return t.watermarks.Front().Value.(OffsetWatermark)
 }
 
+// GetReferredWatermark returns the largest offset with the largest watermark.
+func (t *OffsetTimeline) GetReferredWatermark(eventTime int64) OffsetWatermark {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	if eventTime == 0 {
+		// if eventTime is empty, use the head offset watermark
+		return t.watermarks.Front().Value.(OffsetWatermark)
+	}
+	// otherwise, find the OffsetWatermark which watermark is <= the eventTime
+	for e := t.watermarks.Front(); e != nil; e = e.Next() {
+		if eventTime <= e.Value.(OffsetWatermark).watermark {
+			return e.Value.(OffsetWatermark)
+		}
+	}
+
+	return OffsetWatermark{
+		watermark: -1,
+		offset:    -1,
+	}
+}
+
 // GetOffset will return the offset for the given event-time.
 // TODO(jyu6): will make Watermark an interface make it easy to pass an Offset and return a Watermark?
 func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {

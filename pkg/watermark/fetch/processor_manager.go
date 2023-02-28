@@ -257,7 +257,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 							// any other Vn-1 processor's non-empty head offsetWatermark can replace the idle watermark
 							// if all tail offsetWatermarks are empty, then it means there's no data flowing into
 							// this Vn processor, so it's safe to do nothing
-							watermarkOffset := processor.offsetTimeline.GetHeadOffsetWatermark()
+							watermarkOffset := processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
 							if watermarkOffset.offset != -1 {
 								p.offsetTimeline.PutIdle(watermarkOffset)
 								break
