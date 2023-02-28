@@ -96,7 +96,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	head := p.GetLatestWatermark()
 	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
 
-	p.PublishIdleWatermark()
+	p.PublishIdleWatermark(nil)
 	keys, err = p.otStore.GetAllKeys(p.ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"publisherTestPod1"}, keys)

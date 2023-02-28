@@ -265,7 +265,7 @@ func (p *ProcessAndForward) publishWM(wm processor.Watermark, writeOffsets map[s
 		// batch processing cycle, send an idle watermark
 		for bufferName := range p.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
-				p.publishWatermark[bufferName].PublishIdleWatermark()
+				p.publishWatermark[bufferName].PublishIdleWatermark(&wm)
 			}
 		}
 	}

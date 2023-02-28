@@ -77,7 +77,7 @@ func (e *EventTypeWMProgressor) PublishWatermark(watermark processor.Watermark, 
 	e.watermarks[offset.String()] = watermark
 }
 
-func (e *EventTypeWMProgressor) PublishIdleWatermark() {
+func (e *EventTypeWMProgressor) PublishIdleWatermark(*processor.Watermark) {
 	// TODO
 }
 

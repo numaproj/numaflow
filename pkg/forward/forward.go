@@ -302,7 +302,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// batch processing cycle, send an idle watermark
 		for bufferName := range isdf.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
-				isdf.publishWatermark[bufferName].PublishIdleWatermark()
+				isdf.publishWatermark[bufferName].PublishIdleWatermark(nil)
 			}
 		}
 	}
