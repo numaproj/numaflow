@@ -171,7 +171,8 @@ func (t *OffsetTimeline) GetHeadOffsetWatermark() OffsetWatermark {
 	return t.watermarks.Front().Value.(OffsetWatermark)
 }
 
-// GetReferredWatermark returns the largest offset with the largest watermark.
+// GetReferredWatermark returns the watermark that will be used to replace
+// the idle watermark value
 func (t *OffsetTimeline) GetReferredWatermark(eventTime int64) OffsetWatermark {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
