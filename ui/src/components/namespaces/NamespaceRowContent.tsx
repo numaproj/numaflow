@@ -10,31 +10,55 @@ interface NamespaceRowContentProps {
 
 export function NamespaceRowContent(props: NamespaceRowContentProps) {
   const { namespaceId } = props;
-  const { pipelines } = useNamespaceFetch(namespaceId);
-  return (
-    <div className={"NamespaceRowContent"} data-testid="namespace-row-content">
-      <Box
-        sx={{
-          margin: 1,
-          fontWeight: 500,
-          fontSize: "1rem",
-        }}
-      >
-        <List>
-          {pipelines &&
-            pipelines.map((pipelineId) => {
-              return (
-                <ListItem key={pipelineId}>
-                  <Link
-                    to={`/namespaces/${namespaceId}/pipelines/${pipelineId}`}
-                  >
-                    {pipelineId}
-                  </Link>
-                </ListItem>
-              );
-            })}
-        </List>
-      </Box>
-    </div>
-  );
+
+  if (namespaceId === "") {
+      return (
+          <div className={"NamespaceRowContent"} data-testid="namespace-row-content">
+              <Box
+                  sx={{
+                      fontWeight: 500,
+                      fontSize: "1rem",
+                  }}
+              >
+                  <List>
+                      <ListItem>
+                          <div>Search for a namespace to get the pipelines</div>
+                      </ListItem>
+                  </List>
+              </Box>
+          </div>
+      );
+  } else {
+      const {pipelines} = useNamespaceFetch(namespaceId);
+      return (
+          <div className={"NamespaceRowContent"} data-testid="namespace-row-content">
+              <Box
+                  sx={{
+                      fontWeight: 500,
+                      fontSize: "1rem",
+                  }}
+              >
+                  <List>
+                      {pipelines &&
+                          pipelines.map((pipelineId) => {
+                              return (
+                                  <ListItem key={pipelineId}>
+                                      <Link
+                                          to={`/namespaces/${namespaceId}/pipelines/${pipelineId}`}
+                                      >
+                                          {pipelineId}
+                                      </Link>
+                                  </ListItem>
+                              );
+                          })}
+                      {!pipelines.length &&
+                          <ListItem>
+                              <div>No pipelines in the provided namespaces</div>
+                          </ListItem>
+                      }
+                  </List>
+              </Box>
+          </div>
+      );
+  }
 }
