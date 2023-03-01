@@ -27,7 +27,6 @@ rules:
       - pods/exec
       - pods/log
       - configmaps
-      - secrets
       - services
     verbs:
       - get
