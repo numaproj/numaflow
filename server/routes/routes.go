@@ -36,7 +36,6 @@ func v1Routes(r gin.IRouter) {
 	if err != nil {
 		panic(err)
 	}
-	r.GET("/namespaces", handler.ListNamespaces)
 	r.GET("/namespaces/:namespace/pipelines", handler.ListPipelines)
 	r.GET("/namespaces/:namespace/isbsvcs", handler.ListInterStepBufferServices)
 	r.GET("/namespaces/:namespace/isbsvcs/:isbsvc", handler.GetInterStepBufferService)
