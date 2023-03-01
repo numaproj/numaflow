@@ -50,7 +50,7 @@ const (
 
 var (
 	testStartTime       = time.Unix(1636470000, 0).UTC()
-	testSourceWatermark = time.Now()
+	testSourceWatermark = time.Unix(1636460000, 0).UTC()
 )
 
 type testForwardFetcher struct {
@@ -145,7 +145,7 @@ func (f mySourceForwardTest) WhereTo(_ string) ([]string, error) {
 
 // for source forward test, in transformer, we assign to the message a new event time that is before test source watermark,
 // such that we can verify message IsLate attribute gets set to true.
-var testSourceNewEventTime = testSourceWatermark.Add(-time.Hour)
+var testSourceNewEventTime = testSourceWatermark.Add(time.Duration(-1) * time.Minute)
 
 func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
 	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
@@ -229,7 +229,7 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	assert.Equal(t, []interface{}{writeMessages[0].Header.ID, writeMessages[1].Header.ID}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
-		assert.Equal(t, testSourceNewEventTime.UnixNano(), m.EventTime.UnixNano())
+		assert.Equal(t, testSourceNewEventTime, m.EventTime)
 		// verify messages are marked as late because of event time update.
 		assert.Equal(t, true, m.IsLate)
 	}
