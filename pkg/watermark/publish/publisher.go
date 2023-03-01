@@ -95,8 +95,8 @@ func (p *publish) initialSetup() {
 
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
 // is less than the current head watermark.
-func (p *publish) PublishWatermark(validWM processor.Watermark, offset isb.Offset) {
-	validWM, skipWM := p.validateWatermark(validWM)
+func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
+	validWM, skipWM := p.validateWatermark(wm)
 	if skipWM {
 		return
 	}
