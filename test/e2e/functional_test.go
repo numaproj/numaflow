@@ -86,6 +86,14 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Expect().
 		Status(200).Body().Contains("pipeline")
 
+	HTTPExpect(s.T(), "https://localhost:1234").GET("/readyz").
+		Expect().
+		Status(204)
+
+	HTTPExpect(s.T(), "https://localhost:1234").GET("/livez").
+		Expect().
+		Status(204)
+
 	// Test Daemon service with gRPC
 	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
 	assert.NoError(s.T(), err)

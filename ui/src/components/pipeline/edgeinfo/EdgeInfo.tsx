@@ -106,7 +106,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
                     if (typeof singleEdge?.data?.bufferUsage !== "undefined") {
                       bufferUsage = (singleEdge?.data?.bufferUsage * 100).toFixed(2);
                     }
-                    return <TableRow>
+                    return <TableRow key={singleEdge.id}>
                       <TableCell>{singleEdge.data.bufferName.slice(singleEdge.data.bufferName.indexOf('-') + 1)}</TableCell>
                       <TableCell data-testid="isFull">{isFull}</TableCell>
                       <TableCell data-testid="ackPending">{singleEdge.data.ackPending}</TableCell>
@@ -155,6 +155,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
           {edges.map((singleEdge) => {
             if (singleEdge?.data?.conditions && (singleEdge?.source == edge?.data?.fromVertex && singleEdge?.target == edge?.data?.toVertex)) {
               return <ReactJson
+                  key={singleEdge.id}
                   name="conditions"
                   enableClipboard={handleCopy}
                   theme="apathy:inverted"

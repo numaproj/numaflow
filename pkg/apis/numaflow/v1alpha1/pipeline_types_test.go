@@ -159,6 +159,13 @@ func TestGetDaemonDeploy(t *testing.T) {
 		assert.Contains(t, envNames, "test-env")
 	})
 
+	t.Run("test liveness and readiness probe", func(t *testing.T) {
+		s, err := testPipeline.GetDaemonDeploymentObj(req)
+		assert.NoError(t, err)
+		assert.NotNil(t, s.Spec.Template.Spec.Containers[0].LivenessProbe)
+		assert.NotNil(t, s.Spec.Template.Spec.Containers[0].ReadinessProbe)
+	})
+
 	t.Run("test get init container", func(t *testing.T) {
 		c := testPipeline.getDaemonPodInitContainer(req)
 		assert.Equal(t, CtrInit, c.Name)
