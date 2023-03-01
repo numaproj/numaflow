@@ -47,7 +47,7 @@ func (n NoOpWMProgressor) PublishWatermark(_ processor.Watermark, _ isb.Offset) 
 }
 
 // PublishIdleWatermark does a no-op idle watermark publish.
-func (n NoOpWMProgressor) PublishIdleWatermark(*processor.Watermark) {
+func (n NoOpWMProgressor) PublishIdleWatermark(processor.Watermark) {
 }
 
 // GetLatestWatermark returns the default watermark as the latest watermark.

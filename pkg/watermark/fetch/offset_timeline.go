@@ -171,18 +171,17 @@ func (t *OffsetTimeline) GetHeadOffsetWatermark() OffsetWatermark {
 	return t.watermarks.Front().Value.(OffsetWatermark)
 }
 
-// GetReferredWatermark returns the watermark that will be used to replace
+// GetReferredWatermark returns the referred watermark that will be used to replace
 // the idle watermark value
-func (t *OffsetTimeline) GetReferredWatermark(eventTime int64) OffsetWatermark {
+func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) OffsetWatermark {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	if eventTime == 0 {
-		// if eventTime is empty, use the head offset watermark
-		return t.watermarks.Front().Value.(OffsetWatermark)
-	}
-	// otherwise, find the OffsetWatermark which watermark is <= the eventTime
+	// find in the offset timeline where the OffsetWatermark has a watermark that is <= the idleWM
+	// because, when we replace the idleWM, we need to guarantee the referred watermark's value won't exceed
+	// the largest WM processed from Vn-1's idle processor (meaning the idle processor hasn't seen any data that
+	// is later than this idleWM)
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		if eventTime >= e.Value.(OffsetWatermark).watermark {
+		if e.Value.(OffsetWatermark).watermark <= idleWM {
 			return e.Value.(OffsetWatermark)
 		}
 	}

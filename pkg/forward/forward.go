@@ -344,8 +344,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// batch processing cycle, send an idle watermark
 		for bufferName := range isdf.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
-				// TODO: in the case of map, we don't send the idle watermark with a time stamp for now
-				isdf.publishWatermark[bufferName].PublishIdleWatermark(nil)
+				// use the watermark of the current read batch for the idle watermark
+				isdf.publishWatermark[bufferName].PublishIdleWatermark(processorWM)
 			}
 		}
 	}

@@ -37,7 +37,7 @@ type Publisher interface {
 	// PublishWatermark publishes the watermark.
 	PublishWatermark(processor.Watermark, isb.Offset)
 	// PublishIdleWatermark publishes the idle watermark.
-	PublishIdleWatermark(wm *processor.Watermark)
+	PublishIdleWatermark(wm processor.Watermark)
 	// GetLatestWatermark returns the latest published watermark.
 	GetLatestWatermark() processor.Watermark
 }
@@ -152,19 +152,16 @@ func (p *publish) validateWatermark(wm processor.Watermark) (processor.Watermark
 }
 
 // PublishIdleWatermark publishes the idle watermark and will retry until it can succeed.
-func (p *publish) PublishIdleWatermark(wm *processor.Watermark) {
+func (p *publish) PublishIdleWatermark(wm processor.Watermark) {
 	var key = p.entity.GetName()
+	validWM, skipWM := p.validateWatermark(wm)
+	if skipWM {
+		return
+	}
 	var otValue = ot.Value{
 		Offset:    0,
-		Watermark: 0,
+		Watermark: validWM.UnixMilli(),
 		Idle:      true,
-	}
-	if wm != nil {
-		validWM, skipWM := p.validateWatermark(*wm)
-		if skipWM {
-			return
-		}
-		otValue.Watermark = validWM.UnixMilli()
 	}
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
