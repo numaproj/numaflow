@@ -260,6 +260,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 							// if the referred watermark is empty, skip
 							if referredWatermarkOffset.watermark != -1 {
 								p.offsetTimeline.PutIdle(referredWatermarkOffset)
+								v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("referredWatermark", referredWatermarkOffset.watermark), zap.Int64("offset", referredWatermarkOffset.offset))
 								break
 							}
 						}
@@ -273,8 +274,8 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 						watermark: otValue.Watermark,
 						offset:    otValue.Offset,
 					})
+					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 				}
-				v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 			case store.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
 				// naturally trim the KV store.
