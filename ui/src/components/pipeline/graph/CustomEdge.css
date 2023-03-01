@@ -4,15 +4,12 @@
 
 .edge-watermark {
     width: fit-content;
-    /*height: 12px;*/
     background: white;
-    /*border: 1px solid #8fa4b1;*/
     position: absolute;
-    /*border-radius: 5px;*/
+    border-radius: 2px;
     padding: 0px 5px;
     font-size: 0.8em;
     text-transform: lowercase;
-    margin-top: -12px;
     text-align: center;
     font-family: "IBM Plex Sans", sans-serif;
     pointer-events: all;
@@ -20,15 +17,12 @@
 
 .edge-backpressure {
     width: fit-content;
-    /*height: 12px;*/
     background: white;
-    /*border: 1px solid #8fa4b1;*/
     position: absolute;
-    /*border-radius: 5px;*/
+    border-radius: 2px;
     padding: 0px 5px;
     font-size: 0.8em;
     text-transform: lowercase;
-    margin-top: 1px;
     text-align: center;
     font-family: "IBM Plex Sans", sans-serif;
     pointer-events: all;
