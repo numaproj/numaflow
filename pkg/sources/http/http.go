@@ -194,7 +194,7 @@ func New(
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(h.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(h.logger), forward.WithSourceWatermarkPublisher(h)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -220,29 +220,35 @@ func (h *httpSource) GetName() string {
 }
 
 func (h *httpSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
-	msgs := []*isb.ReadMessage{}
-	var oldest time.Time
+	var msgs []*isb.ReadMessage
 	timeout := time.After(h.readTimeout)
 loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-h.messages:
-			if oldest.IsZero() || m.EventTime.Before(oldest) {
-				oldest = m.EventTime
-			}
-			msgs = append(msgs, m)
 			fmt.Println("got a message to read")
 			httpSourceReadCount.With(map[string]string{metrics.LabelVertex: h.name, metrics.LabelPipeline: h.pipelineName}).Inc()
+			msgs = append(msgs, m)
 		case <-timeout:
 			h.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", h.readTimeout), zap.Int("read", len(msgs)))
 			break loop
 		}
 	}
 	h.logger.Debugf("Read %d messages.", len(msgs))
-	if len(msgs) > 0 && !oldest.IsZero() {
-		h.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), msgs[len(msgs)-1].ReadOffset)
-	}
 	return msgs, nil
+}
+
+func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
+	var oldest time.Time
+	for _, m := range msgs {
+		if oldest.IsZero() || m.EventTime.Before(oldest) {
+			oldest = m.EventTime
+		}
+	}
+	if len(msgs) > 0 && !oldest.IsZero() {
+		h.logger.Debugf("Publishing watermark %v to source", oldest)
+		h.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), nil) // Source publisher does not care about the offset
+	}
 }
 
 func (h *httpSource) Ack(_ context.Context, offsets []isb.Offset) []error {
