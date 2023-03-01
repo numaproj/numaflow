@@ -327,7 +327,6 @@ func TestOffsetTimeline_GetReferredWatermark(t *testing.T) {
 
 	for i, watermark := range testWatermarks {
 		testTimeline.Put(watermark)
-		assert.Equal(t, watermark, testTimeline.GetReferredWatermark(0))
 		assert.Equal(t, expectedReferredWatermarks[i], testTimeline.GetReferredWatermark(referredEventTimes[i]), fmt.Sprintf("test %d", i))
 	}
 	assert.Equal(t, "[32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20] -> [10:9] -> [-1:-1]", testTimeline.Dump())

@@ -185,7 +185,6 @@ func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) OffsetWatermark {
 			return e.Value.(OffsetWatermark)
 		}
 	}
-
 	return OffsetWatermark{
 		watermark: -1,
 		offset:    -1,
