@@ -49,7 +49,8 @@ const (
 )
 
 var (
-	testStartTime = time.Unix(1636470000, 0).UTC()
+	testStartTime       = time.Unix(1636470000, 0).UTC()
+	testSourceWatermark = time.Unix(1636460000, 0).UTC()
 )
 
 type testForwardFetcher struct {
@@ -64,7 +65,7 @@ func (t testForwardFetcher) Close() error {
 // GetWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
 func (t testForwardFetcher) GetWatermark(_ isb.Offset) processor.Watermark {
-	return processor.Watermark(time.Now())
+	return processor.Watermark(testSourceWatermark)
 }
 
 func (t testForwardFetcher) GetHeadWatermark() processor.Watermark {
@@ -131,6 +132,111 @@ func TestNewInterStepDataForward(t *testing.T) {
 	// only for shutdown will work as from buffer is not empty
 	f.ForceStop()
 
+	<-stopped
+}
+
+// mySourceForwardTest tests source data transformer by updating message event time, and then verifying new event time and IsLate assignments.
+type mySourceForwardTest struct {
+}
+
+func (f mySourceForwardTest) WhereTo(_ string) ([]string, error) {
+	return []string{"to1"}, nil
+}
+
+// for source forward test, in transformer, we assign to the message a new event time that is before test source watermark,
+// such that we can verify message IsLate attribute gets set to true.
+var testSourceNewEventTime = testSourceWatermark.Add(time.Duration(-1) * time.Minute)
+
+func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
+		_ = ctx
+		offset := readMessage.ReadOffset
+		payload := readMessage.Body.Payload
+		parentPaneInfo := readMessage.PaneInfo
+
+		// apply source data transformer
+		_ = payload
+		// copy the payload
+		result := payload
+		// assign new event time
+		parentPaneInfo.EventTime = testSourceNewEventTime
+		var key string
+
+		writeMessage := &isb.Message{
+			Header: isb.Header{
+				PaneInfo: parentPaneInfo,
+				ID:       offset.String(),
+				Key:      key,
+			},
+			Body: isb.Body{
+				Payload: result,
+			},
+		}
+		return []*isb.Message{writeMessage}, nil
+	}(ctx, message)
+}
+
+// TestSourceWatermarkPublisher is a dummy implementation of isb.SourceWatermarkPublisher interface
+type TestSourceWatermarkPublisher struct {
+}
+
+func (p TestSourceWatermarkPublisher) PublishSourceWatermarks([]*isb.ReadMessage) {
+	// PublishSourceWatermarks is not tested in forwarder_test.go
+}
+
+func TestSourceInterStepDataForward(t *testing.T) {
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithReadTimeOut(time.Second*10))
+	toSteps := map[string]isb.BufferWriter{
+		"to1": to1,
+	}
+	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+		},
+	}}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+	fetchWatermark := testForwardFetcher{}
+	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+
+	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
+	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
+	assert.True(t, failedForwarder == nil)
+	assert.Error(t, err)
+	assert.Equal(t, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder"), err)
+
+	// create a valid source forwarder
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
+	assert.NoError(t, err)
+	assert.False(t, to1.IsFull())
+	assert.True(t, to1.IsEmpty())
+
+	stopped := f.Start()
+	count := int64(2)
+	// write some data
+	_, errs := fromStep.Write(ctx, writeMessages[0:count])
+	assert.Equal(t, make([]error, count), errs)
+
+	// read some data
+	readMessages, err := to1.Read(ctx, count)
+	assert.NoError(t, err, "expected no error")
+	assert.Len(t, readMessages, int(count))
+	assert.Equal(t, []interface{}{writeMessages[0].Header.Key, writeMessages[1].Header.Key}, []interface{}{readMessages[0].Header.Key, readMessages[1].Header.Key})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.ID, writeMessages[1].Header.ID}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	for _, m := range readMessages {
+		// verify new event time gets assigned to messages.
+		assert.Equal(t, testSourceNewEventTime, m.EventTime)
+		// verify messages are marked as late because of event time update.
+		assert.Equal(t, true, m.IsLate)
+	}
+	f.Stop()
+	time.Sleep(1 * time.Millisecond)
+	// only for shutdown will work as from buffer is not empty
+	f.ForceStop()
 	<-stopped
 }
 
