@@ -256,10 +256,10 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 						if processorName != value.Key() {
 							// in any other Vn-1 processor's offset timeline, we can replace the idle watermark
 							// with any watermark whose watermark is <= otValue.Watermark
-							watermarkOffset := processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
+							referredWatermarkOffset := processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
 							// if the referred watermark is empty, skip
-							if watermarkOffset.offset != -1 {
-								p.offsetTimeline.PutIdle(watermarkOffset)
+							if referredWatermarkOffset.watermark != -1 {
+								p.offsetTimeline.PutIdle(referredWatermarkOffset)
 								break
 							}
 						}
