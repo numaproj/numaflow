@@ -266,7 +266,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					}
 					// if the break never happens, it's safe to do nothing ATM
 					// it could be the Vn-1's idle processor's speed is much slower than the others
-					// or the data is not flowing into this Vn's processor
+					// or no data is flowing into this Vn's processor
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					p.offsetTimeline.Put(OffsetWatermark{
