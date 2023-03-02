@@ -5,7 +5,7 @@ on:
   - cron: '55 23 * * *'
   push:
     branches:
-      - dev-*
+      - dev-nightly*
 
 permissions:
   contents: read
