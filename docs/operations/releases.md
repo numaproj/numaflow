@@ -13,3 +13,9 @@ There's a `stable` tag, pointing to a latest stable release, usually it is the l
 ## Release Cycle
 
 TBD as Numaflow is under active development.
+
+## Nightly Build
+
+If you want to try out the new features on `main` branch, Numaflow provides nightly build images from `main`, the images are available in the format of `quay.io/numaproj/numaflow:nightly-yyyyMMdd`.
+
+Nightly build images expire in 30 days.
