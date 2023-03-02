@@ -133,6 +133,8 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	}
 }
 
+// validateWatermark checks if the new watermark is greater than the head watermark, return true if yes,
+// otherwise, return false
 func (p *publish) validateWatermark(wm processor.Watermark) (processor.Watermark, bool) {
 	if p.opts.isSource && p.opts.delay.Nanoseconds() > 0 && !time.Time(wm).IsZero() {
 		wm = processor.Watermark(time.Time(wm).Add(-p.opts.delay))
