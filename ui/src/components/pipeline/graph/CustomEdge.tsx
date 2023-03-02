@@ -31,6 +31,15 @@ const CustomEdge: FC<EdgeProps> = ({
             fontWeight: 700,
         };
     }
+    let wmStyle;
+    let pendingStyle;
+    if (sourceY === targetY) {
+        wmStyle = { marginTop: "-12px" }
+        pendingStyle = { marginTop: "1px" }
+    } else {
+        wmStyle = { right: "1px" }
+        pendingStyle = { left: "1px" }
+    }
 
     return (
         <>
@@ -44,10 +53,9 @@ const CustomEdge: FC<EdgeProps> = ({
                         fontFamily: "IBM Plex Sans",
                         fontWeight: 400,
                         fontSize: "0.6rem",
-                        width: "40px",
+                        width: "fit-content",
                         display: "flex",
                         justifyContent: "center",
-
                     }}
                     className="nodrag nopan"
                 >
@@ -64,7 +72,7 @@ const CustomEdge: FC<EdgeProps> = ({
                             arrow
                             placement={"top"}
                         >
-                            <div className={"edge-watermark"}>
+                            <div className={"edge-watermark"} style={wmStyle}>
                                 {Math.min.apply(null, data.edgeWatermark.watermarks)}
                             </div>
                         </Tooltip>
@@ -78,7 +86,7 @@ const CustomEdge: FC<EdgeProps> = ({
                         arrow
                         placement={"bottom"}
                     >
-                        <div className={"edge-backpressure"}>
+                        <div className={"edge-backpressure"} style={pendingStyle}>
                             {data.backpressureLabel}
                         </div>
                     </Tooltip>
