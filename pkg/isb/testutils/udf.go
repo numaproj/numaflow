@@ -27,7 +27,7 @@ func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb
 	_ = ctx
 	offset := readMessage.ReadOffset
 	payload := readMessage.Body.Payload
-	parentPaneInfo := readMessage.PaneInfo
+	parentPaneInfo := readMessage.MessageInfo
 
 	// apply UDF
 	_ = payload
@@ -37,9 +37,9 @@ func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb
 
 	writeMessage := &isb.Message{
 		Header: isb.Header{
-			PaneInfo: parentPaneInfo,
-			ID:       offset.String(),
-			Key:      key,
+			MessageInfo: parentPaneInfo,
+			ID:          offset.String(),
+			Key:         key,
 		},
 		Body: isb.Body{
 			Payload: result,

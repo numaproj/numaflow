@@ -159,8 +159,8 @@ func New(
 		m := &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{EventTime: eventTime},
-					ID:       id,
+					MessageInfo: isb.MessageInfo{EventTime: eventTime},
+					ID:          id,
 				},
 				Body: isb.Body{
 					Payload: msg,

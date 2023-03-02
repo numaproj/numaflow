@@ -314,7 +314,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	var result = []*isb.Message{
 		{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{
+				MessageInfo: isb.MessageInfo{
 					EventTime: time.UnixMilli(60000),
 				},
 				ID:  "1",

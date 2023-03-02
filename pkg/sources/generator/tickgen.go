@@ -318,8 +318,8 @@ func (mg *memgen) newReadMessage(payload []byte, offset int64) *isb.ReadMessage 
 	msg := isb.Message{
 		Header: isb.Header{
 			// TODO: insert the right time based on the generator
-			PaneInfo: isb.PaneInfo{EventTime: timeFromNanos(parseTime(payload))},
-			ID:       strconv.FormatInt(offset, 10) + "-" + strconv.FormatInt(int64(mg.vertexInstance.Replica), 10),
+			MessageInfo: isb.MessageInfo{EventTime: timeFromNanos(parseTime(payload))},
+			ID:          strconv.FormatInt(offset, 10) + "-" + strconv.FormatInt(int64(mg.vertexInstance.Replica), 10),
 		},
 		Body: isb.Body{Payload: payload},
 	}

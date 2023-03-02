@@ -30,8 +30,8 @@ type paneInfoPreamble struct {
 	IsLate     bool
 }
 
-// MarshalBinary encodes PaneInfo to the binary format
-func (p PaneInfo) MarshalBinary() (data []byte, err error) {
+// MarshalBinary encodes MessageInfo to the binary format
+func (p MessageInfo) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	var preamble = paneInfoPreamble{
 		EventEpoch: p.EventTime.UnixMilli(),
@@ -43,8 +43,8 @@ func (p PaneInfo) MarshalBinary() (data []byte, err error) {
 	return buf.Bytes(), nil
 }
 
-// UnmarshalBinary decodes PaneInfo from the binary format
-func (p *PaneInfo) UnmarshalBinary(data []byte) (err error) {
+// UnmarshalBinary decodes MessageInfo from the binary format
+func (p *MessageInfo) UnmarshalBinary(data []byte) (err error) {
 	var r = bytes.NewReader(data)
 	var preamble = new(paneInfoPreamble)
 	err = binary.Read(r, binary.LittleEndian, preamble)
@@ -65,7 +65,7 @@ type headerPreamble struct {
 // MarshalBinary encodes Header to a binary format
 func (h Header) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
-	paneInfo, err := h.PaneInfo.MarshalBinary()
+	paneInfo, err := h.MessageInfo.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 	} else if n != int(preamble.PLen) {
 		return fmt.Errorf("expected to read paneInfo size of %d but got %d", preamble.PLen, n)
 	}
-	var paneInfo = new(PaneInfo)
+	var paneInfo = new(MessageInfo)
 	if err = paneInfo.UnmarshalBinary(paneInfoByte); err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 	if err = binary.Read(r, binary.LittleEndian, key); err != nil {
 		return err
 	}
-	h.PaneInfo = *paneInfo
+	h.MessageInfo = *paneInfo
 	h.ID = string(id)
 	h.Key = string(key)
 	return err

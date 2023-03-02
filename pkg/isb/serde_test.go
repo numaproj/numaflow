@@ -16,7 +16,7 @@ func TestPaneInfo(t *testing.T) {
 	tests := []struct {
 		name               string
 		fields             fields
-		wantData           PaneInfo
+		wantData           MessageInfo
 		wantMarshalError   bool
 		wantUnmarshalError bool
 	}{
@@ -26,7 +26,7 @@ func TestPaneInfo(t *testing.T) {
 				EventTime: time.UnixMilli(1676617200000),
 				IsLate:    false,
 			},
-			wantData: PaneInfo{
+			wantData: MessageInfo{
 				EventTime: time.UnixMilli(1676617200000).UTC(),
 				IsLate:    false,
 			},
@@ -39,7 +39,7 @@ func TestPaneInfo(t *testing.T) {
 				EventTime: time.UnixMilli(1676617200000),
 				IsLate:    true,
 			},
-			wantData: PaneInfo{
+			wantData: MessageInfo{
 				EventTime: time.UnixMilli(1676617200000).UTC(),
 				IsLate:    true,
 			},
@@ -49,7 +49,7 @@ func TestPaneInfo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := PaneInfo{
+			p := MessageInfo{
 				EventTime: tt.fields.EventTime,
 				IsLate:    tt.fields.IsLate,
 			}
@@ -58,7 +58,7 @@ func TestPaneInfo(t *testing.T) {
 				t.Errorf("MarshalBinary() error = %v, wantMarshalError %v", err, tt.wantMarshalError)
 				return
 			}
-			var newP = new(PaneInfo)
+			var newP = new(MessageInfo)
 			err = newP.UnmarshalBinary(gotData)
 			if (err != nil) != tt.wantUnmarshalError {
 				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
@@ -73,7 +73,7 @@ func TestPaneInfo(t *testing.T) {
 
 func TestHeader(t *testing.T) {
 	type fields struct {
-		PaneInfo PaneInfo
+		PaneInfo MessageInfo
 		ID       string
 		Key      string
 	}
@@ -87,7 +87,7 @@ func TestHeader(t *testing.T) {
 		{
 			name: "good",
 			fields: fields{
-				PaneInfo: PaneInfo{
+				PaneInfo: MessageInfo{
 					EventTime: time.UnixMilli(1676617200000),
 					IsLate:    true,
 				},
@@ -95,7 +95,7 @@ func TestHeader(t *testing.T) {
 				Key: "TestKey",
 			},
 			wantData: Header{
-				PaneInfo: PaneInfo{
+				MessageInfo: MessageInfo{
 					EventTime: time.UnixMilli(1676617200000).UTC(),
 					IsLate:    true,
 				},
@@ -109,9 +109,9 @@ func TestHeader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &Header{
-				PaneInfo: tt.fields.PaneInfo,
-				ID:       tt.fields.ID,
-				Key:      tt.fields.Key,
+				MessageInfo: tt.fields.PaneInfo,
+				ID:          tt.fields.ID,
+				Key:         tt.fields.Key,
 			}
 			gotData, err := h.MarshalBinary()
 			if (err != nil) != tt.wantMarshalError {
@@ -202,7 +202,7 @@ func TestMessage(t *testing.T) {
 			name: "good",
 			fields: fields{
 				Header: Header{
-					PaneInfo: PaneInfo{
+					MessageInfo: MessageInfo{
 						EventTime: time.UnixMilli(1676617200000),
 						IsLate:    true,
 					},
@@ -215,7 +215,7 @@ func TestMessage(t *testing.T) {
 			},
 			wantData: Message{
 				Header: Header{
-					PaneInfo: PaneInfo{
+					MessageInfo: MessageInfo{
 						EventTime: time.UnixMilli(1676617200000).UTC(),
 						IsLate:    true,
 					},
@@ -279,7 +279,7 @@ func TestReadMessage(t *testing.T) {
 			fields: fields{
 				Message: Message{
 					Header: Header{
-						PaneInfo: PaneInfo{
+						MessageInfo: MessageInfo{
 							EventTime: time.UnixMilli(1676617200000),
 							IsLate:    true,
 						},
@@ -298,7 +298,7 @@ func TestReadMessage(t *testing.T) {
 			wantData: ReadMessage{
 				Message: Message{
 					Header: Header{
-						PaneInfo: PaneInfo{
+						MessageInfo: MessageInfo{
 							EventTime: time.UnixMilli(1676617200000).UTC(),
 							IsLate:    true,
 						},
