@@ -84,8 +84,5 @@ jobs:
 
       - name: Container build and push with arm64/amd64
         run: |
-          echo 'LABEL quay.expires-after="20d"' > /tmp/Dockerfile
-          cat Dockerfile >> /tmp/Dockerfile
-          mv /tmp/Dockerfile Dockerfile
-          IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true make image-multi
+          IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true DOCKER_BUILD_ARGS="--label \"quay.expires-after=20d\"" make image-multi
 
