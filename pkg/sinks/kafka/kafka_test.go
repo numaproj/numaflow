@@ -65,15 +65,15 @@ func TestWriteSuccessToKafka(t *testing.T) {
 	msgs := []isb.Message{
 		{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{},
-				Key:      "key1",
+				MessageInfo: isb.MessageInfo{},
+				Key:         "key1",
 			},
 			Body: isb.Body{Payload: []byte("welcome1")},
 		},
 		{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{},
-				Key:      "key1",
+				MessageInfo: isb.MessageInfo{},
+				Key:         "key1",
 			},
 			Body: isb.Body{Payload: []byte("welcome1")},
 		},
@@ -117,15 +117,15 @@ func TestWriteFailureToKafka(t *testing.T) {
 	msgs := []isb.Message{
 		{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{},
-				Key:      "key1",
+				MessageInfo: isb.MessageInfo{},
+				Key:         "key1",
 			},
 			Body: isb.Body{Payload: []byte("welcome1")},
 		},
 		{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{},
-				Key:      "key1",
+				MessageInfo: isb.MessageInfo{},
+				Key:         "key1",
 			},
 			Body: isb.Body{Payload: []byte("welcome1")},
 		},
