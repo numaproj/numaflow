@@ -73,9 +73,10 @@ func TestPaneInfo(t *testing.T) {
 
 func TestHeader(t *testing.T) {
 	type fields struct {
-		PaneInfo MessageInfo
-		ID       string
-		Key      string
+		MessageInfo MessageInfo
+		Kind        MessageKind
+		ID          string
+		Key         string
 	}
 	tests := []struct {
 		name               string
@@ -87,20 +88,22 @@ func TestHeader(t *testing.T) {
 		{
 			name: "good",
 			fields: fields{
-				PaneInfo: MessageInfo{
+				MessageInfo: MessageInfo{
 					EventTime: time.UnixMilli(1676617200000),
 					IsLate:    true,
 				},
-				ID:  "TestID",
-				Key: "TestKey",
+				Kind: Data,
+				ID:   "TestID",
+				Key:  "TestKey",
 			},
 			wantData: Header{
 				MessageInfo: MessageInfo{
 					EventTime: time.UnixMilli(1676617200000).UTC(),
 					IsLate:    true,
 				},
-				ID:  "TestID",
-				Key: "TestKey",
+				Kind: Data,
+				ID:   "TestID",
+				Key:  "TestKey",
 			},
 			wantMarshalError:   false,
 			wantUnmarshalError: false,
@@ -109,7 +112,8 @@ func TestHeader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &Header{
-				MessageInfo: tt.fields.PaneInfo,
+				MessageInfo: tt.fields.MessageInfo,
+				Kind:        tt.fields.Kind,
 				ID:          tt.fields.ID,
 				Key:         tt.fields.Key,
 			}
@@ -206,8 +210,9 @@ func TestMessage(t *testing.T) {
 						EventTime: time.UnixMilli(1676617200000),
 						IsLate:    true,
 					},
-					ID:  "TestID",
-					Key: "TestKey",
+					Kind: Data,
+					ID:   "TestID",
+					Key:  "TestKey",
 				},
 				Body: Body{
 					Payload: []byte("TestBODY"),
@@ -219,8 +224,9 @@ func TestMessage(t *testing.T) {
 						EventTime: time.UnixMilli(1676617200000).UTC(),
 						IsLate:    true,
 					},
-					ID:  "TestID",
-					Key: "TestKey",
+					Kind: Data,
+					ID:   "TestID",
+					Key:  "TestKey",
 				},
 				Body: Body{
 					Payload: []byte("TestBODY"),
@@ -283,8 +289,9 @@ func TestReadMessage(t *testing.T) {
 							EventTime: time.UnixMilli(1676617200000),
 							IsLate:    true,
 						},
-						ID:  "TestID",
-						Key: "TestKey",
+						Kind: Data,
+						ID:   "TestID",
+						Key:  "TestKey",
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),
@@ -302,8 +309,9 @@ func TestReadMessage(t *testing.T) {
 							EventTime: time.UnixMilli(1676617200000).UTC(),
 							IsLate:    true,
 						},
-						ID:  "TestID",
-						Key: "TestKey",
+						Kind: Data,
+						ID:   "TestID",
+						Key:  "TestKey",
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),

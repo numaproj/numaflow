@@ -20,15 +20,15 @@ import (
 	"time"
 )
 
-// MessageType represents the message type of the payload.
-type MessageType int16
+// MessageKind represents the message type of the payload.
+type MessageKind int16
 
 const (
-	Data MessageType = 1 << iota // Data payload
+	Data MessageKind = 1 << iota // Data payload
 	WMB                          // Watermark Barrier
 )
 
-func (mt MessageType) String() string {
+func (mt MessageKind) String() string {
 	switch mt {
 	case mt & Data:
 		return "Data"
@@ -40,15 +40,15 @@ func (mt MessageType) String() string {
 }
 
 // MessageInfo is the message information window of the payload.
-// The contents inside the MessageInfo can be interpreted differently based on the MessageType.
+// The contents inside the MessageInfo can be interpreted differently based on the MessageKind.
 type MessageInfo struct {
 	// EventTime when
-	// MessageType == Data represents the event time of the message
-	// MessageType == WMB, value is ignored
+	// MessageKind == Data represents the event time of the message
+	// MessageKind == WMB, value is ignored
 	EventTime time.Time
 	// IsLate when
-	// MessageType == Data, IsLate is used to indicate if the message is a late data (assignment happens at source)
-	// MessageType == WMB, value is ignored
+	// MessageKind == Data, IsLate is used to indicate if the message is a late data (assignment happens at source)
+	// MessageKind == WMB, value is ignored
 	IsLate bool
 }
 
@@ -56,7 +56,7 @@ type MessageInfo struct {
 type Header struct {
 	MessageInfo
 	// Kind indicates the kind of Message
-	Kind MessageType
+	Kind MessageKind
 	// ID is used for exactly-once-semantics. ID is usually populated from the offset, if offset is available.
 	ID string
 	// Key is (key,value) in the map-reduce paradigm which will be used for conditional forwarding.

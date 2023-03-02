@@ -82,11 +82,11 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 	key := readMessage.Key
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
-	parentPaneInfo := readMessage.MessageInfo
+	parentMessageInfo := readMessage.MessageInfo
 	var d = &functionpb.Datum{
 		Key:       key,
 		Value:     payload,
-		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
+		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
 	}
 
@@ -108,7 +108,7 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 		key := datum.Key
 		writeMessage := &isb.Message{
 			Header: isb.Header{
-				MessageInfo: parentPaneInfo,
+				MessageInfo: parentMessageInfo,
 				ID:          fmt.Sprintf("%s-%d", offset.String(), i),
 				Key:         key,
 			},
@@ -206,12 +206,12 @@ readLoop:
 func createDatum(readMessage *isb.ReadMessage) *functionpb.Datum {
 	key := readMessage.Key
 	payload := readMessage.Body.Payload
-	parentPaneInfo := readMessage.MessageInfo
+	parentMessageInfo := readMessage.MessageInfo
 
 	var d = &functionpb.Datum{
 		Key:       key,
 		Value:     payload,
-		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentPaneInfo.EventTime)},
+		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
 	}
 	return d
