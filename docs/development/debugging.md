@@ -49,7 +49,7 @@ go tool pprof -http localhost:8081 https+insecure://localhost:2469/debug/pprof/h
 `Tracing` is also available with commands below.
 
 ```sh
-# Add optional "&seconds=n" to specify the duration in the seconds.
+# Add optional "&seconds=n" to specify the duration.
 curl -skq https://localhost:2469/debug/pprof/trace?debug=1 -o trace.out
 
 go tool trace -http localhost:8082 trace.out
