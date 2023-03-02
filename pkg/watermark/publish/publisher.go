@@ -37,7 +37,7 @@ type Publisher interface {
 	// PublishWatermark publishes the watermark.
 	PublishWatermark(processor.Watermark, isb.Offset)
 	// PublishIdleWatermark publishes the idle watermark.
-	PublishIdleWatermark()
+	PublishIdleWatermark(wm processor.Watermark)
 	// GetLatestWatermark returns the latest published watermark.
 	GetLatestWatermark() processor.Watermark
 }
@@ -96,18 +96,8 @@ func (p *publish) initialSetup() {
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
 // is less than the current head watermark.
 func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
-	if p.opts.isSource && p.opts.delay.Nanoseconds() > 0 && !time.Time(wm).IsZero() {
-		wm = processor.Watermark(time.Time(wm).Add(-p.opts.delay))
-	}
-	// update p.headWatermark only if wm > p.headWatermark
-	if wm.After(time.Time(p.headWatermark)) {
-		p.log.Debugw("New watermark is updated for the head watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
-		p.headWatermark = wm
-	} else if wm.Before(time.Time(p.headWatermark)) {
-		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
-		return
-	} else {
-		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+	validWM, skipWM := p.validateWatermark(wm)
+	if skipWM {
 		return
 	}
 
@@ -123,7 +113,7 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 	}
 	var otValue = ot.Value{
 		Offset:    seq,
-		Watermark: wm.UnixMilli(),
+		Watermark: validWM.UnixMilli(),
 	}
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
@@ -137,18 +127,42 @@ func (p *publish) PublishWatermark(wm processor.Watermark, offset isb.Offset) {
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
-			p.log.Debugw("New watermark published with offset", zap.Int64("head", p.headWatermark.UnixMilli()), zap.Int64("new", wm.UnixMilli()), zap.Int64("offset", seq))
+			p.log.Debugw("New watermark published with offset", zap.Int64("head", p.headWatermark.UnixMilli()), zap.Int64("new", validWM.UnixMilli()), zap.Int64("offset", seq))
 			break
 		}
 	}
 }
 
+// validateWatermark checks if the new watermark is greater than the head watermark, return true if yes,
+// otherwise, return false
+func (p *publish) validateWatermark(wm processor.Watermark) (processor.Watermark, bool) {
+	if p.opts.isSource && p.opts.delay.Nanoseconds() > 0 && !time.Time(wm).IsZero() {
+		wm = processor.Watermark(time.Time(wm).Add(-p.opts.delay))
+	}
+	// update p.headWatermark only if wm > p.headWatermark
+	if wm.After(time.Time(p.headWatermark)) {
+		p.log.Debugw("New watermark is updated for the head watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		p.headWatermark = wm
+	} else if wm.Before(time.Time(p.headWatermark)) {
+		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		return processor.Watermark{}, true
+	} else {
+		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		return processor.Watermark{}, true
+	}
+	return wm, false
+}
+
 // PublishIdleWatermark publishes the idle watermark and will retry until it can succeed.
-func (p *publish) PublishIdleWatermark() {
+func (p *publish) PublishIdleWatermark(wm processor.Watermark) {
 	var key = p.entity.GetName()
+	validWM, skipWM := p.validateWatermark(wm)
+	if skipWM {
+		return
+	}
 	var otValue = ot.Value{
 		Offset:    0,
-		Watermark: 0,
+		Watermark: validWM.UnixMilli(),
 		Idle:      true,
 	}
 	value, err := otValue.EncodeToBytes()

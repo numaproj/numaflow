@@ -6,7 +6,7 @@ on:
       - 'v*'
     branches:
       - main
-      - dev-*
+      - dev-release*
 
 defaults:
   run:
@@ -81,7 +81,7 @@ jobs:
           if [ $tag = "main" ]; then
             tag="latest"
           fi
-          echo "::set-output name=VERSION::$tag"
+          echo "VERSION=$tag" >> $GITHUB_OUTPUT
 
       - name: Container build and push with arm64/amd64
         run: |

@@ -18,6 +18,7 @@ package fetch
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -280,4 +281,53 @@ func TestOffsetTimeline(t *testing.T) {
 	testTimeline.PutIdle(OffsetWatermark{watermark: 34, offset: 38}) // inserted
 	assert.Equal(t, "[34:38] -> [33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21]", testTimeline.Dump())
 
+}
+
+func TestOffsetTimeline_GetReferredWatermark(t *testing.T) {
+	var (
+		ctx            = context.Background()
+		testTimeline   = NewOffsetTimeline(ctx, 10)
+		testWatermarks = [10]OffsetWatermark{
+			{watermark: 10, offset: 9},
+			{watermark: 12, offset: 20},
+			{watermark: 13, offset: 21},
+			{watermark: 15, offset: 24},
+			{watermark: 15, offset: 25}, // will overwrite the previous one
+			{watermark: 20, offset: 26},
+			{watermark: 23, offset: 27},
+			{watermark: 28, offset: 30},
+			{watermark: 29, offset: 35},
+			{watermark: 32, offset: 36},
+		}
+		referredEventTimes = [10]int64{
+			12,
+			12,
+			12,
+			13,
+			16,
+			19,
+			20,
+			28,
+			30,
+			32,
+		}
+		expectedReferredWatermarks = [10]OffsetWatermark{
+			{watermark: 10, offset: 9},
+			{watermark: 12, offset: 20},
+			{watermark: 12, offset: 20},
+			{watermark: 13, offset: 21},
+			{watermark: 15, offset: 25},
+			{watermark: 15, offset: 25},
+			{watermark: 20, offset: 26},
+			{watermark: 28, offset: 30},
+			{watermark: 29, offset: 35},
+			{watermark: 32, offset: 36},
+		}
+	)
+
+	for i, watermark := range testWatermarks {
+		testTimeline.Put(watermark)
+		assert.Equal(t, expectedReferredWatermarks[i], testTimeline.GetReferredWatermark(referredEventTimes[i]), fmt.Sprintf("test %d", i))
+	}
+	assert.Equal(t, "[32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20] -> [10:9] -> [-1:-1]", testTimeline.Dump())
 }

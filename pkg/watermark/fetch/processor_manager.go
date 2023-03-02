@@ -252,26 +252,30 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 				if otValue.Idle {
 					var processors = v.GetAllProcessors()
 					for processorName, processor := range processors {
-						// skip the processor itself, only use other processors as reference
+						// skip the idle processor itself, only use other processors as reference
 						if processorName != value.Key() {
-							// any other Vn-1 processor's non-empty head offsetWatermark can replace the idle watermark
-							// if all tail offsetWatermarks are empty, then it means there's no data flowing into
-							// this Vn processor, so it's safe to do nothing
-							watermarkOffset := processor.offsetTimeline.GetHeadOffsetWatermark()
-							if watermarkOffset.offset != -1 {
-								p.offsetTimeline.PutIdle(watermarkOffset)
+							// in any other Vn-1 processor's offset timeline, we can replace the idle watermark
+							// with any watermark whose watermark is <= otValue.Watermark
+							referredWatermarkOffset := processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
+							// if the referred watermark is empty, skip
+							if referredWatermarkOffset.watermark != -1 {
+								p.offsetTimeline.PutIdle(referredWatermarkOffset)
+								v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("referredWatermark", referredWatermarkOffset.watermark), zap.Int64("offset", referredWatermarkOffset.offset))
 								break
 							}
 						}
 					}
+					// if the break never happens, it's safe to do nothing ATM
+					// it could be the Vn-1's idle processor's speed is much slower than the others
+					// or no data is flowing into this Vn's processor
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					p.offsetTimeline.Put(OffsetWatermark{
 						watermark: otValue.Watermark,
 						offset:    otValue.Offset,
 					})
+					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 				}
-				v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 			case store.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
 				// naturally trim the KV store.
