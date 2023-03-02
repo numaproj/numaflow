@@ -2,7 +2,7 @@ name: nightly-build
 
 on:
   schedule:
-  - cron: '55 23 * * *'
+    - cron: '55 23 * * *'
   push:
     branches:
       - dev-nightly*
