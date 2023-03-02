@@ -18,4 +18,4 @@ TBD as Numaflow is under active development.
 
 If you want to try out the new features on `main` branch, Numaflow provides nightly build images from `main`, the images are available in the format of `quay.io/numaproj/numaflow:nightly-yyyyMMdd`.
 
-Nightly build images will be expired in 30 days.
+Nightly build images expire in 30 days.
