@@ -159,10 +159,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 				// We only support single partition non-keyed windowing.
 				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" should not > 1 for non-keyed windowing`, e.From, e.To)
 			}
-			if _, ok := sources[e.From]; ok && reduceUdfs[e.To].UDF.GroupBy.Keyed {
-				// Source vertex can not lead to a keyed reduce vertex, because the keys coming from sources are undeterminable.
-				return fmt.Errorf(`invalid spec (%s - %s), "keyed" should not be true for a reduce vertex which has data coming from a source vertex`, e.From, e.To)
-			}
 		}
 		namesInEdges[e.From] = true
 		namesInEdges[e.To] = true

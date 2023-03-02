@@ -99,25 +99,6 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	c.JSON(http.StatusOK, pl)
 }
 
-// ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
-func (h *handler) ListNamespaces(c *gin.Context) {
-	ns := c.GetString("namespace")
-	l, err := h.numaflowClient.Pipelines(ns).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	m := make(map[string]bool)
-	for _, pl := range l.Items {
-		m[pl.Namespace] = true
-	}
-	namespaces := []string{}
-	for k := range m {
-		namespaces = append(namespaces, k)
-	}
-	c.JSON(http.StatusOK, namespaces)
-}
-
 // ListInterStepBufferServices is used to provide all the interstepbuffer services in a namespace
 func (h *handler) ListInterStepBufferServices(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)

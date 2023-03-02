@@ -53,3 +53,8 @@ type ReadMessage struct {
 	ReadOffset Offset
 	Watermark  time.Time
 }
+
+// ToReadMessage converts Message to a ReadMessage by providing the offset and watermark
+func (m *Message) ToReadMessage(ot Offset, wm time.Time) *ReadMessage {
+	return &ReadMessage{Message: *m, ReadOffset: ot, Watermark: wm}
+}

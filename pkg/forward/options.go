@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 // options for forwarding the message
@@ -34,6 +35,8 @@ type options struct {
 	retryInterval time.Duration
 	// vertexType indicates the type of the vertex
 	vertexType dfv1.VertexType
+	// srcWatermarkPublisher is used to publish source watermark
+	srcWatermarkPublisher isb.SourceWatermarkPublisher
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
 }
@@ -76,6 +79,14 @@ func WithLogger(l *zap.SugaredLogger) Option {
 func WithVertexType(t dfv1.VertexType) Option {
 	return func(o *options) error {
 		o.vertexType = t
+		return nil
+	}
+}
+
+// WithSourceWatermarkPublisher sets the source watermark publisher
+func WithSourceWatermarkPublisher(p isb.SourceWatermarkPublisher) Option {
+	return func(o *options) error {
+		o.srcWatermarkPublisher = p
 		return nil
 	}
 }
