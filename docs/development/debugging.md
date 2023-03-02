@@ -46,6 +46,15 @@ kubectl port-forward simple-pipeline-p1-0-7jzbn 2469
 go tool pprof -http localhost:8081 https+insecure://localhost:2469/debug/pprof/heap
 ```
 
+`Tracing` is also available with commands below.
+
+```sh
+# Add optional "&seconds=n" to specify the duration.
+curl -skq https://localhost:2469/debug/pprof/trace?debug=1 -o trace.out
+
+go tool trace -http localhost:8082 trace.out
+```
+
 ## Debug Inside the Container
 
 When doing local [development](development.md) using command lines such as `make start`, or `make image`, the built `numaflow` docker image is based on `alpine`, which allows you to execute into the container for debugging with `kubectl exec -it {pod-name} -c {container-name} -- sh`.
