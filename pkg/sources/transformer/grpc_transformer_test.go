@@ -27,10 +27,11 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
 	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/udf/function"
-	"github.com/stretchr/testify/assert"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
@@ -114,7 +115,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{
+					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169600, 0),
 					},
 					ID:  "test_id",
@@ -158,7 +159,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{
+					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
 					ID:  "test_id",

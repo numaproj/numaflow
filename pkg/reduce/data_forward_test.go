@@ -119,7 +119,7 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 	b, _ := json.Marshal(payload)
 	ret := &isb.Message{
 		Header: isb.Header{
-			PaneInfo: isb.PaneInfo{
+			MessageInfo: isb.MessageInfo{
 				EventTime: partitionID.End,
 			},
 			ID:  "msgID",
@@ -156,7 +156,7 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 		b, _ := json.Marshal(payload)
 		msg := &isb.Message{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{
+				MessageInfo: isb.MessageInfo{
 					EventTime: partitionID.End,
 				},
 				ID:  "msgID",
@@ -194,7 +194,7 @@ func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 		b, _ := json.Marshal(payload)
 		ret := &isb.Message{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{
+				MessageInfo: isb.MessageInfo{
 					EventTime: partitionID.End,
 				},
 				ID:  "msgID",
@@ -806,7 +806,7 @@ func buildMessagesForReduce(count int, key string, publishTime time.Time) []isb.
 		})
 		messages[i] = isb.Message{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{
+				MessageInfo: isb.MessageInfo{
 					EventTime: publishTime,
 				},
 				ID:  fmt.Sprintf("%d", i),
@@ -894,7 +894,7 @@ func buildIsbMessage(messageValue int, eventTime time.Time) isb.Message {
 	})
 	return isb.Message{
 		Header: isb.Header{
-			PaneInfo: isb.PaneInfo{
+			MessageInfo: isb.MessageInfo{
 				EventTime: eventTime,
 			},
 			ID:  fmt.Sprintf("%d", messageValue),

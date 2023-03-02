@@ -152,7 +152,7 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 		_ = ctx
 		offset := readMessage.ReadOffset
 		payload := readMessage.Body.Payload
-		parentPaneInfo := readMessage.PaneInfo
+		parentPaneInfo := readMessage.MessageInfo
 
 		// apply source data transformer
 		_ = payload
@@ -164,9 +164,9 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 
 		writeMessage := &isb.Message{
 			Header: isb.Header{
-				PaneInfo: parentPaneInfo,
-				ID:       offset.String(),
-				Key:      key,
+				MessageInfo: parentPaneInfo,
+				ID:          offset.String(),
+				Key:         key,
 			},
 			Body: isb.Body{
 				Payload: result,

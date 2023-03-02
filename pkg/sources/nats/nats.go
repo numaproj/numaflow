@@ -167,8 +167,8 @@ func New(
 			Message: isb.Message{
 				Header: isb.Header{
 					// TODO: Be able to specify event time.
-					PaneInfo: isb.PaneInfo{EventTime: time.Now()},
-					ID:       id,
+					MessageInfo: isb.MessageInfo{EventTime: time.Now()},
+					ID:          id,
 				},
 				Body: isb.Body{
 					Payload: msg.Data,
