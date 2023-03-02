@@ -80,7 +80,7 @@ jobs:
         id: version
         run: |
           tag=$(date +"%Y%m%d")
-          echo "::set-output name=VERSION::nightly-$tag"
+          echo "VERSION=nightly-$tag" >> $GITHUB_OUTPUT
 
       - name: Container build and push with arm64/amd64
         run: |
