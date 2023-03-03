@@ -20,14 +20,14 @@ import (
 	"io"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // Fetcher fetches watermark data from Vn-1 vertex.
 type Fetcher interface {
 	io.Closer
 	// GetWatermark returns the inorder monotonically increasing watermark of the edge connected to Vn-1.
-	GetWatermark(offset isb.Offset) processor.Watermark
+	GetWatermark(offset isb.Offset) wmb.Watermark
 	// GetHeadWatermark returns the latest watermark based on the head offset
-	GetHeadWatermark() processor.Watermark
+	GetHeadWatermark() wmb.Watermark
 }
