@@ -39,6 +39,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
 
@@ -67,36 +68,36 @@ var nonKeyedVertex = &dfv1.VertexInstance{
 }
 
 type EventTypeWMProgressor struct {
-	watermarks map[string]processor.Watermark
+	watermarks map[string]wmb.Watermark
 	m          sync.Mutex
 }
 
-func (e *EventTypeWMProgressor) PublishWatermark(watermark processor.Watermark, offset isb.Offset) {
+func (e *EventTypeWMProgressor) PublishWatermark(watermark wmb.Watermark, offset isb.Offset) {
 	e.m.Lock()
 	defer e.m.Unlock()
 	e.watermarks[offset.String()] = watermark
 }
 
-func (e *EventTypeWMProgressor) PublishIdleWatermark(processor.Watermark) {
+func (e *EventTypeWMProgressor) PublishIdleWatermark(wmb.Watermark) {
 	// TODO
 }
 
-func (e *EventTypeWMProgressor) GetLatestWatermark() processor.Watermark {
-	return processor.Watermark{}
+func (e *EventTypeWMProgressor) GetLatestWatermark() wmb.Watermark {
+	return wmb.Watermark{}
 }
 
 func (e *EventTypeWMProgressor) Close() error {
 	return nil
 }
 
-func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset) processor.Watermark {
+func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset) wmb.Watermark {
 	e.m.Lock()
 	defer e.m.Unlock()
 	return e.watermarks[offset.String()]
 }
 
-func (e *EventTypeWMProgressor) GetHeadWatermark() processor.Watermark {
-	return processor.Watermark{}
+func (e *EventTypeWMProgressor) GetHeadWatermark() wmb.Watermark {
+	return wmb.Watermark{}
 }
 
 // PayloadForTest is a dummy payload for testing.
@@ -227,7 +228,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	to := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
 
 	wmpublisher := &EventTypeWMProgressor{
-		watermarks: make(map[string]processor.Watermark),
+		watermarks: make(map[string]wmb.Watermark),
 	}
 
 	// keep on writing <count> messages every 1 second for the supplied key
@@ -834,7 +835,7 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 		// write the messages to fromBuffer, so that it will be available for consuming
 		offsets, _ := fromBuffer.Write(ctx, messages)
 		for _, offset := range offsets {
-			publish.PublishWatermark(processor.Watermark(publishTime), offset)
+			publish.PublishWatermark(wmb.Watermark(publishTime), offset)
 		}
 	}
 }
@@ -869,7 +870,7 @@ func publishMessages(ctx context.Context, startTime int, messages []int, testDur
 				if count >= batchSize {
 					offsets, _ := fromBuffer.Write(ctx, inputMsgs)
 					if len(offsets) > 0 {
-						publish.PublishWatermark(processor.Watermark(time.UnixMilli(int64(et))), offsets[len(offsets)-1])
+						publish.PublishWatermark(wmb.Watermark(time.UnixMilli(int64(et))), offsets[len(offsets)-1])
 					}
 					count = 0
 				}

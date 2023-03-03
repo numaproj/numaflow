@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package ot
+package wmb
 
 import (
 	"bytes"
@@ -30,14 +30,14 @@ func TestDecodeToOTValue(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    Value
+		want    WMB
 		wantErr bool
 	}{
 		{
 			name: "decode_success_using_ot_value",
 			args: args{
 				b: func() []byte {
-					v := Value{
+					v := WMB{
 						Offset:    100,
 						Watermark: 1667495100000,
 						Idle:      false,
@@ -47,7 +47,7 @@ func TestDecodeToOTValue(t *testing.T) {
 					return buf.Bytes()
 				}(),
 			},
-			want: Value{
+			want: WMB{
 				Offset:    100,
 				Watermark: 1667495100000,
 				Idle:      false,
@@ -68,7 +68,7 @@ func TestDecodeToOTValue(t *testing.T) {
 					return buf.Bytes()
 				}(),
 			},
-			want:    Value{},
+			want:    WMB{},
 			wantErr: true,
 		},
 		{
@@ -87,7 +87,7 @@ func TestDecodeToOTValue(t *testing.T) {
 					return buf.Bytes()
 				}(),
 			},
-			want:    Value{},
+			want:    WMB{},
 			wantErr: true,
 		},
 		{
@@ -95,20 +95,20 @@ func TestDecodeToOTValue(t *testing.T) {
 			args: args{
 				b: func() []byte {
 					v := struct {
-						Test0 int64
+						Test0 bool
 						Test1 int64
-						Test2 bool
+						Test2 int64
 					}{
-						Test0: 0,
+						Test0: true,
 						Test1: 0,
-						Test2: true,
+						Test2: 0,
 					}
 					buf := new(bytes.Buffer)
 					_ = binary.Write(buf, binary.LittleEndian, v)
 					return buf.Bytes()
 				}(),
 			},
-			want: Value{
+			want: WMB{
 				Offset:    0,
 				Watermark: 0,
 				Idle:      true,
@@ -120,14 +120,14 @@ func TestDecodeToOTValue(t *testing.T) {
 			args: args{
 				b: func() []byte {
 					v := struct {
-						Test0 int64
+						Test0 bool
 						Test1 int64
-						Test2 bool
+						Test2 int64
 						Test3 int64 // should be ignored
 					}{
-						Test0: 100,
-						Test1: 1667495100000,
-						Test2: false,
+						Test0: false,
+						Test1: 100,
+						Test2: 1667495100000,
 						Test3: 20,
 					}
 					buf := new(bytes.Buffer)
@@ -135,7 +135,7 @@ func TestDecodeToOTValue(t *testing.T) {
 					return buf.Bytes()
 				}(),
 			},
-			want: Value{
+			want: WMB{
 				Offset:    100,
 				Watermark: 1667495100000,
 				Idle:      false,
@@ -145,13 +145,13 @@ func TestDecodeToOTValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := DecodeToOTValue(tt.args.b)
+			got, err := DecodeToWMB(tt.args.b)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeToOTValue() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DecodeToWMB() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("DecodeToOTValue() got = %v, want %v", got, tt.want)
+				t.Errorf("DecodeToWMB() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -173,17 +173,17 @@ func TestOTValue_EncodeToBytes(t *testing.T) {
 		{
 			name: "encode_success",
 			fields: fields{
+				Idle:      false,
 				Offset:    100,
 				Watermark: 1667495100000,
-				Idle:      false,
 			},
-			want:    []byte{100, 0, 0, 0, 0, 0, 0, 0, 96, 254, 115, 62, 132, 1, 0, 0, 0},
+			want:    []byte{0, 100, 0, 0, 0, 0, 0, 0, 0, 96, 254, 115, 62, 132, 1, 0, 0},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := Value{
+			v := WMB{
 				Offset:    tt.fields.Offset,
 				Watermark: tt.fields.Watermark,
 			}

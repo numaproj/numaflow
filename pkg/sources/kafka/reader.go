@@ -39,6 +39,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type KafkaSource struct {
@@ -151,7 +152,7 @@ func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 	for p, t := range oldestTimestamps {
 		publisher := r.loadSourceWatermarkPublisher(p)
-		publisher.PublishWatermark(processor.Watermark(t), nil) // Source publisher does not care about the offset
+		publisher.PublishWatermark(wmb.Watermark(t), nil) // Source publisher does not care about the offset
 	}
 }
 
