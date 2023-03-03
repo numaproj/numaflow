@@ -24,16 +24,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/ot"
-	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 func otValueToBytes(offset int64, watermark int64, idle bool) ([]byte, error) {
-	otValue := ot.Value{
+	otValue := wmb.WMB{
 		Offset:    offset,
 		Watermark: watermark,
 		Idle:      idle,

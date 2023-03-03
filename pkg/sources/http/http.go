@@ -40,6 +40,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type httpSource struct {
@@ -247,7 +248,7 @@ func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
 		h.logger.Debugf("Publishing watermark %v to source", oldest)
-		h.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), nil) // Source publisher does not care about the offset
+		h.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
 	}
 }
 

@@ -26,6 +26,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -140,7 +141,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
 			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-				t.Errorf("GetWatermark() = %v, want %v", got, processor.Watermark(time.UnixMilli(tt.want)))
+				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 14 because the timeline has been populated ahead of time
 			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.UnixMilli(14).In(location))

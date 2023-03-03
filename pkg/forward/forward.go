@@ -36,8 +36,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // InterStepDataForward forwards the data from previous step to the current step via inter-step buffer.
@@ -233,12 +233,12 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	concurrentUDFProcessingStart := time.Now()
 
-	var processorWM processor.Watermark
+	var processorWM wmb.Watermark
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
 		// for source vertex, the udf is the source data transformer.
 		// in this case, we assign time.UnixMilli(-1) to processorWM.
 		// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
-		processorWM = processor.Watermark(time.UnixMilli(-1))
+		processorWM = wmb.Watermark(time.UnixMilli(-1))
 	} else {
 		// fetch watermark if available
 		// TODO: make it async (concurrent and wait later)

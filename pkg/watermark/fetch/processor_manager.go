@@ -24,13 +24,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // ProcessorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor). The code is running on Vn vertex.
@@ -188,7 +188,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				// value is epoch
 				intValue, convErr := strconv.Atoi(string(value.Value()))
 				if convErr != nil {
-					v.log.Errorw("Unable to convert intValue.Value() to int64", zap.Error(convErr))
+					v.log.Errorw("Unable to convert intValue.WMB() to int64", zap.Error(convErr))
 				} else {
 					// insert the last seen timestamp. we use this to figure whether this processor entity is inactive.
 					v.heartbeat.Put(value.Key(), int64(intValue))
@@ -244,19 +244,19 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					v.log.Errorw("Unable to find the processor", zap.String("processorEntity", value.Key()))
 					continue
 				}
-				otValue, err := ot.DecodeToOTValue(value.Value())
+				otValue, err := wmb.DecodeToWMB(value.Value())
 				if err != nil {
 					v.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
 					continue
 				}
 				if otValue.Idle {
 					var processors = v.GetAllProcessors()
-					for processorName, processor := range processors {
+					for processorName, _processor := range processors {
 						// skip the idle processor itself, only use other processors as reference
 						if processorName != value.Key() {
 							// in any other Vn-1 processor's offset timeline, we can replace the idle watermark
 							// with any watermark whose watermark is <= otValue.Watermark
-							referredWatermarkOffset := processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
+							referredWatermarkOffset := _processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
 							// if the referred watermark is empty, skip
 							if referredWatermarkOffset.watermark != -1 {
 								p.offsetTimeline.PutIdle(referredWatermarkOffset)

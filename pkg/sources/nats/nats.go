@@ -36,6 +36,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type natsSource struct {
@@ -243,7 +244,7 @@ func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		ns.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), nil) // Source publisher does not care about the offset
+		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
 	}
 }
 
