@@ -5,11 +5,13 @@ metadata:
 spec:
   vertices:
     - name: in
+      scale:
+        min: 1
       source:
         http: {}
         transformer:
           container:
-            image: quay.io/numaio/numaflow-python/mapt-event-time-filter:v5
+            image: quay.io/numaio/numaflow-python/mapt-event-time-filter:v7
     - name: sink-within-2022
       scale:
         min: 1
