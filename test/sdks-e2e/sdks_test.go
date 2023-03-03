@@ -65,7 +65,7 @@ func (s *SDKsSuite) TestSourceTransformerPython() {
 	janFirst2022 := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
 	// janFirst2023 := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	w.Expect().VertexPodLogContains("in", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1), PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogContains("in", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1), PodLogCheckOptionWithContainer("transformer"))
 }
 
 func TestHTTPSuite(t *testing.T) {
