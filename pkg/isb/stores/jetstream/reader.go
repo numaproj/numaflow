@@ -228,12 +228,16 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 		return nil, fmt.Errorf("failed to fetch messages from jet stream subject %q, %w", jr.subject, err)
 	}
 	for _, msg := range msgs {
-		var m = new(isb.ReadMessage)
+		var m = new(isb.Message)
 		err = m.UnmarshalBinary(msg.Data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal the message into isb.ReadMessage, %w", err)
+			return nil, fmt.Errorf("failed to unmarshal the message into isb.Message, %w", err)
 		}
-		result = append(result, m)
+		rm := &isb.ReadMessage{
+			ReadOffset: newOffset(msg, jr.inProgessTickDuration, jr.log),
+			Message:    *m,
+		}
+		result = append(result, rm)
 	}
 	return result, nil
 }
