@@ -404,7 +404,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	go reduceDataForward.Start()
 
 	// start the producer
-	go publishMessages(ctx, startTime, messageValue, 300, 10, p[fromBuffer.GetName()], fromBuffer)
+	publishMessages(ctx, startTime, messageValue, 300, 10, p[fromBuffer.GetName()], fromBuffer)
 
 	// wait until there is data in to buffer
 	for buffer.IsEmpty() {
