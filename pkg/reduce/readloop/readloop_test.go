@@ -64,9 +64,7 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 		b, _ := json.Marshal(payload)
 		msg := &isb.Message{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{
-					StartTime: partitionID.Start,
-					EndTime:   partitionID.End,
+				MessageInfo: isb.MessageInfo{
 					EventTime: partitionID.End,
 				},
 				ID:  "msgID",
@@ -150,10 +148,8 @@ func TestReadLoop_Startup(t *testing.T) {
 	latestMessage := &isb.ReadMessage{
 		Message: isb.Message{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{
+				MessageInfo: isb.MessageInfo{
 					EventTime: time.Unix(300, 0),
-					StartTime: time.Time{},
-					EndTime:   time.Time{},
 					IsLate:    false,
 				},
 				ID:  "",
@@ -208,7 +204,7 @@ func createStoreMessages(_ context.Context, key string, value int, eventTime tim
 		readMessage := &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{
+					MessageInfo: isb.MessageInfo{
 						EventTime: eventTime,
 					},
 					ID:  fmt.Sprintf("%d", value+1),

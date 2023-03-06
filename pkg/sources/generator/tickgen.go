@@ -39,6 +39,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 var log = logging.NewLogger()
@@ -179,7 +180,7 @@ func NewMemGen(
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(gensrc.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(gensrc.logger), forward.WithSourceWatermarkPublisher(gensrc)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -231,17 +232,17 @@ loop:
 			break loop
 		}
 	}
-	if len(msgs) > 0 {
-		// publish the last message's offset with watermark, this is an optimization to avoid too many insert calls
-		// into the offset timeline store.
-		// Please note that we are inserting the watermark before the data has been persisted into ISB by the forwarder.
-		o := msgs[len(msgs)-1].ReadOffset
-		// use the first event time as watermark to make it conservative
-		nanos, _ := msgs[0].ReadOffset.Sequence()
-		// remove the nanosecond precision
-		mg.sourcePublishWM.PublishWatermark(processor.Watermark(time.Unix(0, nanos)), o)
-	}
 	return msgs, nil
+}
+
+func (mg *memgen) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
+	if len(msgs) <= 0 {
+		return
+	}
+	// use the first event time as watermark to make it conservative
+	nanos, _ := msgs[0].ReadOffset.Sequence()
+	// remove the nanosecond precision
+	mg.sourcePublishWM.PublishWatermark(wmb.Watermark(time.Unix(0, nanos)), nil) // Source publisher does not care about the offset
 }
 
 // Ack acknowledges an array of offset.
@@ -318,8 +319,8 @@ func (mg *memgen) newReadMessage(payload []byte, offset int64) *isb.ReadMessage 
 	msg := isb.Message{
 		Header: isb.Header{
 			// TODO: insert the right time based on the generator
-			PaneInfo: isb.PaneInfo{EventTime: timeFromNanos(parseTime(payload))},
-			ID:       strconv.FormatInt(offset, 10) + "-" + strconv.FormatInt(int64(mg.vertexInstance.Replica), 10),
+			MessageInfo: isb.MessageInfo{EventTime: timeFromNanos(parseTime(payload))},
+			ID:          strconv.FormatInt(offset, 10) + "-" + strconv.FormatInt(int64(mg.vertexInstance.Replica), 10),
 		},
 		Body: isb.Body{Payload: payload},
 	}

@@ -17,22 +17,49 @@ limitations under the License.
 package isb
 
 import (
-	"encoding/json"
 	"time"
 )
 
-// PaneInfo is the time window of the payload.
-type PaneInfo struct {
+// MessageKind represents the message type of the payload.
+type MessageKind int16
+
+const (
+	Data MessageKind = 1 << iota // Data payload
+	WMB                          // Watermark Barrier
+)
+
+func (mta MessageKind) String() string {
+	var mt MessageKind
+	switch mt {
+	case 0:
+		return "Empty"
+	case mt & Data:
+		return "Data"
+	case mt & WMB:
+		return "WMB"
+	default:
+		return "Unknown"
+	}
+}
+
+// MessageInfo is the message information window of the payload.
+// The contents inside the MessageInfo can be interpreted differently based on the MessageKind.
+type MessageInfo struct {
+	// EventTime when
+	// MessageKind == Data represents the event time of the message
+	// MessageKind == WMB, value is ignored
 	EventTime time.Time
-	StartTime time.Time
-	EndTime   time.Time
-	// IsLate is used to indicate if it's a late data .
+	// IsLate when
+	// MessageKind == Data, IsLate is used to indicate if the message is a late data (assignment happens at source)
+	// MessageKind == WMB, value is ignored
 	IsLate bool
 }
 
 // Header is the header of the message
 type Header struct {
-	PaneInfo
+	MessageInfo
+	// Kind indicates the kind of Message
+	Kind MessageKind
 	// ID is used for exactly-once-semantics. ID is usually populated from the offset, if offset is available.
 	ID string
 	// Key is (key,value) in the map-reduce paradigm which will be used for conditional forwarding.
@@ -57,22 +84,7 @@ type ReadMessage struct {
 	Watermark  time.Time
 }
 
-// MarshalBinary encodes header to a binary format
-func (h Header) MarshalBinary() (data []byte, err error) {
-	return json.Marshal(h)
-}
-
-// MarshalBinary encodes header to a binary format
-func (b Body) MarshalBinary() (data []byte, err error) {
-	return json.Marshal(b)
-}
-
-// UnmarshalBinary decodes header from the binary format
-func (h *Header) UnmarshalBinary(data []byte) (err error) {
-	return json.Unmarshal(data, &h)
-}
-
-// UnmarshalBinary decodes header from the binary format
-func (b *Body) UnmarshalBinary(data []byte) (err error) {
-	return json.Unmarshal(data, &b)
+// ToReadMessage converts Message to a ReadMessage by providing the offset and watermark
+func (m *Message) ToReadMessage(ot Offset, wm time.Time) *ReadMessage {
+	return &ReadMessage{Message: *m, ReadOffset: ot, Watermark: wm}
 }

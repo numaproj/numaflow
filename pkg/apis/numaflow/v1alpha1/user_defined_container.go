@@ -29,9 +29,13 @@ type Container struct {
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty" protobuf:"bytes,4,rep,name=env"`
 	// +optional
-	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty" protobuf:"bytes,5,rep,name=volumeMounts"`
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty" protobuf:"bytes,5,rep,name=envFrom"`
 	// +optional
-	Resources corev1.ResourceRequirements `json:"resources,omitempty" protobuf:"bytes,6,opt,name=resources"`
+	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty" protobuf:"bytes,6,rep,name=volumeMounts"`
 	// +optional
-	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty" protobuf:"bytes,7,opt,name=securityContext"`
+	Resources corev1.ResourceRequirements `json:"resources,omitempty" protobuf:"bytes,7,opt,name=resources"`
+	// +optional
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty" protobuf:"bytes,8,opt,name=securityContext"`
+	// +optional
+	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty" protobuf:"bytes,9,opt,name=imagePullPolicy,casttype=PullPolicy"`
 }

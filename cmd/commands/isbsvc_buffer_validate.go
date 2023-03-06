@@ -74,7 +74,7 @@ func NewISBSvcBufferValidateCommand() *cobra.Command {
 			}
 			_ = wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func() (bool, error) {
 				if err = isbsClient.ValidateBuffers(ctx, bfs); err != nil {
-					logger.Errorw("Buffers validation failed, will retry if the limit is not reached", zap.Error(err))
+					logger.Infow("Buffers might have not been created yet, will retry if the limit is not reached", zap.Error(err))
 					return false, nil
 				}
 				return true, nil

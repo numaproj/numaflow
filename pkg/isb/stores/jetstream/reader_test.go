@@ -171,16 +171,6 @@ func TestClose(t *testing.T) {
 
 }
 
-// TestConvert2IsbMsgHeader is used to convert isb header
-func TestConvert2IsbMsgHeader(t *testing.T) {
-	natsHeader := nats.Header{}
-	natsHeader.Set("w", "1")
-	natsHeader.Set("ps", "1636470000")
-	natsHeader.Set("pen", "1636470060")
-
-	assert.NotNil(t, convert2IsbMsgHeader(natsHeader))
-}
-
 func addStream(t *testing.T, js *jsclient.JetStreamContext, streamName string) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)

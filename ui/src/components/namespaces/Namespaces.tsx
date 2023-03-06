@@ -1,22 +1,76 @@
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Paper from "@mui/material/Paper";
-import { useFetch } from "../../utils/fetchWrappers/fetch";
-import { useState } from "react";
+import {useEffect, useState} from "react";
 import { NamespaceRowContent } from "./NamespaceRowContent";
-import IconButton from "@mui/material/IconButton";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import Collapse from "@mui/material/Collapse";
 import "./Namespaces.css";
-
+import {
+    Button,
+    TableBody,
+    Table,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Paper,
+    TextField,
+    Autocomplete
+} from "@mui/material";
+import ClearIcon from '@mui/icons-material/Clear'
+import SearchIcon from '@mui/icons-material/Search';
 
 export function Namespaces() {
-  const { data } = useFetch("/api/v1/namespaces");
+    const [nsArr, setnsArr] = useState([]);
+    const [value, setValue] = useState("");
+    const [namespace, setNamespace] = useState("");
+
+    const handle = (namespaceVal) => {
+        localStorage.setItem("curr_namespace", namespaceVal);
+        setValue(namespaceVal);
+        setNamespace(namespaceVal);
+        if (namespaceVal !== "") {
+            let flag = 0;
+            for (let i = 0; i < nsArr.length; i++) {
+                if (namespaceVal === nsArr[i]) {
+                    flag = 1;
+                    break;
+                }
+            }
+            if (flag === 1) {return;}
+            const arr = nsArr;
+            arr.unshift(namespaceVal);
+            if (arr.length > 5) arr.pop();
+            setnsArr(arr);
+            let ns_list = "";
+            for (let i = 0; i < nsArr.length; i++) ns_list += nsArr[i] + ",";
+            localStorage.setItem("namespaces", ns_list);
+        }
+    };
+
+    useEffect(() => {
+        // set namespace value in search box
+        let curr_ns = localStorage.getItem("curr_namespace");
+        if (!curr_ns) curr_ns = "";
+        setValue(curr_ns);
+        setNamespace(curr_ns);
+
+        // set drop-down for previously entered namespaces
+        let ns_list = localStorage.getItem("namespaces");
+        if (!ns_list) ns_list = "";
+        const ns_arr = ns_list.split(",");
+        ns_arr.pop();
+        setnsArr(ns_arr);
+    }, []);
+
+    const ns_List = [];
+    nsArr.forEach((namespace) => (
+        ns_List.push({label: namespace})
+    ))
+
+    const handleKeyPress = e => {
+        if (e.key === 'Enter') {
+            handle(value);
+            setNamespace(value);
+            e.target.blur();
+        }
+    }
 
   return (
     <div className="Namespaces">
@@ -24,71 +78,70 @@ export function Namespaces() {
         <Table aria-label="collapsible table">
           <TableHead>
             <TableRow>
-              <TableCell />
               <TableCell
-                style={{
-                  fontWeight: "bold",
-                  fontSize: "1rem",
-                }}
               >
-                Namespace
+                  <div style={{display: "flex", flexDirection: "row"}}>
+                  <Autocomplete
+                      data-testid="namespace-input"
+                      freeSolo
+                      blurOnSelect
+                      disableClearable
+                      id="curr_ns"
+                      options={ns_List}
+                      sx={{ width: 250, margin: "0 10px" }}
+                      filterOptions={(x) => x}
+                      value={value}
+                      onChange={(e, v) => {
+                          setValue(v.label);
+                          handle(v.label);
+                          setNamespace(v.label);
+                      }}
+                      renderInput={(params) => {
+                          params.inputProps.onKeyPress = handleKeyPress;
+                          return <TextField
+                              {...params}
+                              autoComplete="off"
+                              label="Namespace"
+                              placeholder="enter a namespace"
+                              InputLabelProps={{ shrink: true }}
+                              onChange={e => {setValue(e.target.value)}}
+                          />
+                      }}
+                  />
+                  <Button
+                      data-testid="namespace-search"
+                      onClick={() => {
+                          handle(value);
+                          setNamespace(value);
+                      }}
+                      style={{marginTop: "15px", height: "30px"}}
+                  >
+                      <SearchIcon/>
+                  </Button>
+                  <Button
+                      data-testid="namespace-clear"
+                      onClick={() => {
+                          handle("");
+                          setNamespace("");
+                          setValue("");
+                      }}
+                      style={{marginTop: "15px", height: "30px"}}
+                  >
+                      <ClearIcon/>
+                  </Button>
+                  </div>
               </TableCell>
             </TableRow>
           </TableHead>
-            {data &&
-              data.map((namespace: string) => {
-                return <NamespaceRow key={namespace} namespaceId={namespace} />;
-              })}
+          <TableBody>
+            <TableRow>
+                <TableCell>
+                    <NamespaceRowContent namespaceId={namespace} />
+                </TableCell>
+            </TableRow>
+          </TableBody>
         </Table>
       </TableContainer>
     </div>
   );
 }
-
-interface NamespaceRowProps {
-    namespaceId: string;
-}
-
-export function NamespaceRow(props: NamespaceRowProps) {
-    const { namespaceId } = props;
-    const [open, setOpen] = useState(false);
-
-    return (
-        <TableBody data-testid={`namespace-row-body-${namespaceId}`}>
-            <TableRow sx={{ "& > *": { borderBottom: "unset" } }}>
-                <TableCell>
-                    <IconButton
-                        data-testid={`namespace-row-${namespaceId}`}
-                        aria-label="expand row"
-                        size="small"
-                        onClick={() => setOpen(!open)}
-                    >
-                        {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                    </IconButton>
-                </TableCell>
-                <TableCell
-                    sx={{
-                        fontWeight: 500,
-                        fontSize: "1rem",
-                    }}
-                    component="th"
-                    scope="row"
-                >
-                    {namespaceId}
-                </TableCell>
-            </TableRow>
-            <TableRow>
-                <TableCell
-                    data-testid="table-cell"
-                    style={{ paddingBottom: 0, paddingTop: 0 }}
-                    colSpan={6}
-                >
-                    <Collapse in={open} timeout="auto" unmountOnExit>
-                        <NamespaceRowContent namespaceId={namespaceId} />
-                    </Collapse>
-                </TableCell>
-            </TableRow>
-        </TableBody>
-    );
-}
-

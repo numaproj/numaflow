@@ -117,7 +117,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{
+					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169600, 0),
 					},
 					ID:  "test_id",
@@ -161,7 +161,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{
+					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
 					ID:  "test_id",

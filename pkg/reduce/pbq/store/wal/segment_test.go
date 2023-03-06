@@ -57,7 +57,7 @@ func Test_writeReadHeader(t *testing.T) {
 	fName := wal.fp.Name()
 	assert.NoError(t, err)
 	// read will fail because the file was opened only in write only mode
-	_, err = wal.readHeader()
+	_, err = wal.readWALHeader()
 	assert.Error(t, err)
 	err = wal.Close()
 	fmt.Println(fName)
@@ -66,7 +66,7 @@ func Test_writeReadHeader(t *testing.T) {
 	openWAL, err := wal.walStores.openWAL(fName)
 	assert.NoError(t, err)
 	// we have already read the header in OpenWAL
-	_, err = openWAL.readHeader()
+	_, err = openWAL.readWALHeader()
 	assert.Error(t, err)
 
 	// compare the original ID with read ID
@@ -109,13 +109,13 @@ func Test_encodeDecodeHeader(t *testing.T) {
 			wal, err := stores.CreateStore(context.Background(), *tt.id)
 			assert.NoError(t, err)
 			newWal := wal.(*WAL)
-			got, err := newWal.encodeHeader(tt.id)
-			if !tt.wantErr(t, err, fmt.Sprintf("encodeHeader(%v)", tt.id)) {
+			got, err := newWal.encodeWALHeader(tt.id)
+			if !tt.wantErr(t, err, fmt.Sprintf("encodeWALHeader(%v)", tt.id)) {
 				return
 			}
-			result, err := decodeHeader(got)
+			result, err := decodeWALHeader(got)
 			assert.NoError(t, err)
-			assert.Equalf(t, tt.id, result, "encodeHeader(%v)", tt.id)
+			assert.Equalf(t, tt.id, result, "encodeWALHeader(%v)", tt.id)
 			err = newWal.Close()
 			assert.NoError(t, err)
 		})
@@ -148,7 +148,7 @@ func Test_writeReadEntry(t *testing.T) {
 	assert.NoError(t, err)
 	newWal := store.(*WAL)
 	// we have already read the header in OpenWAL
-	_, err = newWal.readHeader()
+	_, err = newWal.readWALHeader()
 	assert.Error(t, err)
 
 	actualMessages, finished, err := newWal.Read(10000)
@@ -165,7 +165,7 @@ func Test_writeReadEntry(t *testing.T) {
 	actualOffset, err := actualMessage.ReadOffset.Sequence()
 	assert.NoError(t, err)
 	assert.Equalf(t, expectedOffset, actualOffset, "Read(%v)", message.ReadOffset)
-	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeEntry(%v)", message.Watermark)
+	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeReadMessage(%v)", message.Watermark)
 
 	// Start to write an entry again
 	err = newWal.Write(&message)
@@ -210,20 +210,20 @@ func Test_encodeDecodeEntry(t *testing.T) {
 			assert.NoError(t, err)
 			newWal := wal.(*WAL)
 
-			got, err := newWal.encodeEntry(tt.message)
-			if !tt.wantErr(t, err, fmt.Sprintf("encodeEntry(%v)", tt.message)) {
+			got, err := newWal.encodeReadMessage(tt.message)
+			if !tt.wantErr(t, err, fmt.Sprintf("encodeReadMessage(%v)", tt.message)) {
 				return
 			}
 
-			result, _, err := decodeEntry(bytes.NewReader(got.Bytes()))
+			result, _, err := decodeReadMessage(bytes.NewReader(got.Bytes()))
 			assert.NoError(t, err)
-			assert.Equalf(t, tt.message.Message, result.Message, "encodeEntry(%v)", tt.message.Message)
+			assert.Equalf(t, tt.message.Message, result.Message, "encodeReadMessage(%v)", tt.message.Message)
 			expectedOffset, err := tt.message.ReadOffset.Sequence()
 			assert.NoError(t, err)
 			actualOffset, err := result.ReadOffset.Sequence()
 			assert.NoError(t, err)
-			assert.Equalf(t, expectedOffset, actualOffset, "encodeEntry(%v)", tt.message.ReadOffset)
-			assert.Equalf(t, tt.message.Watermark, result.Watermark, "encodeEntry(%v)", tt.message.Watermark)
+			assert.Equalf(t, expectedOffset, actualOffset, "encodeReadMessage(%v)", tt.message.ReadOffset)
+			assert.Equalf(t, tt.message.Watermark, result.Watermark, "encodeReadMessage(%v)", tt.message.Watermark)
 			err = newWal.Close()
 			assert.NoError(t, err)
 		})
@@ -252,14 +252,14 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	err = wal.Write(&message)
 	assert.NoError(t, err)
 
-	assert.Equal(t, tempWAL.prevSyncedWOffset, int64(0))
+	assert.Equal(t, int64(0), tempWAL.prevSyncedWOffset)
 	assert.NoError(t, err)
 
 	tempWAL.walStores.maxBatchSize = 10
 	assert.NoError(t, err)
 	err = wal.Write(&message)
 	assert.NoError(t, err)
-	assert.Equal(t, tempWAL.prevSyncedWOffset, int64(844))
+	assert.Equal(t, int64(418), tempWAL.prevSyncedWOffset)
 
 	err = wal.Close()
 	assert.NoError(t, err)
@@ -269,7 +269,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	assert.NoError(t, err)
 	newWal := store.(*WAL)
 	// we have already read the header in OpenWAL
-	_, err = newWal.readHeader()
+	_, err = newWal.readWALHeader()
 	assert.Error(t, err)
 
 	actualMessages, finished, err := newWal.Read(10000)
@@ -286,7 +286,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	actualOffset, err := actualMessage.ReadOffset.Sequence()
 	assert.NoError(t, err)
 	assert.Equalf(t, expectedOffset, actualOffset, "Read(%v)", message.ReadOffset)
-	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeEntry(%v)", message.Watermark)
+	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeReadMessage(%v)", message.Watermark)
 
 	// Start to write an entry again
 	err = newWal.Write(&message)
@@ -316,7 +316,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	message := writeMessages[0]
 	storePrevSyncedTime := tempWAL.prevSyncedTime
 	err = wal.Write(&message)
-	assert.Equal(t, tempWAL.prevSyncedWOffset, int64(441))
+	assert.Equal(t, int64(228), tempWAL.prevSyncedWOffset)
 	assert.NotEqual(t, storePrevSyncedTime, tempWAL.prevSyncedTime)
 	assert.NoError(t, err)
 
@@ -335,7 +335,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	assert.NoError(t, err)
 	newWal := store.(*WAL)
 	// we have already read the header in OpenWAL
-	_, err = newWal.readHeader()
+	_, err = newWal.readWALHeader()
 	assert.Error(t, err)
 
 	actualMessages, finished, err := newWal.Read(10000)
@@ -352,7 +352,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	actualOffset, err := actualMessage.ReadOffset.Sequence()
 	assert.NoError(t, err)
 	assert.Equalf(t, expectedOffset, actualOffset, "Read(%v)", message.ReadOffset)
-	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeEntry(%v)", message.Watermark)
+	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeReadMessage(%v)", message.Watermark)
 
 	// Start to write an entry again
 	err = newWal.Write(&message)

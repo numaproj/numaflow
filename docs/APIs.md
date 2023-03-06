@@ -618,6 +618,16 @@ Description
 </tr>
 <tr>
 <td>
+<code>envFrom</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envfromsource-v1-core">
+\[\]Kubernetes core/v1.EnvFromSource </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
 <code>volumeMounts</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#volumemount-v1-core">
 \[\]Kubernetes core/v1.VolumeMount </a> </em>
@@ -641,6 +651,16 @@ Kubernetes core/v1.ResourceRequirements </a> </em>
 <code>securityContext</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#securitycontext-v1-core">
 Kubernetes core/v1.SecurityContext </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePullPolicy</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
+Kubernetes core/v1.PullPolicy </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -3481,11 +3501,12 @@ only effective for source vertices.
 <td>
 <em>(Optional)</em>
 <p>
-TargetBufferUsage is used to define the target percentage of usage of
-the buffer to be read. A valid and meaningful value should be less than
-the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
-example, 50. It only applies to UDF and Sink vertices as only they have
-buffers to read.
+TargetBufferUsage is used to define the target percentage of the buffer
+availability. A valid and meaningful value should be less than the
+BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
+example, 50. It only applies to UDF and Sink vertices because only they
+have buffers to read. Deprecated: use targetBufferAvailability instead.
+Will be removed in v0.9
 </p>
 </td>
 </tr>
@@ -3498,6 +3519,21 @@ buffers to read.
 <p>
 ReplicasPerScale defines maximum replicas can be scaled up or down at
 once. The is use to prevent too aggressive scaling operations
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>targetBufferAvailability</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+TargetBufferAvailability is used to define the target percentage of the
+buffer availability. A valid and meaningful value should be less than
+the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
+example, 50. It only applies to UDF and Sink vertices because only they
+have buffers to read.
 </p>
 </td>
 </tr>

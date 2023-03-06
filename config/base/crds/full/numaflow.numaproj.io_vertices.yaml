@@ -1377,6 +1377,9 @@ spec:
                   replicasPerScale:
                     format: int32
                     type: integer
+                  targetBufferAvailability:
+                    format: int32
+                    type: integer
                   targetBufferUsage:
                     format: int32
                     type: integer
@@ -2169,7 +2172,30 @@ spec:
                               - name
                               type: object
                             type: array
+                          envFrom:
+                            items:
+                              properties:
+                                configMapRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                                prefix:
+                                  type: string
+                                secretRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                              type: object
+                            type: array
                           image:
+                            type: string
+                          imagePullPolicy:
                             type: string
                           resources:
                             properties:
@@ -2555,7 +2581,30 @@ spec:
                               - name
                               type: object
                             type: array
+                          envFrom:
+                            items:
+                              properties:
+                                configMapRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                                prefix:
+                                  type: string
+                                secretRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                              type: object
+                            type: array
                           image:
+                            type: string
+                          imagePullPolicy:
                             type: string
                           resources:
                             properties:
@@ -2799,7 +2848,30 @@ spec:
                           - name
                           type: object
                         type: array
+                      envFrom:
+                        items:
+                          properties:
+                            configMapRef:
+                              properties:
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                            prefix:
+                              type: string
+                            secretRef:
+                              properties:
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                          type: object
+                        type: array
                       image:
+                        type: string
+                      imagePullPolicy:
                         type: string
                       resources:
                         properties:

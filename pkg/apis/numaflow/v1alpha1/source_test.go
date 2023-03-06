@@ -25,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
+var testImagePullPolicy = corev1.PullNever
+
 func TestSource_getContainers(t *testing.T) {
 	x := Source{
 		UDTransformer: &UDTransformer{
@@ -34,6 +36,9 @@ func TestSource_getContainers(t *testing.T) {
 				Command:      []string{"my-cmd"},
 				Args:         []string{"my-arg"},
 				Env:          []corev1.EnvVar{{Name: "my-envvar"}},
+				EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+				}}},
 				Resources: corev1.ResourceRequirements{
 					Requests: map[corev1.ResourceName]resource.Quantity{
 						"cpu": resource.MustParse("2"),
@@ -53,7 +58,15 @@ func TestSource_getContainers(t *testing.T) {
 	assert.Equal(t, x.UDTransformer.Container.Command, c[1].Command)
 	assert.Equal(t, x.UDTransformer.Container.Args, c[1].Args)
 	assert.Equal(t, x.UDTransformer.Container.Env, c[1].Env)
+	assert.Equal(t, x.UDTransformer.Container.EnvFrom, c[1].EnvFrom)
 	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[1].Resources)
+	assert.Equal(t, c[0].ImagePullPolicy, c[1].ImagePullPolicy)
+	x.UDTransformer.Container.ImagePullPolicy = &testImagePullPolicy
+	c, _ = x.getContainers(getContainerReq{
+		image:           "main-image",
+		imagePullPolicy: corev1.PullAlways,
+	})
+	assert.Equal(t, testImagePullPolicy, c[1].ImagePullPolicy)
 }
 
 func Test_getTransformerContainer(t *testing.T) {
@@ -65,17 +78,23 @@ func Test_getTransformerContainer(t *testing.T) {
 					Image:           "my-image",
 					Args:            []string{"my-arg"},
 					SecurityContext: &corev1.SecurityContext{},
+					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+					}}},
+					ImagePullPolicy: &testImagePullPolicy,
 				},
 			},
 		}
 		c := x.getUDTransformerContainer(getContainerReq{
 			image:           "main-image",
-			imagePullPolicy: corev1.PullNever,
+			imagePullPolicy: corev1.PullAlways,
 		})
 		assert.Equal(t, "my-image", c.Image)
 		assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
 		assert.Contains(t, c.Args, "my-arg")
 		assert.NotNil(t, c.SecurityContext)
+		assert.Equal(t, x.UDTransformer.Container.EnvFrom, c.EnvFrom)
+		assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 	})
 
 	t.Run("with built-in transformers", func(t *testing.T) {

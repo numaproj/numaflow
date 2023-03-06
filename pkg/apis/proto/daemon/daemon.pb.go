@@ -530,29 +530,29 @@ func (m *GetVertexMetricsResponse) GetVertexMetrics() []*VertexMetrics {
 	return nil
 }
 
-// VertexWatermark has vertex to watermark mapping.
-type VertexWatermark struct {
+// EdgeWatermark has edge to watermark mapping.
+type EdgeWatermark struct {
 	Pipeline             *string  `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
-	Vertex               *string  `protobuf:"bytes,2,req,name=vertex" json:"vertex,omitempty"`
-	Watermark            *int64   `protobuf:"varint,3,req,name=watermark" json:"watermark,omitempty"`
+	Edge                 *string  `protobuf:"bytes,2,req,name=edge" json:"edge,omitempty"`
+	Watermarks           []int64  `protobuf:"varint,3,rep,name=watermarks" json:"watermarks,omitempty"`
 	IsWatermarkEnabled   *bool    `protobuf:"varint,4,req,name=isWatermarkEnabled" json:"isWatermarkEnabled,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *VertexWatermark) Reset()         { *m = VertexWatermark{} }
-func (m *VertexWatermark) String() string { return proto.CompactTextString(m) }
-func (*VertexWatermark) ProtoMessage()    {}
-func (*VertexWatermark) Descriptor() ([]byte, []int) {
+func (m *EdgeWatermark) Reset()         { *m = EdgeWatermark{} }
+func (m *EdgeWatermark) String() string { return proto.CompactTextString(m) }
+func (*EdgeWatermark) ProtoMessage()    {}
+func (*EdgeWatermark) Descriptor() ([]byte, []int) {
 	return fileDescriptor_93e327fd0d673221, []int{8}
 }
-func (m *VertexWatermark) XXX_Unmarshal(b []byte) error {
+func (m *EdgeWatermark) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *VertexWatermark) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *EdgeWatermark) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_VertexWatermark.Marshal(b, m, deterministic)
+		return xxx_messageInfo_EdgeWatermark.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -562,161 +562,58 @@ func (m *VertexWatermark) XXX_Marshal(b []byte, deterministic bool) ([]byte, err
 		return b[:n], nil
 	}
 }
-func (m *VertexWatermark) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_VertexWatermark.Merge(m, src)
+func (m *EdgeWatermark) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EdgeWatermark.Merge(m, src)
 }
-func (m *VertexWatermark) XXX_Size() int {
+func (m *EdgeWatermark) XXX_Size() int {
 	return m.Size()
 }
-func (m *VertexWatermark) XXX_DiscardUnknown() {
-	xxx_messageInfo_VertexWatermark.DiscardUnknown(m)
+func (m *EdgeWatermark) XXX_DiscardUnknown() {
+	xxx_messageInfo_EdgeWatermark.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_VertexWatermark proto.InternalMessageInfo
+var xxx_messageInfo_EdgeWatermark proto.InternalMessageInfo
 
-func (m *VertexWatermark) GetPipeline() string {
+func (m *EdgeWatermark) GetPipeline() string {
 	if m != nil && m.Pipeline != nil {
 		return *m.Pipeline
 	}
 	return ""
 }
 
-func (m *VertexWatermark) GetVertex() string {
-	if m != nil && m.Vertex != nil {
-		return *m.Vertex
+func (m *EdgeWatermark) GetEdge() string {
+	if m != nil && m.Edge != nil {
+		return *m.Edge
 	}
 	return ""
 }
 
-func (m *VertexWatermark) GetWatermark() int64 {
-	if m != nil && m.Watermark != nil {
-		return *m.Watermark
+func (m *EdgeWatermark) GetWatermarks() []int64 {
+	if m != nil {
+		return m.Watermarks
 	}
-	return 0
+	return nil
 }
 
-func (m *VertexWatermark) GetIsWatermarkEnabled() bool {
+func (m *EdgeWatermark) GetIsWatermarkEnabled() bool {
 	if m != nil && m.IsWatermarkEnabled != nil {
 		return *m.IsWatermarkEnabled
 	}
 	return false
 }
 
-type GetVertexWatermarkResponse struct {
-	VertexWatermark      *VertexWatermark `protobuf:"bytes,1,req,name=vertexWatermark" json:"vertexWatermark,omitempty"`
+type GetPipelineWatermarksResponse struct {
+	PipelineWatermarks   []*EdgeWatermark `protobuf:"bytes,1,rep,name=pipelineWatermarks" json:"pipelineWatermarks,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
 	XXX_unrecognized     []byte           `json:"-"`
 	XXX_sizecache        int32            `json:"-"`
-}
-
-func (m *GetVertexWatermarkResponse) Reset()         { *m = GetVertexWatermarkResponse{} }
-func (m *GetVertexWatermarkResponse) String() string { return proto.CompactTextString(m) }
-func (*GetVertexWatermarkResponse) ProtoMessage()    {}
-func (*GetVertexWatermarkResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{9}
-}
-func (m *GetVertexWatermarkResponse) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *GetVertexWatermarkResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_GetVertexWatermarkResponse.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *GetVertexWatermarkResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetVertexWatermarkResponse.Merge(m, src)
-}
-func (m *GetVertexWatermarkResponse) XXX_Size() int {
-	return m.Size()
-}
-func (m *GetVertexWatermarkResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetVertexWatermarkResponse.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GetVertexWatermarkResponse proto.InternalMessageInfo
-
-func (m *GetVertexWatermarkResponse) GetVertexWatermark() *VertexWatermark {
-	if m != nil {
-		return m.VertexWatermark
-	}
-	return nil
-}
-
-// GetVertexWatermarksRequest requests for the watermark for a pipeline's vertex.
-type GetVertexWatermarkRequest struct {
-	Pipeline             *string  `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
-	Vertex               *string  `protobuf:"bytes,2,req,name=vertex" json:"vertex,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *GetVertexWatermarkRequest) Reset()         { *m = GetVertexWatermarkRequest{} }
-func (m *GetVertexWatermarkRequest) String() string { return proto.CompactTextString(m) }
-func (*GetVertexWatermarkRequest) ProtoMessage()    {}
-func (*GetVertexWatermarkRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{10}
-}
-func (m *GetVertexWatermarkRequest) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *GetVertexWatermarkRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_GetVertexWatermarkRequest.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *GetVertexWatermarkRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetVertexWatermarkRequest.Merge(m, src)
-}
-func (m *GetVertexWatermarkRequest) XXX_Size() int {
-	return m.Size()
-}
-func (m *GetVertexWatermarkRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetVertexWatermarkRequest.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GetVertexWatermarkRequest proto.InternalMessageInfo
-
-func (m *GetVertexWatermarkRequest) GetPipeline() string {
-	if m != nil && m.Pipeline != nil {
-		return *m.Pipeline
-	}
-	return ""
-}
-
-func (m *GetVertexWatermarkRequest) GetVertex() string {
-	if m != nil && m.Vertex != nil {
-		return *m.Vertex
-	}
-	return ""
-}
-
-type GetPipelineWatermarksResponse struct {
-	PipelineWatermarks   []*VertexWatermark `protobuf:"bytes,1,rep,name=pipelineWatermarks" json:"pipelineWatermarks,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
 }
 
 func (m *GetPipelineWatermarksResponse) Reset()         { *m = GetPipelineWatermarksResponse{} }
 func (m *GetPipelineWatermarksResponse) String() string { return proto.CompactTextString(m) }
 func (*GetPipelineWatermarksResponse) ProtoMessage()    {}
 func (*GetPipelineWatermarksResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{11}
+	return fileDescriptor_93e327fd0d673221, []int{9}
 }
 func (m *GetPipelineWatermarksResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -745,7 +642,7 @@ func (m *GetPipelineWatermarksResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetPipelineWatermarksResponse proto.InternalMessageInfo
 
-func (m *GetPipelineWatermarksResponse) GetPipelineWatermarks() []*VertexWatermark {
+func (m *GetPipelineWatermarksResponse) GetPipelineWatermarks() []*EdgeWatermark {
 	if m != nil {
 		return m.PipelineWatermarks
 	}
@@ -764,7 +661,7 @@ func (m *GetPipelineWatermarksRequest) Reset()         { *m = GetPipelineWaterma
 func (m *GetPipelineWatermarksRequest) String() string { return proto.CompactTextString(m) }
 func (*GetPipelineWatermarksRequest) ProtoMessage()    {}
 func (*GetPipelineWatermarksRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_93e327fd0d673221, []int{12}
+	return fileDescriptor_93e327fd0d673221, []int{10}
 }
 func (m *GetPipelineWatermarksRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -811,9 +708,7 @@ func init() {
 	proto.RegisterType((*GetBufferResponse)(nil), "daemon.GetBufferResponse")
 	proto.RegisterType((*GetVertexMetricsRequest)(nil), "daemon.GetVertexMetricsRequest")
 	proto.RegisterType((*GetVertexMetricsResponse)(nil), "daemon.GetVertexMetricsResponse")
-	proto.RegisterType((*VertexWatermark)(nil), "daemon.VertexWatermark")
-	proto.RegisterType((*GetVertexWatermarkResponse)(nil), "daemon.GetVertexWatermarkResponse")
-	proto.RegisterType((*GetVertexWatermarkRequest)(nil), "daemon.GetVertexWatermarkRequest")
+	proto.RegisterType((*EdgeWatermark)(nil), "daemon.EdgeWatermark")
 	proto.RegisterType((*GetPipelineWatermarksResponse)(nil), "daemon.GetPipelineWatermarksResponse")
 	proto.RegisterType((*GetPipelineWatermarksRequest)(nil), "daemon.GetPipelineWatermarksRequest")
 }
@@ -823,63 +718,60 @@ func init() {
 }
 
 var fileDescriptor_93e327fd0d673221 = []byte{
-	// 894 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x56, 0x5f, 0x6f, 0xe3, 0x44,
-	0x10, 0x97, 0xed, 0x6b, 0x2f, 0x99, 0x12, 0xb5, 0x0c, 0xf7, 0xc7, 0xe7, 0x2b, 0xc5, 0x2c, 0x05,
-	0x42, 0x75, 0xc4, 0x50, 0x09, 0x54, 0xf5, 0x24, 0xee, 0xe8, 0x71, 0x57, 0x21, 0xb5, 0x50, 0x99,
-	0x3f, 0x27, 0xf1, 0x82, 0xdc, 0x74, 0x93, 0x9a, 0xc6, 0x5e, 0xe3, 0xdd, 0xa4, 0x54, 0xa7, 0xbe,
-	0xdc, 0x57, 0x38, 0xf5, 0x91, 0xef, 0xc3, 0x13, 0x42, 0xe2, 0x91, 0x17, 0x54, 0xf1, 0x41, 0x90,
-	0x77, 0xd7, 0x8e, 0x9d, 0x38, 0x69, 0xe1, 0xa9, 0x3b, 0x33, 0xbf, 0x99, 0xdf, 0x6f, 0x77, 0x66,
-	0xdc, 0x00, 0x49, 0x4e, 0xfa, 0x5e, 0x90, 0x84, 0xdc, 0x4b, 0x52, 0x26, 0x98, 0x77, 0x14, 0xd0,
-	0x88, 0xc5, 0xfa, 0x4f, 0x47, 0xfa, 0x70, 0x51, 0x59, 0xce, 0x6a, 0x9f, 0xb1, 0xfe, 0x80, 0x66,
-	0x70, 0x2f, 0x88, 0x63, 0x26, 0x02, 0x11, 0xb2, 0x98, 0x2b, 0x94, 0x73, 0x5f, 0x47, 0xa5, 0x75,
-	0x38, 0xec, 0x79, 0x34, 0x4a, 0xc4, 0x99, 0x0a, 0x92, 0x97, 0x16, 0xc0, 0xce, 0xb0, 0xd7, 0xa3,
-	0xe9, 0x97, 0x71, 0x8f, 0xa1, 0x03, 0x8d, 0x24, 0x4c, 0xe8, 0x20, 0x8c, 0xa9, 0x6d, 0xb8, 0x66,
-	0xbb, 0xe9, 0x17, 0x36, 0xae, 0x01, 0xf4, 0x52, 0x16, 0x7d, 0x4f, 0x53, 0x41, 0x7f, 0xb1, 0x4d,
-	0x19, 0x2d, 0x79, 0xb2, 0x5c, 0xc1, 0x74, 0xd4, 0x52, 0xb9, 0xb9, 0x9d, 0xe5, 0x1e, 0x4a, 0x96,
-	0xaf, 0x82, 0x88, 0xda, 0x37, 0x54, 0xee, 0xd8, 0x83, 0x04, 0x5e, 0x4b, 0x68, 0x7c, 0x14, 0xc6,
-	0xfd, 0x27, 0x6c, 0x18, 0x0b, 0x7b, 0xc1, 0x35, 0xdb, 0x96, 0x5f, 0xf1, 0x61, 0x1b, 0x96, 0x83,
-	0xee, 0xc9, 0x41, 0x19, 0xb6, 0x28, 0x61, 0x93, 0x6e, 0x5c, 0x87, 0x96, 0x60, 0x22, 0x18, 0xec,
-	0x53, 0xce, 0x83, 0x3e, 0xe5, 0xf6, 0x4d, 0x89, 0xab, 0x3a, 0x33, 0x4e, 0xa5, 0x60, 0x8f, 0xc6,
-	0x7d, 0x71, 0x6c, 0x37, 0x14, 0x67, 0xd9, 0x87, 0x1b, 0xb0, 0xa2, 0xec, 0xef, 0xb2, 0x9c, 0xbd,
-	0x30, 0x0a, 0x85, 0xdd, 0x74, 0xcd, 0xb6, 0xe1, 0x4f, 0xf9, 0xd1, 0x85, 0xa5, 0x92, 0xcf, 0x06,
-	0x09, 0x2b, 0xbb, 0xf0, 0x0e, 0x2c, 0x86, 0xfc, 0xd9, 0x70, 0x30, 0xb0, 0x97, 0x5c, 0xb3, 0xdd,
-	0xf0, 0xb5, 0x45, 0xfe, 0x32, 0xa1, 0xa5, 0x1e, 0x6a, 0x9f, 0x8a, 0x34, 0xec, 0xf2, 0xb9, 0x7d,
-	0xb8, 0x03, 0x8b, 0xa3, 0x72, 0x0f, 0xb4, 0x85, 0xdf, 0xc2, 0x72, 0x92, 0xb2, 0x2e, 0xe5, 0x3c,
-	0x8c, 0xfb, 0x7e, 0x20, 0x28, 0xb7, 0x2d, 0xd7, 0x6a, 0x2f, 0x6d, 0x6e, 0x74, 0xf4, 0xd4, 0x54,
-	0x38, 0x3a, 0x07, 0x55, 0xf0, 0xd3, 0x58, 0xa4, 0x67, 0xfe, 0x64, 0x09, 0x7c, 0x04, 0x0d, 0xdd,
-	0x05, 0x6e, 0xdf, 0x90, 0xe5, 0xde, 0x99, 0x51, 0x4e, 0xa3, 0x54, 0x9d, 0x22, 0xc9, 0xd9, 0x81,
-	0x5b, 0x75, 0x4c, 0xb8, 0x02, 0xd6, 0x09, 0x3d, 0xb3, 0x0d, 0xd7, 0x68, 0x37, 0xfd, 0xec, 0x88,
-	0xb7, 0x60, 0x61, 0x14, 0x0c, 0x86, 0xd4, 0x36, 0x5d, 0xa3, 0x6d, 0xf8, 0xca, 0xd8, 0x36, 0xb7,
-	0x0c, 0xe7, 0x21, 0xb4, 0x2a, 0xe5, 0xaf, 0x4a, 0xb6, 0x4a, 0xc9, 0xe4, 0x23, 0xc0, 0xbd, 0x90,
-	0x0b, 0x35, 0xe5, 0xdc, 0xa7, 0x3f, 0x0f, 0x29, 0x17, 0xf3, 0x5e, 0x98, 0x3c, 0x81, 0x37, 0x2a,
-	0x19, 0x3c, 0x61, 0x31, 0xa7, 0xf8, 0x00, 0x6e, 0xaa, 0x6e, 0x72, 0xdb, 0x90, 0x2f, 0x81, 0xf9,
-	0x4b, 0x8c, 0x37, 0xc8, 0xcf, 0x21, 0xe4, 0x19, 0xac, 0xec, 0x52, 0x5d, 0xe3, 0x1a, 0xa4, 0x59,
-	0x5b, 0x55, 0x6a, 0xde, 0x56, 0x65, 0x91, 0x47, 0xf0, 0x7a, 0xa9, 0x8e, 0x96, 0xb2, 0x51, 0x80,
-	0xb3, 0x32, 0xf5, 0x4a, 0xf2, 0x02, 0xfb, 0x70, 0x77, 0x97, 0x8a, 0x4a, 0xb3, 0xea, 0xf4, 0x98,
-	0x33, 0xc7, 0xcc, 0x2a, 0x8f, 0x19, 0x79, 0x0e, 0xf6, 0x74, 0x39, 0x2d, 0xeb, 0x21, 0xb4, 0x46,
-	0xe5, 0x80, 0x7e, 0xa7, 0xdb, 0xb5, 0x13, 0xe3, 0x57, 0xb1, 0xe4, 0x95, 0x01, 0xcb, 0x0a, 0xf0,
-	0x3c, 0x10, 0x34, 0x8d, 0x82, 0xf4, 0xe4, 0x7f, 0xed, 0xc1, 0x2a, 0x34, 0x4f, 0xf3, 0x02, 0x52,
-	0xbb, 0xe5, 0x8f, 0x1d, 0xd8, 0x01, 0x0c, 0x79, 0x41, 0xf0, 0x34, 0x0e, 0x0e, 0x07, 0xf4, 0x48,
-	0x7e, 0x91, 0x1a, 0x7e, 0x4d, 0x84, 0xfc, 0x08, 0x4e, 0x71, 0xdd, 0x22, 0x58, 0x5c, 0xf8, 0x73,
-	0x58, 0x1e, 0x55, 0x43, 0xba, 0x21, 0x77, 0xab, 0x57, 0x1e, 0x67, 0x4e, 0xe2, 0xc9, 0xd7, 0x70,
-	0xaf, 0x8e, 0xe0, 0x5a, 0x03, 0x53, 0x77, 0x7f, 0x72, 0x0c, 0x6f, 0xee, 0x52, 0x71, 0xa0, 0x61,
-	0x45, 0xc9, 0x71, 0x97, 0x76, 0x01, 0x93, 0xa9, 0xa8, 0x6e, 0xd5, 0x4c, 0xdd, 0x35, 0x29, 0x64,
-	0x1b, 0x56, 0x67, 0x30, 0x5d, 0xa9, 0x7e, 0xf3, 0xf7, 0x05, 0x68, 0x7d, 0x21, 0xa9, 0xbe, 0xa1,
-	0xe9, 0x28, 0xec, 0x52, 0x14, 0xb0, 0x54, 0xda, 0x3a, 0x74, 0x72, 0x25, 0xd3, 0xcb, 0xeb, 0xdc,
-	0xaf, 0x8d, 0xa9, 0xeb, 0x91, 0x07, 0x2f, 0xff, 0xfc, 0xe7, 0x95, 0xf9, 0x1e, 0xae, 0xcb, 0xff,
-	0x87, 0xa3, 0x8f, 0xbd, 0x9c, 0x93, 0x7b, 0x2f, 0xf2, 0xe3, 0xb9, 0xa7, 0xd7, 0x14, 0x4f, 0xa1,
-	0x59, 0xac, 0x17, 0xda, 0x79, 0xdd, 0xc9, 0xcd, 0x75, 0xee, 0xd5, 0x44, 0x34, 0xdf, 0x27, 0x92,
-	0xcf, 0xc3, 0x0f, 0xaf, 0xc3, 0xe7, 0xbd, 0x50, 0x87, 0x73, 0xbc, 0x30, 0xe4, 0x07, 0xa2, 0xfa,
-	0xdd, 0x7f, 0xab, 0x44, 0x53, 0xb7, 0xb1, 0x8e, 0x3b, 0x1b, 0xa0, 0xe5, 0x7c, 0x26, 0xe5, 0x6c,
-	0xe1, 0xa7, 0x73, 0xe5, 0x64, 0xb3, 0x12, 0x76, 0x33, 0x9f, 0x9a, 0x9a, 0x73, 0x2f, 0xd2, 0x12,
-	0x7e, 0x35, 0x00, 0xa7, 0x07, 0x12, 0xdf, 0x9e, 0x22, 0x9e, 0x1c, 0x56, 0x87, 0xcc, 0x83, 0x68,
-	0x75, 0x8f, 0xa5, 0xba, 0x6d, 0xdc, 0xfa, 0x8f, 0xea, 0xc6, 0x0b, 0x7c, 0x61, 0xc0, 0xed, 0xda,
-	0xa9, 0xc3, 0xf5, 0x12, 0xff, 0xcc, 0xa1, 0x74, 0xde, 0xbd, 0x02, 0xa5, 0x85, 0x7a, 0x52, 0xe8,
-	0x07, 0xf8, 0xfe, 0x5c, 0xa1, 0x85, 0x2c, 0xbe, 0xf3, 0xf8, 0xb7, 0xcb, 0x35, 0xe3, 0x8f, 0xcb,
-	0x35, 0xe3, 0xef, 0xcb, 0x35, 0xe3, 0x87, 0xcd, 0x7e, 0x28, 0x8e, 0x87, 0x87, 0x9d, 0x2e, 0x8b,
-	0xbc, 0x78, 0x18, 0x05, 0x49, 0xca, 0x7e, 0x92, 0x87, 0xde, 0x80, 0x9d, 0x7a, 0xb5, 0xbf, 0xed,
-	0xfe, 0x0d, 0x00, 0x00, 0xff, 0xff, 0xe4, 0x90, 0xc1, 0x21, 0xf3, 0x09, 0x00, 0x00,
+	// 839 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x56, 0xdd, 0x8e, 0xdb, 0x44,
+	0x14, 0x96, 0xed, 0x6d, 0x9a, 0x9c, 0x10, 0x75, 0x19, 0xda, 0x32, 0xb8, 0x25, 0x58, 0x66, 0x01,
+	0xb3, 0x2a, 0x31, 0xac, 0x04, 0xaa, 0x5a, 0x89, 0xa2, 0x2d, 0xe9, 0x0a, 0x69, 0x17, 0xad, 0xcc,
+	0x4f, 0x25, 0xee, 0x9c, 0x64, 0xe2, 0x9a, 0xd8, 0x1e, 0xe3, 0x19, 0x67, 0x59, 0x55, 0x7b, 0xd3,
+	0x17, 0xe0, 0x02, 0xf5, 0x35, 0x78, 0x0e, 0x2e, 0x91, 0xb8, 0xe4, 0x06, 0xad, 0x78, 0x10, 0xe4,
+	0x99, 0x71, 0x62, 0x27, 0x4e, 0x76, 0xaf, 0x76, 0xce, 0xef, 0xf7, 0xcd, 0x39, 0xdf, 0x78, 0x03,
+	0x76, 0x3a, 0x0b, 0x5c, 0x3f, 0x0d, 0x99, 0x9b, 0x66, 0x94, 0x53, 0x77, 0xe2, 0x93, 0x98, 0x26,
+	0xea, 0xcf, 0x40, 0xf8, 0x50, 0x4b, 0x5a, 0xe6, 0xfd, 0x80, 0xd2, 0x20, 0x22, 0x45, 0xba, 0xeb,
+	0x27, 0x09, 0xe5, 0x3e, 0x0f, 0x69, 0xc2, 0x64, 0x96, 0x79, 0x4f, 0x45, 0x85, 0x35, 0xca, 0xa7,
+	0x2e, 0x89, 0x53, 0x7e, 0x2e, 0x83, 0xf6, 0x2b, 0x03, 0xe0, 0x30, 0x9f, 0x4e, 0x49, 0xf6, 0x4d,
+	0x32, 0xa5, 0xc8, 0x84, 0x76, 0x1a, 0xa6, 0x24, 0x0a, 0x13, 0x82, 0x35, 0x4b, 0x77, 0x3a, 0xde,
+	0xc2, 0x46, 0x7d, 0x80, 0x69, 0x46, 0xe3, 0x1f, 0x49, 0xc6, 0xc9, 0xaf, 0x58, 0x17, 0xd1, 0x8a,
+	0xa7, 0xa8, 0xe5, 0x54, 0x45, 0x0d, 0x59, 0x5b, 0xda, 0x45, 0xed, 0x48, 0xa0, 0x7c, 0xeb, 0xc7,
+	0x04, 0xef, 0xc8, 0xda, 0xa5, 0x07, 0xd9, 0xf0, 0x46, 0x4a, 0x92, 0x49, 0x98, 0x04, 0x4f, 0x69,
+	0x9e, 0x70, 0x7c, 0xc3, 0xd2, 0x1d, 0xc3, 0xab, 0xf9, 0x90, 0x03, 0xb7, 0xfc, 0xf1, 0xec, 0xb4,
+	0x9a, 0xd6, 0x12, 0x69, 0xab, 0x6e, 0xb4, 0x07, 0x3d, 0x4e, 0xb9, 0x1f, 0x9d, 0x10, 0xc6, 0xfc,
+	0x80, 0x30, 0x7c, 0x53, 0xe4, 0xd5, 0x9d, 0x05, 0xa6, 0x64, 0x70, 0x4c, 0x92, 0x80, 0xbf, 0xc0,
+	0x6d, 0x89, 0x59, 0xf5, 0xa1, 0x7d, 0xd8, 0x95, 0xf6, 0x0f, 0x45, 0xcd, 0x71, 0x18, 0x87, 0x1c,
+	0x77, 0x2c, 0xdd, 0xd1, 0xbc, 0x35, 0x3f, 0xb2, 0xa0, 0x5b, 0xf1, 0x61, 0x10, 0x69, 0x55, 0x17,
+	0xba, 0x0b, 0xad, 0x90, 0x3d, 0xcb, 0xa3, 0x08, 0x77, 0x2d, 0xdd, 0x69, 0x7b, 0xca, 0xb2, 0xff,
+	0xd1, 0xa1, 0x27, 0x07, 0x75, 0x42, 0x78, 0x16, 0x8e, 0xd9, 0xd6, 0x3d, 0xdc, 0x85, 0xd6, 0xbc,
+	0xba, 0x03, 0x65, 0xa1, 0xef, 0xe1, 0x56, 0x9a, 0xd1, 0x31, 0x61, 0x2c, 0x4c, 0x02, 0xcf, 0xe7,
+	0x84, 0x61, 0xc3, 0x32, 0x9c, 0xee, 0xc1, 0xfe, 0x40, 0xa9, 0xa6, 0x86, 0x31, 0x38, 0xad, 0x27,
+	0x0f, 0x13, 0x9e, 0x9d, 0x7b, 0xab, 0x2d, 0xd0, 0x13, 0x68, 0xab, 0x2d, 0x30, 0xbc, 0x23, 0xda,
+	0xbd, 0xbf, 0xa1, 0x9d, 0xca, 0x92, 0x7d, 0x16, 0x45, 0xe6, 0x21, 0xdc, 0x6e, 0x42, 0x42, 0xbb,
+	0x60, 0xcc, 0xc8, 0x39, 0xd6, 0x2c, 0xcd, 0xe9, 0x78, 0xc5, 0x11, 0xdd, 0x86, 0x1b, 0x73, 0x3f,
+	0xca, 0x09, 0xd6, 0x2d, 0xcd, 0xd1, 0x3c, 0x69, 0x3c, 0xd2, 0x1f, 0x6a, 0xe6, 0x63, 0xe8, 0xd5,
+	0xda, 0x5f, 0x55, 0x6c, 0x54, 0x8a, 0xed, 0x4f, 0x01, 0x1d, 0x87, 0x8c, 0x4b, 0x95, 0x33, 0x8f,
+	0xfc, 0x92, 0x13, 0xc6, 0xb7, 0x4d, 0xd8, 0x7e, 0x0a, 0x6f, 0xd5, 0x2a, 0x58, 0x4a, 0x13, 0x46,
+	0xd0, 0x03, 0xb8, 0x29, 0xb7, 0xc9, 0xb0, 0x26, 0x26, 0x81, 0xca, 0x49, 0x2c, 0x5f, 0x90, 0x57,
+	0xa6, 0xd8, 0xcf, 0x60, 0xf7, 0x88, 0xa8, 0x1e, 0xd7, 0x00, 0x2d, 0xd6, 0x2a, 0x4b, 0xcb, 0xb5,
+	0x4a, 0xcb, 0x7e, 0x02, 0x6f, 0x56, 0xfa, 0x28, 0x2a, 0xfb, 0x8b, 0xe4, 0xa2, 0x4d, 0x33, 0x93,
+	0xb2, 0xc1, 0x09, 0xbc, 0x7d, 0x44, 0x78, 0x6d, 0x59, 0x4d, 0x7c, 0xf4, 0x8d, 0x32, 0x33, 0xaa,
+	0x32, 0xb3, 0x9f, 0x03, 0x5e, 0x6f, 0xa7, 0x68, 0x3d, 0x86, 0xde, 0xbc, 0x1a, 0x50, 0x73, 0xba,
+	0xd3, 0xa8, 0x18, 0xaf, 0x9e, 0x6b, 0xff, 0xa6, 0x41, 0x6f, 0x38, 0x09, 0xc8, 0x73, 0x9f, 0x93,
+	0x2c, 0xf6, 0xb3, 0xd9, 0xd6, 0x71, 0x21, 0xd8, 0x21, 0x93, 0xa0, 0xa4, 0x2d, 0xce, 0xc5, 0x57,
+	0xe6, 0xac, 0x2c, 0x96, 0xe2, 0x37, 0xbc, 0x8a, 0x07, 0x0d, 0x00, 0x85, 0x6c, 0xd1, 0x7e, 0x98,
+	0xf8, 0xa3, 0x88, 0x4c, 0xc4, 0xd7, 0xa8, 0xed, 0x35, 0x44, 0xec, 0x29, 0xbc, 0x7b, 0x44, 0xf8,
+	0xa9, 0x82, 0x5c, 0x84, 0x97, 0xf7, 0x1d, 0x02, 0x4a, 0xd7, 0xa2, 0xab, 0x97, 0xae, 0xdd, 0xc9,
+	0x6b, 0x28, 0xb0, 0x1f, 0xc1, 0xfd, 0x0d, 0x38, 0x57, 0xca, 0xe6, 0xe0, 0x8f, 0x1d, 0xe8, 0x7d,
+	0x2d, 0x80, 0xbe, 0x23, 0xd9, 0x3c, 0x1c, 0x13, 0xc4, 0xa1, 0x5b, 0x51, 0x2f, 0x32, 0x4b, 0x1e,
+	0xeb, 0x8f, 0xc0, 0xbc, 0xd7, 0x18, 0x93, 0x97, 0xb3, 0x1f, 0xbc, 0xfa, 0xfb, 0xbf, 0xdf, 0xf5,
+	0x0f, 0xd1, 0x9e, 0xf8, 0xbf, 0x32, 0xff, 0xcc, 0x2d, 0x31, 0x99, 0xfb, 0xb2, 0x3c, 0x5e, 0xb8,
+	0x4a, 0xee, 0xe8, 0x0c, 0x3a, 0x0b, 0x99, 0x22, 0x5c, 0xf6, 0x5d, 0x7d, 0x01, 0xe6, 0x3b, 0x0d,
+	0x11, 0x85, 0xf7, 0xb9, 0xc0, 0x73, 0xd1, 0x27, 0xd7, 0xc1, 0x73, 0x5f, 0xca, 0xc3, 0x05, 0x7a,
+	0xad, 0x89, 0x87, 0x56, 0xff, 0x7e, 0xbe, 0x57, 0x81, 0x69, 0x52, 0xbe, 0x69, 0x6d, 0x4e, 0x50,
+	0x74, 0xbe, 0x14, 0x74, 0x1e, 0xa2, 0x2f, 0xb6, 0xd2, 0x29, 0x24, 0x1c, 0x8e, 0x0b, 0x9f, 0x14,
+	0xf3, 0x85, 0x1b, 0x2b, 0x0a, 0xaf, 0x35, 0xb8, 0xd3, 0xb8, 0x55, 0xb4, 0x57, 0xc1, 0xde, 0xb8,
+	0x74, 0xf3, 0x83, 0x2b, 0xb2, 0x14, 0x4d, 0x57, 0xd0, 0xfc, 0x18, 0x7d, 0xb4, 0x95, 0xe6, 0xf2,
+	0x11, 0x1c, 0x7e, 0xf5, 0xe7, 0x65, 0x5f, 0xfb, 0xeb, 0xb2, 0xaf, 0xfd, 0x7b, 0xd9, 0xd7, 0x7e,
+	0x3a, 0x08, 0x42, 0xfe, 0x22, 0x1f, 0x0d, 0xc6, 0x34, 0x76, 0x93, 0x3c, 0xf6, 0xd3, 0x8c, 0xfe,
+	0x2c, 0x0e, 0xd3, 0x88, 0x9e, 0xb9, 0x8d, 0xbf, 0x41, 0xfe, 0x0f, 0x00, 0x00, 0xff, 0xff, 0x8b,
+	0xee, 0x3e, 0xac, 0x9b, 0x08, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -897,8 +789,6 @@ type DaemonServiceClient interface {
 	ListBuffers(ctx context.Context, in *ListBuffersRequest, opts ...grpc.CallOption) (*ListBuffersResponse, error)
 	GetBuffer(ctx context.Context, in *GetBufferRequest, opts ...grpc.CallOption) (*GetBufferResponse, error)
 	GetVertexMetrics(ctx context.Context, in *GetVertexMetricsRequest, opts ...grpc.CallOption) (*GetVertexMetricsResponse, error)
-	// GetVertexWatermark return the watermark of the given vertex.
-	GetVertexWatermark(ctx context.Context, in *GetVertexWatermarkRequest, opts ...grpc.CallOption) (*GetVertexWatermarkResponse, error)
 	// GetPipelineWatermarks return the watermark of the given pipeline
 	GetPipelineWatermarks(ctx context.Context, in *GetPipelineWatermarksRequest, opts ...grpc.CallOption) (*GetPipelineWatermarksResponse, error)
 }
@@ -938,15 +828,6 @@ func (c *daemonServiceClient) GetVertexMetrics(ctx context.Context, in *GetVerte
 	return out, nil
 }
 
-func (c *daemonServiceClient) GetVertexWatermark(ctx context.Context, in *GetVertexWatermarkRequest, opts ...grpc.CallOption) (*GetVertexWatermarkResponse, error) {
-	out := new(GetVertexWatermarkResponse)
-	err := c.cc.Invoke(ctx, "/daemon.DaemonService/GetVertexWatermark", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *daemonServiceClient) GetPipelineWatermarks(ctx context.Context, in *GetPipelineWatermarksRequest, opts ...grpc.CallOption) (*GetPipelineWatermarksResponse, error) {
 	out := new(GetPipelineWatermarksResponse)
 	err := c.cc.Invoke(ctx, "/daemon.DaemonService/GetPipelineWatermarks", in, out, opts...)
@@ -961,8 +842,6 @@ type DaemonServiceServer interface {
 	ListBuffers(context.Context, *ListBuffersRequest) (*ListBuffersResponse, error)
 	GetBuffer(context.Context, *GetBufferRequest) (*GetBufferResponse, error)
 	GetVertexMetrics(context.Context, *GetVertexMetricsRequest) (*GetVertexMetricsResponse, error)
-	// GetVertexWatermark return the watermark of the given vertex.
-	GetVertexWatermark(context.Context, *GetVertexWatermarkRequest) (*GetVertexWatermarkResponse, error)
 	// GetPipelineWatermarks return the watermark of the given pipeline
 	GetPipelineWatermarks(context.Context, *GetPipelineWatermarksRequest) (*GetPipelineWatermarksResponse, error)
 }
@@ -979,9 +858,6 @@ func (*UnimplementedDaemonServiceServer) GetBuffer(ctx context.Context, req *Get
 }
 func (*UnimplementedDaemonServiceServer) GetVertexMetrics(ctx context.Context, req *GetVertexMetricsRequest) (*GetVertexMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVertexMetrics not implemented")
-}
-func (*UnimplementedDaemonServiceServer) GetVertexWatermark(ctx context.Context, req *GetVertexWatermarkRequest) (*GetVertexWatermarkResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetVertexWatermark not implemented")
 }
 func (*UnimplementedDaemonServiceServer) GetPipelineWatermarks(ctx context.Context, req *GetPipelineWatermarksRequest) (*GetPipelineWatermarksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPipelineWatermarks not implemented")
@@ -1045,24 +921,6 @@ func _DaemonService_GetVertexMetrics_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DaemonService_GetVertexWatermark_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetVertexWatermarkRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DaemonServiceServer).GetVertexWatermark(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/daemon.DaemonService/GetVertexWatermark",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DaemonServiceServer).GetVertexWatermark(ctx, req.(*GetVertexWatermarkRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _DaemonService_GetPipelineWatermarks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPipelineWatermarksRequest)
 	if err := dec(in); err != nil {
@@ -1096,10 +954,6 @@ var _DaemonService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVertexMetrics",
 			Handler:    _DaemonService_GetVertexMetrics_Handler,
-		},
-		{
-			MethodName: "GetVertexWatermark",
-			Handler:    _DaemonService_GetVertexWatermark_Handler,
 		},
 		{
 			MethodName: "GetPipelineWatermarks",
@@ -1558,7 +1412,7 @@ func (m *GetVertexMetricsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error
 	return len(dAtA) - i, nil
 }
 
-func (m *VertexWatermark) Marshal() (dAtA []byte, err error) {
+func (m *EdgeWatermark) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -1568,12 +1422,12 @@ func (m *VertexWatermark) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *VertexWatermark) MarshalTo(dAtA []byte) (int, error) {
+func (m *EdgeWatermark) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *VertexWatermark) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *EdgeWatermark) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -1594,105 +1448,19 @@ func (m *VertexWatermark) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x20
 	}
-	if m.Watermark == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("watermark")
-	} else {
-		i = encodeVarintDaemon(dAtA, i, uint64(*m.Watermark))
-		i--
-		dAtA[i] = 0x18
-	}
-	if m.Vertex == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertex")
-	} else {
-		i -= len(*m.Vertex)
-		copy(dAtA[i:], *m.Vertex)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Vertex)))
-		i--
-		dAtA[i] = 0x12
-	}
-	if m.Pipeline == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	} else {
-		i -= len(*m.Pipeline)
-		copy(dAtA[i:], *m.Pipeline)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Pipeline)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
-}
-
-func (m *GetVertexWatermarkResponse) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *GetVertexWatermarkResponse) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *GetVertexWatermarkResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	if m.VertexWatermark == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertexWatermark")
-	} else {
-		{
-			size, err := m.VertexWatermark.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintDaemon(dAtA, i, uint64(size))
+	if len(m.Watermarks) > 0 {
+		for iNdEx := len(m.Watermarks) - 1; iNdEx >= 0; iNdEx-- {
+			i = encodeVarintDaemon(dAtA, i, uint64(m.Watermarks[iNdEx]))
+			i--
+			dAtA[i] = 0x18
 		}
-		i--
-		dAtA[i] = 0xa
 	}
-	return len(dAtA) - i, nil
-}
-
-func (m *GetVertexWatermarkRequest) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *GetVertexWatermarkRequest) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *GetVertexWatermarkRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	if m.Vertex == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertex")
+	if m.Edge == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("edge")
 	} else {
-		i -= len(*m.Vertex)
-		copy(dAtA[i:], *m.Vertex)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Vertex)))
+		i -= len(*m.Edge)
+		copy(dAtA[i:], *m.Edge)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Edge)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -1989,7 +1757,7 @@ func (m *GetVertexMetricsResponse) Size() (n int) {
 	return n
 }
 
-func (m *VertexWatermark) Size() (n int) {
+func (m *EdgeWatermark) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1999,51 +1767,17 @@ func (m *VertexWatermark) Size() (n int) {
 		l = len(*m.Pipeline)
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.Vertex != nil {
-		l = len(*m.Vertex)
+	if m.Edge != nil {
+		l = len(*m.Edge)
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.Watermark != nil {
-		n += 1 + sovDaemon(uint64(*m.Watermark))
+	if len(m.Watermarks) > 0 {
+		for _, e := range m.Watermarks {
+			n += 1 + sovDaemon(uint64(e))
+		}
 	}
 	if m.IsWatermarkEnabled != nil {
 		n += 2
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
-	return n
-}
-
-func (m *GetVertexWatermarkResponse) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	if m.VertexWatermark != nil {
-		l = m.VertexWatermark.Size()
-		n += 1 + l + sovDaemon(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
-	return n
-}
-
-func (m *GetVertexWatermarkRequest) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	if m.Pipeline != nil {
-		l = len(*m.Pipeline)
-		n += 1 + l + sovDaemon(uint64(l))
-	}
-	if m.Vertex != nil {
-		l = len(*m.Vertex)
-		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -3392,7 +3126,7 @@ func (m *GetVertexMetricsResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *VertexWatermark) Unmarshal(dAtA []byte) error {
+func (m *EdgeWatermark) Unmarshal(dAtA []byte) error {
 	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
@@ -3416,10 +3150,10 @@ func (m *VertexWatermark) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: VertexWatermark: wiretype end group for non-group")
+			return fmt.Errorf("proto: EdgeWatermark: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: VertexWatermark: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: EdgeWatermark: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -3458,7 +3192,7 @@ func (m *VertexWatermark) Unmarshal(dAtA []byte) error {
 			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Vertex", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Edge", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -3487,30 +3221,85 @@ func (m *VertexWatermark) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			s := string(dAtA[iNdEx:postIndex])
-			m.Vertex = &s
+			m.Edge = &s
 			iNdEx = postIndex
 			hasFields[0] |= uint64(0x00000002)
 		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Watermark", wireType)
-			}
-			var v int64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDaemon
+			if wireType == 0 {
+				var v int64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowDaemon
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= int64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
 				}
-				if iNdEx >= l {
+				m.Watermarks = append(m.Watermarks, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowDaemon
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLengthDaemon
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLengthDaemon
+				}
+				if postIndex > l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
+				var elementCount int
+				var count int
+				for _, integer := range dAtA[iNdEx:postIndex] {
+					if integer < 128 {
+						count++
+					}
 				}
+				elementCount = count
+				if elementCount != 0 && len(m.Watermarks) == 0 {
+					m.Watermarks = make([]int64, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v int64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowDaemon
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= int64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.Watermarks = append(m.Watermarks, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field Watermarks", wireType)
 			}
-			m.Watermark = &v
-			hasFields[0] |= uint64(0x00000004)
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field IsWatermarkEnabled", wireType)
@@ -3532,7 +3321,7 @@ func (m *VertexWatermark) Unmarshal(dAtA []byte) error {
 			}
 			b := bool(v != 0)
 			m.IsWatermarkEnabled = &b
-			hasFields[0] |= uint64(0x00000008)
+			hasFields[0] |= uint64(0x00000004)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -3553,231 +3342,10 @@ func (m *VertexWatermark) Unmarshal(dAtA []byte) error {
 		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertex")
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("edge")
 	}
 	if hasFields[0]&uint64(0x00000004) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("watermark")
-	}
-	if hasFields[0]&uint64(0x00000008) == 0 {
 		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("isWatermarkEnabled")
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *GetVertexWatermarkResponse) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDaemon
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: GetVertexWatermarkResponse: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetVertexWatermarkResponse: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field VertexWatermark", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDaemon
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.VertexWatermark == nil {
-				m.VertexWatermark = &VertexWatermark{}
-			}
-			if err := m.VertexWatermark.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDaemon(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
-			iNdEx += skippy
-		}
-	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertexWatermark")
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *GetVertexWatermarkRequest) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDaemon
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: GetVertexWatermarkRequest: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetVertexWatermarkRequest: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Pipeline", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDaemon
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Pipeline = &s
-			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Vertex", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDaemon
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Vertex = &s
-			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000002)
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDaemon(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if (skippy < 0) || (iNdEx+skippy) < 0 {
-				return ErrInvalidLengthDaemon
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
-			iNdEx += skippy
-		}
-	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	}
-	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertex")
 	}
 
 	if iNdEx > l {
@@ -3843,7 +3411,7 @@ func (m *GetPipelineWatermarksResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.PipelineWatermarks = append(m.PipelineWatermarks, &VertexWatermark{})
+			m.PipelineWatermarks = append(m.PipelineWatermarks, &EdgeWatermark{})
 			if err := m.PipelineWatermarks[len(m.PipelineWatermarks)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}

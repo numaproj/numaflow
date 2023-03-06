@@ -122,13 +122,13 @@ const (
 	DefaultReadBatchSize    = 500
 
 	// Auto scaling
-	DefaultLookbackSeconds         = 180 // Default lookback seconds for calculating avg rate and pending
-	DefaultCooldownSeconds         = 90  // Default cooldown seconds after a scaling operation
-	DefaultZeroReplicaSleepSeconds = 180 // Default sleep time in seconds after scaling down to 0, before peeking
-	DefaultMaxReplicas             = 50  // Default max replicas
-	DefaultTargetProcessingSeconds = 20  // Default targeted time in seconds to finish processing all the pending messages for a source
-	DefaultTargetBufferUsage       = 50  // Default targeted percentage of balanced buffer usage
-	DefaultReplicasPerScale        = 2   // Default maximum replicas to be scaled up or down at once
+	DefaultLookbackSeconds          = 180 // Default lookback seconds for calculating avg rate and pending
+	DefaultCooldownSeconds          = 90  // Default cooldown seconds after a scaling operation
+	DefaultZeroReplicaSleepSeconds  = 180 // Default sleep time in seconds after scaling down to 0, before peeking
+	DefaultMaxReplicas              = 50  // Default max replicas
+	DefaultTargetProcessingSeconds  = 20  // Default targeted time in seconds to finish processing all the pending messages for a source
+	DefaultTargetBufferAvailability = 50  // Default targeted percentage of buffer availability
+	DefaultReplicasPerScale         = 2   // Default maximum replicas to be scaled up or down at once
 
 	// Default persistent buffer queue options
 	DefaultPBQChannelBufferSize = 100             // Default channel size in int (what should be right value?)

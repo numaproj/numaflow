@@ -17506,7 +17506,16 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
           }
         },
+        "envFrom": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.EnvFromSource"
+          }
+        },
         "image": {
+          "type": "string"
+        },
+        "imagePullPolicy": {
           "type": "string"
         },
         "resources": {
@@ -18800,8 +18809,13 @@
           "type": "integer",
           "format": "int64"
         },
+        "targetBufferAvailability": {
+          "description": "TargetBufferAvailability is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read.",
+          "type": "integer",
+          "format": "int64"
+        },
         "targetBufferUsage": {
-          "description": "TargetBufferUsage is used to define the target percentage of usage of the buffer to be read. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read.",
+          "description": "TargetBufferUsage is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read. Deprecated: use targetBufferAvailability instead. Will be removed in v0.9",
           "type": "integer",
           "format": "int64"
         },

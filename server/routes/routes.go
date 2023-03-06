@@ -36,7 +36,6 @@ func v1Routes(r gin.IRouter) {
 	if err != nil {
 		panic(err)
 	}
-	r.GET("/namespaces", handler.ListNamespaces)
 	r.GET("/namespaces/:namespace/pipelines", handler.ListPipelines)
 	r.GET("/namespaces/:namespace/isbsvcs", handler.ListInterStepBufferServices)
 	r.GET("/namespaces/:namespace/isbsvcs/:isbsvc", handler.GetInterStepBufferService)
@@ -50,6 +49,5 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/edges", handler.ListPipelineEdges)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/edges/:edge", handler.GetPipelineEdge)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics", handler.GetVertexMetrics)
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/watermark", handler.GetVertexWatermark)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks", handler.GetPipelineWatermarks)
 }

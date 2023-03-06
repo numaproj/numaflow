@@ -36,6 +36,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type natsSource struct {
@@ -87,7 +88,7 @@ func New(
 	for _, w := range writers {
 		destinations[w.GetName()] = w
 	}
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(n.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(n.logger), forward.WithSourceWatermarkPublisher(n)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -167,8 +168,8 @@ func New(
 			Message: isb.Message{
 				Header: isb.Header{
 					// TODO: Be able to specify event time.
-					PaneInfo: isb.PaneInfo{EventTime: time.Now()},
-					ID:       id,
+					MessageInfo: isb.MessageInfo{EventTime: time.Now()},
+					ID:          id,
 				},
 				Body: isb.Body{
 					Payload: msg.Data,
@@ -218,28 +219,33 @@ func (ns *natsSource) GetName() string {
 }
 
 func (ns *natsSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
-	msgs := []*isb.ReadMessage{}
-	var oldest time.Time
+	var msgs []*isb.ReadMessage
 	timeout := time.After(ns.readTimeout)
 loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-ns.messages:
-			if oldest.IsZero() || m.EventTime.Before(oldest) {
-				oldest = m.EventTime
-			}
-			msgs = append(msgs, m)
 			natsSourceReadCount.With(map[string]string{metrics.LabelVertex: ns.name, metrics.LabelPipeline: ns.pipelineName}).Inc()
+			msgs = append(msgs, m)
 		case <-timeout:
 			ns.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", ns.readTimeout), zap.Int("read", len(msgs)))
 			break loop
 		}
 	}
 	ns.logger.Debugf("Read %d messages.", len(msgs))
-	if len(msgs) > 0 && !oldest.IsZero() {
-		ns.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), msgs[len(msgs)-1].ReadOffset)
-	}
 	return msgs, nil
+}
+
+func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
+	var oldest time.Time
+	for _, m := range msgs {
+		if oldest.IsZero() || m.EventTime.Before(oldest) {
+			oldest = m.EventTime
+		}
+	}
+	if len(msgs) > 0 && !oldest.IsZero() {
+		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
+	}
 }
 
 func (ns *natsSource) Ack(_ context.Context, offsets []isb.Offset) []error {

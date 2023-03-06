@@ -214,10 +214,14 @@ func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message,
 	var writeOffsets = make([]isb.Offset, len(messages))
 	var futures = make([]nats.PubAckFuture, len(messages))
 	for index, message := range messages {
+		payload, err := message.MarshalBinary()
+		if err != nil {
+			errs[index] = err
+			continue
+		}
 		m := &nats.Msg{
-			Header:  convert2NatsMsgHeader(message.Header),
 			Subject: jw.subject,
-			Data:    message.Payload,
+			Data:    payload,
 		}
 		if future, err := jw.js.PublishMsgAsync(m, nats.MsgId(message.Header.ID)); err != nil { // nats.MsgId() is for exactly-once writing
 			errs[index] = err
@@ -272,10 +276,14 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 		wg.Add(1)
 		go func(message isb.Message, idx int) {
 			defer wg.Done()
+			payload, err := message.MarshalBinary()
+			if err != nil {
+				errs[idx] = err
+				return
+			}
 			m := &nats.Msg{
-				Header:  convert2NatsMsgHeader(message.Header),
 				Subject: jw.subject,
-				Data:    message.Payload,
+				Data:    payload,
 			}
 			if pubAck, err := jw.js.PublishMsg(m, nats.MsgId(message.Header.ID), nats.AckWait(2*time.Second)); err != nil { // nats.MsgId() is for exactly-once writing
 				errs[idx] = err
@@ -306,34 +314,4 @@ func (w *writeOffset) Sequence() (int64, error) {
 
 func (w *writeOffset) AckIt() error {
 	return fmt.Errorf("not supported")
-}
-
-const (
-	_key       = "k"
-	_id        = "i"
-	_late      = "l"
-	_eventTime = "pev"
-	_startTime = "ps"
-	_endTime   = "pen"
-)
-
-func convert2NatsMsgHeader(header isb.Header) nats.Header {
-	r := nats.Header{}
-	r.Add(_id, header.ID)
-	r.Add(_key, string(header.Key))
-	if header.IsLate {
-		r.Add(_late, "1")
-	} else {
-		r.Add(_late, "0")
-	}
-	if !header.EventTime.IsZero() {
-		r.Add(_eventTime, fmt.Sprint(header.EventTime.UnixMilli()))
-	}
-	if !header.StartTime.IsZero() {
-		r.Add(_startTime, fmt.Sprint(header.StartTime.UnixMilli()))
-	}
-	if !header.EndTime.IsZero() {
-		r.Add(_endTime, fmt.Sprint(header.EndTime.UnixMilli()))
-	}
-	return r
 }

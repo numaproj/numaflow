@@ -14,41 +14,47 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package ot represents the offset-timeline pair and its corresponding encoder and decoder.
-package ot
+// Package wmb represents the offset-timeline pair and its corresponding encoder and decoder.
+package wmb
 
 import (
 	"bytes"
 	"encoding/binary"
 )
 
-// Value is used in the JetStream offset timeline bucket as the value for the given processor entity key.
-type Value struct {
-	Offset    int64
-	Watermark int64
+// WMB is used in the KV offset timeline bucket as the value for the given processor entity key.
+type WMB struct {
 	// Idle is set to true if the given processor entity hasn't published anything
 	// to the offset timeline bucket in a batch processing cycle.
 	// Idle is used to signal an idle watermark.
 	Idle bool
+	// Offset is the monotonically increasing index/offset of the buffer (buffer is the physical representation
+	// of the partition of the edge).
+	Offset int64
+	// Watermark is tightly coupled with the offset and will be monotonically increasing for a given ProcessorEntity
+	// as the offset increases.
+	// When it is idling (Idle==true), for a given offset, the watermark can monotonically increase without offset
+	// increasing.
+	Watermark int64
 }
 
-// EncodeToBytes encodes a Value object into byte array.
-func (v Value) EncodeToBytes() ([]byte, error) {
+// EncodeToBytes encodes a WMB object into byte array.
+func (w WMB) EncodeToBytes() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.LittleEndian, v)
+	err := binary.Write(buf, binary.LittleEndian, w)
 	if err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-// DecodeToOTValue decodes the given byte array into a Value object.
-func DecodeToOTValue(b []byte) (Value, error) {
-	var v Value
+// DecodeToWMB decodes the given byte array into a WMB object.
+func DecodeToWMB(b []byte) (WMB, error) {
+	var v WMB
 	buf := bytes.NewReader(b)
 	err := binary.Read(buf, binary.LittleEndian, &v)
 	if err != nil {
-		return Value{}, err
+		return WMB{}, err
 	}
 	return v, nil
 }

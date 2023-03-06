@@ -32,10 +32,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
@@ -206,7 +206,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		pf         ProcessAndForward
 		otStores   map[string]wmstore.WatermarkKVStorer
 		expected   []bool
-		wmExpected map[string]ot.Value
+		wmExpected map[string]wmb.WMB
 	}{
 		{
 			name: "test-forward-one",
@@ -219,15 +219,15 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			pf:       pf1,
 			otStores: otStores1,
 			expected: []bool{false, true},
-			wmExpected: map[string]ot.Value{
+			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    0,
-					Watermark: 120000,
+					Watermark: int64(60000),
 					Idle:      false,
 				},
 				"buffer2": {
 					Offset:    0,
-					Watermark: 0,
+					Watermark: int64(60000),
 					Idle:      true,
 				},
 			},
@@ -243,15 +243,15 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			pf:       pf2,
 			otStores: otStores2,
 			expected: []bool{false, false},
-			wmExpected: map[string]ot.Value{
+			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    0,
-					Watermark: 120000,
+					Watermark: int64(60000),
 					Idle:      false,
 				},
 				"buffer2": {
 					Offset:    0,
-					Watermark: 120000,
+					Watermark: int64(60000),
 					Idle:      false,
 				},
 			},
@@ -267,15 +267,15 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			pf:       pf3,
 			otStores: otStores3,
 			expected: []bool{true, true},
-			wmExpected: map[string]ot.Value{
+			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    0,
-					Watermark: 0,
+					Watermark: int64(60000),
 					Idle:      true,
 				},
 				"buffer2": {
 					Offset:    0,
-					Watermark: 0,
+					Watermark: int64(60000),
 					Idle:      true,
 				},
 			},
@@ -295,7 +295,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 				otKeys, _ := value.otStores[bufferName].GetAllKeys(ctx)
 				for _, otKey := range otKeys {
 					otValue, _ := value.otStores[bufferName].GetValue(ctx, otKey)
-					ot, _ := ot.DecodeToOTValue(otValue)
+					ot, _ := wmb.DecodeToWMB(otValue)
 					assert.Equal(t, ot, value.wmExpected[bufferName])
 				}
 			}
@@ -324,7 +324,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	var result = []*isb.Message{
 		{
 			Header: isb.Header{
-				PaneInfo: isb.PaneInfo{
+				MessageInfo: isb.MessageInfo{
 					EventTime: time.UnixMilli(60000),
 				},
 				ID:  "1",

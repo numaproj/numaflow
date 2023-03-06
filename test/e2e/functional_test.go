@@ -86,6 +86,14 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Expect().
 		Status(200).Body().Contains("pipeline")
 
+	HTTPExpect(s.T(), "https://localhost:1234").GET("/readyz").
+		Expect().
+		Status(204)
+
+	HTTPExpect(s.T(), "https://localhost:1234").GET("/livez").
+		Expect().
+		Status(204)
+
 	// Test Daemon service with gRPC
 	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
 	assert.NoError(s.T(), err)
@@ -169,15 +177,48 @@ func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
 	pipelineName := "extract-event-time"
 
 	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
+	w.Expect().VertexPodsRunning().DaemonPodsRunning()
+
+	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
+		TerminateAllPodPortForwards()
+
+	// Use daemon client to verify watermark propagation.
+	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	assert.NoError(s.T(), err)
+	defer func() {
+		_ = client.Close()
+	}()
 
 	// In this test, we send a message with event time being now, apply event time extractor and verify from log that the message event time gets updated.
 	timeNow := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	testMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`
+	testMsgOne := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-01-18T21:54:42.123Z"}]}`
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)).WithHeader("X-Numaflow-Event-Time", timeNow))
+	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1))
 
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsg)).WithHeader("X-Numaflow-Event-Time", timeNow))
+	// Verify watermark is generated based on the new event time.
+	testMsgTwo := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`
+	testMsgThree := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-03-18T21:54:42.123Z"}]}`
+	testMsgFour := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-04-18T21:54:42.123Z"}]}`
+	testMsgFive := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-05-18T21:54:42.123Z"}]}`
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
-	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 2, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1))
+	// TODO - Figure out a better way to wait for watermark to propagate.
+	time.Sleep(time.Second * 2)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)).WithHeader("X-Numaflow-Event-Time", timeNow))
+	time.Sleep(time.Second * 2)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgThree)).WithHeader("X-Numaflow-Event-Time", timeNow))
+	time.Sleep(time.Second * 2)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgFour)).WithHeader("X-Numaflow-Event-Time", timeNow))
+	time.Sleep(time.Second * 2)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgFive)).WithHeader("X-Numaflow-Event-Time", timeNow))
+	time.Sleep(time.Second * 2)
+
+	wm, err := client.GetPipelineWatermarks(ctx, pipelineName)
+	assert.NoError(s.T(), err)
+	edgeWM := wm[0].Watermarks[0]
+	// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark matches one of the assigned event times.
+	assert.True(s.T(), edgeWM == time.Date(2021, 4, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 3, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 2, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli())
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {
@@ -215,7 +256,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 
 	pipelineName := "simple-pipeline-watermark"
 	// TODO: Any way to extract the list from suite
-	vertexList := []string{"input", "cat1", "cat2", "cat3", "output1", "output2"}
+	edgeList := []string{"input-cat1", "input-cat2", "cat1-output1", "cat2-cat3", "cat3-output2"}
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning().DaemonPodsRunning()
@@ -237,16 +278,16 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	assert.Equal(s.T(), "input", *bufferInfo.FromVertex)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	isProgressing, err := isWatermarkProgressing(ctx, client, pipelineName, vertexList, 3)
+	isProgressing, err := isWatermarkProgressing(ctx, client, pipelineName, edgeList, 3)
 	assert.NoError(s.T(), err, "TestWatermarkEnabled failed %s\n", err)
 	assert.Truef(s.T(), isProgressing, "isWatermarkProgressing\n")
 }
 
-// isWatermarkProgressing checks whether the watermark for each vertex in a pipeline is progressing monotonically.
+// isWatermarkProgressing checks whether the watermark for each edge in a pipeline is progressing monotonically.
 // progressCount is the number of progressions the watermark value should undertake within the timeout deadline for it
-func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClient, pipelineName string, vertexList []string, progressCount int) (bool, error) {
-	prevWatermark := make([]int64, len(vertexList))
-	for i := 0; i < len(vertexList); i++ {
+func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClient, pipelineName string, edgeList []string, progressCount int) (bool, error) {
+	prevWatermark := make([]int64, len(edgeList))
+	for i := 0; i < len(edgeList); i++ {
 		prevWatermark[i] = -1
 	}
 	for i := 0; i < progressCount; i++ {
@@ -263,10 +304,10 @@ func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClie
 			if err != nil {
 				return false, err
 			}
-			pipelineWatermarks := make([]int64, len(vertexList))
+			pipelineWatermarks := make([]int64, len(edgeList))
 			idx := 0
-			for _, v := range wm {
-				pipelineWatermarks[idx] = *v.Watermark
+			for _, e := range wm {
+				pipelineWatermarks[idx] = e.Watermarks[0]
 				idx++
 			}
 			currentWatermark = pipelineWatermarks

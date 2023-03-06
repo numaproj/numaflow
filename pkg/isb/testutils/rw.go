@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
@@ -46,7 +47,7 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 		messages = append(messages,
 			isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{
+					MessageInfo: isb.MessageInfo{
 						EventTime: tmpTime,
 					},
 					ID: fmt.Sprintf("%d", i),
@@ -74,7 +75,7 @@ func BuildTestReadMessages(count int64, startTime time.Time) []isb.ReadMessage {
 	return readMessages
 }
 
-// BuildTestReadMessages builds test isb.ReadMessage which can be used for testing.
+// BuildTestReadMessagesIntOffset builds test isb.ReadMessage which can be used for testing.
 func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.ReadMessage {
 	writeMessages := BuildTestWriteMessages(count, startTime)
 	var readMessages = make([]isb.ReadMessage, count)

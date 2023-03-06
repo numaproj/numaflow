@@ -286,6 +286,13 @@ func (in *Container) DeepCopyInto(out *Container) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.EnvFrom != nil {
+		in, out := &in.EnvFrom, &out.EnvFrom
+		*out = make([]v1.EnvFromSource, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.VolumeMounts != nil {
 		in, out := &in.VolumeMounts, &out.VolumeMounts
 		*out = make([]v1.VolumeMount, len(*in))
@@ -298,6 +305,11 @@ func (in *Container) DeepCopyInto(out *Container) {
 		in, out := &in.SecurityContext, &out.SecurityContext
 		*out = new(v1.SecurityContext)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.ImagePullPolicy != nil {
+		in, out := &in.ImagePullPolicy, &out.ImagePullPolicy
+		*out = new(v1.PullPolicy)
+		**out = **in
 	}
 	return
 }
@@ -1490,13 +1502,18 @@ func (in *Scale) DeepCopyInto(out *Scale) {
 		*out = new(uint32)
 		**out = **in
 	}
-	if in.TargetBufferUsage != nil {
-		in, out := &in.TargetBufferUsage, &out.TargetBufferUsage
+	if in.DeprecatedTargetBufferUsage != nil {
+		in, out := &in.DeprecatedTargetBufferUsage, &out.DeprecatedTargetBufferUsage
 		*out = new(uint32)
 		**out = **in
 	}
 	if in.ReplicasPerScale != nil {
 		in, out := &in.ReplicasPerScale, &out.ReplicasPerScale
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.TargetBufferAvailability != nil {
+		in, out := &in.TargetBufferAvailability, &out.TargetBufferAvailability
 		*out = new(uint32)
 		**out = **in
 	}

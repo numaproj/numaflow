@@ -38,8 +38,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // ProcessAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
@@ -107,7 +107,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 	}).Observe(float64(time.Since(startTime).Microseconds()))
 
-	processorWM := processor.Watermark(p.PartitionID.End)
+	processorWM := wmb.Watermark(p.PartitionID.Start)
 
 	messagesToStep := p.whereToStep()
 
@@ -247,7 +247,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 }
 
 // publishWM publishes the watermark to each edge.
-func (p *ProcessAndForward) publishWM(wm processor.Watermark, writeOffsets map[string][]isb.Offset) {
+func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string][]isb.Offset) {
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
@@ -265,7 +265,8 @@ func (p *ProcessAndForward) publishWM(wm processor.Watermark, writeOffsets map[s
 		// batch processing cycle, send an idle watermark
 		for bufferName := range p.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
-				p.publishWatermark[bufferName].PublishIdleWatermark()
+				// use the watermark of the current read batch for the idle watermark
+				p.publishWatermark[bufferName].PublishIdleWatermark(wm)
 			}
 		}
 	}

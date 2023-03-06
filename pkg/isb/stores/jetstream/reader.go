@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -221,6 +220,7 @@ func (jr *jetStreamReader) Rate(_ context.Context, seconds int64) (float64, erro
 }
 
 func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
+	var err error
 	result := []*isb.ReadMessage{}
 	msgs, err := jr.sub.Fetch(int(count), nats.MaxWait(jr.opts.readTimeOut))
 	if err != nil && !errors.Is(err, nats.ErrTimeout) {
@@ -228,16 +228,17 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 		return nil, fmt.Errorf("failed to fetch messages from jet stream subject %q, %w", jr.subject, err)
 	}
 	for _, msg := range msgs {
-		m := &isb.ReadMessage{
-			ReadOffset: newOffset(msg, jr.inProgessTickDuration, jr.log),
-			Message: isb.Message{
-				Header: convert2IsbMsgHeader(msg.Header),
-				Body: isb.Body{
-					Payload: msg.Data,
-				},
-			},
+		var m = new(isb.Message)
+		// err should be nil as we have our own marshaller/unmarshaller
+		err = m.UnmarshalBinary(msg.Data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal the message into isb.Message, %w", err)
 		}
-		result = append(result, m)
+		rm := &isb.ReadMessage{
+			ReadOffset: newOffset(msg, jr.inProgessTickDuration, jr.log),
+			Message:    *m,
+		}
+		result = append(result, rm)
 	}
 	return result, nil
 }
@@ -267,32 +268,6 @@ func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error 
 	}()
 	<-done
 	return errs
-}
-
-func convert2IsbMsgHeader(header nats.Header) isb.Header {
-	r := isb.Header{}
-	if header.Get(_late) == "1" {
-		r.IsLate = true
-	}
-	if x := header.Get(_id); x != "" {
-		r.ID = x
-	}
-	if x := header.Get(_key); x != "" {
-		r.Key = x
-	}
-	if x := header.Get(_eventTime); x != "" {
-		i, _ := strconv.ParseInt(x, 10, 64)
-		r.EventTime = time.UnixMilli(i)
-	}
-	if x := header.Get(_startTime); x != "" {
-		i, _ := strconv.ParseInt(x, 10, 64)
-		r.StartTime = time.UnixMilli(i)
-	}
-	if x := header.Get(_endTime); x != "" {
-		i, _ := strconv.ParseInt(x, 10, 64)
-		r.EndTime = time.UnixMilli(i)
-	}
-	return r
 }
 
 // offset implements ID interface for JetStream.

@@ -48,15 +48,25 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 				Image:           "my-image",
 				Args:            []string{"my-arg"},
 				SecurityContext: &corev1.SecurityContext{},
+				EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+				}}},
 			},
 		},
 	}
 	c := x.getUDSinkContainer(getContainerReq{
 		image:           "main-image",
-		imagePullPolicy: corev1.PullNever,
+		imagePullPolicy: corev1.PullAlways,
 	})
 	assert.NotNil(t, c.SecurityContext)
-	assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
+	assert.Equal(t, corev1.PullAlways, c.ImagePullPolicy)
 	assert.Equal(t, "my-image", c.Image)
 	assert.Contains(t, c.Args, "my-arg")
+	assert.Equal(t, 1, len(c.EnvFrom))
+	x.UDSink.Container.ImagePullPolicy = &testImagePullPolicy
+	c = x.getUDSinkContainer(getContainerReq{
+		image:           "main-image",
+		imagePullPolicy: corev1.PullAlways,
+	})
+	assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 }

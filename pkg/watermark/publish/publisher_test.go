@@ -23,8 +23,9 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -79,30 +80,31 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	var epoch int64 = 1651161600000
 	var location, _ = time.LoadLocation("UTC")
 	for i := 0; i < 3; i++ {
-		p.PublishWatermark(processor.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
+		p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
 		epoch += 60000
 		time.Sleep(time.Millisecond)
 	}
 	// publish a stale watermark (offset doesn't matter)
-	p.PublishWatermark(processor.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
+	p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
 
 	keys, err := p.otStore.GetAllKeys(p.ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"publisherTestPod1"}, keys)
 
 	wm := p.loadLatestFromStore()
-	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), wm.String())
+	assert.Equal(t, wmb.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), wm.String())
 
 	head := p.GetLatestWatermark()
-	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
+	assert.Equal(t, wmb.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
 
-	p.PublishIdleWatermark()
+	// simulate the next read batch where the watermark is now $epoch
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)))
 	keys, err = p.otStore.GetAllKeys(p.ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"publisherTestPod1"}, keys)
 	otValue, err := p.otStore.GetValue(p.ctx, keys[0])
 	assert.NoError(t, err)
-	otDecode, err := ot.DecodeToOTValue(otValue)
+	otDecode, err := wmb.DecodeToWMB(otValue)
 	assert.NoError(t, err)
 	assert.True(t, otDecode.Idle)
 

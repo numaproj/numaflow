@@ -595,6 +595,19 @@ func schema_pkg_apis_numaflow_v1alpha1_Container(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"envFrom": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.EnvFromSource"),
+									},
+								},
+							},
+						},
+					},
 					"volumeMounts": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
@@ -619,11 +632,17 @@ func schema_pkg_apis_numaflow_v1alpha1_Container(ref common.ReferenceCallback) c
 							Ref: ref("k8s.io/api/core/v1.SecurityContext"),
 						},
 					},
+					"imagePullPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.SecurityContext", "k8s.io/api/core/v1.VolumeMount"},
+			"k8s.io/api/core/v1.EnvFromSource", "k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.SecurityContext", "k8s.io/api/core/v1.VolumeMount"},
 	}
 }
 
@@ -3020,7 +3039,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"targetBufferUsage": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TargetBufferUsage is used to define the target percentage of usage of the buffer to be read. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices as only they have buffers to read.",
+							Description: "TargetBufferUsage is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read. Deprecated: use targetBufferAvailability instead. Will be removed in v0.9",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3028,6 +3047,13 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					"replicasPerScale": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"targetBufferAvailability": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TargetBufferAvailability is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},

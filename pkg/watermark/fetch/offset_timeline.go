@@ -171,6 +171,26 @@ func (t *OffsetTimeline) GetHeadOffsetWatermark() OffsetWatermark {
 	return t.watermarks.Front().Value.(OffsetWatermark)
 }
 
+// GetReferredWatermark returns the referred watermark that will be used to replace
+// the idle watermark value
+func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) OffsetWatermark {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	// find in the offset timeline where the OffsetWatermark has a watermark that is <= the idleWM
+	// because, when we replace the idleWM, we need to guarantee the referred watermark's value won't exceed
+	// the largest WM processed from Vn-1's idle processor (meaning the idle processor hasn't seen any data that
+	// is later than this idleWM)
+	for e := t.watermarks.Front(); e != nil; e = e.Next() {
+		if e.Value.(OffsetWatermark).watermark <= idleWM {
+			return e.Value.(OffsetWatermark)
+		}
+	}
+	return OffsetWatermark{
+		watermark: -1,
+		offset:    -1,
+	}
+}
+
 // GetOffset will return the offset for the given event-time.
 // TODO(jyu6): will make Watermark an interface make it easy to pass an Offset and return a Watermark?
 func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {

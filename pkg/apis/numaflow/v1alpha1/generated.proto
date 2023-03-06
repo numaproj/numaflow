@@ -194,13 +194,19 @@ message Container {
   repeated k8s.io.api.core.v1.EnvVar env = 4;
 
   // +optional
-  repeated k8s.io.api.core.v1.VolumeMount volumeMounts = 5;
+  repeated k8s.io.api.core.v1.EnvFromSource envFrom = 5;
 
   // +optional
-  optional k8s.io.api.core.v1.ResourceRequirements resources = 6;
+  repeated k8s.io.api.core.v1.VolumeMount volumeMounts = 6;
 
   // +optional
-  optional k8s.io.api.core.v1.SecurityContext securityContext = 7;
+  optional k8s.io.api.core.v1.ResourceRequirements resources = 7;
+
+  // +optional
+  optional k8s.io.api.core.v1.SecurityContext securityContext = 8;
+
+  // +optional
+  optional string imagePullPolicy = 9;
 }
 
 // ContainerTemplate defines customized spec for a container
@@ -901,9 +907,10 @@ message Scale {
   // +optional
   optional uint32 targetProcessingSeconds = 7;
 
-  // TargetBufferUsage is used to define the target percentage of usage of the buffer to be read.
+  // TargetBufferUsage is used to define the target percentage of the buffer availability.
   // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
-  // It only applies to UDF and Sink vertices as only they have buffers to read.
+  // It only applies to UDF and Sink vertices because only they have buffers to read.
+  // Deprecated: use targetBufferAvailability instead. Will be removed in v0.9
   // +optional
   optional uint32 targetBufferUsage = 8;
 
@@ -911,6 +918,12 @@ message Scale {
   // The is use to prevent too aggressive scaling operations
   // +optional
   optional uint32 replicasPerScale = 9;
+
+  // TargetBufferAvailability is used to define the target percentage of the buffer availability.
+  // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+  // It only applies to UDF and Sink vertices because only they have buffers to read.
+  // +optional
+  optional uint32 targetBufferAvailability = 10;
 }
 
 message Sink {

@@ -27,6 +27,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -71,7 +72,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
 	}
-	wmFetchers, err := service.GetVertexWatermarkFetchers(ctx, ds.pipeline, isbSvcClient)
+	wmFetchers, err := service.GetEdgeWatermarkFetchers(ctx, ds.pipeline, isbSvcClient)
 	if err != nil {
 		return fmt.Errorf("failed to get watermark fetchers, %w", err)
 	}
@@ -174,5 +175,13 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 		TLSConfig: tlsConfig,
 	}
 	mux.Handle("/api/", gwmux)
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.Handle("/metrics", promhttp.Handler())
+
 	return &httpServer
 }

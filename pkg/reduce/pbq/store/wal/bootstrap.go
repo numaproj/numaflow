@@ -44,7 +44,7 @@ func (w *WAL) IsCorrupted() bool {
 	return w.corrupted
 }
 
-func (w *WAL) readHeader() (*partition.ID, error) {
+func (w *WAL) readWALHeader() (*partition.ID, error) {
 	if w.openMode == os.O_WRONLY {
 		return nil, fmt.Errorf("opened using O_WRONLY")
 	}
@@ -53,7 +53,7 @@ func (w *WAL) readHeader() (*partition.ID, error) {
 		return nil, fmt.Errorf("header has already been read, current readoffset is at %d", w.rOffset)
 	}
 
-	id, err := decodeHeader(w.fp)
+	id, err := decodeWALHeader(w.fp)
 	if err != nil {
 		return nil, err
 	}
@@ -74,17 +74,17 @@ func (w *WAL) isEnd() bool {
 	return w.rOffset >= w.readUpTo
 }
 
-// decodeHeader decodes the header which is encoded by encodeHeader.
-func decodeHeader(buf io.Reader) (*partition.ID, error) {
+// decodeWALHeader decodes the header which is encoded by encodeWALHeader.
+func decodeWALHeader(buf io.Reader) (*partition.ID, error) {
 	var err error
 	// read the fixed vals
-	var hp = new(headerPreamble)
+	var hp = new(walHeaderPreamble)
 	err = binary.Read(buf, binary.LittleEndian, hp)
 	if err != nil {
 		return nil, err
 	}
 	// read the variadic key
-	var key = make([]rune, hp.KLen)
+	var key = make([]rune, hp.SLen)
 	err = binary.Read(buf, binary.LittleEndian, key)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (w *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 	// we will assign size with the number of messages in the store
 	start := w.rOffset
 	for size > w.rOffset-start && !w.isEnd() {
-		message, sizeRead, err := decodeEntry(w.fp)
+		message, sizeRead, err := decodeReadMessage(w.fp)
 		if err != nil {
 			if err == errChecksumMismatch {
 				w.corrupted = true
@@ -133,14 +133,14 @@ func (w *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 	return messages, false, nil
 }
 
-// decodeEntry decodes the header which is encoded by encodeEntry.
-func decodeEntry(buf io.Reader) (*isb.ReadMessage, int64, error) {
-	entryHeader, err := decodeEntryHeader(buf)
+// decodeReadMessage decodes the header which is encoded by encodeReadMessage.
+func decodeReadMessage(buf io.Reader) (*isb.ReadMessage, int64, error) {
+	entryHeader, err := decodeReadMessageHeader(buf)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	entryBody, err := decodeEntryBody(buf, entryHeader)
+	entryBody, err := decodeReadMessageBody(buf, entryHeader)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -153,10 +153,10 @@ func decodeEntry(buf io.Reader) (*isb.ReadMessage, int64, error) {
 	}, size, nil
 }
 
-// decodeEntryHeader decodes the header which is encoded by encodeEntryHeader.
-func decodeEntryHeader(buf io.Reader) (*entryHeaderPreamble, error) {
+// decodeReadMessageHeader decodes the header which is encoded by encodeReadMessageHeader.
+func decodeReadMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
 	// read the fixed vals
-	var entryHeader = new(entryHeaderPreamble)
+	var entryHeader = new(readMessageHeaderPreamble)
 	err := binary.Read(buf, binary.LittleEndian, entryHeader)
 	if err != nil {
 		return nil, err
@@ -164,9 +164,9 @@ func decodeEntryHeader(buf io.Reader) (*entryHeaderPreamble, error) {
 	return entryHeader, nil
 }
 
-// decodeEntryBody decodes the header which is encoded by encodeEntryBody.
+// decodeReadMessageBody decodes the header which is encoded by encodeReadMessageBody.
 // Returns errChecksumMismatch to indicate if corrupted entry is found.
-func decodeEntryBody(buf io.Reader, entryHeader *entryHeaderPreamble) (*isb.Message, error) {
+func decodeReadMessageBody(buf io.Reader, entryHeader *readMessageHeaderPreamble) (*isb.Message, error) {
 	var err error
 
 	body := make([]byte, entryHeader.MessageLen)

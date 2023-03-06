@@ -39,6 +39,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type KafkaSource struct {
@@ -122,8 +123,6 @@ func (r *KafkaSource) GetName() string {
 }
 
 func (r *KafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
-	// It stores latest timestamps for different partitions
-	oldestTimestamps := make(map[int32]time.Time)
 	msgs := make([]*isb.ReadMessage, 0, count)
 	timeout := time.After(r.readTimeout)
 loop:
@@ -131,23 +130,30 @@ loop:
 		select {
 		case m := <-r.handler.messages:
 			kafkaSourceReadCount.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
-			_m := toReadMessage(m)
-			msgs = append(msgs, _m)
-			// Get latest timestamps for different partitions
-			if t, ok := oldestTimestamps[m.Partition]; !ok || m.Timestamp.Before(t) {
-				oldestTimestamps[m.Partition] = m.Timestamp
-			}
+			msgs = append(msgs, toReadMessage(m))
 		case <-timeout:
 			// log that timeout has happened and don't return an error
 			r.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", r.readTimeout))
 			break loop
 		}
 	}
+	return msgs, nil
+}
+
+func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
+	// oldestTimestamps stores the latest timestamps for different partitions
+	oldestTimestamps := make(map[int32]time.Time)
+	for _, m := range msgs {
+		// Get latest timestamps for different partitions
+		_, partition, _, _ := offsetFrom(m.ReadOffset.String())
+		if t, ok := oldestTimestamps[partition]; !ok || m.EventTime.Before(t) {
+			oldestTimestamps[partition] = m.EventTime
+		}
+	}
 	for p, t := range oldestTimestamps {
 		publisher := r.loadSourceWatermarkPublisher(p)
-		publisher.PublishWatermark(processor.Watermark(t), nil) // Source publisher does not care about the offset
+		publisher.PublishWatermark(wmb.Watermark(t), nil) // Source publisher does not care about the offset
 	}
-	return msgs, nil
 }
 
 // loadSourceWatermarkPublisher does a lazy load on the watermark publisher
@@ -331,7 +337,7 @@ func NewKafkaSource(
 		destinations[w.GetName()] = w
 	}
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(kafkasource.logger)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(kafkasource.logger), forward.WithSourceWatermarkPublisher(kafkasource)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -387,9 +393,9 @@ func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
 	offset := toOffset(m.Topic, m.Partition, m.Offset)
 	msg := isb.Message{
 		Header: isb.Header{
-			PaneInfo: isb.PaneInfo{EventTime: m.Timestamp},
-			ID:       offset,
-			Key:      string(m.Key),
+			MessageInfo: isb.MessageInfo{EventTime: m.Timestamp},
+			ID:          offset,
+			Key:         string(m.Key),
 		},
 		Body: isb.Body{Payload: m.Value},
 	}

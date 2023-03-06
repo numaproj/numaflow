@@ -24,13 +24,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // ProcessorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor). The code is running on Vn vertex.
@@ -188,7 +188,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				// value is epoch
 				intValue, convErr := strconv.Atoi(string(value.Value()))
 				if convErr != nil {
-					v.log.Errorw("Unable to convert intValue.Value() to int64", zap.Error(convErr))
+					v.log.Errorw("Unable to convert intValue.WMB() to int64", zap.Error(convErr))
 				} else {
 					// insert the last seen timestamp. we use this to figure whether this processor entity is inactive.
 					v.heartbeat.Put(value.Key(), int64(intValue))
@@ -244,34 +244,38 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					v.log.Errorw("Unable to find the processor", zap.String("processorEntity", value.Key()))
 					continue
 				}
-				otValue, err := ot.DecodeToOTValue(value.Value())
+				otValue, err := wmb.DecodeToWMB(value.Value())
 				if err != nil {
 					v.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
 					continue
 				}
 				if otValue.Idle {
 					var processors = v.GetAllProcessors()
-					for processorName, processor := range processors {
-						// skip the processor itself, only use other processors as reference
+					for processorName, _processor := range processors {
+						// skip the idle processor itself, only use other processors as reference
 						if processorName != value.Key() {
-							// any other Vn-1 processor's non-empty head offsetWatermark can replace the idle watermark
-							// if all tail offsetWatermarks are empty, then it means there's no data flowing into
-							// this Vn processor, so it's safe to do nothing
-							watermarkOffset := processor.offsetTimeline.GetHeadOffsetWatermark()
-							if watermarkOffset.offset != -1 {
-								p.offsetTimeline.PutIdle(watermarkOffset)
+							// in any other Vn-1 processor's offset timeline, we can replace the idle watermark
+							// with any watermark whose watermark is <= otValue.Watermark
+							referredWatermarkOffset := _processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
+							// if the referred watermark is empty, skip
+							if referredWatermarkOffset.watermark != -1 {
+								p.offsetTimeline.PutIdle(referredWatermarkOffset)
+								v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("referredWatermark", referredWatermarkOffset.watermark), zap.Int64("offset", referredWatermarkOffset.offset))
 								break
 							}
 						}
 					}
+					// if the break never happens, it's safe to do nothing ATM
+					// it could be the Vn-1's idle processor's speed is much slower than the others
+					// or no data is flowing into this Vn's processor
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					p.offsetTimeline.Put(OffsetWatermark{
 						watermark: otValue.Watermark,
 						offset:    otValue.Offset,
 					})
+					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 				}
-				v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 			case store.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
 				// naturally trim the KV store.

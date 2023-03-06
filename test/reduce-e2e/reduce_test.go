@@ -229,8 +229,8 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	}()
 
 	w.Expect().
-		SinkContains("sink", "15").
-		SinkContains("sink", "45").
+		SinkContains("sink", "30").
+		SinkContains("sink", "60").
 		SinkContains("sink", "180")
 	done <- struct{}{}
 }
