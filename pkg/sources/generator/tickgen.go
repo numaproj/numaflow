@@ -102,7 +102,7 @@ type memgen struct {
 	keyCount int32
 	// value is the optional uint64 number that can be set in the payload
 	// can be retrieved in the udf
-	value uint64
+	value *uint64
 	// msgSize is the size of each generated message
 	msgSize int32
 	// timeunit - ticker will fire once per timeunit and generates
@@ -177,9 +177,9 @@ func NewMemGen(
 	if vertexInstance.Vertex.Spec.Source.Generator.KeyCount != nil {
 		keyCount = *(vertexInstance.Vertex.Spec.Source.Generator.KeyCount)
 	}
-	value := uint64(1)
+	var value *uint64
 	if vertexInstance.Vertex.Spec.Source.Generator.Value != nil {
-		value = *(vertexInstance.Vertex.Spec.Source.Generator.Value)
+		value = vertexInstance.Vertex.Spec.Source.Generator.Value
 	}
 
 	gensrc := &memgen{
@@ -340,7 +340,7 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 						for i := 0; i < rate; i++ {
 							for k := int32(0); k < mg.keyCount; k++ {
 								key := fmt.Sprintf("key-%d", k)
-								payload := mg.genfn(mg.msgSize, &mg.value, t)
+								payload := mg.genfn(mg.msgSize, mg.value, t)
 								r := record{data: payload, offset: time.Now().UTC().UnixNano(), key: key}
 								select {
 								case <-ctx.Done():
