@@ -47,7 +47,7 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 		messages = append(messages,
 			isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{
+					MessageInfo: isb.MessageInfo{
 						EventTime: tmpTime,
 					},
 					ID: fmt.Sprintf("%d", i),

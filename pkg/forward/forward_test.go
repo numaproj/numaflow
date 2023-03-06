@@ -31,11 +31,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/ot"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -64,13 +64,13 @@ func (t testForwardFetcher) Close() error {
 
 // GetWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t testForwardFetcher) GetWatermark(_ isb.Offset) processor.Watermark {
-	return processor.Watermark(testSourceWatermark)
+func (t testForwardFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
+	return wmb.Watermark(testSourceWatermark)
 }
 
-func (t testForwardFetcher) GetHeadWatermark() processor.Watermark {
+func (t testForwardFetcher) GetHeadWatermark() wmb.Watermark {
 	// won't be used
-	return processor.Watermark{}
+	return wmb.Watermark{}
 }
 
 type myForwardTest struct {
@@ -152,7 +152,7 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 		_ = ctx
 		offset := readMessage.ReadOffset
 		payload := readMessage.Body.Payload
-		parentPaneInfo := readMessage.PaneInfo
+		parentPaneInfo := readMessage.MessageInfo
 
 		// apply source data transformer
 		_ = payload
@@ -164,9 +164,9 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 
 		writeMessage := &isb.Message{
 			Header: isb.Header{
-				PaneInfo: parentPaneInfo,
-				ID:       offset.String(),
-				Key:      key,
+				MessageInfo: parentPaneInfo,
+				ID:          offset.String(),
+				Key:         key,
 			},
 			Body: isb.Body{
 				Payload: result,
@@ -351,7 +351,7 @@ func TestNewInterStepDataForwardToOneStep(t *testing.T) {
 	// so len(otKeys) should always be 1
 	otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
 	otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
-	otDecode1, _ := ot.DecodeToOTValue(otValue1)
+	otDecode1, _ := wmb.DecodeToWMB(otValue1)
 	assert.False(t, otDecode1.Idle)
 
 	wg.Add(1)
@@ -368,7 +368,7 @@ func TestNewInterStepDataForwardToOneStep(t *testing.T) {
 	// so len(otKeys) should always be 1
 	otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
 	otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
-	otDecode2, _ := ot.DecodeToOTValue(otValue2)
+	otDecode2, _ := wmb.DecodeToWMB(otValue2)
 	assert.True(t, otDecode2.Idle)
 
 	// stop will cancel the contexts and therefore the forwarder stops without waiting
@@ -444,7 +444,7 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 	// so len(otKeys) should always be 1
 	otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
 	otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
-	otDecode1, _ := ot.DecodeToOTValue(otValue1)
+	otDecode1, _ := wmb.DecodeToWMB(otValue1)
 	assert.True(t, otDecode1.Idle)
 
 	wg.Add(1)
@@ -461,7 +461,7 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 	// so len(otKeys) should always be 1
 	otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
 	otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
-	otDecode2, _ := ot.DecodeToOTValue(otValue2)
+	otDecode2, _ := wmb.DecodeToWMB(otValue2)
 	assert.True(t, otDecode2.Idle)
 
 	// since this is a dropping WhereTo, the buffer can never be full
@@ -539,7 +539,7 @@ func TestNewInterStepData_forwardToAll(t *testing.T) {
 	// so len(otKeys) should always be 1
 	otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
 	otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
-	otDecode1, _ := ot.DecodeToOTValue(otValue1)
+	otDecode1, _ := wmb.DecodeToWMB(otValue1)
 	assert.False(t, otDecode1.Idle)
 
 	wg.Add(1)
@@ -556,7 +556,7 @@ func TestNewInterStepData_forwardToAll(t *testing.T) {
 	// so len(otKeys) should always be 1
 	otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
 	otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
-	otDecode2, _ := ot.DecodeToOTValue(otValue2)
+	otDecode2, _ := wmb.DecodeToWMB(otValue2)
 	assert.False(t, otDecode2.Idle)
 
 	f.Stop()

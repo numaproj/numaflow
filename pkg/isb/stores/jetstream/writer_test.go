@@ -263,14 +263,3 @@ func TestWriteClose(t *testing.T) {
 	assert.NoError(t, bw.Close())
 
 }
-
-// TestConvert2NatsMsgHeader is used to convert nats header
-func TestConvert2NatsMsgHeader(t *testing.T) {
-	isbHeader := isb.Header{
-		PaneInfo: isb.PaneInfo{
-			EventTime: time.Unix(1636470000, 0),
-		},
-		ID: "1",
-	}
-	assert.NotNil(t, convert2NatsMsgHeader(isbHeader))
-}

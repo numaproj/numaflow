@@ -36,6 +36,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type natsSource struct {
@@ -167,8 +168,8 @@ func New(
 			Message: isb.Message{
 				Header: isb.Header{
 					// TODO: Be able to specify event time.
-					PaneInfo: isb.PaneInfo{EventTime: time.Now()},
-					ID:       id,
+					MessageInfo: isb.MessageInfo{EventTime: time.Now()},
+					ID:          id,
 				},
 				Body: isb.Body{
 					Payload: msg.Data,
@@ -243,7 +244,7 @@ func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		ns.sourcePublishWM.PublishWatermark(processor.Watermark(oldest), nil) // Source publisher does not care about the offset
+		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
 	}
 }
 

@@ -197,7 +197,7 @@ func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) 
 func TestLua(t *testing.T) {
 	ctx := context.Background()
 	client := redis.NewUniversalClient(redisOptions)
-	message := isb.Message{Header: isb.Header{ID: "0", PaneInfo: isb.PaneInfo{EventTime: testStartTime}}, Body: isb.Body{Payload: []byte("foo")}}
+	message := isb.Message{Header: isb.Header{ID: "0", MessageInfo: isb.MessageInfo{EventTime: testStartTime}}, Body: isb.Body{Payload: []byte("foo")}}
 	script := redis.NewScript(exactlyOnceInsertLuaScript)
 
 	var hashName = "{step-1}:1234567890:hash-foo"
@@ -565,7 +565,7 @@ func forwardDataAndVerify(ctx context.Context, t *testing.T, fromStepWrite *Buff
 
 	// Read messages and validate the content
 	assert.Len(t, readMessages, 17)
-	assert.Equal(t, []interface{}{writeMessages[0].Header.PaneInfo, writeMessages[1].Header.PaneInfo, writeMessages[2].Header.PaneInfo, writeMessages[3].Header.PaneInfo, writeMessages[4].Header.PaneInfo}, []interface{}{readMessages[0].Header.PaneInfo, readMessages[1].Header.PaneInfo, readMessages[2].Header.PaneInfo, readMessages[3].Header.PaneInfo, readMessages[4].Header.PaneInfo})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.MessageInfo, writeMessages[1].Header.MessageInfo, writeMessages[2].Header.MessageInfo, writeMessages[3].Header.MessageInfo, writeMessages[4].Header.MessageInfo}, []interface{}{readMessages[0].Header.MessageInfo, readMessages[1].Header.MessageInfo, readMessages[2].Header.MessageInfo, readMessages[3].Header.MessageInfo, readMessages[4].Header.MessageInfo})
 	assert.Equal(t, []interface{}{writeMessages[0].Body.Payload, writeMessages[1].Body.Payload, writeMessages[2].Body.Payload, writeMessages[3].Body.Payload, writeMessages[4].Body.Payload}, []interface{}{readMessages[0].Body.Payload, readMessages[1].Body.Payload, readMessages[2].Body.Payload, readMessages[3].Body.Payload, readMessages[4].Body.Payload})
 
 	_, _ = fromStepWrite.Write(ctx, writeMessages[18:20])

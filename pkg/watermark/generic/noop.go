@@ -20,8 +20,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // NoOpWMProgressor is a no-op watermark progressor. As the name suggests, it does not do anything, no watermark is
@@ -38,26 +38,26 @@ func NewNoOpWMProgressor() *NoOpWMProgressor {
 }
 
 // GetWatermark returns the default watermark.
-func (n NoOpWMProgressor) GetWatermark(_ isb.Offset) processor.Watermark {
-	return processor.Watermark{}
+func (n NoOpWMProgressor) GetWatermark(_ isb.Offset) wmb.Watermark {
+	return wmb.Watermark{}
 }
 
 // PublishWatermark does a no-op watermark publish.
-func (n NoOpWMProgressor) PublishWatermark(_ processor.Watermark, _ isb.Offset) {
+func (n NoOpWMProgressor) PublishWatermark(_ wmb.Watermark, _ isb.Offset) {
 }
 
 // PublishIdleWatermark does a no-op idle watermark publish.
-func (n NoOpWMProgressor) PublishIdleWatermark() {
+func (n NoOpWMProgressor) PublishIdleWatermark(wmb.Watermark) {
 }
 
 // GetLatestWatermark returns the default watermark as the latest watermark.
-func (n NoOpWMProgressor) GetLatestWatermark() processor.Watermark {
-	return processor.Watermark{}
+func (n NoOpWMProgressor) GetLatestWatermark() wmb.Watermark {
+	return wmb.Watermark{}
 }
 
 // GetHeadWatermark returns the default head watermark.
-func (n NoOpWMProgressor) GetHeadWatermark() processor.Watermark {
-	return processor.Watermark{}
+func (n NoOpWMProgressor) GetHeadWatermark() wmb.Watermark {
+	return wmb.Watermark{}
 }
 
 // Close stops the no-op progressor.
