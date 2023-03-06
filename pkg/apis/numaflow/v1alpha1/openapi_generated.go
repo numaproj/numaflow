@@ -1019,6 +1019,20 @@ func schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref common.ReferenceCallb
 							Format:      "int32",
 						},
 					},
+					"keyCount": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KeyCount is the number of unique keys in the payload",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"value": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Value is an optional uint64 value to be written in to the payload",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 			},
 		},

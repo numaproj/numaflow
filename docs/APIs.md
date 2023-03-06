@@ -1096,6 +1096,26 @@ Size of each generated message
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>keyCount</code></br> <em> int32 </em>
+</td>
+<td>
+<p>
+KeyCount is the number of unique keys in the payload
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>value</code></br> <em> uint64 </em>
+</td>
+<td>
+<p>
+Value is an optional uint64 value to be written in to the payload
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetDaemonDeploymentReq">

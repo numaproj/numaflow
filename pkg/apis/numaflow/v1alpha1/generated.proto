@@ -307,6 +307,12 @@ message GeneratorSource {
   // +kubebuilder:default=8
   // +optional
   optional int32 msgSize = 3;
+
+  // KeyCount is the number of unique keys in the payload
+  optional int32 keyCount = 4;
+
+  // Value is an optional uint64 value to be written in to the payload
+  optional uint64 value = 5;
 }
 
 message GetDaemonDeploymentReq {
