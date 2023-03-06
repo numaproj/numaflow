@@ -147,7 +147,7 @@ const (
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 
 	// Default gRPC max message size
-	DefaultGRPCMaxMessageSize = 4 * 1024 * 1024
+	DefaultGRPCMaxMessageSize = 20 * 1024 * 1024
 )
 
 var (
