@@ -28,8 +28,11 @@ const (
 	WMB                          // Watermark Barrier
 )
 
-func (mt MessageKind) String() string {
+func (mta MessageKind) String() string {
+	var mt MessageKind
 	switch mt {
+	case 0:
+		return "Empty"
 	case mt & Data:
 		return "Data"
 	case mt & WMB:

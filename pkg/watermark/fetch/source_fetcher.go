@@ -25,8 +25,8 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // sourceFetcher is a fetcher on source buffers.
@@ -53,7 +53,7 @@ func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher
 }
 
 // GetHeadWatermark returns the latest watermark of all the processors.
-func (e *sourceFetcher) GetHeadWatermark() processor.Watermark {
+func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 	var epoch int64 = math.MinInt64
 	for _, p := range e.processorManager.GetAllProcessors() {
 		if !p.IsActive() {
@@ -65,14 +65,14 @@ func (e *sourceFetcher) GetHeadWatermark() processor.Watermark {
 	}
 	if epoch == math.MinInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return processor.Watermark(time.UnixMilli(-1))
+		return wmb.Watermark(time.UnixMilli(-1))
 	}
-	return processor.Watermark(time.UnixMilli(epoch))
+	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
 // GetWatermark returns the lowest of the latest watermark of all the processors,
 // it ignores the input offset.
-func (e *sourceFetcher) GetWatermark(_ isb.Offset) processor.Watermark {
+func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 	var epoch int64 = math.MaxInt64
 	for _, p := range e.processorManager.GetAllProcessors() {
 		if !p.IsActive() {
@@ -85,7 +85,7 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) processor.Watermark {
 	if epoch == math.MaxInt64 {
 		epoch = -1
 	}
-	return processor.Watermark(time.UnixMilli(epoch))
+	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
 // Close function closes the watchers.

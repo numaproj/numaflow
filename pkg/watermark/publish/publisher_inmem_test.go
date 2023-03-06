@@ -23,8 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -51,22 +53,22 @@ func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 	var epoch int64 = 1651161600000
 	var location, _ = time.LoadLocation("UTC")
 	for i := 0; i < 3; i++ {
-		p.PublishWatermark(processor.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
+		p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
 		epoch += 60000
 		time.Sleep(time.Millisecond)
 	}
 	// publish a stale watermark (offset doesn't matter)
-	p.PublishWatermark(processor.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
+	p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
 
 	keys, err := p.otStore.GetAllKeys(p.ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"publisherTestPod1"}, keys)
 
 	wm := p.loadLatestFromStore()
-	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), wm.String())
+	assert.Equal(t, wmb.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), wm.String())
 
 	head := p.GetLatestWatermark()
-	assert.Equal(t, processor.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
+	assert.Equal(t, wmb.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
 
 	_ = p.Close()
 
