@@ -206,12 +206,23 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		return
 	}
 
+	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
+
+	// store the offsets of the messages we read from ISB
+	var readOffsets = make([]isb.Offset, len(readMessages))
+	for idx, m := range readMessages {
+		readOffsets[idx] = m.ReadOffset
+		if m.Kind == isb.Data {
+			dataMessages = append(dataMessages, m)
+		}
+	}
+
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][]isb.Message)
 	var toBuffers string // logging purpose
 	for buffer := range isdf.toBuffers {
 		// over allocating to have a predictable pattern
-		messageToStep[buffer] = make([]isb.Message, 0, len(readMessages))
+		messageToStep[buffer] = make([]isb.Message, 0, len(dataMessages))
 		toBuffers += buffer + ","
 	}
 
@@ -219,7 +230,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	udfCh := make(chan *readWriteMessagePair)
 	// udfResults stores the results after UDF processing for all read messages. It indexes
 	// a read message to the corresponding write message
-	udfResults := make([]readWriteMessagePair, len(readMessages))
+	udfResults := make([]readWriteMessagePair, len(dataMessages))
 	// applyUDF, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
 
 	// create a pool of UDF Processors
@@ -247,7 +258,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
 	}
 
-	for idx, m := range readMessages {
+	// send to UDF only the data messages
+	for idx, m := range dataMessages {
 		// emit message size metric
 		readBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
 		// assign watermark to the message. assign time.UnixMilli(-1) as watermark when we are at source vertex.
@@ -352,10 +364,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// let us ack the chunk only if we have successfully forwarded all the messages.
 	// we need the readOffsets to acknowledge later
-	var readOffsets = make([]isb.Offset, len(readMessages))
-	for idx, m := range udfResults {
-		readOffsets[idx] = m.readMessage.ReadOffset
-	}
 	err = isdf.ackFromBuffer(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
