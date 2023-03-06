@@ -56,6 +56,7 @@ type InterStepDataForward struct {
 	opts             options
 	vertexName       string
 	pipelineName     string
+	wmbOffset        isb.Offset
 	Shutdown
 }
 
@@ -203,6 +204,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
 	// reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
+		isdf.publishIdleWatermark()
 		return
 	}
 
@@ -215,6 +217,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		if m.Kind == isb.Data {
 			dataMessages = append(dataMessages, m)
 		}
+	}
+
+	if len(dataMessages) != 0 {
+		// we are no longer idling
+		isdf.wmbOffset = nil
 	}
 
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
@@ -570,6 +577,20 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, message
 		}
 	}
 	return nil
+}
+
+// publishIdleWatermark publishes a ctrl message with isb.Kind set to WMB.
+// A WMB is only created if this a new
+func (isdf *InterStepDataForward) publishIdleWatermark() {
+	var wmbOffset int64
+	if isdf.wmbOffset != nil {
+		// create WMB
+	}
+
+	// save wmbOffset
+	isdf.wmbOffset = isb.SimpleIntOffset(func() int64 { return wmbOffset })
+
+	// write to ISB
 }
 
 // errorArrayToMap summarizes an error array to map
