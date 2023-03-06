@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -127,14 +128,23 @@ func TestProcessAndForward_Process(t *testing.T) {
 	mockReduceClient := udfcall.NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 
 	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().CloseAndRecv().Return(&functionpb.DatumList{
+	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
+	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 		Elements: []*functionpb.Datum{
 			{
 				Key:   "reduced_result_key",
 				Value: []byte(`forward_message`),
 			},
 		},
-	}, nil)
+	}, nil).Times(1)
+	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
+		Elements: []*functionpb.Datum{
+			{
+				Key:   "reduced_result_key",
+				Value: []byte(`forward_message`),
+			},
+		},
+	}, io.EOF).Times(1)
 
 	mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
