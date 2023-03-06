@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -271,20 +272,29 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-		mockReduceClient.EXPECT().CloseAndRecv().Return(&functionpb.DatumList{
+		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
 					Key:   "reduced_result_key",
 					Value: []byte(`forward_message`),
 				},
 			},
-		}, nil)
+		}, nil).Times(1)
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
+			Elements: []*functionpb.Datum{
+				{
+					Key:   "reduced_result_key",
+					Value: []byte(`forward_message`),
+				},
+			},
+		}, io.EOF).Times(1)
 
 		messageCh := make(chan *isb.ReadMessage)
 
 		mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		go func() {
 			<-ctx.Done()
@@ -308,7 +318,6 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			End:   time.Unix(120, 0),
 			Slot:  "test",
 		}
-
 		got, err := u.ApplyReduce(ctx, partitionID, messageCh)
 
 		assert.Len(t, got, 1)
@@ -322,14 +331,15 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 		mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-		mockReduceClient.EXPECT().CloseAndRecv().Return(&functionpb.DatumList{
+		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
 					Key:   "reduced_result_key",
 					Value: []byte(`forward_message`),
 				},
 			},
-		}, errors.New("mock error for reduce"))
+		}, errors.New("mock error for reduce")).AnyTimes()
 
 		mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
@@ -379,14 +389,24 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 		mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-		mockReduceClient.EXPECT().CloseAndRecv().Return(&functionpb.DatumList{
+		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
 					Key:   "reduced_result_key",
 					Value: []byte(`forward_message`),
 				},
 			},
-		}, nil).AnyTimes()
+		}, nil).Times(1)
+
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
+			Elements: []*functionpb.Datum{
+				{
+					Key:   "reduced_result_key",
+					Value: []byte(`forward_message`),
+				},
+			},
+		}, io.EOF).Times(1)
 
 		mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
@@ -438,7 +458,8 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 	mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().CloseAndRecv().DoAndReturn(
+	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
+	mockReduceClient.EXPECT().Recv().DoAndReturn(
 		func() (*functionpb.DatumList, error) {
 			result := sumFunc(datumStreamCh)
 			sumValue, _ := json.Marshal(result.(testutils.PayloadForTest))
@@ -451,7 +472,15 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 				Elements: elements,
 			}
 			return datumList, nil
-		}).AnyTimes()
+		}).Times(1)
+	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
+		Elements: []*functionpb.Datum{
+			{
+				Key:   "reduced_result_key",
+				Value: []byte(`forward_message`),
+			},
+		},
+	}, io.EOF).Times(1)
 
 	mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
