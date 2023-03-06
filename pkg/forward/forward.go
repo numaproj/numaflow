@@ -582,15 +582,19 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, message
 // publishIdleWatermark publishes a ctrl message with isb.Kind set to WMB.
 // A WMB is only created if this a new
 func (isdf *InterStepDataForward) publishIdleWatermark() {
-	var wmbOffset int64
+	// fetch watermark
+
+	// iterate X times to make sure len() == 0 and Vn-1's head offsets are still WMBs with same offsets
+
 	if isdf.wmbOffset != nil {
 		// create WMB
+		var wmbOffset int64
+		// write to ISB
+		// save wmbOffset
+		isdf.wmbOffset = isb.SimpleIntOffset(func() int64 { return wmbOffset })
 	}
 
-	// save wmbOffset
-	isdf.wmbOffset = isb.SimpleIntOffset(func() int64 { return wmbOffset })
-
-	// write to ISB
+	// publish WM (this will naturally incr or set the timestamp of isdf.wmbOffset)
 }
 
 // errorArrayToMap summarizes an error array to map
