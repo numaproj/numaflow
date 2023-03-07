@@ -107,6 +107,7 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headoffset:%d) \n", p, o))
 		if o != -1 && o > headOffset {
 			headOffset = o
+			// TODO: Why?....
 			epoch = p.offsetTimeline.GetEventTimeFromInt64(o)
 		}
 	}
@@ -118,10 +119,31 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetHeadWMB returns the WMB using the HeadOffset (the latest offset among all processors).
+// GetHeadWMB returns the latest idle WMB from Vn-1 processors
 func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
-	// TODO
-	return wmb.WMB{}
+	var headWMB = wmb.WMB{
+		// we find the head WMB only based on Offset
+		Offset: math.MinInt64,
+	}
+	// if any head wmb from Vn-1 processors is not idle, we skip publishing
+	var allProcessors = e.processorManager.GetAllProcessors()
+	for _, p := range allProcessors {
+		if !p.IsActive() {
+			continue
+		}
+		var curHeadWMB = p.offsetTimeline.GetHeadWMB()
+		if !curHeadWMB.Idle {
+			return wmb.WMB{}
+		}
+		if curHeadWMB.Offset != -1 && curHeadWMB.Offset > headWMB.Offset {
+			headWMB = curHeadWMB
+		}
+	}
+	if headWMB.Offset == math.MinInt64 {
+		// there is no valid watermark yet
+		return wmb.WMB{}
+	}
+	return headWMB
 }
 
 // Close function closes the watchers.
