@@ -214,8 +214,8 @@ func (t *OffsetTimeline) GetEventTimeFromInt64(inputOffsetInt64 int64) int64 {
 	var eventTime int64 = -1
 
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		// get the event time has the closest Offset to the input Offset
-		// exclude the same Offset because this Offset may not finish processing yet
+		// get the event time has the closest offset to the input offset
+		// exclude the same offset because this offset may not finish processing yet
 		if e.Value.(wmb.WMB).Offset < inputOffsetInt64 {
 			eventTime = e.Value.(wmb.WMB).Watermark
 			break
