@@ -307,6 +307,7 @@ func TestSliding_RemoveWindows(t *testing.T) {
 			keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
 			keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
+			keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 		}
 	)
 	for i := 0; i < 10000; i++ {
