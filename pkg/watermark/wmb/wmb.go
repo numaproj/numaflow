@@ -96,7 +96,7 @@ func (c *WMBChecker) ValidateHeadWMB(w WMB) bool {
 			// else, start over
 			c.counter = 0
 		}
-	} else if c.counter == c.max-1 {
+	} else if c.counter >= c.max-1 {
 		c.counter = 0
 		if c.w == w {
 			// reach max iteration, if still get the same wmb,

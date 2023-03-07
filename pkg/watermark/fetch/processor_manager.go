@@ -250,6 +250,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					continue
 				}
 				if otValue.Idle {
+					var getReferredWM bool
 					var processors = v.GetAllProcessors()
 					for processorName, _processor := range processors {
 						// skip the idle processor itself, only use other processors as reference
@@ -262,18 +263,22 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 								referredWatermarkOffset.Idle = true
 								p.offsetTimeline.PutIdle(referredWatermarkOffset)
 								v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("referredWatermark", referredWatermarkOffset.Watermark), zap.Int64("offset", referredWatermarkOffset.Offset))
+								getReferredWM = true
 								break
 							}
 						}
 					}
-					// if the break never happens
-					// it could be the Vn-1's idle processor's speed is much slower than the others
-					// or no data is flowing into this Vn's processor
-					p.offsetTimeline.Put(wmb.WMB{
-						Idle:      true,
-						Watermark: otValue.Watermark,
-						Offset:    otValue.Offset,
-					})
+					// if we failed to get a referred wm, it could be the Vn-1's idle processor's speed is much slower
+					// than the others, or no data is flowing into this Vn's processor
+					// in this case, insert the idle watermark we get if otValue.Offset is not -1 (we assign it to -1
+					// in the reduce use case (processandforward.go, publishWM function)
+					if !getReferredWM && otValue.Offset != -1 {
+						p.offsetTimeline.Put(wmb.WMB{
+							Idle:      true,
+							Watermark: otValue.Watermark,
+							Offset:    otValue.Offset,
+						})
+					}
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					p.offsetTimeline.Put(wmb.WMB{
