@@ -60,6 +60,10 @@ func (n NoOpWMProgressor) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark{}
 }
 
+func (n NoOpWMProgressor) GetHeadWMB() wmb.WMB {
+	return wmb.WMB{}
+}
+
 // Close stops the no-op progressor.
 func (n NoOpWMProgressor) Close() error {
 	return nil

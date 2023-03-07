@@ -30,4 +30,6 @@ type Fetcher interface {
 	GetWatermark(offset isb.Offset) wmb.Watermark
 	// GetHeadWatermark returns the latest watermark based on the head offset
 	GetHeadWatermark() wmb.Watermark
+	// GetHeadWMB returns the latest wmb based on the head offset
+	GetHeadWMB() wmb.WMB
 }

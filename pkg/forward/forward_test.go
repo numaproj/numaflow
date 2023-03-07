@@ -73,6 +73,11 @@ func (t testForwardFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark{}
 }
 
+func (t testForwardFetcher) GetHeadWMB() wmb.WMB {
+	// won't be used
+	return wmb.WMB{}
+}
+
 type myForwardTest struct {
 }
 

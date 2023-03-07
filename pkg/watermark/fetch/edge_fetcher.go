@@ -61,6 +61,11 @@ func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.W
 //   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
 //     Meaning, in the UX (daemon service) we never delete any processor.
 func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
+	return wmb.Watermark(time.UnixMilli(e.GetHeadWMB().Watermark))
+}
+
+// GetHeadWMB returns the wmb using the HeadOffset (the latest offset among all processors).
+func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 	var debugString strings.Builder
 	var headOffset int64 = math.MinInt64
 	var epoch int64 = math.MaxInt64
@@ -81,9 +86,17 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
 	if epoch == math.MaxInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return wmb.Watermark(time.UnixMilli(-1))
+		return wmb.WMB{
+			// TODO: we don't have idle info in the offsetTimeline
+			Offset:    headOffset,
+			Watermark: -1,
+		}
 	}
-	return wmb.Watermark(time.UnixMilli(epoch))
+	return wmb.WMB{
+		// TODO: we don't have idle info in the offsetTimeline
+		Offset:    headOffset,
+		Watermark: epoch,
+	}
 }
 
 // GetWatermark gets the smallest timestamp for the given offset

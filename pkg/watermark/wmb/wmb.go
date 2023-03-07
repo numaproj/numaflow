@@ -58,3 +58,45 @@ func DecodeToWMB(b []byte) (WMB, error) {
 	}
 	return v, nil
 }
+
+type WMBChecker struct {
+	counter int
+	max     int
+	w       WMB
+}
+
+// NewWMBChecker returns a WMBChecker to check if the wmb is idle.
+// If all the iterations get the same wmb, the wmb is
+func NewWMBChecker(numOfIteration int) WMBChecker {
+	return WMBChecker{
+		counter: 0,
+		max:     numOfIteration,
+		w:       WMB{},
+	}
+}
+
+// ValidateWMB checks if the wmb the same as the wmb from the previous iteration.
+// If all the iterations get the same wmb, returns true.
+func (c *WMBChecker) ValidateWMB(w WMB) bool {
+	if c.counter == 0 {
+		c.counter++
+		// the wmb only writes once when counter is zero
+		c.w = w
+	} else if c.counter < c.max-1 {
+		c.counter++
+		if c.w == w {
+			// we get the same wmb, meaning the wmb is valid, continue
+		} else {
+			// else, start over
+			c.counter = 0
+		}
+	} else if c.counter == c.max-1 {
+		c.counter = 0
+		if c.w == w {
+			// reach max iteration, still get the same wmb,
+			// meaning the wmb is valid, return ture
+			return true
+		}
+	}
+	return false
+}

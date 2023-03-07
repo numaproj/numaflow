@@ -56,7 +56,8 @@ type InterStepDataForward struct {
 	opts             options
 	vertexName       string
 	pipelineName     string
-	wmbOffset        isb.Offset
+	wmbOffset        map[string]isb.Offset
+	wmbChecker       wmb.WMBChecker
 	Shutdown
 }
 
@@ -84,7 +85,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	// creating a context here which is managed by the forwarder's lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 
-	isdf := InterStepDataForward{
+	var isdf = InterStepDataForward{
 		ctx:              ctx,
 		cancelFn:         cancel,
 		fromBuffer:       fromStep,
@@ -96,13 +97,12 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 		// should we do a check here for the values not being null?
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
+		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
 		opts: *options,
-	}
-
-	// Add logger from parent ctx to child context.
+	} // Add logger from parent ctx to child context.
 	isdf.ctx = logging.WithLogger(ctx, options.logger)
 
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
@@ -221,6 +221,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	if len(dataMessages) != 0 {
 		// we are no longer idling
+		// TODO: conditional forwarding: part of the outgoing edges are idling
 		isdf.wmbOffset = nil
 	}
 
@@ -582,19 +583,43 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, message
 // publishIdleWatermark publishes a ctrl message with isb.Kind set to WMB.
 // A WMB is only created if this a new
 func (isdf *InterStepDataForward) publishIdleWatermark() {
+	var wmbMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
+
 	// fetch watermark
+	// TODO: the wmb we get here doesn't have idle information
+	// TODO: differentiate between source and regular vertex
+	var processorWMB = isdf.fetchWatermark.GetHeadWMB()
+	if !isdf.wmbChecker.ValidateWMB(processorWMB) {
+		// skip publishing
+		return
+	}
 
-	// iterate X times to make sure len() == 0 and Vn-1's head offsets are still WMBs with same offsets
-
-	if isdf.wmbOffset != nil {
+	if isdf.wmbOffset == nil {
+		// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
 		// create WMB
-		var wmbOffset int64
+		isdf.wmbOffset = make(map[string]isb.Offset, len(isdf.toBuffers))
 		// write to ISB
-		// save wmbOffset
-		isdf.wmbOffset = isb.SimpleIntOffset(func() int64 { return wmbOffset })
+		for bufferName, toBuffer := range isdf.toBuffers {
+			writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, wmbMessage)
+			if err != nil {
+				isdf.opts.logger.Errorw("failed to write ctrl message to toBuffers", zap.Error(err))
+				return
+			}
+			isdf.wmbOffset[bufferName] = writeOffsets[0]
+		}
 	}
 
 	// publish WM (this will naturally incr or set the timestamp of isdf.wmbOffset)
+	for bufferName, offset := range isdf.wmbOffset {
+		if publisher, ok := isdf.publishWatermark[bufferName]; ok {
+			if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
+				isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
+				publisher.PublishWatermark(wmb.Watermark(time.UnixMilli(processorWMB.Watermark)), offset)
+			} else { // For Sink vertex, and it does not care about the offset during watermark publishing
+				publisher.PublishWatermark(wmb.Watermark(time.UnixMilli(processorWMB.Watermark)), nil)
+			}
+		}
+	}
 }
 
 // errorArrayToMap summarizes an error array to map

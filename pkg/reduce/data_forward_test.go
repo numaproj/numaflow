@@ -100,6 +100,10 @@ func (e *EventTypeWMProgressor) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark{}
 }
 
+func (e *EventTypeWMProgressor) GetHeadWMB() wmb.WMB {
+	return wmb.WMB{}
+}
+
 // PayloadForTest is a dummy payload for testing.
 type PayloadForTest struct {
 	Key   string

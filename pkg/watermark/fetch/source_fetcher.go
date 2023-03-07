@@ -54,6 +54,10 @@ func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher
 
 // GetHeadWatermark returns the latest watermark of all the processors.
 func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
+	return wmb.Watermark(time.UnixMilli(e.GetHeadWMB().Watermark))
+}
+
+func (e *sourceFetcher) GetHeadWMB() wmb.WMB {
 	var epoch int64 = math.MinInt64
 	for _, p := range e.processorManager.GetAllProcessors() {
 		if !p.IsActive() {
@@ -65,9 +69,15 @@ func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 	}
 	if epoch == math.MinInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return wmb.Watermark(time.UnixMilli(-1))
+		return wmb.WMB{
+			// TODO: offset and idle
+			Watermark: -1,
+		}
 	}
-	return wmb.Watermark(time.UnixMilli(epoch))
+	return wmb.WMB{
+		// TODO: offset and idle
+		Watermark: epoch,
+	}
 }
 
 // GetWatermark returns the lowest of the latest watermark of all the processors,
