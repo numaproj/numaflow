@@ -95,9 +95,6 @@ func (t *OffsetTimeline) Put(node wmb.WMB) {
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
 			}
-			if node.Offset == elementNode.Offset {
-				// TODO: not insert but update the watermark
-			}
 			// our list is sorted by event time from highest to lowest
 			t.watermarks.InsertBefore(node, e)
 			// remove the last event time
@@ -110,11 +107,56 @@ func (t *OffsetTimeline) Put(node wmb.WMB) {
 	}
 }
 
-// PutIdle inserts the assumed WMB which replaces the idle watermark into list. It ensures that the list will remain sorted after the insert.
+// PutIdle inserts the idle WMB into list or update the current idle WMB.
 func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	// when inserting an assumed WMB, we only need to compare with the head
+	// when inserting an idle WMB, we only need to compare with the head
+	// and can safely skip insertion when any condition doesn't meet
+	if e := t.watermarks.Front(); e != nil {
+		var elementNode = e.Value.(wmb.WMB)
+		if elementNode.Idle {
+			// if the head is already an idle wmb, the offset should be the same
+			if elementNode.Offset == node.Offset {
+				e.Value = wmb.WMB{
+					Idle:      true,
+					Offset:    node.Offset,
+					Watermark: node.Watermark,
+				}
+			} else {
+				t.log.Errorw("The idle watermark has a different offset from the head idle watermark", zap.Int64("idleWatermark", node.Watermark),
+					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
+				return
+			}
+			return
+		}
+		// if the head is not an idle wmb, insert the idle wmb
+		if node.Watermark > elementNode.Watermark {
+			if node.Offset > elementNode.Offset {
+				t.watermarks.InsertBefore(node, e)
+				t.watermarks.Remove(t.watermarks.Back())
+				return
+			}
+		} else if node.Watermark == elementNode.Watermark {
+			if node.Offset > elementNode.Offset {
+				e.Value = wmb.WMB{
+					Idle:      true,
+					Watermark: node.Watermark,
+					Offset:    node.Offset,
+				}
+				return
+			}
+		} else {
+			return
+		}
+	}
+}
+
+// PutReferred inserts the referred WMB which replaces the idle watermark into list. It ensures that the list will remain sorted after the insert.
+func (t *OffsetTimeline) PutReferred(node wmb.WMB) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	// when inserting a referred WMB, we only need to compare with the head
 	// and can safely skip insertion when any condition doesn't meet
 	if e := t.watermarks.Front(); e != nil {
 		var elementNode = e.Value.(wmb.WMB)

@@ -261,25 +261,25 @@ func TestOffsetTimeline(t *testing.T) {
 	testTimeline.Put(wmb.WMB{Watermark: 30, Offset: 35})
 	assert.Equal(t, "[33:36] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
 
-	testTimeline.PutIdle(wmb.WMB{Watermark: 32, Offset: 36}) // ignored
+	testTimeline.PutReferred(wmb.WMB{Watermark: 32, Offset: 36}) // ignored
 	assert.Equal(t, "[33:36] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
 
-	testTimeline.PutIdle(wmb.WMB{Watermark: 33, Offset: 35}) // ignored
+	testTimeline.PutReferred(wmb.WMB{Watermark: 33, Offset: 35}) // ignored
 	assert.Equal(t, "[33:36] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
 
-	testTimeline.PutIdle(wmb.WMB{Watermark: 33, Offset: 36}) // ignored
+	testTimeline.PutReferred(wmb.WMB{Watermark: 33, Offset: 36}) // ignored
 	assert.Equal(t, "[33:36] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
 
-	testTimeline.PutIdle(wmb.WMB{Watermark: 33, Offset: 37}) // updated
+	testTimeline.PutReferred(wmb.WMB{Watermark: 33, Offset: 37}) // updated
 	assert.Equal(t, "[33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
 
-	testTimeline.PutIdle(wmb.WMB{Watermark: 34, Offset: 36}) // ignored
+	testTimeline.PutReferred(wmb.WMB{Watermark: 34, Offset: 36}) // ignored
 	assert.Equal(t, "[33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
 
-	testTimeline.PutIdle(wmb.WMB{Watermark: 34, Offset: 37}) // ignored
+	testTimeline.PutReferred(wmb.WMB{Watermark: 34, Offset: 37}) // ignored
 	assert.Equal(t, "[33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
 
-	testTimeline.PutIdle(wmb.WMB{Watermark: 34, Offset: 38}) // inserted
+	testTimeline.PutReferred(wmb.WMB{Watermark: 34, Offset: 38}) // inserted
 	assert.Equal(t, "[34:38] -> [33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21]", testTimeline.Dump())
 
 }
