@@ -90,7 +90,7 @@ func (p *PBQ) CloseOfBook() {
 func (p *PBQ) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	// we need a nil check because GC could have been invoked before close
+	// we need a nil check because PBQ.GC could have been invoked before close
 	if p.store != nil {
 		return p.store.Close()
 	}
@@ -106,7 +106,8 @@ func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
 // GC cleans up the PBQ and also the store associated with it. GC is invoked after the Reader (ProcessAndForward) has
 // finished forwarding the output to ISB.
 func (p *PBQ) GC() error {
-	// we need a lock because Close() and GC() can be invoked simultaneously
+	// we need a lock because Close() and PBQ.GC() can be invoked simultaneously
+	// by shutdown routine(pbq.GC in case of ctx close) and pnf(pbq.Close after forwarding the result)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.store = nil
