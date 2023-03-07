@@ -31,4 +31,8 @@ type GeneratorSource struct {
 	// +kubebuilder:default=8
 	// +optional
 	MsgSize *int32 `json:"msgSize,omitempty" protobuf:"bytes,3,opt,name=msgSize"`
+	// KeyCount is the number of unique keys in the payload
+	KeyCount *int32 `json:"keyCount,omitempty" protobuf:"bytes,4,opt,name=keyCount"`
+	// Value is an optional uint64 value to be written in to the payload
+	Value *uint64 `json:"value,omitempty" protobuf:"bytes,5,opt,name=value"`
 }
