@@ -124,7 +124,7 @@ export default function NodeInfo(props: NodeInfoProps) {
                 <Table aria-label="pod-backpressure">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Pod</TableCell>
+                      <TableCell>Partition</TableCell>
                       <TableCell >1m</TableCell>
                       <TableCell >5m</TableCell>
                       <TableCell >15m</TableCell>
@@ -133,7 +133,7 @@ export default function NodeInfo(props: NodeInfoProps) {
                   <TableBody>
                     {node.data.vertexMetrics.podMetrics.map((podMetric, idx) => {
                       return <TableRow>
-                        <TableCell>Pod - {idx}</TableCell>
+                        <TableCell>Partition - {idx}</TableCell>
                         <TableCell>{podMetric["processingRates"]["1m"].toFixed(2)}</TableCell>
                         <TableCell>{podMetric["processingRates"]["5m"].toFixed(2)}</TableCell>
                         <TableCell>{podMetric["processingRates"]["15m"].toFixed(2)}</TableCell>

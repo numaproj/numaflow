@@ -85,7 +85,6 @@ export function Pipeline() {
           )
             .then((response) => response.json())
             .then((json) => {
-              console.log(vertex.name, " - ", json);
               const vertexMetrics = {ratePerMin: "0.00", ratePerFiveMin: "0.00", ratePerFifteenMin: "0.00", podMetrics: null, error: false} as VertexMetrics;
               let ratePerMin = 0.0, ratePerFiveMin = 0.0, ratePerFifteenMin = 0.0;
               // keeping processing rates as summation of pod values
@@ -107,11 +106,11 @@ export function Pipeline() {
                 vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
                 vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
                 vertexMetrics.podMetrics = json;
-                if (vertexPods && vertexPods.get(vertex.name) > json.length) {
+                if (vertex?.udf?.groupBy && vertexPods && vertexPods.get(vertex.name) > json.length) {
                   vertexMetrics.error = true;
                 }
               } else {
-                if (vertexPods && vertexPods.get(vertex.name) !== 0) {
+                if (vertex?.udf?.groupBy && vertexPods && vertexPods.get(vertex.name) !== 0) {
                   vertexMetrics.error = true;
                 }
               }
