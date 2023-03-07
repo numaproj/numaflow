@@ -127,12 +127,14 @@ export default function Graph(props: GraphProps) {
 
   // This has been added to make sure that edge container refreshes on edges being refreshed
   useEffect(() => {
+    let flag = false;
     edges.forEach((dataEdge) => {
       const edge = {} as Edge;
-      if (dataEdge.id === edgeId) {
+      if (dataEdge.id === edgeId && !flag) {
         edge.data = dataEdge.data;
         edge.label = dataEdge.label;
         edge.id = dataEdge.id;
+        flag = true;
         setEdge(edge);
       }
     });
@@ -144,11 +146,13 @@ export default function Graph(props: GraphProps) {
   const [node, setNode] = useState<Node>();
 
   const handleNodeClick = (event: MouseEvent, node: Node) => {
-    setNodeOpen(true);
-    setNode(node);
-    setNodeId(node.id);
-    setShowSpec(false);
-    setEdgeOpen(false);
+    if (node?.data?.vertexMetrics?.error === false) {
+      setNodeOpen(true);
+      setNode(node);
+      setNodeId(node.id);
+      setShowSpec(false);
+      setEdgeOpen(false);
+    }
   };
 
   // This has been added to make sure that node container refreshes on nodes being refreshed

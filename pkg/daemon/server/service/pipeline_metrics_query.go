@@ -225,14 +225,15 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		}
 	}
 
+	var metricsArrFilter []*daemon.VertexMetrics
+
 	// in case any vertex queried for metrics is not running, this check prevents daemon crashes
 	for _, v := range metricsArr {
-		if v == nil {
-			return nil, fmt.Errorf("error while retrieving metrics for the %s vertex", req.GetVertex())
+		if v != nil {
+			metricsArrFilter = append(metricsArrFilter, v)
 		}
 	}
-
-	resp.VertexMetrics = metricsArr
+	resp.VertexMetrics = metricsArrFilter
 	return resp, nil
 }
 

@@ -116,7 +116,7 @@ export default function NodeInfo(props: NodeInfoProps) {
             )}
           </TabPanel>
           <TabPanel value={value} index={2}>
-            {node?.data?.vertexMetrics && (
+            {node?.data?.vertexMetrics?.podMetrics && (
               <TableContainer
                   component={Paper}
                   sx={{ borderBottom: 1, borderColor: "divider" }}
@@ -131,8 +131,7 @@ export default function NodeInfo(props: NodeInfoProps) {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {node?.data?.vertexMetrics?.podMetrics &&
-                        node.data.vertexMetrics.podMetrics.map((podMetric, idx) => {
+                    {node.data.vertexMetrics.podMetrics.map((podMetric, idx) => {
                       return <TableRow>
                         <TableCell>Pod - {idx}</TableCell>
                         <TableCell>{podMetric["processingRates"]["1m"].toFixed(2)}</TableCell>
@@ -143,6 +142,9 @@ export default function NodeInfo(props: NodeInfoProps) {
                   </TableBody>
                 </Table>
               </TableContainer>
+            )}
+            {!node?.data?.vertexMetrics?.podMetrics && (
+              <Box  key = {"no pods"}>{`No pods found`}</Box>
             )}
           </TabPanel>
         </>

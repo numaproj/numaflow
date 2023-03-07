@@ -5,6 +5,7 @@ export interface VertexMetrics {
   ratePerFiveMin: string;
   ratePerFifteenMin: string;
   podMetrics: any[];
+  error: boolean;
 }
 
 export interface EdgeWatermark {
