@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"sync"
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
@@ -45,6 +46,7 @@ type PBQ struct {
 	options       *options
 	manager       *Manager
 	log           *zap.SugaredLogger
+	mu            sync.Mutex
 }
 
 var _ ReadWriteCloser = (*PBQ)(nil)
@@ -86,7 +88,13 @@ func (p *PBQ) CloseOfBook() {
 // Close is used by the writer to indicate close of context
 // we should flush pending messages to store
 func (p *PBQ) Close() error {
-	return p.store.Close()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	// we need a nil check because PBQ.GC could have been invoked before close
+	if p.store != nil {
+		return p.store.Close()
+	}
+	return nil
 }
 
 // ReadCh exposes read channel to read messages from PBQ
@@ -98,6 +106,10 @@ func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
 // GC cleans up the PBQ and also the store associated with it. GC is invoked after the Reader (ProcessAndForward) has
 // finished forwarding the output to ISB.
 func (p *PBQ) GC() error {
+	// we need a lock because Close() and PBQ.GC() can be invoked simultaneously
+	// by shutdown routine(pbq.GC in case of ctx close) and pnf(pbq.Close after forwarding the result)
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.store = nil
 	return p.manager.deregister(p.PartitionID)
 }
