@@ -206,7 +206,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
 		// When the read length is zero, the write length is definitely zero too
-		// meaning there's no data published to the next vertex, and we consider this
+		// meaning there's no data to be published to the next vertex, and we consider this
 		// situation as idling.
 		// In order to continue propagating watermark, we will set watermark idle=true and publish it.
 		// We also publish a control message if this is the first time we get this idle.
@@ -611,6 +611,7 @@ func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter
 			isdf.opts.logger.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(err))
 			return
 		}
+		// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
 		isdf.wmbOffset[bufferName] = writeOffsets[0]
 	}
 
