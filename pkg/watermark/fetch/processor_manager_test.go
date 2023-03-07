@@ -71,7 +71,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	defer func() { _ = js.DeleteKeyValue(keyspace + "_PROCESSORS") }()
 	assert.NoError(t, err)
 
-	// create Offset timeline bucket
+	// create offset timeline bucket
 	_, err = js.CreateKeyValue(&nats.KeyValueConfig{
 		Bucket:       keyspace + "_OT",
 		Description:  "",
@@ -100,7 +100,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	// put values into otStore
 
-	// this first entry should not be in the Offset timeline because we set the wmb bucket history to 2
+	// this first entry should not be in the offset timeline because we set the wmb bucket history to 2
 	otValueByte, err := otValueToBytes(testOffset, epoch+100, false)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)
@@ -123,7 +123,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	err = otStore.PutKV(ctx, "p2", otValueByte)
 	assert.NoError(t, err)
 
-	// create watchers for heartbeat and Offset timeline
+	// create watchers for heartbeat and offset timeline
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
@@ -172,7 +172,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the Offset timeline [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -206,8 +206,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" should be deleted after this GetWatermark Offset=101
-	// because "p1" offsetTimeline's head Offset=102, which is < inputOffset 103
+	// "p1" should be deleted after this GetWatermark offset=101
+	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
 	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
 	allProcessors = testBuffer.processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
@@ -244,7 +244,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
-	// so "p1" will be considered as a new processors with a new default Offset timeline
+	// so "p1" will be considered as a new processors with a new default offset timeline
 	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
 	p1 := testBuffer.processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
@@ -252,7 +252,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NotNil(t, p1.offsetTimeline)
 	assert.Equal(t, int64(-1), p1.offsetTimeline.GetHeadOffset())
 
-	// publish a new Watermark 103
+	// publish a new watermark 103
 	otValueByte, err = otValueToBytes(testOffset+3, epoch+500, false)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)
@@ -303,7 +303,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the Offset timeline [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -311,18 +311,18 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}
 
-	// publish an idle Watermark
+	// publish an idle watermark
 	otValueByte, err = otValueToBytes(0, epoch+600, true)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
 
-	// p1 should get the head Offset Watermark from p2
+	// p1 should get the head offset watermark from p2
 	for allProcessors["p1"].offsetTimeline.Dump() != "[1651161660500:105] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the Offset timeline [1651161660500:105] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [1651161660500:105] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)

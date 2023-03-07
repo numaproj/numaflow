@@ -30,7 +30,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// OffsetTimeline is to store the event time to the Offset records.
+// OffsetTimeline is to store the event time to the offset records.
 // Our list is sorted by event time from highest to lowest.
 type OffsetTimeline struct {
 	ctx context.Context
@@ -85,13 +85,13 @@ func (t *OffsetTimeline) Put(node wmb.WMB) {
 				}
 				return
 			} else {
-				t.log.Errorw("The new input Offset should never be smaller than the existing Offset", zap.Int64("Watermark", node.Watermark),
+				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.Watermark),
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
 			}
 		} else if node.Watermark > elementNode.Watermark {
 			if node.Offset < elementNode.Offset {
-				t.log.Errorw("The new input Offset should never be smaller than the existing Offset", zap.Int64("Watermark", node.Watermark),
+				t.log.Errorw("The new input offset should never be smaller than the existing Offset", zap.Int64("watermark", node.Watermark),
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
 			}
@@ -101,13 +101,13 @@ func (t *OffsetTimeline) Put(node wmb.WMB) {
 			t.watermarks.Remove(t.watermarks.Back())
 			return
 		} else {
-			// keep iterating, we need to go to the next smallest Watermark.
+			// keep iterating, we need to go to the next smallest watermark.
 			continue
 		}
 	}
 }
 
-// PutIdle inserts the assumed WMB which replaces the idle Watermark into list. It ensures that the list will remain sorted after the insert.
+// PutIdle inserts the assumed WMB which replaces the idle watermark into list. It ensures that the list will remain sorted after the insert.
 func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -135,7 +135,7 @@ func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 	}
 }
 
-// GetHeadOffset returns the head Offset, that is the most recent Offset which will have the highest
+// GetHeadOffset returns the head offset, that is the most recent offset which will have the highest
 // Watermark.
 func (t *OffsetTimeline) GetHeadOffset() int64 {
 	t.lock.RLock()
@@ -146,7 +146,7 @@ func (t *OffsetTimeline) GetHeadOffset() int64 {
 	return t.watermarks.Front().Value.(wmb.WMB).Offset
 }
 
-// GetHeadWatermark returns the head Watermark, which is the highest one.
+// GetHeadWatermark returns the head watermark, which is the highest one.
 func (t *OffsetTimeline) GetHeadWatermark() int64 {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -156,20 +156,20 @@ func (t *OffsetTimeline) GetHeadWatermark() int64 {
 	return t.watermarks.Front().Value.(wmb.WMB).Watermark
 }
 
-// GetHeadWMB returns the largest Offset with the largest Watermark.
+// GetHeadWMB returns the largest offset with the largest watermark.
 func (t *OffsetTimeline) GetHeadWMB() wmb.WMB {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return t.watermarks.Front().Value.(wmb.WMB)
 }
 
-// GetReferredWatermark returns the referred Watermark that will be used to replace
-// the idle Watermark value
+// GetReferredWatermark returns the referred watermark that will be used to replace
+// the idle watermark value
 func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) wmb.WMB {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	// find in the Offset timeline where the WMB has a Watermark that is <= the idleWM
-	// because, when we replace the idleWM, we need to guarantee the referred Watermark's value won't exceed
+	// find in the offset timeline where the WMB has a watermark that is <= the idleWM
+	// because, when we replace the idleWM, we need to guarantee the referred watermark's value won't exceed
 	// the largest WM processed from Vn-1's idle processor (meaning the idle processor hasn't seen any data that
 	// is later than this idleWM)
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
@@ -183,7 +183,7 @@ func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) wmb.WMB {
 	}
 }
 
-// GetOffset will return the Offset for the given event-time.
+// GetOffset will return the offset for the given event-time.
 // TODO(jyu6): will make Watermark an interface make it easy to pass an Offset and return a Watermark?
 func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
 	t.lock.RLock()
@@ -199,7 +199,7 @@ func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
 	return -1
 }
 
-// GetEventTime will return the event-time for the given Offset.
+// GetEventTime will return the event-time for the given offset.
 // TODO(jyu6): will make Watermark an interface make it easy to get a Watermark and return an Offset?
 func (t *OffsetTimeline) GetEventTime(inputOffset isb.Offset) int64 {
 	// TODO: handle err?

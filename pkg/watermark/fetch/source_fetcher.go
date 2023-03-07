@@ -42,7 +42,7 @@ type sourceFetcher struct {
 // buckets of the source buffer.
 func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher store.WatermarkStoreWatcher) Fetcher {
 	log := logging.FromContext(ctx).With("sourceBufferName", sourceBufferName)
-	log.Info("Creating a new source Watermark fetcher")
+	log.Info("Creating a new source watermark fetcher")
 	return &sourceFetcher{
 		ctx:              ctx,
 		sourceBufferName: sourceBufferName,
@@ -96,7 +96,7 @@ func (e *sourceFetcher) GetHeadWMB() wmb.WMB {
 
 // Close function closes the watchers.
 func (e *sourceFetcher) Close() error {
-	e.log.Infof("Closing source Watermark fetcher")
+	e.log.Infof("Closing source watermark fetcher")
 	if e.storeWatcher != nil {
 		e.storeWatcher.HeartbeatWatcher().Close()
 		e.storeWatcher.OffsetTimelineWatcher().Close()

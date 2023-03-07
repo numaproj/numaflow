@@ -26,9 +26,9 @@ import (
 // Fetcher fetches Watermark data from Vn-1 vertex.
 type Fetcher interface {
 	io.Closer
-	// GetWatermark returns the inorder monotonically increasing Watermark of the edge connected to Vn-1.
+	// GetWatermark returns the inorder monotonically increasing watermark of the edge connected to Vn-1.
 	GetWatermark(offset isb.Offset) wmb.Watermark
-	// GetHeadWatermark returns the latest Watermark based on the head Offset
+	// GetHeadWatermark returns the latest watermark based on the head offset
 	GetHeadWatermark() wmb.Watermark
 	// GetHeadWMB returns the latest idle WMB from Vn-1 processors
 	GetHeadWMB() wmb.WMB
