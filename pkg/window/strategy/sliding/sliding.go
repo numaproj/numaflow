@@ -151,12 +151,14 @@ func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 		return closedWindows
 	}
 
+	// close the window if the window end time is equal to the watermark
+	// because window is right exclusive
 	for e := s.entries.Front(); e != nil; {
 		win := e.Value.(*keyed.AlignedKeyedWindow)
 		next := e.Next()
 
 		// break, if we find a window with end time > watermark
-		if !win.EndTime().Before(wm) {
+		if win.EndTime().After(wm) {
 			break
 		}
 
