@@ -312,7 +312,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	}
 
 	// publish an idle watermark
-	otValueByte, err = otValueToBytes(0, epoch+600, true)
+	otValueByte, err = otValueToBytes(-1, epoch+600, true)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
