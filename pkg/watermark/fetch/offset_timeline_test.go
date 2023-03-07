@@ -241,7 +241,7 @@ func TestOffsetTimeline(t *testing.T) {
 
 	for _, watermark := range testwatermarks {
 		testTimeline.Put(watermark)
-		assert.Equal(t, watermark, testTimeline.GetHeadOffsetWatermark())
+		assert.Equal(t, watermark, testTimeline.GetHeadWMB())
 		assert.Equal(t, watermark.Watermark, testTimeline.GetHeadWatermark(), watermark.Watermark)
 		assert.Equal(t, watermark.Offset, testTimeline.GetHeadOffset())
 	}

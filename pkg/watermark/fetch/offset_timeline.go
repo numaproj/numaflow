@@ -156,8 +156,8 @@ func (t *OffsetTimeline) GetHeadWatermark() int64 {
 	return t.watermarks.Front().Value.(wmb.WMB).Watermark
 }
 
-// GetHeadOffsetWatermark returns the largest Offset with the largest Watermark.
-func (t *OffsetTimeline) GetHeadOffsetWatermark() wmb.WMB {
+// GetHeadWMB returns the largest Offset with the largest Watermark.
+func (t *OffsetTimeline) GetHeadWMB() wmb.WMB {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return t.watermarks.Front().Value.(wmb.WMB)
