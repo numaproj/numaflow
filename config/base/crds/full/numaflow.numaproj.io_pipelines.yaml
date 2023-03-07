@@ -3745,12 +3745,18 @@ spec:
                             duration:
                               default: 1s
                               type: string
+                            keyCount:
+                              format: int32
+                              type: integer
                             msgSize:
                               default: 8
                               format: int32
                               type: integer
                             rpu:
                               default: 5
+                              format: int64
+                              type: integer
+                            value:
                               format: int64
                               type: integer
                           type: object

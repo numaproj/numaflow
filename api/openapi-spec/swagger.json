@@ -17720,12 +17720,22 @@
         "duration": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
+        "keyCount": {
+          "description": "KeyCount is the number of unique keys in the payload",
+          "type": "integer",
+          "format": "int32"
+        },
         "msgSize": {
           "description": "Size of each generated message",
           "type": "integer",
           "format": "int32"
         },
         "rpu": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "value": {
+          "description": "Value is an optional uint64 value to be written in to the payload",
           "type": "integer",
           "format": "int64"
         }

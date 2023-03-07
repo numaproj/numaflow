@@ -530,6 +530,16 @@ func (in *GeneratorSource) DeepCopyInto(out *GeneratorSource) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.KeyCount != nil {
+		in, out := &in.KeyCount, &out.KeyCount
+		*out = new(int32)
+		**out = **in
+	}
+	if in.Value != nil {
+		in, out := &in.Value, &out.Value
+		*out = new(uint64)
+		**out = **in
+	}
 	return
 }
 
