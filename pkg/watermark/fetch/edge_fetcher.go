@@ -64,7 +64,7 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(e.GetHeadWMB().Watermark))
 }
 
-// GetHeadWMB returns the wmb using the HeadOffset (the latest offset among all processors).
+// GetHeadWMB returns the WMB using the HeadOffset (the latest offset among all processors).
 func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 	var debugString strings.Builder
 	var headOffset int64 = math.MinInt64

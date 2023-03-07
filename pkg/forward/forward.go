@@ -97,6 +97,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 		// should we do a check here for the values not being null?
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
+		wmbOffset:    make(map[string]isb.Offset, len(toSteps)),
 		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
@@ -204,7 +205,15 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
 	// reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
-		isdf.publishIdleWatermark()
+		// fetch watermark
+		var processorWMB = isdf.fetchWatermark.GetHeadWMB()
+		if !isdf.wmbChecker.ValidateHeadWMB(processorWMB) {
+			// skip publishing
+			return
+		}
+		for _, toBuffer := range isdf.toBuffers {
+			isdf.publishIdleWatermark(toBuffer, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+		}
 		return
 	}
 
@@ -217,12 +226,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		if m.Kind == isb.Data {
 			dataMessages = append(dataMessages, m)
 		}
-	}
-
-	if len(dataMessages) != 0 {
-		// we are no longer idling
-		// TODO: conditional forwarding: part of the outgoing edges are idling
-		isdf.wmbOffset = nil
 	}
 
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
@@ -350,12 +353,15 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
 					activeWatermarkBuffers[bufferName] = true
+					// reset because the toBuffer is not idling
+					isdf.wmbOffset[bufferName] = nil
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
-				// TODO: Should also publish to those edges without writing (fall out of conditional forwarding)
 			} else { // For Sink vertex, and it does not care about the offset during watermark publishing
 				publisher.PublishWatermark(processorWM, nil)
 				activeWatermarkBuffers[bufferName] = true
+				// reset because the toBuffer is not idling
+				isdf.wmbOffset[bufferName] = nil
 			}
 		}
 	}
@@ -365,7 +371,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		for bufferName := range isdf.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
 				// use the watermark of the current read batch for the idle watermark
-				isdf.publishWatermark[bufferName].PublishIdleWatermark(processorWM)
+				// same as read len==0 because there's no event published to the buffer
+				isdf.publishIdleWatermark(isdf.toBuffers[bufferName], processorWM)
 			}
 		}
 	}
@@ -580,44 +587,30 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, message
 	return nil
 }
 
-// publishIdleWatermark publishes a ctrl message with isb.Kind set to WMB.
+// publishIdleWatermark publishes a ctrl message with isb.Kind set to WMB when write length is zero
 // A WMB is only created if this a new
-func (isdf *InterStepDataForward) publishIdleWatermark() {
+func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter, wm wmb.Watermark) {
+	var bufferName = toBuffer.GetName()
 	var wmbMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
 
-	// fetch watermark
-	// TODO: the wmb we get here doesn't have idle information
-	// TODO: differentiate between source and regular vertex
-	var processorWMB = isdf.fetchWatermark.GetHeadWMB()
-	if !isdf.wmbChecker.ValidateWMB(processorWMB) {
-		// skip publishing
-		return
-	}
-
-	if isdf.wmbOffset == nil {
+	if isdf.wmbOffset[bufferName] == nil {
 		// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
-		// create WMB
-		isdf.wmbOffset = make(map[string]isb.Offset, len(isdf.toBuffers))
-		// write to ISB
-		for bufferName, toBuffer := range isdf.toBuffers {
-			writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, wmbMessage)
-			if err != nil {
-				isdf.opts.logger.Errorw("failed to write ctrl message to toBuffers", zap.Error(err))
-				return
-			}
-			isdf.wmbOffset[bufferName] = writeOffsets[0]
+		writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, wmbMessage)
+		if err != nil {
+			isdf.opts.logger.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(err))
+			return
 		}
+		isdf.wmbOffset[bufferName] = writeOffsets[0]
 	}
 
-	// publish WM (this will naturally incr or set the timestamp of isdf.wmbOffset)
-	for bufferName, offset := range isdf.wmbOffset {
-		if publisher, ok := isdf.publishWatermark[bufferName]; ok {
-			if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
-				isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
-				publisher.PublishWatermark(wmb.Watermark(time.UnixMilli(processorWMB.Watermark)), offset)
-			} else { // For Sink vertex, and it does not care about the offset during watermark publishing
-				publisher.PublishWatermark(wmb.Watermark(time.UnixMilli(processorWMB.Watermark)), nil)
-			}
+	// publish WMB (this will naturally incr or set the timestamp of isdf.wmbOffset)
+	if publisher, ok := isdf.publishWatermark[bufferName]; ok {
+		if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
+			isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
+			publisher.PublishIdleWatermark(wm, isdf.wmbOffset[bufferName])
+		} else {
+			// for Sink vertex, and it does not care about the offset during watermark publishing
+			publisher.PublishIdleWatermark(wm, nil)
 		}
 	}
 }

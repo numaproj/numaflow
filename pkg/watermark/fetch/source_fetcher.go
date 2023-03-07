@@ -42,7 +42,7 @@ type sourceFetcher struct {
 // buckets of the source buffer.
 func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher store.WatermarkStoreWatcher) Fetcher {
 	log := logging.FromContext(ctx).With("sourceBufferName", sourceBufferName)
-	log.Info("Creating a new source watermark fetcher")
+	log.Info("Creating a new source Watermark fetcher")
 	return &sourceFetcher{
 		ctx:              ctx,
 		sourceBufferName: sourceBufferName,
@@ -52,7 +52,7 @@ func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher
 	}
 }
 
-// GetHeadWatermark returns the latest watermark of all the processors.
+// GetHeadWatermark returns the latest Watermark of all the processors.
 func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(e.GetHeadWMB().Watermark))
 }
@@ -68,20 +68,20 @@ func (e *sourceFetcher) GetHeadWMB() wmb.WMB {
 		}
 	}
 	if epoch == math.MinInt64 {
-		// Use -1 as default watermark value to indicate there is no valid watermark yet.
+		// Use -1 as default Watermark value to indicate there is no valid Watermark yet.
 		return wmb.WMB{
-			// TODO: offset and idle
+			// TODO: Offset and idle
 			Watermark: -1,
 		}
 	}
 	return wmb.WMB{
-		// TODO: offset and idle
+		// TODO: Offset and idle
 		Watermark: epoch,
 	}
 }
 
-// GetWatermark returns the lowest of the latest watermark of all the processors,
-// it ignores the input offset.
+// GetWatermark returns the lowest of the latest Watermark of all the processors,
+// it ignores the input Offset.
 func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 	var epoch int64 = math.MaxInt64
 	for _, p := range e.processorManager.GetAllProcessors() {
@@ -100,7 +100,7 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 
 // Close function closes the watchers.
 func (e *sourceFetcher) Close() error {
-	e.log.Infof("Closing source watermark fetcher")
+	e.log.Infof("Closing source Watermark fetcher")
 	if e.storeWatcher != nil {
 		e.storeWatcher.HeartbeatWatcher().Close()
 		e.storeWatcher.OffsetTimelineWatcher().Close()

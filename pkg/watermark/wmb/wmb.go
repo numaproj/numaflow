@@ -75,9 +75,13 @@ func NewWMBChecker(numOfIteration int) WMBChecker {
 	}
 }
 
-// ValidateWMB checks if the wmb the same as the wmb from the previous iteration.
+// ValidateHeadWMB checks if the head wmb the same as the wmb from the previous iteration.
 // If all the iterations get the same wmb, returns true.
-func (c *WMBChecker) ValidateWMB(w WMB) bool {
+func (c *WMBChecker) ValidateHeadWMB(w WMB) bool {
+	if !w.Idle {
+		c.counter = 0
+		return false
+	}
 	if c.counter == 0 {
 		c.counter++
 		// the wmb only writes once when counter is zero

@@ -41,8 +41,8 @@ type ProcessorManager struct {
 	otWatcher store.WatermarkKVWatcher
 	// heartbeat just tracks the heartbeat of each processing unit. we use it to mark a processing unit's status (e.g, inactive)
 	heartbeat *ProcessorHeartbeat
-	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
-	// used for tracking watermark.
+	// processors has reference to the actual processing unit (ProcessorEntitier) which includes Offset timeline which is
+	// used for tracking Watermark.
 	processors map[string]*ProcessorToFetch
 	lock       sync.RWMutex
 	log        *zap.SugaredLogger
@@ -254,27 +254,33 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					for processorName, _processor := range processors {
 						// skip the idle processor itself, only use other processors as reference
 						if processorName != value.Key() {
-							// in any other Vn-1 processor's offset timeline, we can replace the idle watermark
-							// with any watermark whose watermark is <= otValue.Watermark
+							// in any other Vn-1 processor's Offset timeline, we can replace the idle Watermark
+							// with any Watermark whose Watermark is <= otValue.Watermark
 							referredWatermarkOffset := _processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
-							// if the referred watermark is empty, skip
-							if referredWatermarkOffset.watermark != -1 {
+							// if the referred Watermark is empty, skip
+							if referredWatermarkOffset.Watermark != -1 {
+								referredWatermarkOffset.Idle = true
 								p.offsetTimeline.PutIdle(referredWatermarkOffset)
-								v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("referredWatermark", referredWatermarkOffset.watermark), zap.Int64("offset", referredWatermarkOffset.offset))
+								v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("referredWatermark", referredWatermarkOffset.Watermark), zap.Int64("Offset", referredWatermarkOffset.Offset))
 								break
 							}
 						}
 					}
-					// if the break never happens, it's safe to do nothing ATM
+					// if the break never happens
 					// it could be the Vn-1's idle processor's speed is much slower than the others
 					// or no data is flowing into this Vn's processor
+					p.offsetTimeline.Put(wmb.WMB{
+						Idle:      true,
+						Watermark: otValue.Watermark,
+						Offset:    otValue.Offset,
+					})
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
-					p.offsetTimeline.Put(OffsetWatermark{
-						watermark: otValue.Watermark,
-						offset:    otValue.Offset,
+					p.offsetTimeline.Put(wmb.WMB{
+						Watermark: otValue.Watermark,
+						Offset:    otValue.Offset,
 					})
-					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
+					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("Watermark", otValue.Watermark), zap.Int64("Offset", otValue.Offset))
 				}
 			case store.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will

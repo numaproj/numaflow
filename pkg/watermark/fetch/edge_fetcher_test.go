@@ -45,24 +45,24 @@ func TestBuffer_GetWatermark(t *testing.T) {
 		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
 		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
 		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
-		pod0Timeline = []OffsetWatermark{
-			{watermark: 11, offset: 9},
-			{watermark: 12, offset: 20},
-			{watermark: 13, offset: 21},
-			{watermark: 14, offset: 22},
-			{watermark: 17, offset: 28},
+		pod0Timeline = []wmb.WMB{
+			{Watermark: 11, Offset: 9},
+			{Watermark: 12, Offset: 20},
+			{Watermark: 13, Offset: 21},
+			{Watermark: 14, Offset: 22},
+			{Watermark: 17, Offset: 28},
 		}
-		pod1Timeline = []OffsetWatermark{
-			{watermark: 8, offset: 13},
-			{watermark: 9, offset: 16},
-			{watermark: 10, offset: 18},
-			{watermark: 17, offset: 26},
+		pod1Timeline = []wmb.WMB{
+			{Watermark: 8, Offset: 13},
+			{Watermark: 9, Offset: 16},
+			{Watermark: 10, Offset: 18},
+			{Watermark: 17, Offset: 26},
 		}
-		pod2Timeline = []OffsetWatermark{
-			{watermark: 10, offset: 14},
-			{watermark: 12, offset: 17},
-			{watermark: 14, offset: 19},
-			{watermark: 17, offset: 24},
+		pod2Timeline = []wmb.WMB{
+			{Watermark: 10, Offset: 14},
+			{Watermark: 12, Offset: 17},
+			{Watermark: 14, Offset: 19},
+			{Watermark: 17, Offset: 24},
 		}
 	)
 
