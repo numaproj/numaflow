@@ -104,3 +104,7 @@ func (c *WMBChecker) ValidateHeadWMB(w WMB) bool {
 	}
 	return false
 }
+
+func (c *WMBChecker) GetCounter() int {
+	return c.counter
+}
