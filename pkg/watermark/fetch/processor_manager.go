@@ -260,9 +260,8 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 							referredWatermarkOffset := _processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
 							// if the referred watermark is empty, skip
 							if referredWatermarkOffset.Watermark != -1 {
-								referredWatermarkOffset.Idle = true
 								p.offsetTimeline.PutIdle(referredWatermarkOffset)
-								v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("referredWatermark", referredWatermarkOffset.Watermark), zap.Int64("offset", referredWatermarkOffset.Offset))
+								v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("referredWatermark", referredWatermarkOffset.Watermark), zap.Int64("referredOffset", referredWatermarkOffset.Offset))
 								getReferredWM = true
 								break
 							}
@@ -278,6 +277,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 							Watermark: otValue.Watermark,
 							Offset:    otValue.Offset,
 						})
+						v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("idleWatermark", otValue.Watermark), zap.Int64("idleOffset", otValue.Offset))
 					}
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false

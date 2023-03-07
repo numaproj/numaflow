@@ -95,6 +95,9 @@ func (t *OffsetTimeline) Put(node wmb.WMB) {
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
 			}
+			if node.Offset == elementNode.Offset {
+				// TODO: not insert but update the watermark
+			}
 			// our list is sorted by event time from highest to lowest
 			t.watermarks.InsertBefore(node, e)
 			// remove the last event time
@@ -168,12 +171,12 @@ func (t *OffsetTimeline) GetHeadWMB() wmb.WMB {
 func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) wmb.WMB {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	// find in the offset timeline where the WMB has a watermark that is <= the idleWM
+	// find in the offset timeline where the WMB has an active watermark that is <= the idleWM
 	// because, when we replace the idleWM, we need to guarantee the referred watermark's value won't exceed
 	// the largest WM processed from Vn-1's idle processor (meaning the idle processor hasn't seen any data that
 	// is later than this idleWM)
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		if e.Value.(wmb.WMB).Watermark <= idleWM {
+		if e.Value.(wmb.WMB).Watermark <= idleWM && !e.Value.(wmb.WMB).Idle {
 			return e.Value.(wmb.WMB)
 		}
 	}

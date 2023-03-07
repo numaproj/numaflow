@@ -56,8 +56,10 @@ type InterStepDataForward struct {
 	opts             options
 	vertexName       string
 	pipelineName     string
-	wmbOffset        map[string]isb.Offset
-	wmbChecker       wmb.WMBChecker
+	// wmbOffset is a toBufferName to the write offset of the idle watermark map.
+	wmbOffset map[string]isb.Offset
+	// wmbChecker checks if the idle watermark is valid.
+	wmbChecker wmb.WMBChecker
 	Shutdown
 }
 
@@ -209,7 +211,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// meaning there's no data to be published to the next vertex, and we consider this
 		// situation as idling.
 		// In order to continue propagating watermark, we will set watermark idle=true and publish it.
-		// We also publish a control message if this is the first time we get this idle.
+		// We also publish a control message if this is the first time we get this idle situation.
 
 		// we use the HeadWMB as the watermark for the idle
 		var processorWMB = isdf.fetchWatermark.GetHeadWMB()
