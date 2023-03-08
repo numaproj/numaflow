@@ -613,8 +613,13 @@ func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter
 			isdf.opts.logger.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(err))
 			return
 		}
-		// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
-		isdf.wmbOffset[bufferName] = writeOffsets[0]
+		if len(writeOffsets) == 1 {
+			// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
+			isdf.wmbOffset[bufferName] = writeOffsets[0]
+		} else {
+			// if sink vertex, then there's no write offset
+			isdf.wmbOffset[bufferName] = isb.SimpleIntOffset(func() int64 { return 0 })
+		}
 	}
 
 	// publish WMB (this will naturally incr or set the timestamp of isdf.wmbOffset)
