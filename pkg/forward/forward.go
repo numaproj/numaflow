@@ -607,18 +607,26 @@ func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter
 	var wmbMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
 
 	if isdf.wmbOffset[bufferName] == nil {
-		// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
-		writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, wmbMessage)
-		if err != nil {
-			isdf.opts.logger.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(err))
-			return
-		}
-		if len(writeOffsets) == 1 {
-			// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
-			isdf.wmbOffset[bufferName] = writeOffsets[0]
+		if isdf.opts.vertexType == dfv1.VertexTypeSink {
+			// for Sink vertex, we don't need to write any ctrl message
+			// and because when we publish the watermark, offset is not important for sink
+			// so, we do nothing here
 		} else {
-			// if sink vertex, then there's no write offset
-			isdf.wmbOffset[bufferName] = isb.SimpleIntOffset(func() int64 { return 0 })
+			// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
+			writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, wmbMessage)
+			if err != nil {
+				isdf.opts.logger.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(err))
+				return
+			}
+			isdf.opts.logger.Debug("succeeded to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(err))
+
+			if len(writeOffsets) == 1 {
+				// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
+				isdf.wmbOffset[bufferName] = writeOffsets[0]
+			} else {
+				// if sink vertex, then there's no write offset
+				isdf.wmbOffset[bufferName] = isb.SimpleIntOffset(func() int64 { return 0 })
+			}
 		}
 	}
 
