@@ -88,7 +88,7 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value))
 	})
 
-	t.Run("Time string is in epoch format at second granularity, assign a new event time to the message", func(t *testing.T) {
+	t.Run("The time string is in epoch format with a granularity of seconds, assign a new event time to the message", func(t *testing.T) {
 		args := map[string]string{"expression": "json(payload).item[1].time"}
 		handle, err := New(args)
 		assert.NoError(t, err)
@@ -110,7 +110,7 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value))
 	})
 
-	t.Run("Time string is in epoch format at millisecond granularity, assign a new event time to the message", func(t *testing.T) {
+	t.Run("The time string is in epoch format with a granularity of milliseconds, assign a new event time to the message", func(t *testing.T) {
 		args := map[string]string{"expression": "json(payload).item[1].time"}
 		handle, err := New(args)
 		assert.NoError(t, err)

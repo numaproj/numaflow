@@ -28,9 +28,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// EpochFormatSpec indicates that the event time in the JSON payload is presented in epoch format.
-var EpochFormatSpec = "epoch"
-
 type eventTimeExtractor struct {
 	// expression is used to extract the string representation of the event time from message payload.
 	// e.g. `json(payload).metadata.time`
