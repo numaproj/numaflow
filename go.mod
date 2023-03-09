@@ -7,6 +7,7 @@ require (
 	github.com/Shopify/sarama v1.30.1
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/antonmedv/expr v1.9.0
+	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/gavv/httpexpect/v2 v2.3.1
 	github.com/gin-contrib/static v0.0.2-0.20220606235426-ae09b2ea7e39
