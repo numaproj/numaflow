@@ -49,8 +49,28 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.Contains(t, err.Error(), "missing \"expression\"")
 	})
 
-	t.Run("Json expression valid, assign a new event time to the message", func(t *testing.T) {
+	t.Run("Json expression valid, assign a new event time to the message - format not specified", func(t *testing.T) {
 		args := map[string]string{"expression": "json(payload).item[1].time"}
+		handle, err := New(args)
+		assert.NoError(t, err)
+
+		testJsonMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`
+		result := handle(context.Background(), "test-key", &testDatum{
+			value:     []byte(testJsonMsg),
+			eventTime: time.Time{},
+			watermark: time.Time{},
+		})
+
+		time.Local, _ = time.LoadLocation("UTC")
+		expected, _ := time.Parse(time.RFC3339, "2021-02-18T21:54:42.123Z")
+		// Verify new event time is assigned to the message.
+		assert.True(t, expected.Equal(result.Items()[0].EventTime))
+		// Verify the payload remains unchanged.
+		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value))
+	})
+
+	t.Run("Json expression valid, assign a new event time to the message - format specified", func(t *testing.T) {
+		args := map[string]string{"expression": "json(payload).item[1].time", "format": time.RFC3339}
 		handle, err := New(args)
 		assert.NoError(t, err)
 

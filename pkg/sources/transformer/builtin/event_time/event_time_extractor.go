@@ -32,6 +32,10 @@ type eventTimeExtractor struct {
 	// expression is used to extract the string representation of the event time from message payload.
 	// e.g. `json(payload).metadata.time`
 	expression string
+	// format specifies the layout of extracted time string.
+	// with format, eventTimeExtractor uses the time.Parse function to translate the event time string representation to time.Time object.
+	// otherwise if format is not specified, eventTimeExtractor uses dateparse to find format based on the date string.
+	format string
 }
 
 func New(args map[string]string) (functionsdk.MapTFunc, error) {
@@ -40,8 +44,14 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 		return nil, fmt.Errorf(`missing "expression"`)
 	}
 
+	var format string
+	if format, existing = args["format"]; !existing {
+		format = ""
+	}
+
 	e := eventTimeExtractor{
 		expression: expr,
+		format:     format,
 	}
 
 	return func(ctx context.Context, key string, datum functionsdk.Datum) functionsdk.MessageTs {
@@ -61,8 +71,14 @@ func (e eventTimeExtractor) apply(et time.Time, payload []byte) (functionsdk.Mes
 	if err != nil {
 		return functionsdk.MessageTToAll(et, payload), err
 	}
+
+	var newEventTime time.Time
 	time.Local, _ = time.LoadLocation("UTC")
-	newEventTime, err := dateparse.ParseLocal(timeStr)
+	if e.format != "" {
+		newEventTime, err = time.Parse(e.format, timeStr)
+	} else {
+		newEventTime, err = dateparse.ParseLocal(timeStr)
+	}
 	if err != nil {
 		return functionsdk.MessageTToAll(et, payload), err
 	} else {
