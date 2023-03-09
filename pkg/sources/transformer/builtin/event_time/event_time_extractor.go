@@ -77,7 +77,7 @@ func (e eventTimeExtractor) apply(et time.Time, payload []byte) (functionsdk.Mes
 	if e.format != "" {
 		newEventTime, err = time.Parse(e.format, timeStr)
 	} else {
-		newEventTime, err = dateparse.ParseLocal(timeStr)
+		newEventTime, err = dateparse.ParseStrict(timeStr)
 	}
 	if err != nil {
 		return functionsdk.MessageTToAll(et, payload), err
