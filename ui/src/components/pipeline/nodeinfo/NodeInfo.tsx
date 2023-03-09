@@ -133,10 +133,19 @@ export default function NodeInfo(props: NodeInfoProps) {
                   <TableBody>
                     {node.data.vertexMetrics.podMetrics.map((podMetric, idx) => {
                       return <TableRow>
-                        <TableCell>Partition - {idx}</TableCell>
-                        <TableCell>{podMetric["processingRates"]["1m"].toFixed(2)}</TableCell>
-                        <TableCell>{podMetric["processingRates"]["5m"].toFixed(2)}</TableCell>
-                        <TableCell>{podMetric["processingRates"]["15m"].toFixed(2)}</TableCell>
+                        <TableCell>{idx}</TableCell>
+                        <TableCell>
+                          {("processingRates" in podMetric) && podMetric["processingRates"]["1m"].toFixed(2)}
+                          {!("processingRates" in podMetric) && -1}
+                        </TableCell>
+                        <TableCell>
+                          {("processingRates" in podMetric) && podMetric["processingRates"]["5m"].toFixed(2)}
+                          {!("processingRates" in podMetric) && -1}
+                        </TableCell>
+                        <TableCell>
+                          {("processingRates" in podMetric) && podMetric["processingRates"]["15m"].toFixed(2)}
+                          {!("processingRates" in podMetric) && -1}
+                        </TableCell>
                       </TableRow>
                     })}
                   </TableBody>

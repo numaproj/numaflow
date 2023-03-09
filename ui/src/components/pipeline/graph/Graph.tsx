@@ -146,13 +146,11 @@ export default function Graph(props: GraphProps) {
   const [node, setNode] = useState<Node>();
 
   const handleNodeClick = (event: MouseEvent, node: Node) => {
-    if (node?.data?.vertexMetrics?.error === false) {
-      setNodeOpen(true);
-      setNode(node);
-      setNodeId(node.id);
-      setShowSpec(false);
-      setEdgeOpen(false);
-    }
+    setNodeOpen(true);
+    setNode(node);
+    setNodeId(node.id);
+    setShowSpec(false);
+    setEdgeOpen(false);
   };
 
   // This has been added to make sure that node container refreshes on nodes being refreshed

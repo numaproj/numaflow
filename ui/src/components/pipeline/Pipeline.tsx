@@ -88,31 +88,28 @@ export function Pipeline() {
               const vertexMetrics = {ratePerMin: "0.00", ratePerFiveMin: "0.00", ratePerFifteenMin: "0.00", podMetrics: null, error: false} as VertexMetrics;
               let ratePerMin = 0.0, ratePerFiveMin = 0.0, ratePerFifteenMin = 0.0;
               // keeping processing rates as summation of pod values
-              if (json) {
-                json.map((pod) => {
-                  if ("processingRates" in pod) {
-                    if ("1m" in pod["processingRates"]) {
-                      ratePerMin += pod["processingRates"]["1m"];
-                    }
-                    if ("5m" in pod["processingRates"]) {
-                      ratePerFiveMin += pod["processingRates"]["5m"];
-                    }
-                    if ("15m" in pod["processingRates"]) {
-                      ratePerFifteenMin += pod["processingRates"]["15m"];
-                    }
+              json.map((pod) => {
+                if ("processingRates" in pod) {
+                  if ("1m" in pod["processingRates"]) {
+                    ratePerMin += pod["processingRates"]["1m"];
                   }
-                })
-                vertexMetrics.ratePerMin = ratePerMin.toFixed(2);
-                vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
-                vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
+                  if ("5m" in pod["processingRates"]) {
+                    ratePerFiveMin += pod["processingRates"]["5m"];
+                  }
+                  if ("15m" in pod["processingRates"]) {
+                    ratePerFifteenMin += pod["processingRates"]["15m"];
+                  }
+                } else {
+                  if (vertexPods && vertexPods.get(vertex.name) !== 0) {
+                    vertexMetrics.error = true;
+                  }
+                }
+              })
+              vertexMetrics.ratePerMin = ratePerMin.toFixed(2);
+              vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
+              vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
+              if (vertexPods && vertexPods.get(vertex.name) !== 0) {
                 vertexMetrics.podMetrics = json;
-                if (vertex?.udf?.groupBy && vertexPods && vertexPods.get(vertex.name) > json.length) {
-                  vertexMetrics.error = true;
-                }
-              } else {
-                if (vertex?.udf?.groupBy && vertexPods && vertexPods.get(vertex.name) !== 0) {
-                  vertexMetrics.error = true;
-                }
               }
               vertexToMetricsMap.set(vertex.name, vertexMetrics);
             });
