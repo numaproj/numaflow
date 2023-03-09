@@ -321,6 +321,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		got, err := u.ApplyReduce(ctx, partitionID, messageCh)
 
 		assert.Len(t, got, 1)
+		assert.Equal(t, time.Unix(120, 0).Add(-1*time.Millisecond), got[0].EventTime)
 		assert.NoError(t, err)
 	})
 
@@ -507,6 +508,7 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 	_ = json.Unmarshal(result[0].Payload, &resultPayload)
 
 	assert.NoError(t, err)
-	assert.Equal(t, result[0].Key, "sum")
-	assert.Equal(t, resultPayload.Value, int64(45))
+	assert.Equal(t, "sum", result[0].Key)
+	assert.Equal(t, int64(45), resultPayload.Value)
+	assert.Equal(t, time.Unix(120, 0).Add(-1*time.Millisecond), result[0].EventTime)
 }
