@@ -34,7 +34,7 @@ type eventTimeExtractor struct {
 	expression string
 	// format specifies the layout of extracted time string.
 	// with format, eventTimeExtractor uses the time.Parse function to translate the event time string representation to time.Time object.
-	// otherwise if format is not specified, eventTimeExtractor uses dateparse to find format based on the date string.
+	// otherwise if format is not specified, eventTimeExtractor uses dateparse to find format based on the time string.
 	format string
 }
 
