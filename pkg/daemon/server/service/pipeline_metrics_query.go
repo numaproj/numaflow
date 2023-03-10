@@ -229,6 +229,40 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	return resp, nil
 }
 
+func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {
+
+	resp := new(daemon.GetPipelineStatusResponse)
+
+	// get all vertices of pipeline
+	vertices := ps.pipeline.Spec.Vertices
+
+	// loop over vertices and get metrics to check pending messages vs processing rate
+	for _, vertex := range vertices {
+		vertexReq := new(daemon.GetVertexMetricsRequest)
+		vertexReq.Pipeline = req.Pipeline
+		vertexReq.Vertex = &vertex.Name
+		vertexResp, err := ps.GetVertexMetrics(ctx, vertexReq)
+		if err != nil {
+			return nil, err
+		}
+		// check default pending msg and processing rates
+		if vertexResp.VertexMetrics[0].Pendings["default"] > 0 && vertexResp.VertexMetrics[0].ProcessingRates["default"] == 0 {
+			resp.Status = &daemon.PipelineStatus{
+				Health:  pointer.Bool(false),
+				Message: pointer.String("Pipeline may have issue."),
+			}
+			return resp, nil
+		}
+	}
+
+	resp.Status = &daemon.PipelineStatus{
+		Health:  pointer.Bool(true),
+		Message: pointer.String("Pipeline has no issue."),
+	}
+	return resp, nil
+
+}
+
 func getBufferLimits(pl *v1alpha1.Pipeline, edge v1alpha1.Edge) (bufferLength int64, bufferUsageLimit float64) {
 	plLimits := pl.GetPipelineLimits()
 	bufferLength = int64(*plLimits.BufferMaxLength)

@@ -47,6 +47,12 @@ message VertexMetrics {
   map<string, int64> pendings = 4;
 }
 
+// PipelineStatus
+message PipelineStatus {
+  required bool health = 1;
+  required string message = 2;
+}
+
 message ListBuffersRequest {
     required string pipeline = 1;
 }
@@ -62,6 +68,21 @@ message GetBufferRequest {
 
 message GetBufferResponse {
     required BufferInfo buffer = 1;
+}
+
+// empty request
+// GetPipelineStatus better name
+message GetPipelineStatusRequest {
+    required string pipeline = 1;
+}
+
+// return message instead of name of vertex
+// string
+// "Pipeline is running well."
+// "Pipeline may have issue, %s could be cause"
+// name: PipelineStatus
+message GetPipelineStatusResponse {
+    required PipelineStatus status = 1;
 }
 
 message GetVertexMetricsRequest {
@@ -109,5 +130,10 @@ service DaemonService {
   // GetPipelineWatermarks return the watermark of the given pipeline
   rpc GetPipelineWatermarks (GetPipelineWatermarksRequest) returns (GetPipelineWatermarksResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/watermarks";
+  };
+
+  // GetPipelineStatus () returns (PipelineStatus) // status: bool and string
+  rpc GetPipelineStatus (GetPipelineStatusRequest) returns (GetPipelineStatusResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/status";
   };
 }
