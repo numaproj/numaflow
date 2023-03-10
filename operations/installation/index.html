@@ -1675,6 +1675,13 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
         - --managed-namespace
         - my-namespace
 </code></pre></div>
+<h1 id="high-availability">High Availability<a class="headerlink" href="#high-availability" title="Permanent link">&para;</a></h1>
+<p>By default, the Numaflow controller is installed with <code>Active-Passive</code> HA strategy enabled, which means you can run the controller with multiple replicas (defaults to 1 in the manifests).</p>
+<p>To turn off HA, add following environment variable to the deployment spec.</p>
+<div class="highlight"><pre><span></span><code>      name: NUMAFLOW_LEADER_ELECTION_DISABLED
+      value: &quot;true&quot;
+</code></pre></div>
+<p>If HA is turned off, the controller deployment should not run with multiple replicas.</p>
 
               
             </article>
