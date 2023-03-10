@@ -70,17 +70,10 @@ message GetBufferResponse {
     required BufferInfo buffer = 1;
 }
 
-// empty request
-// GetPipelineStatus better name
 message GetPipelineStatusRequest {
     required string pipeline = 1;
 }
 
-// return message instead of name of vertex
-// string
-// "Pipeline is running well."
-// "Pipeline may have issue, %s could be cause"
-// name: PipelineStatus
 message GetPipelineStatusResponse {
     required PipelineStatus status = 1;
 }

@@ -484,8 +484,6 @@ func (m *GetBufferResponse) GetBuffer() *BufferInfo {
 	return nil
 }
 
-// empty request
-// GetPipelineStatus better name
 type GetPipelineStatusRequest struct {
 	Pipeline             *string  `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -533,11 +531,6 @@ func (m *GetPipelineStatusRequest) GetPipeline() string {
 	return ""
 }
 
-// return message instead of name of vertex
-// string
-// "Pipeline is running well."
-// "Pipeline may have issue, %s could be cause"
-// name: PipelineStatus
 type GetPipelineStatusResponse struct {
 	Status               *PipelineStatus `protobuf:"bytes,1,req,name=status" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
