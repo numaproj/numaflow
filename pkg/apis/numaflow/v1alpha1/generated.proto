@@ -99,6 +99,21 @@ message AbstractPodTemplate {
   // AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.
   // +optional
   optional bool automountServiceAccountToken = 11;
+
+  // Set DNS policy for the pod.
+  // Defaults to "ClusterFirst".
+  // Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'.
+  // DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy.
+  // To have DNS options set along with hostNetwork, you have to specify DNS policy
+  // explicitly to 'ClusterFirstWithHostNet'.
+  // +optional
+  optional string dnsPolicy = 12;
+
+  // Specifies the DNS parameters of a pod.
+  // Parameters specified here will be merged to the generated DNS
+  // configuration based on DNSPolicy.
+  // +optional
+  optional k8s.io.api.core.v1.PodDNSConfig dnsConfig = 13;
 }
 
 message AbstractVertex {

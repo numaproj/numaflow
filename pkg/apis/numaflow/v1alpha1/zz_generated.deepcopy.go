@@ -79,6 +79,11 @@ func (in *AbstractPodTemplate) DeepCopyInto(out *AbstractPodTemplate) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.DNSConfig != nil {
+		in, out := &in.DNSConfig, &out.DNSConfig
+		*out = new(v1.PodDNSConfig)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
