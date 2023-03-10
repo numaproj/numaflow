@@ -17,6 +17,7 @@ limitations under the License.
 package cmd
 
 import (
+	"context"
 	"reflect"
 
 	numaflow "github.com/numaproj/numaflow"
@@ -37,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -58,7 +60,14 @@ func Start(namespaced bool, managedNamespace string) {
 	opts := ctrl.Options{
 		MetricsBindAddress:     ":9090",
 		HealthProbeBindAddress: ":8081",
+		LeaderElection:         true,
+		LeaderElectionID:       "numaflow-controller-lock",
 	}
+
+	if sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionDisabled, "false") == "true" {
+		opts.LeaderElection = false
+	}
+
 	if namespaced {
 		opts.Namespace = managedNamespace
 	}
@@ -184,11 +193,27 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 
-	ctx := ctrl.SetupSignalHandler()
-	go autoscaler.Start(logging.WithLogger(ctx, logging.NewLogger().Named("autoscaler")))
+	// Add autoscaling runner
+	if err := mgr.Add(LeaderElectionRunner(autoscaler.Start)); err != nil {
+		logger.Fatalw("Unable to add autoscaling runner", zap.Error(err))
+	}
 
 	logger.Infow("Starting controller manager", "version", numaflow.GetVersion())
-	if err := mgr.Start(ctx); err != nil {
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Fatalw("Unable to run controller manager", zap.Error(err))
 	}
 }
+
+// LeaderElectionRunner is used to convert a function to be able to run as a LeaderElectionRunnable.
+type LeaderElectionRunner func(ctx context.Context) error
+
+func (ler LeaderElectionRunner) Start(ctx context.Context) error {
+	return ler(ctx)
+}
+
+func (ler LeaderElectionRunner) NeedLeaderElection() bool {
+	return true
+}
+
+var _ manager.Runnable = (*LeaderElectionRunner)(nil)
+var _ manager.LeaderElectionRunnable = (*LeaderElectionRunner)(nil)
