@@ -18,11 +18,12 @@ package shuffle
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestShuffle_ShuffleMessages(t *testing.T) {

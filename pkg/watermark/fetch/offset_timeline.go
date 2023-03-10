@@ -116,21 +116,28 @@ func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 	if e := t.watermarks.Front(); e != nil {
 		var elementNode = e.Value.(wmb.WMB)
 		if elementNode.Idle {
-			// if the head is already an idle wmb, the offset should be the same
+			if node.Watermark < elementNode.Watermark {
+				// should never happen
+				return
+			}
 			if elementNode.Offset == node.Offset {
 				e.Value = wmb.WMB{
 					Idle:      true,
 					Offset:    node.Offset,
 					Watermark: node.Watermark,
 				}
-			} else {
-				t.log.Errorw("The idle watermark has a different offset from the head idle watermark", zap.Int64("idleWatermark", node.Watermark),
+			} else if node.Offset > elementNode.Offset {
+				// NOTE: Valid case for the warning:
+				// If we have an active watermark between two idle watermarks, but this active watermark is skipped
+				// publishing due to "skip publishing same watermark", we will see this warning.
+				// In this case, it's safe to insert the idle watermark.
+				t.log.Warnw("The idle watermark has a larger offset from the head idle watermark", zap.Int64("idleWatermark", node.Watermark),
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
-				return
+				t.watermarks.InsertBefore(node, e)
+				t.watermarks.Remove(t.watermarks.Back())
 			}
 			return
 		}
-		// if the head is not an idle wmb, insert the idle wmb
 		if node.Watermark > elementNode.Watermark {
 			if node.Offset > elementNode.Offset {
 				t.watermarks.InsertBefore(node, e)
