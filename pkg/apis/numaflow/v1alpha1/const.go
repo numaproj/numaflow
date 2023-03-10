@@ -102,6 +102,7 @@ const (
 	EnvISBSvcJetStreamURL             = "NUMAFLOW_ISBSVC_JETSTREAM_URL"
 	EnvISBSvcJetStreamTLSEnabled      = "NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED"
 	EnvISBSvcConfig                   = "NUMAFLOW_ISBSVC_CONFIG"
+	EnvLeaderElectionDisabled         = "NUMAFLOW_LEADER_ELECTION_DISABLED"
 	EnvDebug                          = "NUMAFLOW_DEBUG"
 	EnvPPROF                          = "NUMAFLOW_PPROF"
 	EnvHealthCheckDisabled            = "NUMAFLOW_HEALTH_CHECK_DISABLED"
