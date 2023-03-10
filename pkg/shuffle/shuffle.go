@@ -18,25 +18,38 @@ package shuffle
 
 import (
 	"hash"
-	"hash/fnv"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+
+	"github.com/spaolacci/murmur3"
 )
 
 // Shuffle shuffles messages among ISB
 type Shuffle struct {
+	vertexName        string
 	bufferIdentifiers []string
 	buffersCount      int
 	hash              hash.Hash64
 }
 
 // NewShuffle accepts list of buffer identifiers(unique identifier of isb)
-// and returns new shuffle instance
-func NewShuffle(bufferIdentifiers []string) *Shuffle {
+// and returns new shuffle instance. It uses vertex-name as seed, without a seed, we will end with the problem where
+// Shuffling before the Vnth vertex creates a key to edge-buffer-index affinity,
+// which will not change from Vn to Vn+1 Reduce vertices if there is no re-keying between these vertices causing
+// idle partitions.
+func NewShuffle(vertexName string, bufferIdentifiers []string) *Shuffle {
+	// We use vertex name as seed.
+	vertexHash := murmur3.New64()
+	_, _ = vertexHash.Write([]byte(vertexName))
+
 	return &Shuffle{
+		vertexName:        vertexName,
 		bufferIdentifiers: bufferIdentifiers,
 		buffersCount:      len(bufferIdentifiers),
-		hash:              fnv.New64(),
+		// we use murmur3, we are open for suggestions. fnv did not work for us because of lack of re-keying in
+		// some cases causing idle partitions in reduce edges. We need to revisit the below link
+		// https://softwareengineering.stackexchange.com/questions/49550/which-hashing-algorithm-is-best-for-uniqueness-and-speed
+		hash: murmur3.New64WithSeed(uint32(vertexHash.Sum64())),
 	}
 }
 
