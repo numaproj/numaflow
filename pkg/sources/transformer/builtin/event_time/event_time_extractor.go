@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/araddon/dateparse"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 
 	"github.com/numaproj/numaflow/pkg/shared/expr"
@@ -32,7 +33,8 @@ type eventTimeExtractor struct {
 	// e.g. `json(payload).metadata.time`
 	expression string
 	// format specifies the layout of extracted time string.
-	// With format, we use the time.Parse function to translate the event time string representation to time.Time object.
+	// with format, eventTimeExtractor uses the time.Parse function to translate the event time string representation to time.Time object.
+	// otherwise if format is not specified, eventTimeExtractor uses dateparse to find format based on the time string.
 	format string
 }
 
@@ -42,9 +44,9 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 		return nil, fmt.Errorf(`missing "expression"`)
 	}
 
-	format, existing := args["format"]
-	if !existing {
-		return nil, fmt.Errorf("missing \"format\"")
+	var format string
+	if format, existing = args["format"]; !existing {
+		format = ""
 	}
 
 	e := eventTimeExtractor{
@@ -63,13 +65,20 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 }
 
 // apply compiles the payload to extract the new event time. If there is any error during extraction,
-// we pass on the default event time. Otherwise, we assign the new event time to the message.
+// we pass on the original input event time. Otherwise, we assign the new event time to the message.
 func (e eventTimeExtractor) apply(et time.Time, payload []byte) (functionsdk.MessageT, error) {
 	timeStr, err := expr.EvalStr(e.expression, payload)
 	if err != nil {
 		return functionsdk.MessageTToAll(et, payload), err
 	}
-	newEventTime, err := time.Parse(e.format, timeStr)
+
+	var newEventTime time.Time
+	time.Local, _ = time.LoadLocation("UTC")
+	if e.format != "" {
+		newEventTime, err = time.Parse(e.format, timeStr)
+	} else {
+		newEventTime, err = dateparse.ParseStrict(timeStr)
+	}
 	if err != nil {
 		return functionsdk.MessageTToAll(et, payload), err
 	} else {
