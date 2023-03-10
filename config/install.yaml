@@ -546,6 +546,28 @@ spec:
                             type: object
                         type: object
                     type: object
+                  dnsConfig:
+                    properties:
+                      nameservers:
+                        items:
+                          type: string
+                        type: array
+                      options:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                          type: object
+                        type: array
+                      searches:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  dnsPolicy:
+                    type: string
                   encryption:
                     type: boolean
                   imagePullSecrets:
@@ -1370,6 +1392,28 @@ spec:
                         type: object
                       automountServiceAccountToken:
                         type: boolean
+                      dnsConfig:
+                        properties:
+                          nameservers:
+                            items:
+                              type: string
+                            type: array
+                          options:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          searches:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      dnsPolicy:
+                        type: string
                       imagePullSecrets:
                         items:
                           properties:
@@ -2891,6 +2935,28 @@ spec:
                                 type: object
                             type: object
                         type: object
+                      dnsConfig:
+                        properties:
+                          nameservers:
+                            items:
+                              type: string
+                            type: array
+                          options:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          searches:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      dnsPolicy:
+                        type: string
                       imagePullSecrets:
                         items:
                           properties:
@@ -3657,6 +3723,28 @@ spec:
                                 type: object
                             type: object
                         type: object
+                      dnsConfig:
+                        properties:
+                          nameservers:
+                            items:
+                              type: string
+                            type: array
+                          options:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          searches:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      dnsPolicy:
+                        type: string
                       imagePullSecrets:
                         items:
                           properties:
@@ -4277,6 +4365,28 @@ spec:
                               type: object
                           type: object
                       type: object
+                    dnsConfig:
+                      properties:
+                        nameservers:
+                          items:
+                            type: string
+                          type: array
+                        options:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                            type: object
+                          type: array
+                        searches:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    dnsPolicy:
+                      type: string
                     imagePullSecrets:
                       items:
                         properties:
@@ -5999,12 +6109,18 @@ spec:
                             duration:
                               default: 1s
                               type: string
+                            keyCount:
+                              format: int32
+                              type: integer
                             msgSize:
                               default: 8
                               format: int32
                               type: integer
                             rpu:
                               default: 5
+                              format: int64
+                              type: integer
+                            value:
                               format: int64
                               type: integer
                           type: object
@@ -8004,6 +8120,28 @@ spec:
                         type: object
                     type: object
                 type: object
+              dnsConfig:
+                properties:
+                  nameservers:
+                    items:
+                      type: string
+                    type: array
+                  options:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        value:
+                          type: string
+                      type: object
+                    type: array
+                  searches:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              dnsPolicy:
+                type: string
               fromEdges:
                 items:
                   properties:
@@ -9767,12 +9905,18 @@ spec:
                       duration:
                         default: 1s
                         type: string
+                      keyCount:
+                        format: int32
+                        type: integer
                       msgSize:
                         default: 8
                         format: int32
                         type: integer
                       rpu:
                         default: 5
+                        format: int64
+                        type: integer
+                      value:
                         format: int64
                         type: integer
                     type: object
@@ -11345,6 +11489,25 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - ""
   resources:

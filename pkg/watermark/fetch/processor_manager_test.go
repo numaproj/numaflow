@@ -100,7 +100,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	// put values into otStore
 
-	// this first entry should not be in the offset timeline because we set the ot bucket history to 2
+	// this first entry should not be in the offset timeline because we set the wmb bucket history to 2
 	otValueByte, err := otValueToBytes(testOffset, epoch+100, false)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)

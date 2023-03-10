@@ -200,6 +200,8 @@ func TestGetPodSpec(t *testing.T) {
 			ServiceAccountName:           "sa",
 			RuntimeClassName:             pointer.String("run"),
 			AutomountServiceAccountToken: pointer.Bool(true),
+			DNSPolicy:                    corev1.DNSClusterFirstWithHostNet,
+			DNSConfig:                    &corev1.PodDNSConfig{Nameservers: []string{"aaa.aaa"}},
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
@@ -217,6 +219,8 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, "run", *s.RuntimeClassName)
 		assert.NotNil(t, s.AutomountServiceAccountToken)
 		assert.True(t, *s.AutomountServiceAccountToken)
+		assert.Equal(t, corev1.DNSClusterFirstWithHostNet, s.DNSPolicy)
+		assert.Equal(t, s.DNSConfig, testObj.Spec.DNSConfig)
 		assert.Equal(t, 1, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)

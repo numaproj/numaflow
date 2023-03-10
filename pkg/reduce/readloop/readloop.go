@@ -44,8 +44,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
@@ -153,7 +153,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	// since the watermark will be same for all the messages in the batch
 	// we can invoke remove windows only once per batch
 	var closedWindows []window.AlignedKeyedWindower
-	wm := processor.Watermark(successfullyWrittenMessages[0].Watermark)
+	wm := wmb.Watermark(successfullyWrittenMessages[0].Watermark)
 
 	closedWindows = rl.windower.RemoveWindows(time.Time(wm))
 

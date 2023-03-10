@@ -272,8 +272,13 @@ func TestAligned_RemoveWindow(t *testing.T) {
 					End:   time.Unix(180, 0),
 				},
 			},
-			input:           time.Unix(180, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{},
+			input: time.Unix(180, 0),
+			expectedWindows: []*keyed.AlignedKeyedWindow{
+				{
+					Start: time.Unix(120, 0),
+					End:   time.Unix(180, 0),
+				},
+			},
 		},
 		{
 			name: "single_window",
@@ -367,6 +372,7 @@ func TestFixed_RemoveWindows(t *testing.T) {
 			keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
 			keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
 			keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
+			keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 		}
 	)
 	for i := 0; i < 10000; i++ {
@@ -375,7 +381,7 @@ func TestFixed_RemoveWindows(t *testing.T) {
 		eventTime = eventTime.Add(length)
 	}
 	closeWin := slidWin.RemoveWindows(time.Unix(300, 0))
-	assert.Equal(t, closeWin, expectedWindows)
+	assert.Equal(t, expectedWindows, closeWin)
 }
 
 func setup(windows *Fixed, wins []*keyed.AlignedKeyedWindow) {

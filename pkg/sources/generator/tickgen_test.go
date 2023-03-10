@@ -151,7 +151,7 @@ func TestStop(t *testing.T) {
 }
 
 func TestTimeParsing(t *testing.T) {
-	rbytes := recordGenerator(8)
+	rbytes := recordGenerator(8, nil, time.Now().UnixNano())
 	parsedtime := parseTime(rbytes)
 	assert.True(t, parsedtime > 0)
 }

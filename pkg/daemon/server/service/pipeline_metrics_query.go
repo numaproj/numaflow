@@ -180,6 +180,10 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 		if res, err := ps.httpClient.Get(url); err != nil {
 			log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())
+			metricsArr[i] = &daemon.VertexMetrics{
+				Pipeline: &ps.pipeline.Name,
+				Vertex:   req.Vertex,
+			}
 		} else {
 			// expfmt Parser from prometheus to parse the metrics
 			textParser := expfmt.TextParser{}

@@ -547,6 +547,28 @@ spec:
                             type: object
                         type: object
                     type: object
+                  dnsConfig:
+                    properties:
+                      nameservers:
+                        items:
+                          type: string
+                        type: array
+                      options:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                          type: object
+                        type: array
+                      searches:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  dnsPolicy:
+                    type: string
                   encryption:
                     type: boolean
                   imagePullSecrets:
@@ -1371,6 +1393,28 @@ spec:
                         type: object
                       automountServiceAccountToken:
                         type: boolean
+                      dnsConfig:
+                        properties:
+                          nameservers:
+                            items:
+                              type: string
+                            type: array
+                          options:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
+                          searches:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      dnsPolicy:
+                        type: string
                       imagePullSecrets:
                         items:
                           properties:

@@ -27,8 +27,8 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // edgeFetcher is a fetcher between two vertices.
@@ -60,7 +60,7 @@ func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.W
 //   - We don't use this function in the regular pods in the vertex.
 //   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
 //     Meaning, in the UX (daemon service) we never delete any processor.
-func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
+func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	var debugString strings.Builder
 	var headOffset int64 = math.MinInt64
 	var epoch int64 = math.MaxInt64
@@ -81,17 +81,17 @@ func (e *edgeFetcher) GetHeadWatermark() processor.Watermark {
 	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
 	if epoch == math.MaxInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return processor.Watermark(time.UnixMilli(-1))
+		return wmb.Watermark(time.UnixMilli(-1))
 	}
-	return processor.Watermark(time.UnixMilli(epoch))
+	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
 // GetWatermark gets the smallest timestamp for the given offset
-func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
+func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("Unable to get offset from isb.Offset.Sequence()", zap.Error(err))
-		return processor.Watermark(time.Unix(-1, 0))
+		return wmb.Watermark(time.Unix(-1, 0))
 	}
 	var debugString strings.Builder
 	var epoch int64 = math.MaxInt64
@@ -115,7 +115,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) processor.Watermark {
 	}
 	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bufferName, offset, epoch)
 
-	return processor.Watermark(time.UnixMilli(epoch))
+	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
 // Close function closes the watchers.
