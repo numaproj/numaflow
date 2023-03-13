@@ -69,5 +69,3 @@ spec:
               expression: sprig.trim(string(json(payload).timestamp))
               format: 2006-01-02T15:04:05Z07:00
 ```
-
-
