@@ -54,7 +54,8 @@ spec:
       to: atoi
     - from: atoi
       to: keyed-fixed-sum
-      parallelism: 2
+      # FIXME: use parallelism of 2 after we implement reduce watermark
+      parallelism: 1
     - from: keyed-fixed-sum
       to: non-keyed-fixed-sum
     - from: non-keyed-fixed-sum
