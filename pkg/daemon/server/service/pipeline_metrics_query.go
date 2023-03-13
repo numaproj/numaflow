@@ -246,25 +246,42 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 		vertexReq.Pipeline = req.Pipeline
 		vertexReq.Vertex = &vertex.Name
 		vertexResp, err := ps.GetVertexMetrics(ctx, vertexReq)
+		// if err is not nil, more than likely autoscaling is down to 0 and metrics are not available
 		if err != nil {
-			return nil, err
-		}
-		// check default pending msg and processing rates
-		if vertexResp.VertexMetrics[0].Pendings["default"] > 0 && vertexResp.VertexMetrics[0].ProcessingRates["default"] == 0 {
 			resp.Status = &daemon.PipelineStatus{
-				Health:  pointer.Bool(false),
-				Message: pointer.String("Pipeline may have issue."),
+				Health:  pointer.String(metrics.PipelineStatusUnknown),
+				Message: pointer.String("Pipeline health is unknown."),
 			}
 			return resp, nil
+		}
+
+		for _, vertexMetrics := range vertexResp.VertexMetrics {
+			if pending, ok := vertexMetrics.Pendings["default"]; ok {
+				if processingRate, ok := vertexMetrics.ProcessingRates["default"]; ok {
+					if pending > 0 && processingRate == 0 {
+						resp.Status = &daemon.PipelineStatus{
+							Health:  pointer.String(metrics.PipelineStatusError),
+							Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
+						}
+					}
+				}
+			} else {
+				if vertexMetrics.Pendings["1m"] > 0 && vertexMetrics.ProcessingRates["1m"] == 0 {
+					resp.Status = &daemon.PipelineStatus{
+						Health:  pointer.String(metrics.PipelineStatusError),
+						Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
+					}
+				}
+			}
 		}
 	}
 
 	resp.Status = &daemon.PipelineStatus{
-		Health:  pointer.Bool(true),
+		Health:  pointer.String(metrics.PipelineStatusOK),
 		Message: pointer.String("Pipeline has no issue."),
 	}
-	return resp, nil
 
+	return resp, nil
 }
 
 func getBufferLimits(pl *v1alpha1.Pipeline, edge v1alpha1.Edge) (bufferLength int64, bufferUsageLimit float64) {

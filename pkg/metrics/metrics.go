@@ -46,6 +46,10 @@ const (
 
 	VertexProcessingRate  = "vertex_processing_rate"
 	VertexPendingMessages = "vertex_pending_messages"
+
+	PipelineStatusOK      = "OK"
+	PipelineStatusError   = "Error"
+	PipelineStatusUnknown = "Unknown"
 )
 
 var (

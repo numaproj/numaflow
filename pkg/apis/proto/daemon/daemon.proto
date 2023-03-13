@@ -49,7 +49,7 @@ message VertexMetrics {
 
 // PipelineStatus
 message PipelineStatus {
-  required bool health = 1;
+  required string health = 1;
   required string message = 2;
 }
 
