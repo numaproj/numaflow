@@ -24,8 +24,8 @@ import (
 type MessageKind int16
 
 const (
-	Data MessageKind = 0 // Data payload
-	WMB              = 1 // Watermark Barrier
+	Data MessageKind = iota // Data payload
+	WMB                     // Watermark Barrier
 )
 
 func (mta MessageKind) String() string {
