@@ -67,5 +67,5 @@ spec:
             name: eventTimeExtractor
             kwargs:
               expression: sprig.trim(string(json(payload).timestamp))
-              format: 2006-01-02T15:04:05Z07:00
+              format: 2006-01-02T15:04:05Z07:00 # Remove this line if the event time is in epoch format.
 ```
