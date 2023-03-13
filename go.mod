@@ -7,6 +7,7 @@ require (
 	github.com/Shopify/sarama v1.30.1
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/antonmedv/expr v1.9.0
+	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/gavv/httpexpect/v2 v2.3.1
 	github.com/gin-contrib/static v0.0.2-0.20220606235426-ae09b2ea7e39
@@ -30,6 +31,7 @@ require (
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/common v0.32.1
 	github.com/soheilhy/cmux v0.1.5
+	github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.2

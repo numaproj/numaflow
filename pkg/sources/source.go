@@ -221,7 +221,7 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
 		if edge.Parallelism != nil && *edge.Parallelism > 1 {
-			s := shuffle.NewShuffle(dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge))
+			s := shuffle.NewShuffle(sp.VertexInstance.Vertex.GetName(), dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge))
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}

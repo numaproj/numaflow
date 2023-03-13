@@ -77,6 +77,19 @@ type AbstractPodTemplate struct {
 	// AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.
 	// +optional
 	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty" protobuf:"bytes,11,opt,name=automountServiceAccountToken"`
+	// Set DNS policy for the pod.
+	// Defaults to "ClusterFirst".
+	// Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'.
+	// DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy.
+	// To have DNS options set along with hostNetwork, you have to specify DNS policy
+	// explicitly to 'ClusterFirstWithHostNet'.
+	// +optional
+	DNSPolicy corev1.DNSPolicy `json:"dnsPolicy,omitempty" protobuf:"bytes,12,opt,name=dnsPolicy,casttype=DNSPolicy"`
+	// Specifies the DNS parameters of a pod.
+	// Parameters specified here will be merged to the generated DNS
+	// configuration based on DNSPolicy.
+	// +optional
+	DNSConfig *corev1.PodDNSConfig `json:"dnsConfig,omitempty" protobuf:"bytes,13,opt,name=dnsConfig"`
 }
 
 // ApplyToPodSpec updates the PodSpec with the values in the AbstractPodTemplate
@@ -91,6 +104,8 @@ func (apt *AbstractPodTemplate) ApplyToPodSpec(ps *corev1.PodSpec) {
 	ps.ServiceAccountName = apt.ServiceAccountName
 	ps.RuntimeClassName = apt.RuntimeClassName
 	ps.AutomountServiceAccountToken = apt.AutomountServiceAccountToken
+	ps.DNSPolicy = apt.DNSPolicy
+	ps.DNSConfig = apt.DNSConfig
 }
 
 // ApplyToPodTemplateSpec updates the PodTemplateSpec with the values in the AbstractPodTemplate

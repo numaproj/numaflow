@@ -21,9 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestShuffle_ShuffleMessages(t *testing.T) {
@@ -82,7 +83,7 @@ func TestShuffle_ShuffleMessages(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// create shuffle with buffer id list
-			shuffler := NewShuffle(test.buffersIdentifiers)
+			shuffler := NewShuffle(test.name, test.buffersIdentifiers)
 
 			bufferIdMessageMap := shuffler.ShuffleMessages(test.messages)
 			sum := 0
