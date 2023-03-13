@@ -1,0 +1,40 @@
+# Built-in Functions
+
+Numaflow provides some built-in source data transformers that can be used directly.
+
+**Filter**
+
+A `filter` built-in transformer filters the message based on expression. `payload` keyword represents message object.
+see documentation for filter expression [here](filter.md#expression)
+
+```yaml
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+        transformer:
+          builtin:
+            name: filter
+            kwargs:
+              expression: int(json(payload).id) < 100
+```
+
+**Event Time Extractor**
+
+A `eventTimeExtractor` built-in transformer extracts event time from the payload of the message, based on expression and user-specified format. `payload` keyword represents message object.
+see documentation for event time extractor expression [here](event-time-extractor.md#expression)
+
+```yaml
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+        transformer:
+          builtin:
+            name: eventTimeExtractor
+            kwargs:
+              expression: json(payload).item[0].time
+              format: 2006-01-02T15:04:05Z07:00
+```
