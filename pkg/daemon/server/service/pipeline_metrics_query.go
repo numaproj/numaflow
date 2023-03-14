@@ -51,6 +51,12 @@ type pipelineMetadataQuery struct {
 	watermarkFetchers map[string][]fetch.Fetcher
 }
 
+const (
+	PipelineStatusOK      = "OK"
+	PipelineStatusError   = "Error"
+	PipelineStatusUnknown = "Unknown"
+)
+
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
 func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline, wmFetchers map[string][]fetch.Fetcher) (*pipelineMetadataQuery, error) {
 	var err error
@@ -249,35 +255,35 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 		// if err is not nil, more than likely autoscaling is down to 0 and metrics are not available
 		if err != nil {
 			resp.Status = &daemon.PipelineStatus{
-				Health:  pointer.String(metrics.PipelineStatusUnknown),
-				Message: pointer.String("Pipeline health is unknown."),
+				Status:  pointer.String(PipelineStatusUnknown),
+				Message: pointer.String("Pipeline status is unknown."),
 			}
 			return resp, nil
 		}
 
+		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
 		for _, vertexMetrics := range vertexResp.VertexMetrics {
 			if pending, ok := vertexMetrics.Pendings["default"]; ok {
 				if processingRate, ok := vertexMetrics.ProcessingRates["default"]; ok {
 					if pending > 0 && processingRate == 0 {
 						resp.Status = &daemon.PipelineStatus{
-							Health:  pointer.String(metrics.PipelineStatusError),
+							Status:  pointer.String(PipelineStatusError),
 							Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
 						}
 					}
 				}
-			} else {
-				if vertexMetrics.Pendings["1m"] > 0 && vertexMetrics.ProcessingRates["1m"] == 0 {
-					resp.Status = &daemon.PipelineStatus{
-						Health:  pointer.String(metrics.PipelineStatusError),
-						Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
-					}
+			}
+			if vertexMetrics.Pendings["1m"] > 0 && vertexMetrics.ProcessingRates["1m"] == 0 {
+				resp.Status = &daemon.PipelineStatus{
+					Status:  pointer.String(PipelineStatusError),
+					Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
 				}
 			}
 		}
 	}
 
 	resp.Status = &daemon.PipelineStatus{
-		Health:  pointer.String(metrics.PipelineStatusOK),
+		Status:  pointer.String(PipelineStatusOK),
 		Message: pointer.String("Pipeline has no issue."),
 	}
 

@@ -239,7 +239,7 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 		},
 	}
 
-	healthyPipelineResponse := daemon.PipelineStatus{Health: pointer.String("OK"), Message: pointer.String("Pipeline has no issue.")}
+	healthyPipelineResponse := daemon.PipelineStatus{Status: pointer.String("OK"), Message: pointer.String("Pipeline has no issue.")}
 
 	req := &daemon.GetPipelineStatusRequest{Pipeline: &pipelineName}
 
