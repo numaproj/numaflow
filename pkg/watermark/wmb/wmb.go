@@ -66,7 +66,8 @@ type WMBChecker struct {
 }
 
 // NewWMBChecker returns a WMBChecker to check if the wmb is idle.
-// If all the iterations get the same wmb, the wmb is
+// If all the iterations get the same wmb, the wmb is considered as valid
+// and will be used to publish a wmb to pods of the next vertex.
 func NewWMBChecker(numOfIteration int) WMBChecker {
 	return WMBChecker{
 		counter: 0,
