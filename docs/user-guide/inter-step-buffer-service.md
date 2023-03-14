@@ -2,7 +2,7 @@
 
 Inter-Step Buffer Service is the service to provide [Inter-Step Buffers](./inter-step-buffer.md).
 
-An Inter-Step Buffer Service is describe by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), it is required to be existing in a namespace before Pipeline objects are created. A sample `InterStepBufferService` with JetStream implementation looks like below.
+An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), it is required to be existing in a namespace before Pipeline objects are created. A sample `InterStepBufferService` with JetStream implementation looks like below.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
