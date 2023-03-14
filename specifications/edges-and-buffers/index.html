@@ -601,6 +601,128 @@
 
             
           
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_5" type="checkbox" id="__nav_3_2_5" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_2_5">
+          Data Transformer
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Data Transformer" data-md-level="3">
+        <label class="md-nav__title" for="__nav_3_2_5">
+          <span class="md-nav__icon md-icon"></span>
+          Data Transformer
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/transformer/overview/" class="md-nav__link">
+        Overview
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_5_2" type="checkbox" id="__nav_3_2_5_2" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_2_5_2">
+          Built-in Transformers
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Built-in Transformers" data-md-level="4">
+        <label class="md-nav__title" for="__nav_3_2_5_2">
+          <span class="md-nav__icon md-icon"></span>
+          Built-in Transformers
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/" class="md-nav__link">
+        Overview
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/filter/" class="md-nav__link">
+        Filter
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
+        Event Time Extractor
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
         </ul>
       </nav>
     </li>
@@ -1600,14 +1722,14 @@
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sink</span>
 </code></pre></div>
 <p><code>Buffer</code> is a concept different from <code>edge</code> but has lots of connections. Usually, each <code>edge</code> has one or more corresponding buffers, depending on the to vertex type (map or reduce). If the to vertex is a reduce and the edge parallelism &gt; 1, there will be multiple buffers defined for that edge.</p>
-<p><code>Buffers</code> are not only defined for <code>edges</code>, but also for <code>Source</code> and <code>Sink</code> vertices - each <code>Source</code> and <code>Sink</code> vertex has a coresponding <code>buffer</code>.</p>
+<p><code>Buffers</code> are not only defined for <code>edges</code>, but also for <code>Source</code> and <code>Sink</code> vertices - each <code>Source</code> and <code>Sink</code> vertex has a corresponding <code>buffer</code>.</p>
 <p>In summary, there are 3 types of <code>buffers</code> in a pipeline:</p>
 <ul>
 <li>Edge Buffer</li>
 <li>Source Buffer</li>
 <li>Sink Buffer</li>
 </ul>
-<p>Each buffer has a name, the naming convertion for different type of buffers can be found in the <a href="https://github.com/numaproj/numaflow/blob/main/pkg/apis/numaflow/v1alpha1/vertex_types.go">source code</a>.</p>
+<p>Each buffer has a name, the naming conversions for different type of buffers can be found in the <a href="https://github.com/numaproj/numaflow/blob/main/pkg/apis/numaflow/v1alpha1/vertex_types.go">source code</a>.</p>
 <p><code>Buffer</code> is only used internally, it's transparent to the users. Each Inter-Step Buffer implementation should have something physical to map to the <code>buffers</code>. For example, In JetStream Inter-Step ISB implementation, a K/V bucket will be created for a <code>Source Buffer</code> or a <code>Sink Buffer</code>, and a K/V bucket plus a Stream will be created for a <code>Edge Buffer</code>. These buffer management operations are done by K8s jobs spawned by the controllers during pipeline creation and deletion.</p>
 
               
