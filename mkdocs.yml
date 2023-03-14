@@ -49,6 +49,12 @@ nav:
           - user-guide/sources/http.md
           - user-guide/sources/kafka.md
           - user-guide/sources/nats.md
+          - Data Transformer:
+              - Overview: "user-guide/sources/transformer/overview.md"
+              - Built-in Transformers:
+                  - Overview: "user-guide/sources/transformer/builtin-transformers/README.md"
+                  - Filter: "user-guide/sources/transformer/builtin-transformers/filter.md"
+                  - Event Time Extractor: "user-guide/sources/transformer/builtin-transformers/event-time-extractor.md"
       - Sinks:
           - user-guide/sinks/kafka.md
           - user-guide/sinks/log.md
