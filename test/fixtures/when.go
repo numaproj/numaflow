@@ -132,23 +132,21 @@ func (w *When) DeletePipelineAndWait() *When {
 		w.t.Fatal(err)
 	}
 
-	// timeout is 30 seconds because we want to make sure there's no pending messages
-	timeout := 30 * time.Second
+	timeout := defaultTimeout
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyPipelineName, w.pipeline.Name)
-	fieldSelector := "status.phase!=Succeeded"
 	for {
 		select {
 		case <-ctx.Done():
 			w.t.Fatalf("Timeout after %v waiting for pipeline pods terminating", timeout)
 		default:
 		}
-		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: fieldSelector})
+		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
 			w.t.Fatalf("Error getting pipeline pods: %v", err)
 		}
-		w.t.Logf("%d remaining to be deleted...", len(podList.Items))
 		if len(podList.Items) == 0 {
 			return w
 		}

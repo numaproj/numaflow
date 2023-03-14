@@ -154,15 +154,16 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		rl.log.Errorw("Failed to write messages", zap.Int("totalMessages", len(messages)), zap.Int("writtenMessage", len(successfullyWrittenMessages)))
 	}
 
-	if len(successfullyWrittenMessages) == 0 {
-		return
-	}
-
-	// ack successful messages
-	rl.ackMessages(ctx, successfullyWrittenMessages)
+	// ack the control messages
 	if len(ctrlMessages) != 0 {
 		rl.ackMessages(ctx, ctrlMessages)
 	}
+
+	if len(successfullyWrittenMessages) == 0 {
+		return
+	}
+	// ack successful messages
+	rl.ackMessages(ctx, successfullyWrittenMessages)
 
 	// close any windows that need to be closed.
 	// since the watermark will be same for all the messages in the batch
