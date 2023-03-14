@@ -132,7 +132,8 @@ func (w *When) DeletePipelineAndWait() *When {
 		w.t.Fatal(err)
 	}
 
-	timeout := defaultTimeout
+	// timeout is 30 seconds because we want to make sure there's no pending messages
+	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyPipelineName, w.pipeline.Name)
