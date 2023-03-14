@@ -48,7 +48,7 @@ spec:
 
 `Buffer` is a concept different from `edge` but has lots of connections. Usually, each `edge` has one or more corresponding buffers, depending on the to vertex type (map or reduce). If the to vertex is a reduce and the edge parallelism > 1, there will be multiple buffers defined for that edge.
 
-`Buffers` are not only defined for `edges`, but also for `Source` and `Sink` vertices - each `Source` and `Sink` vertex has a coresponding `buffer`.
+`Buffers` are not only defined for `edges`, but also for `Source` and `Sink` vertices - each `Source` and `Sink` vertex has a corresponding `buffer`.
 
 In summary, there are 3 types of `buffers` in a pipeline:
 
@@ -56,6 +56,6 @@ In summary, there are 3 types of `buffers` in a pipeline:
 - Source Buffer
 - Sink Buffer
 
-Each buffer has a name, the naming convertion for different type of buffers can be found in the [source code](https://github.com/numaproj/numaflow/blob/main/pkg/apis/numaflow/v1alpha1/vertex_types.go).
+Each buffer has a name, the naming conversions for different type of buffers can be found in the [source code](https://github.com/numaproj/numaflow/blob/main/pkg/apis/numaflow/v1alpha1/vertex_types.go).
 
 `Buffer` is only used internally, it's transparent to the users. Each Inter-Step Buffer implementation should have something physical to map to the `buffers`. For example, In JetStream Inter-Step ISB implementation, a K/V bucket will be created for a `Source Buffer` or a `Sink Buffer`, and a K/V bucket plus a Stream will be created for a `Edge Buffer`. These buffer management operations are done by K8s jobs spawned by the controllers during pipeline creation and deletion.
