@@ -604,7 +604,6 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, message
 // A WMB is only created if this a new
 func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter, wm wmb.Watermark) {
 	var bufferName = toBuffer.GetName()
-	var wmbMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
 
 	if isdf.wmbOffset[bufferName] == nil {
 		if isdf.opts.vertexType == dfv1.VertexTypeSink {
@@ -613,7 +612,8 @@ func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter
 			// so, we do nothing here
 		} else {
 			// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
-			writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, wmbMessage)
+			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
+			writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, ctrlMessage)
 			if err != nil {
 				isdf.opts.logger.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(err))
 				return
