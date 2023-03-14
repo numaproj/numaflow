@@ -23,7 +23,9 @@ spec:
 **Event Time Extractor**
 
 A `eventTimeExtractor` built-in transformer extracts event time from the payload of the message, based on expression and user-specified format. `payload` keyword represents message object.
-see documentation for event time extractor expression [here](event-time-extractor.md#expression)
+see documentation for event time extractor expression [here](event-time-extractor.md#expression).
+
+If you want to handle event times in epoch format, you can find helpful resource [here](event-time-extractor.md#epoch-format).
 
 ```yaml
 spec:
@@ -36,5 +38,5 @@ spec:
             name: eventTimeExtractor
             kwargs:
               expression: json(payload).item[0].time
-              format: 2006-01-02T15:04:05Z07:00 # Remove this line if the event time is in epoch format.
+              format: 2006-01-02T15:04:05Z07:00
 ```
