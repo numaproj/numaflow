@@ -107,7 +107,8 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 	}).Observe(float64(time.Since(startTime).Microseconds()))
 
-	processorWM := wmb.Watermark(p.PartitionID.Start)
+	// millisecond is the lowest granularity currently supported.
+	processorWM := wmb.Watermark(p.PartitionID.End.Add(-1 * time.Millisecond))
 
 	messagesToStep := p.whereToStep()
 
