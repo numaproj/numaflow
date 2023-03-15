@@ -221,7 +221,7 @@ func TestOffsetTimeline_GetOffset(t *testing.T) {
 	}
 }
 
-func TestOffsetTimeline(t *testing.T) {
+func TestOffsetTimeline_PutReferred(t *testing.T) {
 	var (
 		ctx            = context.Background()
 		testTimeline   = NewOffsetTimeline(ctx, 10)
@@ -281,6 +281,55 @@ func TestOffsetTimeline(t *testing.T) {
 
 	testTimeline.PutReferred(wmb.WMB{Watermark: 34, Offset: 38}) // inserted
 	assert.Equal(t, "[34:38] -> [33:37] -> [32:36] -> [30:35] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21]", testTimeline.Dump())
+
+}
+
+func TestOffsetTimeline_PutIdle(t *testing.T) {
+	var (
+		ctx          = context.Background()
+		testTimeline = NewOffsetTimeline(ctx, 10)
+		setUps       = []wmb.WMB{
+			{Idle: false, Watermark: 10, Offset: 9},
+			{Idle: false, Watermark: 12, Offset: 20},
+			{Idle: false, Watermark: 13, Offset: 21},
+			{Idle: false, Watermark: 15, Offset: 24},
+			{Idle: false, Watermark: 15, Offset: 25}, // will overwrite the previous one
+			{Idle: false, Watermark: 20, Offset: 26},
+			{Idle: false, Watermark: 23, Offset: 27},
+			{Idle: false, Watermark: 28, Offset: 30},
+			{Idle: false, Watermark: 29, Offset: 35},
+			{Idle: false, Watermark: 32, Offset: 36},
+		}
+	)
+
+	for _, watermark := range setUps {
+		testTimeline.Put(watermark)
+		assert.Equal(t, watermark, testTimeline.GetHeadWMB())
+		assert.Equal(t, watermark.Watermark, testTimeline.GetHeadWatermark(), watermark.Watermark)
+		assert.Equal(t, watermark.Offset, testTimeline.GetHeadOffset())
+	}
+	assert.Equal(t, "[32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20] -> [10:9] -> [-1:-1]", testTimeline.Dump())
+
+	testTimeline.PutIdle(wmb.WMB{Idle: true, Watermark: 33, Offset: 37}) // insert
+	assert.Equal(t, "[IDLE 33:37] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20] -> [10:9]", testTimeline.Dump())
+
+	testTimeline.Put(wmb.WMB{Idle: false, Watermark: 34, Offset: 38}) // insert
+	assert.Equal(t, "[34:38] -> [IDLE 33:37] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(wmb.WMB{Idle: true, Watermark: 34, Offset: 39}) // same watermark, update
+	assert.Equal(t, "[IDLE 34:39] -> [IDLE 33:37] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(wmb.WMB{Idle: true, Watermark: 36, Offset: 39}) // same offset, update
+	assert.Equal(t, "[IDLE 36:39] -> [IDLE 33:37] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(wmb.WMB{Idle: true, Watermark: 36, Offset: 38}) // smaller offset, ignore
+	assert.Equal(t, "[IDLE 36:39] -> [IDLE 33:37] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(wmb.WMB{Idle: true, Watermark: 35, Offset: 39}) // smaller watermark, ignore
+	assert.Equal(t, "[IDLE 36:39] -> [IDLE 33:37] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21] -> [12:20]", testTimeline.Dump())
+
+	testTimeline.PutIdle(wmb.WMB{Idle: true, Watermark: 37, Offset: 40}) // larger offset, insert
+	assert.Equal(t, "[IDLE 37:40] -> [IDLE 36:39] -> [IDLE 33:37] -> [32:36] -> [29:35] -> [28:30] -> [23:27] -> [20:26] -> [15:25] -> [13:21]", testTimeline.Dump())
 
 }
 

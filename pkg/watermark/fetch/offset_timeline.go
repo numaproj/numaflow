@@ -284,7 +284,11 @@ func (t *OffsetTimeline) Dump() string {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		builder.WriteString(fmt.Sprintf("[%d:%d] -> ", e.Value.(wmb.WMB).Watermark, e.Value.(wmb.WMB).Offset))
+		if e.Value.(wmb.WMB).Idle {
+			builder.WriteString(fmt.Sprintf("[IDLE %d:%d] -> ", e.Value.(wmb.WMB).Watermark, e.Value.(wmb.WMB).Offset))
+		} else {
+			builder.WriteString(fmt.Sprintf("[%d:%d] -> ", e.Value.(wmb.WMB).Watermark, e.Value.(wmb.WMB).Offset))
+		}
 	}
 	if builder.Len() < 4 {
 		return ""
