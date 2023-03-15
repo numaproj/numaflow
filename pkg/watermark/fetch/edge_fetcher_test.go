@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
@@ -146,6 +147,35 @@ func TestBuffer_GetWatermark(t *testing.T) {
 			// this will always be 17 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
 			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.UnixMilli(17).In(location))
+		})
+	}
+}
+
+func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
+	type fields struct {
+		ctx              context.Context
+		bufferName       string
+		storeWatcher     store.WatermarkStoreWatcher
+		processorManager *ProcessorManager
+		log              *zap.SugaredLogger
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   wmb.WMB
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &edgeFetcher{
+				ctx:              tt.fields.ctx,
+				bufferName:       tt.fields.bufferName,
+				storeWatcher:     tt.fields.storeWatcher,
+				processorManager: tt.fields.processorManager,
+				log:              tt.fields.log,
+			}
+			assert.Equalf(t, tt.want, e.GetHeadWMB(), "GetHeadWMB()")
 		})
 	}
 }
