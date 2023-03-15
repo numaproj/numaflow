@@ -50,4 +50,5 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/edges/:edge", handler.GetPipelineEdge)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics", handler.GetVertexMetrics)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks", handler.GetPipelineWatermarks)
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/status", handler.GetPipelineStatus)
 }
