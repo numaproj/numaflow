@@ -208,7 +208,14 @@ func TestListBuffers(t *testing.T) {
 func TestGetPipelineStatus(t *testing.T) {
 	pipelineName := "simple-pipeline"
 	pipeline := &v1alpha1.Pipeline{
-		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: pipelineName,
+		},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "cat"},
+			},
+		},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName)
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil)
