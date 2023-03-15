@@ -160,6 +160,7 @@ func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 }
 
 // PutReferred inserts the referred WMB which replaces the idle watermark into list. It ensures that the list will remain sorted after the insert.
+// TODO: clean up and refine the other two put methods after we remove copying over strategy
 func (t *OffsetTimeline) PutReferred(node wmb.WMB) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
