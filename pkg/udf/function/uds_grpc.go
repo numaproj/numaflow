@@ -189,7 +189,7 @@ readLoop:
 		writeMessage := &isb.Message{
 			Header: isb.Header{
 				MessageInfo: isb.MessageInfo{
-					EventTime: partitionID.Start,
+					EventTime: partitionID.End.Add(-1 * time.Millisecond),
 					IsLate:    false,
 				},
 				Key: key,
