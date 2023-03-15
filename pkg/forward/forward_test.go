@@ -152,14 +152,13 @@ type testWMBFetcher struct {
 }
 
 // RevertBoolValue set WMBTestSameHeadWMB and WMBTestDiffHeadWMB to opposite value
-func (t *testWMBFetcher) RevertBoolValue() error {
+func (t *testWMBFetcher) RevertBoolValue() {
 	t.sameLock.Lock()
 	defer t.sameLock.Unlock()
 	t.diffLock.Lock()
 	defer t.diffLock.Unlock()
 	t.WMBTestSameHeadWMB = !t.WMBTestSameHeadWMB
 	t.WMBTestDiffHeadWMB = !t.WMBTestDiffHeadWMB
-	return nil
 }
 
 func (t *testWMBFetcher) Close() error {
