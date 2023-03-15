@@ -201,6 +201,37 @@ should be automatically mounted.
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>dnsPolicy</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#dnspolicy-v1-core">
+Kubernetes core/v1.DNSPolicy </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Set DNS policy for the pod. Defaults to “ClusterFirst”. Valid values are
+‘ClusterFirstWithHostNet’, ‘ClusterFirst’, ‘Default’ or ‘None’. DNS
+parameters given in DNSConfig will be merged with the policy selected
+with DNSPolicy. To have DNS options set along with hostNetwork, you have
+to specify DNS policy explicitly to ‘ClusterFirstWithHostNet’.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>dnsConfig</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#poddnsconfig-v1-core">
+Kubernetes core/v1.PodDNSConfig </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Specifies the DNS parameters of a pod. Parameters specified here will be
+merged to the generated DNS configuration based on DNSPolicy.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.AbstractVertex">

@@ -127,12 +127,14 @@ export default function Graph(props: GraphProps) {
 
   // This has been added to make sure that edge container refreshes on edges being refreshed
   useEffect(() => {
+    let flag = false;
     edges.forEach((dataEdge) => {
       const edge = {} as Edge;
-      if (dataEdge.id === edgeId) {
+      if (dataEdge.id === edgeId && !flag) {
         edge.data = dataEdge.data;
         edge.label = dataEdge.label;
         edge.id = dataEdge.id;
+        flag = true;
         setEdge(edge);
       }
     });

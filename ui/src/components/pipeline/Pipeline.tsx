@@ -85,7 +85,7 @@ export function Pipeline() {
           )
             .then((response) => response.json())
             .then((json) => {
-              const vertexMetrics = {ratePerMin: "0.00", ratePerFiveMin: "0.00", ratePerFifteenMin: "0.00", podMetrics: null} as VertexMetrics;
+              const vertexMetrics = {ratePerMin: "0.00", ratePerFiveMin: "0.00", ratePerFifteenMin: "0.00", podMetrics: null, error: false} as VertexMetrics;
               let ratePerMin = 0.0, ratePerFiveMin = 0.0, ratePerFifteenMin = 0.0;
               // keeping processing rates as summation of pod values
               json.map((pod) => {
@@ -99,12 +99,18 @@ export function Pipeline() {
                   if ("15m" in pod["processingRates"]) {
                     ratePerFifteenMin += pod["processingRates"]["15m"];
                   }
+                } else {
+                  if (vertexPods && vertexPods.get(vertex.name) !== 0) {
+                    vertexMetrics.error = true;
+                  }
                 }
               })
               vertexMetrics.ratePerMin = ratePerMin.toFixed(2);
               vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
               vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
-              vertexMetrics.podMetrics = json;
+              if (vertexPods && vertexPods.get(vertex.name) !== 0) {
+                vertexMetrics.podMetrics = json;
+              }
               vertexToMetricsMap.set(vertex.name, vertexMetrics);
             });
         })
@@ -112,7 +118,7 @@ export function Pipeline() {
         .then(() => setVertexMetrics(vertexToMetricsMap))
         .catch(console.error);
     }
-  }, [pipeline]);
+  }, [pipeline, vertexPods]);
 
   // This useEffect is used to obtain metrics for a given vertex in a pipeline and refreshes every 5 minutes
   useEffect(() => {

@@ -165,6 +165,17 @@ export function Pods(props: PodsProps) {
       errors.push(<Box  key = {podsDetailError}>{`Pods metric map undefined`}</Box>);
     }
     return <Box>{errors}</Box>;
+  } else {
+    let found = false;
+    pods.forEach((pod) => {
+      if (podsDetailMap.has(pod.name)) {
+        found = true;
+      }
+    })
+
+    if (!found) {
+      return <Box  key = {"load-pods"}>{`Pods are not up yet...`}</Box>;
+    }
   }
 
   return (

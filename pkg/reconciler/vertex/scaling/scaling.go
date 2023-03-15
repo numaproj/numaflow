@@ -324,11 +324,11 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 // Start function starts the autoscaling worker group.
 // Each worker keeps picking up scaling tasks (which contains vertex keys) to calculate the desired replicas,
 // and patch the vetex spec with the new replica number if needed.
-func (s *Scaler) Start(ctx context.Context) {
-	log := logging.FromContext(ctx)
+func (s *Scaler) Start(ctx context.Context) error {
+	log := logging.FromContext(ctx).Named("autoscaler")
 	log.Info("Starting autoscaler...")
 	keyCh := make(chan string)
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, log))
 	defer cancel()
 	// Worker group
 	for i := 1; i <= s.options.workers; i++ {
@@ -356,7 +356,7 @@ func (s *Scaler) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Info("Shutting down scaling job assigner")
-			return
+			return nil
 		default:
 			assign()
 		}
