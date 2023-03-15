@@ -214,6 +214,9 @@ func TestGetPipelineStatus(t *testing.T) {
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil)
 	assert.NoError(t, err)
 
+	OKPipelineResponse := daemon.PipelineStatus{Status: pointer.String("OK"), Message: pointer.String("Pipeline has no issue.")}
+	ErrorPipelineResponse := daemon.PipelineStatus{Status: pointer.String("Error"), Message: pointer.String("Pipeline has an error. Vertex cat is not processing pending messages.")}
+
 	metricsResponse := `# HELP vertex_processing_rate Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.
 # TYPE vertex_processing_rate gauge
 vertex_processing_rate{period="15m",pipeline="simple-pipeline",vertex="cat"} 4.894736842105263
@@ -239,11 +242,38 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 		},
 	}
 
-	healthyPipelineResponse := daemon.PipelineStatus{Status: pointer.String("OK"), Message: pointer.String("Pipeline has no issue.")}
-
 	req := &daemon.GetPipelineStatusRequest{Pipeline: &pipelineName}
 
 	resp, err := pipelineMetricsQueryService.GetPipelineStatus(context.Background(), req)
 	assert.NoError(t, err)
-	assert.Equal(t, &healthyPipelineResponse, resp.Status)
+	assert.Equal(t, &OKPipelineResponse, resp.Status)
+
+	errorMetricsResponse := `# HELP vertex_processing_rate Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.
+# TYPE vertex_processing_rate gauge
+vertex_processing_rate{period="15m",pipeline="simple-pipeline",vertex="cat"} 0
+vertex_processing_rate{period="1m",pipeline="simple-pipeline",vertex="cat"} 0
+vertex_processing_rate{period="5m",pipeline="simple-pipeline",vertex="cat"} 0
+vertex_processing_rate{period="default",pipeline="simple-pipeline",vertex="cat"} 0
+
+# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
+# TYPE vertex_pending_messages gauge
+vertex_pending_messages{period="15m",pipeline="simple-pipeline",vertex="cat"} 4.011
+vertex_pending_messages{period="1m",pipeline="simple-pipeline",vertex="cat"} 5.333
+vertex_pending_messages{period="5m",pipeline="simple-pipeline",vertex="cat"} 6.002
+vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"} 7.00002
+`
+	ioReader = io.NopCloser(bytes.NewReader([]byte(errorMetricsResponse)))
+
+	pipelineMetricsQueryService.httpClient = &mockHttpClient{
+		MockGet: func(url string) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       ioReader,
+			}, nil
+		},
+	}
+
+	resp, err = pipelineMetricsQueryService.GetPipelineStatus(context.Background(), req)
+	assert.NoError(t, err)
+	assert.Equal(t, &ErrorPipelineResponse, resp.Status)
 }

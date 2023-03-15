@@ -949,7 +949,6 @@ type DaemonServiceClient interface {
 	GetVertexMetrics(ctx context.Context, in *GetVertexMetricsRequest, opts ...grpc.CallOption) (*GetVertexMetricsResponse, error)
 	// GetPipelineWatermarks return the watermark of the given pipeline
 	GetPipelineWatermarks(ctx context.Context, in *GetPipelineWatermarksRequest, opts ...grpc.CallOption) (*GetPipelineWatermarksResponse, error)
-	// GetPipelineStatus () returns (PipelineStatus) // status: bool and string
 	GetPipelineStatus(ctx context.Context, in *GetPipelineStatusRequest, opts ...grpc.CallOption) (*GetPipelineStatusResponse, error)
 }
 
@@ -1013,7 +1012,6 @@ type DaemonServiceServer interface {
 	GetVertexMetrics(context.Context, *GetVertexMetricsRequest) (*GetVertexMetricsResponse, error)
 	// GetPipelineWatermarks return the watermark of the given pipeline
 	GetPipelineWatermarks(context.Context, *GetPipelineWatermarksRequest) (*GetPipelineWatermarksResponse, error)
-	// GetPipelineStatus () returns (PipelineStatus) // status: bool and string
 	GetPipelineStatus(context.Context, *GetPipelineStatusRequest) (*GetPipelineStatusResponse, error)
 }
 

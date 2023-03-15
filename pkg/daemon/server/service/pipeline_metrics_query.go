@@ -249,7 +249,6 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 	// loop over vertices and get metrics to check pending messages vs processing rate
 	for _, vertex := range vertices {
 		vertexReq := new(daemon.GetVertexMetricsRequest)
-		vertexReq.Pipeline = req.Pipeline
 		vertexReq.Vertex = &vertex.Name
 		vertexResp, err := ps.GetVertexMetrics(ctx, vertexReq)
 		// if err is not nil, more than likely autoscaling is down to 0 and metrics are not available
@@ -263,21 +262,22 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 
 		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
 		for _, vertexMetrics := range vertexResp.VertexMetrics {
-			if pending, ok := vertexMetrics.Pendings["default"]; ok {
-				if processingRate, ok := vertexMetrics.ProcessingRates["default"]; ok {
+			if pending, ok := vertexMetrics.GetPendings()["default"]; ok {
+				if processingRate, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
 					if pending > 0 && processingRate == 0 {
 						resp.Status = &daemon.PipelineStatus{
 							Status:  pointer.String(PipelineStatusError),
 							Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
 						}
+						return resp, nil
 					}
 				}
-			}
-			if vertexMetrics.Pendings["1m"] > 0 && vertexMetrics.ProcessingRates["1m"] == 0 {
+			} else {
 				resp.Status = &daemon.PipelineStatus{
 					Status:  pointer.String(PipelineStatusError),
 					Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
 				}
+				return resp, nil
 			}
 		}
 	}

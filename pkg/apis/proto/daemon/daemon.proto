@@ -125,7 +125,6 @@ service DaemonService {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/watermarks";
   };
 
-  // GetPipelineStatus () returns (PipelineStatus) // status: bool and string
   rpc GetPipelineStatus (GetPipelineStatusRequest) returns (GetPipelineStatusResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/status";
   };
