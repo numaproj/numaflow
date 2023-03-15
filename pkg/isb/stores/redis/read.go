@@ -30,18 +30,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/readers"
 )
 
 // BufferRead is the read queue implementation powered by RedisClient.
 type BufferRead struct {
-	Name     string
-	Stream   string
-	Group    string
-	Consumer string
+	*readers.RedisReader
 	*BufferReadInfo
-	*redisclient.RedisClient
-	options
-	log *zap.SugaredLogger
 }
 
 // BufferReadInfo will contain the buffer information from the reader point of view.
@@ -52,7 +47,7 @@ type BufferReadInfo struct {
 	refreshEmptyError *atomic.Uint32
 }
 
-var _ isb.BufferReader = (*BufferRead)(nil)
+var _ isb.BufferReader = (*BufferRead)(nil) //todo: where should this go?
 
 // NewBufferRead returns a new redis buffer reader.
 func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, opts ...Option) isb.BufferReader {
@@ -67,18 +62,21 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 	}
 
 	rqr := &BufferRead{
-		Name:        name,
-		Stream:      redisclient.GetRedisStreamName(name),
-		Group:       group,
-		Consumer:    consumer,
-		RedisClient: client,
+		RedisReader: &readers.RedisReader{
+			Name:        name,
+			Stream:      redisclient.GetRedisStreamName(name),
+			Group:       group,
+			Consumer:    consumer,
+			RedisClient: client,
+			options:     *options,
+		},
+
 		BufferReadInfo: &BufferReadInfo{
 			rwLock:            new(sync.RWMutex),
 			isEmpty:           true,
 			lag:               atomic.NewDuration(0),
 			refreshEmptyError: atomic.NewUint32(0),
 		},
-		options: *options,
 		// checkBackLog is set to true as on start up we need to start from the beginning
 	}
 	rqr.log = logging.FromContext(ctx).With("BufferReader", rqr.GetName())

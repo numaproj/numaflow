@@ -20,8 +20,8 @@ import (
 	"time"
 )
 
-// options for writing to redis
-type options struct {
+// Options for writing to redis
+type Options struct {
 	// pipelining enables redis pipeline
 	pipelining bool
 	// infoRefreshInterval refreshes the info at this interval
@@ -42,13 +42,13 @@ type options struct {
 
 // Option to apply different options
 type Option interface {
-	apply(*options)
+	apply(*Options)
 }
 
 // pipelining option
 type pipelining bool
 
-func (p pipelining) apply(opts *options) {
+func (p pipelining) apply(opts *Options) {
 	opts.pipelining = true
 }
 
@@ -60,7 +60,7 @@ func WithoutPipelining() Option {
 // infoRefreshInterval option
 type infoRefreshInterval time.Duration
 
-func (i infoRefreshInterval) apply(o *options) {
+func (i infoRefreshInterval) apply(o *Options) {
 	o.infoRefreshInterval = time.Duration(i)
 }
 
@@ -72,7 +72,7 @@ func WithInfoRefreshInterval(t time.Duration) Option {
 // lagDuration option
 type lagDuration time.Duration
 
-func (l lagDuration) apply(o *options) {
+func (l lagDuration) apply(o *Options) {
 	o.lagDuration = time.Duration(l)
 }
 
@@ -84,7 +84,7 @@ func WithLagDuration(t time.Duration) Option {
 // readTimeOut option
 type readTimeOut time.Duration
 
-func (r readTimeOut) apply(o *options) {
+func (r readTimeOut) apply(o *Options) {
 	o.readTimeOut = time.Duration(r)
 }
 
@@ -96,7 +96,7 @@ func WithReadTimeOut(t time.Duration) Option {
 // checkBackLog option
 type checkBackLog bool
 
-func (b checkBackLog) apply(o *options) {
+func (b checkBackLog) apply(o *Options) {
 	o.checkBackLog = true
 }
 
@@ -108,7 +108,7 @@ func WithCheckBacklog(b bool) Option {
 // maxLength option
 type maxLength int64
 
-func (m maxLength) apply(o *options) {
+func (m maxLength) apply(o *Options) {
 	o.maxLength = int64(m)
 }
 
@@ -120,7 +120,7 @@ func WithMaxLength(m int64) Option {
 // usageLimit option
 type bufferUsageLimit float64
 
-func (u bufferUsageLimit) apply(o *options) {
+func (u bufferUsageLimit) apply(o *Options) {
 	o.bufferUsageLimit = float64(u)
 }
 
@@ -132,7 +132,7 @@ func WithBufferUsageLimit(u float64) Option {
 // refreshBufferWriteInfo option
 type refreshBufferWriteInfo bool
 
-func (r refreshBufferWriteInfo) apply(o *options) {
+func (r refreshBufferWriteInfo) apply(o *Options) {
 	o.refreshBufferWriteInfo = bool(r)
 }
 
