@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
@@ -41,7 +40,8 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	// so use no op watcher for testing
 	hbWatcher := noop.NewKVOpWatch()
 	otWatcher := noop.NewKVOpWatch()
-	processorManager := NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	processorManager := NewProcessorManager(ctx, storeWatcher)
 	var (
 		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
 		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
@@ -152,30 +152,200 @@ func TestBuffer_GetWatermark(t *testing.T) {
 }
 
 func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
-	type fields struct {
-		ctx              context.Context
-		bufferName       string
-		storeWatcher     store.WatermarkStoreWatcher
-		processorManager *ProcessorManager
-		log              *zap.SugaredLogger
-	}
+	var (
+		ctx               = context.Background()
+		bufferName        = "testBuffer"
+		hbWatcher         = noop.NewKVOpWatch()
+		otWatcher         = noop.NewKVOpWatch()
+		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+		processorManager1 = NewProcessorManager(ctx, storeWatcher)
+		processorManager2 = NewProcessorManager(ctx, storeWatcher)
+		processorManager3 = NewProcessorManager(ctx, storeWatcher)
+		processorManager4 = NewProcessorManager(ctx, storeWatcher)
+	)
+
+	getHeadWMBTest1(ctx, processorManager1)
+	getHeadWMBTest2(ctx, processorManager2)
+	getHeadWMBTest3(ctx, processorManager3)
+	getHeadWMBTest4(ctx, processorManager4)
+
 	tests := []struct {
-		name   string
-		fields fields
-		want   wmb.WMB
+		name             string
+		processorManager *ProcessorManager
+		want             wmb.WMB
 	}{
-		// TODO: Add test cases.
+		{
+			name:             "all pods idle and get an idle WMB",
+			processorManager: processorManager1,
+			want: wmb.WMB{
+				Idle:      true,
+				Offset:    28,
+				Watermark: 17,
+			},
+		},
+		{
+			name:             "some pods idle and skip an idle WMB",
+			processorManager: processorManager2,
+			want:             wmb.WMB{},
+		},
+		{
+			name:             "all pods not idle and skip an idle WMB",
+			processorManager: processorManager3,
+			want:             wmb.WMB{},
+		},
+		{
+			name:             "all pods empty timeline",
+			processorManager: processorManager3,
+			want:             wmb.WMB{},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &edgeFetcher{
-				ctx:              tt.fields.ctx,
-				bufferName:       tt.fields.bufferName,
-				storeWatcher:     tt.fields.storeWatcher,
-				processorManager: tt.fields.processorManager,
-				log:              tt.fields.log,
+				ctx:              ctx,
+				bufferName:       bufferName,
+				storeWatcher:     storeWatcher,
+				processorManager: tt.processorManager,
+				log:              zaptest.NewLogger(t).Sugar(),
 			}
 			assert.Equalf(t, tt.want, e.GetHeadWMB(), "GetHeadWMB()")
 		})
 	}
+}
+
+func getHeadWMBTest1(ctx context.Context, processorManager1 *ProcessorManager) {
+	var (
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		pod0Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    28,
+				Watermark: 17,
+			},
+		}
+		pod1Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    26,
+				Watermark: 17,
+			},
+		}
+		pod2Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    24,
+				Watermark: 17,
+			},
+		}
+	)
+
+	for _, watermark := range pod0Timeline {
+		testPod0.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod1Timeline {
+		testPod1.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod2Timeline {
+		testPod2.offsetTimeline.Put(watermark)
+	}
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
+}
+
+func getHeadWMBTest2(ctx context.Context, processorManager1 *ProcessorManager) {
+	var (
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		pod0Timeline = []wmb.WMB{
+			{
+				Idle:      false,
+				Offset:    28,
+				Watermark: 17,
+			},
+		}
+		pod1Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    26,
+				Watermark: 17,
+			},
+		}
+		pod2Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    24,
+				Watermark: 17,
+			},
+		}
+	)
+
+	for _, watermark := range pod0Timeline {
+		testPod0.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod1Timeline {
+		testPod1.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod2Timeline {
+		testPod2.offsetTimeline.Put(watermark)
+	}
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
+}
+
+func getHeadWMBTest3(ctx context.Context, processorManager1 *ProcessorManager) {
+	var (
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		pod0Timeline = []wmb.WMB{
+			{
+				Idle:      false,
+				Offset:    28,
+				Watermark: 17,
+			},
+		}
+		pod1Timeline = []wmb.WMB{
+			{
+				Idle:      false,
+				Offset:    26,
+				Watermark: 17,
+			},
+		}
+		pod2Timeline = []wmb.WMB{
+			{
+				Idle:      false,
+				Offset:    24,
+				Watermark: 17,
+			},
+		}
+	)
+
+	for _, watermark := range pod0Timeline {
+		testPod0.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod1Timeline {
+		testPod1.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod2Timeline {
+		testPod2.offsetTimeline.Put(watermark)
+	}
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
+}
+
+func getHeadWMBTest4(ctx context.Context, processorManager1 *ProcessorManager) {
+	var (
+		testPod0 = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
+		testPod1 = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
+		testPod2 = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+	)
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
 }
