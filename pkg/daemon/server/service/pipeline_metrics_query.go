@@ -272,12 +272,6 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 						return resp, nil
 					}
 				}
-			} else {
-				resp.Status = &daemon.PipelineStatus{
-					Status:  pointer.String(PipelineStatusError),
-					Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
-				}
-				return resp, nil
 			}
 		}
 	}
