@@ -222,12 +222,12 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    0,
-					Watermark: int64(60000),
+					Watermark: int64(119999),
 					Idle:      false,
 				},
 				"buffer2": {
 					Offset:    -1,
-					Watermark: int64(60000),
+					Watermark: int64(119999),
 					Idle:      true,
 				},
 			},
@@ -246,12 +246,12 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    0,
-					Watermark: int64(60000),
+					Watermark: int64(119999),
 					Idle:      false,
 				},
 				"buffer2": {
 					Offset:    0,
-					Watermark: int64(60000),
+					Watermark: int64(119999),
 					Idle:      false,
 				},
 			},
@@ -270,12 +270,12 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    -1,
-					Watermark: int64(60000),
+					Watermark: int64(119999),
 					Idle:      true,
 				},
 				"buffer2": {
 					Offset:    -1,
-					Watermark: int64(60000),
+					Watermark: int64(119999),
 					Idle:      true,
 				},
 			},

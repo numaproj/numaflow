@@ -108,3 +108,13 @@ func (dc *DaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline stri
 		return rspn.PipelineWatermarks, nil
 	}
 }
+
+func (dc *DaemonClient) GetPipelineStatus(ctx context.Context, pipeline string) (*daemon.PipelineStatus, error) {
+	if rspn, err := dc.client.GetPipelineStatus(ctx, &daemon.GetPipelineStatusRequest{
+		Pipeline: &pipeline,
+	}); err != nil {
+		return nil, err
+	} else {
+		return rspn.Status, nil
+	}
+}
