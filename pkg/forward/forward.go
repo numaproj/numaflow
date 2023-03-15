@@ -611,7 +611,6 @@ func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter
 			// and because when we publish the watermark, offset is not important for sink
 			// so, we do nothing here
 		} else {
-			fmt.Println("SENT CTRL MSG")
 			// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
 			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
 			writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, ctrlMessage)
