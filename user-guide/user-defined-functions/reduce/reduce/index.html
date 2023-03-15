@@ -1074,6 +1074,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#time-characteristics" class="md-nav__link">
+    Time Characteristics
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#storage" class="md-nav__link">
     Storage
   </a>
@@ -1791,6 +1798,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#time-characteristics" class="md-nav__link">
+    Time Characteristics
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#storage" class="md-nav__link">
     Storage
   </a>
@@ -1916,6 +1930,17 @@ not supported in reduce vertex. If <code>parallelism</code> is not defined defau
 <p>It is wrong to give a <code>parallelism</code> &gt; <code>1</code> if it is a <em>non-keyed</em> vertex (<code>keyed: false</code>).</p>
 <p>There are a couple of <a href="../examples/">examples</a> that demonstrates Fixed windows, Sliding windows,
 chaining of windows, keyed streams, etc.</p>
+<h2 id="time-characteristics">Time Characteristics<a class="headerlink" href="#time-characteristics" title="Permanent link">&para;</a></h2>
+<p>All windowing operations generate new records as an output of reduce operations. Event-time and Watermark 
+are two main primitives that determine how the time propagates in a streaming application. so for all new 
+records generated in a reduce operation, event time is set to the end time of the window. </p>
+<p>For example, for a reduce operation over a keyed/non-keyed window with a start and end defined by 
+<code>[2031-09-29T18:47:00Z, 2031-09-29T18:48:00Z)</code>, event time for all the records generated will be set to 
+<code>2031-09-29T18:47:59.999Z</code> since millisecond is the smallest granularity (as of now) event time is set to 
+the last timestamp that belongs to a window. </p>
+<p>Watermark is treated similarly, the watermark is set to the last timestamp for a given window. 
+So for the example above, the value of the watermark will be set to the last timestamp, i.e., <code>2031-09-29T18:47:59.999Z</code>.</p>
+<p>This applies to all the window types regardless of whether they are keyed or non-keyed windows. </p>
 <h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
 <p>Reduce unlike map requires persistence. To support persistence user has to define the 
 <code>storage</code> configuration. We replay the data stored in this storage on pod startup if there has
