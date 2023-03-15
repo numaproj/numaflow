@@ -108,6 +108,7 @@ func (c *WMBChecker) ValidateHeadWMB(w WMB) bool {
 	return false
 }
 
+// GetCounter gets the current counter value for the WMBChecker, it's used in log and tests
 func (c *WMBChecker) GetCounter() int {
 	return c.counter
 }
