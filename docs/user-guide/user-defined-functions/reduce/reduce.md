@@ -68,6 +68,22 @@ It is wrong to give a `parallelism` > `1` if it is a _non-keyed_ vertex (`keyed:
 There are a couple of [examples](examples.md) that demonstrates Fixed windows, Sliding windows,
 chaining of windows, keyed streams, etc.
 
+## Time Characteristics
+
+All windowing operations generate new records as an output of reduce operations. Event-time and Watermark 
+are two main primitives that determine how the time propagates in a streaming application. so for all new 
+records generated in a reduce operation, event time is set to the end time of the window. 
+
+For example, for a reduce operation over a keyed/non-keyed window with a start and end defined by 
+`[2031-09-29T18:47:00Z, 2031-09-29T18:48:00Z)`, event time for all the records generated will be set to 
+`2031-09-29T18:47:59.999Z` since millisecond is the smallest granularity (as of now) event time is set to 
+the last timestamp that belongs to a window. 
+
+Watermark is treated similarly, the watermark is set to the last timestamp for a given window. 
+So for the example above, the value of the watermark will be set to the last timestamp, i.e., `2031-09-29T18:47:59.999Z`.
+
+This applies to all the window types regardless of whether they are keyed or non-keyed windows. 
+
 ## Storage
 
 Reduce unlike map requires persistence. To support persistence user has to define the 
