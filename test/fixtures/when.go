@@ -133,7 +133,6 @@ func (w *When) DeletePipelineAndWait() *When {
 	}
 
 	timeout := defaultTimeout
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyPipelineName, w.pipeline.Name)
