@@ -145,8 +145,20 @@ type testWMBFetcher struct {
 	// for forward_test.go only
 	WMBTestSameHeadWMB bool
 	sameCounter        int
+	sameLock           sync.RWMutex
 	WMBTestDiffHeadWMB bool
 	diffCounter        int
+	diffLock           sync.RWMutex
+}
+
+func (t *testWMBFetcher) ChangeUseCase() error {
+	t.sameLock.Lock()
+	defer t.sameLock.Unlock()
+	t.diffLock.Lock()
+	defer t.diffLock.Unlock()
+	t.WMBTestSameHeadWMB = !t.WMBTestSameHeadWMB
+	t.WMBTestDiffHeadWMB = !t.WMBTestDiffHeadWMB
+	return nil
 }
 
 func (t *testWMBFetcher) Close() error {
@@ -166,6 +178,10 @@ func (t *testWMBFetcher) GetHeadWatermark() wmb.Watermark {
 }
 
 func (t *testWMBFetcher) GetHeadWMB() wmb.WMB {
+	t.sameLock.RLock()
+	defer t.sameLock.RUnlock()
+	t.diffLock.RLock()
+	defer t.diffLock.RUnlock()
 	if t.WMBTestSameHeadWMB {
 		t.sameCounter++
 		if t.sameCounter == 1 || t.sameCounter == 2 {
