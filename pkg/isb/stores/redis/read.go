@@ -30,12 +30,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/shared/readers"
 )
 
 // BufferRead is the read queue implementation powered by RedisClient.
 type BufferRead struct {
-	*readers.RedisReader
+	*redisclient.RedisReader
 	*BufferReadInfo
 }
 
@@ -51,7 +50,7 @@ var _ isb.BufferReader = (*BufferRead)(nil) //todo: where should this go?
 
 // NewBufferRead returns a new redis buffer reader.
 func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, opts ...Option) isb.BufferReader {
-	options := &options{
+	options := &redisclient.Options{
 		infoRefreshInterval: time.Second,
 		readTimeOut:         time.Second,
 		checkBackLog:        true,
