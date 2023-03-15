@@ -51,29 +51,40 @@ const (
 var (
 	testStartTime       = time.Unix(1636470000, 0).UTC()
 	testSourceWatermark = time.Unix(1636460000, 0).UTC()
+	testWMBWatermark    = time.Unix(1636470000, 0).UTC()
+	wmbTestSameHeadWMB  = wmb.WMB{
+		Idle:      true,
+		Offset:    100,
+		Watermark: 1636440000000,
+	}
+	wmbTestDiffHeadWMB = wmb.WMB{
+		Idle:      false,
+		Offset:    101,
+		Watermark: 1636450000000,
+	}
 )
 
 type testForwardFetcher struct {
 	// for forward_test.go only
 }
 
-func (t testForwardFetcher) Close() error {
+func (t *testForwardFetcher) Close() error {
 	// won't be used
 	return nil
 }
 
 // GetWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t testForwardFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
+func (t *testForwardFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
 }
 
-func (t testForwardFetcher) GetHeadWatermark() wmb.Watermark {
+func (t *testForwardFetcher) GetHeadWatermark() wmb.Watermark {
 	// won't be used
 	return wmb.Watermark{}
 }
 
-func (t testForwardFetcher) GetHeadWMB() wmb.WMB {
+func (t *testForwardFetcher) GetHeadWMB() wmb.WMB {
 	// won't be used
 	return wmb.WMB{}
 }
@@ -136,6 +147,206 @@ func TestNewInterStepDataForward(t *testing.T) {
 	time.Sleep(1 * time.Millisecond)
 	// only for shutdown will work as from buffer is not empty
 	f.ForceStop()
+
+	<-stopped
+}
+
+type testWMBFetcher struct {
+	// for forward_test.go only
+	WMBTestSameHeadWMB bool
+	WMBTestDiffHeadWMB bool
+	diffCounter        int
+}
+
+func (t *testWMBFetcher) Close() error {
+	// won't be used
+	return nil
+}
+
+// GetWatermark uses current time as the watermark because we want to make sure
+// the test publisher is publishing watermark
+func (t *testWMBFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
+	return wmb.Watermark(testWMBWatermark)
+}
+
+func (t *testWMBFetcher) GetHeadWatermark() wmb.Watermark {
+	// won't be used
+	return wmb.Watermark{}
+}
+
+func (t *testWMBFetcher) GetHeadWMB() wmb.WMB {
+	if t.WMBTestSameHeadWMB {
+		return wmbTestSameHeadWMB
+	} else if t.WMBTestDiffHeadWMB {
+		if t.diffCounter == 0 {
+			t.diffCounter++
+			return wmbTestSameHeadWMB
+		}
+		t.diffCounter = 0
+		return wmbTestDiffHeadWMB
+	}
+	return wmb.WMB{}
+}
+
+func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
+	toSteps := map[string]isb.BufferWriter{
+		"to1": to1,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+		},
+	}}
+
+	ctrlMessage := []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+
+	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
+	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
+	assert.NoError(t, err)
+	assert.False(t, to1.IsFull())
+	assert.True(t, to1.IsEmpty())
+
+	stopped := f.Start()
+	// first batch: read message size is 1 with one ctrl message
+	// the ctrl message should be acked
+	// no message published to the next vertex
+	// so the timeline should be empty
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for fromStep.IsEmpty() {
+			select {
+			case <-ctx.Done():
+				if ctx.Err() == context.DeadlineExceeded {
+					t.Fatal("expected to have ctrl msg in buffer", ctx.Err())
+				}
+			default:
+				time.Sleep(1 * time.Millisecond)
+			}
+		}
+	}()
+	_, errs := fromStep.Write(ctx, ctrlMessage)
+	assert.Equal(t, make([]error, 1), errs)
+	wg.Wait()
+	for !fromStep.IsEmpty() {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected the buffer to be empty", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+	otNil, _ := otStores["to1"].GetAllKeys(ctx)
+	assert.Nil(t, otNil)
+
+	// 2nd and 3rd batches: read message size is 0
+	// should send idle watermark
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+		for otKeys1 == nil {
+			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+			time.Sleep(time.Millisecond * 100)
+		}
+	}()
+	wg.Wait()
+
+	otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+	otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+	otDecode1, _ := wmb.DecodeToWMB(otValue1)
+	for !otDecode1.Idle {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have idle watermark in to1 timeline", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+			otValue1, _ = otStores["to1"].GetValue(ctx, otKeys1[0])
+			otDecode1, _ = wmb.DecodeToWMB(otValue1)
+		}
+	}
+	assert.Equal(t, wmb.WMB{
+		Idle:      true,
+		Offset:    0, // the first ctrl message written to isb
+		Watermark: wmbTestSameHeadWMB.Watermark,
+	}, otDecode1)
+	assert.Equal(t, isb.WMB, to1.GetMessages(1)[0].Kind)
+
+	// 4th batch: read message size = 1
+	// a new active watermark should be inserted
+	_, errs = fromStep.Write(ctx, writeMessages[:2])
+	assert.Equal(t, make([]error, 2), errs)
+
+	otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+	otValue1, _ = otStores["to1"].GetValue(ctx, otKeys1[0])
+	otDecode1, _ = wmb.DecodeToWMB(otValue1)
+	for otDecode1.Idle {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have active watermark in to1 timeline", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+			otValue1, _ = otStores["to1"].GetValue(ctx, otKeys1[0])
+			otDecode1, _ = wmb.DecodeToWMB(otValue1)
+		}
+	}
+	assert.Equal(t, wmb.WMB{
+		Idle:      false,
+		Offset:    2, // the second message written to isb, read batch size is 2 so the offset is 0+2=2
+		Watermark: testWMBWatermark.UnixMilli(),
+	}, otDecode1)
+
+	// 5th & 6th batch: again idling but got diff head WMB
+	// so the head is still the same active watermark
+	// and no new ctrl message to the next vertex
+	f.fetchWatermark.(*testWMBFetcher).WMBTestSameHeadWMB = false
+	f.fetchWatermark.(*testWMBFetcher).WMBTestDiffHeadWMB = true
+	time.Sleep(2 * time.Second) // default read timeout is 1s
+	otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+	otValue1, _ = otStores["to1"].GetValue(ctx, otKeys1[0])
+	otDecode1, _ = wmb.DecodeToWMB(otValue1)
+	assert.Equal(t, wmb.WMB{
+		Idle:      false,
+		Offset:    2, // the second message written to isb, read batch size is 2 so the offset is 0+2=2
+		Watermark: testWMBWatermark.UnixMilli(),
+	}, otDecode1)
+
+	var wantKind = []isb.MessageKind{
+		isb.WMB,
+		isb.Data,
+		isb.Data,
+		isb.Data, // this is data because it's the default value
+	}
+	var wantBody = []bool{
+		false,
+		true,
+		true,
+		false,
+	}
+	for idx, msg := range to1.GetMessages(4) {
+		assert.Equal(t, wantKind[idx], msg.Kind)
+		assert.Equal(t, wantBody[idx], len(msg.Body.Payload) > 0)
+	}
+
+	// stop will cancel the contexts and therefore the forwarder stops without waiting
+	f.Stop()
 
 	<-stopped
 }
@@ -205,7 +416,7 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	defer cancel()
 
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-	fetchWatermark := testForwardFetcher{}
+	fetchWatermark := &testForwardFetcher{}
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
 	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
@@ -318,7 +529,7 @@ func TestNewInterStepDataForwardToOneStep(t *testing.T) {
 		},
 	}}
 
-	fetchWatermark := testForwardFetcher{}
+	fetchWatermark := &testForwardFetcher{}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
@@ -414,7 +625,7 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 		},
 	}}
 
-	fetchWatermark := testForwardFetcher{}
+	fetchWatermark := &testForwardFetcher{}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
@@ -506,7 +717,7 @@ func TestNewInterStepData_forwardToAll(t *testing.T) {
 			Name: "testVertex",
 		},
 	}}
-	fetchWatermark := testForwardFetcher{}
+	fetchWatermark := &testForwardFetcher{}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)

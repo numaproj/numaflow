@@ -378,8 +378,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			}
 		}
 	}
-	if len(activeWatermarkBuffers) < len(isdf.publishWatermark) {
-		// if there's any buffers that haven't received any watermark during this
+	if 0 < len(activeWatermarkBuffers) && len(activeWatermarkBuffers) < len(isdf.publishWatermark) {
+		// if some out buffers (meaning, at least 1 but not all) haven't received any watermark during this
 		// batch processing cycle, send an idle watermark
 		for bufferName := range isdf.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
@@ -611,6 +611,7 @@ func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter
 			// and because when we publish the watermark, offset is not important for sink
 			// so, we do nothing here
 		} else {
+			fmt.Println("SENT CTRL MSG")
 			// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
 			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
 			writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, ctrlMessage)
