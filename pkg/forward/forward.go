@@ -378,9 +378,14 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			}
 		}
 	}
-	if 0 < len(activeWatermarkBuffers) && len(activeWatermarkBuffers) < len(isdf.publishWatermark) {
-		// if some out buffers (meaning, at least 1 but not all) haven't received any watermark during this
-		// batch processing cycle, send an idle watermark
+	if len(dataMessages) > 0 && len(activeWatermarkBuffers) < len(isdf.publishWatermark) {
+		// - condition1 "len(dataMessages) > 0" :
+		//   Meaning, we do have some data messages, but not all out buffers gets written.
+		//   Tt could be all data messages are dropped, or conditional forwarding to part of the out buffers.
+		//   If we don't have this condition check, when dataMessages is zero but ctrlMessages > 0, we will
+		//   wrongly publish an idle watermark without the ctrl message and the ctrl message tracking map.
+		// - condition 2 "len(activeWatermarkBuffers) < len(isdf.publishWatermark)" :
+		//   send idle watermark only if we have idle out buffers
 		for bufferName := range isdf.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
 				// use the watermark of the current read batch for the idle watermark
