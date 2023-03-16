@@ -435,6 +435,12 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		replicas := int32(1)
 		if pl.Status.Phase == dfv1.PipelinePhasePaused {
 			replicas = int32(0)
+		} else if v.UDF != nil && v.UDF.GroupBy != nil {
+			for _, edge := range fromEdges {
+				if edge.Parallelism != nil {
+					replicas = *edge.Parallelism
+				}
+			}
 		} else {
 			x := vCopy.Scale
 			if x.Min != nil && *x.Min > 1 && replicas < *x.Min {
@@ -444,6 +450,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 				replicas = *x.Max
 			}
 		}
+
 		spec := dfv1.VertexSpec{
 			AbstractVertex:             *vCopy,
 			PipelineName:               pl.Name,
