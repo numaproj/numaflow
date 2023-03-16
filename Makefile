@@ -193,6 +193,7 @@ manifests: crds
 	kubectl kustomize config/cluster-install > config/install.yaml
 	kubectl kustomize config/namespace-install > config/namespace-install.yaml
 	kubectl kustomize config/advanced-install/namespaced-controller > config/advanced-install/namespaced-controller-wo-crds.yaml
+	kubectl kustomize config/advanced-install/namespaced-numaflow-server > config/advanced-install/namespaced-numaflow-server.yaml
 	kubectl kustomize config/advanced-install/numaflow-server > config/advanced-install/numaflow-server.yaml
 	kubectl kustomize config/advanced-install/minimal-crds > config/advanced-install/minimal-crds.yaml
 
