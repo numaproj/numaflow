@@ -40,7 +40,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"k8s.io/utils/pointer"
 )
 
 // vertexReconciler reconciles a vertex object.
@@ -160,13 +159,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	currentReplicas := int(vertex.Status.Replicas)
 	if currentReplicas != desiredReplicas || vertex.Status.Selector == "" {
 		log.Infow("Replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
-		if vertex.IsReduceUDF() {
-			vertex.Spec.Replicas = pointer.Int32(int32(desiredReplicas))
-			err = r.client.Update(ctx, vertex)
-			if err != nil && !apierrors.IsNotFound(err) {
-				return ctrl.Result{}, err
-			}
-		}
 		vertex.Status.Replicas = uint32(desiredReplicas)
 		vertex.Status.LastScaledAt = metav1.Time{Time: time.Now()}
 	}

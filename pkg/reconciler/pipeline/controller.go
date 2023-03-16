@@ -444,6 +444,11 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 				replicas = *x.Max
 			}
 		}
+		for _, edge := range fromEdges {
+			if edge.Parallelism != nil {
+				replicas = *edge.Parallelism
+			}
+		}
 		spec := dfv1.VertexSpec{
 			AbstractVertex:             *vCopy,
 			PipelineName:               pl.Name,
