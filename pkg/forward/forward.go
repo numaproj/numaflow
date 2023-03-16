@@ -380,7 +380,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	if len(dataMessages) > 0 && len(activeWatermarkBuffers) < len(isdf.publishWatermark) {
 		// - condition1 "len(dataMessages) > 0" :
-		//   Meaning, we do have some data messages, but not all out buffers gets written.
+		//   Meaning, we do have some data messages, but not all out buffers get written.
 		//   Tt could be all data messages are dropped, or conditional forwarding to part of the out buffers.
 		//   If we don't have this condition check, when dataMessages is zero but ctrlMessages > 0, we will
 		//   wrongly publish an idle watermark without the ctrl message and the ctrl message tracking map.
@@ -395,8 +395,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	// let us ack the chunk only if we have successfully forwarded all the messages.
-	// we need the readOffsets to acknowledge later
+	// when we apply udf, we don't handle partial errors (it's either non or all, non will return early),
+	// so we should be able to ack all the readOffsets including data messages and control messages
 	err = isdf.ackFromBuffer(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
@@ -606,11 +606,13 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, message
 }
 
 // publishIdleWatermark publishes a ctrl message with isb.Kind set to WMB when write length is zero
-// A WMB is only created if this a new
+// We only send one ctrl message when we see a new WMB; later we only update the WMB without a ctrl
+// message.
 func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter, wm wmb.Watermark) {
 	var bufferName = toBuffer.GetName()
 
 	if isdf.wmbOffset[bufferName] == nil {
+		// the map is nil means we get a new idle situation
 		if isdf.opts.vertexType == dfv1.VertexTypeSink {
 			// for Sink vertex, we don't need to write any ctrl message
 			// and because when we publish the watermark, offset is not important for sink
