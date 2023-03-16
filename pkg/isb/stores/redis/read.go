@@ -46,14 +46,14 @@ type BufferReadInfo struct {
 	refreshEmptyError *atomic.Uint32
 }
 
-var _ isb.BufferReader = (*BufferRead)(nil) //todo: where should this go?
+var _ isb.BufferReader = (*BufferRead)(nil)
 
 // NewBufferRead returns a new redis buffer reader.
 func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, opts ...Option) isb.BufferReader {
 	options := &redisclient.Options{
-		infoRefreshInterval: time.Second,
-		readTimeOut:         time.Second,
-		checkBackLog:        true,
+		InfoRefreshInterval: time.Second,
+		ReadTimeOut:         time.Second,
+		CheckBackLog:        true,
 	}
 
 	for _, o := range opts {
@@ -61,13 +61,13 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 	}
 
 	rqr := &BufferRead{
-		RedisReader: &readers.RedisReader{
+		RedisReader: &redisclient.RedisReader{
 			Name:        name,
 			Stream:      redisclient.GetRedisStreamName(name),
 			Group:       group,
 			Consumer:    consumer,
 			RedisClient: client,
-			options:     *options,
+			Options:     *options,
 		},
 
 		BufferReadInfo: &BufferReadInfo{

@@ -17,6 +17,12 @@ limitations under the License.
 package redis
 
 import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/go-redis/redis/v8"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"go.uber.org/zap"
 	//redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
@@ -31,4 +37,110 @@ type RedisReader struct {
 	*RedisClient
 	Options Options
 	Log     *zap.SugaredLogger
+}
+
+// Read reads the messages from the stream.
+// During a restart, we need to make sure all the un-acknowledged messages are reprocessed.
+// we need to replace `>` with `0-0` during restarts. We might run into data loss otherwise.
+func (br *RedisReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
+	var messages = make([]*isb.ReadMessage, 0, count)
+	var xstreams []redis.XStream
+	var err error
+	// start with 0-0 if CheckBackLog is true
+	labels := map[string]string{"buffer": br.GetName()}
+	if br.Options.CheckBackLog {
+		xstreams, err = br.processXReadResult("0-0", count)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
+				br.log.Debugw("checkBacklog true, redis.Nil", zap.Error(err))
+				return messages, nil
+			}
+			isbReadErrors.With(labels).Inc()
+			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
+			messages, errMsg := br.convertXStreamToMessages(xstreams, messages, labels)
+			br.log.Errorw("checkBacklog true, convertXStreamToMessages failed", zap.Error(errMsg))
+			return messages, fmt.Errorf("XReadGroup failed, %w", err)
+		}
+
+		// NOTE: If all messages have been delivered and acknowledged, the XREADGROUP 0-0 call returns an empty
+		// list of messages in the stream. At this point we want to read everything from last delivered which would be >
+		if len(xstreams) == 1 && len(xstreams[0].Messages) == 0 {
+			br.log.Infow("We have delivered and acknowledged all PENDING msgs, setting checkBacklog to false")
+			br.CheckBackLog = false
+		}
+	}
+	if !br.Options.CheckBackLog {
+		xstreams, err = br.processXReadResult(">", count)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
+				br.log.Debugw("checkBacklog false, redis.Nil", zap.Error(err))
+				return messages, nil
+			}
+			isbReadErrors.With(labels).Inc()
+			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
+			messages, errMsg := br.convertXStreamToMessages(xstreams, messages, labels)
+			br.log.Errorw("checkBacklog false, convertXStreamToMessages failed", zap.Error(errMsg))
+			return messages, fmt.Errorf("XReadGroup failed, %w", err)
+		}
+	}
+
+	// for each XMessage in []XStream
+	return br.convertXStreamToMessages(xstreams, messages, labels)
+}
+
+// Ack acknowledges the offset to the read queue. Ack is always pipelined, if you want to avoid it then
+// send array of 1 element.
+func (br *RedisReader) Ack(_ context.Context, offsets []isb.Offset) []error {
+	errs := make([]error, len(offsets))
+	strOffsets := []string{}
+	for _, o := range offsets {
+		strOffsets = append(strOffsets, o.String())
+	}
+	if err := br.Client.XAck(redisclient.RedisContext, br.Stream, br.Group, strOffsets...).Err(); err != nil {
+		for i := 0; i < len(offsets); i++ {
+			errs[i] = err
+		}
+	}
+	return errs
+}
+
+// processXReadResult is used to process the results of XREADGROUP
+func (br *RedisReader) processXReadResult(startIndex string, count int64) ([]redis.XStream, error) {
+	result := br.Client.XReadGroup(redisclient.RedisContext, &redis.XReadGroupArgs{
+		Group:    br.Group,
+		Consumer: br.Consumer,
+		Streams:  []string{br.Stream, startIndex},
+		Count:    count,
+		Block:    br.Options.readTimeOut,
+	})
+	return result.Result()
+}
+
+// convertXStreamToMessages is used to convert xstreams to messages
+func (br *RedisReader) convertXStreamToMessages(xstreams []redis.XStream, messages []*isb.ReadMessage, labels map[string]string) ([]*isb.ReadMessage, error) {
+	// for each XMessage in []XStream
+	for _, xstream := range xstreams {
+		for _, message := range xstream.Messages {
+			var readOffset = message.ID
+
+			// our messages have only one field/value pair (i.e., header/payload)
+			if len(message.Values) != 1 {
+				isbReadErrors.With(labels).Inc()
+				return messages, fmt.Errorf("expected only 1 pair of field/value in stream %+v", message.Values)
+			}
+			for f, v := range message.Values {
+				msg, err := getHeaderAndBody(f, v)
+				if err != nil {
+					return messages, fmt.Errorf("%w", err)
+				}
+				readMessage := isb.ReadMessage{
+					Message:    msg,
+					ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
+				}
+				messages = append(messages, &readMessage)
+			}
+		}
+	}
+
+	return messages, nil
 }
