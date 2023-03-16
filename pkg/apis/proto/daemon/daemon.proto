@@ -47,6 +47,12 @@ message VertexMetrics {
   map<string, int64> pendings = 4;
 }
 
+// PipelineStatus
+message PipelineStatus {
+  required string status = 1;
+  required string message = 2;
+}
+
 message ListBuffersRequest {
     required string pipeline = 1;
 }
@@ -62,6 +68,14 @@ message GetBufferRequest {
 
 message GetBufferResponse {
     required BufferInfo buffer = 1;
+}
+
+message GetPipelineStatusRequest {
+    required string pipeline = 1;
+}
+
+message GetPipelineStatusResponse {
+    required PipelineStatus status = 1;
 }
 
 message GetVertexMetricsRequest {
@@ -109,5 +123,9 @@ service DaemonService {
   // GetPipelineWatermarks return the watermark of the given pipeline
   rpc GetPipelineWatermarks (GetPipelineWatermarksRequest) returns (GetPipelineWatermarksResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/watermarks";
+  };
+
+  rpc GetPipelineStatus (GetPipelineStatusRequest) returns (GetPipelineStatusResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/status";
   };
 }
