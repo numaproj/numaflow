@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -45,21 +46,28 @@ func TestManager_ListPartitions(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Slot:  "partition-1",
+		Slot:  "slot-1",
 	}
 	partitionTwo := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Slot:  "partition-2",
+		Slot:  "slot-2",
 	}
+
+	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-1")
+
+	kwTwo := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-2")
+
 	var pq1, pq2 ReadWriteCloser
-	pq1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
+	pq1, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
 	assert.NoError(t, err)
 
-	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo)
+	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo, kwTwo)
 	assert.NoError(t, err)
 
-	assert.Len(t, pbqManager.ListPartitions(), 1)
+	assert.Len(t, pbqManager.ListPartitions(), 2)
 
 	err = pq1.GC()
 	assert.NoError(t, err)
@@ -83,9 +91,13 @@ func TestManager_GetPBQ(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Slot:  "partition-1",
+		Slot:  "slot-1",
 	}
-	pb1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
+
+	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-1")
+
+	pb1, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
 	assert.NoError(t, err)
 
 	// get the created pbq
@@ -102,14 +114,18 @@ func TestPBQFlow(t *testing.T) {
 	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
+
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Slot:  "partition-1",
+		Slot:  "slot-1",
 	}
 
+	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-1")
+
 	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
+	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
 	assert.NoError(t, err)
 
 	msgsCount := 5
@@ -165,12 +181,15 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Slot:  "partition-1",
+		Slot:  "slot-1",
 	}
+
+	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-1")
 
 	// create a pbq backed with no op store
 	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
+	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
 	msgsCount := 50
 	var wg sync.WaitGroup
 
@@ -223,11 +242,14 @@ func TestManager_Replay(t *testing.T) {
 	testPartition := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Slot:  "partition-1",
+		Slot:  "slot-1",
 	}
 
+	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-1")
+
 	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
+	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
 	assert.NoError(t, err)
 	var wg sync.WaitGroup
 	wg.Add(1)

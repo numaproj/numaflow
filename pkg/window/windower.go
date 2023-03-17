@@ -33,8 +33,8 @@ type AlignedKeyedWindower interface {
 	AddSlot(string)
 	// Partitions returns an array of partition ids
 	Partitions() []partition.ID
-	// Keys returns an array of keys
-	Keys() []string
+	// Slots returns an array of keys
+	Slots() []string
 }
 
 // Windower manages AlignedKeyedWindower

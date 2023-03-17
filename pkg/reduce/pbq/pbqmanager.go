@@ -27,6 +27,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/shared/slist"
+	"github.com/numaproj/numaflow/pkg/window"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -34,6 +36,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
+
+type WindowToDrop struct {
+	window.AlignedKeyedWindower
+	count int
+}
 
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
@@ -44,6 +51,7 @@ type Manager struct {
 	pbqOptions    *options
 	pbqMap        map[string]*PBQ
 	log           *zap.SugaredLogger
+	yetToBeClosed *slist.SortedWindowList[*WindowToDrop]
 	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
@@ -70,13 +78,14 @@ func NewManager(ctx context.Context, vertexName string, pipelineName string, vr 
 		pbqMap:        make(map[string]*PBQ),
 		pbqOptions:    pbqOpts,
 		log:           logging.FromContext(ctx),
+		yetToBeClosed: slist.New[*WindowToDrop](),
 	}
 
 	return pbqManager, nil
 }
 
 // CreateNewPBQ creates new pbq for a partition
-func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
+func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID, win window.AlignedKeyedWindower) (ReadWriteCloser, error) {
 	persistentStore, err := m.storeProvider.CreateStore(ctx, partitionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a PBQ store, %w", err)
@@ -93,6 +102,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 		PartitionID:   partitionID,
 		options:       m.pbqOptions,
 		manager:       m,
+		kw:            win,
 		log:           logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 	m.register(partitionID, p)
@@ -197,6 +207,13 @@ func (m *Manager) ShutDown(ctx context.Context) {
 
 // register is intended to be used by PBQ to register itself with the manager.
 func (m *Manager) register(partitionID partition.ID, p *PBQ) {
+	ww := &WindowToDrop{
+		AlignedKeyedWindower: p.kw,
+	}
+
+	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
+	ww.count += 1
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -216,6 +233,18 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 func (m *Manager) deregister(partitionID partition.ID) error {
 	m.Lock()
 	defer m.Unlock()
+
+	ww := &WindowToDrop{
+		AlignedKeyedWindower: m.pbqMap[partitionID.String()].kw,
+	}
+
+	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
+	ww.count -= 1
+
+	if ww.count == 0 {
+		m.yetToBeClosed.DeleteWindow(ww)
+	}
+
 	delete(m.pbqMap, partitionID.String())
 	activePartitionCount.With(map[string]string{
 		metrics.LabelVertex:             m.vertexName,
@@ -253,4 +282,13 @@ func (m *Manager) Replay(ctx context.Context) {
 
 	wg.Wait()
 	m.log.Infow("Finished replaying records from store", zap.Duration("took", time.Since(tm)), zap.Any("partitions", partitionsIds))
+}
+
+func (m *Manager) NextWindowToBeClosed() window.AlignedKeyedWindower {
+	m.Lock()
+	defer m.Unlock()
+	if m.yetToBeClosed.Len() == 0 {
+		return nil
+	}
+	return m.yetToBeClosed.Front()
 }
