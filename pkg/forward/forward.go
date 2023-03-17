@@ -105,7 +105,9 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 			rwlock: new(sync.RWMutex),
 		},
 		opts: *options,
-	} // Add logger from parent ctx to child context.
+	}
+
+	// Add logger from parent ctx to child context.
 	isdf.ctx = logging.WithLogger(ctx, options.logger)
 
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
