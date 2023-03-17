@@ -26,16 +26,16 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// AlignedKeyedWindow maintains association between keys and a window.
+// AlignedKeyedWindow maintains association between slots and a window.
 // In a keyed stream, we need to close all the partitions when the watermark is past the window.
 type AlignedKeyedWindow struct {
 	// Start time of the window
 	Start time.Time
 	// End time of the window
 	End time.Time
-	// keys map of keys
-	keys map[string]struct{}
-	lock sync.RWMutex
+	// slots map of slots
+	slots map[string]struct{}
+	lock  sync.RWMutex
 }
 
 var _ window.AlignedKeyedWindower = (*AlignedKeyedWindow)(nil)
@@ -45,7 +45,7 @@ func NewKeyedWindow(start time.Time, end time.Time) *AlignedKeyedWindow {
 	kw := &AlignedKeyedWindow{
 		Start: start,
 		End:   end,
-		keys:  make(map[string]struct{}),
+		slots: make(map[string]struct{}),
 		lock:  sync.RWMutex{},
 	}
 	return kw
@@ -62,11 +62,11 @@ func (kw *AlignedKeyedWindow) EndTime() time.Time {
 }
 
 // AddSlot adds a slot to an existing window
-func (kw *AlignedKeyedWindow) AddSlot(key string) {
+func (kw *AlignedKeyedWindow) AddSlot(slot string) {
 	kw.lock.Lock()
 	defer kw.lock.Unlock()
-	if _, ok := kw.keys[key]; !ok {
-		kw.keys[key] = struct{}{}
+	if _, ok := kw.slots[slot]; !ok {
+		kw.slots[slot] = struct{}{}
 	}
 }
 
@@ -75,9 +75,9 @@ func (kw *AlignedKeyedWindow) Partitions() []partition.ID {
 	kw.lock.RLock()
 	defer kw.lock.RUnlock()
 
-	partitions := make([]partition.ID, len(kw.keys))
+	partitions := make([]partition.ID, len(kw.slots))
 	idx := 0
-	for k := range kw.keys {
+	for k := range kw.slots {
 		partitions[idx] = partition.ID{Start: kw.StartTime(), End: kw.EndTime(), Slot: k}
 		idx++
 	}
@@ -85,13 +85,13 @@ func (kw *AlignedKeyedWindow) Partitions() []partition.ID {
 	return partitions
 }
 
-func (kw *AlignedKeyedWindow) Keys() []string {
+func (kw *AlignedKeyedWindow) Slots() []string {
 	kw.lock.RLock()
 	defer kw.lock.RUnlock()
 
-	keys := make([]string, len(kw.keys))
+	keys := make([]string, len(kw.slots))
 	idx := 0
-	for k := range kw.keys {
+	for k := range kw.slots {
 		keys[idx] = k
 		idx++
 	}

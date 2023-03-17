@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -51,10 +52,13 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Slot:  "new-partition",
+		Slot:  "slot-1",
 	}
 
-	pq, err := qManager.CreateNewPBQ(ctx, partitionID)
+	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-1")
+
+	pq, err := qManager.CreateNewPBQ(ctx, partitionID, kwOne)
 	assert.NoError(t, err)
 
 	var readMessages []*isb.ReadMessage
@@ -114,10 +118,14 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Slot:  "new-partition",
+		Slot:  "slot-1",
 	}
+
+	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-1")
+
 	var pq ReadWriteCloser
-	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
+	pq, err = qManager.CreateNewPBQ(ctx, partitionID, kwOne)
 	assert.NoError(t, err)
 
 	var readMessages []*isb.ReadMessage
@@ -178,11 +186,14 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
-		Slot:  "new-partition",
+		Slot:  "slot-1",
 	}
 
+	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-1")
+
 	var pq ReadWriteCloser
-	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
+	pq, err = qManager.CreateNewPBQ(ctx, partitionID, kwOne)
 	assert.NoError(t, err)
 
 	for _, msg := range writeMessages {
