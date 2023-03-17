@@ -177,6 +177,7 @@ func (s *SortedWindowList[W]) Len() int {
 func (s *SortedWindowList[W]) Front() W {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
+	// FIXME: add len == 0 check
 	return s.windows.Front().Value.(W)
 }
 
@@ -184,6 +185,7 @@ func (s *SortedWindowList[W]) Front() W {
 func (s *SortedWindowList[W]) Back() W {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
+	// FIXME: add len == 0 check
 	return s.windows.Back().Value.(W)
 }
 
