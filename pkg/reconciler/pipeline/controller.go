@@ -436,6 +436,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		if pl.Status.Phase == dfv1.PipelinePhasePaused {
 			replicas = int32(0)
 		} else if v.UDF != nil && v.UDF.GroupBy != nil {
+			// check first edge only since there is only one fromEdge for a vertex
 			if fromEdges[0].Parallelism != nil {
 				replicas = *fromEdges[0].Parallelism
 			}
