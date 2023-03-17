@@ -88,7 +88,7 @@ func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetHeadWMB returns the latest idle WMB from Vn-1 processors
+// GetHeadWMB returns the latest idle WMB among all processors
 func (e *sourceFetcher) GetHeadWMB() wmb.WMB {
 	// TODO: what would this be...
 	return wmb.WMB{}

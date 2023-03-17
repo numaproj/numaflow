@@ -85,9 +85,8 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetHeadWatermark returns the watermark using the HeadOffset (the latest offset among all processors). This
-// can be used in showing the watermark progression for a vertex when not consuming the messages
-// directly (eg. UX, tests)
+// GetHeadWatermark returns the latest watermark among all processors. This can be used in showing the watermark
+// progression for a vertex when not consuming the messages directly (eg. UX, tests)
 // NOTE
 //   - We don't use this function in the regular pods in the vertex.
 //   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
@@ -118,7 +117,7 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetHeadWMB returns the latest idle WMB from Vn-1 processors
+// GetHeadWMB returns the latest idle WMB among all processors
 func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 	var headWMB = wmb.WMB{
 		// we find the head WMB only based on Offset

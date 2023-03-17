@@ -159,7 +159,8 @@ func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 	}
 }
 
-// PutReferred inserts the referred WMB which replaces the idle watermark into list. It ensures that the list will remain sorted after the insert.
+// PutReferred inserts the referred WMB, which is a validated watermark copied from other timelines, to replace
+// the idle watermark into list. It ensures that the list will remain sorted after the insert.
 // TODO: clean up and refine the other two put methods after we remove copying over strategy
 func (t *OffsetTimeline) PutReferred(node wmb.WMB) {
 	t.lock.Lock()
@@ -216,8 +217,8 @@ func (t *OffsetTimeline) GetHeadWMB() wmb.WMB {
 	return t.watermarks.Front().Value.(wmb.WMB)
 }
 
-// GetReferredWatermark returns the referred watermark that will be used to replace
-// the idle watermark value
+// GetReferredWatermark returns a referred watermark, which is a validated watermark copied from other timelines,
+// to replace the idle watermark value
 func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) wmb.WMB {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
