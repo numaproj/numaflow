@@ -137,18 +137,34 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 // Process is one iteration of the read loop which writes the messages to the PBQs followed by acking the messages, and
 // then closing the windows that can closed.
 func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
+	var dataMessages = make([]*isb.ReadMessage, 0, len(messages))
+	var ctrlMessages = make([]*isb.ReadMessage, 0) // for a high TPS pipeline, 0 is the most optimal value
+
+	for _, message := range messages {
+		if message.Kind == isb.Data {
+			dataMessages = append(dataMessages, message)
+		} else {
+			ctrlMessages = append(ctrlMessages, message)
+		}
+	}
+
 	// write messages to windows based by PBQs.
-	successfullyWrittenMessages, err := rl.writeMessagesToWindows(ctx, messages)
+	successfullyWrittenMessages, err := rl.writeMessagesToWindows(ctx, dataMessages)
 	if err != nil {
 		rl.log.Errorw("Failed to write messages", zap.Int("totalMessages", len(messages)), zap.Int("writtenMessage", len(successfullyWrittenMessages)))
+	}
+
+	// ack the control messages
+	if len(ctrlMessages) != 0 {
+		rl.ackMessages(ctx, ctrlMessages)
 	}
 
 	if len(successfullyWrittenMessages) == 0 {
 		return
 	}
-
 	// ack successful messages
 	rl.ackMessages(ctx, successfullyWrittenMessages)
+
 	// close any windows that need to be closed.
 	// since the watermark will be same for all the messages in the batch
 	// we can invoke remove windows only once per batch

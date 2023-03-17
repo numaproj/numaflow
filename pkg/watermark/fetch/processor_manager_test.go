@@ -311,8 +311,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}
 
-	// publish an idle watermark
-	otValueByte, err = otValueToBytes(0, epoch+600, true)
+	// publish an idle watermark: simulate reduce
+	otValueByte, err = otValueToBytes(-1, epoch+600, true)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByte)
 	assert.NoError(t, err)
@@ -323,6 +323,25 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
 				t.Fatalf("expected p1 has the offset timeline [1651161660500:105] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			allProcessors = testBuffer.processorManager.GetAllProcessors()
+		}
+	}
+
+	// publish an idle watermark: simulate map
+	otValueByte, err = otValueToBytes(106, epoch+600, true)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	// p1 should get the head offset watermark from p2
+	for allProcessors["p1"].offsetTimeline.Dump() != "[IDLE 1651161660600:106] -> [1651161660500:105] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("[IDLE 1651161660600:106] -> [1651161660500:105] -> [-1:-1] -> ..., got %s: %s", allProcessors["p1"].offsetTimeline.Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)

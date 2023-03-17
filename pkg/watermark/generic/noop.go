@@ -47,7 +47,7 @@ func (n NoOpWMProgressor) PublishWatermark(_ wmb.Watermark, _ isb.Offset) {
 }
 
 // PublishIdleWatermark does a no-op idle watermark publish.
-func (n NoOpWMProgressor) PublishIdleWatermark(wmb.Watermark) {
+func (n NoOpWMProgressor) PublishIdleWatermark(wmb.Watermark, isb.Offset) {
 }
 
 // GetLatestWatermark returns the default watermark as the latest watermark.
@@ -58,6 +58,11 @@ func (n NoOpWMProgressor) GetLatestWatermark() wmb.Watermark {
 // GetHeadWatermark returns the default head watermark.
 func (n NoOpWMProgressor) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark{}
+}
+
+// GetHeadWMB returns the default WMB.
+func (n NoOpWMProgressor) GetHeadWMB() wmb.WMB {
+	return wmb.WMB{}
 }
 
 // Close stops the no-op progressor.

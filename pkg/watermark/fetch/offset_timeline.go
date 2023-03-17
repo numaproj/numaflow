@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -51,22 +52,13 @@ func NewOffsetTimeline(ctx context.Context, c int) *OffsetTimeline {
 	}
 
 	for i := 0; i < c; i++ {
-		offsetTimeline.watermarks.PushBack(OffsetWatermark{
-			watermark: -1,
-			offset:    -1,
+		offsetTimeline.watermarks.PushBack(wmb.WMB{
+			Watermark: -1,
+			Offset:    -1,
 		})
 	}
 
 	return &offsetTimeline
-}
-
-// OffsetWatermark stores the maximum offset for the given event time
-// we use basic data type int64 to compare the value
-type OffsetWatermark struct {
-	// watermark is derived from fetch.Watermark
-	watermark int64
-	// offset is derived from isb.Offset
-	offset int64
 }
 
 // Capacity returns the capacity of the OffsetTimeline list.
@@ -76,31 +68,31 @@ func (t *OffsetTimeline) Capacity() int {
 	return t.capacity
 }
 
-// Put inserts the OffsetWatermark into list. It ensures that the list will remain sorted after the insert.
-func (t *OffsetTimeline) Put(node OffsetWatermark) {
+// Put inserts the WMB into list. It ensures that the list will remain sorted after the insert.
+func (t *OffsetTimeline) Put(node wmb.WMB) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	// The `for` loop's amortized time complexity should be O(1). Since the OffsetTimeline is sorted by time and
 	// our access pattern will always hit the most recent data.
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		var elementNode = e.Value.(OffsetWatermark)
-		if node.watermark == elementNode.watermark {
-			// we store the maximum offset for the given event time
-			if node.offset > elementNode.offset {
-				e.Value = OffsetWatermark{
-					watermark: node.watermark,
-					offset:    node.offset,
+		var elementNode = e.Value.(wmb.WMB)
+		if node.Watermark == elementNode.Watermark {
+			// we store the maximum Offset for the given event time
+			if node.Offset > elementNode.Offset {
+				e.Value = wmb.WMB{
+					Watermark: node.Watermark,
+					Offset:    node.Offset,
 				}
 				return
 			} else {
-				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
-					zap.Int64("existingOffset", elementNode.offset), zap.Int64("inputOffset", node.offset))
+				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.Watermark),
+					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
 			}
-		} else if node.watermark > elementNode.watermark {
-			if node.offset < elementNode.offset {
-				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.watermark),
-					zap.Int64("existingOffset", elementNode.offset), zap.Int64("inputOffset", node.offset))
+		} else if node.Watermark > elementNode.Watermark {
+			if node.Offset < elementNode.Offset {
+				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.Watermark),
+					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
 			}
 			// our list is sorted by event time from highest to lowest
@@ -115,25 +107,79 @@ func (t *OffsetTimeline) Put(node OffsetWatermark) {
 	}
 }
 
-// PutIdle inserts the assumed OffsetWatermark which replaces the idle watermark into list. It ensures that the list will remain sorted after the insert.
-func (t *OffsetTimeline) PutIdle(node OffsetWatermark) {
+// PutIdle inserts the idle WMB into list or update the current idle WMB.
+func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	// when inserting an assumed OffsetWatermark, we only need to compare with the head
+	// when inserting an idle WMB, we only need to compare with the head
 	// and can safely skip insertion when any condition doesn't meet
 	if e := t.watermarks.Front(); e != nil {
-		var elementNode = e.Value.(OffsetWatermark)
-		if node.watermark > elementNode.watermark {
-			if node.offset > elementNode.offset {
+		var elementNode = e.Value.(wmb.WMB)
+		if elementNode.Idle {
+			if node.Watermark < elementNode.Watermark {
+				// should never happen
+				return
+			}
+			if elementNode.Offset == node.Offset {
+				e.Value = wmb.WMB{
+					Idle:      true,
+					Offset:    node.Offset,
+					Watermark: node.Watermark,
+				}
+			} else if node.Offset > elementNode.Offset {
+				// NOTE: Valid case for the warning:
+				// If we have an active watermark between two idle watermarks, but this active watermark is skipped
+				// publishing due to "skip publishing same watermark", we will see this warning.
+				// In this case, it's safe to insert the idle watermark.
+				t.log.Warnw("The idle watermark has a larger offset from the head idle watermark", zap.Int64("idleWatermark", node.Watermark),
+					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
+				t.watermarks.InsertBefore(node, e)
+				t.watermarks.Remove(t.watermarks.Back())
+			}
+			return
+		}
+		if node.Watermark > elementNode.Watermark {
+			if node.Offset > elementNode.Offset {
 				t.watermarks.InsertBefore(node, e)
 				t.watermarks.Remove(t.watermarks.Back())
 				return
 			}
-		} else if node.watermark == elementNode.watermark {
-			if node.offset > elementNode.offset {
-				e.Value = OffsetWatermark{
-					watermark: node.watermark,
-					offset:    node.offset,
+		} else if node.Watermark == elementNode.Watermark {
+			if node.Offset > elementNode.Offset {
+				e.Value = wmb.WMB{
+					Idle:      true,
+					Watermark: node.Watermark,
+					Offset:    node.Offset,
+				}
+				return
+			}
+		} else {
+			return
+		}
+	}
+}
+
+// PutReferred inserts the referred WMB, which is a validated watermark copied from other timelines, to replace
+// the idle watermark into list. It ensures that the list will remain sorted after the insert.
+// TODO: clean up and refine the other two put methods after we remove copying over strategy
+func (t *OffsetTimeline) PutReferred(node wmb.WMB) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	// when inserting a referred WMB, we only need to compare with the head
+	// and can safely skip insertion when any condition doesn't meet
+	if e := t.watermarks.Front(); e != nil {
+		var elementNode = e.Value.(wmb.WMB)
+		if node.Watermark > elementNode.Watermark {
+			if node.Offset > elementNode.Offset {
+				t.watermarks.InsertBefore(node, e)
+				t.watermarks.Remove(t.watermarks.Back())
+				return
+			}
+		} else if node.Watermark == elementNode.Watermark {
+			if node.Offset > elementNode.Offset {
+				e.Value = wmb.WMB{
+					Watermark: node.Watermark,
+					Offset:    node.Offset,
 				}
 				return
 			}
@@ -151,7 +197,7 @@ func (t *OffsetTimeline) GetHeadOffset() int64 {
 	if t.watermarks.Len() == 0 {
 		return -1
 	}
-	return t.watermarks.Front().Value.(OffsetWatermark).offset
+	return t.watermarks.Front().Value.(wmb.WMB).Offset
 }
 
 // GetHeadWatermark returns the head watermark, which is the highest one.
@@ -161,33 +207,33 @@ func (t *OffsetTimeline) GetHeadWatermark() int64 {
 	if t.watermarks.Len() == 0 {
 		return 0
 	}
-	return t.watermarks.Front().Value.(OffsetWatermark).watermark
+	return t.watermarks.Front().Value.(wmb.WMB).Watermark
 }
 
-// GetHeadOffsetWatermark returns the largest offset with the largest watermark.
-func (t *OffsetTimeline) GetHeadOffsetWatermark() OffsetWatermark {
+// GetHeadWMB returns the largest offset with the largest watermark.
+func (t *OffsetTimeline) GetHeadWMB() wmb.WMB {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	return t.watermarks.Front().Value.(OffsetWatermark)
+	return t.watermarks.Front().Value.(wmb.WMB)
 }
 
-// GetReferredWatermark returns the referred watermark that will be used to replace
-// the idle watermark value
-func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) OffsetWatermark {
+// GetReferredWatermark returns a referred watermark, which is a validated watermark copied from other timelines,
+// to replace the idle watermark value
+func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) wmb.WMB {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	// find in the offset timeline where the OffsetWatermark has a watermark that is <= the idleWM
+	// find in the offset timeline where the WMB has an active watermark that is <= the idleWM
 	// because, when we replace the idleWM, we need to guarantee the referred watermark's value won't exceed
 	// the largest WM processed from Vn-1's idle processor (meaning the idle processor hasn't seen any data that
 	// is later than this idleWM)
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		if e.Value.(OffsetWatermark).watermark <= idleWM {
-			return e.Value.(OffsetWatermark)
+		if e.Value.(wmb.WMB).Watermark <= idleWM && !e.Value.(wmb.WMB).Idle {
+			return e.Value.(wmb.WMB)
 		}
 	}
-	return OffsetWatermark{
-		watermark: -1,
-		offset:    -1,
+	return wmb.WMB{
+		Watermark: -1,
+		Offset:    -1,
 	}
 }
 
@@ -198,8 +244,8 @@ func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
 	defer t.lock.RUnlock()
 
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		if eventTime >= e.Value.(OffsetWatermark).watermark {
-			return e.Value.(OffsetWatermark).offset
+		if eventTime >= e.Value.(wmb.WMB).Watermark {
+			return e.Value.(wmb.WMB).Offset
 		}
 	}
 
@@ -224,8 +270,8 @@ func (t *OffsetTimeline) GetEventTimeFromInt64(inputOffsetInt64 int64) int64 {
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
 		// get the event time has the closest offset to the input offset
 		// exclude the same offset because this offset may not finish processing yet
-		if e.Value.(OffsetWatermark).offset < inputOffsetInt64 {
-			eventTime = e.Value.(OffsetWatermark).watermark
+		if e.Value.(wmb.WMB).Offset < inputOffsetInt64 {
+			eventTime = e.Value.(wmb.WMB).Watermark
 			break
 		}
 	}
@@ -240,7 +286,11 @@ func (t *OffsetTimeline) Dump() string {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		builder.WriteString(fmt.Sprintf("[%d:%d] -> ", e.Value.(OffsetWatermark).watermark, e.Value.(OffsetWatermark).offset))
+		if e.Value.(wmb.WMB).Idle {
+			builder.WriteString(fmt.Sprintf("[IDLE %d:%d] -> ", e.Value.(wmb.WMB).Watermark, e.Value.(wmb.WMB).Offset))
+		} else {
+			builder.WriteString(fmt.Sprintf("[%d:%d] -> ", e.Value.(wmb.WMB).Watermark, e.Value.(wmb.WMB).Offset))
+		}
 	}
 	if builder.Len() < 4 {
 		return ""

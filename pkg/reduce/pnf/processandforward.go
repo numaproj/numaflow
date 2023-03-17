@@ -267,7 +267,9 @@ func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string]
 		for bufferName := range p.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
 				// use the watermark of the current read batch for the idle watermark
-				p.publishWatermark[bufferName].PublishIdleWatermark(wm)
+				// we don't care about the offset here because, in this use case,
+				// we will use a referred watermark to replace this idle watermark
+				p.publishWatermark[bufferName].PublishIdleWatermark(wm, isb.SimpleIntOffset(func() int64 { return -1 }))
 			}
 		}
 	}
