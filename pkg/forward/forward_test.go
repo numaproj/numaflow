@@ -91,6 +91,7 @@ func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) (
 }
 
 func TestNewInterStepDataForward(t *testing.T) {
+	t.Logf("starting TestNewInterStepDataForward")
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
 	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
 	toSteps := map[string]isb.BufferWriter{
@@ -116,6 +117,20 @@ func TestNewInterStepDataForward(t *testing.T) {
 	assert.True(t, to1.IsEmpty())
 
 	stopped := f.Start()
+
+	// make sure we end in time
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case <-stopped:
+			return
+		case <-ctx.Done():
+			t.Errorf("did not complete within expected time, %s", ctx.Err())
+		}
+	}()
+
 	// write some data
 	_, errs := fromStep.Write(ctx, writeMessages[0:5])
 	assert.Equal(t, make([]error, 5), errs)
@@ -138,12 +153,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 	// only for shutdown will work as from buffer is not empty
 	f.ForceStop()
 
-	select {
-	case <-stopped:
-		return
-	case <-ctx.Done():
-		t.Errorf("did not complete within expected time, %s", ctx.Err())
-	}
+	wg.Wait()
 }
 
 type testWMBFetcher struct {
