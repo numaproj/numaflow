@@ -180,6 +180,16 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		rl.closePartitions(partitions)
 		rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
 	}
+
+	if len(closedWindows) == 0 {
+		nextWin := rl.pbqManager.NextWindowToBeClosed()
+		if nextWin.EndTime().After(time.Time(wm).Add(time.Millisecond)) {
+			for _, p := range rl.publishWatermark {
+				// TODO: What would be the offset?
+				p.PublishWatermark(wm, isb.SimpleIntOffset(func() int64 { return -1 }))
+			}
+		}
+	}
 }
 
 // writeMessagesToWindows write the messages to each window that message belongs to. Each window is backed by a PBQ.
