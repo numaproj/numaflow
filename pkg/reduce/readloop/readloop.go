@@ -183,10 +183,11 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
 	if len(closedWindows) == 0 {
 		nextWin := rl.pbqManager.NextWindowToBeClosed()
-		if nextWin.EndTime().After(time.Time(wm).Add(time.Millisecond)) {
+		watermark := time.Time(wm).Add(time.Millisecond)
+		if nextWin.EndTime().After(watermark) {
 			for _, p := range rl.publishWatermark {
 				// TODO: What would be the offset?
-				p.PublishWatermark(wm, isb.SimpleIntOffset(func() int64 { return -1 }))
+				p.PublishIdleWatermark(wm, isb.SimpleIntOffset(func() int64 { return -1 }))
 			}
 		}
 	}
