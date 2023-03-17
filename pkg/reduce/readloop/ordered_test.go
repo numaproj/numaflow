@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -109,7 +110,10 @@ func TestOrderedProcessing(t *testing.T) {
 			cCtx, cancelFn := context.WithCancel(ctx)
 			defer cancelFn()
 			for _, _partition := range tt.partitions {
-				p, _ := pbqManager.CreateNewPBQ(ctx, _partition)
+				kw := keyed.NewKeyedWindow(_partition.Start, _partition.End)
+				kw.AddSlot(_partition.Slot)
+
+				p, _ := pbqManager.CreateNewPBQ(ctx, _partition, kw)
 				t := op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
 				op.insertTask(t)
 			}
