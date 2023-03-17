@@ -1,4 +1,22 @@
-package slist
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Package wlist implements a window list ordered by the start time. The Front/Head of the list will always have the smallest
+// element while the End/Tail will have the largest element (start time).
+package wlist
 
 import (
 	"container/list"
@@ -27,6 +45,8 @@ func New[W Window]() *SortedWindowList[W] {
 	}
 }
 
+// InsertFront tries to insert the window to the Front of the list as long as the window is smaller than the current
+// Front/Head.
 func (s *SortedWindowList[W]) InsertFront(kw W) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -40,6 +60,8 @@ func (s *SortedWindowList[W]) InsertFront(kw W) {
 	s.windows.PushFront(kw)
 }
 
+// InsertBack tries to insert the window to the Back of the list as long as the window is larger than the current
+// Back/Tail.
 func (s *SortedWindowList[W]) InsertBack(kw W) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -53,7 +75,7 @@ func (s *SortedWindowList[W]) InsertBack(kw W) {
 	s.windows.PushBack(kw)
 }
 
-// InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window
+// InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window.
 func (s *SortedWindowList[W]) InsertIfNotPresent(kw W) (aw W, isPresent bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -98,6 +120,7 @@ func (s *SortedWindowList[W]) InsertIfNotPresent(kw W) (aw W, isPresent bool) {
 	return
 }
 
+// DeleteWindow deletes a window from the list.
 func (s *SortedWindowList[W]) DeleteWindow(kw W) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -113,7 +136,8 @@ func (s *SortedWindowList[W]) DeleteWindow(kw W) {
 	}
 }
 
-func (s *SortedWindowList[W]) RemoveWindows(wm time.Time) []W {
+// RemoveWindows removes a set of windows smaller than or equal to the given time.
+func (s *SortedWindowList[W]) RemoveWindows(tm time.Time) []W {
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -125,7 +149,7 @@ func (s *SortedWindowList[W]) RemoveWindows(wm time.Time) []W {
 	}
 	// examine the earliest window
 	earliestWindow := s.windows.Front().Value.(W)
-	if earliestWindow.EndTime().After(wm) {
+	if earliestWindow.EndTime().After(tm) {
 		// no windows to close since the watermark is behind the earliest window
 		return closedWindows
 	}
@@ -137,7 +161,7 @@ func (s *SortedWindowList[W]) RemoveWindows(wm time.Time) []W {
 		next := e.Next()
 
 		// break, if we find a window with end time > watermark
-		if win.EndTime().After(wm) {
+		if win.EndTime().After(tm) {
 			break
 		}
 
@@ -149,24 +173,28 @@ func (s *SortedWindowList[W]) RemoveWindows(wm time.Time) []W {
 	return closedWindows
 }
 
+// Len returns the length of the window.
 func (s *SortedWindowList[W]) Len() int {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	return s.windows.Len()
 }
 
+// Front returns the smallest element from the list.
 func (s *SortedWindowList[W]) Front() W {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	return s.windows.Front().Value.(W)
 }
 
+// Back returns the largest element from the list.
 func (s *SortedWindowList[W]) Back() W {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	return s.windows.Back().Value.(W)
 }
 
+// Items returns the entire window list.
 func (s *SortedWindowList[W]) Items() []W {
 	s.lock.RLock()
 	defer s.lock.RUnlock()

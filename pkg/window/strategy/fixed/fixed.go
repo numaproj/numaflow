@@ -26,9 +26,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/slist"
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
+	"github.com/numaproj/numaflow/pkg/window/wlist"
 )
 
 // Fixed implements Fixed window.
@@ -48,7 +48,7 @@ type Fixed struct {
 	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
 	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 	// from the Head.
-	entries *slist.SortedWindowList[window.AlignedKeyedWindower]
+	entries *wlist.SortedWindowList[window.AlignedKeyedWindower]
 	lock    sync.RWMutex
 }
 
@@ -58,7 +58,7 @@ var _ window.Windower = (*Fixed)(nil)
 func NewFixed(length time.Duration) window.Windower {
 	return &Fixed{
 		Length:  length,
-		entries: slist.New[window.AlignedKeyedWindower](),
+		entries: wlist.New[window.AlignedKeyedWindower](),
 		lock:    sync.RWMutex{},
 	}
 }
