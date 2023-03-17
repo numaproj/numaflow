@@ -22,7 +22,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
-// AlignedWindower defines a window that is aligned by start and end time.
+// AlignedWindower defines a window that is aligned and bounded by start and end time.
 type AlignedWindower interface {
 	// StartTime returns the start time of the window
 	StartTime() time.Time
@@ -30,8 +30,7 @@ type AlignedWindower interface {
 	EndTime() time.Time
 }
 
-// AlignedKeyedWindower represents a bounded window (i.e., it will have a definite start and end time), and the
-// keys that also fall into the same window.
+// AlignedKeyedWindower represents a keyed or non-keyed aligned window (bounded by start and end).
 type AlignedKeyedWindower interface {
 	AlignedWindower
 	// AddSlot adds a slot to the window. Slots are hash-ranges for keys.
