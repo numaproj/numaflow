@@ -138,7 +138,12 @@ func TestNewInterStepDataForward(t *testing.T) {
 	// only for shutdown will work as from buffer is not empty
 	f.ForceStop()
 
-	<-stopped
+	select {
+	case <-stopped:
+		return
+	case <-ctx.Done():
+		t.Errorf("did not complete within expected time, %s", ctx.Err())
+	}
 }
 
 type testWMBFetcher struct {
