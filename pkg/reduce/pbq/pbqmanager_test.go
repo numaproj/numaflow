@@ -320,3 +320,79 @@ func TestManager_StartUp(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, ids, 2)
 }
+
+func TestManager_NextWindowToBeClosed(t *testing.T) {
+	size := int64(100)
+
+	ctx := context.Background()
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),
+		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
+	assert.NoError(t, err)
+
+	// create a new pbq using pbq manager
+	partitionOne := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Slot:  "slot-1",
+	}
+	partitionTwo := partition.ID{
+		Start: time.Unix(60, 0),
+		End:   time.Unix(120, 0),
+		Slot:  "slot-2",
+	}
+	partitionThree := partition.ID{
+		Start: time.Unix(120, 0),
+		End:   time.Unix(240, 0),
+		Slot:  "slot-1",
+	}
+	partitionFour := partition.ID{
+		Start: time.Unix(120, 0),
+		End:   time.Unix(240, 0),
+		Slot:  "slot-2",
+	}
+
+	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-1")
+
+	kwTwo := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
+	kwOne.AddSlot("slot-2")
+
+	kwThree := keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(240, 0))
+	kwOne.AddSlot("slot-1")
+
+	kwFour := keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(240, 0))
+	kwOne.AddSlot("slot-2")
+
+	var pq1, pq2, pq3, pq4 ReadWriteCloser
+	pq1, err = pbqManager.CreateNewPBQ(ctx, partitionOne, kwOne)
+	assert.NoError(t, err)
+
+	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo, kwTwo)
+	assert.NoError(t, err)
+
+	pq3, err = pbqManager.CreateNewPBQ(ctx, partitionThree, kwThree)
+	assert.NoError(t, err)
+
+	pq4, err = pbqManager.CreateNewPBQ(ctx, partitionFour, kwFour)
+	assert.NoError(t, err)
+
+	aw := pbqManager.NextWindowToBeClosed()
+	assert.Equal(t, aw.EndTime(), time.Unix(120, 0))
+
+	_ = pq1.GC()
+	aw = pbqManager.NextWindowToBeClosed()
+	assert.Equal(t, aw.EndTime(), time.Unix(120, 0))
+
+	_ = pq2.GC()
+	aw = pbqManager.NextWindowToBeClosed()
+	assert.Equal(t, aw.EndTime(), time.Unix(240, 0))
+
+	_ = pq3.GC()
+	aw = pbqManager.NextWindowToBeClosed()
+	assert.Equal(t, aw.EndTime(), time.Unix(240, 0))
+
+	_ = pq4.GC()
+	aw = pbqManager.NextWindowToBeClosed()
+	assert.Nil(t, aw)
+
+}

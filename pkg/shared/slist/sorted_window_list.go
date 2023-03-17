@@ -4,16 +4,23 @@ import (
 	"container/list"
 	"sync"
 	"time"
-
-	"github.com/numaproj/numaflow/pkg/window"
 )
 
-type SortedWindowList[W window.AlignedKeyedWindower] struct {
+type Window interface {
+	// StartTime returns the start time of the window
+	StartTime() time.Time
+	// EndTime returns the end time of the window
+	EndTime() time.Time
+}
+
+// SortedWindowList is a thread safe list implementation, which is sorted by window start time
+// from lowest to highest
+type SortedWindowList[W Window] struct {
 	windows *list.List
 	lock    *sync.RWMutex
 }
 
-func New[W window.AlignedKeyedWindower]() *SortedWindowList[W] {
+func New[W Window]() *SortedWindowList[W] {
 	return &SortedWindowList[W]{
 		windows: list.New(),
 		lock:    new(sync.RWMutex),
@@ -23,12 +30,26 @@ func New[W window.AlignedKeyedWindower]() *SortedWindowList[W] {
 func (s *SortedWindowList[W]) InsertFront(kw W) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	if s.windows.Len() == 0 {
+		s.windows.PushFront(kw)
+		return
+	}
+	if !s.windows.Front().Value.(W).StartTime().After(kw.StartTime()) {
+		return
+	}
 	s.windows.PushFront(kw)
 }
 
 func (s *SortedWindowList[W]) InsertBack(kw W) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	if s.windows.Len() == 0 {
+		s.windows.PushBack(kw)
+		return
+	}
+	if !s.windows.Back().Value.(W).StartTime().Before(kw.StartTime()) {
+		return
+	}
 	s.windows.PushBack(kw)
 }
 

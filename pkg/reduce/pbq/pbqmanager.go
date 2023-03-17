@@ -37,7 +37,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-type WindowToDrop struct {
+// RegisteredWindow to track the number of windows for a start and end time.
+type RegisteredWindow struct {
 	window.AlignedKeyedWindower
 	count int
 }
@@ -51,7 +52,7 @@ type Manager struct {
 	pbqOptions    *options
 	pbqMap        map[string]*PBQ
 	log           *zap.SugaredLogger
-	yetToBeClosed *slist.SortedWindowList[*WindowToDrop]
+	yetToBeClosed *slist.SortedWindowList[*RegisteredWindow]
 	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
@@ -78,7 +79,7 @@ func NewManager(ctx context.Context, vertexName string, pipelineName string, vr 
 		pbqMap:        make(map[string]*PBQ),
 		pbqOptions:    pbqOpts,
 		log:           logging.FromContext(ctx),
-		yetToBeClosed: slist.New[*WindowToDrop](),
+		yetToBeClosed: slist.New[*RegisteredWindow](),
 	}
 
 	return pbqManager, nil
@@ -207,7 +208,7 @@ func (m *Manager) ShutDown(ctx context.Context) {
 
 // register is intended to be used by PBQ to register itself with the manager.
 func (m *Manager) register(partitionID partition.ID, p *PBQ) {
-	ww := &WindowToDrop{
+	ww := &RegisteredWindow{
 		AlignedKeyedWindower: p.kw,
 	}
 
@@ -234,7 +235,7 @@ func (m *Manager) deregister(partitionID partition.ID) error {
 	m.Lock()
 	defer m.Unlock()
 
-	ww := &WindowToDrop{
+	ww := &RegisteredWindow{
 		AlignedKeyedWindower: m.pbqMap[partitionID.String()].kw,
 	}
 
@@ -284,9 +285,8 @@ func (m *Manager) Replay(ctx context.Context) {
 	m.log.Infow("Finished replaying records from store", zap.Duration("took", time.Since(tm)), zap.Any("partitions", partitionsIds))
 }
 
+// NextWindowToBeClosed returns the next keyed window that is yet to be closed
 func (m *Manager) NextWindowToBeClosed() window.AlignedKeyedWindower {
-	m.Lock()
-	defer m.Unlock()
 	if m.yetToBeClosed.Len() == 0 {
 		return nil
 	}
