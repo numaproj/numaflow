@@ -22,34 +22,34 @@ import (
 
 // Options for writing to redis
 type Options struct {
-	// pipelining enables redis pipeline
-	pipelining bool
-	// infoRefreshInterval refreshes the info at this interval
-	infoRefreshInterval time.Duration
-	// lagDuration is the minimum permissable consumerLag that we consider as a valid consumerLag.
-	lagDuration time.Duration
-	// readTimeOut is the timeout needed for read timeout
-	readTimeOut time.Duration
-	// checkBackLog is used to read all the PENDING entries from the stream
-	checkBackLog bool
-	// maxLength is the maximum length of the stream before it reaches full
-	maxLength int64
-	// bufferUsageLimit is the limit of buffer usage before we declare it as full
-	bufferUsageLimit float64
-	// refreshBufferWriteInfo is used to determine if we refresh buffer write info
-	refreshBufferWriteInfo bool
+	// Pipelining enables redis pipeline
+	Pipelining bool
+	// InfoRefreshInterval refreshes the info at this interval
+	InfoRefreshInterval time.Duration
+	// LagDuration is the minimum permissable consumerLag that we consider as a valid consumerLag.
+	LagDuration time.Duration
+	// ReadTimeOut is the timeout needed for read timeout
+	ReadTimeOut time.Duration
+	// CheckBackLog is used to read all the PENDING entries from the stream
+	CheckBackLog bool
+	// MaxLength is the maximum length of the stream before it reaches full
+	MaxLength int64
+	// BufferUsageLimit is the limit of buffer usage before we declare it as full
+	BufferUsageLimit float64
+	// RefreshBufferWriteInfo is used to determine if we refresh buffer write info
+	RefreshBufferWriteInfo bool
 }
 
 // Option to apply different options
 type Option interface {
-	apply(*Options)
+	Apply(*Options)
 }
 
 // pipelining option
 type pipelining bool
 
-func (p pipelining) apply(opts *Options) {
-	opts.pipelining = true
+func (p pipelining) Apply(opts *Options) {
+	opts.Pipelining = true
 }
 
 // WithoutPipelining turns on redis pipelining
@@ -60,8 +60,8 @@ func WithoutPipelining() Option {
 // infoRefreshInterval option
 type infoRefreshInterval time.Duration
 
-func (i infoRefreshInterval) apply(o *Options) {
-	o.infoRefreshInterval = time.Duration(i)
+func (i infoRefreshInterval) Apply(o *Options) {
+	o.InfoRefreshInterval = time.Duration(i)
 }
 
 // WithInfoRefreshInterval sets the refresh interval
@@ -72,8 +72,8 @@ func WithInfoRefreshInterval(t time.Duration) Option {
 // lagDuration option
 type lagDuration time.Duration
 
-func (l lagDuration) apply(o *Options) {
-	o.lagDuration = time.Duration(l)
+func (l lagDuration) Apply(o *Options) {
+	o.LagDuration = time.Duration(l)
 }
 
 // WithLagDuration sets the consumerLag duration
@@ -84,8 +84,8 @@ func WithLagDuration(t time.Duration) Option {
 // readTimeOut option
 type readTimeOut time.Duration
 
-func (r readTimeOut) apply(o *Options) {
-	o.readTimeOut = time.Duration(r)
+func (r readTimeOut) Apply(o *Options) {
+	o.ReadTimeOut = time.Duration(r)
 }
 
 // WithReadTimeOut sets the readTimeOut
@@ -96,8 +96,8 @@ func WithReadTimeOut(t time.Duration) Option {
 // checkBackLog option
 type checkBackLog bool
 
-func (b checkBackLog) apply(o *Options) {
-	o.checkBackLog = true
+func (b checkBackLog) Apply(o *Options) {
+	o.CheckBackLog = true
 }
 
 // WithCheckBacklog sets the checkBackLog option
@@ -108,8 +108,8 @@ func WithCheckBacklog(b bool) Option {
 // maxLength option
 type maxLength int64
 
-func (m maxLength) apply(o *Options) {
-	o.maxLength = int64(m)
+func (m maxLength) Apply(o *Options) {
+	o.MaxLength = int64(m)
 }
 
 // WithMaxLength sets the maxLength
@@ -120,8 +120,8 @@ func WithMaxLength(m int64) Option {
 // usageLimit option
 type bufferUsageLimit float64
 
-func (u bufferUsageLimit) apply(o *Options) {
-	o.bufferUsageLimit = float64(u)
+func (u bufferUsageLimit) Apply(o *Options) {
+	o.BufferUsageLimit = float64(u)
 }
 
 // WithBufferUsageLimit sets the bufferUsageLimit
@@ -132,8 +132,8 @@ func WithBufferUsageLimit(u float64) Option {
 // refreshBufferWriteInfo option
 type refreshBufferWriteInfo bool
 
-func (r refreshBufferWriteInfo) apply(o *Options) {
-	o.refreshBufferWriteInfo = bool(r)
+func (r refreshBufferWriteInfo) Apply(o *Options) {
+	o.RefreshBufferWriteInfo = bool(r)
 }
 
 // WithRefreshBufferWriteInfo sets the refreshBufferWriteInfo

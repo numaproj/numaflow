@@ -69,12 +69,12 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	switch sp.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			writeOpts := []redisisb.Option{}
+			writeOpts := []redisclient.Option{}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
-				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
+				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 			buffers := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e)
 			for _, buffer := range buffers {

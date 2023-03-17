@@ -64,9 +64,9 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		redisClient := redisclient.NewInClusterRedisClient()
 		fromGroup := fromBufferName + "-group"
 		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
-		readOptions := []redisisb.Option{}
+		readOptions := []redisclient.Option{}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
-			readOptions = append(readOptions, redisisb.WithReadTimeOut(x.ReadTimeout.Duration))
+			readOptions = append(readOptions, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readOptions...)
 	case dfv1.ISBSvcTypeJetStream:
