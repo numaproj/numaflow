@@ -98,7 +98,8 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	assert.Equal(t, wmb.Watermark(time.UnixMilli(epoch-60000).In(location)).String(), head.String())
 
 	// simulate the next read batch where the watermark is now $epoch
-	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)))
+	// set offset to -1 to simulate reduce vertex publish idle watermark
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(-1) }))
 	keys, err = p.otStore.GetAllKeys(p.ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"publisherTestPod1"}, keys)
@@ -107,6 +108,8 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	otDecode, err := wmb.DecodeToWMB(otValue)
 	assert.NoError(t, err)
 	assert.True(t, otDecode.Idle)
+	assert.Equal(t, otDecode.Watermark, epoch)
+	assert.Equal(t, otDecode.Offset, int64(-1))
 
 	_ = p.Close()
 

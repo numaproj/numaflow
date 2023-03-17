@@ -24,18 +24,15 @@ import (
 type MessageKind int16
 
 const (
-	Data MessageKind = 1 << iota // Data payload
-	WMB                          // Watermark Barrier
+	Data MessageKind = iota // Data payload
+	WMB                     // Watermark Barrier
 )
 
-func (mta MessageKind) String() string {
-	var mt MessageKind
+func (mt MessageKind) String() string {
 	switch mt {
-	case 0:
-		return "Empty"
-	case mt & Data:
+	case Data:
 		return "Data"
-	case mt & WMB:
+	case WMB:
 		return "WMB"
 	default:
 		return "Unknown"

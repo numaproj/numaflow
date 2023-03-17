@@ -185,5 +185,7 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(d.vertexReplica)),
 		"buffer":                        d.fromBuffer.GetName(),
 	}).Add(float64(totalBytes))
+
+	// readMessages has to be written to PBQ, acked, etc.
 	d.readloop.Process(ctx, readMessages)
 }
