@@ -152,6 +152,17 @@ func Test_buildVertices(t *testing.T) {
 	assert.Equal(t, testPipeline.Spec.Watermark.MaxDelay, r[testPipeline.Name+"-"+testPipeline.Spec.Vertices[0].Name].Spec.Watermark.MaxDelay)
 }
 
+func Test_buildReducesVertices(t *testing.T) {
+	pl := testReducePipeline.DeepCopy()
+	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
+	pl.Spec.Edges[0].Parallelism = pointer.Int32(2)
+	r := buildVertices(pl)
+	assert.Equal(t, 5, len(r))
+	_, existing := r[pl.Name+"-"+pl.Spec.Vertices[1].Name]
+	assert.True(t, existing)
+	assert.Equal(t, int32(2), *r[pl.Name+"-"+pl.Spec.Vertices[1].Name].Spec.Replicas)
+}
+
 func Test_copyVertexLimits(t *testing.T) {
 	pl := testPipeline.DeepCopy()
 	v := pl.Spec.Vertices[0].DeepCopy()
