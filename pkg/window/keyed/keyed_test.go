@@ -40,7 +40,7 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 		{
 			name: "with_some_existing_keys",
 			given: &AlignedKeyedWindow{
-				keys: map[string]struct{}{"key2": {}, "key3": {}},
+				slots: map[string]struct{}{"key2": {}, "key3": {}},
 			},
 			input:        "key4",
 			expectedKeys: map[string]struct{}{"key2": {}, "key3": {}, "key4": {}},
@@ -50,13 +50,13 @@ func TestKeyedWindow_AddKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			kw = NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-			for k := range tt.given.keys {
+			for k := range tt.given.slots {
 				kw.AddSlot(k)
 			}
 			kw.AddSlot(tt.input)
-			assert.Equal(t, len(tt.expectedKeys), len(kw.keys))
+			assert.Equal(t, len(tt.expectedKeys), len(kw.slots))
 			for k := range tt.expectedKeys {
-				_, ok := kw.keys[k]
+				_, ok := kw.slots[k]
 				assert.True(t, ok)
 			}
 		})

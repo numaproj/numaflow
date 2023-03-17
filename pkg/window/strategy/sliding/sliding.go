@@ -22,7 +22,6 @@ limitations under the License.
 package sliding
 
 import (
-	"container/list"
 	"sync"
 	"time"
 
@@ -47,7 +46,7 @@ type Sliding struct {
 	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
 	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 	// from the Head.
-	entries *list.List
+	entries *window.SortedWindowList[window.AlignedKeyedWindower]
 	lock    sync.RWMutex
 }
 
@@ -58,7 +57,7 @@ func NewSliding(length time.Duration, slide time.Duration) *Sliding {
 	return &Sliding{
 		Length:  length,
 		Slide:   slide,
-		entries: list.New(),
+		entries: window.NewSortedWindowList[window.AlignedKeyedWindower](),
 		lock:    sync.RWMutex{},
 	}
 }
@@ -94,78 +93,10 @@ func (s *Sliding) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindowe
 }
 
 // InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window
-func (s *Sliding) InsertIfNotPresent(kw window.AlignedKeyedWindower) (aw window.AlignedKeyedWindower, isPresent bool) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	// this could be the first window
-	if s.entries.Len() == 0 {
-		s.entries.PushFront(kw)
-		return kw, false
-	}
-
-	earliestWindow := s.entries.Front().Value.(*keyed.AlignedKeyedWindow)
-	recentWindow := s.entries.Back().Value.(*keyed.AlignedKeyedWindow)
-
-	// if there is only one window
-	if earliestWindow.StartTime().Equal(kw.StartTime()) && earliestWindow.EndTime().Equal(kw.EndTime()) {
-		aw = earliestWindow
-		isPresent = true
-	} else if earliestWindow.StartTime().After(kw.StartTime()) {
-		// late arrival
-		s.entries.PushFront(kw)
-		aw = kw
-	} else if recentWindow.StartTime().Before(kw.StartTime()) {
-		// early arrival
-		s.entries.PushBack(kw)
-		aw = kw
-	} else {
-		// a window in the middle
-		for e := s.entries.Back(); e.Prev() != nil; e = e.Prev() {
-			win := e.Value.(*keyed.AlignedKeyedWindow)
-			prevWin := e.Prev().Value.(*keyed.AlignedKeyedWindow)
-			if win.StartTime().Equal(kw.StartTime()) && win.EndTime().Equal(kw.EndTime()) {
-				aw = win
-				isPresent = true
-				break
-			}
-			if win.StartTime().After(kw.StartTime()) && prevWin.StartTime().Before(kw.StartTime()) {
-				s.entries.InsertBefore(kw, e)
-				aw = kw
-				break
-			}
-		}
-	}
-	return
+func (s *Sliding) InsertIfNotPresent(kw window.AlignedKeyedWindower) (window.AlignedKeyedWindower, bool) {
+	return s.entries.InsertIfNotPresent(kw)
 }
 
 func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	closedWindows := make([]window.AlignedKeyedWindower, 0)
-
-	// examine the earliest window
-	earliestWindow := s.entries.Front().Value.(*keyed.AlignedKeyedWindow)
-	if earliestWindow.EndTime().After(wm) {
-		// no windows to close since the watermark is behind the earliest window
-		return closedWindows
-	}
-
-	// close the window if the window end time is equal to the watermark
-	// because window is right exclusive
-	for e := s.entries.Front(); e != nil; {
-		win := e.Value.(*keyed.AlignedKeyedWindow)
-		next := e.Next()
-
-		// break, if we find a window with end time > watermark
-		if win.EndTime().After(wm) {
-			break
-		}
-
-		s.entries.Remove(e)
-		closedWindows = append(closedWindows, win)
-		e = next
-	}
-
-	return closedWindows
+	return s.entries.RemoveWindows(wm)
 }
