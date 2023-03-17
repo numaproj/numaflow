@@ -20,11 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"github.com/numaproj/numaflow/pkg/window/wlist"
-
-	"github.com/stretchr/testify/assert"
 )
 
 // TestSliding_AssignWindow tests the assignment of element to a set of windows
@@ -322,7 +321,7 @@ func TestSliding_RemoveWindows(t *testing.T) {
 }
 
 func setup(windows *Sliding, wins []*keyed.AlignedKeyedWindow) {
-	windows.entries = wlist.New[window.AlignedKeyedWindower]()
+	windows.entries = window.NewSortedWindowList[window.AlignedKeyedWindower]()
 	for _, win := range wins {
 		windows.entries.InsertBack(win)
 	}

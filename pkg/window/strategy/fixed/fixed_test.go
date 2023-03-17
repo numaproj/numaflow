@@ -20,10 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/numaproj/numaflow/pkg/window/wlist"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/window"
 
 	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
@@ -387,7 +386,7 @@ func TestFixed_RemoveWindows(t *testing.T) {
 }
 
 func setup(windows *Fixed, wins []*keyed.AlignedKeyedWindow) {
-	windows.entries = wlist.New[window.AlignedKeyedWindower]()
+	windows.entries = window.NewSortedWindowList[window.AlignedKeyedWindower]()
 	for _, win := range wins {
 		windows.entries.InsertBack(win)
 	}

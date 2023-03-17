@@ -18,7 +18,7 @@ limitations under the License.
 // defined by a static window size, e.g. minutely windows or hourly windows. They are generally aligned, i.e. every
 // window applies across all the data for the corresponding period of time.
 // Package fixed also maintains the state of active keyed windows in a vertex.
-// Keyed Window maintains the association between set of keys and an interval window.
+// Keyed AlignedWindower maintains the association between set of keys and an interval window.
 // keyed also provides the lifecycle management of an interval window. Watermark is used to trigger the expiration of windows.
 package fixed
 
@@ -28,7 +28,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"github.com/numaproj/numaflow/pkg/window/wlist"
 )
 
 // Fixed implements Fixed window.
@@ -48,7 +47,7 @@ type Fixed struct {
 	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
 	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 	// from the Head.
-	entries *wlist.SortedWindowList[window.AlignedKeyedWindower]
+	entries *window.SortedWindowList[window.AlignedKeyedWindower]
 	lock    sync.RWMutex
 }
 
@@ -58,7 +57,7 @@ var _ window.Windower = (*Fixed)(nil)
 func NewFixed(length time.Duration) window.Windower {
 	return &Fixed{
 		Length:  length,
-		entries: wlist.New[window.AlignedKeyedWindower](),
+		entries: window.NewSortedWindowList[window.AlignedKeyedWindower](),
 		lock:    sync.RWMutex{},
 	}
 }

@@ -14,9 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package wlist implements a window list ordered by the start time. The Front/Head of the list will always have the smallest
-// element while the End/Tail will have the largest element (start time).
-package wlist
+package window
 
 import (
 	"container/list"
@@ -24,21 +22,16 @@ import (
 	"time"
 )
 
-type Window interface {
-	// StartTime returns the start time of the window
-	StartTime() time.Time
-	// EndTime returns the end time of the window
-	EndTime() time.Time
-}
-
 // SortedWindowList is a thread safe list implementation, which is sorted by window start time
 // from lowest to highest
-type SortedWindowList[W Window] struct {
+type SortedWindowList[W AlignedWindower] struct {
 	windows *list.List
 	lock    *sync.RWMutex
 }
 
-func New[W Window]() *SortedWindowList[W] {
+// NewSortedWindowList implements a window list ordered by the start time. The Front/Head of the list will always have the smallest
+// element while the End/Tail will have the largest element (start time).
+func NewSortedWindowList[W AlignedWindower]() *SortedWindowList[W] {
 	return &SortedWindowList[W]{
 		windows: list.New(),
 		lock:    new(sync.RWMutex),

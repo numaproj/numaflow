@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package wlist
+package window
 
 import (
 	"testing"
@@ -179,7 +179,7 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := New[*TestWindow]()
+			windows := NewSortedWindowList[*TestWindow]()
 			setup(windows, tt.given)
 			ret, isPresent := windows.InsertIfNotPresent(tt.input)
 			assert.Equal(t, tt.isPresent, isPresent)
@@ -232,7 +232,7 @@ func TestSortedWindowList_RemoveWindows(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := New[*TestWindow]()
+			windows := NewSortedWindowList[*TestWindow]()
 			setup(windows, tt.given)
 			removedWindows := windows.RemoveWindows(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), len(removedWindows))
@@ -351,7 +351,7 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := New[*TestWindow]()
+			windows := NewSortedWindowList[*TestWindow]()
 			setup(windows, tt.given)
 			windows.DeleteWindow(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
@@ -429,7 +429,7 @@ func TestSortedWindowList_InsertFront(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := New[*TestWindow]()
+			windows := NewSortedWindowList[*TestWindow]()
 			setup(windows, tt.given)
 			windows.InsertFront(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
@@ -507,7 +507,7 @@ func TestSortedWindowList_InsertBack(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := New[*TestWindow]()
+			windows := NewSortedWindowList[*TestWindow]()
 			setup(windows, tt.given)
 			windows.InsertBack(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())

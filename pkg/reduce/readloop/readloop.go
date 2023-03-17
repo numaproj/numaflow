@@ -178,7 +178,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	for _, cw := range closedWindows {
 		partitions := cw.Partitions()
 		rl.closePartitions(partitions)
-		rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
+		rl.log.Debugw("Closing AlignedWindower", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
 	}
 }
 

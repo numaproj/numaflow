@@ -27,7 +27,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"github.com/numaproj/numaflow/pkg/window/wlist"
 )
 
 // Sliding implements sliding windows
@@ -47,7 +46,7 @@ type Sliding struct {
 	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
 	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 	// from the Head.
-	entries *wlist.SortedWindowList[window.AlignedKeyedWindower]
+	entries *window.SortedWindowList[window.AlignedKeyedWindower]
 	lock    sync.RWMutex
 }
 
@@ -58,7 +57,7 @@ func NewSliding(length time.Duration, slide time.Duration) *Sliding {
 	return &Sliding{
 		Length:  length,
 		Slide:   slide,
-		entries: wlist.New[window.AlignedKeyedWindower](),
+		entries: window.NewSortedWindowList[window.AlignedKeyedWindower](),
 		lock:    sync.RWMutex{},
 	}
 }
