@@ -308,41 +308,23 @@ func NewKafkaSource(
 			config.Net.TLS.Config = c
 		}
 	}
-	kafkasource.logger.Infow("config sasl", zap.Any("sasl", source.SASL))
 	if sasl := source.SASL; sasl != nil {
-		kafkasource.logger.Infow("config sarama kerberos client")
-		config.Net.SASL.Enable = true
-		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeGSSAPI)
-		if gssapi, err := sharedutil.GetGSSAPIConfig(sasl); err != nil {
-			return nil, fmt.Errorf("error loading gssapi config, %w", err)
-		} else {
-			config.Net.SASL.GSSAPI = *gssapi
+		switch *sasl.Mechanism {
+		case dfv1.SASLTypeGSSAPI:
+			if gssapi := sasl.GSSAPI; gssapi != nil {
+				config.Net.SASL.Enable = true
+				config.Net.SASL.Mechanism = sarama.SASLTypeGSSAPI
+				if gssapi, err := sharedutil.GetGSSAPIConfig(gssapi); err != nil {
+					return nil, fmt.Errorf("error loading gssapi config, %w", err)
+				} else {
+					config.Net.SASL.GSSAPI = *gssapi
+				}
+			}
+		default:
+			return nil, fmt.Errorf("SASL mechanism not supported: %s", *sasl.Mechanism)
 		}
-
-		//kafkasource.logger.Infow("init sarama kerberos client")
-		//kbrclient, err := sarama.NewKerberosClient(&config.Net.SASL.GSSAPI)
-		//// Expect to create client with password
-		//if err != nil {
-		//	kafkasource.logger.Errorw("Problem initializing sarama kerberos client", zap.Error(err))
-		//	return nil, fmt.Errorf("error loading gssapi config, %w", err)
-		//}
-		//err = kbrclient.Login()
-		//if err != nil {
-		//	kafkasource.logger.Errorw("Problem logging in sarama kerberos client", zap.Error(err))
-		//	return nil, fmt.Errorf("error loading gssapi config, %w", err)
-		//}
-		//// Expect to create client with password
-		//if kbrclient == nil {
-		//	kafkasource.logger.Errorw("sarama kafka kerberos client nil")
-		//	return nil, fmt.Errorf("sarama kafka kerberos client nil")
-		//}
-		//kafkasource.logger.Infow("sarama kerberos client ok", "domain", kbrclient.Domain(), "cname", kbrclient.CName().NameString[0])
-		kafkasource.logger.Infow("sarama kerberos client ok")
-	} else {
-		kafkasource.logger.Infow("sarama kerberos not configured")
 	}
 	kafkasource.config = config
-	kafkasource.logger.Infow("kafka cluster admin create")
 	// Best effort to initialize the clients for pending messages calculation
 	adminClient, err := sarama.NewClusterAdmin(kafkasource.brokers, config)
 	if err != nil {
@@ -350,49 +332,39 @@ func NewKafkaSource(
 	} else {
 		kafkasource.adminClient = adminClient
 	}
-	kafkasource.logger.Infow("kafka cluster admin create ok")
-	kafkasource.logger.Infow("kafka client create")
 	client, err := sarama.NewClient(kafkasource.brokers, config)
 	if err != nil {
 		kafkasource.logger.Warnw("Problem initializing sarama client", zap.Error(err))
 	} else {
 		kafkasource.saramaClient = client
 	}
-	kafkasource.logger.Infow("kafka client create ok")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	kafkasource.cancelfn = cancel
 	kafkasource.lifecyclectx = ctx
 
-	kafkasource.logger.Infow("kafka chan create")
 	kafkasource.stopch = make(chan struct{})
-	kafkasource.logger.Infow("kafka chan create ok")
 
-	kafkasource.logger.Infow("kafka consumer create")
 	handler := newConsumerHandler(kafkasource.handlerbuffer)
 	kafkasource.handler = handler
-	kafkasource.logger.Infow("kafka consumer create ok")
 
 	destinations := make(map[string]isb.BufferWriter, len(writers))
 	for _, w := range writers {
 		destinations[w.GetName()] = w
 	}
 
-	kafkasource.logger.Infow("kafka forwardOpts")
 	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(kafkasource.logger), forward.WithSourceWatermarkPublisher(kafkasource)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	kafkasource.logger.Infow("kafka NewInterStepDataForward")
 	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
 	kafkasource.forwarder = forwarder
-	kafkasource.logger.Infow("kafkasource sarama client ok")
 	return kafkasource, nil
 }
 
