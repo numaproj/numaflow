@@ -18,59 +18,66 @@ package util
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/Shopify/sarama"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"os"
 )
 
 // A utility function to get sasl.gssapi.Config
-func GetGSSAPIConfig(config *dfv1.SASL) (*sarama.GSSAPIConfig, error) {
+func GetGSSAPIConfig(config *dfv1.GSSAPI) (*sarama.GSSAPIConfig, error) {
 	if config == nil {
 		return nil, nil
 	}
 
 	c := &sarama.GSSAPIConfig{
-		AuthType:    int(config.GSSAPIAuthType),
-		ServiceName: config.GSSAPIServiceName,
-		Username:    config.GSSAPIUsername,
-		Realm:       config.GSSAPIRealm,
+		ServiceName: config.ServiceName,
+		Username:    config.Username,
+		Realm:       config.Realm,
 	}
 
-	if config.KeyTabSecretSecret != nil {
-		gssapiKeyTabPath, err := GetSecretVolumePath(config.KeyTabSecretSecret)
+	switch *config.AuthType {
+	case dfv1.KRB5UserAuth:
+		c.AuthType = sarama.KRB5_USER_AUTH
+	case dfv1.KRB5KeytabAuth:
+		c.AuthType = sarama.KRB5_KEYTAB_AUTH
+	default:
+		return nil, fmt.Errorf("failed to parse GSSAPI AuthType %s. Must be one of the following: ['KRB5_USER_AUTH', 'KRB5_KEYTAB_AUTH']", config.AuthType)
+	}
+
+	if config.KeytabSecret != nil {
+		keyTabPath, err := GetSecretVolumePath(config.KeytabSecret)
 		if err != nil {
 			return nil, err
 		}
-		if len(gssapiKeyTabPath) > 0 {
-			_, err := os.ReadFile(gssapiKeyTabPath)
+		if len(keyTabPath) > 0 {
+			_, err := os.ReadFile(keyTabPath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read keytab file %s, %w", gssapiKeyTabPath, err)
+				return nil, fmt.Errorf("failed to read keytab file %s, %w", keyTabPath, err)
 			}
 		}
-		c.KeyTabPath = gssapiKeyTabPath
+		c.KeyTabPath = keyTabPath
 	}
 
 	if config.KerberosConfigSecret != nil {
-		gssapiKerberosConfigPath, err := GetSecretVolumePath(config.KerberosConfigSecret)
+		kerberosConfigPath, err := GetSecretVolumePath(config.KerberosConfigSecret)
 		if err != nil {
 			return nil, err
 		}
-		if len(gssapiKerberosConfigPath) > 0 {
-			_, err := os.ReadFile(gssapiKerberosConfigPath)
+		if len(kerberosConfigPath) > 0 {
+			_, err := os.ReadFile(kerberosConfigPath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read kerberos config file %s, %w", gssapiKerberosConfigPath, err)
+				return nil, fmt.Errorf("failed to read kerberos config file %s, %w", kerberosConfigPath, err)
 			}
 		}
-		c.KerberosConfigPath = gssapiKerberosConfigPath
+		c.KerberosConfigPath = kerberosConfigPath
 	}
 
-	if config.GSSAPIPasswordSecret != nil {
-		gssapiPassword, err := GetSecretFromVolume(config.GSSAPIPasswordSecret)
+	if config.PasswordSecret != nil {
+		password, err := GetSecretFromVolume(config.PasswordSecret)
 		if err != nil {
 			return nil, err
 		} else {
-			c.Password = gssapiPassword
+			c.Password = password
 		}
 	}
 
