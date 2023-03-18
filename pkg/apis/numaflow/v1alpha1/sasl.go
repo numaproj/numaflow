@@ -19,28 +19,61 @@ package v1alpha1
 import corev1 "k8s.io/api/core/v1"
 
 type SASL struct {
-	Enable bool `json:"enable" protobuf:"bytes,1,opt,name=enable"`
+	// SASL mechanism to use
+	Mechanism *SASLType `json:"mechanism" protobuf:"bytes,1,opt,name=mechanism,casttype=SASLType"`
+	// GSSAPI contains the kerberos config
+	// +optional
+	GSSAPI *GSSAPI `json:"gssapi" protobuf:"bytes,2,opt,name=gssapi"`
+}
+
+// SASLType describes the SASL type
+type SASLType string
+
+const (
 	// SASLTypeOAuth represents the SASL/OAUTHBEARER mechanism (Kafka 2.0.0+)
 	// SASLTypeOAuth = "OAUTHBEARER"
+	SASLTypeOAuth SASLType = "OAUTHBEARER"
 	// SASLTypePlaintext represents the SASL/PLAIN mechanism
 	// SASLTypePlaintext = "PLAIN"
+	SASLTypePlaintext SASLType = "PLAIN"
 	// SASLTypeSCRAMSHA256 represents the SCRAM-SHA-256 mechanism.
 	// SASLTypeSCRAMSHA256 = "SCRAM-SHA-256"
+	SASLTypeSCRAMSHA256 SASLType = "SCRAM-SHA-256"
 	// SASLTypeSCRAMSHA512 represents the SCRAM-SHA-512 mechanism.
 	// SASLTypeSCRAMSHA512 = "SCRAM-SHA-512"
+	SASLTypeSCRAMSHA512 SASLType = "SCRAM-SHA-512"
+	// SASLTypeGSSAPI represents the GSSAPI mechanism
 	// SASLTypeGSSAPI      = "GSSAPI"
-	Mechanism         string `json:"mechanism" protobuf:"bytes,2,opt,name=mechanism"`
-	GSSAPIServiceName string `json:"gssapiServiceName" protobuf:"bytes,3,opt,name=gssapiServiceName"`
-	GSSAPIRealm       string `json:"gssapiRealm" protobuf:"bytes,4,opt,name=gssapiRealm"`
-	GSSAPIUsername    string `json:"gssapiUsername" protobuf:"bytes,5,opt,name=gssapiUsername"`
-	// KRB5_USER_AUTH      = 1
-	// KRB5_KEYTAB_AUTH    = 2
-	GSSAPIAuthType int32 `json:"gssapiAuthType" protobuf:"bytes,6,opt,name=gssapiAuthType"`
+	SASLTypeGSSAPI SASLType = "GSSAPI"
+)
+
+// GSSAPI represents a SASL GSSAPI config
+type GSSAPI struct {
+	ServiceName string `json:"serviceName" protobuf:"bytes,1,opt,name=serviceName"`
+	Realm       string `json:"realm" protobuf:"bytes,2,opt,name=realm"`
+	Username    string `json:"username" protobuf:"bytes,3,opt,name=username"`
+	// valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH
+	AuthType *KRB5AuthType `json:"authType" protobuf:"bytes,4,opt,name=authType,casttype=KRB5AuthType"`
+	// PasswordSecret refers to the secret that contains the password
 	// +optional
-	GSSAPIPasswordSecret *corev1.SecretKeySelector `json:"gssapiPasswordSecret,opt" protobuf:"bytes,7,opt,name=gssapiPasswordSecret"`
+	PasswordSecret *corev1.SecretKeySelector `json:"passwordSecret,opt" protobuf:"bytes,5,opt,name=passwordSecret"`
+	// KeytabSecret refers to the secret that contains the keytab
 	// +optional
-	KeyTabSecretSecret *corev1.SecretKeySelector `json:"gssapiKeyTabSecret,opt" protobuf:"bytes,8,opt,name=gssapiKeyTabSecret"`
-	// KeySecret refers to the secret that contains the key
+	KeytabSecret *corev1.SecretKeySelector `json:"keytabSecret,opt" protobuf:"bytes,6,opt,name=keytabSecret"`
+	// KerberosConfigSecret refers to the secret that contains the kerberos config
 	// +optional
-	KerberosConfigSecret *corev1.SecretKeySelector `json:"gssapiKerberosConfigSecret,opt" protobuf:"bytes,9,opt,name=gssapiKerberosConfigSecret"`
+	KerberosConfigSecret *corev1.SecretKeySelector `json:"kerberosConfigSecret,opt" protobuf:"bytes,7,opt,name=kerberosConfigSecret"`
 }
+
+// KRB5AuthType describes the kerberos auth type
+// +enum
+type KRB5AuthType string
+
+const (
+	// KRB5UserAuth represents the password method
+	// KRB5UserAuth = "KRB5_USER_AUTH" = 1
+	KRB5UserAuth KRB5AuthType = "KRB5_USER_AUTH"
+	// KRB5KeytabAuth represents the password method
+	// KRB5KeytabAuth = "KRB5_KEYTAB_AUTH" = 2
+	KRB5KeytabAuth KRB5AuthType = "KRB5_KEYTAB_AUTH"
+)
