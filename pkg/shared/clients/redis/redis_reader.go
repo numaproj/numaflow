@@ -42,8 +42,9 @@ type RedisStreamsReader struct {
 }
 
 type Metrics struct {
-	readErrors *prometheus.CounterVec
-	reads      *prometheus.CounterVec //todo: use this
+	ReadErrors *prometheus.CounterVec
+	Reads      *prometheus.CounterVec //todo: use this
+	Acks       *prometheus.CounterVec //todo: use this
 }
 
 func (br *RedisStreamsReader) GetName() string {
@@ -59,6 +60,27 @@ func (br *RedisStreamsReader) GetStreamName() string {
 func (br *RedisStreamsReader) GetGroupName() string {
 	return br.Group
 }
+
+/*
+func NewRedisStreamsReader(name string, group string, consumer string, client *RedisClient, metrics Metrics) *RedisStreamsReader {
+	Options := &Options{ // TODO: if we don't end up needing this outside of this package we can turn it back to "options"
+		InfoRefreshInterval: time.Second,
+		ReadTimeOut:         time.Second,
+		CheckBackLog:        true,
+	}
+
+	for _, o := range opts {
+		o.Apply(Options)
+	}
+
+	return &RedisStreamsReader{
+		Name:        name,
+		Stream:      GetRedisStreamName(name),
+		Group:       group,
+		Consumer:    consumer,
+		RedisClient: client,
+		Metrics:     metrics}
+}*/
 
 // Read reads the messages from the stream.
 // During a restart, we need to make sure all the un-acknowledged messages are reprocessed.
@@ -76,8 +98,8 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 				br.Log.Debugw("checkBacklog true, redis.Nil", zap.Error(err))
 				return messages, nil
 			}
-			if br.Metrics.readErrors != nil {
-				br.Metrics.readErrors.With(labels).Inc()
+			if br.Metrics.ReadErrors != nil {
+				br.Metrics.ReadErrors.With(labels).Inc()
 			}
 			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
 			messages, errMsg := br.convertXStreamToMessages(xstreams, messages, labels)
@@ -99,8 +121,8 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 				br.Log.Debugw("checkBacklog false, redis.Nil", zap.Error(err))
 				return messages, nil
 			}
-			if br.Metrics.readErrors != nil {
-				br.Metrics.readErrors.With(labels).Inc()
+			if br.Metrics.ReadErrors != nil {
+				br.Metrics.ReadErrors.With(labels).Inc()
 			}
 			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
 			messages, errMsg := br.convertXStreamToMessages(xstreams, messages, labels)
@@ -150,8 +172,8 @@ func (br *RedisStreamsReader) convertXStreamToMessages(xstreams []redis.XStream,
 
 			// our messages have only one field/value pair (i.e., header/payload)
 			if len(message.Values) != 1 {
-				if br.Metrics.readErrors != nil {
-					br.Metrics.readErrors.With(labels).Inc()
+				if br.Metrics.ReadErrors != nil {
+					br.Metrics.ReadErrors.With(labels).Inc()
 				}
 				return messages, fmt.Errorf("expected only 1 pair of field/value in stream %+v", message.Values)
 			}

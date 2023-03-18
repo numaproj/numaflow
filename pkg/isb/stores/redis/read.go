@@ -65,6 +65,9 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 			Consumer:    consumer,
 			RedisClient: client,
 			Options:     *Options,
+			Metrics: redisclient.Metrics{
+				ReadErrors: isbReadErrors,
+			},
 		},
 
 		BufferReadInfo: &BufferReadInfo{
