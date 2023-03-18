@@ -49,7 +49,23 @@ type redisStreamsSource struct {
 	sourcePublishWM publish.Publisher
 }
 
-type Option func(*redisStreamsSource) error //todo: implement these
+type Option func(*redisStreamsSource) error
+
+// WithLogger is used to return logger information
+func WithLogger(l *zap.SugaredLogger) Option {
+	return func(o *redisStreamsSource) error {
+		o.Log = l
+		return nil
+	}
+}
+
+// WithReadTimeOut sets the read timeout
+func WithReadTimeOut(t time.Duration) Option {
+	return func(o *redisStreamsSource) error {
+		o.Options.ReadTimeOut = t
+		return nil
+	}
+}
 
 func New(
 	vertexInstance *dfv1.VertexInstance,
@@ -63,7 +79,7 @@ func New(
 
 	// create RedisClient and create RedisStreamsReader passing that in
 	vertexSpec := vertexInstance.Vertex.Spec
-	redisSpec := vertexSpec.Source.RedisStreamsSource
+	redisSpec := vertexSpec.Source.RedisStreams
 	redisClient := newRedisClient(redisSpec)
 
 	readerOpts := &redisclient.Options{ //TODO: do we want read timeout like is an option in common.go?

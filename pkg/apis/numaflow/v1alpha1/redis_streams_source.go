@@ -20,10 +20,10 @@ type RedisStreamsSource struct {
 	// URL to connect to RedisStreams, multiple urls could be separated by comma.
 	URLs              string `json:"url" protobuf:"bytes,1,opt,name=url"`
 	Stream            string `json:"stream" protobuf:"bytes,2,opt,name=stream"`
-	ConsumerGroupName string `json:"consumerGroup,omitempty" protobuf:"bytes,3,opt,name=consumerGroup"`
+	ConsumerGroupName string `json:"consumerGroup" protobuf:"bytes,3,opt,name=consumerGroup"`
 	// TLS user to configure TLS connection for kafka broker
 	// TLS.enable=true default for TLS.
 	// +optional
-	TLS *TLS `json:"tls" protobuf:"bytes,4,opt,name=tls"`
+	TLS *TLS `json:"tls" protobuf:"bytes,4,opt,name=tls"` // TODO: shouldn't this be 'omitempty'? (but it's not for Kafka or Nats)
 	// TODO: add auth
 }
