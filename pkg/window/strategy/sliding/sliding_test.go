@@ -33,12 +33,10 @@ func TestSliding_AssignWindow(t *testing.T) {
 	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	go func() {
-		select {
-		case <-cctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-				assert.Fail(t, "timed out")
-			}
+		<-cctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			assert.Fail(t, "timed out")
 		}
 	}()
 	baseTime := time.Unix(600, 0)
@@ -195,12 +193,10 @@ func TestAligned_CreateWindow(t *testing.T) {
 	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	go func() {
-		select {
-		case <-cctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-				assert.Fail(t, "timed out")
-			}
+		<-cctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			assert.Fail(t, "timed out")
 		}
 	}()
 
@@ -341,12 +337,10 @@ func TestSliding_RemoveWindows(t *testing.T) {
 	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	go func() {
-		select {
-		case <-cctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-				assert.Fail(t, "timed out")
-			}
+		<-cctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			assert.Fail(t, "timed out")
 		}
 	}()
 

@@ -42,12 +42,10 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	go func() {
-		select {
-		case <-cctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-				assert.Fail(t, "timed out")
-			}
+		<-cctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			assert.Fail(t, "timed out")
 		}
 	}()
 
@@ -216,12 +214,10 @@ func TestSortedWindowList_RemoveWindows(t *testing.T) {
 	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	go func() {
-		select {
-		case <-cctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-				assert.Fail(t, "timed out")
-			}
+		<-cctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			assert.Fail(t, "timed out")
 		}
 	}()
 
@@ -279,12 +275,10 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	go func() {
-		select {
-		case <-cctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-				assert.Fail(t, "timed out")
-			}
+		<-cctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			assert.Fail(t, "timed out")
 		}
 	}()
 
@@ -411,12 +405,10 @@ func TestSortedWindowList_InsertFront(t *testing.T) {
 	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	go func() {
-		select {
-		case <-cctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-				assert.Fail(t, "timed out")
-			}
+		<-cctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			assert.Fail(t, "timed out")
 		}
 	}()
 
@@ -502,12 +494,10 @@ func TestSortedWindowList_InsertBack(t *testing.T) {
 	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	go func() {
-		select {
-		case <-cctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-				assert.Fail(t, "timed out")
-			}
+		<-cctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			assert.Fail(t, "timed out")
 		}
 	}()
 

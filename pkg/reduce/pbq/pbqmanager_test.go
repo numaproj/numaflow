@@ -328,9 +328,9 @@ func TestManager_NextWindowToBeClosed(t *testing.T) {
 	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	go func() {
-		select {
-		case <-cctx.Done():
-			println("Test timed out")
+		<-cctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
 			assert.Fail(t, "timed out")
 		}
 	}()
