@@ -33,6 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"go.uber.org/zap"
 )
 
@@ -44,8 +45,6 @@ type redisStreamsSource struct {
 	forwarder *forward.InterStepDataForward
 	// context cancel function
 	cancelfn context.CancelFunc
-	// lifecycle context
-	lifecyclectx context.Context
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
 }
@@ -97,7 +96,7 @@ func New(
 	for _, w := range writers {
 		destinations[w.GetName()] = w
 	}
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(redisStreamsSource.Log), forward.WithSourceWatermarkPublisher(n)}
+	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(redisStreamsSource.Log), forward.WithSourceWatermarkPublisher(redisStreamsSource)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -115,7 +114,13 @@ func New(
 	processorEntity := processor.NewProcessorEntity(entityName)
 	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
-	// todo: probably create the ConsumerGroup here if not already created
+	// todo: add TLS, auth
+
+	// create the ConsumerGroup here if not already created: it's okay if this fails
+	err = redisClient.CreateStreamGroup(ctx, redisStreamsReader.Stream, redisStreamsReader.Group, redisclient.ReadFromLatest)
+	// TODO: if err != alreadyCreated { return err }
+
+	return redisStreamsSource, nil
 }
 
 func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) *redisclient.RedisClient {
@@ -132,11 +137,37 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) *redisclient.RedisClien
 	return redisclient.NewRedisClient(opts)
 }
 
-// Close():
-// similar to nats except don't need to worry about unsubscribing
+func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
+	var oldest time.Time
+	for _, m := range msgs {
+		if oldest.IsZero() || m.EventTime.Before(oldest) {
+			oldest = m.EventTime
+		}
+	}
+	if len(msgs) > 0 && !oldest.IsZero() {
+		rsSource.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
+	}
+}
 
-// Pending():
-// noticed read.go doesn't implement it but has it as a TODO?
+func (rsSource *redisStreamsSource) Close() error {
+	rsSource.Log.Info("Shutting down nats source server...")
+	rsSource.cancelfn()
+	if err := rsSource.sourcePublishWM.Close(); err != nil {
+		rsSource.Log.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
+	}
+	rsSource.Log.Info("Nats source server shutdown")
+	return nil
+}
 
-// Start(), Stop(), ForceStop(), GetName():
-// similar to nats?
+func (rsSource *redisStreamsSource) Stop() {
+	rsSource.Log.Info("Stopping redis streams source reader...")
+	rsSource.forwarder.Stop()
+}
+
+func (rsSource *redisStreamsSource) ForceStop() {
+	rsSource.Stop()
+}
+
+func (rsSource *redisStreamsSource) Start() <-chan struct{} {
+	return rsSource.forwarder.Start()
+}
