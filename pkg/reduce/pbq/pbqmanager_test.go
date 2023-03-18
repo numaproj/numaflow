@@ -325,6 +325,15 @@ func TestManager_NextWindowToBeClosed(t *testing.T) {
 	size := int64(100)
 
 	ctx := context.Background()
+	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+	go func() {
+		select {
+		case <-cctx.Done():
+			println("Test timed out")
+			assert.Fail(t, "timed out")
+		}
+	}()
 	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)

@@ -17,6 +17,7 @@ limitations under the License.
 package window
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -37,6 +38,19 @@ func (t *TestWindow) EndTime() time.Time {
 }
 
 func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
+	ctx := context.Background()
+	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+	go func() {
+		select {
+		case <-cctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+				assert.Fail(t, "timed out")
+			}
+		}
+	}()
+
 	tests := []struct {
 		name            string
 		given           []*TestWindow
@@ -198,6 +212,19 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 }
 
 func TestSortedWindowList_RemoveWindows(t *testing.T) {
+	ctx := context.Background()
+	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+	go func() {
+		select {
+		case <-cctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+				assert.Fail(t, "timed out")
+			}
+		}
+	}()
+
 	tests := []struct {
 		name            string
 		given           []*TestWindow
@@ -248,6 +275,19 @@ func TestSortedWindowList_RemoveWindows(t *testing.T) {
 }
 
 func TestSortedWindowList_DeleteWindow(t *testing.T) {
+	ctx := context.Background()
+	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+	go func() {
+		select {
+		case <-cctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+				assert.Fail(t, "timed out")
+			}
+		}
+	}()
+
 	tests := []struct {
 		name            string
 		given           []*TestWindow
@@ -367,6 +407,19 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 }
 
 func TestSortedWindowList_InsertFront(t *testing.T) {
+	ctx := context.Background()
+	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+	go func() {
+		select {
+		case <-cctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+				assert.Fail(t, "timed out")
+			}
+		}
+	}()
+
 	tests := []struct {
 		name            string
 		given           []*TestWindow
@@ -445,6 +498,19 @@ func TestSortedWindowList_InsertFront(t *testing.T) {
 }
 
 func TestSortedWindowList_InsertBack(t *testing.T) {
+	ctx := context.Background()
+	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+	go func() {
+		select {
+		case <-cctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+				assert.Fail(t, "timed out")
+			}
+		}
+	}()
+
 	tests := []struct {
 		name            string
 		given           []*TestWindow
