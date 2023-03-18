@@ -29,14 +29,13 @@ import (
 )
 
 func TestFixed_AssignWindow(t *testing.T) {
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 
@@ -107,14 +106,13 @@ func TestFixed_AssignWindow(t *testing.T) {
 // TestAligned_CreateWindow tests the insertion of a new keyed window for a given interval
 // It tests early, late and existing window scenarios.
 func TestAligned_InsertIfNotPresent(t *testing.T) {
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 
@@ -274,14 +272,13 @@ func TestAligned_InsertIfNotPresent(t *testing.T) {
 }
 
 func TestAligned_RemoveWindow(t *testing.T) {
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 
@@ -409,14 +406,13 @@ func TestFixed_RemoveWindows(t *testing.T) {
 			keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 		}
 	)
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 

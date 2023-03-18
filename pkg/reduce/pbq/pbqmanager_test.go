@@ -110,7 +110,15 @@ func TestManager_GetPBQ(t *testing.T) {
 func TestPBQFlow(t *testing.T) {
 	size := int64(100)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
 	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
@@ -235,7 +243,15 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 func TestManager_Replay(t *testing.T) {
 	size := int64(100)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
 	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
 	assert.NoError(t, err)
@@ -324,14 +340,13 @@ func TestManager_StartUp(t *testing.T) {
 func TestManager_NextWindowToBeClosed(t *testing.T) {
 	size := int64(100)
 
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),

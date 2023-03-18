@@ -38,14 +38,13 @@ func (t *TestWindow) EndTime() time.Time {
 }
 
 func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 
@@ -210,14 +209,13 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 }
 
 func TestSortedWindowList_RemoveWindows(t *testing.T) {
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 
@@ -271,14 +269,13 @@ func TestSortedWindowList_RemoveWindows(t *testing.T) {
 }
 
 func TestSortedWindowList_DeleteWindow(t *testing.T) {
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 
@@ -401,14 +398,13 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 }
 
 func TestSortedWindowList_InsertFront(t *testing.T) {
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 
@@ -490,14 +486,13 @@ func TestSortedWindowList_InsertFront(t *testing.T) {
 }
 
 func TestSortedWindowList_InsertBack(t *testing.T) {
-	ctx := context.Background()
-	cctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	go func() {
-		<-cctx.Done()
+		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			assert.Fail(t, "timed out")
+			t.Fail()
 		}
 	}()
 
