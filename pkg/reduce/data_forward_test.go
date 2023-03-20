@@ -277,7 +277,9 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
 	msgs, readErr := to.Read(child, 1)
-
+	for msgs[0].Header.Kind == isb.WMB {
+		msgs, readErr = to.Read(child, 1)
+	}
 	assert.Nil(t, readErr)
 	assert.Len(t, msgs, 1)
 
@@ -353,6 +355,9 @@ func TestReduceDataForward_Count(t *testing.T) {
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
 	msgs, readErr := buffer.Read(ctx, 1)
+	for msgs[0].Header.Kind == isb.WMB {
+		msgs, readErr = buffer.Read(ctx, 1)
+	}
 	assert.Nil(t, readErr)
 	assert.Len(t, msgs, 1)
 
@@ -427,6 +432,9 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
 	msgs, readErr := buffer.Read(ctx, 1)
+	for msgs[0].Header.Kind == isb.WMB {
+		msgs, readErr = buffer.Read(ctx, 1)
+	}
 	assert.Nil(t, readErr)
 	assert.Len(t, msgs, 1)
 
@@ -502,6 +510,9 @@ func TestReduceDataForward_Max(t *testing.T) {
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
 	msgs, readErr := buffer.Read(ctx, 1)
+	for msgs[0].Header.Kind == isb.WMB {
+		msgs, readErr = buffer.Read(ctx, 1)
+	}
 	assert.Nil(t, readErr)
 	assert.Len(t, msgs, 1)
 
@@ -577,22 +588,33 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
-	msgs, readErr := buffer.Read(ctx, 2)
+	msgs, readErr := buffer.Read(ctx, 1)
+	for msgs[0].Header.Kind == isb.WMB {
+		msgs, readErr = buffer.Read(ctx, 1)
+	}
 	assert.Nil(t, readErr)
-	assert.Len(t, msgs, 2)
+	assert.Len(t, msgs, 1)
+
+	msgs1, readErr1 := buffer.Read(ctx, 1)
+	for msgs1[0].Header.Kind == isb.WMB {
+		msgs1, readErr1 = buffer.Read(ctx, 1)
+	}
+	assert.Nil(t, readErr1)
+	assert.Len(t, msgs1, 1)
 
 	// assert the output of reduce
-	var readMessagePayload1 PayloadForTest
-	var readMessagePayload2 PayloadForTest
-	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload1)
-	_ = json.Unmarshal(msgs[1].Payload, &readMessagePayload2)
+	var readMessagePayload0 PayloadForTest
+	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload0)
 	// since the window duration is 5 minutes, the output should be
 	// 100 * 300(for key even) and 99 * 300(for key odd)
 	// we cant guarantee the order of the output
+	assert.Contains(t, []int{30000, 29700}, readMessagePayload0.Value)
+	assert.Contains(t, []string{"even", "odd"}, readMessagePayload0.Key)
+
+	var readMessagePayload1 PayloadForTest
+	_ = json.Unmarshal(msgs1[0].Payload, &readMessagePayload1)
 	assert.Contains(t, []int{30000, 29700}, readMessagePayload1.Value)
-	assert.Contains(t, []int{30000, 29700}, readMessagePayload2.Value)
 	assert.Contains(t, []string{"even", "odd"}, readMessagePayload1.Key)
-	assert.Contains(t, []string{"even", "odd"}, readMessagePayload2.Key)
 
 }
 
@@ -659,6 +681,9 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
 	msgs, readErr := buffer.Read(ctx, 1)
+	for msgs[0].Header.Kind == isb.WMB {
+		msgs, readErr = buffer.Read(ctx, 1)
+	}
 	assert.Nil(t, readErr)
 	assert.Len(t, msgs, 1)
 
