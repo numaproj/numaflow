@@ -47,14 +47,14 @@ var _ isb.BufferReader = (*BufferRead)(nil)
 
 // NewBufferRead returns a new redis buffer reader.
 func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, opts ...redisclient.Option) isb.BufferReader {
-	Options := &redisclient.Options{
+	options := &redisclient.Options{
 		InfoRefreshInterval: time.Second,
 		ReadTimeOut:         time.Second,
 		CheckBackLog:        true,
 	}
 
 	for _, o := range opts {
-		o.Apply(Options)
+		o.Apply(options)
 	}
 
 	rqr := &BufferRead{
@@ -64,7 +64,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 			Group:       group,
 			Consumer:    consumer,
 			RedisClient: client,
-			Options:     *Options,
+			Options:     *options,
 			Metrics: redisclient.Metrics{
 				ReadErrors: isbReadErrors,
 			},

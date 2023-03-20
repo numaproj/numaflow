@@ -18,12 +18,17 @@ package v1alpha1
 
 type RedisStreamsSource struct {
 	// URL to connect to RedisStreams, multiple urls could be separated by comma.
-	URLs              string `json:"url" protobuf:"bytes,1,opt,name=url"`
-	Stream            string `json:"stream" protobuf:"bytes,2,opt,name=stream"`
-	ConsumerGroupName string `json:"consumerGroup" protobuf:"bytes,3,opt,name=consumerGroup"`
+	URLs          string `json:"urls" protobuf:"bytes,1,opt,name=urls"`
+	Stream        string `json:"stream" protobuf:"bytes,2,opt,name=stream"`
+	ConsumerGroup string `json:"consumerGroup" protobuf:"bytes,3,opt,name=consumerGroup"`
+	// if true, stream starts being read from the beginning; otherwise, the latest
+	ReadFromBeginning bool `json:"readFromBeginning" protobuf:"bytes,4,opt,name=readFromBeginning"`
 	// TLS user to configure TLS connection for kafka broker
 	// TLS.enable=true default for TLS.
 	// +optional
-	TLS *TLS `json:"tls" protobuf:"bytes,4,opt,name=tls"` // TODO: shouldn't this be 'omitempty'? (but it's not for Kafka or Nats)
-	// TODO: add auth
+	TLS *TLS `json:"tls" protobuf:"bytes,5,opt,name=tls"` // TODO: shouldn't this be 'omitempty'? (but it's not for Kafka or Nats)
+	// TODO: imitate NatsAuth?
+	// Basic auth which contains a user name and a password
+	// +optional
+	Auth *BasicAuth `json:"auth,omitempty" protobuf:"bytes,6,opt,name=auth"`
 }

@@ -18848,6 +18848,39 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.RedisStreamsSource": {
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.BasicAuth",
+          "description": "Basic auth which contains a user name and a password"
+        },
+        "consumerGroup": {
+          "type": "string"
+        },
+        "readFromBeginning": {
+          "description": "if true, stream starts being read from the beginning; otherwise, the latest",
+          "type": "boolean"
+        },
+        "stream": {
+          "type": "string"
+        },
+        "tls": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
+          "description": "TLS user to configure TLS connection for kafka broker TLS.enable=true default for TLS."
+        },
+        "urls": {
+          "description": "URL to connect to RedisStreams, multiple urls could be separated by comma.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "urls",
+        "stream",
+        "consumerGroup",
+        "readFromBeginning"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.Scale": {
       "description": "Scale defines the parameters for autoscaling.",
       "properties": {
@@ -18945,6 +18978,9 @@
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
+        },
+        "redisStreams": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisStreamsSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"

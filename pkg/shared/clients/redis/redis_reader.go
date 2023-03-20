@@ -98,7 +98,9 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 				br.Log.Debugw("checkBacklog true, redis.Nil", zap.Error(err))
 				return messages, nil
 			}
+			fmt.Printf("deletethis: error from Read(): %v\n", err)
 			if br.Metrics.ReadErrors != nil {
+				fmt.Printf("deletethis: ReadErrors=%+v\n", br.Metrics.ReadErrors)
 				br.Metrics.ReadErrors.With(labels).Inc()
 			}
 			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop

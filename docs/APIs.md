@@ -431,7 +431,8 @@ BasicAuth
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.NatsAuth">NatsAuth</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NatsAuth">NatsAuth</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
 </p>
 <p>
 <p>
@@ -3437,6 +3438,91 @@ config
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.RedisStreamsSource">
+RedisStreamsSource
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>urls</code></br> <em> string </em>
+</td>
+<td>
+<p>
+URL to connect to RedisStreams, multiple urls could be separated by
+comma.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>stream</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>consumerGroup</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>readFromBeginning</code></br> <em> bool </em>
+</td>
+<td>
+<p>
+if true, stream starts being read from the beginning; otherwise, the
+latest
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+TLS </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+TLS user to configure TLS connection for kafka broker TLS.enable=true
+default for TLS.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.BasicAuth"> BasicAuth </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+TODO: imitate NatsAuth? Basic auth which contains a user name and a
+password
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Scale">
 Scale
 </h3>
@@ -3752,6 +3838,16 @@ GeneratorSource </a> </em>
 </tr>
 <tr>
 <td>
+<code>redisStreams</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">
+RedisStreamsSource </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
 <code>transformer</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDTransformer"> UDTransformer
 </a> </em>
@@ -3810,7 +3906,8 @@ TLS
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
 </p>
 <p>
 </p>

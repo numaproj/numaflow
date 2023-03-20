@@ -29,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -80,7 +81,11 @@ func New(
 	// create RedisClient and create RedisStreamsReader passing that in
 	vertexSpec := vertexInstance.Vertex.Spec
 	redisSpec := vertexSpec.Source.RedisStreams
-	redisClient := newRedisClient(redisSpec)
+	redisClient, err := newRedisClient(redisSpec)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("deletethis: redisSpec=%+v, redisClient=%+v\n", redisSpec, redisClient)
 
 	readerOpts := &redisclient.Options{ //TODO: do we want read timeout like is an option in common.go?
 		InfoRefreshInterval: time.Second,
@@ -91,7 +96,7 @@ func New(
 	redisStreamsReader := &redisclient.RedisStreamsReader{
 		Name:        vertexSpec.Name,
 		Stream:      redisclient.GetRedisStreamName(vertexSpec.Name),
-		Group:       redisSpec.ConsumerGroupName,
+		Group:       redisSpec.ConsumerGroup,
 		Consumer:    fmt.Sprintf("%s-%v", vertexSpec.Name, vertexInstance.Replica),
 		RedisClient: redisClient,
 		Options:     *readerOpts,
@@ -133,13 +138,18 @@ func New(
 	// todo: add TLS, auth
 
 	// create the ConsumerGroup here if not already created: it's okay if this fails
-	err = redisClient.CreateStreamGroup(ctx, redisStreamsReader.Stream, redisStreamsReader.Group, redisclient.ReadFromLatest)
+	readFrom := redisclient.ReadFromLatest
+	if redisSpec.ReadFromBeginning {
+		readFrom = redisclient.ReadFromEarliest
+	}
+	err = redisClient.CreateStreamGroup(ctx, redisStreamsReader.Stream, redisStreamsReader.Group, readFrom)
+	fmt.Printf("deletethis: error from CreateStreamGroup: %v\n", err)
 	// TODO: if err != alreadyCreated { return err }
 
 	return redisStreamsSource, nil
 }
 
-func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) *redisclient.RedisClient {
+func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
 	opts := &redis.UniversalOptions{
 		Addrs: strings.Split(sourceSpec.URLs, ","), //todo: what is Sentinel and should I enable it?
 		//Username:  //todo: add auth
@@ -150,7 +160,18 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) *redisclient.RedisClien
 		//      https://github.com/go-redis/redis/blob/f6a8adc50cdaec30527f50d06468f9176ee674fe/cluster.go#L33-L36
 		MaxRedirects: 3,
 	}
-	return redisclient.NewRedisClient(opts)
+	var err error
+	if sourceSpec.Auth != nil && sourceSpec.Auth.User != nil && sourceSpec.Auth.Password != nil {
+		opts.Username, err = sharedutil.GetSecretFromVolume(sourceSpec.Auth.User)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get basic auth user, %w", err)
+		}
+		opts.Password, err = sharedutil.GetSecretFromVolume(sourceSpec.Auth.Password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get basic auth password, %w", err)
+		}
+	}
+	return redisclient.NewRedisClient(opts), nil
 }
 
 func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {

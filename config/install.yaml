@@ -2,7 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: interstepbufferservices.numaflow.numaproj.io
 spec:
@@ -2301,7 +2301,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: pipelines.numaflow.numaproj.io
 spec:
@@ -6297,6 +6297,85 @@ spec:
                           - subject
                           - url
                           type: object
+                        redisStreams:
+                          properties:
+                            auth:
+                              properties:
+                                password:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                user:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                              type: object
+                            consumerGroup:
+                              type: string
+                            readFromBeginning:
+                              type: boolean
+                            stream:
+                              type: string
+                            tls:
+                              properties:
+                                caCertSecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                clientCertSecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                clientKeySecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                insecureSkipVerify:
+                                  type: boolean
+                              type: object
+                            urls:
+                              type: string
+                          required:
+                          - consumerGroup
+                          - readFromBeginning
+                          - stream
+                          - urls
+                          type: object
                         transformer:
                           properties:
                             builtin:
@@ -7577,7 +7656,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: vertices.numaflow.numaproj.io
 spec:
@@ -10092,6 +10171,85 @@ spec:
                     - queue
                     - subject
                     - url
+                    type: object
+                  redisStreams:
+                    properties:
+                      auth:
+                        properties:
+                          password:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                          user:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                        type: object
+                      consumerGroup:
+                        type: string
+                      readFromBeginning:
+                        type: boolean
+                      stream:
+                        type: string
+                      tls:
+                        properties:
+                          caCertSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                          clientCertSecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                          clientKeySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                          insecureSkipVerify:
+                            type: boolean
+                        type: object
+                      urls:
+                        type: string
+                    required:
+                    - consumerGroup
+                    - readFromBeginning
+                    - stream
+                    - urls
                     type: object
                   transformer:
                     properties:

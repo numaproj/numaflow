@@ -895,6 +895,28 @@ message RedisSettings {
   optional string sentinel = 4;
 }
 
+message RedisStreamsSource {
+  // URL to connect to RedisStreams, multiple urls could be separated by comma.
+  optional string urls = 1;
+
+  optional string stream = 2;
+
+  optional string consumerGroup = 3;
+
+  // if true, stream starts being read from the beginning; otherwise, the latest
+  optional bool readFromBeginning = 4;
+
+  // TLS user to configure TLS connection for kafka broker
+  // TLS.enable=true default for TLS.
+  // +optional
+  optional TLS tls = 5;
+
+  // TODO: imitate NatsAuth?
+  // Basic auth which contains a user name and a password
+  // +optional
+  optional BasicAuth auth = 6;
+}
+
 // Scale defines the parameters for autoscaling.
 message Scale {
   // Whether to disable autoscaling.
@@ -978,7 +1000,10 @@ message Source {
   optional NatsSource nats = 4;
 
   // +optional
-  optional UDTransformer transformer = 5;
+  optional RedisStreamsSource redisStreams = 5;
+
+  // +optional
+  optional UDTransformer transformer = 6;
 }
 
 // Status is a common structure which can be used for Status field.
