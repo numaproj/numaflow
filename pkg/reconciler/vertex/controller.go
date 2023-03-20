@@ -156,15 +156,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		}
 	}
 
-	currentReplicas := int(vertex.Status.Replicas)
-	if currentReplicas != desiredReplicas || vertex.Status.Selector == "" {
-		log.Infow("Replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
-		vertex.Status.Replicas = uint32(desiredReplicas)
-		vertex.Status.LastScaledAt = metav1.Time{Time: time.Now()}
-	}
-	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
-	vertex.Status.Selector = selector.String()
-
 	pipeline := &dfv1.Pipeline{}
 	if err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: vertex.Spec.PipelineName}, pipeline); err != nil {
 		log.Errorw("Failed to get pipeline object", zap.Error(err))
@@ -249,6 +240,15 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			return ctrl.Result{}, err
 		}
 	}
+
+	currentReplicas := int(vertex.Status.Replicas)
+	if currentReplicas != desiredReplicas || vertex.Status.Selector == "" {
+		log.Infow("Replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
+		vertex.Status.Replicas = uint32(desiredReplicas)
+		vertex.Status.LastScaledAt = metav1.Time{Time: time.Now()}
+	}
+	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
+	vertex.Status.Selector = selector.String()
 
 	// create services
 	existingSvcs, err := r.findExistingServices(ctx, vertex)
