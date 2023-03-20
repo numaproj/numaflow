@@ -56,6 +56,7 @@ type ProcessAndForward struct {
 	toBuffers        map[string]isb.BufferWriter
 	whereToDecider   forward.ToWhichStepDecider
 	publishWatermark map[string]publish.Publisher
+	idleManager      *wmb.IdleManager
 }
 
 // NewProcessAndForward will return a new ProcessAndForward instance
@@ -67,7 +68,9 @@ func NewProcessAndForward(ctx context.Context,
 	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
 	toBuffers map[string]isb.BufferWriter,
-	whereToDecider forward.ToWhichStepDecider, pw map[string]publish.Publisher) *ProcessAndForward {
+	whereToDecider forward.ToWhichStepDecider,
+	pw map[string]publish.Publisher,
+	idleManager *wmb.IdleManager) *ProcessAndForward {
 	return &ProcessAndForward{
 		vertexName:       vertexName,
 		pipelineName:     pipelineName,
@@ -79,6 +82,7 @@ func NewProcessAndForward(ctx context.Context,
 		toBuffers:        toBuffers,
 		whereToDecider:   whereToDecider,
 		publishWatermark: pw,
+		idleManager:      idleManager,
 	}
 }
 
@@ -258,6 +262,8 @@ func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string]
 			if len(offsets) > 0 {
 				publisher.PublishWatermark(wm, offsets[len(offsets)-1])
 				activeWatermarkBuffers[bufferName] = true
+				// reset because the toBuffer is not idling
+				p.idleManager.Reset(bufferName)
 			}
 		}
 	}
@@ -269,6 +275,7 @@ func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string]
 				// use the watermark of the current read batch for the idle watermark
 				// we don't care about the offset here because, in this use case,
 				// we will use a referred watermark to replace this idle watermark
+				// TODO
 				p.publishWatermark[bufferName].PublishIdleWatermark(wm, isb.SimpleIntOffset(func() int64 { return -1 }))
 			}
 		}

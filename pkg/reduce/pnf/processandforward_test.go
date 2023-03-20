@@ -159,7 +159,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
 
 	// create pf using key and reducer
-	pf := NewProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{}, publishWatermark)
+	pf := NewProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{}, publishWatermark, wmb.NewIdleManager(1))
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)
@@ -357,6 +357,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		toBuffers:        toBuffers,
 		whereToDecider:   whereto,
 		publishWatermark: pw,
+		idleManager:      wmb.NewIdleManager(len(toBuffers)),
 	}
 
 	return pf, otStore

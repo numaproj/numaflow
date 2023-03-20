@@ -64,6 +64,7 @@ type ReadLoop struct {
 	whereToDecider        forward.ToWhichStepDecider
 	publishWatermark      map[string]publish.Publisher
 	udfInvocationTracking map[partition.ID]*task
+	idleManager           *wmb.IdleManager
 }
 
 // NewReadLoop initializes  and returns ReadLoop.
@@ -93,6 +94,7 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:        whereToDecider,
 		publishWatermark:      pw,
 		udfInvocationTracking: make(map[partition.ID]*task),
+		idleManager:           wmb.NewIdleManager(len(toBuffers)),
 	}
 
 	err := rl.Startup(ctx)
@@ -183,11 +185,11 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
 	if len(closedWindows) == 0 {
 		nextWin := rl.pbqManager.NextWindowToBeClosed()
-		watermark := time.Time(wm).Add(time.Millisecond)
+		watermark := time.Time(wm).Add(-1 * time.Millisecond)
 		if nextWin.EndTime().After(watermark) {
-			for _, p := range rl.publishWatermark {
-				// TODO: What would be the offset?
-				p.PublishIdleWatermark(wm, isb.SimpleIntOffset(func() int64 { return -1 }))
+			// publish idle watermark to solve watermark latency
+			for _, toBuffer := range rl.toBuffers {
+				rl.publishIdleWatermark(ctx, toBuffer, wmb.Watermark(watermark))
 			}
 		}
 	}
@@ -395,7 +397,7 @@ func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partitio
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
-		t := rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
+		t := rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark, rl.idleManager)
 		rl.udfInvocationTracking[partitionID] = t
 		rl.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
@@ -438,5 +440,34 @@ func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
 		rl.op.insertTask(rl.udfInvocationTracking[p])
 		q.CloseOfBook()
 		delete(rl.udfInvocationTracking, p)
+	}
+}
+
+// publishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
+// we see a new WMB; later we only update the WMB without a ctrl message.
+func (rl *ReadLoop) publishIdleWatermark(ctx context.Context, toBuffer isb.BufferWriter, wm wmb.Watermark) {
+	var bufferName = toBuffer.GetName()
+
+	if !rl.idleManager.Exists(bufferName) {
+		// if the buffer doesn't exist, then we get a new idle situation
+		// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
+		var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
+		writeOffsets, errs := toBuffer.Write(ctx, ctrlMessage)
+		// we only write one ctrl message, so there's one and only one error in the array, use index=0 to get the error
+		if errs[0] != nil {
+			rl.log.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
+			return
+		}
+		rl.log.Debug("succeeded to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
+
+		if len(writeOffsets) == 1 {
+			// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
+			rl.idleManager.Update(bufferName, writeOffsets[0])
+		}
+	}
+
+	// publish WMB (this will naturally incr or set the timestamp of rl.wmbOffset)
+	if publisher, ok := rl.publishWatermark[bufferName]; ok {
+		publisher.PublishIdleWatermark(wm, rl.idleManager.Get(bufferName))
 	}
 }

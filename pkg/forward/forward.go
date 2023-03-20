@@ -57,6 +57,7 @@ type InterStepDataForward struct {
 	vertexName       string
 	pipelineName     string
 	// wmbOffset is a toBufferName to the write offset of the idle watermark map.
+	// TODO: update to idleManager
 	wmbOffset map[string]isb.Offset
 	// wmbChecker checks if the idle watermark is valid.
 	wmbChecker wmb.WMBChecker
