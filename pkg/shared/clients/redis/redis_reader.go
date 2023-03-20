@@ -93,6 +93,7 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 	labels := map[string]string{"buffer": br.GetName()}
 	if br.Options.CheckBackLog {
 		xstreams, err = br.processXReadResult("0-0", count)
+		fmt.Printf("deletethis: processXReadResult returned xstreams=%+v, err=%v\n", xstreams, err)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
 				br.Log.Debugw("checkBacklog true, redis.Nil", zap.Error(err))
@@ -118,12 +119,15 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 	}
 	if !br.Options.CheckBackLog {
 		xstreams, err = br.processXReadResult(">", count)
+		fmt.Printf("deletethis: processXReadResult returned xstreams=%+v, err=%v\n", xstreams, err)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
 				br.Log.Debugw("checkBacklog false, redis.Nil", zap.Error(err))
 				return messages, nil
 			}
+			fmt.Printf("deletethis: error from Read(): %v\n", err)
 			if br.Metrics.ReadErrors != nil {
+				fmt.Printf("deletethis: ReadErrors=%+v\n", br.Metrics.ReadErrors)
 				br.Metrics.ReadErrors.With(labels).Inc()
 			}
 			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
@@ -131,6 +135,7 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 			br.Log.Errorw("checkBacklog false, convertXStreamToMessages failed", zap.Error(errMsg))
 			return messages, fmt.Errorf("XReadGroup failed, %w", err)
 		}
+		fmt.Printf("deletethis: successfully received %d messages\n", count)
 	}
 
 	// for each XMessage in []XStream
@@ -155,6 +160,7 @@ func (br *RedisStreamsReader) Ack(_ context.Context, offsets []isb.Offset) []err
 
 // processXReadResult is used to process the results of XREADGROUP
 func (br *RedisStreamsReader) processXReadResult(startIndex string, count int64) ([]redis.XStream, error) {
+	fmt.Printf("deletethis: about to XReadGroup starting from %s, count=%d\n", startIndex, count)
 	result := br.Client.XReadGroup(RedisContext, &redis.XReadGroupArgs{
 		Group:    br.Group,
 		Consumer: br.Consumer,

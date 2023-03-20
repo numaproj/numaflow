@@ -95,7 +95,7 @@ func New(
 
 	redisStreamsReader := &redisclient.RedisStreamsReader{
 		Name:        vertexSpec.Name,
-		Stream:      redisclient.GetRedisStreamName(vertexSpec.Name),
+		Stream:      redisSpec.Stream,
 		Group:       redisSpec.ConsumerGroup,
 		Consumer:    fmt.Sprintf("%s-%v", vertexSpec.Name, vertexInstance.Replica),
 		RedisClient: redisClient,
@@ -142,6 +142,7 @@ func New(
 	if redisSpec.ReadFromBeginning {
 		readFrom = redisclient.ReadFromEarliest
 	}
+	redisStreamsSource.Log.Infof("Creating Redis Stream group %q on Stream %q", redisStreamsReader.Group, redisStreamsReader.Stream)
 	err = redisClient.CreateStreamGroup(ctx, redisStreamsReader.Stream, redisStreamsReader.Group, readFrom)
 	fmt.Printf("deletethis: error from CreateStreamGroup: %v\n", err)
 	// TODO: if err != alreadyCreated { return err }
