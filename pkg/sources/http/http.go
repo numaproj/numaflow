@@ -227,7 +227,6 @@ loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-h.messages:
-			fmt.Println("got a message to read")
 			httpSourceReadCount.With(map[string]string{metrics.LabelVertex: h.name, metrics.LabelPipeline: h.pipelineName}).Inc()
 			msgs = append(msgs, m)
 		case <-timeout:

@@ -25,6 +25,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/window"
 
 	"go.uber.org/zap"
 
@@ -46,6 +47,7 @@ type PBQ struct {
 	options       *options
 	manager       *Manager
 	log           *zap.SugaredLogger
+	kw            window.AlignedKeyedWindower
 	mu            sync.Mutex
 }
 

@@ -18,49 +18,16 @@ package shuffle
 
 import (
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/testutils"
 )
 
 func TestShuffle_ShuffleMessages(t *testing.T) {
-
-	// buffer id list of test 1
-	bufferIdListOne := []string{
-		"buffer-1",
-		"buffer-2",
-		"buffer-3",
-		"buffer-4",
-	}
-
-	// buffer id list for test 2
-	var bufferIdListTwo []string
-
-	isbCount := 100
-	for i := 0; i < isbCount; i++ {
-		bufferIdListTwo = append(bufferIdListTwo, fmt.Sprintf("buffer-%d", i+1))
-	}
-
-	// build test messages for test 1
-	messagesOne := testutils.BuildTestWriteMessages(10000, time.Now())
-	// set key for messagesOne
-	var testMessagesOne []*isb.Message
-	for index := 0; index < len(messagesOne); index++ {
-		messagesOne[index].Key = fmt.Sprintf("key_%d", index)
-		testMessagesOne = append(testMessagesOne, &messagesOne[index])
-	}
-
-	// build test messages for test 2
-	messagesTwo := testutils.BuildTestWriteMessages(10, time.Now())
-	// set key for messages
-	var testMessagesTwo []*isb.Message
-	for index := 0; index < len(messagesTwo); index++ {
-		messagesOne[index].Key = fmt.Sprintf("key_%d", index)
-		testMessagesOne = append(testMessagesOne, &messagesTwo[index])
-	}
-
 	tests := []struct {
 		name               string
 		buffersIdentifiers []string
@@ -68,20 +35,25 @@ func TestShuffle_ShuffleMessages(t *testing.T) {
 	}{
 		{
 			name:               "MessageCountGreaterThanBufferCount",
-			buffersIdentifiers: bufferIdListOne,
-			messages:           testMessagesOne,
+			buffersIdentifiers: buildBufferIdList(10),
+			messages:           buildTestMessagesWithDistinctKeys(100),
 		},
 		{
 			name:               "BufferCountGreaterThanMessageCount",
-			buffersIdentifiers: bufferIdListTwo,
-			messages:           testMessagesTwo,
+			buffersIdentifiers: buildBufferIdList(100),
+			messages:           buildTestMessagesWithDistinctKeys(10),
+		},
+		{
+			name:               "BufferCountEqualToMessageCount",
+			buffersIdentifiers: buildBufferIdList(100),
+			messages:           buildTestMessagesWithDistinctKeys(100),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// create shuffle with buffer id list
-			shuffler := NewShuffle(test.buffersIdentifiers)
+			shuffler := NewShuffle(test.name, test.buffersIdentifiers)
 
 			bufferIdMessageMap := shuffler.ShuffleMessages(test.messages)
 			sum := 0
@@ -92,4 +64,76 @@ func TestShuffle_ShuffleMessages(t *testing.T) {
 			assert.Equal(t, sum, len(test.messages))
 		})
 	}
+}
+
+func TestShuffler_UseVertexNameAsSeed(t *testing.T) {
+	tests := []struct {
+		name                   string
+		buffersIdentifiers     []string
+		messages               []*isb.Message
+		vertexName1            string
+		vertexName2            string
+		expectSameDistribution bool
+	}{
+		{
+			name:                   "MessagesDistributionRemainUnchangedWhenVertexNamesAreTheSame",
+			buffersIdentifiers:     buildBufferIdList(10),
+			messages:               buildTestMessagesWithDistinctKeys(100),
+			vertexName1:            "v1",
+			vertexName2:            "v1",
+			expectSameDistribution: true,
+		},
+		{
+			name:                   "MessagesDistributionChangesWhenVertexNameChanges",
+			buffersIdentifiers:     buildBufferIdList(10),
+			messages:               buildTestMessagesWithDistinctKeys(100),
+			vertexName1:            "v1",
+			vertexName2:            "v2",
+			expectSameDistribution: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			shuffler1 := NewShuffle(test.vertexName1, test.buffersIdentifiers)
+			shuffler2 := NewShuffle(test.vertexName2, test.buffersIdentifiers)
+			bufferIdMessageMap1 := shuffler1.ShuffleMessages(test.messages)
+			bufferIdMessageMap2 := shuffler2.ShuffleMessages(test.messages)
+			assert.Equal(t, test.expectSameDistribution, isSameShuffleDistribution(bufferIdMessageMap1, bufferIdMessageMap2))
+		})
+	}
+}
+
+// isSameShuffleDistribution performs a simple count check to ensure that the two input maps have the same distribution of elements.
+// For a more strict verification, one could compare the contents of the two distributions, which would require sorting the elements.
+func isSameShuffleDistribution(a, b map[string][]*isb.Message) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for key, list := range a {
+		if len(list) != len(b[key]) {
+			return false
+		}
+	}
+	return true
+}
+
+func buildBufferIdList(size int) []string {
+	var bufferIdList []string
+	for i := 0; i < size; i++ {
+		bufferIdList = append(bufferIdList, fmt.Sprintf("buffer-%d", i+1))
+	}
+	return bufferIdList
+}
+
+func buildTestMessagesWithDistinctKeys(size int64) []*isb.Message {
+	// build test messages
+	messages := testutils.BuildTestWriteMessages(size, time.Now())
+	// set key for test messages
+	var res []*isb.Message
+	for index := 0; index < len(messages); index++ {
+		messages[index].Key = fmt.Sprintf("key_%d", index)
+		res = append(res, &messages[index])
+	}
+	return res
 }

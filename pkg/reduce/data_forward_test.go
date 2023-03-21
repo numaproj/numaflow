@@ -78,7 +78,7 @@ func (e *EventTypeWMProgressor) PublishWatermark(watermark wmb.Watermark, offset
 	e.watermarks[offset.String()] = watermark
 }
 
-func (e *EventTypeWMProgressor) PublishIdleWatermark(wmb.Watermark) {
+func (e *EventTypeWMProgressor) PublishIdleWatermark(wmb.Watermark, isb.Offset) {
 	// TODO
 }
 
@@ -98,6 +98,10 @@ func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset) wmb.Watermark {
 
 func (e *EventTypeWMProgressor) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark{}
+}
+
+func (e *EventTypeWMProgressor) GetHeadWMB() wmb.WMB {
+	return wmb.WMB{}
 }
 
 // PayloadForTest is a dummy payload for testing.

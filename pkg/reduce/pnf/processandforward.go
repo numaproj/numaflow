@@ -107,7 +107,8 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 	}).Observe(float64(time.Since(startTime).Microseconds()))
 
-	processorWM := wmb.Watermark(p.PartitionID.Start)
+	// millisecond is the lowest granularity currently supported.
+	processorWM := wmb.Watermark(p.PartitionID.End.Add(-1 * time.Millisecond))
 
 	messagesToStep := p.whereToStep()
 
@@ -266,7 +267,9 @@ func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string]
 		for bufferName := range p.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
 				// use the watermark of the current read batch for the idle watermark
-				p.publishWatermark[bufferName].PublishIdleWatermark(wm)
+				// we don't care about the offset here because, in this use case,
+				// we will use a referred watermark to replace this idle watermark
+				p.publishWatermark[bufferName].PublishIdleWatermark(wm, isb.SimpleIntOffset(func() int64 { return -1 }))
 			}
 		}
 	}

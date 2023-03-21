@@ -36,6 +36,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
@@ -97,6 +98,9 @@ func TestProcessAndForward_Process(t *testing.T) {
 		End:   time.UnixMilli(120000),
 		Slot:  "partition-1",
 	}
+	kw := keyed.NewKeyedWindow(time.UnixMilli(60000), time.UnixMilli(120000))
+	kw.AddSlot("partition-1")
+
 	var err error
 	var pbqManager *pbq.Manager
 
@@ -106,7 +110,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 
 	// create a pbq for a partition
 	var simplePbq pbq.ReadWriteCloser
-	simplePbq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
+	simplePbq, err = pbqManager.CreateNewPBQ(ctx, testPartition, kw)
 	assert.NoError(t, err)
 
 	// write messages to pbq
@@ -222,12 +226,12 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    0,
-					Watermark: int64(60000),
+					Watermark: int64(119999),
 					Idle:      false,
 				},
 				"buffer2": {
-					Offset:    0,
-					Watermark: int64(60000),
+					Offset:    -1,
+					Watermark: int64(119999),
 					Idle:      true,
 				},
 			},
@@ -246,12 +250,12 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    0,
-					Watermark: int64(60000),
+					Watermark: int64(119999),
 					Idle:      false,
 				},
 				"buffer2": {
 					Offset:    0,
-					Watermark: int64(60000),
+					Watermark: int64(119999),
 					Idle:      false,
 				},
 			},
@@ -269,13 +273,13 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			expected: []bool{true, true},
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
-					Offset:    0,
-					Watermark: int64(60000),
+					Offset:    -1,
+					Watermark: int64(119999),
 					Idle:      true,
 				},
 				"buffer2": {
-					Offset:    0,
-					Watermark: int64(60000),
+					Offset:    -1,
+					Watermark: int64(119999),
 					Idle:      true,
 				},
 			},
@@ -310,11 +314,13 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		End:   time.UnixMilli(120000),
 		Slot:  key,
 	}
+	kw := keyed.NewKeyedWindow(time.UnixMilli(60000), time.UnixMilli(120000))
+	kw.AddSlot(key)
 
 	// create a pbq for a partition
 	pw, otStore := buildPublisherMapAndOTStore(toBuffers)
 	var simplePbq pbq.Reader
-	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition)
+	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition, kw)
 
 	resultPayload, _ := json.Marshal(PayloadForTest{
 		Key:   "result_payload",

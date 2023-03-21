@@ -275,10 +275,8 @@ func (mg *memgen) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	if len(msgs) <= 0 {
 		return
 	}
-	// use the first event time as watermark to make it conservative
-	nanos, _ := msgs[0].ReadOffset.Sequence()
-	// remove the nanosecond precision
-	mg.sourcePublishWM.PublishWatermark(wmb.Watermark(time.Unix(0, nanos)), nil) // Source publisher does not care about the offset
+	// use the first event time of the message as watermark to make it conservative
+	mg.sourcePublishWM.PublishWatermark(wmb.Watermark(msgs[0].EventTime), nil) // Source publisher does not care about the offset
 }
 
 // Ack acknowledges an array of offset.

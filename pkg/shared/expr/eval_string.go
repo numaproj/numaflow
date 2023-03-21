@@ -23,7 +23,7 @@ import (
 )
 
 // EvalStr uses the given input expression to evaluate input message and compile it to a string.
-// See examples in compile_test.go
+// See examples in eval_string_test.go
 func EvalStr(expression string, msg []byte) (string, error) {
 	msgMap := map[string]interface{}{
 		root: string(msg),

@@ -17,13 +17,13 @@ limitations under the License.
 package sliding
 
 import (
-	"container/list"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"github.com/stretchr/testify/assert"
 )
 
 // TestSliding_AssignWindow tests the assignment of element to a set of windows
@@ -287,11 +287,12 @@ func TestAligned_CreateWindow(t *testing.T) {
 			assert.Equal(t, tt.input.StartTime(), ret.StartTime())
 			assert.Equal(t, tt.input.EndTime(), ret.EndTime())
 			assert.Equal(t, len(tt.expectedWindows), windows.entries.Len())
-			node := windows.entries.Front()
+			nodes := windows.entries.Items()
+			i := 0
 			for _, kw := range tt.expectedWindows {
-				assert.Equal(t, kw.StartTime(), node.Value.(*keyed.AlignedKeyedWindow).Start)
-				assert.Equal(t, kw.EndTime(), node.Value.(*keyed.AlignedKeyedWindow).End)
-				node = node.Next()
+				assert.Equal(t, kw.StartTime(), nodes[i].StartTime())
+				assert.Equal(t, kw.EndTime(), nodes[i].EndTime())
+				i += 1
 			}
 		})
 	}
@@ -320,8 +321,8 @@ func TestSliding_RemoveWindows(t *testing.T) {
 }
 
 func setup(windows *Sliding, wins []*keyed.AlignedKeyedWindow) {
-	windows.entries = list.New()
+	windows.entries = window.NewSortedWindowList[window.AlignedKeyedWindower]()
 	for _, win := range wins {
-		windows.entries.PushBack(win)
+		windows.entries.InsertBack(win)
 	}
 }

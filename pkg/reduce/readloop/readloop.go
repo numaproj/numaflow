@@ -126,7 +126,7 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 		keyedWindow.AddSlot(p.Slot)
 
 		// create and invoke process and forward for the partition
-		rl.associatePBQAndPnF(ctx, p)
+		rl.associatePBQAndPnF(ctx, p, keyedWindow)
 	}
 
 	// replays the data (replay internally writes the data from persistent store on to the PBQ)
@@ -137,18 +137,34 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 // Process is one iteration of the read loop which writes the messages to the PBQs followed by acking the messages, and
 // then closing the windows that can closed.
 func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
+	var dataMessages = make([]*isb.ReadMessage, 0, len(messages))
+	var ctrlMessages = make([]*isb.ReadMessage, 0) // for a high TPS pipeline, 0 is the most optimal value
+
+	for _, message := range messages {
+		if message.Kind == isb.Data {
+			dataMessages = append(dataMessages, message)
+		} else {
+			ctrlMessages = append(ctrlMessages, message)
+		}
+	}
+
 	// write messages to windows based by PBQs.
-	successfullyWrittenMessages, err := rl.writeMessagesToWindows(ctx, messages)
+	successfullyWrittenMessages, err := rl.writeMessagesToWindows(ctx, dataMessages)
 	if err != nil {
 		rl.log.Errorw("Failed to write messages", zap.Int("totalMessages", len(messages)), zap.Int("writtenMessage", len(successfullyWrittenMessages)))
+	}
+
+	// ack the control messages
+	if len(ctrlMessages) != 0 {
+		rl.ackMessages(ctx, ctrlMessages)
 	}
 
 	if len(successfullyWrittenMessages) == 0 {
 		return
 	}
-
 	// ack successful messages
 	rl.ackMessages(ctx, successfullyWrittenMessages)
+
 	// close any windows that need to be closed.
 	// since the watermark will be same for all the messages in the batch
 	// we can invoke remove windows only once per batch
@@ -181,6 +197,9 @@ messagesLoop:
 				metrics.LabelPipeline:           rl.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
 				LabelReason:                     "late"}).Inc()
+
+			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
+			writtenMessages = append(writtenMessages, message)
 			continue
 		}
 
@@ -205,22 +224,20 @@ messagesLoop:
 
 		// identify and add window for the message
 		windows := rl.upsertWindowsAndKeys(message)
+
 		// for each window we will have a PBQ. A message could belong to multiple windows (e.g., sliding).
 		// We need to write the messages to these PBQs.
 		for _, kw := range windows {
-			// identify partition for message
-			partitionID := partition.ID{
-				Start: kw.StartTime(),
-				End:   kw.EndTime(),
-				Slot:  "slot-0", // FIXME: revisit this later. for now hard coded to slot-0
-			}
 
-			err := rl.writeToPBQ(ctx, partitionID, message)
-			// there is no point continuing because we are seeing an error.
-			// this error will ONLY BE set if we are in a erroring loop and ctx.Done() has been invoked.
-			if err != nil {
-				rl.log.Errorw("Failed to write message, asked to stop trying", zap.Any("msgOffSet", message.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Error(err))
-				break messagesLoop
+			for _, partitionID := range kw.Partitions() {
+
+				err := rl.writeToPBQ(ctx, message, partitionID, kw)
+				// there is no point continuing because we are seeing an error.
+				// this error will ONLY BE set if we are in a erroring loop and ctx.Done() has been invoked.
+				if err != nil {
+					rl.log.Errorw("Failed to write message, asked to stop trying", zap.Any("msgOffSet", message.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Error(err))
+					break messagesLoop
+				}
 			}
 		}
 
@@ -232,7 +249,7 @@ messagesLoop:
 
 // writeToPBQ writes to the PBQ. It will return error only if it is not failing to write to PBQ and is in a continuous
 // error loop, and we have received ctx.Done() via SIGTERM.
-func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadMessage) error {
+func (rl *ReadLoop) writeToPBQ(ctx context.Context, m *isb.ReadMessage, p partition.ID, kw window.AlignedKeyedWindower) error {
 	startTime := time.Now()
 	defer pbqWriteTime.With(map[string]string{
 		metrics.LabelVertex:             rl.vertexName,
@@ -247,7 +264,7 @@ func (rl *ReadLoop) writeToPBQ(ctx context.Context, p partition.ID, m *isb.ReadM
 		Jitter:   0.1,
 	}
 
-	q := rl.associatePBQAndPnF(ctx, p)
+	q := rl.associatePBQAndPnF(ctx, p, kw)
 
 	err := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
 		rErr := q.Write(context.Background(), m)
@@ -341,7 +358,7 @@ func (rl *ReadLoop) ackMessages(ctx context.Context, messages []*isb.ReadMessage
 
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
 // it to the partition.
-func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partition.ID) pbq.ReadWriteCloser {
+func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partition.ID, kw window.AlignedKeyedWindower) pbq.ReadWriteCloser {
 	// look for existing pbq
 	q := rl.pbqManager.GetPBQ(partitionID)
 
@@ -356,7 +373,7 @@ func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partitio
 		}
 		pbqErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func() (done bool, err error) {
 			var attempt int
-			q, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID)
+			q, pbqErr = rl.pbqManager.CreateNewPBQ(ctx, partitionID, kw)
 			if pbqErr != nil {
 				attempt += 1
 				rl.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.String("partitionID", partitionID.String()), zap.Error(pbqErr))
