@@ -18,9 +18,11 @@ package redis
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -66,10 +68,12 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 			RedisClient: client,
 			Options:     *options,
 			Metrics: redisclient.Metrics{
-				ReadErrors: isbReadErrors,
+				ReadErrorsInc: func() {
+					labels := map[string]string{"buffer": name}
+					isbReadErrors.With(labels).Inc()
+				},
 			},
 		},
-
 		BufferReadInfo: &BufferReadInfo{
 			rwLock:            new(sync.RWMutex),
 			isEmpty:           true,
@@ -78,6 +82,38 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 		},
 		// checkBackLog is set to true as on start up we need to start from the beginning
 	}
+
+	// this function describes how to derive messages from the XSstream
+	rqr.XStreamToMessages = func(xstreams []redis.XStream, messages []*isb.ReadMessage, labels map[string]string) ([]*isb.ReadMessage, error) {
+		// for each XMessage in []XStream
+		for _, xstream := range xstreams {
+			for _, message := range xstream.Messages {
+				var readOffset = message.ID
+
+				// our messages have only one field/value pair (i.e., header/payload)
+				if len(message.Values) != 1 {
+					if rqr.Metrics.ReadErrorsInc != nil {
+						rqr.Metrics.ReadErrorsInc()
+					}
+					return messages, fmt.Errorf("expected only 1 pair of field/value in stream %+v", message.Values)
+				}
+				for f, v := range message.Values {
+					msg, err := getHeaderAndBody(f, v)
+					if err != nil {
+						return messages, fmt.Errorf("%w", err)
+					}
+					readMessage := isb.ReadMessage{
+						Message:    msg,
+						ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
+					}
+					messages = append(messages, &readMessage)
+				}
+			}
+		}
+
+		return messages, nil
+	}
+
 	rqr.Log = logging.FromContext(ctx).With("BufferReader", rqr.GetName())
 	// updateIsEmptyFlag is used to update isEmpty flag once
 	rqr.updateIsEmptyFlag(ctx)
@@ -85,6 +121,16 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 	// refresh IsEmpty Flag  at a periodic interval
 	go rqr.refreshIsEmptyFlag(ctx)
 	return rqr
+}
+
+func getHeaderAndBody(field string, value interface{}) (msg isb.Message, err error) {
+	err = msg.Header.UnmarshalBinary([]byte(field))
+	if err != nil {
+		return msg, fmt.Errorf("header unmarshal error %w", err)
+	}
+
+	msg.Body.Payload = []byte(value.(string))
+	return msg, nil
 }
 
 // refreshIsEmptyFlag is used to refresh the changes for isEmpty

@@ -23,7 +23,6 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	//redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
@@ -39,13 +38,21 @@ type RedisStreamsReader struct {
 	Options
 	Log     *zap.SugaredLogger
 	Metrics Metrics
+
+	XStreamToMessages func(xstreams []redis.XStream, messages []*isb.ReadMessage, labels map[string]string) ([]*isb.ReadMessage, error)
 }
 
 type Metrics struct {
-	ReadErrors *prometheus.CounterVec
-	Reads      *prometheus.CounterVec //todo: use this
-	Acks       *prometheus.CounterVec //todo: use this
+	//ReadErrors *prometheus.CounterVec
+	//Reads      *prometheus.CounterVec //todo: use this
+	//Acks       *prometheus.CounterVec //todo: use this
+	ReadErrorsInc MetricsIncrementFunc
+	ReadsInc      MetricsIncrementFunc
+	AcksInc       MetricsIncrementFunc
 }
+
+// need a function type which increments a particular counter
+type MetricsIncrementFunc func()
 
 func (br *RedisStreamsReader) GetName() string {
 	return br.Name
@@ -100,12 +107,11 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 				return messages, nil
 			}
 			fmt.Printf("deletethis: error from Read(): %v\n", err)
-			if br.Metrics.ReadErrors != nil {
-				fmt.Printf("deletethis: ReadErrors=%+v\n", br.Metrics.ReadErrors)
-				br.Metrics.ReadErrors.With(labels).Inc()
+			if br.Metrics.ReadErrorsInc != nil {
+				br.Metrics.ReadErrorsInc()
 			}
 			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
-			messages, errMsg := br.convertXStreamToMessages(xstreams, messages, labels)
+			messages, errMsg := br.XStreamToMessages(xstreams, messages, labels)
 			br.Log.Errorw("checkBacklog true, convertXStreamToMessages failed", zap.Error(errMsg))
 			return messages, fmt.Errorf("XReadGroup failed, %w", err)
 		}
@@ -126,20 +132,19 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 				return messages, nil
 			}
 			fmt.Printf("deletethis: error from Read(): %v\n", err)
-			if br.Metrics.ReadErrors != nil {
-				fmt.Printf("deletethis: ReadErrors=%+v\n", br.Metrics.ReadErrors)
-				br.Metrics.ReadErrors.With(labels).Inc()
+			if br.Metrics.ReadErrorsInc != nil {
+				br.Metrics.ReadErrorsInc()
 			}
 			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
-			messages, errMsg := br.convertXStreamToMessages(xstreams, messages, labels)
+			messages, errMsg := br.XStreamToMessages(xstreams, messages, labels)
 			br.Log.Errorw("checkBacklog false, convertXStreamToMessages failed", zap.Error(errMsg))
 			return messages, fmt.Errorf("XReadGroup failed, %w", err)
 		}
-		fmt.Printf("deletethis: successfully received %d messages\n", count)
+		fmt.Printf("deletethis: successfully received %d messages\n", len(messages))
 	}
 
 	// for each XMessage in []XStream
-	return br.convertXStreamToMessages(xstreams, messages, labels)
+	return br.XStreamToMessages(xstreams, messages, labels)
 }
 
 // Ack acknowledges the offset to the read queue. Ack is always pipelined, if you want to avoid it then
@@ -169,45 +174,4 @@ func (br *RedisStreamsReader) processXReadResult(startIndex string, count int64)
 		Block:    br.Options.ReadTimeOut,
 	})
 	return result.Result()
-}
-
-// convertXStreamToMessages is used to convert xstreams to messages
-func (br *RedisStreamsReader) convertXStreamToMessages(xstreams []redis.XStream, messages []*isb.ReadMessage, labels map[string]string) ([]*isb.ReadMessage, error) {
-	// for each XMessage in []XStream
-	for _, xstream := range xstreams {
-		for _, message := range xstream.Messages {
-			var readOffset = message.ID
-
-			// our messages have only one field/value pair (i.e., header/payload)
-			if len(message.Values) != 1 {
-				if br.Metrics.ReadErrors != nil {
-					br.Metrics.ReadErrors.With(labels).Inc()
-				}
-				return messages, fmt.Errorf("expected only 1 pair of field/value in stream %+v", message.Values)
-			}
-			for f, v := range message.Values {
-				msg, err := getHeaderAndBody(f, v)
-				if err != nil {
-					return messages, fmt.Errorf("%w", err)
-				}
-				readMessage := isb.ReadMessage{
-					Message:    msg,
-					ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
-				}
-				messages = append(messages, &readMessage)
-			}
-		}
-	}
-
-	return messages, nil
-}
-
-func getHeaderAndBody(field string, value interface{}) (msg isb.Message, err error) {
-	err = msg.Header.UnmarshalBinary([]byte(field))
-	if err != nil {
-		return msg, fmt.Errorf("header unmarshal error %w", err)
-	}
-
-	msg.Body.Payload = []byte(value.(string))
-	return msg, nil
 }

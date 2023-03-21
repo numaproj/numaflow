@@ -27,6 +27,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -101,9 +102,12 @@ func New(
 		RedisClient: redisClient,
 		Options:     *readerOpts,
 		Metrics: redisclient.Metrics{
-			ReadErrors: redisStreamsSourceReadErrors,
-			Reads:      redisStreamsSourceReadCount,
-			Acks:       redisStreamsSourceAckCount,
+			ReadErrorsInc: func() {
+				redisStreamsSourceReadErrors.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Inc()
+			},
+
+			//Reads:
+			//Acks:
 		},
 	}
 	redisStreamsReader.Log = logging.NewLogger()
@@ -147,7 +151,40 @@ func New(
 	fmt.Printf("deletethis: error from CreateStreamGroup: %v\n", err)
 	// TODO: if err != alreadyCreated { return err }
 
+	redisStreamsSource.XStreamToMessages = func(xstreams []redis.XStream, messages []*isb.ReadMessage, labels map[string]string) ([]*isb.ReadMessage, error) {
+		// for each XMessage in []XStream
+		for _, xstream := range xstreams {
+			for _, message := range xstream.Messages {
+				var readOffset = message.ID
+				for f, v := range message.Values {
+					offset := toOffset(xstream.Stream, readOffset)
+					isbMsg := isb.Message{
+						Header: isb.Header{
+							//MessageInfo: isb.MessageInfo{EventTime: m.Timestamp}, //todo: do we need this?
+							ID:  offset,
+							Key: f, //todo: is this binary?
+						},
+						Body: isb.Body{Payload: []byte(v.(string))},
+					}
+
+					readMsg := &isb.ReadMessage{
+						ReadOffset: isb.SimpleStringOffset(func() string { return offset }),
+						Message:    isbMsg,
+					}
+					messages = append(messages, readMsg)
+					fmt.Printf("deletethis: added message to output: %+v\n", readMsg)
+				}
+			}
+		}
+
+		return messages, nil
+	}
+
 	return redisStreamsSource, nil
+}
+
+func toOffset(stream string, offset string) string {
+	return fmt.Sprintf("%s:%s", stream, offset)
 }
 
 func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
