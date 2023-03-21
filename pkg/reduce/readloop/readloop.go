@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/idlehandler"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -189,7 +190,9 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		if nextWin.EndTime().After(watermark) {
 			// publish idle watermark to solve watermark latency
 			for _, toBuffer := range rl.toBuffers {
-				rl.publishIdleWatermark(ctx, toBuffer, wmb.Watermark(watermark))
+				if publisher, ok := rl.publishWatermark[toBuffer.GetName()]; ok {
+					idlehandler.PublishIdleWatermark(ctx, toBuffer, wmb.Watermark(watermark), publisher, rl.log, rl.idleManager)
+				}
 			}
 		}
 	}
@@ -440,34 +443,5 @@ func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
 		rl.op.insertTask(rl.udfInvocationTracking[p])
 		q.CloseOfBook()
 		delete(rl.udfInvocationTracking, p)
-	}
-}
-
-// publishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
-// we see a new WMB; later we only update the WMB without a ctrl message.
-func (rl *ReadLoop) publishIdleWatermark(ctx context.Context, toBuffer isb.BufferWriter, wm wmb.Watermark) {
-	var bufferName = toBuffer.GetName()
-
-	if !rl.idleManager.Exists(bufferName) {
-		// if the buffer doesn't exist, then we get a new idle situation
-		// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
-		var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
-		writeOffsets, errs := toBuffer.Write(ctx, ctrlMessage)
-		// we only write one ctrl message, so there's one and only one error in the array, use index=0 to get the error
-		if errs[0] != nil {
-			rl.log.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
-			return
-		}
-		rl.log.Debug("succeeded to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
-
-		if len(writeOffsets) == 1 {
-			// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
-			rl.idleManager.Update(bufferName, writeOffsets[0])
-		}
-	}
-
-	// publish WMB (this will naturally incr or set the timestamp of rl.wmbOffset)
-	if publisher, ok := rl.publishWatermark[bufferName]; ok {
-		publisher.PublishIdleWatermark(wm, rl.idleManager.Get(bufferName))
 	}
 }

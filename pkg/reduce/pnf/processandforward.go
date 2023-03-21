@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/idlehandler"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -152,7 +153,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		return errors.New("failed to forward the messages to isb")
 	}
 
-	p.publishWM(processorWM, writeOffsets)
+	p.publishWM(ctx, processorWM, writeOffsets)
 	// delete the persisted messages
 	err := p.pbqReader.GC()
 	if err != nil {
@@ -252,7 +253,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 }
 
 // publishWM publishes the watermark to each edge.
-func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string][]isb.Offset) {
+func (p *ProcessAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][]isb.Offset) {
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
@@ -272,11 +273,7 @@ func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string]
 		// batch processing cycle, send an idle watermark
 		for bufferName := range p.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
-				// use the watermark of the current read batch for the idle watermark
-				// we don't care about the offset here because, in this use case,
-				// we will use a referred watermark to replace this idle watermark
-				// TODO
-				p.publishWatermark[bufferName].PublishIdleWatermark(wm, isb.SimpleIntOffset(func() int64 { return -1 }))
+				idlehandler.PublishIdleWatermark(ctx, p.toBuffers[bufferName], wm, p.publishWatermark[bufferName], p.log, p.idleManager)
 			}
 		}
 	}

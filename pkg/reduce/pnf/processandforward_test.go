@@ -222,7 +222,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			buffers:  []*simplebuffer.InMemoryBuffer{test1Buffer1, test1Buffer2},
 			pf:       pf1,
 			otStores: otStores1,
-			expected: []bool{false, true},
+			expected: []bool{false, false}, // should have one ctrl message for buffer2
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    0,
@@ -230,7 +230,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 					Idle:      false,
 				},
 				"buffer2": {
-					Offset:    -1,
+					Offset:    0,
 					Watermark: int64(119999),
 					Idle:      true,
 				},
@@ -270,15 +270,15 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			buffers:  []*simplebuffer.InMemoryBuffer{test3Buffer1, test3Buffer2},
 			pf:       pf3,
 			otStores: otStores3,
-			expected: []bool{true, true},
+			expected: []bool{false, false}, // should have one ctrl message for each buffer
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
-					Offset:    -1,
+					Offset:    0,
 					Watermark: int64(119999),
 					Idle:      true,
 				},
 				"buffer2": {
-					Offset:    -1,
+					Offset:    0,
 					Watermark: int64(119999),
 					Idle:      true,
 				},
@@ -290,9 +290,9 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		t.Run(value.name, func(t *testing.T) {
 			err := value.pf.Forward(ctx)
 			assert.NoError(t, err)
-			assert.Equal(t, []bool{value.buffers[0].IsEmpty(), value.buffers[1].IsEmpty()}, value.expected)
+			assert.Equal(t, value.expected, []bool{value.buffers[0].IsEmpty(), value.buffers[1].IsEmpty()})
 			// pbq entry from the manager will be removed after forwarding
-			assert.Equal(t, pbqManager.GetPBQ(value.id), nil)
+			assert.Equal(t, nil, pbqManager.GetPBQ(value.id))
 			for bufferName := range value.pf.publishWatermark {
 				// NOTE: in this test we only have one processor to publish
 				// so len(otKeys) should always be 1
@@ -300,7 +300,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 				for _, otKey := range otKeys {
 					otValue, _ := value.otStores[bufferName].GetValue(ctx, otKey)
 					ot, _ := wmb.DecodeToWMB(otValue)
-					assert.Equal(t, ot, value.wmExpected[bufferName])
+					assert.Equal(t, value.wmExpected[bufferName], ot)
 				}
 			}
 		})

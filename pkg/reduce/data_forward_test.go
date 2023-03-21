@@ -251,7 +251,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	assert.NoError(t, err)
 
 	publisher := map[string]publish.Publisher{
-		"to": &EventTypeWMProgressor{},
+		toBufferName: wmpublisher,
 	}
 
 	// create new fixed window of (windowTime)
