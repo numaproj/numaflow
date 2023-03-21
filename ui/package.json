@@ -75,7 +75,7 @@
   },
   "jest": {
     "transformIgnorePatterns": [
-      "/node_modules/(?!d3|d3-array|internmap|delaunator|robust-predicates|reactflow)"
+      "/node_modules/(?!d3|d3-array|internmap|delaunator|robust-predicates|reactflow|react-toastify)"
     ]
   }
 }
