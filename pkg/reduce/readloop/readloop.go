@@ -80,6 +80,7 @@ func NewReadLoop(ctx context.Context,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
+	idleManager *wmb.IdleManager,
 ) (*ReadLoop, error) {
 	op := newOrderedForwarder(ctx, vertexName, pipelineName, vr)
 
@@ -96,7 +97,7 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:        whereToDecider,
 		publishWatermark:      pw,
 		udfInvocationTracking: make(map[partition.ID]*task),
-		idleManager:           wmb.NewIdleManager(len(toBuffers)),
+		idleManager:           idleManager,
 	}
 
 	err := rl.Startup(ctx)
