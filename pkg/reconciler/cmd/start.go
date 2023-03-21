@@ -20,15 +20,6 @@ import (
 	"context"
 	"reflect"
 
-	numaflow "github.com/numaproj/numaflow"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/reconciler"
-	isbsvcctrl "github.com/numaproj/numaflow/pkg/reconciler/isbsvc"
-	plctrl "github.com/numaproj/numaflow/pkg/reconciler/pipeline"
-	vertexctrl "github.com/numaproj/numaflow/pkg/reconciler/vertex"
-	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
-	logging "github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -41,6 +32,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	numaflow "github.com/numaproj/numaflow"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
+	isbsvcctrl "github.com/numaproj/numaflow/pkg/reconciler/isbsvc"
+	plctrl "github.com/numaproj/numaflow/pkg/reconciler/pipeline"
+	vertexctrl "github.com/numaproj/numaflow/pkg/reconciler/vertex"
+	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
+	logging "github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 func Start(namespaced bool, managedNamespace string) {
@@ -158,7 +159,7 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 
-	// Watch Deployments with Genreation changes
+	// Watch Deployments with Generation changes
 	if err := pipelineController.Watch(&source.Kind{Type: &appv1.Deployment{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.Pipeline{}, IsController: true}, predicate.GenerationChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch Deployments", zap.Error(err))
 	}

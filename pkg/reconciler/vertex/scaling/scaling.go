@@ -40,9 +40,10 @@ import (
 )
 
 type Scaler struct {
-	client    client.Client
+	client client.Client
+	// Key is the vertex namespaced name, Value is the corresponding *list.Element in the vertexList
 	vertexMap map[string]*list.Element
-	// List of the vertex namespaced name, format is "namespace/name"
+	// List of the vertex namespaced name, format is "namespace/vertex-name"
 	vertexList *list.List
 	lock       *sync.RWMutex
 	options    *options
@@ -77,7 +78,7 @@ func (s *Scaler) Contains(key string) bool {
 	return ok
 }
 
-// Length returns how many vetices are being watched for autoscaling
+// Length returns how many vertices are being watched for autoscaling
 func (s *Scaler) Length() int {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -133,8 +134,8 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 //	desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
 //
 // Back pressure factor
-// When desiredReplicas > currentReplics:
-// If there's back pressure in the directly connectied vertices, desiredReplicas = currentReplicas-1;
+// When desiredReplicas > currentReplicas:
+// If there's back pressure in the directly connected vertices, desiredReplicas = currentReplicas-1;
 // If there's back pressure in the downstream vertices (not connected), desiredReplicas remains the same.
 func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) error {
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("vertexKey", key)
@@ -273,14 +274,14 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		directPressure, downstreamPressure := s.hasBackPressure(*pl, *vertex)
 		if directPressure {
 			if current > 1 {
-				log.Debugf("Vertex %s has direct back pressure from connected vertices, decreasing one replica")
+				log.Debugf("Vertex %s has direct back pressure from connected vertices, decreasing one replica", key)
 				return s.patchVertexReplicas(ctx, vertex, current-1)
 			} else {
-				log.Debugf("Vertex %s has direct back pressure from connected vertices, skip scaling")
+				log.Debugf("Vertex %s has direct back pressure from connected vertices, skip scaling", key)
 				return nil
 			}
 		} else if downstreamPressure {
-			log.Debugf("Vertex %s has back pressure in downstream vertices, skip scaling")
+			log.Debugf("Vertex %s has back pressure in downstream vertices, skip scaling", key)
 			return nil
 		}
 		diff := desired - current
@@ -329,7 +330,7 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 
 // Start function starts the autoscaling worker group.
 // Each worker keeps picking up scaling tasks (which contains vertex keys) to calculate the desired replicas,
-// and patch the vetex spec with the new replica number if needed.
+// and patch the vertex spec with the new replica number if needed.
 func (s *Scaler) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx).Named("autoscaler")
 	log.Info("Starting autoscaler...")
