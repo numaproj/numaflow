@@ -34,7 +34,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/idlehandler"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -191,7 +192,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 			// publish idle watermark to solve watermark latency
 			for _, toBuffer := range rl.toBuffers {
 				if publisher, ok := rl.publishWatermark[toBuffer.GetName()]; ok {
-					idlehandler.PublishIdleWatermark(ctx, toBuffer, wmb.Watermark(watermark), publisher, rl.log, rl.idleManager)
+					idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, rl.idleManager, rl.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 				}
 			}
 		}

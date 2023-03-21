@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -226,7 +227,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 		for _, toBuffer := range isdf.toBuffers {
-			isdf.publishIdleWatermark(toBuffer, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+			if p, ok := isdf.publishWatermark[toBuffer.GetName()]; ok {
+				idlehandler.PublishIdleWatermark(ctx, toBuffer, p, isdf.idleManager, isdf.opts.logger, isdf.opts.vertexType, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+			}
 		}
 		return
 	}
@@ -391,7 +394,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			if !activeWatermarkBuffers[bufferName] {
 				// use the watermark of the current read batch for the idle watermark
 				// same as read len==0 because there's no event published to the buffer
-				isdf.publishIdleWatermark(isdf.toBuffers[bufferName], processorWM)
+				if p, ok := isdf.publishWatermark[bufferName]; ok {
+					idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName], p, isdf.idleManager, isdf.opts.logger, isdf.opts.vertexType, processorWM)
+				}
 			}
 		}
 	}
@@ -604,50 +609,6 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, message
 		}
 	}
 	return nil
-}
-
-// publishIdleWatermark publishes a ctrl message with isb.Kind set to WMB when write length is zero
-// We only send one ctrl message when we see a new WMB; later we only update the WMB without a ctrl
-// message.
-func (isdf *InterStepDataForward) publishIdleWatermark(toBuffer isb.BufferWriter, wm wmb.Watermark) {
-	var bufferName = toBuffer.GetName()
-
-	if !isdf.idleManager.Exists(bufferName) {
-		// the map is nil means we get a new idle situation
-		if isdf.opts.vertexType == dfv1.VertexTypeSink {
-			// for Sink vertex, we don't need to write any ctrl message
-			// and because when we publish the watermark, offset is not important for sink
-			// so, we do nothing here
-		} else {
-			// if idleManager is nil, create a new WMB and write a ctrl message to ISB
-			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
-			writeOffsets, err := isdf.writeToBuffer(isdf.ctx, toBuffer, ctrlMessage)
-			if err != nil {
-				isdf.opts.logger.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(err))
-				return
-			}
-			isdf.opts.logger.Debug("succeeded to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(err))
-
-			if len(writeOffsets) == 1 {
-				// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
-				isdf.idleManager.Update(bufferName, writeOffsets[0])
-			} else {
-				// if sink vertex, then there's no write offset
-				isdf.idleManager.Update(bufferName, isb.SimpleIntOffset(func() int64 { return 0 }))
-			}
-		}
-	}
-
-	// publish WMB (this will naturally incr or set the timestamp of isdf.idleManager)
-	if publisher, ok := isdf.publishWatermark[bufferName]; ok {
-		if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
-			isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
-			publisher.PublishIdleWatermark(wm, isdf.idleManager.Get(bufferName))
-		} else {
-			// for Sink vertex, and it does not care about the offset during watermark publishing
-			publisher.PublishIdleWatermark(wm, nil)
-		}
-	}
 }
 
 // errorArrayToMap summarizes an error array to map

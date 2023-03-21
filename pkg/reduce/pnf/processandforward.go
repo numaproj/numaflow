@@ -28,7 +28,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/idlehandler"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -273,7 +274,7 @@ func (p *ProcessAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 		// batch processing cycle, send an idle watermark
 		for bufferName := range p.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
-				idlehandler.PublishIdleWatermark(ctx, p.toBuffers[bufferName], wm, p.publishWatermark[bufferName], p.log, p.idleManager)
+				idlehandler.PublishIdleWatermark(ctx, p.toBuffers[bufferName], p.publishWatermark[bufferName], p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
 			}
 		}
 	}
