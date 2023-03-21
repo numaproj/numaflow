@@ -274,7 +274,9 @@ func (p *ProcessAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 		// batch processing cycle, send an idle watermark
 		for bufferName := range p.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
-				idlehandler.PublishIdleWatermark(ctx, p.toBuffers[bufferName], p.publishWatermark[bufferName], p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
+				if publisher, ok := p.publishWatermark[bufferName]; ok {
+					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[bufferName], publisher, p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
+				}
 			}
 		}
 	}

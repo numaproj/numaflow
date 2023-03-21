@@ -1,5 +1,6 @@
 package wmb
 
+// WMBChecker checks if the idle watermark is valid.
 type WMBChecker struct {
 	counter int
 	max     int
