@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/idlehandler"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -64,6 +65,7 @@ type ReadLoop struct {
 	whereToDecider        forward.ToWhichStepDecider
 	publishWatermark      map[string]publish.Publisher
 	udfInvocationTracking map[partition.ID]*task
+	idleManager           *wmb.IdleManager
 }
 
 // NewReadLoop initializes  and returns ReadLoop.
@@ -93,6 +95,7 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:        whereToDecider,
 		publishWatermark:      pw,
 		udfInvocationTracking: make(map[partition.ID]*task),
+		idleManager:           wmb.NewIdleManager(len(toBuffers)),
 	}
 
 	err := rl.Startup(ctx)
@@ -179,6 +182,19 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		partitions := cw.Partitions()
 		rl.closePartitions(partitions)
 		rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
+	}
+
+	if len(closedWindows) == 0 {
+		nextWin := rl.pbqManager.NextWindowToBeClosed()
+		watermark := time.Time(wm).Add(-1 * time.Millisecond)
+		if nextWin.EndTime().After(watermark) {
+			// publish idle watermark to solve watermark latency
+			for _, toBuffer := range rl.toBuffers {
+				if publisher, ok := rl.publishWatermark[toBuffer.GetName()]; ok {
+					idlehandler.PublishIdleWatermark(ctx, toBuffer, wmb.Watermark(watermark), publisher, rl.log, rl.idleManager)
+				}
+			}
+		}
 	}
 }
 
@@ -384,7 +400,7 @@ func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partitio
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
-		t := rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
+		t := rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark, rl.idleManager)
 		rl.udfInvocationTracking[partitionID] = t
 		rl.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}

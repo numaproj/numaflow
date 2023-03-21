@@ -25,14 +25,14 @@ import (
 var isbIsEmptyFlagErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "isb_redis",
 	Name:      "isEmpty_error_total",
-	Help:      "Total number of Redis IsEmpty Errors",
+	Help:      "Total number of Redis Exists Errors",
 }, []string{"buffer"})
 
 // isbReadErrors is used to indicate the number of errors in the redis READ operations
 var isbReadErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "isb_redis",
 	Name:      "read_error_total",
-	Help:      "Total number of Redis IsEmpty Errors",
+	Help:      "Total number of Redis Exists Errors",
 }, []string{"buffer"})
 
 // isbIsFullErrors is used to indicate the number of errors in the redis isFull check
@@ -53,7 +53,7 @@ var isbIsFull = promauto.NewCounterVec(prometheus.CounterOpts{
 var isbIsEmpty = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "isb_redis",
 	Name:      "isEmpty_total",
-	Help:      "Total number of IsEmpty",
+	Help:      "Total number of Exists",
 }, []string{"buffer"})
 
 // isbWriteErrors is used to indicate the number of errors in the redis write check

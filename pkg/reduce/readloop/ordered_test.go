@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/stretchr/testify/assert"
 
@@ -59,6 +60,7 @@ func TestOrderedProcessing(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	idleManager := wmb.NewIdleManager(len(toSteps))
 	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
 
 	ctx := context.Background()
@@ -114,7 +116,7 @@ func TestOrderedProcessing(t *testing.T) {
 				kw.AddSlot(_partition.Slot)
 
 				p, _ := pbqManager.CreateNewPBQ(ctx, _partition, kw)
-				t := op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
+				t := op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw, idleManager)
 				op.insertTask(t)
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
