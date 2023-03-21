@@ -85,7 +85,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 	// updateIsEmptyFlag is used to update isEmpty flag once
 	rqr.updateIsEmptyFlag(ctx)
 
-	// refresh Exists Flag  at a periodic interval
+	// refresh IsEmpty Flag  at a periodic interval
 	go rqr.refreshIsEmptyFlag(ctx)
 	return rqr
 }
