@@ -159,36 +159,6 @@ func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 	}
 }
 
-// PutReferred inserts the referred WMB, which is a validated watermark copied from other timelines, to replace
-// the idle watermark into list. It ensures that the list will remain sorted after the insert.
-// TODO: clean up and refine the other two put methods after we remove copying over strategy
-func (t *OffsetTimeline) PutReferred(node wmb.WMB) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	// when inserting a referred WMB, we only need to compare with the head
-	// and can safely skip insertion when any condition doesn't meet
-	if e := t.watermarks.Front(); e != nil {
-		var elementNode = e.Value.(wmb.WMB)
-		if node.Watermark > elementNode.Watermark {
-			if node.Offset > elementNode.Offset {
-				t.watermarks.InsertBefore(node, e)
-				t.watermarks.Remove(t.watermarks.Back())
-				return
-			}
-		} else if node.Watermark == elementNode.Watermark {
-			if node.Offset > elementNode.Offset {
-				e.Value = wmb.WMB{
-					Watermark: node.Watermark,
-					Offset:    node.Offset,
-				}
-				return
-			}
-		} else {
-			return
-		}
-	}
-}
-
 // GetHeadOffset returns the head offset, that is the most recent offset which will have the highest
 // Watermark.
 func (t *OffsetTimeline) GetHeadOffset() int64 {
