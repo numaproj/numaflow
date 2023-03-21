@@ -156,19 +156,20 @@ func New(
 		for _, xstream := range xstreams {
 			for _, message := range xstream.Messages {
 				var readOffset = message.ID
+
 				for f, v := range message.Values {
-					offset := toOffset(xstream.Stream, readOffset)
+
 					isbMsg := isb.Message{
 						Header: isb.Header{
-							//MessageInfo: isb.MessageInfo{EventTime: m.Timestamp}, //todo: do we need this?
-							ID:  offset,
-							Key: f, //todo: is this binary?
+							MessageInfo: isb.MessageInfo{EventTime: time.Now()}, //doesn't seem like Redis offers a timestamp
+							ID:          readOffset,                             // assumption is that this only needs to be unique for this source vertex
+							Key:         f,
 						},
 						Body: isb.Body{Payload: []byte(v.(string))},
 					}
 
 					readMsg := &isb.ReadMessage{
-						ReadOffset: isb.SimpleStringOffset(func() string { return offset }),
+						ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }), // assumption is that this is just used for ack, so doesn't need to include stream name
 						Message:    isbMsg,
 					}
 					messages = append(messages, readMsg)
@@ -183,9 +184,10 @@ func New(
 	return redisStreamsSource, nil
 }
 
+/*
 func toOffset(stream string, offset string) string {
 	return fmt.Sprintf("%s:%s", stream, offset)
-}
+}*/
 
 func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
 	opts := &redis.UniversalOptions{
