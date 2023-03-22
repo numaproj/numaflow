@@ -18,12 +18,14 @@ package cat
 
 import (
 	"context"
+	"fmt"
 
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 )
 
 func New() functionsdk.MapFunc {
 	return func(ctx context.Context, key string, datum functionsdk.Datum) functionsdk.Messages {
+		fmt.Printf("deletethis: key=%s\n", key)
 		return functionsdk.MessagesBuilder().Append(functionsdk.MessageToAll(datum.Value()))
 	}
 }

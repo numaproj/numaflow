@@ -222,6 +222,7 @@ func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMess
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
+		fmt.Printf("deletethis: publishing watermark for oldest=%v\n", oldest)
 		rsSource.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
 	}
 }
