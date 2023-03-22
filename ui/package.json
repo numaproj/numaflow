@@ -35,6 +35,7 @@
     "react-json-view": "^1.21.3",
     "react-router-dom": "6",
     "react-test-renderer": "^18.0.0",
+    "react-toastify": "^9.1.1",
     "reactflow": "^11.5.5",
     "resize-observer-polyfill": "^1.5.1",
     "typescript": "^4.4.2",
@@ -74,7 +75,7 @@
   },
   "jest": {
     "transformIgnorePatterns": [
-      "/node_modules/(?!d3|d3-array|internmap|delaunator|robust-predicates|reactflow)"
+      "/node_modules/(?!d3|d3-array|internmap|delaunator|robust-predicates|reactflow|react-toastify)"
     ]
   }
 }

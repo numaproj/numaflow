@@ -147,7 +147,6 @@ export default function Graph(props: GraphProps) {
 
   const handleNodeClick = (event: MouseEvent, node: Node) => {
     setNodeOpen(true);
-    setNode(node);
     setNodeId(node.id);
     setShowSpec(false);
     setEdgeOpen(false);
