@@ -186,10 +186,9 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
 	}
 
-	if len(closedWindows) == 0 {
-		nextWin := rl.pbqManager.NextWindowToBeClosed()
-		watermark := time.Time(wm).Add(-1 * time.Millisecond)
-		if nextWin.EndTime().After(watermark) {
+	if nextWin := rl.pbqManager.NextWindowToBeClosed(); nextWin != nil {
+		// minus 1 ms because if it's the same as the end time the window would have already been closed
+		if watermark := time.Time(wm).Add(-1 * time.Millisecond); nextWin.EndTime().After(watermark) {
 			// publish idle watermark to solve watermark latency
 			for _, toBuffer := range rl.toBuffers {
 				if publisher, ok := rl.publishWatermark[toBuffer.GetName()]; ok {
