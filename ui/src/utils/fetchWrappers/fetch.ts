@@ -27,7 +27,7 @@ export const useFetch = (
       try {
         const response = await fetch(url, fetchOptions);
         if (!response.ok) {
-          setError(response.statusText);
+          setError(response.status);
           setLoading(false);
         } else {
           const data = await response.json();
