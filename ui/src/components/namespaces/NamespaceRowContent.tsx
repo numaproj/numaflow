@@ -34,15 +34,10 @@ export function NamespaceRowContent(props: NamespaceRowContentProps) {
       const {pipelines, error: pipelineError} = useNamespaceFetch(namespaceId);
 
       useEffect(() => {
-        if (pipelineError === "Internal Server Error") {
+        if (pipelineError) {
           notifyError([{
             error: "Failed to fetch the pipelines for the provided namespace",
             options: {toastId: "ns-server", autoClose: false}
-          }]);
-        } else if (pipelineError === "Unauthorized") {
-          notifyError([{
-            error: "Unauthorized access for the entered namespace",
-            options: {toastId: "ns-access", autoClose: false}
           }]);
         }
       }, [pipelineError]);

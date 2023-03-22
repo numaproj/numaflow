@@ -51,7 +51,7 @@ export function Pipeline() {
         options: {toastId: "pl-vertex", autoClose: false}
       }]);
     }
-  }, [pipeline, pipelineError]);
+  }, [pipelineError]);
 
   useEffect(() => {
     // Refresh pipeline info every x ms
@@ -77,7 +77,7 @@ export function Pipeline() {
         options: {toastId: "pl-edge", autoClose: false}
       }]);
     }
-  }, [edgesInfo, edgesInfoError]);
+  }, [edgesInfoError]);
 
   useEffect(() => {
     // Refresh edgesInfo every x ms
@@ -251,7 +251,7 @@ export function Pipeline() {
               if (result && result?.status === "rejected") {
                 watermarkErr.push({
                   error: `${result.reason.status}: Failed to get watermarks for some vertices`,
-                  options: {toastId: "vertex-watermarks", autoClose: false}
+                  options: {toastId: "vertex-watermarks", autoClose: 5000}
                 });
               }
             })
@@ -306,7 +306,7 @@ export function Pipeline() {
         }
         newNode.data.vertexMetrics = vertexMetrics.has(vertex.name)
           ? vertexMetrics.get(vertex.name)
-          : 0;
+          : null;
         newVertices.push(newNode);
       });
     }
@@ -353,7 +353,7 @@ export function Pipeline() {
             } as Edge;
             pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
                 ? edgeWatermark.get(pipelineEdge.id)
-                : 0;
+                : null;
             pipelineEdge.animated = true;
             pipelineEdge.type = 'custom';
             newEdges.push(pipelineEdge);

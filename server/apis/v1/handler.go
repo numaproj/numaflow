@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -84,11 +83,7 @@ func NewHandler() (*handler, error) {
 func (h *handler) ListPipelines(c *gin.Context) {
 	plList, err := h.numaflowClient.Pipelines(c.Param("namespace")).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		if strings.Contains(err.Error(), "forbidden") {
-			c.JSON(http.StatusUnauthorized, err.Error())
-		} else {
-			c.JSON(http.StatusInternalServerError, err.Error())
-		}
+		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, plList.Items)
