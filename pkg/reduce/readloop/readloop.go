@@ -182,7 +182,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
 	for _, cw := range closedWindows {
 		partitions := cw.Partitions()
-		rl.closePartitions(partitions)
+		rl.ClosePartitions(partitions)
 		rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
 	}
 
@@ -435,8 +435,8 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 	return kWindows
 }
 
-// closePartitions closes the partitions by invoking close-of-book (COB).
-func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
+// ClosePartitions closes the partitions by invoking close-of-book (COB).
+func (rl *ReadLoop) ClosePartitions(partitions []partition.ID) {
 	for _, p := range partitions {
 		q := rl.pbqManager.GetPBQ(p)
 		rl.log.Infow("Close of book", zap.String("partitionID", p.String()))

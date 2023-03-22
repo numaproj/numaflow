@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"go.uber.org/zap"
 
@@ -55,6 +56,7 @@ type DataForward struct {
 	keyed               bool
 	idleManager         *wmb.IdleManager
 	wmbChecker          wmb.WMBChecker
+	pbqManager          *pbq.Manager
 	opts                *Options
 	log                 *zap.SugaredLogger
 }
@@ -97,6 +99,7 @@ func NewDataForward(ctx context.Context,
 		windowingStrategy:   windowingStrategy,
 		keyed:               vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed,
 		idleManager:         idleManager,
+		pbqManager:          pbqManager,
 		wmbChecker:          wmb.NewWMBChecker(2), // TODO: make configurable
 		log:                 logging.FromContext(ctx),
 		opts:                options}
@@ -169,21 +172,39 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	if len(readMessages) == 0 {
 		// TODO
 		// we use the HeadWMB as the watermark for the idle
-		// var processorWMB = d.watermarkFetcher.GetHeadWMB()
-		// if !d.wmbChecker.ValidateHeadWMB(processorWMB) {
-		// 	// validation failed, skip publishing
-		// 	d.log.Debugw("skip publishing idle watermark",
-		// 		zap.Int("counter", d.wmbChecker.GetCounter()),
-		// 		zap.Int64("offset", processorWMB.Offset),
-		// 		zap.Int64("watermark", processorWMB.Watermark),
-		// 		zap.Bool("Idle", processorWMB.Idle))
-		// 	return
-		// }
-		// for _, toBuffer := range d.toBuffers {
-		// 	if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
-		// 		idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
-		// 	}
-		// }
+		var processorWMB = d.watermarkFetcher.GetHeadWMB()
+		if !d.wmbChecker.ValidateHeadWMB(processorWMB) {
+			// validation failed, skip publishing
+			d.log.Debugw("skip publishing idle watermark",
+				zap.Int("counter", d.wmbChecker.GetCounter()),
+				zap.Int64("offset", processorWMB.Offset),
+				zap.Int64("watermark", processorWMB.Watermark),
+				zap.Bool("Idle", processorWMB.Idle))
+			return
+		}
+
+		nextWin := d.pbqManager.NextWindowToBeClosed()
+		if nextWin == nil {
+			for _, toBuffer := range d.toBuffers {
+				if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
+					idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+				}
+			}
+		} else {
+			if nextWin.EndTime().Before(time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond)) {
+				// you can close the windows
+				closedWindows := d.windowingStrategy.RemoveWindows(time.UnixMilli(processorWMB.Watermark))
+				for _, win := range closedWindows {
+					d.readloop.ClosePartitions(win.Partitions())
+				}
+			} else {
+				for _, toBuffer := range d.toBuffers {
+					if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
+						idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					}
+				}
+			}
+		}
 		return
 	}
 	readMessagesCount.With(map[string]string{
