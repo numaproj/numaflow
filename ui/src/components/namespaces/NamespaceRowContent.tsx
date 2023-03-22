@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import { useNamespaceFetch } from "../../utils/fetchWrappers/namespaceFetch";
+import { notifyError } from "../../utils/error";
+import { useEffect } from "react";
 
 interface NamespaceRowContentProps {
   namespaceId: string;
@@ -29,7 +31,17 @@ export function NamespaceRowContent(props: NamespaceRowContentProps) {
           </div>
       );
   } else {
-      const {pipelines} = useNamespaceFetch(namespaceId);
+      const {pipelines, error: pipelineError} = useNamespaceFetch(namespaceId);
+
+      useEffect(() => {
+        if (pipelineError) {
+          notifyError([{
+            error: "Failed to fetch the pipelines for the provided namespace",
+            options: {toastId: "ns-server", autoClose: false}
+          }]);
+        }
+      }, [pipelineError]);
+
       return (
           <div className={"NamespaceRowContent"} data-testid="namespace-row-content">
               <Box
