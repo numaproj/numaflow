@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"go.uber.org/zap"
 
@@ -168,22 +167,23 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	if len(readMessages) == 0 {
+		// TODO
 		// we use the HeadWMB as the watermark for the idle
-		var processorWMB = d.watermarkFetcher.GetHeadWMB()
-		if !d.wmbChecker.ValidateHeadWMB(processorWMB) {
-			// validation failed, skip publishing
-			d.log.Debugw("skip publishing idle watermark",
-				zap.Int("counter", d.wmbChecker.GetCounter()),
-				zap.Int64("offset", processorWMB.Offset),
-				zap.Int64("watermark", processorWMB.Watermark),
-				zap.Bool("Idle", processorWMB.Idle))
-			return
-		}
-		for _, toBuffer := range d.toBuffers {
-			if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
-				idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
-			}
-		}
+		// var processorWMB = d.watermarkFetcher.GetHeadWMB()
+		// if !d.wmbChecker.ValidateHeadWMB(processorWMB) {
+		// 	// validation failed, skip publishing
+		// 	d.log.Debugw("skip publishing idle watermark",
+		// 		zap.Int("counter", d.wmbChecker.GetCounter()),
+		// 		zap.Int64("offset", processorWMB.Offset),
+		// 		zap.Int64("watermark", processorWMB.Watermark),
+		// 		zap.Bool("Idle", processorWMB.Idle))
+		// 	return
+		// }
+		// for _, toBuffer := range d.toBuffers {
+		// 	if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
+		// 		idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+		// 	}
+		// }
 		return
 	}
 	readMessagesCount.With(map[string]string{
