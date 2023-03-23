@@ -128,7 +128,7 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 
 	var headWMB = wmb.WMB{
 		// we find the head WMB based on watermark
-		Offset:    math.MinInt64,
+		Offset:    math.MaxInt64,
 		Watermark: math.MaxInt64,
 	}
 	// if any head wmb from Vn-1 processors is not idle, we skip publishing
@@ -145,8 +145,8 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 			return wmb.WMB{}
 		}
 		if curHeadWMB.Offset != -1 {
-			// find the largest head offset's smallest watermark
-			if curHeadWMB.Offset > headWMB.Offset {
+			// find the smallest head offset's smallest watermark
+			if curHeadWMB.Offset < headWMB.Offset {
 				headWMB = curHeadWMB
 			} else if curHeadWMB.Offset == headWMB.Offset && curHeadWMB.Watermark < headWMB.Watermark {
 				headWMB = curHeadWMB
