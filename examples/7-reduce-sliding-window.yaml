@@ -2,8 +2,6 @@ apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
   name: reduce-sliding-pipeline
-  annotations:
-    loglevel: "true"
 spec:
   limits:
     readBatchSize: 50
