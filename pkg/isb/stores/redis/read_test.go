@@ -108,11 +108,11 @@ func TestRedisCheckBacklog(t *testing.T) {
 
 	readMessages, err := rqr.Read(ctx, count)
 	// check if backlog is set to false
-	assert.False(t, rqr.checkBackLog)
+	assert.False(t, rqr.CheckBackLog)
 	assert.NoErrorf(t, err, "rqr.Read failed, %s", err)
 	assert.Len(t, readMessages, int(count))
 
-	rqr.options.checkBackLog = true
+	rqr.Options.CheckBackLog = true
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -121,7 +121,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 		},
 	}}
 
-	rqw, _ := NewBufferWrite(ctx, client, "toStream", "toGroup", WithInfoRefreshInterval(2*time.Millisecond), WithLagDuration(time.Minute)).(*BufferWrite)
+	rqw, _ := NewBufferWrite(ctx, client, "toStream", "toGroup", redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute)).(*BufferWrite)
 	err = client.CreateStreamGroup(ctx, rqw.GetStreamName(), "toGroup", redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
@@ -308,7 +308,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	toGroup := "ReadWritePerformance-group-to"
 	consumer := "ReadWritePerformance-con-0"
 	count := int64(10000)
-	rqw, _ := NewBufferWrite(ctx, client, toStream, toGroup, WithInfoRefreshInterval(2*time.Millisecond), WithLagDuration(time.Minute), WithMaxLength(20000)).(*BufferWrite)
+	rqw, _ := NewBufferWrite(ctx, client, toStream, toGroup, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute), redisclient.WithMaxLength(20000)).(*BufferWrite)
 	rqr, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer).(*BufferRead)
 
 	toSteps := map[string]isb.BufferWriter{
@@ -398,7 +398,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatency() {
 
 // TestReadWriteLatencyPipelining is performs wthe latency test during a forward.
 func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
-	suite.rqw, _ = NewBufferWrite(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", WithInfoRefreshInterval(2*time.Second), WithLagDuration(time.Minute), WithoutPipelining(), WithMaxLength(20000)).(*BufferWrite)
+	suite.rqw, _ = NewBufferWrite(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", redisclient.WithInfoRefreshInterval(2*time.Second), redisclient.WithLagDuration(time.Minute), redisclient.WithoutPipelining(), redisclient.WithMaxLength(20000)).(*BufferWrite)
 	_ = NewBufferRead(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", "consumer-0")
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
