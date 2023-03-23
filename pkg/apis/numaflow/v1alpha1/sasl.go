@@ -24,6 +24,9 @@ type SASL struct {
 	// GSSAPI contains the kerberos config
 	// +optional
 	GSSAPI *GSSAPI `json:"gssapi" protobuf:"bytes,2,opt,name=gssapi"`
+	// SASLPlain contains the sasl plain config
+	// +optional
+	Plain *SASLPlain `json:"plain" protobuf:"bytes,3,opt,name=plain"`
 }
 
 // SASLType describes the SASL type
@@ -77,3 +80,11 @@ const (
 	// KRB5KeytabAuth = "KRB5_KEYTAB_AUTH" = 2
 	KRB5KeytabAuth KRB5AuthType = "KRB5_KEYTAB_AUTH"
 )
+
+type SASLPlain struct {
+	User string `json:"user" protobuf:"bytes,1,opt,name=user"`
+	// PasswordSecret refers to the secret that contains the password
+	// +optional
+	PasswordSecret *corev1.SecretKeySelector `json:"passwordSecret,opt" protobuf:"bytes,2,opt,name=passwordSecret"`
+	Handshake      bool                      `json:"handshake" protobuf:"bytes,3,opt,name=handshake"`
+}

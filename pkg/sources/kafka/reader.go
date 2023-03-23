@@ -320,6 +320,21 @@ func NewKafkaSource(
 					config.Net.SASL.GSSAPI = *gssapi
 				}
 			}
+		case dfv1.SASLTypePlaintext:
+			if plain := sasl.Plain; plain != nil {
+				config.Net.SASL.Enable = true
+				config.Net.SASL.Mechanism = sarama.SASLTypePlaintext
+				config.Net.SASL.User = plain.User
+				if plain.PasswordSecret != nil {
+					password, err := sharedutil.GetSecretFromVolume(plain.PasswordSecret)
+					if err != nil {
+						return nil, err
+					} else {
+						config.Net.SASL.Password = password
+					}
+				}
+				config.Net.SASL.Handshake = plain.Handshake
+			}
 		default:
 			return nil, fmt.Errorf("SASL mechanism not supported: %s", *sasl.Mechanism)
 		}
