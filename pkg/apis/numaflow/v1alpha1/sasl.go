@@ -59,13 +59,13 @@ type GSSAPI struct {
 	AuthType *KRB5AuthType `json:"authType" protobuf:"bytes,4,opt,name=authType,casttype=KRB5AuthType"`
 	// PasswordSecret refers to the secret that contains the password
 	// +optional
-	PasswordSecret *corev1.SecretKeySelector `json:"passwordSecret,opt" protobuf:"bytes,5,opt,name=passwordSecret"`
+	PasswordSecret *corev1.SecretKeySelector `json:"passwordSecret,omitempty" protobuf:"bytes,5,opt,name=passwordSecret"`
 	// KeytabSecret refers to the secret that contains the keytab
 	// +optional
-	KeytabSecret *corev1.SecretKeySelector `json:"keytabSecret,opt" protobuf:"bytes,6,opt,name=keytabSecret"`
+	KeytabSecret *corev1.SecretKeySelector `json:"keytabSecret,omitempty" protobuf:"bytes,6,opt,name=keytabSecret"`
 	// KerberosConfigSecret refers to the secret that contains the kerberos config
 	// +optional
-	KerberosConfigSecret *corev1.SecretKeySelector `json:"kerberosConfigSecret,opt" protobuf:"bytes,7,opt,name=kerberosConfigSecret"`
+	KerberosConfigSecret *corev1.SecretKeySelector `json:"kerberosConfigSecret,omitempty" protobuf:"bytes,7,opt,name=kerberosConfigSecret"`
 }
 
 // KRB5AuthType describes the kerberos auth type
@@ -85,6 +85,6 @@ type SASLPlain struct {
 	User string `json:"user" protobuf:"bytes,1,opt,name=user"`
 	// PasswordSecret refers to the secret that contains the password
 	// +optional
-	PasswordSecret *corev1.SecretKeySelector `json:"passwordSecret,opt" protobuf:"bytes,2,opt,name=passwordSecret"`
+	PasswordSecret *corev1.SecretKeySelector `json:"passwordSecret" protobuf:"bytes,2,opt,name=passwordSecret"`
 	Handshake      bool                      `json:"handshake" protobuf:"bytes,3,opt,name=handshake"`
 }
