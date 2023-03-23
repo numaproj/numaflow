@@ -191,16 +191,16 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 				}
 			}
 		} else {
-			if nextWin.EndTime().Before(time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond)) {
+			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); nextWin.EndTime().After(watermark) {
 				// you can close the windows
-				closedWindows := d.windowingStrategy.RemoveWindows(time.UnixMilli(processorWMB.Watermark))
+				closedWindows := d.windowingStrategy.RemoveWindows(watermark)
 				for _, win := range closedWindows {
 					d.readloop.ClosePartitions(win.Partitions())
 				}
 			} else {
 				for _, toBuffer := range d.toBuffers {
 					if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
-						idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+						idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 					}
 				}
 			}
