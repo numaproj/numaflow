@@ -41,7 +41,7 @@ func GetGSSAPIConfig(config *dfv1.GSSAPI) (*sarama.GSSAPIConfig, error) {
 	case dfv1.KRB5KeytabAuth:
 		c.AuthType = sarama.KRB5_KEYTAB_AUTH
 	default:
-		return nil, fmt.Errorf("failed to parse GSSAPI AuthType %s. Must be one of the following: ['KRB5_USER_AUTH', 'KRB5_KEYTAB_AUTH']", config.AuthType)
+		return nil, fmt.Errorf("failed to parse GSSAPI AuthType %v. Must be one of the following: ['KRB5_USER_AUTH', 'KRB5_KEYTAB_AUTH']", config.AuthType)
 	}
 
 	if config.KeytabSecret != nil {
