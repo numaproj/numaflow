@@ -104,9 +104,14 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 		var w = p.offsetTimeline.GetHeadWMB()
 		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, w.Offset, w.Watermark, w.Idle)
 		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, w.Offset, w.Watermark, w.Idle))
-		if w.Offset != -1 && w.Offset > headOffset {
-			headOffset = w.Offset
-			epoch = w.Watermark
+		if w.Offset != -1 {
+			// find the largest head offset's smallest watermark
+			if w.Offset > headOffset {
+				headOffset = w.Offset
+				epoch = w.Watermark
+			} else if w.Offset == headOffset && w.Watermark < epoch {
+				epoch = w.Watermark
+			}
 		}
 	}
 	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
@@ -117,12 +122,13 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetHeadWMB returns the latest idle WMB with smallest watermark among all processors
+// GetHeadWMB returns the latest idle WMB with the smallest watermark among all processors
 func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 	var debugString strings.Builder
 
 	var headWMB = wmb.WMB{
 		// we find the head WMB based on watermark
+		Offset:    math.MinInt64,
 		Watermark: math.MaxInt64,
 	}
 	// if any head wmb from Vn-1 processors is not idle, we skip publishing
@@ -135,10 +141,16 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 		// we only consider the latest wmb in the offset timeline
 		var curHeadWMB = p.offsetTimeline.GetHeadWMB()
 		if !curHeadWMB.Idle {
+			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bufferName)
 			return wmb.WMB{}
 		}
-		if curHeadWMB.Watermark != -1 && curHeadWMB.Watermark < headWMB.Watermark {
-			headWMB = curHeadWMB
+		if curHeadWMB.Offset != -1 {
+			// find the largest head offset's smallest watermark
+			if curHeadWMB.Offset > headWMB.Offset {
+				headWMB = curHeadWMB
+			} else if curHeadWMB.Offset == headWMB.Offset && curHeadWMB.Watermark < headWMB.Watermark {
+				headWMB = curHeadWMB
+			}
 		}
 	}
 	if headWMB.Watermark == math.MaxInt64 {
