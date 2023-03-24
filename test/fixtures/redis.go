@@ -51,7 +51,7 @@ func PumpRedisStream(stream string, n int, opts ...interface{}) {
 			panic(fmt.Errorf("unexpected option type %T", opt))
 		}
 		log.Printf("Pumping Redis stream %q sleeping %v with %d messages sized %d\n", stream, sleep, n, size)
-		InvokeE2EAPI("/redis/pump-stream?stream=%s&sleep=%v&n=%d&msg=%s&size=%d", stream, sleep, n, msg, size)
+		InvokeE2EAPI("/redis/pump-stream?stream=%s&sleep=%v&n=%d&key=test-key&value=%s&size=%d", stream, sleep, n, msg, size)
 	}
 
 }

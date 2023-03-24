@@ -44,7 +44,7 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 	w.Expect().VertexPodsRunning()
 
 	fixtures.PumpRedisStream(stream, 100, 20*time.Millisecond, 10, "test-message")
-	w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(100))
+	w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(100)) // todo: we're not really testing the key here, just the value
 
 }
 func TestRedisSourceSuite(t *testing.T) {
