@@ -1,12 +1,10 @@
 package wmb
 
-import "math"
-
 // WMBChecker checks if the idle watermark is valid.
 type WMBChecker struct {
-	counter   int
-	max       int
-	wmbOffset int64
+	counter int
+	max     int
+	w       WMB
 }
 
 // NewWMBChecker returns a WMBChecker to check if the wmb is idle.
@@ -14,9 +12,9 @@ type WMBChecker struct {
 // and will be used to publish a wmb to pods of the next vertex.
 func NewWMBChecker(numOfIteration int) WMBChecker {
 	return WMBChecker{
-		counter:   0,
-		max:       numOfIteration,
-		wmbOffset: math.MaxInt64,
+		counter: 0,
+		max:     numOfIteration,
+		w:       WMB{},
 	}
 }
 
@@ -32,10 +30,10 @@ func (c *WMBChecker) ValidateHeadWMB(w WMB) bool {
 	if c.counter == 0 {
 		c.counter++
 		// the wmb only writes once when counter is zero
-		c.wmbOffset = w.Offset
+		c.w.Offset = w.Offset
 	} else if c.counter < c.max-1 {
 		c.counter++
-		if c.wmbOffset == w.Offset {
+		if c.w.Offset == w.Offset {
 			// we get the same wmb, meaning the wmb is valid, continue
 		} else {
 			// else, start over
@@ -43,7 +41,7 @@ func (c *WMBChecker) ValidateHeadWMB(w WMB) bool {
 		}
 	} else if c.counter >= c.max-1 {
 		c.counter = 0
-		if c.wmbOffset == w.Offset {
+		if c.w.Offset == w.Offset {
 			// reach max iteration, if still get the same wmb,
 			// then the wmb is considered as valid, return ture
 			return true
