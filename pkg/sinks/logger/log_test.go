@@ -116,6 +116,10 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 		"to1": to1,
 		"to2": to2,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+		"to2": dfv1.RetryUntilSuccess,
+	}
 
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
@@ -125,7 +129,7 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, actionsOnFull, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := f.Start()

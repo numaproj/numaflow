@@ -898,9 +898,17 @@ func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common
 					},
 					"parallelism": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
+							Description: "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's not provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"onFull": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OnFull specifies the behaviour for the write actions when the inter step buffer is full. if not provided, the default value is set to \"\", which currently has the same effect as \"retryUntilSuccess\".",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},

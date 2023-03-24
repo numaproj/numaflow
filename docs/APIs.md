@@ -911,8 +911,21 @@ edge, will override pipeline level settings.
 <em>(Optional)</em>
 <p>
 Parallelism is only effective when the “to” vertex is a reduce vertex,
-if it’s provided, the default value is set to “1”. Parallelism is
+if it’s not provided, the default value is set to “1”. Parallelism is
 ignored when the “to” vertex is not a reduce vertex.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>onFull</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+OnFull specifies the behaviour for the write actions when the inter step
+buffer is full. if not provided, the default value is set to “”, which
+currently has the same effect as “retryUntilSuccess”.
 </p>
 </td>
 </tr>

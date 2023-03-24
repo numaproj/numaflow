@@ -17667,8 +17667,12 @@
           "description": "Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.EdgeLimits"
         },
+        "onFull": {
+          "description": "OnFull specifies the behaviour for the write actions when the inter step buffer is full. if not provided, the default value is set to \"\", which currently has the same effect as \"retryUntilSuccess\".",
+          "type": "string"
+        },
         "parallelism": {
-          "description": "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
+          "description": "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's not provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
           "type": "integer",
           "format": "int32"
         },

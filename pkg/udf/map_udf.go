@@ -73,12 +73,17 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
-	// Populate shuffle function map
+	// Populate shuffle function map and onFull actions map
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
+	onFullActions := make(map[string]string)
 	for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
+		bufferNames := dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge)
 		if edge.Parallelism != nil && *edge.Parallelism > 1 {
-			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge))
+			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), bufferNames)
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
+		}
+		for _, bn := range bufferNames {
+			onFullActions[bn] = edge.OnFull
 		}
 	}
 
@@ -131,7 +136,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, opts...)
+	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, onFullActions, udfHandler, fetchWatermark, publishWatermark, opts...)
 	if err != nil {
 		return err
 	}

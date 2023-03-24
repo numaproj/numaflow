@@ -96,6 +96,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -110,7 +113,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, actionsOnFull, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -226,6 +229,9 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -241,7 +247,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, actionsOnFull, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -391,6 +397,9 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -405,7 +414,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, actionsOnFull, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -572,6 +581,9 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{
@@ -586,13 +598,13 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
 	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
-	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
+	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, actionsOnFull, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
 	assert.True(t, failedForwarder == nil)
 	assert.Error(t, err)
 	assert.Equal(t, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder"), err)
 
 	// create a valid source forwarder
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, actionsOnFull, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -622,13 +634,17 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	<-stopped
 }
 
-// TestWriteToBufferError explicitly tests the case of retrying failed messages
-func TestWriteToBufferError(t *testing.T) {
+// TestWriteToBufferError_ActionOnFullIsRetryUntilSuccess explicitly tests the case of retrying failed messages
+func TestWriteToBufferError_ActionOnFullIsRetryUntilSuccess(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
 	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -641,7 +657,7 @@ func TestWriteToBufferError(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, actionsOnFull, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -671,7 +687,46 @@ func TestWriteToBufferError(t *testing.T) {
 	assert.True(t, strings.Contains(err.Error(), "with failed messages:1"))
 
 	<-stopped
+}
 
+// TestWriteToBufferError_ActionOnFullIsDropAndAckLatest explicitly tests the case of dropping messages when buffer is full
+func TestWriteToBufferError_ActionOnFullIsDropAndAckLatest(t *testing.T) {
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
+	toSteps := map[string]isb.BufferWriter{
+		"to1": to1,
+	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.DropAndAckLatest,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+		},
+	}}
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, actionsOnFull, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
+	assert.NoError(t, err)
+	assert.False(t, to1.IsFull())
+	assert.True(t, to1.IsEmpty())
+
+	stopped := f.Start()
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+	var messageToStep = make(map[string][]isb.Message)
+	messageToStep["to1"] = make([]isb.Message, 0)
+	messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:11]...)
+	_, err = f.writeToBuffers(ctx, messageToStep)
+	// although we are writing 11 messages to a buffer of size 10, since we specify actionOnFull as DropAndAckLatest,
+	// the writeToBuffers() call should return no error.
+	assert.Nil(t, err)
+	// stop will cancel the contexts and therefore the forwarder stops without waiting
+	f.Stop()
+	<-stopped
 }
 
 // TestNewInterStepDataForwardToOneStep explicitly tests the case where we forward to only one buffer
@@ -683,6 +738,11 @@ func TestNewInterStepDataForwardToOneStep(t *testing.T) {
 		"to1": to1,
 		"to2": to2,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+		"to2": dfv1.RetryUntilSuccess,
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -697,7 +757,7 @@ func TestNewInterStepDataForwardToOneStep(t *testing.T) {
 
 	fetchWatermark := &testForwardFetcher{}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, actionsOnFull, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -779,6 +839,11 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 		"to1": to1,
 		"to2": to2,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+		"to2": dfv1.RetryUntilSuccess,
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -793,7 +858,7 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 
 	fetchWatermark := &testForwardFetcher{}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, actionsOnFull, myForwardDropTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -872,6 +937,10 @@ func TestNewInterStepData_forwardToAll(t *testing.T) {
 		"to1": to1,
 		"to2": to2,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+		"to2": dfv1.RetryUntilSuccess,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -885,7 +954,7 @@ func TestNewInterStepData_forwardToAll(t *testing.T) {
 	}}
 	fetchWatermark := &testForwardFetcher{}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, actionsOnFull, myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -970,6 +1039,10 @@ func TestNewInterStepDataForward_WithInternalError(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -983,7 +1056,7 @@ func TestNewInterStepDataForward_WithInternalError(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, actionsOnFull, myForwardInternalErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1016,6 +1089,9 @@ func TestNewInterStepDataForward_WhereToError(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -1029,7 +1105,7 @@ func TestNewInterStepDataForward_WhereToError(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, actionsOnFull, myForwardApplyWhereToErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.True(t, to1.IsEmpty())
 
@@ -1063,6 +1139,10 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -1076,7 +1156,7 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, actionsOnFull, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.True(t, to1.IsEmpty())
 

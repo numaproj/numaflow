@@ -26,10 +26,15 @@ type Edge struct {
 	// +optional
 	Limits *EdgeLimits `json:"limits,omitempty" protobuf:"bytes,4,opt,name=limits"`
 	// Parallelism is only effective when the "to" vertex is a reduce vertex,
-	// if it's provided, the default value is set to "1".
+	// if it's not provided, the default value is set to "1".
 	// Parallelism is ignored when the "to" vertex is not a reduce vertex.
 	// +optional
 	Parallelism *int32 `json:"parallelism" protobuf:"bytes,5,opt,name=parallelism"`
+	// OnFull specifies the behaviour for the write actions when the inter step buffer is full.
+	// if not provided, the default value is set to "", which currently has the same effect as "retryUntilSuccess".
+	// +kubebuilder:validation:Enum="";retryUntilSuccess;dropAndAckLatest
+	// +optional
+	OnFull string `json:"onFull" protobuf:"bytes,6,opt,name=onFull"`
 }
 
 type ForwardConditions struct {

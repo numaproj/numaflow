@@ -118,7 +118,11 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+		"to2": dfv1.RetryUntilSuccess,
+	}
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, actionsOnFull, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := f.Start()

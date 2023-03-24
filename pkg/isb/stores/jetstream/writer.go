@@ -194,7 +194,7 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 	for i := 0; i < len(errs); i++ {
 		errs[i] = fmt.Errorf("unknown error")
 	}
-	if jw.isFull.Load() {
+	if jw.IsFull() {
 		jw.log.Debugw("Is full")
 		isbFull.With(map[string]string{"buffer": jw.GetName()}).Inc()
 		for i := 0; i < len(errs); i++ {
@@ -208,6 +208,11 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 		return jw.asyncWrite(ctx, messages, errs, labels)
 	}
 	return jw.syncWrite(ctx, messages, errs, labels)
+}
+
+// IsFull returns whether the buffer is full. It could be approximate.
+func (jw *jetStreamWriter) IsFull() bool {
+	return jw.isFull.Load()
 }
 
 func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message, errs []error, metricsLabels map[string]string) ([]isb.Offset, []error) {

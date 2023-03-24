@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,9 +47,11 @@ type InterStepDataForward struct {
 	ctx context.Context
 	// cancelFn cancels our new context, our cancellation is little more complex and needs to be well orchestrated, hence
 	// we need something more than a cancel().
-	cancelFn         context.CancelFunc
-	fromBuffer       isb.BufferReader
-	toBuffers        map[string]isb.BufferWriter
+	cancelFn   context.CancelFunc
+	fromBuffer isb.BufferReader
+	toBuffers  map[string]isb.BufferWriter
+	// key is the toBuffer name, value is the corresponding onFull action.
+	onFullActions    map[string]string
 	FSD              ToWhichStepDecider
 	UDF              applier.MapApplier
 	fetchWatermark   fetch.Fetcher
@@ -68,17 +71,13 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
 	toSteps map[string]isb.BufferWriter,
 	fsd ToWhichStepDecider,
+	onFullActions map[string]string,
 	applyUDF applier.MapApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*InterStepDataForward, error) {
 
-	options := &options{
-		retryInterval:  time.Millisecond,
-		readBatchSize:  dfv1.DefaultReadBatchSize,
-		udfConcurrency: dfv1.DefaultReadBatchSize,
-		logger:         logging.NewLogger(),
-	}
+	options := DefaultOptions()
 	for _, o := range opts {
 		if err := o(options); err != nil {
 			return nil, err
@@ -92,6 +91,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 		cancelFn:         cancel,
 		fromBuffer:       fromStep,
 		toBuffers:        toSteps,
+		onFullActions:    onFullActions,
 		FSD:              fsd,
 		UDF:              applyUDF,
 		fetchWatermark:   fetchWatermark,
@@ -478,53 +478,73 @@ func (isdf *InterStepDataForward) writeToBuffers(ctx context.Context, messageToS
 
 // writeToBuffer forwards an array of messages to a single buffer and is a blocking call or until shutdown has been initiated.
 func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBuffer isb.BufferWriter, messages []isb.Message) (writeOffsets []isb.Offset, err error) {
-	var totalBytes float64
-	for _, m := range messages {
-		totalBytes += float64(len(m.Payload))
-	}
-	writeOffsets = make([]isb.Offset, 0, len(messages))
-retry:
-	needRetry := false
+	var (
+		totalCount int
+		writeCount int
+		writeBytes float64
+		dropBytes  float64
+	)
+	totalCount = len(messages)
+	writeOffsets = make([]isb.Offset, 0, totalCount)
+
 	for {
 		_writeOffsets, errs := toBuffer.Write(ctx, messages)
 		// Note: this is an unwanted memory allocation during a happy path. We want only minimal allocation since using failedMessages is an unlikely path.
-		var failedMessages []isb.Message
-		for idx := range messages {
-			// use the messages index to index error, there is a 1:1 mapping
-			err := errs[idx]
-			// ATM there are no user defined errors during write, all are InternalErrors, and they require retry.
-			if err != nil {
-				needRetry = true
-				// we retry only failed messages
-				failedMessages = append(failedMessages, messages[idx])
-				writeMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Inc()
-				// a shutdown can break the blocking loop caused due to InternalErr
-				if ok, _ := isdf.IsShuttingDown(); ok {
-					err := fmt.Errorf("writeToBuffer failed, Stop called while stuck on an internal error with failed messages:%d, %v", len(failedMessages), errs)
-					platformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName}).Inc()
-					return writeOffsets, err
+		failedMessages := make([]isb.Message, 0, len(messages))
+		needRetry := false
+
+		for idx, msg := range messages {
+			if err := errs[idx]; err != nil {
+				// ATM there are no user defined errors during write, all are InternalErrors.
+
+				// using `strings.Contains` to check BufferFull error type is not a good practice for two reasons:
+				// 1. it's an O(n) operation which, if being called frequently, can introduce performance issue.
+				// 2. it assumes that all the buffer implementations implement err.Error() to use "Buffer full" as error message content.
+				// TODO - a better way could be to declare a BufferFullError type and use type check instead of checking error message.
+				needRetry = !(isdf.onFullActions[toBuffer.GetName()] == dfv1.DropAndAckLatest && strings.Contains(err.Error(), "Buffer full"))
+				if needRetry {
+					// we retry only failed messages
+					failedMessages = append(failedMessages, msg)
+					writeMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Inc()
+					// a shutdown can break the blocking loop caused due to InternalErr
+					if ok, _ := isdf.IsShuttingDown(); ok {
+						platformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName}).Inc()
+						return writeOffsets, fmt.Errorf("writeToBuffer failed, Stop called while stuck on an internal error with failed messages:%d, %v", len(failedMessages), errs)
+					}
+				} else {
+					// drop the message
+					dropBytes += float64(len(msg.Payload))
 				}
 			} else {
+				writeCount++
+				writeBytes += float64(len(msg.Payload))
 				// we support write offsets only for jetstream
 				if _writeOffsets != nil {
 					writeOffsets = append(writeOffsets, _writeOffsets[idx])
 				}
 			}
 		}
-		// set messages to failed for the retry
+
 		if needRetry {
-			isdf.opts.logger.Errorw("Retrying failed msgs", zap.Any("errors", errorArrayToMap(errs)))
+			isdf.opts.logger.Errorw("Retrying failed messages",
+				zap.Any("errors", errorArrayToMap(errs)),
+				zap.String("pipeline", isdf.pipelineName),
+				zap.String("vertex", isdf.vertexName),
+				zap.String("buffer", toBuffer.GetName()),
+			)
+			// set messages to failed for the retry
 			messages = failedMessages
 			// TODO: implement retry with backoff etc.
 			time.Sleep(isdf.opts.retryInterval)
-			goto retry
 		} else {
 			break
 		}
 	}
 
-	writeMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(float64(len(messages)))
-	writeBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(totalBytes)
+	dropMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(float64(totalCount - writeCount))
+	dropBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(dropBytes)
+	writeMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(float64(writeCount))
+	writeBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": toBuffer.GetName()}).Add(writeBytes)
 	return writeOffsets, nil
 }
 

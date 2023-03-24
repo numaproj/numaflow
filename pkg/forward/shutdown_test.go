@@ -47,6 +47,10 @@ func TestInterStepDataForward_Stop(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -61,7 +65,7 @@ func TestInterStepDataForward_Stop(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, actionsOnFull, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// write some data but buffer is not full even though we are not reading
@@ -80,6 +84,10 @@ func TestInterStepDataForward_ForceStop(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	actionsOnFull := map[string]string{
+		"to1": dfv1.RetryUntilSuccess,
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -94,7 +102,7 @@ func TestInterStepDataForward_ForceStop(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, actionsOnFull, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// write some data such that the fromBuffer can be empty, that is toBuffer gets full

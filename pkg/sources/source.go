@@ -139,9 +139,9 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 		}()
 		readyChecker = t
-		sourcer, err = sp.getSourcer(writers, sp.getTransformerGoWhereDecider(), t, fetchWatermark, publishWatermark, sourcePublisherStores, log)
+		sourcer, err = sp.getSourcer(writers, sp.getTransformerGoWhereDecider(), sp.getOnFullActions(), t, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	} else {
-		sourcer, err = sp.getSourcer(writers, forward.All, applier.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
+		sourcer, err = sp.getSourcer(writers, forward.All, sp.getOnFullActions(), applier.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
@@ -179,6 +179,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 func (sp *SourceProcessor) getSourcer(
 	writers []isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
+	onFullActions map[string]string,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
@@ -193,7 +194,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, generator.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return generator.NewMemGen(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
+		return generator.NewMemGen(sp.VertexInstance, writers, fsd, onFullActions, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.Kafka; x != nil {
 		readOptions := []kafka.Option{
 			kafka.WithGroupName(x.ConsumerGroupName),
@@ -202,9 +203,9 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, kafka.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return kafka.NewKafkaSource(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
+		return kafka.NewKafkaSource(sp.VertexInstance, writers, fsd, onFullActions, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	} else if x := src.HTTP; x != nil {
-		return http.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
+		return http.New(sp.VertexInstance, writers, fsd, onFullActions, mapApplier, fetchWM, publishWM, publishWMStores, http.WithLogger(logger))
 	} else if x := src.Nats; x != nil {
 		readOptions := []nats.Option{
 			nats.WithLogger(logger),
@@ -212,7 +213,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return nats.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
+		return nats.New(sp.VertexInstance, writers, fsd, onFullActions, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }
@@ -220,8 +221,9 @@ func (sp *SourceProcessor) getSourcer(
 func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
+		bufferNames := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)
 		if edge.Parallelism != nil && *edge.Parallelism > 1 {
-			s := shuffle.NewShuffle(sp.VertexInstance.Vertex.GetName(), dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge))
+			s := shuffle.NewShuffle(sp.VertexInstance.Vertex.GetName(), bufferNames)
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
@@ -243,4 +245,16 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
 		return result, nil
 	})
 	return fsd
+}
+
+// getOnFullActions builds a mapping between the out-going buffers and their respective onFull action.
+func (sp *SourceProcessor) getOnFullActions() map[string]string {
+	onFullActions := make(map[string]string)
+	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
+		bufferNames := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)
+		for _, bn := range bufferNames {
+			onFullActions[bn] = edge.OnFull
+		}
+	}
+	return onFullActions
 }
