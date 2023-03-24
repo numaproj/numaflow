@@ -139,7 +139,7 @@ jobs:
       max-parallel: 6
       matrix:
         driver: [jetstream]
-        case: [e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-e2e]
+        case: [e2e, kafka-e2e, http-e2e, nats-e2e, redis-source-e2e, sdks-e2e, reduce-e2e]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
