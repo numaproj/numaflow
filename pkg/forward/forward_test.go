@@ -241,8 +241,16 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -307,8 +315,13 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 		defer wg.Done()
 		otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
 		for otKeys1 == nil {
-			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
+			select {
+			case <-ctx.Done():
+				t.Log("test timed out")
+			default:
+				otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+				time.Sleep(time.Millisecond * 100)
+			}
 		}
 	}()
 	wg.Wait()
