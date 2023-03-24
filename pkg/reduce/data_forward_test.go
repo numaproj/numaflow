@@ -281,6 +281,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	assert.Len(t, msgs, 1)
 	for msgs[0].Header.Kind == isb.WMB {
 		msgs, readErr = to.Read(child, 1)
+		assert.Nil(t, readErr)
+		assert.Len(t, msgs, 1)
 	}
 
 	// assert the output of reduce (count of messages)
@@ -359,6 +361,8 @@ func TestReduceDataForward_Count(t *testing.T) {
 	assert.Len(t, msgs, 1)
 	for msgs[0].Header.Kind == isb.WMB {
 		msgs, readErr = buffer.Read(ctx, 1)
+		assert.Nil(t, readErr)
+		assert.Len(t, msgs, 1)
 	}
 
 	// assert the output of reduce
@@ -436,6 +440,8 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	assert.Len(t, msgs, 1)
 	for msgs[0].Header.Kind == isb.WMB {
 		msgs, readErr = buffer.Read(ctx, 1)
+		assert.Nil(t, readErr)
+		assert.Len(t, msgs, 1)
 	}
 
 	// assert the output of reduce
@@ -514,6 +520,8 @@ func TestReduceDataForward_Max(t *testing.T) {
 	assert.Len(t, msgs, 1)
 	for msgs[0].Header.Kind == isb.WMB {
 		msgs, readErr = buffer.Read(ctx, 1)
+		assert.Nil(t, readErr)
+		assert.Len(t, msgs, 1)
 	}
 
 	// assert the output of reduce
@@ -593,13 +601,17 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	assert.Len(t, msgs, 1)
 	for msgs[0].Header.Kind == isb.WMB {
 		msgs, readErr = buffer.Read(ctx, 1)
+		assert.Nil(t, readErr)
+		assert.Len(t, msgs, 1)
 	}
 
 	msgs1, readErr1 := buffer.Read(ctx, 1)
 	assert.Nil(t, readErr1)
-	assert.Len(t, msgs, 1)
+	assert.Len(t, msgs1, 1)
 	for msgs1[0].Header.Kind == isb.WMB {
 		msgs1, readErr1 = buffer.Read(ctx, 1)
+		assert.Nil(t, readErr1)
+		assert.Len(t, msgs1, 1)
 	}
 
 	// assert the output of reduce
@@ -685,6 +697,8 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	assert.Len(t, msgs, 1)
 	for msgs[0].Header.Kind == isb.WMB {
 		msgs, readErr = buffer.Read(ctx, 1)
+		assert.Nil(t, readErr)
+		assert.Len(t, msgs, 1)
 	}
 
 	// assert the output of reduce
