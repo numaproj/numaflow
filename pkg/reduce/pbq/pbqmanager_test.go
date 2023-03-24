@@ -46,7 +46,6 @@ func TestManager_ListPartitions(t *testing.T) {
 			t.Fail()
 		}
 	}()
-	
 	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),
 		WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
