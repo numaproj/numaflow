@@ -420,12 +420,9 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 				return s.Err()
 			}
 			data := s.Bytes()
-			fmt.Println("deletethis: " + string(data))
 			if exp.Match(data) {
-				fmt.Println("deletethis: got match")
 				result <- true
 			}
-			fmt.Println("deletethis: no match")
 		}
 	}
 }
