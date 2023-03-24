@@ -17,6 +17,7 @@ limitations under the License.
 package keyed
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -24,6 +25,16 @@ import (
 )
 
 func TestKeyedWindow_AddKey(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
+
 	kw := NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
 	tests := []struct {
 		name         string

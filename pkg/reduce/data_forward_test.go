@@ -219,15 +219,26 @@ func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 // assert to check if the result is forwarded to toBuffers
 func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	var (
-		windowTime      = 2 * time.Second
-		parentCtx       = context.Background()
-		child, cancelFn = context.WithTimeout(parentCtx, windowTime*2)
-		fromBufferSize  = int64(1000)
-		toBufferSize    = int64(10)
-		fromBufferName  = "source-from-buffer"
-		toBufferName    = "reduce-to-buffer"
+		windowTime     = 2 * time.Second
+		fromBufferSize = int64(1000)
+		toBufferSize   = int64(10)
+		fromBufferName = "source-from-buffer"
+		toBufferName   = "reduce-to-buffer"
 	)
+
+	parentCtx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	go func() {
+		<-parentCtx.Done()
+		if parentCtx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
+
+	child, cancelFn := context.WithTimeout(parentCtx, windowTime*2)
 	defer cancelFn()
+
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 	to := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
 
@@ -293,7 +304,6 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 // Count operation with 1 min window
 func TestReduceDataForward_Count(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{7}
@@ -304,7 +314,15 @@ func TestReduceDataForward_Count(t *testing.T) {
 		err            error
 	)
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
 
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
@@ -368,7 +386,6 @@ func TestReduceDataForward_Count(t *testing.T) {
 // Sum operation with 2 minutes window
 func TestReduceDataForward_Sum(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{10}
@@ -379,7 +396,15 @@ func TestReduceDataForward_Sum(t *testing.T) {
 		err            error
 	)
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
 
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
@@ -442,7 +467,6 @@ func TestReduceDataForward_Sum(t *testing.T) {
 // Max operation with 5 minutes window
 func TestReduceDataForward_Max(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{100}
@@ -453,7 +477,15 @@ func TestReduceDataForward_Max(t *testing.T) {
 		err            error
 	)
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
 
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
@@ -517,7 +549,6 @@ func TestReduceDataForward_Max(t *testing.T) {
 // Max operation with 5 minutes window and two keys
 func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messages       = []int{100, 99}
@@ -528,8 +559,15 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 		err            error
 	)
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
-
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
@@ -599,7 +637,6 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 // Max operation with 5 minutes window and non keyed
 func TestReduceDataForward_NonKeyed(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messages       = []int{100, 99}
@@ -610,7 +647,15 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 		err            error
 	)
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
 
 	// create from buffers
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
@@ -675,7 +720,6 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 func TestDataForward_WithContextClose(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messages       = []int{100, 99}
@@ -686,9 +730,17 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		err            error
 	)
 
-	cctx, childCancel := context.WithCancel(ctx)
-
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Log(t.Name(), "test timeout")
+			t.Fail()
+		}
+	}()
+
+	cctx, childCancel := context.WithCancel(ctx)
 	defer childCancel()
 
 	// create from buffers
