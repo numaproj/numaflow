@@ -6,19 +6,36 @@ import { usePipelineFetch } from "../../utils/fetchWrappers/pipelineFetch";
 import { useEdgesInfoFetch } from "../../utils/fetchWrappers/edgeInfoFetch";
 import { VertexMetrics, EdgeWatermark } from "../../utils/models/pipeline";
 import "./Pipeline.css";
+import { notifyError } from "../../utils/error";
 
 export function Pipeline() {
-  const { namespaceId, pipelineId } = useParams();
-
-  const [pipelineRequestKey, setPipelineRequestKey] = useState(`${Date.now()}`);
-
-  const [vertexPods, setVertexPods] = useState<Map<string, number>>(null);
+  const [vertexPods, setVertexPods] =
+    useState<Map<string, number>>(null);
 
   const [vertexMetrics, setVertexMetrics] =
     useState<Map<string, VertexMetrics>>(null);
 
   const [edgeWatermark, setEdgeWatermark] =
-    useState<Map<string, EdgeWatermark>>(null);
+    useState<Map<string, EdgeWatermark>>(null)
+
+  const [podsErr, setPodsErr] =
+    useState<any[]>(null);
+
+  const [metricsErr, setMetricsErr] =
+    useState<any[]>(null);
+
+  const [watermarkErr, setWatermarkErr] =
+    useState<any[]>(null);
+
+  const [pipelineRequestKey, setPipelineRequestKey] = useState(
+    `${Date.now()}`
+  );
+
+  const [edgesInfoRequestKey, setEdgesInfoRequestKey] = useState(
+    `${Date.now()}`
+  );
+
+  const { namespaceId, pipelineId } = useParams();
 
   const { pipeline, error: pipelineError } = usePipelineFetch(
     namespaceId,
@@ -26,15 +43,15 @@ export function Pipeline() {
     pipelineRequestKey
   );
 
-  const [edgesInfoRequestKey, setEdgesInfoRequestKey] = useState(
-    `${Date.now()}`
-  );
-
-  const { edgesInfo, error: edgesInfoError } = useEdgesInfoFetch(
-    namespaceId,
-    pipelineId,
-    edgesInfoRequestKey
-  );
+  // This useEffect notifies about the errors while querying for the vertices of the pipeline
+  useEffect(() => {
+    if (pipelineError){
+      notifyError([{
+        error: "Failed to fetch the pipeline vertices",
+        options: {toastId: "pl-vertex", autoClose: false}
+      }]);
+    }
+  }, [pipelineError]);
 
   useEffect(() => {
     // Refresh pipeline info every x ms
@@ -45,6 +62,22 @@ export function Pipeline() {
       clearInterval(interval);
     };
   }, []);
+
+  const { edgesInfo, error: edgesInfoError } = useEdgesInfoFetch(
+    namespaceId,
+    pipelineId,
+    edgesInfoRequestKey
+  );
+
+  // This useEffect notifies about the errors while querying for the edges of the pipeline
+  useEffect(() => {
+    if (edgesInfoError) {
+      notifyError([{
+        error: "Failed to fetch the pipeline edges",
+        options: {toastId: "pl-edge", autoClose: false}
+      }]);
+    }
+  }, [edgesInfoError]);
 
   useEffect(() => {
     // Refresh edgesInfo every x ms
@@ -59,31 +92,64 @@ export function Pipeline() {
   // This useEffect is used to obtain all the pods for a given vertex in a pipeline.
   useEffect(() => {
     const vertexToPodsMap = new Map();
+    const podsErr: any[] = [];
+
     if (pipeline?.spec?.vertices) {
-      Promise.all(
+      Promise.allSettled(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
             `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/pods`
           )
-            .then((response) => response.json())
+            .then((response) => {
+              if (response.ok) {
+                return response.json();
+              } else {
+                return Promise.reject({response, vertex:vertex.name});
+              }
+            })
             .then((json) => {
               vertexToPodsMap.set(vertex.name, json.length);
             });
         })
-      ).then(() => setVertexPods(vertexToPodsMap));
+      )
+        .then((results) => {
+          results.forEach((result) => {
+            if (result && result?.status === "rejected") {
+              podsErr.push({
+                error: `${result.reason.response.status}: Failed to get pods count for ${result.reason.vertex} vertex`,
+                options: {toastId: `${result.reason.vertex}-pods`, autoClose: 5000}
+              });
+            }
+          })
+          setPodsErr(podsErr);
+        })
+        .then(() => {setVertexPods(vertexToPodsMap)})
+        .catch(console.error)
     }
   }, [pipeline]);
 
+  // This useEffect notifies about the errors while querying for the pod count of a given vertex
+  useEffect(() => {
+    notifyError(podsErr);
+  }, [podsErr]);
+
   const getMetrics = useCallback(() => {
     const vertexToMetricsMap = new Map();
+    const metricsErr: any[] = [];
 
     if (pipeline?.spec?.vertices) {
-      Promise.all(
+      Promise.allSettled(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
             `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/metrics`
           )
-            .then((response) => response.json())
+            .then((response) => {
+              if (response.ok) {
+                return response.json();
+              } else {
+                return Promise.reject({response, vertex:vertex.name});
+              }
+            })
             .then((json) => {
               const vertexMetrics = {ratePerMin: "0.00", ratePerFiveMin: "0.00", ratePerFifteenMin: "0.00", podMetrics: null, error: false} as VertexMetrics;
               let ratePerMin = 0.0, ratePerFiveMin = 0.0, ratePerFifteenMin = 0.0;
@@ -102,6 +168,10 @@ export function Pipeline() {
                 } else {
                   if (vertexPods && vertexPods.get(vertex.name) !== 0) {
                     vertexMetrics.error = true;
+                    metricsErr.push({
+                      error: `404: Failed to get metrics for ${vertex.name} vertex`,
+                      options: {toastId: `${vertex.name}-metrics`, autoClose: 5000}
+                    });
                   }
                 }
               })
@@ -115,6 +185,17 @@ export function Pipeline() {
             });
         })
       )
+        .then((results) => {
+          results.forEach((result) => {
+            if (result && result?.status === "rejected") {
+              metricsErr.push({
+                error: `${result.reason.response.status}: Failed to get metrics for ${result.reason.vertex} vertex`,
+                options: {toastId: `${result.reason.vertex}-metrics`, autoClose: 5000}
+              });
+            }
+          })
+          setMetricsErr(metricsErr);
+        })
         .then(() => setVertexMetrics(vertexToMetricsMap))
         .catch(console.error);
     }
@@ -130,18 +211,31 @@ export function Pipeline() {
     return () => clearInterval(interval);
   }, [getMetrics]);
 
+  // This useEffect notifies about the errors while querying for the metrics of a given vertex
+  useEffect(() => {
+    notifyError(metricsErr);
+  }, [metricsErr]);
+
   // This is used to obtain the watermark of a given pipeline
   const getPipelineWatermarks = useCallback(() => {
     const edgeToWatermarkMap = new Map();
+    const watermarkErr: any[] = [];
+
     if (pipeline?.spec?.edges) {
       if (pipeline?.spec?.watermark?.disabled === true) {
         setEdgeWatermark(edgeToWatermarkMap)
       } else {
-        Promise.all( [
+        Promise.allSettled( [
               fetch(
                   `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
               )
-                  .then((response) => response.json())
+                  .then((response) => {
+                    if (response.ok) {
+                      return response.json();
+                    } else {
+                      return Promise.reject(response);
+                    }
+                  })
                   .then((json) => {
                     json.map((edge) => {
                       const edgeWatermark = {} as EdgeWatermark;
@@ -152,8 +246,19 @@ export function Pipeline() {
                   })
             ]
         )
-            .then(() => setEdgeWatermark(edgeToWatermarkMap))
-            .catch(console.error);
+          .then((results) => {
+            results.forEach((result) => {
+              if (result && result?.status === "rejected") {
+                watermarkErr.push({
+                  error: `${result.reason.status}: Failed to get watermarks for some vertices`,
+                  options: {toastId: "vertex-watermarks", autoClose: 5000}
+                });
+              }
+            })
+            setWatermarkErr(watermarkErr);
+          })
+          .then(() => setEdgeWatermark(edgeToWatermarkMap))
+          .catch(console.error);
       }
     }
   }, [pipeline]);
@@ -167,6 +272,11 @@ export function Pipeline() {
 
     return () => clearInterval(interval);
   }, [getPipelineWatermarks]);
+
+  // This useEffect notifies about the errors while querying for the watermark of the pipeline
+  useEffect(() => {
+    notifyError(watermarkErr);
+  }, [watermarkErr]);
 
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];
@@ -196,7 +306,7 @@ export function Pipeline() {
         }
         newNode.data.vertexMetrics = vertexMetrics.has(vertex.name)
           ? vertexMetrics.get(vertex.name)
-          : 0;
+          : null;
         newVertices.push(newNode);
       });
     }
@@ -243,7 +353,7 @@ export function Pipeline() {
             } as Edge;
             pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
                 ? edgeWatermark.get(pipelineEdge.id)
-                : 0;
+                : null;
             pipelineEdge.animated = true;
             pipelineEdge.type = 'custom';
             newEdges.push(pipelineEdge);
@@ -257,6 +367,7 @@ export function Pipeline() {
   if (pipelineError || edgesInfoError) {
     return <div>Error</div>;
   }
+
   return (
     <div data-testid={"pipeline"} style={{ overflow: "scroll !important" }}>
       {pipeline?.spec &&
