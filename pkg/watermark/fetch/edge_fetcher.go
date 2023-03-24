@@ -94,7 +94,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	var debugString strings.Builder
 	var headOffset int64 = math.MinInt64
-	var epoch int64 = math.MaxInt64
+	var headWatermark int64 = math.MaxInt64
 	var allProcessors = e.processorManager.GetAllProcessors()
 	// get the head offset of each processor
 	for _, p := range allProcessors {
@@ -104,17 +104,22 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 		var w = p.offsetTimeline.GetHeadWMB()
 		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, w.Offset, w.Watermark, w.Idle)
 		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, w.Offset, w.Watermark, w.Idle))
-		if w.Offset != -1 && w.Offset > headOffset {
-			headOffset = w.Offset
-			epoch = w.Watermark
+		if w.Offset != -1 {
+			// find the smallest head offset of the smallest watermark
+			if w.Watermark < headWatermark {
+				headOffset = w.Offset
+				headWatermark = w.Watermark
+			} else if w.Watermark == headWatermark && w.Offset < headOffset {
+				headWatermark = w.Watermark
+			}
 		}
 	}
 	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
-	if epoch == math.MaxInt64 {
+	if headWatermark == math.MaxInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
 		return wmb.Watermark(time.UnixMilli(-1))
 	}
-	return wmb.Watermark(time.UnixMilli(epoch))
+	return wmb.Watermark(time.UnixMilli(headWatermark))
 }
 
 // GetHeadWMB returns the latest idle WMB among all processors
