@@ -241,7 +241,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
-	
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	go func() {
