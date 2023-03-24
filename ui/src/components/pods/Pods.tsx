@@ -12,6 +12,7 @@ import { usePodsDetailFetch } from "../../utils/fetchWrappers/podsDetailFetch";
 import { Hexagon } from "../../utils/models/hexagonHeatMap";
 
 import "./Pods.css";
+import {notifyError} from "../../utils/error";
 
 interface PodsProps {
   namespaceId: string;
@@ -56,6 +57,16 @@ export function Pods(props: PodsProps) {
     };
   }, []);
 
+  // This useEffect notifies about the errors while querying for the pods of a vertex
+  useEffect(() => {
+    if (podsError){
+      notifyError([{
+        error: `Failed to get pods for ${vertexId} vertex`,
+        options: {toastId: `${vertexId}-pod`, autoClose: 5000}
+      }]);
+    }
+  }, [podsError]);
+
   useEffect(() => {
     if (pods.length) {
       setSelectedPod(pods[0]);
@@ -65,6 +76,15 @@ export function Pods(props: PodsProps) {
       setSelectedContainer(undefined);
     }
   }, [pods]);
+
+  useEffect(() => {
+    if (podsDetailError){
+      notifyError([{
+        error: `Failed to get pod details for ${vertexId} vertex`,
+        options: {toastId: `${vertexId}-pod-detail`, autoClose: 5000}
+      }]);
+    }
+  }, [podsDetailError]);
 
   const handlePodClick = useCallback((e: Element | EventType, p: Hexagon) => {
     setSelectedPod(p.data.pod);
