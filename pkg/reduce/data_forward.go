@@ -170,7 +170,6 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	if len(readMessages) == 0 {
-		// TODO
 		// we use the HeadWMB as the watermark for the idle
 		var processorWMB = d.watermarkFetcher.GetHeadWMB()
 		if !d.wmbChecker.ValidateHeadWMB(processorWMB) {
