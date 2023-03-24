@@ -19,10 +19,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/go-redis/redis/v8"
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
+	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 var redisClient *redis.Client
@@ -58,5 +61,53 @@ func init() {
 
 		w.WriteHeader(200)
 		_, _ = w.Write([]byte(count))
+	})
+
+	http.HandleFunc("/redis/pump-stream", func(w http.ResponseWriter, r *http.Request) {
+		stream := r.URL.Query().Get("stream")
+		key := r.URL.Query().Get("key") //todo: enable multiple key/value pairs?
+		value := r.URL.Query().Get("value")
+		valueMap := make(map[string]interface{})
+		valueMap[key] = value
+		size, err := strconv.Atoi(r.URL.Query().Get("size"))
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		ns := r.URL.Query().Get("n")
+		if ns == "" {
+			ns = "-1"
+		}
+		n, err := strconv.Atoi(ns)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(200)
+
+		start := time.Now()
+		_, _ = fmt.Fprintf(w, "sending %d messages of size %d to %q\n", n, size, stream)
+
+		for i := 0; i < n || n < 0; i++ {
+			select {
+			case <-r.Context().Done():
+				return
+			default:
+				redisClient.XAdd(r.Context(), &redis.XAddArgs{Stream: stream, Values: valueMap})
+				time.Sleep(duration)
+			}
+		}
+		_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", n, size, float64(n)/time.Since(start).Seconds(), stream)
 	})
 }
