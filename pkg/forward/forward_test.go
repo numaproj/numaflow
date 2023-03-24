@@ -443,8 +443,15 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 		defer wg.Done()
 		otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
 		for otKeys1 == nil {
-			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
+			select {
+			case <-ctx.Done():
+				t.Log("test timed out")
+				t.Fail()
+			default:
+				otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+				time.Sleep(time.Millisecond * 100)
+			}
+
 		}
 	}()
 	wg.Wait()
