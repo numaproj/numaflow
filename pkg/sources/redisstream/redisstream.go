@@ -88,7 +88,7 @@ func New(
 	}
 	fmt.Printf("deletethis: redisSpec=%+v, redisClient=%+v\n", redisSpec, redisClient)
 
-	readerOpts := &redisclient.Options{ //TODO: do we want read timeout like is an option in common.go?
+	readerOpts := &redisclient.Options{
 		InfoRefreshInterval: time.Second,
 		ReadTimeOut:         time.Second,
 		CheckBackLog:        true,
@@ -210,6 +210,14 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 		if err != nil {
 			return nil, fmt.Errorf("failed to get basic auth password, %w", err)
 		}
+	}
+	if sourceSpec.TLS != nil {
+		if c, err := sharedutil.GetTLSConfig(sourceSpec.TLS); err != nil {
+			return nil, err
+		} else {
+			opts.TLSConfig = c
+		}
+
 	}
 	return redisclient.NewRedisClient(opts), nil
 }
