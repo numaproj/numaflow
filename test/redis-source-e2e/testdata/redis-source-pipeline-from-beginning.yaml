@@ -13,13 +13,6 @@ spec:
           stream: test-stream
           consumerGroup: my-group
           readFromBeginning: true
-          #auth:
-          #  user:
-          #    name: redis-username
-          #    key: key
-          #  password:
-          #    name: redis-password
-          #    key: key
     - name: p1
       udf:
         builtin:

@@ -67,8 +67,10 @@ func init() {
 		stream := r.URL.Query().Get("stream")
 		key := r.URL.Query().Get("key") //todo: enable multiple key/value pairs?
 		value := r.URL.Query().Get("value")
+		fmt.Printf("deletethis: value=%+v\n", value)
 		valueMap := make(map[string]interface{})
-		valueMap[key] = value
+		valueMap[key] = interface{}(value)
+		fmt.Printf("deletethis: valueMap=%+v\n", valueMap)
 		size, err := strconv.Atoi(r.URL.Query().Get("size"))
 		if err != nil {
 			log.Println(err)

@@ -35,7 +35,10 @@ type RedisSourceSuite struct {
 
 func (rss *RedisSourceSuite) TestRedisSource() {
 	stream := "test-stream"
-	w := rss.Given().Pipeline("@testdata/redis-source-pipeline.yaml").
+
+	fixtures.PumpRedisStream(stream, 2, 20*time.Millisecond, 10, "test-message")
+
+	w := rss.Given().Pipeline("@testdata/redis-source-pipeline-from-beginning.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
@@ -44,8 +47,8 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 	w.Expect().VertexPodsRunning()
 
 	fixtures.PumpRedisStream(stream, 100, 20*time.Millisecond, 10, "test-message")
-	w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(100)) // todo: we're not really testing the key here, just the value
-
+	w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(102)) // todo: we're not really testing the key here, just the value
+	time.Sleep(2 * time.Minute)                                                    // todo: delete
 }
 func TestRedisSourceSuite(t *testing.T) {
 	suite.Run(t, new(RedisSourceSuite))

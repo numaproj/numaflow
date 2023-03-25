@@ -139,8 +139,6 @@ func New(
 	processorEntity := processor.NewProcessorEntity(entityName)
 	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
-	// todo: add TLS, auth
-
 	// create the ConsumerGroup here if not already created: it's okay if this fails
 	readFrom := redisclient.ReadFromLatest
 	if redisSpec.ReadFromBeginning {
