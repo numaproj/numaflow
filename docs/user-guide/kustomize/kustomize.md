@@ -2,10 +2,7 @@
 
 ## Transformers
 
-Kustomize [Transformer Configurations](https://github.com/kubernetes-sigs/kustomize/tree/master/examples/transformerconfigs) can be used to lots of powerful operatiions such as ConfigMap and Secret generations, applying common labels and annoations, updating image names and tags. To use thease features with Numaflow CRD objects:
-
-1. Download [numaflow-transformer-config.yaml](numaflow-transformer-config.yaml) into your kustomize directory.
-2. Add `numaflow-transformer-config.yaml` to your kustomize `configurations` section.
+Kustomize [Transformer Configurations](https://github.com/kubernetes-sigs/kustomize/tree/master/examples/transformerconfigs) can be used to do lots of powerful operations such as ConfigMap and Secret generations, applying common labels and annoations, updating image names and tags. To use thease features with Numaflow CRD objects, download [numaflow-transformer-config.yaml](numaflow-transformer-config.yaml) into your kustomize directory, and add it to your kustomize `configurations` section.
 
 ```yaml
 kind: Kustomization
@@ -19,9 +16,21 @@ configurations:
 
 Here is an [example](https://github.com/numaproj/numaflow/blob/main/docs/user-guide/kustomize/examples/transformer) to use transformers with a Pipeline.
 
-## OpenAPI
+## Patch
 
-Starting from version 4.5.5, kustomize can use Kubernetes [OpenAPI schema](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/openapi/) to provide merge key and patch strategy information. For example, given the following Pipeline spec:
+Starting from version 4.5.5, kustomize can use Kubernetes [OpenAPI schema](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/openapi/) to provide merge key and patch strategy information. To use that, download [schema.json](https://raw.githubusercontent.com/numaproj/numaflow/main/api/json-schema/schema.json) to your kustomize directory, and add it to `openapi` section.
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+openapi:
+  path: schema.json
+  # Or reference the remote configuration directly.
+  # path: https://raw.githubusercontent.com/numaproj/numaflow/main/api/json-schema/schema.json
+```
+
+For example, given the following Pipeline spec:
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -49,7 +58,7 @@ spec:
       to: out
 ```
 
-You can update it via a patch in a kustomize file.
+You can update the `source` spec via a patch in a kustomize file.
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -75,4 +84,4 @@ patchesStrategicMerge:
               rpu: 500
 ```
 
-See the full example [here](https://github.com/numaproj/numaflow/blob/main/docs/user-guide/kustomize/examples/openapi).
+See the full example [here](https://github.com/numaproj/numaflow/blob/main/docs/user-guide/kustomize/examples/patch).

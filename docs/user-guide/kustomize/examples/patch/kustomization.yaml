@@ -5,7 +5,6 @@ resources:
   - my-pipeline.yaml
 
 openapi:
-  #path: https://raw.githubusercontent.com/numaproj/numaflow/main/api/openapi-spec/swagger.json
   path: https://raw.githubusercontent.com/numaproj/numaflow/main/api/json-schema/schema.json
 
 patchesStrategicMerge:
@@ -20,3 +19,9 @@ patchesStrategicMerge:
           source:
             generator:
               rpu: 500
+        - name: my-udf
+          udf:
+            container:
+              env:
+              - name: foo
+                value: bar
