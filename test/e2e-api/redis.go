@@ -106,7 +106,11 @@ func init() {
 			case <-r.Context().Done():
 				return
 			default:
-				redisClient.XAdd(r.Context(), &redis.XAddArgs{Stream: stream, Values: valueMap})
+				result := redisClient.XAdd(r.Context(), &redis.XAddArgs{Stream: stream, Values: valueMap})
+				if result.Err() != nil {
+					http.Error(w, result.Err().Error(), http.StatusFailedDependency)
+					return
+				}
 				time.Sleep(duration)
 			}
 		}

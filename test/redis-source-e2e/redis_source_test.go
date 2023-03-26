@@ -34,21 +34,33 @@ type RedisSourceSuite struct {
 }
 
 func (rss *RedisSourceSuite) TestRedisSource() {
-	stream := "test-stream"
 
-	fixtures.PumpRedisStream(stream, 2, 20*time.Millisecond, 10, "test-message")
+	time.Sleep(10 * time.Second) //todo: replace this with waiting for "redis" service to be available
 
-	w := rss.Given().Pipeline("@testdata/redis-source-pipeline-from-beginning.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
+	for _, tt := range []struct {
+		stream          string
+		manifest        string
+		expectedNumMsgs int // expected result
+	}{
+		{"test-stream-a", "@testdata/redis-source-pipeline-from-beginning.yaml", 102},
+		{"test-stream-b", "@testdata/redis-source-pipeline-from-end.yaml", 100},
+	} {
+		fixtures.PumpRedisStream(tt.stream, 2, 20*time.Millisecond, 10, "test-message")
 
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
+		w := rss.Given().Pipeline(tt.manifest).
+			When().
+			CreatePipelineAndWait()
 
-	fixtures.PumpRedisStream(stream, 100, 20*time.Millisecond, 10, "test-message")
-	w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(102)) // todo: we're not really testing the key here, just the value
-	time.Sleep(2 * time.Minute)                                                    // todo: delete
+		// wait for all the pods to come up
+		w.Expect().VertexPodsRunning()
+
+		fixtures.PumpRedisStream(tt.stream, 100, 20*time.Millisecond, 10, "test-message")
+		w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(tt.expectedNumMsgs)) // todo: we're not really testing the key here, just the value
+
+		w.DeletePipelineAndWait()
+	}
+
+	time.Sleep(2 * time.Minute) // todo: delete
 }
 func TestRedisSourceSuite(t *testing.T) {
 	suite.Run(t, new(RedisSourceSuite))

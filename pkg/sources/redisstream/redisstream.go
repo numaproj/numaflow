@@ -144,7 +144,7 @@ func New(
 	if redisSpec.ReadFromBeginning {
 		readFrom = redisclient.ReadFromEarliest
 	}
-	redisStreamsSource.Log.Infof("Creating Redis Stream group %q on Stream %q", redisStreamsReader.Group, redisStreamsReader.Stream)
+	redisStreamsSource.Log.Infof("Creating Redis Stream group %q on Stream %q (readFrom=%v)", redisStreamsReader.Group, redisStreamsReader.Stream, readFrom)
 	err = redisClient.CreateStreamGroup(ctx, redisStreamsReader.Stream, redisStreamsReader.Group, readFrom)
 	fmt.Printf("deletethis: error from CreateStreamGroup: %v\n", err)
 	// TODO: if err != alreadyCreated { return err }
