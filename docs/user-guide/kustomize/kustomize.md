@@ -2,7 +2,7 @@
 
 ## Transformers
 
-Kustomize [Transformer Configurations](https://github.com/kubernetes-sigs/kustomize/tree/master/examples/transformerconfigs) can be used to do lots of powerful operations such as ConfigMap and Secret generations, applying common labels and annoations, updating image names and tags. To use thease features with Numaflow CRD objects, download [numaflow-transformer-config.yaml](numaflow-transformer-config.yaml) into your kustomize directory, and add it to your kustomize `configurations` section.
+Kustomize [Transformer Configurations](https://github.com/kubernetes-sigs/kustomize/tree/master/examples/transformerconfigs) can be used to do lots of powerful operations such as ConfigMap and Secret generations, applying common labels and annoations, updating image names and tags. To use thease features with Numaflow CRD objects, download [numaflow-transformer-config.yaml](numaflow-transformer-config.yaml) into your kustomize directory, and add it to `configurations` section.
 
 ```yaml
 kind: Kustomization
@@ -18,7 +18,7 @@ Here is an [example](https://github.com/numaproj/numaflow/blob/main/docs/user-gu
 
 ## Patch
 
-Starting from version 4.5.5, kustomize can use Kubernetes [OpenAPI schema](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/openapi/) to provide merge key and patch strategy information. To use that, download [schema.json](https://raw.githubusercontent.com/numaproj/numaflow/main/api/json-schema/schema.json) to your kustomize directory, and add it to `openapi` section.
+Starting from version 4.5.5, kustomize can use Kubernetes [OpenAPI schema](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/openapi/) to provide merge key and patch strategy information. To use that with Numaflow CRD objects, download [schema.json](https://raw.githubusercontent.com/numaproj/numaflow/main/api/json-schema/schema.json) into your kustomize directory, and add it to `openapi` section.
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
