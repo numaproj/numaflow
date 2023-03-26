@@ -237,6 +237,9 @@ message ContainerTemplate {
 
   // +optional
   repeated k8s.io.api.core.v1.EnvVar env = 4;
+
+  // +optional
+  repeated k8s.io.api.core.v1.EnvFromSource envFrom = 5;
 }
 
 message DaemonTemplate {

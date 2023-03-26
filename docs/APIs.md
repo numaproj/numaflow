@@ -767,6 +767,16 @@ Kubernetes core/v1.SecurityContext </a> </em>
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>envFrom</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envfromsource-v1-core">
+\[\]Kubernetes core/v1.EnvFromSource </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.DaemonTemplate">
