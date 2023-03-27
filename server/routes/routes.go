@@ -24,11 +24,24 @@ import (
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
 )
 
+type namespaceStatus struct {
+	ManagedNamespace *string `json:"managedNamespace"`
+	Namespaced       *bool   `json:"namespaced"`
+}
+
 func Routes(r *gin.Engine) {
 	r.GET("/healthz", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
-	v1Routes(r.Group("/api/v1"))
+	rGroup := r.Group("/api/v1")
+	v1Routes(rGroup)
+	rGroup.GET("/namespaces/status", func(c *gin.Context) {
+		managedNamespace := c.GetString("managedNamespace")
+		namespaced := c.GetBool("namespaced")
+		resp := namespaceStatus{&managedNamespace, &namespaced}
+		c.JSON(http.StatusOK, resp)
+	})
+
 }
 
 func v1Routes(r gin.IRouter) {
