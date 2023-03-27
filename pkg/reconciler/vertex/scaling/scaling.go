@@ -297,7 +297,7 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 		return 0
 	}
 	if pending == 0 || rate == 0 {
-		// No pending messages, we don't do anything.
+		// Pending is 0 and rate is not 0, or rate is 0 and pending is not 0, we don't do anything.
 		// Technically this would not happen because the pending includes ackpending, which means rate and pending are either both 0, or both > 0.
 		// But we still keep this check here for safety.
 		return int32(vertex.Status.Replicas)
