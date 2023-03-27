@@ -58,12 +58,18 @@ func Test_ApplyToContainer(t *testing.T) {
 	testContainerTemplate.ApplyToContainer(c)
 	assert.NotNil(t, c.SecurityContext)
 	testContainerTemplate.Env = []corev1.EnvVar{{Name: "a", Value: "b"}}
+	testContainerTemplate.EnvFrom = []corev1.EnvFromSource{{Prefix: "a", ConfigMapRef: &corev1.ConfigMapEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "b"}}}}
 	testContainerTemplate.ApplyToContainer(c)
 	envs := []string{}
 	for _, e := range c.Env {
 		envs = append(envs, e.Name)
 	}
 	assert.Contains(t, envs, "a")
+	envFroms := []string{}
+	for _, e := range c.EnvFrom {
+		envFroms = append(envFroms, e.Prefix)
+	}
+	assert.Contains(t, envFroms, "a")
 }
 
 func Test_ApplyToNumaflowContainers(t *testing.T) {
