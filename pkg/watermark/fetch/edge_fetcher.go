@@ -110,7 +110,7 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 				headOffset = w.Offset
 				headWatermark = w.Watermark
 			} else if w.Watermark == headWatermark && w.Offset < headOffset {
-				headWatermark = w.Watermark
+				headOffset = w.Offset
 			}
 		}
 	}
