@@ -178,9 +178,11 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 		// wait till we have data
 		if err := b.blockIfEmpty(cctx); err != nil {
 			if errors.Is(err, context.Canceled) {
+				fmt.Println("cancelled")
 				return readMessages, nil
 			}
 			if errors.Is(err, context.DeadlineExceeded) {
+				fmt.Println("timeout")
 				return readMessages, nil
 			}
 			return readMessages, isb.BufferReadErr{Name: b.name, Empty: true, Message: err.Error()}
@@ -210,9 +212,9 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 
 		readMessage := isb.ReadMessage{Message: msg, ReadOffset: isb.SimpleIntOffset(func() int64 { return currentIdx })}
 
+		fmt.Println("read:", readMessage.Message.Kind, readMessage.Watermark)
 		readMessages = append(readMessages, &readMessage)
 	}
-
 	return readMessages, nil
 }
 
