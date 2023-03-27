@@ -5,6 +5,10 @@ metadata:
 spec:
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
       source:
         http: {}
         transformer:
@@ -13,6 +17,12 @@ spec:
             kwargs:
               expression: json(payload).item[1].time
     - name: out
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+      scale:
+        min: 1
       sink:
         log: {}
   edges:
