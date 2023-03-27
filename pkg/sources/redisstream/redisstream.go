@@ -105,11 +105,11 @@ func New(
 			ReadErrorsInc: func() {
 				redisStreamsSourceReadErrors.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Inc()
 			},
-			ReadsInc: func() {
-				redisStreamsSourceReadCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Inc()
+			ReadsAdd: func(count int) {
+				redisStreamsSourceReadCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
 			},
-			AcksInc: func() {
-				redisStreamsSourceAckCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Inc()
+			AcksAdd: func(count int) {
+				redisStreamsSourceAckCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
 			},
 		},
 	}
@@ -189,11 +189,6 @@ func New(
 
 	return redisStreamsSource, nil
 }
-
-/*
-func toOffset(stream string, offset string) string {
-	return fmt.Sprintf("%s:%s", stream, offset)
-}*/
 
 func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
 	opts := &redis.UniversalOptions{

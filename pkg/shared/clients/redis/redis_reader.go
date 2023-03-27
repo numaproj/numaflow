@@ -24,7 +24,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"go.uber.org/zap"
-	//redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
 
 // RedisStreamsReader is the read queue implementation powered by RedisClient.
@@ -44,12 +43,13 @@ type RedisStreamsReader struct {
 
 type Metrics struct {
 	ReadErrorsInc MetricsIncrementFunc
-	ReadsInc      MetricsIncrementFunc //todo
-	AcksInc       MetricsIncrementFunc
+	ReadsAdd      MetricsAddFunc
+	AcksAdd       MetricsAddFunc
 }
 
 // need a function type which increments a particular counter
 type MetricsIncrementFunc func()
+type MetricsAddFunc func(int)
 
 func (br *RedisStreamsReader) GetName() string {
 	return br.Name
@@ -98,6 +98,9 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 
 	// for each XMessage in []XStream
 	msgs, err := br.XStreamToMessages(xstreams, messages, labels)
+	if br.Metrics.ReadsAdd != nil {
+		br.Metrics.ReadsAdd(len(messages))
+	}
 	br.Log.Debugf("received %d messages over Redis Streams Source, err=%v", len(msgs), err)
 	return msgs, err
 }
@@ -129,6 +132,9 @@ func (br *RedisStreamsReader) Ack(_ context.Context, offsets []isb.Offset) []err
 		for i := 0; i < len(offsets); i++ {
 			errs[i] = err
 		}
+	}
+	if br.Metrics.AcksAdd != nil {
+		br.Metrics.AcksAdd(len(offsets))
 	}
 	return errs
 }
