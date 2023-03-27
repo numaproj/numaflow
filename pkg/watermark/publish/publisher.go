@@ -37,7 +37,7 @@ type Publisher interface {
 	// PublishWatermark publishes the watermark.
 	PublishWatermark(wmb.Watermark, isb.Offset)
 	// PublishIdleWatermark publishes the idle watermark.
-	PublishIdleWatermark(wm wmb.Watermark)
+	PublishIdleWatermark(wm wmb.Watermark, o isb.Offset)
 	// GetLatestWatermark returns the latest published watermark.
 	GetLatestWatermark() wmb.Watermark
 }
@@ -154,14 +154,23 @@ func (p *publish) validateWatermark(wm wmb.Watermark) (wmb.Watermark, bool) {
 }
 
 // PublishIdleWatermark publishes the idle watermark and will retry until it can succeed.
-func (p *publish) PublishIdleWatermark(wm wmb.Watermark) {
+// TODO: merge with PublishWatermark
+func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset) {
 	var key = p.entity.GetName()
 	validWM, skipWM := p.validateWatermark(wm)
 	if skipWM {
 		return
 	}
+	// build value
+	var seq int64
+	if p.opts.isSource || p.opts.isSink {
+		// for source and sink publisher, we don't care about the offset, also the sequence of the offset might not be integer.
+		seq = time.Now().UnixNano()
+	} else {
+		seq, _ = offset.Sequence()
+	}
 	var otValue = wmb.WMB{
-		Offset:    0,
+		Offset:    seq,
 		Watermark: validWM.UnixMilli(),
 		Idle:      true,
 	}
@@ -177,7 +186,7 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark) {
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
-			p.log.Debugw("New idle watermark published", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key))
+			p.log.Debugw("New idle watermark published", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Int64("offset", seq), zap.Int64("watermark", validWM.UnixMilli()))
 			break
 		}
 	}

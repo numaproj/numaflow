@@ -53,39 +53,6 @@ func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.W
 	}
 }
 
-// GetHeadWatermark returns the watermark using the HeadOffset (the latest offset among all processors). This
-// can be used in showing the watermark progression for a vertex when not consuming the messages
-// directly (eg. UX, tests)
-// NOTE
-//   - We don't use this function in the regular pods in the vertex.
-//   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
-//     Meaning, in the UX (daemon service) we never delete any processor.
-func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
-	var debugString strings.Builder
-	var headOffset int64 = math.MinInt64
-	var epoch int64 = math.MaxInt64
-	var allProcessors = e.processorManager.GetAllProcessors()
-	// get the head offset of each processor
-	for _, p := range allProcessors {
-		if !p.IsActive() {
-			continue
-		}
-		var o = p.offsetTimeline.GetHeadOffset()
-		e.log.Debugf("Processor: %v (headoffset:%d)", p, o)
-		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headoffset:%d) \n", p, o))
-		if o != -1 && o > headOffset {
-			headOffset = o
-			epoch = p.offsetTimeline.GetEventTimeFromInt64(o)
-		}
-	}
-	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
-	if epoch == math.MaxInt64 {
-		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return wmb.Watermark(time.UnixMilli(-1))
-	}
-	return wmb.Watermark(time.UnixMilli(epoch))
-}
-
 // GetWatermark gets the smallest timestamp for the given offset
 func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	var offset, err = inputOffset.Sequence()
@@ -116,6 +83,65 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bufferName, offset, epoch)
 
 	return wmb.Watermark(time.UnixMilli(epoch))
+}
+
+// GetHeadWatermark returns the latest watermark among all processors. This can be used in showing the watermark
+// progression for a vertex when not consuming the messages directly (eg. UX, tests)
+// NOTE
+//   - We don't use this function in the regular pods in the vertex.
+//   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
+//     Meaning, in the UX (daemon service) we never delete any processor.
+func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
+	var debugString strings.Builder
+	var headOffset int64 = math.MinInt64
+	var epoch int64 = math.MaxInt64
+	var allProcessors = e.processorManager.GetAllProcessors()
+	// get the head offset of each processor
+	for _, p := range allProcessors {
+		if !p.IsActive() {
+			continue
+		}
+		var w = p.offsetTimeline.GetHeadWMB()
+		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, w.Offset, w.Watermark, w.Idle)
+		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, w.Offset, w.Watermark, w.Idle))
+		if w.Offset != -1 && w.Offset > headOffset {
+			headOffset = w.Offset
+			epoch = w.Watermark
+		}
+	}
+	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
+	if epoch == math.MaxInt64 {
+		// Use -1 as default watermark value to indicate there is no valid watermark yet.
+		return wmb.Watermark(time.UnixMilli(-1))
+	}
+	return wmb.Watermark(time.UnixMilli(epoch))
+}
+
+// GetHeadWMB returns the latest idle WMB among all processors
+func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
+	var headWMB = wmb.WMB{
+		// we find the head WMB only based on Offset
+		Offset: math.MinInt64,
+	}
+	// if any head wmb from Vn-1 processors is not idle, we skip publishing
+	var allProcessors = e.processorManager.GetAllProcessors()
+	for _, p := range allProcessors {
+		if !p.IsActive() {
+			continue
+		}
+		var curHeadWMB = p.offsetTimeline.GetHeadWMB()
+		if !curHeadWMB.Idle {
+			return wmb.WMB{}
+		}
+		if curHeadWMB.Offset != -1 && curHeadWMB.Offset > headWMB.Offset {
+			headWMB = curHeadWMB
+		}
+	}
+	if headWMB.Offset == math.MinInt64 {
+		// there is no valid watermark yet
+		return wmb.WMB{}
+	}
+	return headWMB
 }
 
 // Close function closes the watchers.

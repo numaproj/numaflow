@@ -463,6 +463,27 @@ spec:
                           - name
                           type: object
                         type: array
+                      envFrom:
+                        items:
+                          properties:
+                            configMapRef:
+                              properties:
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                            prefix:
+                              type: string
+                            secretRef:
+                              properties:
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                          type: object
+                        type: array
                       imagePullPolicy:
                         type: string
                       resources:
@@ -650,6 +671,27 @@ spec:
                           - name
                           type: object
                         type: array
+                      envFrom:
+                        items:
+                          properties:
+                            configMapRef:
+                              properties:
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                            prefix:
+                              type: string
+                            secretRef:
+                              properties:
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                          type: object
+                        type: array
                       imagePullPolicy:
                         type: string
                       resources:
@@ -815,6 +857,27 @@ spec:
                               type: object
                           required:
                           - name
+                          type: object
+                        type: array
+                      envFrom:
+                        items:
+                          properties:
+                            configMapRef:
+                              properties:
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                            prefix:
+                              type: string
+                            secretRef:
+                              properties:
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
                           type: object
                         type: array
                       imagePullPolicy:
@@ -1483,6 +1546,27 @@ spec:
                               - name
                               type: object
                             type: array
+                          envFrom:
+                            items:
+                              properties:
+                                configMapRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                                prefix:
+                                  type: string
+                                secretRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                              type: object
+                            type: array
                           imagePullPolicy:
                             type: string
                           resources:
@@ -1637,6 +1721,27 @@ spec:
                                   type: object
                               required:
                               - name
+                              type: object
+                            type: array
+                          envFrom:
+                            items:
+                              properties:
+                                configMapRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                                prefix:
+                                  type: string
+                                secretRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
                               type: object
                             type: array
                           imagePullPolicy:
@@ -1804,6 +1909,27 @@ spec:
                                   type: object
                               required:
                               - name
+                              type: object
+                            type: array
+                          envFrom:
+                            items:
+                              properties:
+                                configMapRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                                prefix:
+                                  type: string
+                                secretRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
                               type: object
                             type: array
                           imagePullPolicy:
@@ -2019,6 +2145,27 @@ spec:
                                   type: object
                               required:
                               - name
+                              type: object
+                            type: array
+                          envFrom:
+                            items:
+                              properties:
+                                configMapRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                                prefix:
+                                  type: string
+                                secretRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
                               type: object
                             type: array
                           imagePullPolicy:
@@ -2852,6 +2999,27 @@ spec:
                               - name
                               type: object
                             type: array
+                          envFrom:
+                            items:
+                              properties:
+                                configMapRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                                prefix:
+                                  type: string
+                                secretRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                              type: object
+                            type: array
                           imagePullPolicy:
                             type: string
                           resources:
@@ -3024,6 +3192,27 @@ spec:
                                   type: object
                               required:
                               - name
+                              type: object
+                            type: array
+                          envFrom:
+                            items:
+                              properties:
+                                configMapRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                                prefix:
+                                  type: string
+                                secretRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
                               type: object
                             type: array
                           imagePullPolicy:
@@ -3638,6 +3827,27 @@ spec:
                                   type: object
                               required:
                               - name
+                              type: object
+                            type: array
+                          envFrom:
+                            items:
+                              properties:
+                                configMapRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
+                                prefix:
+                                  type: string
+                                secretRef:
+                                  properties:
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  type: object
                               type: object
                             type: array
                           imagePullPolicy:
@@ -4282,6 +4492,27 @@ spec:
                             - name
                             type: object
                           type: array
+                        envFrom:
+                          items:
+                            properties:
+                              configMapRef:
+                                properties:
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                type: object
+                              prefix:
+                                type: string
+                              secretRef:
+                                properties:
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                type: object
+                            type: object
+                          type: array
                         imagePullPolicy:
                           type: string
                         resources:
@@ -4454,6 +4685,27 @@ spec:
                                 type: object
                             required:
                             - name
+                            type: object
+                          type: array
+                        envFrom:
+                          items:
+                            properties:
+                              configMapRef:
+                                properties:
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                type: object
+                              prefix:
+                                type: string
+                              secretRef:
+                                properties:
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                type: object
                             type: object
                           type: array
                         imagePullPolicy:
@@ -8116,6 +8368,27 @@ spec:
                       - name
                       type: object
                     type: array
+                  envFrom:
+                    items:
+                      properties:
+                        configMapRef:
+                          properties:
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          type: object
+                        prefix:
+                          type: string
+                        secretRef:
+                          properties:
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          type: object
+                      type: object
+                    type: array
                   imagePullPolicy:
                     type: string
                   resources:
@@ -8321,6 +8594,27 @@ spec:
                           type: object
                       required:
                       - name
+                      type: object
+                    type: array
+                  envFrom:
+                    items:
+                      properties:
+                        configMapRef:
+                          properties:
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          type: object
+                        prefix:
+                          type: string
+                        secretRef:
+                          properties:
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          type: object
                       type: object
                     type: array
                   imagePullPolicy:
@@ -11874,7 +12168,7 @@ data:
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.9.8
+          natsImage: nats:2.9.15
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -11915,6 +12209,11 @@ data:
           startCommand: /nats-server
         - version: 2.9.8
           natsImage: nats:2.9.8
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.9.15
+          natsImage: nats:2.9.15
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server

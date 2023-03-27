@@ -52,6 +52,24 @@ func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher
 	}
 }
 
+// GetWatermark returns the lowest of the latest Watermark of all the processors,
+// it ignores the input Offset.
+func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
+	var epoch int64 = math.MaxInt64
+	for _, p := range e.processorManager.GetAllProcessors() {
+		if !p.IsActive() {
+			continue
+		}
+		if p.offsetTimeline.GetHeadWatermark() < epoch {
+			epoch = p.offsetTimeline.GetHeadWatermark()
+		}
+	}
+	if epoch == math.MaxInt64 {
+		epoch = -1
+	}
+	return wmb.Watermark(time.UnixMilli(epoch))
+}
+
 // GetHeadWatermark returns the latest watermark of all the processors.
 func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 	var epoch int64 = math.MinInt64
@@ -70,22 +88,10 @@ func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetWatermark returns the lowest of the latest watermark of all the processors,
-// it ignores the input offset.
-func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
-	var epoch int64 = math.MaxInt64
-	for _, p := range e.processorManager.GetAllProcessors() {
-		if !p.IsActive() {
-			continue
-		}
-		if p.offsetTimeline.GetHeadWatermark() < epoch {
-			epoch = p.offsetTimeline.GetHeadWatermark()
-		}
-	}
-	if epoch == math.MaxInt64 {
-		epoch = -1
-	}
-	return wmb.Watermark(time.UnixMilli(epoch))
+// GetHeadWMB returns the latest idle WMB among all processors
+func (e *sourceFetcher) GetHeadWMB() wmb.WMB {
+	// TODO: what would this be...
+	return wmb.WMB{}
 }
 
 // Close function closes the watchers.

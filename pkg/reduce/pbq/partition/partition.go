@@ -30,5 +30,5 @@ type ID struct {
 }
 
 func (p ID) String() string {
-	return fmt.Sprintf("%v-%v", p.Start.UnixMilli(), p.End.UnixMilli())
+	return fmt.Sprintf("%v-%v-%s", p.Start.UnixMilli(), p.End.UnixMilli(), p.Slot)
 }

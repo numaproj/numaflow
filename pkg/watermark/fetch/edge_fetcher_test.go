@@ -40,29 +40,30 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	// so use no op watcher for testing
 	hbWatcher := noop.NewKVOpWatch()
 	otWatcher := noop.NewKVOpWatch()
-	processorManager := NewProcessorManager(ctx, store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	processorManager := NewProcessorManager(ctx, storeWatcher)
 	var (
 		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
 		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
 		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
-		pod0Timeline = []OffsetWatermark{
-			{watermark: 11, offset: 9},
-			{watermark: 12, offset: 20},
-			{watermark: 13, offset: 21},
-			{watermark: 14, offset: 22},
-			{watermark: 17, offset: 28},
+		pod0Timeline = []wmb.WMB{
+			{Watermark: 11, Offset: 9},
+			{Watermark: 12, Offset: 20},
+			{Watermark: 13, Offset: 21},
+			{Watermark: 14, Offset: 22},
+			{Watermark: 17, Offset: 28},
 		}
-		pod1Timeline = []OffsetWatermark{
-			{watermark: 8, offset: 13},
-			{watermark: 9, offset: 16},
-			{watermark: 10, offset: 18},
-			{watermark: 17, offset: 26},
+		pod1Timeline = []wmb.WMB{
+			{Watermark: 8, Offset: 13},
+			{Watermark: 9, Offset: 16},
+			{Watermark: 10, Offset: 18},
+			{Watermark: 17, Offset: 26},
 		}
-		pod2Timeline = []OffsetWatermark{
-			{watermark: 10, offset: 14},
-			{watermark: 12, offset: 17},
-			{watermark: 14, offset: 19},
-			{watermark: 17, offset: 24},
+		pod2Timeline = []wmb.WMB{
+			{Watermark: 10, Offset: 14},
+			{Watermark: 12, Offset: 17},
+			{Watermark: 14, Offset: 19},
+			{Watermark: 17, Offset: 24},
 		}
 	)
 
@@ -143,8 +144,208 @@ func TestBuffer_GetWatermark(t *testing.T) {
 			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
-			// this will always be 14 because the timeline has been populated ahead of time
-			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.UnixMilli(14).In(location))
+			// this will always be 17 because the timeline has been populated ahead of time
+			// GetHeadWatermark is only used in UI and test
+			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.UnixMilli(17).In(location))
 		})
 	}
+}
+
+func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
+	var (
+		ctx               = context.Background()
+		bufferName        = "testBuffer"
+		hbWatcher         = noop.NewKVOpWatch()
+		otWatcher         = noop.NewKVOpWatch()
+		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+		processorManager1 = NewProcessorManager(ctx, storeWatcher)
+		processorManager2 = NewProcessorManager(ctx, storeWatcher)
+		processorManager3 = NewProcessorManager(ctx, storeWatcher)
+		processorManager4 = NewProcessorManager(ctx, storeWatcher)
+	)
+
+	getHeadWMBTest1(ctx, processorManager1)
+	getHeadWMBTest2(ctx, processorManager2)
+	getHeadWMBTest3(ctx, processorManager3)
+	getHeadWMBTest4(ctx, processorManager4)
+
+	tests := []struct {
+		name             string
+		processorManager *ProcessorManager
+		want             wmb.WMB
+	}{
+		{
+			name:             "all pods idle and get an idle WMB",
+			processorManager: processorManager1,
+			want: wmb.WMB{
+				Idle:      true,
+				Offset:    28,
+				Watermark: 17,
+			},
+		},
+		{
+			name:             "some pods idle and skip an idle WMB",
+			processorManager: processorManager2,
+			want:             wmb.WMB{},
+		},
+		{
+			name:             "all pods not idle and skip an idle WMB",
+			processorManager: processorManager3,
+			want:             wmb.WMB{},
+		},
+		{
+			name:             "all pods empty timeline",
+			processorManager: processorManager3,
+			want:             wmb.WMB{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &edgeFetcher{
+				ctx:              ctx,
+				bufferName:       bufferName,
+				storeWatcher:     storeWatcher,
+				processorManager: tt.processorManager,
+				log:              zaptest.NewLogger(t).Sugar(),
+			}
+			assert.Equalf(t, tt.want, e.GetHeadWMB(), "GetHeadWMB()")
+		})
+	}
+}
+
+func getHeadWMBTest1(ctx context.Context, processorManager1 *ProcessorManager) {
+	var (
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		pod0Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    28,
+				Watermark: 17,
+			},
+		}
+		pod1Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    26,
+				Watermark: 17,
+			},
+		}
+		pod2Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    24,
+				Watermark: 17,
+			},
+		}
+	)
+
+	for _, watermark := range pod0Timeline {
+		testPod0.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod1Timeline {
+		testPod1.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod2Timeline {
+		testPod2.offsetTimeline.Put(watermark)
+	}
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
+}
+
+func getHeadWMBTest2(ctx context.Context, processorManager1 *ProcessorManager) {
+	var (
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		pod0Timeline = []wmb.WMB{
+			{
+				Idle:      false,
+				Offset:    28,
+				Watermark: 17,
+			},
+		}
+		pod1Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    26,
+				Watermark: 17,
+			},
+		}
+		pod2Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    24,
+				Watermark: 17,
+			},
+		}
+	)
+
+	for _, watermark := range pod0Timeline {
+		testPod0.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod1Timeline {
+		testPod1.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod2Timeline {
+		testPod2.offsetTimeline.Put(watermark)
+	}
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
+}
+
+func getHeadWMBTest3(ctx context.Context, processorManager1 *ProcessorManager) {
+	var (
+		testPod0     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
+		testPod1     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
+		testPod2     = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		pod0Timeline = []wmb.WMB{
+			{
+				Idle:      false,
+				Offset:    28,
+				Watermark: 17,
+			},
+		}
+		pod1Timeline = []wmb.WMB{
+			{
+				Idle:      false,
+				Offset:    26,
+				Watermark: 17,
+			},
+		}
+		pod2Timeline = []wmb.WMB{
+			{
+				Idle:      false,
+				Offset:    24,
+				Watermark: 17,
+			},
+		}
+	)
+
+	for _, watermark := range pod0Timeline {
+		testPod0.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod1Timeline {
+		testPod1.offsetTimeline.Put(watermark)
+	}
+	for _, watermark := range pod2Timeline {
+		testPod2.offsetTimeline.Put(watermark)
+	}
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
+}
+
+func getHeadWMBTest4(ctx context.Context, processorManager1 *ProcessorManager) {
+	var (
+		testPod0 = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
+		testPod1 = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
+		testPod2 = NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+	)
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
 }

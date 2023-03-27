@@ -17553,6 +17553,12 @@
           },
           "type": "array"
         },
+        "envFrom": {
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.EnvFromSource"
+          },
+          "type": "array"
+        },
         "imagePullPolicy": {
           "type": "string"
         },
