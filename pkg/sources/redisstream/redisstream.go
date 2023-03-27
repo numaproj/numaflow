@@ -153,7 +153,7 @@ func New(
 		if redisclient.IsAlreadyExistError(err) {
 			redisStreamsReader.Log.Infow("Consumer Group on Stream already exists.", zap.String("group", redisStreamsReader.Group), zap.String("stream", redisStreamsReader.Stream))
 		} else {
-			return nil, fmt.Errorf("failed to create consumer group %q on redis stream %q", redisStreamsReader.Group, redisStreamsReader.Stream)
+			return nil, fmt.Errorf("failed to create consumer group %q on redis stream %q: err=%v", redisStreamsReader.Group, redisStreamsReader.Stream, err)
 		}
 	}
 
