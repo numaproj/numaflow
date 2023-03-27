@@ -319,11 +319,12 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 		if pending >= totalBufferLength {
 			// Simply return current replica number + max allowed if the pending messages are more than available buffer length
 			desired = int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScale())
-		}
-		singleReplicaContribution := float64(totalBufferLength-pending) / float64(vertex.Status.Replicas)
-		desired := int32(math.Round(float64(targetAvailableBufferLength) / singleReplicaContribution))
-		if desired == 0 {
-			desired = 1
+		} else {
+			singleReplicaContribution := float64(totalBufferLength-pending) / float64(vertex.Status.Replicas)
+			desired := int32(math.Round(float64(targetAvailableBufferLength) / singleReplicaContribution))
+			if desired == 0 {
+				desired = 1
+			}
 		}
 	}
 	if desired > int32(pending) { // For some corner cases, we don't want to scale up to more than pending.
