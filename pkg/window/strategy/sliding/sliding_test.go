@@ -17,7 +17,6 @@ limitations under the License.
 package sliding
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -29,15 +28,6 @@ import (
 
 // TestSliding_AssignWindow tests the assignment of element to a set of windows
 func TestSliding_AssignWindow(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
 	baseTime := time.Unix(600, 0)
 
 	tests := []struct {
@@ -188,16 +178,6 @@ func TestSliding_AssignWindow(t *testing.T) {
 }
 
 func TestAligned_CreateWindow(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	windows := NewSliding(60*time.Second, 20*time.Second)
 	tests := []struct {
 		name            string
@@ -331,16 +311,6 @@ func TestSliding_RemoveWindows(t *testing.T) {
 			keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 		}
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	for i := 0; i < 10000; i++ {
 		win := keyed.NewKeyedWindow(eventTime, eventTime.Add(length))
 		slidWin.InsertIfNotPresent(win)

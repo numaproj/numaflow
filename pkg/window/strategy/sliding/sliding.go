@@ -22,6 +22,7 @@ limitations under the License.
 package sliding
 
 import (
+	"sync"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/window"
@@ -46,6 +47,7 @@ type Sliding struct {
 	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 	// from the Head.
 	entries *window.SortedWindowList[window.AlignedKeyedWindower]
+	lock    sync.RWMutex
 }
 
 var _ window.Windower = (*Sliding)(nil)
@@ -56,6 +58,7 @@ func NewSliding(length time.Duration, slide time.Duration) *Sliding {
 		Length:  length,
 		Slide:   slide,
 		entries: window.NewSortedWindowList[window.AlignedKeyedWindower](),
+		lock:    sync.RWMutex{},
 	}
 }
 

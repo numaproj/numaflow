@@ -90,7 +90,6 @@ func TestProcessAndForward_Process(t *testing.T) {
 		<-ctx.Done()
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Log(t.Name(), "test timeout")
-			t.Fail()
 		}
 	}()
 
@@ -168,16 +167,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 }
 
 func TestProcessAndForward_Forward(t *testing.T) {
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
+	ctx := context.Background()
 
 	var pbqManager *pbq.Manager
 

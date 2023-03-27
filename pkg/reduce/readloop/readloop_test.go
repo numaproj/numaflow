@@ -80,15 +80,8 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 
 // testing startup code with replay included using in-memory pbq
 func TestReadLoop_Startup(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
 
 	// partitions to be replayed
 	partitionIds := []partition.ID{

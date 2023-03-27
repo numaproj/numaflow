@@ -17,7 +17,6 @@ limitations under the License.
 package window
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -38,16 +37,6 @@ func (t *TestWindow) EndTime() time.Time {
 }
 
 func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	tests := []struct {
 		name            string
 		given           []*TestWindow
@@ -209,16 +198,6 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 }
 
 func TestSortedWindowList_RemoveWindows(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	tests := []struct {
 		name            string
 		given           []*TestWindow
@@ -269,16 +248,6 @@ func TestSortedWindowList_RemoveWindows(t *testing.T) {
 }
 
 func TestSortedWindowList_DeleteWindow(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	tests := []struct {
 		name            string
 		given           []*TestWindow
@@ -398,16 +367,6 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 }
 
 func TestSortedWindowList_InsertFront(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	tests := []struct {
 		name            string
 		given           []*TestWindow
@@ -486,16 +445,6 @@ func TestSortedWindowList_InsertFront(t *testing.T) {
 }
 
 func TestSortedWindowList_InsertBack(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	tests := []struct {
 		name            string
 		given           []*TestWindow

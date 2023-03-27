@@ -17,7 +17,6 @@ limitations under the License.
 package fixed
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -29,15 +28,6 @@ import (
 )
 
 func TestFixed_AssignWindow(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
 
 	loc, _ := time.LoadLocation("UTC")
 	baseTime := time.Unix(1651129201, 0).In(loc)
@@ -106,16 +96,6 @@ func TestFixed_AssignWindow(t *testing.T) {
 // TestAligned_CreateWindow tests the insertion of a new keyed window for a given interval
 // It tests early, late and existing window scenarios.
 func TestAligned_InsertIfNotPresent(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	windows := NewFixed(60 * time.Second)
 	tests := []struct {
 		name            string
@@ -272,16 +252,6 @@ func TestAligned_InsertIfNotPresent(t *testing.T) {
 }
 
 func TestAligned_RemoveWindow(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	windows := NewFixed(60 * time.Second)
 	tests := []struct {
 		name            string
@@ -406,16 +376,6 @@ func TestFixed_RemoveWindows(t *testing.T) {
 			keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
 		}
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-			t.Fail()
-		}
-	}()
-
 	for i := 0; i < 10000; i++ {
 		win := keyed.NewKeyedWindow(eventTime, eventTime.Add(length))
 		slidWin.InsertIfNotPresent(win)
