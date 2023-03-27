@@ -408,6 +408,11 @@ func (in *Edge) DeepCopyInto(out *Edge) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.OnFull != nil {
+		in, out := &in.OnFull, &out.OnFull
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 

@@ -130,11 +130,8 @@ func TestRedisCheckBacklog(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": rqw,
 	}
-	actionsOnFull := map[string]string{
-		"to1": dfv1.RetryUntilSuccess,
-	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, actionsOnFull, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(10))
+	f, err := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(10))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -317,9 +314,6 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": rqw,
 	}
-	actionsOnFull := map[string]string{
-		"to1": dfv1.RetryUntilSuccess,
-	}
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -329,7 +323,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, actionsOnFull, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
+	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -416,11 +410,8 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": suite.rqw,
 	}
-	actionsOnFull := map[string]string{
-		"to1": dfv1.RetryUntilSuccess,
-	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, actionsOnFull, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
+	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)

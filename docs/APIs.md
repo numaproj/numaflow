@@ -924,8 +924,9 @@ ignored when the “to” vertex is not a reduce vertex.
 <em>(Optional)</em>
 <p>
 OnFull specifies the behaviour for the write actions when the inter step
-buffer is full. if not provided, the default value is set to “”, which
-currently has the same effect as “retryUntilSuccess”.
+buffer is full. There are currently two options, retryUntilSuccess and
+discardLatest. if not provided, the default value is set to
+“retryUntilSuccess”
 </p>
 </td>
 </tr>
@@ -2718,6 +2719,16 @@ Auth information
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.OnFullWritingStrategy">
+OnFullWritingStrategy (<code>string</code> alias)
+</p>
+</h3>
+<p>
+<p>
+OnFullWritingStrategy is an edge-level specification to define the
+writing behaviour when the ToBuffer is full
+</p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
 PBQStorage
 </h3>

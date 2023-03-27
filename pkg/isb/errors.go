@@ -96,3 +96,13 @@ type MessageReadErr struct {
 func (e MessageReadErr) Error() string {
 	return fmt.Sprintf("(%s) %s Header: %s Body:%s", e.Name, e.Message, string(e.Header), string(e.Body))
 }
+
+// NoRetryableBufferWriteErr indicates that the buffer is full and the writer, based on user specification, decides to not retry.
+type NoRetryableBufferWriteErr struct {
+	Name    string
+	Message string
+}
+
+func (e NoRetryableBufferWriteErr) Error() string {
+	return fmt.Sprintf("(%s) %s %#v", e.Name, e.Message, e)
+}

@@ -31,10 +31,11 @@ type Edge struct {
 	// +optional
 	Parallelism *int32 `json:"parallelism" protobuf:"bytes,5,opt,name=parallelism"`
 	// OnFull specifies the behaviour for the write actions when the inter step buffer is full.
-	// if not provided, the default value is set to "", which currently has the same effect as "retryUntilSuccess".
-	// +kubebuilder:validation:Enum="";retryUntilSuccess;dropAndAckLatest
+	// There are currently two options, retryUntilSuccess and discardLatest.
+	// if not provided, the default value is set to "retryUntilSuccess"
+	// +kubebuilder:validation:Enum=retryUntilSuccess;discardLatest
 	// +optional
-	OnFull string `json:"onFull" protobuf:"bytes,6,opt,name=onFull"`
+	OnFull *string `json:"onFull,omitempty" protobuf:"bytes,6,opt,name=onFull"`
 }
 
 type ForwardConditions struct {
@@ -50,4 +51,18 @@ type EdgeLimits struct {
 	// It overrides the settings from pipeline limits.
 	// +optional
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,2,opt,name=bufferUsageLimit"`
+}
+
+func (e Edge) OnFullWritingStrategy() OnFullWritingStrategy {
+	if e.OnFull == nil {
+		return RetryUntilSuccess
+	}
+	switch *e.OnFull {
+	case "retryUntilSuccess":
+		return RetryUntilSuccess
+	case "discardLatest":
+		return DiscardLatest
+	default:
+		return RetryUntilSuccess
+	}
 }

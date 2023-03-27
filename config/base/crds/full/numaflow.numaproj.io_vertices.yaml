@@ -593,9 +593,8 @@ spec:
                       type: object
                     onFull:
                       enum:
-                      - ""
                       - retryUntilSuccess
-                      - dropAndAckLatest
+                      - discardLatest
                       type: string
                     parallelism:
                       format: int32
@@ -2768,9 +2767,8 @@ spec:
                       type: object
                     onFull:
                       enum:
-                      - ""
                       - retryUntilSuccess
-                      - dropAndAckLatest
+                      - discardLatest
                       type: string
                     parallelism:
                       format: int32

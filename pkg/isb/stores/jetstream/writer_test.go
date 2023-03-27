@@ -114,7 +114,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 		"to1": to1,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, map[string]string{"toStreamName": dfv1.RetryUntilSuccess}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := f.Start()
@@ -209,6 +209,62 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	for _, errMsg := range errs {
 		assert.Error(t, errMsg)
 		assert.Contains(t, errMsg.Error(), "full") // Expect buffer full error
+	}
+}
+
+// TestJetStreamBufferWrite on buffer full, with writing strategy being DiscardLatest
+func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	conn, err := defaultJetStreamClient.Connect(ctx)
+	assert.NoError(t, err)
+	js, err := conn.JetStream()
+	assert.NoError(t, err)
+
+	streamName := "TestJetStreamBufferWriterBufferFull"
+	addStream(t, js, streamName)
+	defer deleteStream(js, streamName)
+
+	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2), WithOnFullWritingStrategy(dfv1.DiscardLatest))
+	assert.NoError(t, err)
+	jw, _ := bw.(*jetStreamWriter)
+	timeout := time.After(10 * time.Second)
+	for jw.isFull.Load() {
+		select {
+		case <-timeout:
+			t.Fatalf("expected not to be full")
+		default:
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+	// Add some data
+	startTime := time.Unix(1636470000, 0)
+	messages := testutils.BuildTestWriteMessages(int64(2), startTime)
+	// Add some data to buffer using write and verify no writes are performed when buffer is full
+	_, errs := jw.Write(ctx, messages)
+	assert.Equal(t, len(errs), 2)
+	for _, errMsg := range errs {
+		assert.Nil(t, errMsg) // Buffer not full, expect no error
+	}
+	timeout = time.After(10 * time.Second)
+	for !jw.isFull.Load() {
+		select {
+		case <-timeout:
+			t.Fatalf("expected to be full")
+		default:
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0))
+	_, errs = jw.Write(ctx, messages)
+	assert.Equal(t, len(errs), 2)
+	for _, errMsg := range errs {
+		assert.Equal(t, errMsg, isb.NoRetryableBufferWriteErr{Name: streamName, Message: "Buffer full!"})
 	}
 }
 

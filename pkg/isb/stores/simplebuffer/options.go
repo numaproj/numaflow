@@ -16,12 +16,18 @@ limitations under the License.
 
 package simplebuffer
 
-import "time"
+import (
+	"time"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+)
 
 // Options for simple buffer
 type options struct {
 	// readTimeOut is the timeout needed for read timeout
 	readTimeOut time.Duration
+	// onFullWritingStrategy is the writing strategy when buffer is full
+	onFullWritingStrategy dfv1.OnFullWritingStrategy
 }
 
 type Option func(options *options) error
@@ -30,6 +36,14 @@ type Option func(options *options) error
 func WithReadTimeOut(timeout time.Duration) Option {
 	return func(o *options) error {
 		o.readTimeOut = timeout
+		return nil
+	}
+}
+
+// WithOnFullWritingStrategy sets the writing strategy when buffer is full
+func WithOnFullWritingStrategy(s dfv1.OnFullWritingStrategy) Option {
+	return func(o *options) error {
+		o.onFullWritingStrategy = s
 		return nil
 	}
 }

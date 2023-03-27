@@ -28,7 +28,7 @@ spec:
   edges:
     - from: in
       to: drop-sink
-      onFull: dropAndAckLatest
+      onFull: discardLatest
     - from: in
       to: retry-sink
       onFull: retryUntilSuccess

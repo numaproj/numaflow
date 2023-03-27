@@ -73,6 +73,7 @@ func NewBufferWrite(ctx context.Context, client *redisclient.RedisClient, name s
 		maxLength:              dfv1.DefaultBufferLength,
 		bufferUsageLimit:       dfv1.DefaultBufferUsageLimit,
 		refreshBufferWriteInfo: true,
+		onFullWritingStrategy:  dfv1.RetryUntilSuccess,
 	}
 
 	for _, o := range opts {
@@ -158,7 +159,17 @@ func (bw *BufferWrite) Write(_ context.Context, messages []isb.Message) ([]isb.O
 	if bw.IsFull() {
 		bw.log.Debugw("Is full")
 		isbIsFull.With(labels).Inc()
-		initializeErrorArray(errs, isb.BufferWriteErr{Name: bw.Name, Full: true, Message: "Buffer full!"})
+
+		// when buffer is full, we need to decide whether to discard the message or not.
+		switch bw.onFullWritingStrategy {
+		case dfv1.DiscardLatest:
+			// user explicitly wants to discard the message when buffer if full.
+			// return no retryable error as a callback to let caller know that the message is discarded.
+			initializeErrorArray(errs, isb.NoRetryableBufferWriteErr{Name: bw.Name, Message: "Buffer full!"})
+		default:
+			// Default behavior is to return a BufferWriteErr.
+			initializeErrorArray(errs, isb.BufferWriteErr{Name: bw.Name, Full: true, Message: "Buffer full!"})
+		}
 		isbWriteErrors.With(labels).Inc()
 		return nil, errs
 	}

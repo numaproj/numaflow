@@ -18,6 +18,8 @@ package redis
 
 import (
 	"time"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 // options for writing to redis
@@ -38,6 +40,8 @@ type options struct {
 	bufferUsageLimit float64
 	// refreshBufferWriteInfo is used to determine if we refresh buffer write info
 	refreshBufferWriteInfo bool
+	// onFullWritingStrategy is the writing strategy when buffer is full
+	onFullWritingStrategy dfv1.OnFullWritingStrategy
 }
 
 // Option to apply different options
@@ -49,7 +53,7 @@ type Option interface {
 type pipelining bool
 
 func (p pipelining) apply(opts *options) {
-	opts.pipelining = true
+	opts.pipelining = bool(p)
 }
 
 // WithoutPipelining turns on redis pipelining
@@ -97,7 +101,7 @@ func WithReadTimeOut(t time.Duration) Option {
 type checkBackLog bool
 
 func (b checkBackLog) apply(o *options) {
-	o.checkBackLog = true
+	o.checkBackLog = bool(b)
 }
 
 // WithCheckBacklog sets the checkBackLog option
@@ -139,4 +143,16 @@ func (r refreshBufferWriteInfo) apply(o *options) {
 // WithRefreshBufferWriteInfo sets the refreshBufferWriteInfo
 func WithRefreshBufferWriteInfo(r bool) Option {
 	return refreshBufferWriteInfo(r)
+}
+
+// WithOnFullWritingStrategy option
+type onFullWritingStrategy dfv1.OnFullWritingStrategy
+
+func (s onFullWritingStrategy) apply(o *options) {
+	o.onFullWritingStrategy = dfv1.OnFullWritingStrategy(s)
+}
+
+// WithOnFullWritingStrategy sets the OnFullWritingStrategy
+func WithOnFullWritingStrategy(s dfv1.OnFullWritingStrategy) Option {
+	return onFullWritingStrategy(s)
 }

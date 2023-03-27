@@ -51,7 +51,6 @@ type BufferWriter interface {
 	BufferWriterInformation
 	io.Closer
 	Write(context.Context, []Message) ([]Offset, []error)
-	IsFull() bool
 }
 
 // BufferReader is the buffer from which we are reading.

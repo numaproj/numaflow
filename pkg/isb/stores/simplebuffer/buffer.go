@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
@@ -58,7 +59,8 @@ type elem struct {
 func NewInMemoryBuffer(name string, size int64, opts ...Option) *InMemoryBuffer {
 
 	bufferOptions := &options{
-		readTimeOut: time.Second, // default read time out
+		readTimeOut:           time.Second,                // default read time out
+		onFullWritingStrategy: v1alpha1.RetryUntilSuccess, // default on full writing strategy
 	}
 
 	for _, o := range opts {
@@ -145,7 +147,12 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			// access buffer via lock
 			b.rwlock.Unlock()
 		} else {
-			errs[idx] = isb.BufferWriteErr{Name: b.name, Full: true, Message: "Buffer full!"}
+			switch b.options.onFullWritingStrategy {
+			case v1alpha1.DiscardLatest:
+				errs[idx] = isb.NoRetryableBufferWriteErr{Name: b.name, Message: "Buffer full!"}
+			default:
+				errs[idx] = isb.BufferWriteErr{Name: b.name, Full: true, Message: "Buffer full!"}
+			}
 		}
 	}
 	return writeOffsets, errs

@@ -17668,7 +17668,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.EdgeLimits"
         },
         "onFull": {
-          "description": "OnFull specifies the behaviour for the write actions when the inter step buffer is full. if not provided, the default value is set to \"\", which currently has the same effect as \"retryUntilSuccess\".",
+          "description": "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
           "type": "string"
         },
         "parallelism": {

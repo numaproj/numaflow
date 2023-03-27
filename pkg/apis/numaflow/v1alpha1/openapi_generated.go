@@ -905,8 +905,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common
 					},
 					"onFull": {
 						SchemaProps: spec.SchemaProps{
-							Description: "OnFull specifies the behaviour for the write actions when the inter step buffer is full. if not provided, the default value is set to \"\", which currently has the same effect as \"retryUntilSuccess\".",
-							Default:     "",
+							Description: "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
 							Type:        []string{"string"},
 							Format:      "",
 						},

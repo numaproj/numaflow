@@ -177,6 +177,46 @@ func TestRedisQWrite_WithInfoRefreshInterval(t *testing.T) {
 	}
 }
 
+func TestRedisQWrite_WithInfoRefreshInterval_DiscardMessageOnFull(t *testing.T) {
+	client := redisclient.NewRedisClient(redisOptions)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	stream := "withInfoRefreshInterval"
+	count := int64(10)
+	group := "withInfoRefreshInterval-group"
+	rqw, _ := NewBufferWrite(ctx, client, stream, group, WithInfoRefreshInterval(2*time.Millisecond), WithLagDuration(2*time.Millisecond), WithMaxLength(10), WithOnFullWritingStrategy(dfv1.DiscardLatest)).(*BufferWrite)
+	err := client.CreateStreamGroup(ctx, rqw.GetStreamName(), group, redisclient.ReadFromEarliest)
+	if err != nil {
+		t.Fatalf("error creating consumer group: %s", err)
+	}
+	defer func() { _ = client.DeleteStreamGroup(ctx, rqw.GetStreamName(), group) }()
+	defer func() { _ = client.DeleteKeys(ctx, rqw.GetStreamName()) }()
+
+	writeMessages, internalKeys := buildTestWriteMessages(rqw, count, testStartTime)
+	defer func() { _ = client.DeleteKeys(ctx, internalKeys...) }()
+	_, errs := rqw.Write(ctx, writeMessages)
+	assert.Equal(t, make([]error, len(writeMessages)), errs, "Write failed")
+
+	for !rqw.IsFull() {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("full, %s", ctx.Err())
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	// Once full try to write messages and expect NoRetryableError
+	writeMessages, internalKeys = buildTestWriteMessages(rqw, count, testStartTime)
+	defer func() { _ = client.DeleteKeys(ctx, internalKeys...) }()
+	_, errs = rqw.Write(ctx, writeMessages)
+
+	// assert the NoRetryableBufferWriteErr
+	for _, err := range errs {
+		assert.Equal(t, err, isb.NoRetryableBufferWriteErr{Name: stream, Message: "Buffer full!"})
+	}
+}
+
 // buildTestWriteMessages a list test messages and the internal hashKeys it created
 func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) ([]isb.Message, []string) {
 	var messages = make([]isb.Message, 0, count)
@@ -343,9 +383,6 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
-	actionsOnFull := map[string]string{
-		"to1": dfv1.RetryUntilSuccess,
-	}
 
 	writeMessages, internalKeys := buildTestWriteMessages(fromStepWrite, int64(20), testStartTime)
 
@@ -359,7 +396,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, actionsOnFull, myForwardRedisTest{}, fetchWatermark, publishWatermark)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 
@@ -395,10 +432,6 @@ func TestReadTimeout(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
-	actionsOnFull := map[string]string{
-		"to1": dfv1.RetryUntilSuccess,
-	}
-
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{
@@ -407,7 +440,7 @@ func TestReadTimeout(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, actionsOnFull, myForwardRedisTest{}, fetchWatermark, publishWatermark)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written
