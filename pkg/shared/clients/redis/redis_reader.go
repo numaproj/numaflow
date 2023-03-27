@@ -43,11 +43,8 @@ type RedisStreamsReader struct {
 }
 
 type Metrics struct {
-	//ReadErrors *prometheus.CounterVec
-	//Reads      *prometheus.CounterVec //todo: use this
-	//Acks       *prometheus.CounterVec //todo: use this
 	ReadErrorsInc MetricsIncrementFunc
-	ReadsInc      MetricsIncrementFunc
+	ReadsInc      MetricsIncrementFunc //todo
 	AcksInc       MetricsIncrementFunc
 }
 
@@ -68,27 +65,6 @@ func (br *RedisStreamsReader) GetGroupName() string {
 	return br.Group
 }
 
-/*
-func NewRedisStreamsReader(name string, group string, consumer string, client *RedisClient, metrics Metrics) *RedisStreamsReader {
-	Options := &Options{ // TODO: if we don't end up needing this outside of this package we can turn it back to "options"
-		InfoRefreshInterval: time.Second,
-		ReadTimeOut:         time.Second,
-		CheckBackLog:        true,
-	}
-
-	for _, o := range opts {
-		o.Apply(Options)
-	}
-
-	return &RedisStreamsReader{
-		Name:        name,
-		Stream:      GetRedisStreamName(name),
-		Group:       group,
-		Consumer:    consumer,
-		RedisClient: client,
-		Metrics:     metrics}
-}*/
-
 // Read reads the messages from the stream.
 // During a restart, we need to make sure all the un-acknowledged messages are reprocessed.
 // we need to replace `>` with `0-0` during restarts. We might run into data loss otherwise.
@@ -102,18 +78,7 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 		xstreams, err = br.processXReadResult("0-0", count)
 		//fmt.Printf("deletethis: processXReadResult returned xstreams=%+v, err=%v\n", xstreams, err)
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
-				br.Log.Debugw("checkBacklog true, redis.Nil", zap.Error(err))
-				return messages, nil
-			}
-			//fmt.Printf("deletethis: error from Read(): %v\n", err)
-			if br.Metrics.ReadErrorsInc != nil {
-				br.Metrics.ReadErrorsInc()
-			}
-			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
-			messages, errMsg := br.XStreamToMessages(xstreams, messages, labels)
-			br.Log.Errorw("checkBacklog true, convertXStreamToMessages failed", zap.Error(errMsg))
-			return messages, fmt.Errorf("XReadGroup failed, %w", err)
+			return br.processReadError(xstreams, messages, err)
 		}
 
 		// NOTE: If all messages have been delivered and acknowledged, the XREADGROUP 0-0 call returns an empty
@@ -127,18 +92,7 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 		xstreams, err = br.processXReadResult(">", count)
 		//fmt.Printf("deletethis: processXReadResult returned xstreams=%+v, err=%v\n", xstreams, err)
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
-				br.Log.Debugw("checkBacklog false, redis.Nil", zap.Error(err))
-				return messages, nil
-			}
-			//fmt.Printf("deletethis: error from Read(): %v\n", err)
-			if br.Metrics.ReadErrorsInc != nil {
-				br.Metrics.ReadErrorsInc()
-			}
-			// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
-			messages, errMsg := br.XStreamToMessages(xstreams, messages, labels)
-			br.Log.Errorw("checkBacklog false, convertXStreamToMessages failed", zap.Error(errMsg))
-			return messages, fmt.Errorf("XReadGroup failed, %w", err)
+			return br.processReadError(xstreams, messages, err)
 		}
 	}
 
@@ -146,6 +100,21 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 	msgs, err := br.XStreamToMessages(xstreams, messages, labels)
 	br.Log.Debugf("received %d messages over Redis Streams Source, err=%v", len(msgs), err)
 	return msgs, err
+}
+
+func (br *RedisStreamsReader) processReadError(xstreams []redis.XStream, messages []*isb.ReadMessage, err error) ([]*isb.ReadMessage, error) {
+	if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
+		br.Log.Debugw("checkBacklog false, redis.Nil", zap.Error(err))
+		return messages, nil
+	}
+
+	if br.Metrics.ReadErrorsInc != nil {
+		br.Metrics.ReadErrorsInc()
+	}
+	// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
+	messages, errMsg := br.XStreamToMessages(xstreams, messages, map[string]string{"buffer": br.GetName()})
+	br.Log.Errorw("checkBacklog false, convertXStreamToMessages failed", zap.Error(errMsg))
+	return messages, fmt.Errorf("XReadGroup failed, %w", err)
 }
 
 // Ack acknowledges the offset to the read queue. Ack is always pipelined, if you want to avoid it then

@@ -37,6 +37,9 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 
 	time.Sleep(10 * time.Second) //todo: replace this with waiting for "redis" service to be available
 
+	// can do 2 tests
+	// first one is to start from the beginning of the Stream
+	// second is to start from the most recent messages of the Stream
 	for _, tt := range []struct {
 		stream          string
 		manifest        string
@@ -55,7 +58,7 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 		w.Expect().VertexPodsRunning()
 
 		fixtures.PumpRedisStream(tt.stream, 100, 20*time.Millisecond, 10, "test-message")
-		w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(tt.expectedNumMsgs)) // todo: we're not really testing the key here, just the value
+		w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(tt.expectedNumMsgs))
 
 		w.DeletePipelineAndWait()
 	}

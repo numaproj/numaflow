@@ -105,9 +105,12 @@ func New(
 			ReadErrorsInc: func() {
 				redisStreamsSourceReadErrors.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Inc()
 			},
-
-			//Reads:
-			//Acks:
+			ReadsInc: func() {
+				redisStreamsSourceReadCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Inc()
+			},
+			AcksInc: func() {
+				redisStreamsSourceAckCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Inc()
+			},
 		},
 	}
 	redisStreamsReader.Log = logging.NewLogger()
@@ -146,8 +149,13 @@ func New(
 	}
 	redisStreamsSource.Log.Infof("Creating Redis Stream group %q on Stream %q (readFrom=%v)", redisStreamsReader.Group, redisStreamsReader.Stream, readFrom)
 	err = redisClient.CreateStreamGroup(ctx, redisStreamsReader.Stream, redisStreamsReader.Group, readFrom)
-	fmt.Printf("deletethis: error from CreateStreamGroup: %v\n", err)
-	// TODO: if err != alreadyCreated { return err }
+	if err != nil {
+		if redisclient.IsAlreadyExistError(err) {
+			redisStreamsReader.Log.Infow("Consumer Group on Stream already exists.", zap.String("group", redisStreamsReader.Group), zap.String("stream", redisStreamsReader.Stream))
+		} else {
+			return nil, fmt.Errorf("failed to create consumer group %q on redis stream %q", redisStreamsReader.Group, redisStreamsReader.Stream)
+		}
+	}
 
 	redisStreamsSource.XStreamToMessages = func(xstreams []redis.XStream, messages []*isb.ReadMessage, labels map[string]string) ([]*isb.ReadMessage, error) {
 		// for each XMessage in []XStream
@@ -190,8 +198,6 @@ func toOffset(stream string, offset string) string {
 func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
 	opts := &redis.UniversalOptions{
 		Addrs: strings.Split(sourceSpec.URLs, ","), //todo: what is Sentinel and should I enable it?
-		//Username:  //todo: add auth
-		//Password:
 		// MaxRedirects is an option for redis cluster mode.
 		// The default value is set 3 to allow redirections when using redis cluster mode.
 		// ref: if we use redis cluster client directly instead of redis universal client, the default value is 3
