@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - my-pipeline.yaml
+
+openapi:
+  path: https://raw.githubusercontent.com/numaproj/numaflow/main/api/json-schema/schema.json
+
+patchesStrategicMerge:
+  - |-
+    apiVersion: numaflow.numaproj.io/v1alpha1
+    kind: Pipeline
+    metadata:
+      name: my-pipeline
+    spec:
+      vertices:
+        - name: in
+          source:
+            generator:
+              rpu: 500
+        - name: my-udf
+          udf:
+            container:
+              env:
+              - name: foo
+                value: bar
