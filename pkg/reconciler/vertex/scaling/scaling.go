@@ -255,7 +255,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	}
 	if desired < min {
 		desired = min
-		log.Debugf("Calculated desired replica number %t of vertex %q is smaller than max, using min %t", vertex.Name, desired, min)
+		log.Debugf("Calculated desired replica number %t of vertex %q is smaller than min, using min %t", vertex.Name, desired, min)
 	}
 	if current > max || current < min { // Someone might have manually scaled up/down the vertex
 		return s.patchVertexReplicas(ctx, vertex, desired)
@@ -326,7 +326,7 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 			desired = 1
 		}
 	}
-	if desired > int32(pending) { // For some corner case, we don't want to scale up to more than pending.
+	if desired > int32(pending) { // For some corner cases, we don't want to scale up to more than pending.
 		desired = int32(pending)
 	}
 	return desired
