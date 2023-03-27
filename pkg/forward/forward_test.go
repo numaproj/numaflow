@@ -259,7 +259,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 			select {
 			case <-ctx.Done():
 				if ctx.Err() == context.DeadlineExceeded {
-					err = ctx.Err()
+					t.Fatal("expected the buffer not to be empty", ctx.Err())
 				}
 			default:
 				time.Sleep(1 * time.Millisecond)
@@ -269,9 +269,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	_, errs := fromStep.Write(ctx, ctrlMessage)
 	assert.Equal(t, make([]error, 1), errs)
 	wg.Wait()
-	if err != nil {
-		t.Fatal("expected the buffer not to be empty", err)
-	}
 	for !fromStep.IsEmpty() {
 		select {
 		case <-ctx.Done():
