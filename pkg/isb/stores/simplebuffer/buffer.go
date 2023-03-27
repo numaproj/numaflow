@@ -180,6 +180,9 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 			if errors.Is(err, context.Canceled) {
 				return readMessages, nil
 			}
+			if errors.Is(err, context.DeadlineExceeded) {
+				return readMessages, nil
+			}
 			return readMessages, isb.BufferReadErr{Name: b.name, Empty: true, Message: err.Error()}
 		}
 		// access buffer via lock
