@@ -296,13 +296,10 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 	if rate == 0 && pending == 0 { // This could scale down to 0
 		return 0
 	}
-	if pending == 0 {
+	if pending == 0 || rate == 0 {
 		// No pending messages, we don't do anything.
 		// Technically this would not happen because the pending includes ackpending, which means rate and pending are either both 0, or both > 0.
 		// But we still keep this check here for safety.
-		return int32(vertex.Status.Replicas)
-	}
-	if rate == 0 { // Something is wrong, we don't do anything.
 		return int32(vertex.Status.Replicas)
 	}
 	var desired int32
@@ -310,9 +307,6 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 		// For sources, we calculate the time of finishing processing the pending messages,
 		// and then we know how many replicas are needed to get them done in target seconds.
 		desired = int32(math.Round(((float64(pending) / rate) / float64(vertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(vertex.Status.Replicas)))
-		if desired == 0 {
-			desired = 1
-		}
 	} else {
 		// For UDF and sinks, we calculate the available buffer length, and consider it is the contribution of current replicas,
 		// then we figure out how many replicas are needed to keep the available buffer length at target level.
@@ -321,11 +315,11 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, rate 
 			desired = int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScale())
 		} else {
 			singleReplicaContribution := float64(totalBufferLength-pending) / float64(vertex.Status.Replicas)
-			desired := int32(math.Round(float64(targetAvailableBufferLength) / singleReplicaContribution))
-			if desired == 0 {
-				desired = 1
-			}
+			desired = int32(math.Round(float64(targetAvailableBufferLength) / singleReplicaContribution))
 		}
+	}
+	if desired == 0 {
+		desired = 1
 	}
 	if desired > int32(pending) { // For some corner cases, we don't want to scale up to more than pending.
 		desired = int32(pending)
