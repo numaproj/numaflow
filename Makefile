@@ -81,7 +81,7 @@ dist/$(BINARY_NAME)-%:
 
 .PHONY: test
 test:
-	go test $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -race -short -v
+	go test $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -race -short -v -timeout 60s
 
 .PHONY: test-coverage
 test-coverage:
@@ -100,7 +100,7 @@ test-coverage-with-isb:
 
 .PHONY: test-code
 test-code:
-	go test -tags=isb_redis -race -v $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/)
+	go test -tags=isb_redis -race -v $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -timeout 120s
 
 test-e2e:
 test-kafka-e2e:
