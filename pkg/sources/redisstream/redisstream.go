@@ -41,6 +41,7 @@ import (
 )
 
 type redisStreamsSource struct {
+	// shared code to read from Redis Streams
 	*redisclient.RedisStreamsReader
 	// name of the pipeline
 	pipelineName string
@@ -80,7 +81,7 @@ func New(
 	publishWMStores store.WatermarkStorer,
 	opts ...Option) (*redisStreamsSource, error) {
 
-	// create RedisClient and create RedisStreamsReader passing that in
+	// create RedisClient to connect to Redis
 	vertexSpec := vertexInstance.Vertex.Spec
 	redisSpec := vertexSpec.Source.RedisStreams
 	redisClient, err := newRedisClient(redisSpec)
@@ -94,6 +95,7 @@ func New(
 		CheckBackLog:        true,
 	}
 
+	// RedisStreamsReader handles reading from Redis Streams
 	redisStreamsReader := &redisclient.RedisStreamsReader{
 		Name:        vertexSpec.Name,
 		Stream:      redisSpec.Stream,
@@ -120,6 +122,7 @@ func New(
 		pipelineName:       vertexSpec.PipelineName,
 	}
 
+	// Create InterStepDataForward
 	destinations := make(map[string]isb.BufferWriter, len(writers))
 	for _, w := range writers {
 		destinations[w.GetName()] = w
@@ -136,27 +139,21 @@ func New(
 		return nil, err
 	}
 	redisStreamsSource.forwarder = forwarder
+
+	// Create Watermark Publisher
 	ctx, cancel := context.WithCancel(context.Background())
 	redisStreamsSource.cancelfn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
 	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
-	// create the ConsumerGroup here if not already created: it's okay if this fails
-	readFrom := redisclient.ReadFromLatest
-	if redisSpec.ReadFromBeginning {
-		readFrom = redisclient.ReadFromEarliest
-	}
-	redisStreamsSource.Log.Infof("Creating Redis Stream group %q on Stream %q (readFrom=%v)", redisStreamsReader.Group, redisStreamsReader.Stream, readFrom)
-	err = redisClient.CreateStreamGroup(ctx, redisStreamsReader.Stream, redisStreamsReader.Group, readFrom)
+	// create the ConsumerGroup here if not already created
+	err = redisStreamsSource.createConsumerGroup(ctx, redisSpec)
 	if err != nil {
-		if redisclient.IsAlreadyExistError(err) {
-			redisStreamsReader.Log.Infow("Consumer Group on Stream already exists.", zap.String("group", redisStreamsReader.Group), zap.String("stream", redisStreamsReader.Stream))
-		} else {
-			return nil, fmt.Errorf("failed to create consumer group %q on redis stream %q: err=%v", redisStreamsReader.Group, redisStreamsReader.Stream, err)
-		}
+		return nil, err
 	}
 
+	// function which takes the messages that have been read from the Stream and turns them into ReadMessages
 	redisStreamsSource.XStreamToMessages = func(xstreams []redis.XStream, messages []*isb.ReadMessage, labels map[string]string) ([]*isb.ReadMessage, error) {
 		// for each XMessage in []XStream
 		for _, xstream := range xstreams {
@@ -196,6 +193,7 @@ func New(
 	return redisStreamsSource, nil
 }
 
+// create a RedisClient from the RedisStreamsSource spec
 func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
 	password, _ := sharedutil.GetSecretFromVolume(sourceSpec.Password)
 	opts := &redis.UniversalOptions{
@@ -219,6 +217,24 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 	}
 
 	return redisclient.NewRedisClient(opts), nil
+}
+
+func (rsSource *redisStreamsSource) createConsumerGroup(ctx context.Context, sourceSpec *dfv1.RedisStreamsSource) error {
+	// user can configure to read stream either from the beginning or from the most recent messages
+	readFrom := redisclient.ReadFromLatest
+	if sourceSpec.ReadFromBeginning {
+		readFrom = redisclient.ReadFromEarliest
+	}
+	rsSource.Log.Infof("Creating Redis Stream group %q on Stream %q (readFrom=%v)", rsSource.Group, rsSource.Stream, readFrom)
+	err := rsSource.RedisClient.CreateStreamGroup(ctx, rsSource.Stream, rsSource.Group, readFrom)
+	if err != nil {
+		if redisclient.IsAlreadyExistError(err) {
+			rsSource.Log.Infow("Consumer Group on Stream already exists.", zap.String("group", rsSource.Group), zap.String("stream", rsSource.Stream))
+		} else {
+			return fmt.Errorf("failed to create consumer group %q on redis stream %q: err=%v", rsSource.Group, rsSource.Stream, err)
+		}
+	}
+	return nil
 }
 
 func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
