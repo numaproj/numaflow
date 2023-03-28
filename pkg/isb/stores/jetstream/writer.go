@@ -26,6 +26,7 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -197,8 +198,19 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 	if jw.isFull.Load() {
 		jw.log.Debugw("Is full")
 		isbFull.With(map[string]string{"buffer": jw.GetName()}).Inc()
-		for i := 0; i < len(errs); i++ {
-			errs[i] = isb.BufferWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"}
+		// when buffer is full, we need to decide whether to discard the message or not.
+		switch jw.opts.bufferFullWritingStrategy {
+		case v1alpha1.DiscardLatest:
+			// user explicitly wants to discard the message when buffer if full.
+			// return no retryable error as a callback to let caller know that the message is discarded.
+			for i := 0; i < len(errs); i++ {
+				errs[i] = isb.NoRetryableBufferWriteErr{Name: jw.name, Message: "Buffer full!"}
+			}
+		default:
+			// Default behavior is to return a BufferWriteErr.
+			for i := 0; i < len(errs); i++ {
+				errs[i] = isb.BufferWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"}
+			}
 		}
 		isbWriteErrors.With(labels).Inc()
 		return nil, errs

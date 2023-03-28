@@ -29,14 +29,15 @@ import (
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 )
 
 var OutputRegexp = func(rx string) func(t *testing.T, output string, err error) {
@@ -50,6 +51,11 @@ var OutputRegexp = func(rx string) func(t *testing.T, output string, err error) 
 
 var CheckPodKillSucceeded = func(t *testing.T, output string, err error) {
 	assert.Contains(t, output, "deleted")
+	assert.NoError(t, err)
+}
+
+var CheckVertexScaled = func(t *testing.T, output string, err error) {
+	assert.Contains(t, output, "scaled")
 	assert.NoError(t, err)
 }
 
@@ -246,6 +252,33 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 		for _, p := range podList.Items {
 			ok = ok && p.Status.Phase == corev1.PodRunning
 		}
+		if ok {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func WaitForVertexPodScalingTo(kubeClient kubernetes.Interface, vertexClient flowpkg.VertexInterface, namespace, pipelineName, vertexName string, timeout time.Duration, size int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout after %v waiting for vertex pod scaling", timeout)
+		default:
+		}
+		vertexList, err := vertexClient.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			return fmt.Errorf("error getting vertex list: %w", err)
+		}
+		ok := len(vertexList.Items) == 1
+		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+		if err != nil {
+			return fmt.Errorf("error getting vertex pod list: %w", err)
+		}
+		ok = ok && len(podList.Items) == size
 		if ok {
 			return nil
 		}
