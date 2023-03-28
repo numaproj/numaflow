@@ -431,8 +431,7 @@ BasicAuth
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.NatsAuth">NatsAuth</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NatsAuth">NatsAuth</a>)
 </p>
 <p>
 <p>
@@ -3289,7 +3288,8 @@ RedisConfig
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">BufferServiceConfig</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
 </p>
 <p>
 </p>
@@ -3471,12 +3471,18 @@ Description
 <tbody>
 <tr>
 <td>
-<code>urls</code></br> <em> string </em>
+<code>RedisConfig</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisConfig"> RedisConfig </a>
+</em>
 </td>
 <td>
 <p>
+(Members of <code>RedisConfig</code> are embedded into this type.)
+</p>
+<p>
 URL to connect to RedisStreams, multiple urls could be separated by
-comma.
+comma. URLs string <code>json:"urls"
+protobuf:"bytes,1,opt,name=urls"</code>
 </p>
 </td>
 </tr>
@@ -3515,19 +3521,6 @@ TLS </a> </em>
 <p>
 TLS user to configure TLS connection for kafka broker TLS.enable=true
 default for TLS.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>auth</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.BasicAuth"> BasicAuth </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-TODO: imitate NatsAuth? Basic auth which contains a user name and a
-password
 </p>
 </td>
 </tr>

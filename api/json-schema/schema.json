@@ -18856,16 +18856,28 @@
     },
     "io.numaproj.numaflow.v1alpha1.RedisStreamsSource": {
       "properties": {
-        "auth": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.BasicAuth",
-          "description": "Basic auth which contains a user name and a password"
-        },
         "consumerGroup": {
           "type": "string"
+        },
+        "masterName": {
+          "description": "Only required when Sentinel is used",
+          "type": "string"
+        },
+        "password": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "Redis password secret selector"
         },
         "readFromBeginning": {
           "description": "if true, stream starts being read from the beginning; otherwise, the latest",
           "type": "boolean"
+        },
+        "sentinelPassword": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "Sentinel password secret selector"
+        },
+        "sentinelUrl": {
+          "description": "Sentinel URL, will be ignored if Redis URL is provided",
+          "type": "string"
         },
         "stream": {
           "type": "string"
@@ -18874,13 +18886,16 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
           "description": "TLS user to configure TLS connection for kafka broker TLS.enable=true default for TLS."
         },
-        "urls": {
-          "description": "URL to connect to RedisStreams, multiple urls could be separated by comma.",
+        "url": {
+          "description": "Redis URL",
+          "type": "string"
+        },
+        "user": {
+          "description": "Redis user",
           "type": "string"
         }
       },
       "required": [
-        "urls",
         "stream",
         "consumerGroup",
         "readFromBeginning"

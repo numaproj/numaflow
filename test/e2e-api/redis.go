@@ -66,7 +66,6 @@ func init() {
 
 	http.HandleFunc("/redis/pump-stream", func(w http.ResponseWriter, r *http.Request) {
 		stream := r.URL.Query().Get("stream")
-		//key := r.URL.Query().Get("key")
 		keysValuesJsonEncoded := r.URL.Query().Get("keysvalues")
 		keysValuesJson, err := url.QueryUnescape(keysValuesJsonEncoded)
 		if err != nil {
@@ -76,7 +75,12 @@ func init() {
 		}
 		fmt.Printf("deletethis: keysValuesJson=%+v\n", keysValuesJson)
 		var keysValues map[string]string
-		json.Unmarshal([]byte(keysValuesJson), &keysValues)
+		err = json.Unmarshal([]byte(keysValuesJson), &keysValues)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		fmt.Printf("deletethis: keysValues=%+v\n", keysValues)
 
 		valueMap := make(map[string]interface{})

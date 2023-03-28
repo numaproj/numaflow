@@ -6551,35 +6551,36 @@ spec:
                           type: object
                         redisStreams:
                           properties:
-                            auth:
-                              properties:
-                                password:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                user:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                              type: object
                             consumerGroup:
                               type: string
+                            masterName:
+                              type: string
+                            password:
+                              properties:
+                                key:
+                                  type: string
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
                             readFromBeginning:
                               type: boolean
+                            sentinelPassword:
+                              properties:
+                                key:
+                                  type: string
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            sentinelUrl:
+                              type: string
                             stream:
                               type: string
                             tls:
@@ -6620,13 +6621,14 @@ spec:
                                 insecureSkipVerify:
                                   type: boolean
                               type: object
-                            urls:
+                            url:
+                              type: string
+                            user:
                               type: string
                           required:
                           - consumerGroup
                           - readFromBeginning
                           - stream
-                          - urls
                           type: object
                         transformer:
                           properties:
@@ -10468,35 +10470,36 @@ spec:
                     type: object
                   redisStreams:
                     properties:
-                      auth:
-                        properties:
-                          password:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                              optional:
-                                type: boolean
-                            required:
-                            - key
-                            type: object
-                          user:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                              optional:
-                                type: boolean
-                            required:
-                            - key
-                            type: object
-                        type: object
                       consumerGroup:
                         type: string
+                      masterName:
+                        type: string
+                      password:
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                          optional:
+                            type: boolean
+                        required:
+                        - key
+                        type: object
                       readFromBeginning:
                         type: boolean
+                      sentinelPassword:
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                          optional:
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                      sentinelUrl:
+                        type: string
                       stream:
                         type: string
                       tls:
@@ -10537,13 +10540,14 @@ spec:
                           insecureSkipVerify:
                             type: boolean
                         type: object
-                      urls:
+                      url:
+                        type: string
+                      user:
                         type: string
                     required:
                     - consumerGroup
                     - readFromBeginning
                     - stream
-                    - urls
                     type: object
                   transformer:
                     properties:

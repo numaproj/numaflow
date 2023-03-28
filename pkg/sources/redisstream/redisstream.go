@@ -19,6 +19,7 @@ package redisstream
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -199,9 +200,34 @@ func New(
 }
 
 func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
+	password, _ := sharedutil.GetSecretFromVolume(sourceSpec.Password)
+	opts := &redis.UniversalOptions{
+		Username:     sourceSpec.User,
+		Password:     password,
+		MasterName:   sourceSpec.MasterName,
+		MaxRedirects: 3,
+	}
+	if opts.MasterName != "" {
+		urls := sourceSpec.SentinelURL
+		if urls != "" {
+			opts.Addrs = strings.Split(urls, ",")
+		}
+		sentinelPassword, _ := sharedutil.GetSecretFromVolume(sourceSpec.SentinelPassword)
+		opts.SentinelPassword = os.Getenv(sentinelPassword)
+	} else {
+		urls := sourceSpec.URL
+		if urls != "" {
+			opts.Addrs = strings.Split(urls, ",")
+		}
+	}
+
+	return redisclient.NewRedisClient(opts), nil
+}
+
+/*func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
 	// todo: maybe we should imitate RedisConfig struct from redis_buffer_service.go
 	opts := &redis.UniversalOptions{
-		Addrs: strings.Split(sourceSpec.URLs, ","), //todo: what is Sentinel and should I enable it?
+		Addrs: strings.Split(sourceSpec.URL, ","), //todo: what is Sentinel and should I enable it?
 		// MaxRedirects is an option for redis cluster mode.
 		// The default value is set 3 to allow redirections when using redis cluster mode.
 		// ref: if we use redis cluster client directly instead of redis universal client, the default value is 3
@@ -228,7 +254,7 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 
 	}
 	return redisclient.NewRedisClient(opts), nil
-}
+}*/
 
 func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	var oldest time.Time

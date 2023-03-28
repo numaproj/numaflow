@@ -18,7 +18,8 @@ package v1alpha1
 
 type RedisStreamsSource struct {
 	// URL to connect to RedisStreams, multiple urls could be separated by comma.
-	URLs          string `json:"urls" protobuf:"bytes,1,opt,name=urls"`
+	//URLs          string `json:"urls" protobuf:"bytes,1,opt,name=urls"`
+	RedisConfig   `json:",inline" protobuf:"bytes,6,opt,name=redisConfig"`
 	Stream        string `json:"stream" protobuf:"bytes,2,opt,name=stream"`
 	ConsumerGroup string `json:"consumerGroup" protobuf:"bytes,3,opt,name=consumerGroup"`
 	// if true, stream starts being read from the beginning; otherwise, the latest
@@ -30,5 +31,5 @@ type RedisStreamsSource struct {
 	// TODO: imitate NatsAuth?
 	// Basic auth which contains a user name and a password
 	// +optional
-	Auth *BasicAuth `json:"auth,omitempty" protobuf:"bytes,6,opt,name=auth"`
+	//Auth *BasicAuth `json:"auth,omitempty" protobuf:"bytes,6,opt,name=auth"`
 }

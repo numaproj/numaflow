@@ -13,7 +13,7 @@ spec:
         min: 2
       source:
         redisStreams:
-          urls: "redis:6379"
+          url: "redis:6379"
           stream: test-stream-b
           consumerGroup: my-group
           readFromBeginning: false

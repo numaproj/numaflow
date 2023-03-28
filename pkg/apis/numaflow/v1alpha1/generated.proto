@@ -900,7 +900,8 @@ message RedisSettings {
 
 message RedisStreamsSource {
   // URL to connect to RedisStreams, multiple urls could be separated by comma.
-  optional string urls = 1;
+  // URLs          string `json:"urls" protobuf:"bytes,1,opt,name=urls"`
+  optional RedisConfig redisConfig = 6;
 
   optional string stream = 2;
 
@@ -913,11 +914,6 @@ message RedisStreamsSource {
   // TLS.enable=true default for TLS.
   // +optional
   optional TLS tls = 5;
-
-  // TODO: imitate NatsAuth?
-  // Basic auth which contains a user name and a password
-  // +optional
-  optional BasicAuth auth = 6;
 }
 
 // Scale defines the parameters for autoscaling.

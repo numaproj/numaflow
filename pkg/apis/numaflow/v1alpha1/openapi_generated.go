@@ -3093,12 +3093,44 @@ func schema_pkg_apis_numaflow_v1alpha1_RedisStreamsSource(ref common.ReferenceCa
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"urls": {
+					"url": {
 						SchemaProps: spec.SchemaProps{
-							Description: "URL to connect to RedisStreams, multiple urls could be separated by comma.",
-							Default:     "",
+							Description: "Redis URL",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"sentinelUrl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Sentinel URL, will be ignored if Redis URL is provided",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"masterName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Only required when Sentinel is used",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"user": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Redis user",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"password": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Redis password secret selector",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"sentinelPassword": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Sentinel password secret selector",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
 						},
 					},
 					"stream": {
@@ -3129,18 +3161,12 @@ func schema_pkg_apis_numaflow_v1alpha1_RedisStreamsSource(ref common.ReferenceCa
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
 						},
 					},
-					"auth": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Basic auth which contains a user name and a password",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth"),
-						},
-					},
 				},
-				Required: []string{"urls", "stream", "consumerGroup", "readFromBeginning"},
+				Required: []string{"stream", "consumerGroup", "readFromBeginning"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS", "k8s.io/api/core/v1.SecretKeySelector"},
 	}
 }
 
