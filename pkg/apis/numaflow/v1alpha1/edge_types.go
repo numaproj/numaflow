@@ -64,3 +64,5 @@ func (e Edge) BufferFullWritingStrategy() BufferFullWritingStrategy {
 		return RetryUntilSuccess
 	}
 }
+
+type BufferFullWritingStrategy string

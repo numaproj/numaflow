@@ -51,8 +51,9 @@ func (s *FunctionalSuite) TestDropOnFull() {
 		VertexSizeScaledTo("drop-sink", 0)
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")))
-	// give buffer writer 2 seconds to update it's isFull attribute.
-	time.Sleep(time.Second * 2)
+	// give buffer writer some time to update the isFull attribute.
+	// 5s is a carefully chosen number to create a stable buffer full scenario, it is a bit higher than the buffer writer's refresh interval.
+	time.Sleep(time.Second * 5)
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
 
 	// scale the sinks up to 1 pod to process the message from the buffer.
