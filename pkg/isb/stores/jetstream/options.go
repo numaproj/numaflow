@@ -32,14 +32,17 @@ type writeOptions struct {
 	refreshInterval time.Duration
 	// useWriteInfoAsRate indicates whether to check the write sequence for rate calculation
 	useWriteInfoAsRate bool
+	// bufferFullWritingStrategy is the writing strategy when buffer is full
+	bufferFullWritingStrategy dfv1.BufferFullWritingStrategy
 }
 
 func defaultWriteOptions() *writeOptions {
 	return &writeOptions{
-		maxLength:          dfv1.DefaultBufferLength,
-		bufferUsageLimit:   dfv1.DefaultBufferUsageLimit,
-		refreshInterval:    1 * time.Second,
-		useWriteInfoAsRate: false,
+		maxLength:                 dfv1.DefaultBufferLength,
+		bufferUsageLimit:          dfv1.DefaultBufferUsageLimit,
+		refreshInterval:           1 * time.Second,
+		useWriteInfoAsRate:        false,
+		bufferFullWritingStrategy: dfv1.RetryUntilSuccess,
 	}
 }
 
@@ -73,6 +76,14 @@ func WithRefreshInterval(refreshInterval time.Duration) WriteOption {
 func WithUsingWriteInfoAsRate(yes bool) WriteOption {
 	return func(o *writeOptions) error {
 		o.useWriteInfoAsRate = yes
+		return nil
+	}
+}
+
+// WithBufferFullWritingStrategy sets the writing strategy when buffer is full
+func WithBufferFullWritingStrategy(s dfv1.BufferFullWritingStrategy) WriteOption {
+	return func(o *writeOptions) error {
+		o.bufferFullWritingStrategy = s
 		return nil
 	}
 }
