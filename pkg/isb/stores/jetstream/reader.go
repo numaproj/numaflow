@@ -222,13 +222,11 @@ func (jr *jetStreamReader) Rate(_ context.Context, seconds int64) (float64, erro
 func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var err error
 	result := []*isb.ReadMessage{}
-	fmt.Println("deletethis: about to call jr.sub.Fetch()")
 	msgs, err := jr.sub.Fetch(int(count), nats.MaxWait(jr.opts.readTimeOut))
 	if err != nil && !errors.Is(err, nats.ErrTimeout) {
 		isbReadErrors.With(map[string]string{"buffer": jr.GetName()}).Inc()
 		return nil, fmt.Errorf("failed to fetch messages from jet stream subject %q, %w", jr.subject, err)
 	}
-	fmt.Printf("deletethis: read %d messages, count=%d\n", len(msgs), count)
 	for _, msg := range msgs {
 		var m = new(isb.Message)
 		// err should be nil as we have our own marshaller/unmarshaller

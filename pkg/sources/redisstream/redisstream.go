@@ -87,7 +87,6 @@ func New(
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("deletethis: redisSpec=%+v, redisClient=%+v\n", redisSpec, redisClient)
 
 	readerOpts := &redisclient.Options{
 		InfoRefreshInterval: time.Second,
@@ -181,14 +180,12 @@ func New(
 						},
 						Body: isb.Body{Payload: []byte(v.(string))},
 					}
-					fmt.Printf("deletethis: writing ID %q\n", id)
 
 					readMsg := &isb.ReadMessage{
 						ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }), // assumption is that this is just used for ack, so doesn't need to include stream name
 						Message:    isbMsg,
 					}
 					messages = append(messages, readMsg)
-					fmt.Printf("deletethis: added message to output: %+v\n", readMsg)
 				}
 			}
 		}
@@ -232,7 +229,6 @@ func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMess
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		fmt.Printf("deletethis: publishing watermark for oldest=%v\n", oldest)
 		rsSource.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
 	}
 }

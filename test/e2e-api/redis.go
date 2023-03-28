@@ -73,7 +73,6 @@ func init() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		fmt.Printf("deletethis: keysValuesJson=%+v\n", keysValuesJson)
 		var keysValues map[string]string
 		err = json.Unmarshal([]byte(keysValuesJson), &keysValues)
 		if err != nil {
@@ -81,14 +80,12 @@ func init() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		fmt.Printf("deletethis: keysValues=%+v\n", keysValues)
 
 		valueMap := make(map[string]interface{})
 		for k, v := range keysValues {
 			valueMap[k] = interface{}(v)
 		}
 
-		fmt.Printf("deletethis: valueMap=%+v\n", valueMap)
 		size, err := strconv.Atoi(r.URL.Query().Get("size"))
 		if err != nil {
 			log.Println(err)

@@ -76,7 +76,6 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 	labels := map[string]string{"buffer": br.GetName()}
 	if br.Options.CheckBackLog {
 		xstreams, err = br.processXReadResult("0-0", count)
-		//fmt.Printf("deletethis: processXReadResult returned xstreams=%+v, err=%v\n", xstreams, err)
 		if err != nil {
 			return br.processReadError(xstreams, messages, err)
 		}
@@ -90,7 +89,6 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 	}
 	if !br.Options.CheckBackLog {
 		xstreams, err = br.processXReadResult(">", count)
-		//fmt.Printf("deletethis: processXReadResult returned xstreams=%+v, err=%v\n", xstreams, err)
 		if err != nil {
 			return br.processReadError(xstreams, messages, err)
 		}
@@ -141,7 +139,6 @@ func (br *RedisStreamsReader) Ack(_ context.Context, offsets []isb.Offset) []err
 
 // processXReadResult is used to process the results of XREADGROUP
 func (br *RedisStreamsReader) processXReadResult(startIndex string, count int64) ([]redis.XStream, error) {
-	//fmt.Printf("deletethis: about to XReadGroup starting from %s, count=%d\n", startIndex, count)
 	result := br.Client.XReadGroup(RedisContext, &redis.XReadGroupArgs{
 		Group:    br.Group,
 		Consumer: br.Consumer,

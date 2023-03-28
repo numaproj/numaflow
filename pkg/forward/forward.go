@@ -204,7 +204,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		isdf.opts.logger.Warnw("failed to read fromBuffer", zap.Error(err))
 		readMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
 	}
-	fmt.Printf("deletethis: forwardAChunk(): got %d messages\n", len(readMessages))
 	readMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(readMessages)))
 
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
@@ -470,7 +469,6 @@ func (isdf *InterStepDataForward) writeToBuffers(ctx context.Context, messageToS
 	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
 	for bufferName, toBuffer := range isdf.toBuffers {
 		writeOffsetsEdge[bufferName], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[bufferName])
-		fmt.Printf("deletethis: wrote to buffer %d messages, err=%v\n", len(messageToStep[bufferName]), err)
 		if err != nil {
 			return nil, err
 		}
