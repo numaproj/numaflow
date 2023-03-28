@@ -36,7 +36,10 @@ type RedisSourceSuite struct {
 
 func (rss *RedisSourceSuite) TestRedisSource() {
 
-	time.Sleep(10 * time.Second) //todo: replace this with waiting for "redis" service to be available
+	// need to wait for Redis to be fully up and running
+	// tried to wait for Pod to be in Running phase, but that doesn't seem to be sufficient for it being ready
+	// so for now just using a timer
+	time.Sleep(10 * time.Second)
 
 	keysValues := map[string]string{"test-msg-1": "test-val-1", "test-msg-2": "test-val-2"}
 	keysValuesJson, err := json.Marshal(keysValues)

@@ -147,6 +147,15 @@ func (t *Expect) DaemonPodsRunning() *Expect {
 	return t
 }
 
+func (t *Expect) PodRunning(podName string) *Expect {
+	t.t.Helper()
+	timeout := 2 * time.Minute
+	if err := WaitForPodRunning(t.kubeClient, Namespace, podName, timeout); err != nil {
+		t.t.Fatalf("Expected pod named %q running: %v", podName, err)
+	}
+	return t
+}
+
 func (t *Expect) DaemonPodLogContains(pipelineName, regex string, opts ...PodLogCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()

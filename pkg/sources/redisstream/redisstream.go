@@ -224,38 +224,6 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 	return redisclient.NewRedisClient(opts), nil
 }
 
-/*func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
-	// todo: maybe we should imitate RedisConfig struct from redis_buffer_service.go
-	opts := &redis.UniversalOptions{
-		Addrs: strings.Split(sourceSpec.URL, ","), //todo: what is Sentinel and should I enable it?
-		// MaxRedirects is an option for redis cluster mode.
-		// The default value is set 3 to allow redirections when using redis cluster mode.
-		// ref: if we use redis cluster client directly instead of redis universal client, the default value is 3
-		//      https://github.com/go-redis/redis/blob/f6a8adc50cdaec30527f50d06468f9176ee674fe/cluster.go#L33-L36
-		MaxRedirects: 3,
-	}
-	var err error
-	if sourceSpec.Auth != nil && sourceSpec.Auth.User != nil && sourceSpec.Auth.Password != nil {
-		opts.Username, err = sharedutil.GetSecretFromVolume(sourceSpec.Auth.User)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get basic auth user, %w", err)
-		}
-		opts.Password, err = sharedutil.GetSecretFromVolume(sourceSpec.Auth.Password)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get basic auth password, %w", err)
-		}
-	}
-	if sourceSpec.TLS != nil {
-		if c, err := sharedutil.GetTLSConfig(sourceSpec.TLS); err != nil {
-			return nil, err
-		} else {
-			opts.TLSConfig = c
-		}
-
-	}
-	return redisclient.NewRedisClient(opts), nil
-}*/
-
 func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	var oldest time.Time
 	for _, m := range msgs {
