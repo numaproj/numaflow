@@ -23,7 +23,6 @@ limitations under the License.
 package fixed
 
 import (
-	"sync"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/window"
@@ -48,7 +47,6 @@ type Fixed struct {
 	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 	// from the Head.
 	entries *window.SortedWindowList[window.AlignedKeyedWindower]
-	lock    sync.RWMutex
 }
 
 var _ window.Windower = (*Fixed)(nil)
@@ -58,7 +56,6 @@ func NewFixed(length time.Duration) window.Windower {
 	return &Fixed{
 		Length:  length,
 		entries: window.NewSortedWindowList[window.AlignedKeyedWindower](),
-		lock:    sync.RWMutex{},
 	}
 }
 
