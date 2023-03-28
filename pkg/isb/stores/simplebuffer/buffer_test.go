@@ -21,9 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewSimpleBuffer(t *testing.T) {
@@ -74,6 +76,27 @@ func TestNewSimpleBuffer(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, readMessages, int(readBatchSize))
 	assert.Equal(t, []string{"2", "3"}, []string{readMessages[0].ReadOffset.String(), readMessages[1].ReadOffset.String()})
+	// still full as we did not ack
+	assert.Equal(t, true, sb.IsFull())
+}
+
+func TestNewSimpleBuffer_BufferFullWritingStrategyIsDiscard(t *testing.T) {
+	count := int64(3)
+	sb := NewInMemoryBuffer("test", 2, WithBufferFullWritingStrategy(v1alpha1.DiscardLatest))
+	ctx := context.Background()
+	assert.NotEmpty(t, sb.String())
+	assert.Equal(t, sb.IsEmpty(), true)
+
+	startTime := time.Unix(1636470000, 0)
+	writeMessages := testutils.BuildTestWriteMessages(count, startTime)
+
+	// try to write 3 messages, it should fail (we have only space for 2)
+	// the first 2 messages should be written, the last one should be discarded and returns us a NoRetryableError.
+	_, errors := sb.Write(ctx, writeMessages[0:3])
+	assert.NoError(t, errors[0])
+	assert.NoError(t, errors[1])
+	assert.EqualValues(t, []error{nil, nil, isb.NoRetryableBufferWriteErr{Name: "test", Message: "Buffer full!"}}, errors)
+
 	// still full as we did not ack
 	assert.Equal(t, true, sb.IsFull())
 }
