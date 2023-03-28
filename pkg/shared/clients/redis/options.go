@@ -41,7 +41,7 @@ type Options struct {
 	// RefreshBufferWriteInfo is used to determine if we refresh buffer write info
 	RefreshBufferWriteInfo bool
 	// BufferFullWritingStrategy is the writing strategy when buffer is full
-        BufferFullWritingStrategy dfv1.BufferFullWritingStrategy
+	BufferFullWritingStrategy dfv1.BufferFullWritingStrategy
 }
 
 // Option to apply different options
@@ -52,7 +52,7 @@ type Option interface {
 // pipelining option
 type pipelining bool
 
-func (p pipelining) apply(opts *options) {
+func (p pipelining) apply(opts *Options) {
 	opts.Pipelining = bool(p)
 }
 
@@ -100,8 +100,8 @@ func WithReadTimeOut(t time.Duration) Option {
 // checkBackLog option
 type checkBackLog bool
 
-func (b checkBackLog) apply(o *options) {
-        o.CheckBackLog = bool(b)
+func (b checkBackLog) apply(o *Options) {
+	o.CheckBackLog = bool(b)
 }
 
 // WithCheckBacklog sets the checkBackLog option
