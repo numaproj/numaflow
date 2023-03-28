@@ -172,11 +172,7 @@ func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
 	w := s.Given().Pipeline("@testdata/extract-event-time-from-payload.yaml").
 		When().
 		CreatePipelineAndWait()
-<<<<<<< HEAD
 	defer w.DeletePipelineAndWait()
-=======
-	// defer w.DeletePipelineAndWait()
->>>>>>> fb3fe01 (clean up)
 	pipelineName := "extract-event-time"
 
 	// wait for all the pods to come up
