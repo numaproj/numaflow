@@ -191,7 +191,7 @@ func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
 	if err != nil {
 		return isb.PendingNotAvailable, fmt.Errorf("failed to get consumer info, %w", err)
 	}
-	return int64(c.NumPending), nil
+	return int64(c.NumPending) + int64(c.NumAckPending), nil
 }
 
 // Rate returns the ack rate (tps) in the past seconds
