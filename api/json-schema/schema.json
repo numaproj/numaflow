@@ -18883,8 +18883,7 @@
           "type": "string"
         },
         "tls": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
-          "description": "TLS user to configure TLS connection for kafka broker TLS.enable=true default for TLS."
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS"
         },
         "url": {
           "description": "Redis URL",

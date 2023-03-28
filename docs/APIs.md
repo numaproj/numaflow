@@ -3480,9 +3480,7 @@ Description
 (Members of <code>RedisConfig</code> are embedded into this type.)
 </p>
 <p>
-URL to connect to RedisStreams, multiple urls could be separated by
-comma. URLs string <code>json:"urls"
-protobuf:"bytes,1,opt,name=urls"</code>
+RedisConfig contains connectivity info
 </p>
 </td>
 </tr>
@@ -3518,10 +3516,6 @@ TLS </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
-<p>
-TLS user to configure TLS connection for kafka broker TLS.enable=true
-default for TLS.
-</p>
 </td>
 </tr>
 </tbody>

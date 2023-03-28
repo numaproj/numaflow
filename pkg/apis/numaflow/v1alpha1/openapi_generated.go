@@ -3157,8 +3157,7 @@ func schema_pkg_apis_numaflow_v1alpha1_RedisStreamsSource(ref common.ReferenceCa
 					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TLS user to configure TLS connection for kafka broker TLS.enable=true default for TLS.",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
 						},
 					},
 				},

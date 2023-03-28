@@ -899,8 +899,7 @@ message RedisSettings {
 }
 
 message RedisStreamsSource {
-  // URL to connect to RedisStreams, multiple urls could be separated by comma.
-  // URLs          string `json:"urls" protobuf:"bytes,1,opt,name=urls"`
+  // RedisConfig contains connectivity info
   optional RedisConfig redisConfig = 6;
 
   optional string stream = 2;
@@ -910,8 +909,6 @@ message RedisStreamsSource {
   // if true, stream starts being read from the beginning; otherwise, the latest
   optional bool readFromBeginning = 4;
 
-  // TLS user to configure TLS connection for kafka broker
-  // TLS.enable=true default for TLS.
   // +optional
   optional TLS tls = 5;
 }
