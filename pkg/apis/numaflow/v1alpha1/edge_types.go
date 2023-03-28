@@ -66,3 +66,8 @@ func (e Edge) BufferFullWritingStrategy() BufferFullWritingStrategy {
 }
 
 type BufferFullWritingStrategy string
+
+const (
+	RetryUntilSuccess BufferFullWritingStrategy = "retryUntilSuccess"
+	DiscardLatest     BufferFullWritingStrategy = "discardLatest"
+)
