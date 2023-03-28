@@ -18,7 +18,9 @@ package fetch
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -56,7 +58,10 @@ func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher
 // it ignores the input Offset.
 func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 	var epoch int64 = math.MaxInt64
+	var debugString strings.Builder
+
 	for _, p := range e.processorManager.GetAllProcessors() {
+		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
 		if !p.IsActive() {
 			continue
 		}
@@ -67,6 +72,7 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 	if epoch == math.MaxInt64 {
 		epoch = -1
 	}
+	e.log.Debugf("%s get watermark for offset : %+v", debugString.String(), epoch)
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
