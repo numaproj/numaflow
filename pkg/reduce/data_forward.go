@@ -190,7 +190,7 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 				}
 			}
 		} else {
-			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); nextWin.EndTime().After(watermark) {
+			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); nextWin.EndTime().Before(watermark) {
 				// you can close the windows
 				closedWindows := d.windowingStrategy.RemoveWindows(watermark)
 				for _, win := range closedWindows {
