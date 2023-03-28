@@ -76,7 +76,6 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 		w.DeletePipelineAndWait()
 	}
 
-	time.Sleep(2 * time.Minute) // todo: delete
 }
 func TestRedisSourceSuite(t *testing.T) {
 	suite.Run(t, new(RedisSourceSuite))

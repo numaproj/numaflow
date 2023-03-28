@@ -25,7 +25,7 @@ import (
 
 // TODO: add comments for all these
 var redisStreamsSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "redis_streams_source", //TODO: does it matter what this is?
+	Subsystem: "redis_streams_source",
 	Name:      "read_total",
 	Help:      "Total number of Redis Streams messages Read",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
