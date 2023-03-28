@@ -254,9 +254,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	// so the timeline should be empty
 	_, errs := fromStep.Write(ctx, ctrlMessage)
 	assert.Equal(t, make([]error, 1), errs)
-	if err != nil {
-		t.Fatal("expected the buffer not to be empty", err)
-	}
 	// waiting for the ctrl message to be acked
 	for !fromStep.IsEmpty() {
 		select {
