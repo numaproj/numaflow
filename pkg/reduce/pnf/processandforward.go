@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -256,12 +258,25 @@ func (p *ProcessAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
+	var activeWatermarkBuffers = make(map[string]bool)
 	for bufferName, offsets := range writeOffsets {
 		if publisher, ok := p.publishWatermark[bufferName]; ok {
 			if len(offsets) > 0 {
 				publisher.PublishWatermark(wm, offsets[len(offsets)-1])
+				activeWatermarkBuffers[bufferName] = true
 				// reset because the toBuffer is not idling
 				p.idleManager.Reset(bufferName)
+			}
+		}
+	}
+	if len(activeWatermarkBuffers) < len(p.publishWatermark) {
+		// if there's any buffers that haven't received any watermark during this
+		// batch processing cycle, send an idle watermark
+		for bufferName := range p.publishWatermark {
+			if !activeWatermarkBuffers[bufferName] {
+				if publisher, ok := p.publishWatermark[bufferName]; ok {
+					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[bufferName], publisher, p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
+				}
 			}
 		}
 	}
