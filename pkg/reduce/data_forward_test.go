@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -41,6 +39,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
+	"github.com/stretchr/testify/assert"
 )
 
 var keyedVertex = &dfv1.VertexInstance{
@@ -294,6 +293,90 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 }
 
+// ReadMessage size = 0
+func TestReduceDataForward_ReadZero(t *testing.T) {
+	var (
+		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		fromBufferSize = int64(100000)
+		toBufferSize   = int64(10)
+		startTime      = 60000 // time in millis
+		fromBufferName = "source-reduce-buffer"
+		toBufferName   = "reduce-to-buffer"
+		pipelineName   = "test-reduce-pipeline"
+		err            error
+	)
+
+	defer cancel()
+
+	// create from buffers
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+
+	// create to buffers
+	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	toBuffer := map[string]isb.BufferWriter{
+		toBufferName: buffer,
+	}
+
+	// create pbq manager
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+	assert.NoError(t, err)
+
+	// create in memory watermark publisher and fetcher
+	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
+	// publish an idle watermark of offset 1 for the test to fetch headWMB
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), isb.SimpleIntOffset(func() int64 { return int64(1) }))
+
+	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// create a fixed window of 60s
+	window := fixed.NewFixed(60 * time.Second)
+
+	var reduceDataForward *DataForward
+	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
+		window, WithReadBatchSize(10))
+	assert.NoError(t, err)
+
+	// start the forwarder
+	go reduceDataForward.Start()
+
+	for toBuffer[toBufferName].(*simplebuffer.InMemoryBuffer).IsEmpty() {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected the buffer to be empty", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	otKeys, _ := otStores[toBufferName].GetAllKeys(ctx)
+	otValue, _ := otStores[toBufferName].GetValue(ctx, otKeys[0])
+	otDecode, _ := wmb.DecodeToWMB(otValue)
+	for otDecode.Offset != 0 { // the first ctrl message written to isb. can't use idle because default idle=false
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have idle watermark in to1 timeline", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
+			otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+			otDecode, _ = wmb.DecodeToWMB(otValue)
+		}
+	}
+	assert.Equal(t, wmb.WMB{
+		Idle:      true,
+		Offset:    0, // the first ctrl message written to isb
+		Watermark: 60000,
+	}, otDecode)
+	assert.Equal(t, isb.WMB, buffer.GetMessages(1)[0].Kind)
+
+}
+
 // Count operation with 1 min window
 func TestReduceDataForward_Count(t *testing.T) {
 	var (
@@ -327,7 +410,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publisherMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
 	// create a fixed window of 60s
 	window := fixed.NewFixed(60 * time.Second)
@@ -407,7 +490,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 	// create a fixed window of 2 minutes
 	window := fixed.NewFixed(2 * time.Minute)
 
@@ -486,7 +569,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
@@ -566,7 +649,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
@@ -663,7 +746,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
@@ -750,7 +833,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(cctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(cctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(cctx, toBuffer, pipelineName)
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
@@ -838,18 +921,20 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	return f, sourcePublisher
 }
 
-func createPublisherForBuffer(ctx context.Context, toBuffers map[string]isb.BufferWriter, pipelineName string) map[string]publish.Publisher {
+func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
 	publishers := make(map[string]publish.Publisher)
+	otStores := make(map[string]wmstore.WatermarkKVStorer)
 
 	// create publisher for to Buffers
 	for key := range toBuffers {
 		publishEntity := processor.NewProcessorEntity(key)
 		hb, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
 		ot, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
+		otStores[key] = ot
 		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 	}
-	return publishers
+	return publishers, otStores
 }
 
 // buildMessagesForReduce builds test isb.Message which can be used for testing reduce.
