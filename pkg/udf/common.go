@@ -41,7 +41,9 @@ func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstan
 	reader := redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readerOpts...)
 	for _, e := range vertexInstance.Vertex.Spec.ToEdges {
 
-		writeOpts := []redisclient.Option{}
+		writeOpts := []redisclient.Option{
+			redisisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
+		}
 		if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 			writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 		}
@@ -73,7 +75,9 @@ func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexIn
 	}
 
 	for _, e := range vertexInstance.Vertex.Spec.ToEdges {
-		writeOpts := []jetstreamisb.WriteOption{}
+		writeOpts := []jetstreamisb.WriteOption{
+			jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
+		}
 		if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 			writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 		}

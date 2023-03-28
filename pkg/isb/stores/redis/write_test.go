@@ -177,6 +177,46 @@ func TestRedisQWrite_WithInfoRefreshInterval(t *testing.T) {
 	}
 }
 
+func TestRedisQWrite_WithInfoRefreshInterval_WithBufferFullWritingStrategyIsDiscardLatest(t *testing.T) {
+	client := redisclient.NewRedisClient(redisOptions)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	stream := "withInfoRefreshInterval"
+	count := int64(10)
+	group := "withInfoRefreshInterval-group"
+	rqw, _ := NewBufferWrite(ctx, client, stream, group, WithInfoRefreshInterval(2*time.Millisecond), WithLagDuration(2*time.Millisecond), WithMaxLength(10), WithBufferFullWritingStrategy(dfv1.DiscardLatest)).(*BufferWrite)
+	err := client.CreateStreamGroup(ctx, rqw.GetStreamName(), group, redisclient.ReadFromEarliest)
+	if err != nil {
+		t.Fatalf("error creating consumer group: %s", err)
+	}
+	defer func() { _ = client.DeleteStreamGroup(ctx, rqw.GetStreamName(), group) }()
+	defer func() { _ = client.DeleteKeys(ctx, rqw.GetStreamName()) }()
+
+	writeMessages, internalKeys := buildTestWriteMessages(rqw, count, testStartTime)
+	defer func() { _ = client.DeleteKeys(ctx, internalKeys...) }()
+	_, errs := rqw.Write(ctx, writeMessages)
+	assert.Equal(t, make([]error, len(writeMessages)), errs, "Write failed")
+
+	for !rqw.IsFull() {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("full, %s", ctx.Err())
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	// Once full try to write messages and expect NoRetryableError
+	writeMessages, internalKeys = buildTestWriteMessages(rqw, count, testStartTime)
+	defer func() { _ = client.DeleteKeys(ctx, internalKeys...) }()
+	_, errs = rqw.Write(ctx, writeMessages)
+
+	// assert the NoRetryableBufferWriteErr
+	for _, err := range errs {
+		assert.Equal(t, err, isb.NoRetryableBufferWriteErr{Name: stream, Message: "Buffer full!"})
+	}
+}
+
 // buildTestWriteMessages a list test messages and the internal hashKeys it created
 func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) ([]isb.Message, []string) {
 	var messages = make([]isb.Message, 0, count)

@@ -65,6 +65,20 @@ var writeMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of Write Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, "buffer"})
 
+// dropMessagesCount is used to indicate the number of messages dropped
+var dropMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "forwarder",
+	Name:      "drop_total",
+	Help:      "Total number of Messages Dropped",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, "buffer"})
+
+// dropBytesCount is to indicate the number of bytes dropped
+var dropBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "forwarder",
+	Name:      "drop_bytes_total",
+	Help:      "Total number of Bytes Dropped",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, "buffer"})
+
 // ackMessagesCount is used to indicate the number of  messages acknowledged
 var ackMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "forwarder",
@@ -121,12 +135,12 @@ var concurrentUDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramO
 var udfReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "forwarder",
 	Name:      "udf_read_total",
-	Help:      "Total number of Messages Read at UDF",
+	Help:      "Total number of Messages Read by UDF",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, "buffer"})
 
-// udfWriteMessagesCount is used to indicate the number of messages read by UDF
+// udfWriteMessagesCount is used to indicate the number of messages written by UDF
 var udfWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "forwarder",
 	Name:      "udf_write_total",
-	Help:      "Total number of Messages Written at UDF",
+	Help:      "Total number of Messages Written by UDF",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, "buffer"})

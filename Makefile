@@ -81,7 +81,7 @@ dist/$(BINARY_NAME)-%:
 
 .PHONY: test
 test:
-	go test $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -race -short -v
+	go test $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -race -short -v -timeout 60s
 
 .PHONY: test-coverage
 test-coverage:
@@ -100,9 +100,10 @@ test-coverage-with-isb:
 
 .PHONY: test-code
 test-code:
-	go test -tags=isb_redis -race -v $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/)
+	go test -tags=isb_redis -race -v $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -timeout 120s
 
-test-e2e:
+test-e2e-suite-1:
+test-e2e-suite-2:
 test-kafka-e2e:
 test-http-e2e:
 test-nats-e2e:
@@ -136,7 +137,7 @@ Test%:
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
 	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
-	-go test -v -timeout 10m -count 1 --tags test -p 1 ./test/e2e  -run='.*/$*'
+	-go test -v -timeout 10m -count 1 --tags test -p 1 ./test/e2e-suite-1  -run='.*/$*'
 	$(MAKE) cleanup-e2e
 
 .PHONY: ui-build

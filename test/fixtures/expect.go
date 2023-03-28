@@ -22,12 +22,13 @@ import (
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 )
 
 type Expect struct {
@@ -107,6 +108,21 @@ func (t *Expect) VertexPodsRunning() *Expect {
 		if err := WaitForVertexPodRunning(t.kubeClient, t.vertexClient, Namespace, t.pipeline.Name, v.Name, timeout); err != nil {
 			t.t.Fatalf("Expected vertex %q pod running: %v", v.Name, err)
 		}
+	}
+	return t
+}
+
+func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	if _, err := t.vertexClient.Get(ctx, t.pipeline.Name+"-"+v, metav1.GetOptions{}); err != nil {
+		t.t.Fatalf("Expected vertex %s existing: %v", v, err)
+	}
+
+	// check expected number of pods running
+	timeout := 2 * time.Minute
+	if err := WaitForVertexPodScalingTo(t.kubeClient, t.vertexClient, Namespace, t.pipeline.Name, v, timeout, size); err != nil {
+		t.t.Fatalf("Expected %d pods running on vertex %s : %v", size, v, err)
 	}
 	return t
 }

@@ -2522,6 +2522,11 @@ spec:
                           format: int32
                           type: integer
                       type: object
+                    onFull:
+                      enum:
+                      - retryUntilSuccess
+                      - discardLatest
+                      type: string
                     parallelism:
                       format: int32
                       type: integer
@@ -8519,6 +8524,11 @@ spec:
                           format: int32
                           type: integer
                       type: object
+                    onFull:
+                      enum:
+                      - retryUntilSuccess
+                      - discardLatest
+                      type: string
                     parallelism:
                       format: int32
                       type: integer
@@ -10790,6 +10800,11 @@ spec:
                           format: int32
                           type: integer
                       type: object
+                    onFull:
+                      enum:
+                      - retryUntilSuccess
+                      - discardLatest
+                      type: string
                     parallelism:
                       format: int32
                       type: integer
