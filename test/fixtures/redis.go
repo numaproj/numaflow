@@ -37,21 +37,22 @@ func GetMsgCountContains(pipelineName, sinkName, targetStr string) int {
 // function to invoke Redis Source
 func PumpRedisStream(stream string, n int, opts ...interface{}) {
 	var sleep time.Duration
-	var msg string
+	var keysValuesJson string
 	var size int
 	for _, opt := range opts {
 		switch v := opt.(type) {
 		case time.Duration:
 			sleep = v
 		case string:
-			msg = v
+			keysValuesJson = v
 		case int:
 			size = v
 		default:
 			panic(fmt.Errorf("unexpected option type %T", opt))
 		}
 	}
-	log.Printf("Pumping Redis stream %q sleeping %v with %d messages sized %d, message=%q\n", stream, sleep, n, size, msg)
-	InvokeE2EAPI("/redis/pump-stream?stream=%s&sleep=%v&n=%d&key=test-key&value=%s&size=%d", stream, sleep, n, msg, size)
+	keysValuesJsonEncoded := url.QueryEscape(keysValuesJson)
+	log.Printf("Pumping Redis stream %q sleeping %v with %d messages sized %d, keys/values=%q\n", stream, sleep, n, size, keysValuesJson)
+	InvokeE2EAPI("/redis/pump-stream?stream=%s&sleep=%v&n=%d&keysvalues=%s&size=%d", stream, sleep, n, keysValuesJsonEncoded, size)
 
 }

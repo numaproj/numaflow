@@ -19,6 +19,7 @@ limitations under the License.
 package redis_source_e2e
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -37,18 +38,25 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 
 	time.Sleep(10 * time.Second) //todo: replace this with waiting for "redis" service to be available
 
+	keysValues := map[string]string{"test-msg-1": "test-val-1", "test-msg-2": "test-val-2"}
+	keysValuesJson, err := json.Marshal(keysValues)
+	if err != nil {
+		rss.Fail(err.Error())
+	}
+
 	// can do 2 tests
-	// first one is to start from the beginning of the Stream
-	// second is to start from the most recent messages of the Stream
+	// 1. start from the beginning of the Stream
+	// 2. start from the most recent messages of the Stream
 	for _, tt := range []struct {
 		stream          string
 		manifest        string
 		expectedNumMsgs int // expected result
 	}{
-		{"test-stream-a", "@testdata/redis-source-pipeline-from-beginning.yaml", 102},
+		{"test-stream-a", "@testdata/redis-source-pipeline-from-beginning.yaml", 101},
 		{"test-stream-b", "@testdata/redis-source-pipeline-from-end.yaml", 100},
 	} {
-		fixtures.PumpRedisStream(tt.stream, 2, 20*time.Millisecond, 10, "test-message")
+		// send some messages before creating the Pipeline so we can test both "ReadFromBeginning" and "ReadFromLatest"
+		fixtures.PumpRedisStream(tt.stream, 1, 20*time.Millisecond, 10, string(keysValuesJson))
 
 		w := rss.Given().Pipeline(tt.manifest).
 			When().
@@ -57,8 +65,10 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 		// wait for all the pods to come up
 		w.Expect().VertexPodsRunning()
 
-		fixtures.PumpRedisStream(tt.stream, 100, 20*time.Millisecond, 10, "test-message")
-		w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(tt.expectedNumMsgs))
+		fixtures.PumpRedisStream(tt.stream, 100, 20*time.Millisecond, 10, string(keysValuesJson))
+		time.Sleep(20 * time.Second)
+		w.Expect().SinkContains("out", "test-val-1", fixtures.WithContainCount(tt.expectedNumMsgs))
+		w.Expect().SinkContains("out", "test-val-2", fixtures.WithContainCount(tt.expectedNumMsgs))
 
 		w.DeletePipelineAndWait()
 	}

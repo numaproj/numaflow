@@ -207,6 +207,7 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 	if sharedutil.LookupEnvStringOr("ISB_ASYNC_WRITE", "false") == "true" {
 		return jw.asyncWrite(ctx, messages, errs, labels)
 	}
+	fmt.Printf("deletethis: jw.syncWrite %d messages\n", len(messages))
 	return jw.syncWrite(ctx, messages, errs, labels)
 }
 
@@ -291,7 +292,7 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 			} else {
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
 				errs[idx] = nil
-				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
+				jw.log.Debugw("deletethis: Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
 			}
 		}(msg, index)
 	}

@@ -163,16 +163,24 @@ func New(
 			for _, message := range xstream.Messages {
 				var readOffset = message.ID
 
+				valIndex := 0
 				for f, v := range message.Values {
+
+					// need to make sure the ID is unique: we can make it a combination of the original
+					// message ID from Redis (timestamp+sequence num) plus its ordinal in the key/value pairs
+					// contained in the message
+					id := fmt.Sprintf("%s-%d", message.ID, valIndex)
+					valIndex = valIndex + 1
 
 					isbMsg := isb.Message{
 						Header: isb.Header{
 							MessageInfo: isb.MessageInfo{EventTime: time.Now()}, //doesn't seem like Redis offers a timestamp
-							ID:          readOffset,                             // assumption is that this only needs to be unique for this source vertex
+							ID:          id,                                     // assumption is that this only needs to be unique for this source vertex
 							Key:         f,
 						},
 						Body: isb.Body{Payload: []byte(v.(string))},
 					}
+					fmt.Printf("deletethis: writing ID %q\n", id)
 
 					readMsg := &isb.ReadMessage{
 						ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }), // assumption is that this is just used for ack, so doesn't need to include stream name
@@ -191,6 +199,7 @@ func New(
 }
 
 func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
+	// todo: maybe we should imitate RedisConfig struct from redis_buffer_service.go
 	opts := &redis.UniversalOptions{
 		Addrs: strings.Split(sourceSpec.URLs, ","), //todo: what is Sentinel and should I enable it?
 		// MaxRedirects is an option for redis cluster mode.

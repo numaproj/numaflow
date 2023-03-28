@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -65,11 +66,24 @@ func init() {
 
 	http.HandleFunc("/redis/pump-stream", func(w http.ResponseWriter, r *http.Request) {
 		stream := r.URL.Query().Get("stream")
-		key := r.URL.Query().Get("key") //todo: enable multiple key/value pairs?
-		value := r.URL.Query().Get("value")
-		fmt.Printf("deletethis: value=%+v\n", value)
+		//key := r.URL.Query().Get("key")
+		keysValuesJsonEncoded := r.URL.Query().Get("keysvalues")
+		keysValuesJson, err := url.QueryUnescape(keysValuesJsonEncoded)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		fmt.Printf("deletethis: keysValuesJson=%+v\n", keysValuesJson)
+		var keysValues map[string]string
+		json.Unmarshal([]byte(keysValuesJson), &keysValues)
+		fmt.Printf("deletethis: keysValues=%+v\n", keysValues)
+
 		valueMap := make(map[string]interface{})
-		valueMap[key] = interface{}(value)
+		for k, v := range keysValues {
+			valueMap[k] = interface{}(v)
+		}
+
 		fmt.Printf("deletethis: valueMap=%+v\n", valueMap)
 		size, err := strconv.Atoi(r.URL.Query().Get("size"))
 		if err != nil {
