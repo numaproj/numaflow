@@ -301,12 +301,11 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		toBufferSize   = int64(10)
 		messageValue   = []int{7}
 		startTime      = 1679961600000 // time in millis
-		fromBufferName = "source-reduce-toBuffer"
-		toBufferName   = "reduce-to-toBuffer"
+		fromBufferName = "source-reduce-buffer"
+		toBufferName   = "reduce-to-buffer"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
-
 	defer cancel()
 
 	// create from buffers
@@ -412,17 +411,17 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	// TEST: len(read)==0 and windowToClose exists => close the window
 	// publish one data message to start a new window
 	publishMessages(ctx, startTime+1000, messageValue, 1, 1, p, fromBuffer)
-	// publish a new idle wm to close the unclosed window
+	// publish a new idle wm to that is smaller than the windowToClose.End()
 	offsets, errs = fromBuffer.Write(ctx, ctrlMessage)
 	assert.Equal(t, make([]error, 1), errs)
-	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+10000))), offsets[0])
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+2000))), offsets[0])
 
 	otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
 	otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
 	otDecode, _ = wmb.DecodeToWMB(otValue)
 	// wm should be updated using the same offset because it's still idling
 	// -1 ms because in this use case we publish watermark-1
-	for otDecode.Watermark != int64(startTime+10000-1) {
+	for otDecode.Watermark != int64(startTime+2000-1) {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -438,7 +437,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	assert.Equal(t, wmb.WMB{
 		Idle:      true,
 		Offset:    0, // only update the wm because it's still idling
-		Watermark: 1679961609999,
+		Watermark: 1679961601999,
 	}, otDecode)
 	msgs := toBuffer.GetMessages(10)
 	// we didn't read/ack from the toBuffer and also didn't publish any new msgs
