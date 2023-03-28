@@ -23,6 +23,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // options for forwarding the message
@@ -42,6 +43,15 @@ type options struct {
 }
 
 type Option func(*options) error
+
+func DefaultOptions() *options {
+	return &options{
+		readBatchSize:  dfv1.DefaultReadBatchSize,
+		udfConcurrency: dfv1.DefaultReadBatchSize,
+		retryInterval:  time.Millisecond,
+		logger:         logging.NewLogger(),
+	}
+}
 
 // WithRetryInterval sets the retry interval
 func WithRetryInterval(f time.Duration) Option {

@@ -1,0 +1,34 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: drop-on-full
+spec:
+  limits:
+    # Using the following limits for generating a buffer full scenario.
+    bufferMaxLength: 1
+    bufferUsageLimit: 100
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: drop-sink
+      scale:
+        disabled: true
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+    - name: retry-sink
+      scale:
+        disabled: true
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+  edges:
+    - from: in
+      to: drop-sink
+      onFull: discardLatest
+    - from: in
+      to: retry-sink
+      onFull: retryUntilSuccess
