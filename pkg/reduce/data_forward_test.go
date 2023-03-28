@@ -294,14 +294,15 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 }
 
 // ReadMessage size = 0
-func TestReduceDataForward_ReadZero(t *testing.T) {
+func TestReduceDataForward_IdleWM(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
-		startTime      = 60000 // time in millis
-		fromBufferName = "source-reduce-buffer"
-		toBufferName   = "reduce-to-buffer"
+		messageValue   = []int{7}
+		startTime      = 1679961600000 // time in millis
+		fromBufferName = "source-reduce-toBuffer"
+		toBufferName   = "reduce-to-toBuffer"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
@@ -312,9 +313,9 @@ func TestReduceDataForward_ReadZero(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
-	toBuffer := map[string]isb.BufferWriter{
-		toBufferName: buffer,
+	toBuffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	toBuffers := map[string]isb.BufferWriter{
+		toBufferName: toBuffer,
 	}
 
 	// create pbq manager
@@ -325,27 +326,34 @@ func TestReduceDataForward_ReadZero(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	// publish an idle watermark of offset 1 for the test to fetch headWMB
-	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), isb.SimpleIntOffset(func() int64 { return int64(1) }))
+	// source publishes a ctrlMessage and idle watermark so we can do fetch headWMB
+	ctrlMessage := []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
+	offsets, errs := fromBuffer.Write(ctx, ctrlMessage)
+	assert.Equal(t, make([]error, 1), errs)
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), offsets[0])
 
-	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffers, pipelineName)
 
-	// create a fixed window of 60s
-	window := fixed.NewFixed(60 * time.Second)
+	// create a fixed window of 5s
+	window := fixed.NewFixed(5 * time.Second)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
+	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffers, pbqManager, CounterReduceTest{}, f, publisherMap,
 		window, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
 	go reduceDataForward.Start()
 
-	for toBuffer[toBufferName].(*simplebuffer.InMemoryBuffer).IsEmpty() {
+	// toBuffers should get a control message after three batch reads
+	// 1st read: got one ctrl message, acked and returned
+	// 2nd read: len(read)==0 and windowToClose=nil, start the 2 round validation
+	// 3rd read: len(read)==0 and windowToClose=nil, validation passes, publish a ctrl msg and idle watermark
+	for toBuffer.IsEmpty() {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatal("expected the buffer to be empty", ctx.Err())
+				t.Fatal("expected the toBuffer not to be empty", ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -353,9 +361,68 @@ func TestReduceDataForward_ReadZero(t *testing.T) {
 	}
 
 	otKeys, _ := otStores[toBufferName].GetAllKeys(ctx)
+	for len(otKeys) == 0 {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have otKeys", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
+		}
+	}
 	otValue, _ := otStores[toBufferName].GetValue(ctx, otKeys[0])
 	otDecode, _ := wmb.DecodeToWMB(otValue)
-	for otDecode.Offset != 0 { // the first ctrl message written to isb. can't use idle because default idle=false
+	for otDecode.Watermark != int64(startTime) { // the first ctrl message written to isb, will use the headWMB to populate wm
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have idle watermark in to1 timeline", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+			otDecode, _ = wmb.DecodeToWMB(otValue)
+		}
+	}
+	assert.Equal(t, wmb.WMB{
+		Idle:      true,
+		Offset:    0, // the first ctrl message written to isb
+		Watermark: 1679961600000,
+	}, otDecode)
+
+	// check the fromBuffer to see if we've acked the message
+	for !fromBuffer.IsEmpty() {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have acked the ctrl message", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+			otDecode, _ = wmb.DecodeToWMB(otValue)
+		}
+	}
+
+	// now check the toBuffer to see if we've published the ctrl msg
+	assert.Equal(t, isb.WMB, toBuffer.GetMessages(1)[0].Kind)
+
+	// TEST: len(read)==0 and windowToClose exists => close the window
+	// publish one data message to start a new window
+	publishMessages(ctx, startTime+1000, messageValue, 1, 1, p, fromBuffer)
+	// publish a new idle wm to close the unclosed window
+	offsets, errs = fromBuffer.Write(ctx, ctrlMessage)
+	assert.Equal(t, make([]error, 1), errs)
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+10000))), offsets[0])
+
+	otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
+	otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+	otDecode, _ = wmb.DecodeToWMB(otValue)
+	// wm should be updated using the same offset because it's still idling
+	// -1 ms because in this use case we publish watermark-1
+	for otDecode.Watermark != int64(startTime+10000-1) {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -370,10 +437,21 @@ func TestReduceDataForward_ReadZero(t *testing.T) {
 	}
 	assert.Equal(t, wmb.WMB{
 		Idle:      true,
-		Offset:    0, // the first ctrl message written to isb
-		Watermark: 60000,
+		Offset:    0, // only update the wm because it's still idling
+		Watermark: 1679961609999,
 	}, otDecode)
-	assert.Equal(t, isb.WMB, buffer.GetMessages(1)[0].Kind)
+	msgs := toBuffer.GetMessages(10)
+	// we didn't read/ack from the toBuffer and also didn't publish any new msgs
+	assert.Equal(t, isb.WMB, msgs[0].Kind)
+	for i := 1; i < len(msgs); i++ {
+		// all the other 9 msgs should be default value
+		assert.Equal(t, isb.Header{
+			MessageInfo: isb.MessageInfo{},
+			Kind:        0,
+			ID:          "",
+			Key:         "",
+		}, msgs[i].Header)
+	}
 
 }
 

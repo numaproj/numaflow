@@ -144,10 +144,10 @@ func (p *publish) validateWatermark(wm wmb.Watermark) (wmb.Watermark, bool) {
 		p.log.Debugw("New watermark is updated for the head watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
 		p.headWatermark = wm
 	} else if wm.Before(time.Time(p.headWatermark)) {
-		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.String("entity", p.entity.GetName()), zap.Int64("head", p.headWatermark.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	} else {
-		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.String("entity", p.entity.GetName()), zap.Int64("head", p.headWatermark.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	}
 	return wm, false
@@ -186,7 +186,7 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset) {
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
-			p.log.Debugw("New idle watermark published", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Int64("offset", seq), zap.Int64("watermark", validWM.UnixMilli()))
+			p.log.Infow("New idle watermark published", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Int64("offset", seq), zap.Int64("watermark", validWM.UnixMilli()))
 			break
 		}
 	}
