@@ -31,6 +31,8 @@ type ContainerTemplate struct {
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty" protobuf:"bytes,3,opt,name=securityContext"`
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty" protobuf:"bytes,4,rep,name=env"`
+	// +optional
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty" protobuf:"bytes,5,rep,name=envFrom"`
 }
 
 // ApplyToContainer updates the Container with the values from the ContainerTemplate
@@ -42,6 +44,9 @@ func (ct *ContainerTemplate) ApplyToContainer(c *corev1.Container) {
 	}
 	if len(ct.Env) > 0 {
 		c.Env = append(c.Env, ct.Env...)
+	}
+	if len(ct.EnvFrom) > 0 {
+		c.EnvFrom = append(c.EnvFrom, ct.EnvFrom...)
 	}
 }
 
