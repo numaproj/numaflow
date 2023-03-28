@@ -40,8 +40,8 @@ type options struct {
 	bufferUsageLimit float64
 	// refreshBufferWriteInfo is used to determine if we refresh buffer write info
 	refreshBufferWriteInfo bool
-	// onFullWritingStrategy is the writing strategy when buffer is full
-	onFullWritingStrategy dfv1.OnFullWritingStrategy
+	// bufferFullWritingStrategy is the writing strategy when buffer is full
+	bufferFullWritingStrategy dfv1.BufferFullWritingStrategy
 }
 
 // Option to apply different options
@@ -145,14 +145,14 @@ func WithRefreshBufferWriteInfo(r bool) Option {
 	return refreshBufferWriteInfo(r)
 }
 
-// WithOnFullWritingStrategy option
-type onFullWritingStrategy dfv1.OnFullWritingStrategy
+// WithBufferFullWritingStrategy option
+type bufferFullWritingStrategy dfv1.BufferFullWritingStrategy
 
-func (s onFullWritingStrategy) apply(o *options) {
-	o.onFullWritingStrategy = dfv1.OnFullWritingStrategy(s)
+func (s bufferFullWritingStrategy) apply(o *options) {
+	o.bufferFullWritingStrategy = dfv1.BufferFullWritingStrategy(s)
 }
 
-// WithOnFullWritingStrategy sets the OnFullWritingStrategy
-func WithOnFullWritingStrategy(s dfv1.OnFullWritingStrategy) Option {
-	return onFullWritingStrategy(s)
+// WithBufferFullWritingStrategy sets the BufferFullWritingStrategy
+func WithBufferFullWritingStrategy(s dfv1.BufferFullWritingStrategy) Option {
+	return bufferFullWritingStrategy(s)
 }

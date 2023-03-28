@@ -67,13 +67,13 @@ var _ isb.BufferWriter = (*BufferWrite)(nil)
 // NewBufferWrite returns a new redis queue writer.
 func NewBufferWrite(ctx context.Context, client *redisclient.RedisClient, name string, group string, opts ...Option) isb.BufferWriter {
 	options := &options{
-		pipelining:             true,
-		infoRefreshInterval:    time.Second,
-		lagDuration:            time.Duration(0),
-		maxLength:              dfv1.DefaultBufferLength,
-		bufferUsageLimit:       dfv1.DefaultBufferUsageLimit,
-		refreshBufferWriteInfo: true,
-		onFullWritingStrategy:  dfv1.RetryUntilSuccess,
+		pipelining:                true,
+		infoRefreshInterval:       time.Second,
+		lagDuration:               time.Duration(0),
+		maxLength:                 dfv1.DefaultBufferLength,
+		bufferUsageLimit:          dfv1.DefaultBufferUsageLimit,
+		refreshBufferWriteInfo:    true,
+		bufferFullWritingStrategy: dfv1.RetryUntilSuccess,
 	}
 
 	for _, o := range opts {
@@ -161,7 +161,7 @@ func (bw *BufferWrite) Write(_ context.Context, messages []isb.Message) ([]isb.O
 		isbIsFull.With(labels).Inc()
 
 		// when buffer is full, we need to decide whether to discard the message or not.
-		switch bw.onFullWritingStrategy {
+		switch bw.bufferFullWritingStrategy {
 		case dfv1.DiscardLatest:
 			// user explicitly wants to discard the message when buffer if full.
 			// return no retryable error as a callback to let caller know that the message is discarded.

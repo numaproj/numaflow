@@ -526,6 +526,16 @@ Description
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.BufferFullWritingStrategy">
+BufferFullWritingStrategy (<code>string</code> alias)
+</p>
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>)
+</p>
+<p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.BufferServiceConfig">
 BufferServiceConfig
 </h3>
@@ -918,7 +928,9 @@ ignored when the “to” vertex is not a reduce vertex.
 </tr>
 <tr>
 <td>
-<code>onFull</code></br> <em> string </em>
+<code>onFull</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.BufferFullWritingStrategy">
+BufferFullWritingStrategy </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -2719,16 +2731,6 @@ Auth information
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.OnFullWritingStrategy">
-OnFullWritingStrategy (<code>string</code> alias)
-</p>
-</h3>
-<p>
-<p>
-OnFullWritingStrategy is an edge-level specification to define the
-writing behaviour when the ToBuffer is full
-</p>
-</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
 PBQStorage
 </h3>

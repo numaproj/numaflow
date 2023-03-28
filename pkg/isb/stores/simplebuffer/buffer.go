@@ -59,8 +59,8 @@ type elem struct {
 func NewInMemoryBuffer(name string, size int64, opts ...Option) *InMemoryBuffer {
 
 	bufferOptions := &options{
-		readTimeOut:           time.Second,                // default read time out
-		onFullWritingStrategy: v1alpha1.RetryUntilSuccess, // default on full writing strategy
+		readTimeOut:               time.Second,                // default read time out
+		bufferFullWritingStrategy: v1alpha1.RetryUntilSuccess, // default buffer full writing strategy
 	}
 
 	for _, o := range opts {
@@ -147,7 +147,7 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			// access buffer via lock
 			b.rwlock.Unlock()
 		} else {
-			switch b.options.onFullWritingStrategy {
+			switch b.options.bufferFullWritingStrategy {
 			case v1alpha1.DiscardLatest:
 				errs[idx] = isb.NoRetryableBufferWriteErr{Name: b.name, Message: "Buffer full!"}
 			default:

@@ -21,6 +21,7 @@ package forward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -490,7 +491,7 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBuffer is
 		for idx, msg := range messages {
 			if err := errs[idx]; err != nil {
 				// ATM there are no user defined errors during write, all are InternalErrors.
-				if _, ok := err.(isb.NoRetryableBufferWriteErr); ok {
+				if ok := errors.As(err, &isb.NoRetryableBufferWriteErr{}); ok {
 					// If toBuffer returns us a NoRetryableBufferWriteErr, we drop the message.
 					dropBytes += float64(len(msg.Payload))
 				} else {

@@ -26,8 +26,8 @@ import (
 type options struct {
 	// readTimeOut is the timeout needed for read timeout
 	readTimeOut time.Duration
-	// onFullWritingStrategy is the writing strategy when buffer is full
-	onFullWritingStrategy dfv1.OnFullWritingStrategy
+	// bufferFullWritingStrategy is the writing strategy when buffer is full
+	bufferFullWritingStrategy dfv1.BufferFullWritingStrategy
 }
 
 type Option func(options *options) error
@@ -40,10 +40,10 @@ func WithReadTimeOut(timeout time.Duration) Option {
 	}
 }
 
-// WithOnFullWritingStrategy sets the writing strategy when buffer is full
-func WithOnFullWritingStrategy(s dfv1.OnFullWritingStrategy) Option {
+// WithBufferFullWritingStrategy sets the writing strategy when buffer is full
+func WithBufferFullWritingStrategy(s dfv1.BufferFullWritingStrategy) Option {
 	return func(o *options) error {
-		o.onFullWritingStrategy = s
+		o.bufferFullWritingStrategy = s
 		return nil
 	}
 }

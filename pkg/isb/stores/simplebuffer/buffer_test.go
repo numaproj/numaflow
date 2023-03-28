@@ -80,9 +80,9 @@ func TestNewSimpleBuffer(t *testing.T) {
 	assert.Equal(t, true, sb.IsFull())
 }
 
-func TestNewSimpleBuffer_DiscardOnFull(t *testing.T) {
+func TestNewSimpleBuffer_BufferFullWritingStrategyIsDiscard(t *testing.T) {
 	count := int64(3)
-	sb := NewInMemoryBuffer("test", 2, WithOnFullWritingStrategy(v1alpha1.DiscardLatest))
+	sb := NewInMemoryBuffer("test", 2, WithBufferFullWritingStrategy(v1alpha1.DiscardLatest))
 	ctx := context.Background()
 	assert.NotEmpty(t, sb.String())
 	assert.Equal(t, sb.IsEmpty(), true)

@@ -35,7 +35,7 @@ type Edge struct {
 	// if not provided, the default value is set to "retryUntilSuccess"
 	// +kubebuilder:validation:Enum=retryUntilSuccess;discardLatest
 	// +optional
-	OnFull *string `json:"onFull,omitempty" protobuf:"bytes,6,opt,name=onFull"`
+	OnFull *BufferFullWritingStrategy `json:"onFull,omitempty" protobuf:"bytes,6,opt,name=onFull"`
 }
 
 type ForwardConditions struct {
@@ -53,15 +53,13 @@ type EdgeLimits struct {
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,2,opt,name=bufferUsageLimit"`
 }
 
-func (e Edge) OnFullWritingStrategy() OnFullWritingStrategy {
+func (e Edge) BufferFullWritingStrategy() BufferFullWritingStrategy {
 	if e.OnFull == nil {
 		return RetryUntilSuccess
 	}
 	switch *e.OnFull {
-	case "retryUntilSuccess":
-		return RetryUntilSuccess
-	case "discardLatest":
-		return DiscardLatest
+	case RetryUntilSuccess, DiscardLatest:
+		return *e.OnFull
 	default:
 		return RetryUntilSuccess
 	}

@@ -24,8 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-// OnFullWritingStrategy is an edge-level specification to define the writing behaviour when the ToBuffer is full
-type OnFullWritingStrategy string
+type BufferFullWritingStrategy string
 
 const (
 	Project = "numaflow"
@@ -125,9 +124,8 @@ const (
 	DefaultBufferUsageLimit = 0.8
 	DefaultReadBatchSize    = 500
 
-	// Edge-level specification to define the writing behaviour when the ToBuffer is full
-	RetryUntilSuccess OnFullWritingStrategy = "retryUntilSuccess"
-	DiscardLatest     OnFullWritingStrategy = "discardLatest"
+	RetryUntilSuccess BufferFullWritingStrategy = "retryUntilSuccess"
+	DiscardLatest     BufferFullWritingStrategy = "discardLatest"
 
 	// Auto scaling
 	DefaultLookbackSeconds          = 180 // Default lookback seconds for calculating avg rate and pending

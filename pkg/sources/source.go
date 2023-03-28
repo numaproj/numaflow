@@ -70,7 +70,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	case dfv1.ISBSvcTypeRedis:
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []redisisb.Option{
-				redisisb.WithOnFullWritingStrategy(e.OnFullWritingStrategy()),
+				redisisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 			}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
@@ -102,7 +102,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{
 				jetstreamisb.WithUsingWriteInfoAsRate(true),
-				jetstreamisb.WithOnFullWritingStrategy(e.OnFullWritingStrategy()),
+				jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 			}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))

@@ -230,7 +230,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2), WithOnFullWritingStrategy(dfv1.DiscardLatest))
+	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2), WithBufferFullWritingStrategy(dfv1.DiscardLatest))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
 	timeout := time.After(10 * time.Second)

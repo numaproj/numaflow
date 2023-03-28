@@ -410,7 +410,7 @@ func (in *Edge) DeepCopyInto(out *Edge) {
 	}
 	if in.OnFull != nil {
 		in, out := &in.OnFull, &out.OnFull
-		*out = new(string)
+		*out = new(BufferFullWritingStrategy)
 		**out = **in
 	}
 	return
