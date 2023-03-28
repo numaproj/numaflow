@@ -90,12 +90,14 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 	return p
 }
 
+// GetHeadWM gets the p.headWatermark field.
 func (p *publish) GetHeadWM() wmb.Watermark {
 	p.headWMLock.RLock()
 	defer p.headWMLock.RUnlock()
 	return p.headWatermark
 }
 
+// SetHeadWM sets the p.headWatermark field useing the given wm.
 func (p *publish) SetHeadWM(wm wmb.Watermark) {
 	p.headWMLock.Lock()
 	defer p.headWMLock.Unlock()
