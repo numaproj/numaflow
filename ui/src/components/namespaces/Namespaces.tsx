@@ -15,7 +15,7 @@ import {
 } from "@mui/material";
 import ClearIcon from '@mui/icons-material/Clear'
 import SearchIcon from '@mui/icons-material/Search';
-import { useNamespaceStatusFetch } from "../../utils/fetchWrappers/namespaceStatusFetch";
+import { useSystemInfoFetch } from "../../utils/fetchWrappers/systemInfoFetch";
 import {notifyError} from "../../utils/error";
 
 export function Namespaces() {
@@ -23,21 +23,21 @@ export function Namespaces() {
     const [value, setValue] = useState("");
     const [disableSearch, setDisableSearch] = useState(false);
     const [namespace, setNamespace] = useState("");
-    const { namespaceStatus, error: namespaceStatusError } = useNamespaceStatusFetch();
+    const { systemInfo, error: systemInfoError } = useSystemInfoFetch();
 
     useEffect(() => {
-      if (namespaceStatusError) {
+      if (systemInfoError) {
         notifyError([{
-          error: "Failed to fetch the namespace scope installation status",
+          error: "Failed to fetch the namespace scope installation info",
           options: {toastId: "ns-scope", autoClose: false}
         }]);
       }
-    }, [namespaceStatusError])
+    }, [systemInfoError])
 
     useEffect(() => {
-      if (namespaceStatus && namespaceStatus?.namespaced) {
-        setValue(namespaceStatus?.managedNamespace);
-        setNamespace(namespaceStatus?.managedNamespace);
+      if (systemInfo && systemInfo?.namespaced) {
+        setValue(systemInfo?.managedNamespace);
+        setNamespace(systemInfo?.managedNamespace);
         setDisableSearch(true);
       } else {
         setDisableSearch(false);
@@ -54,7 +54,7 @@ export function Namespaces() {
         ns_arr.pop();
         setnsArr(ns_arr);
       }
-    }, [namespaceStatus])
+    }, [systemInfo])
 
     const handle = (namespaceVal) => {
         localStorage.setItem("curr_namespace", namespaceVal);

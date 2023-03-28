@@ -1,4 +1,4 @@
-export interface NamespaceStatus {
+export interface SystemInfo {
   managedNamespace: string
   namespaced: boolean
 }

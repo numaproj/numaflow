@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { NamespaceStatus } from "../models/namespace";
+import { SystemInfo } from "../models/systemInfo";
 import { useFetch } from "./fetch";
 
-export const useNamespaceStatusFetch = () => {
-  const [namespaceStatus, setNamespaceStatus] = useState<NamespaceStatus | undefined>(undefined);
+export const useSystemInfoFetch = () => {
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(true);
 
   const {
@@ -11,7 +11,7 @@ export const useNamespaceStatusFetch = () => {
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/namespaces/status`
+    `/api/v1/sysinfo`
   );
 
   useEffect(() => {
@@ -24,11 +24,11 @@ export const useNamespaceStatusFetch = () => {
       return;
     }
     if (data) {
-      setNamespaceStatus(data);
+      setSystemInfo(data);
       setLoading(false);
       return;
     }
   }, [data, fetchLoading]);
 
-  return { namespaceStatus, error, loading };
+  return { systemInfo, error, loading };
 };
