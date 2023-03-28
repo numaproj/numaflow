@@ -247,8 +247,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	assert.True(t, to1.IsEmpty())
 
 	stopped := f.Start()
-	fmt.Println("IS EMPTY", fromStep.IsEmpty())
-	fmt.Println("IS EMPTY", fromStep.IsEmpty())
 	// first batch: read message size is 1 with one ctrl message
 	// the ctrl message should be acked
 	// no message published to the next vertex
@@ -256,11 +254,8 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		fmt.Println("go func")
-		fmt.Println("IS EMPTY", fromStep.IsEmpty())
 		defer wg.Done()
 		for fromStep.IsEmpty() {
-			fmt.Println("loop in")
 			select {
 			case <-ctx.Done():
 				if ctx.Err() == context.DeadlineExceeded {
@@ -268,7 +263,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 				}
 			default:
 				time.Sleep(1 * time.Millisecond)
-				fmt.Println("loop sleep")
 			}
 		}
 	}()
@@ -278,7 +272,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	if err != nil {
 		t.Fatal("expected the buffer not to be empty", err)
 	}
-	t.Log("read new messages", fromStep.IsEmpty())
 	for !fromStep.IsEmpty() {
 		select {
 		case <-ctx.Done():
