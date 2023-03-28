@@ -52,7 +52,7 @@ type Option interface {
 // pipelining option
 type pipelining bool
 
-func (p pipelining) apply(opts *Options) {
+func (p pipelining) Apply(opts *Options) {
 	opts.Pipelining = bool(p)
 }
 
@@ -100,7 +100,7 @@ func WithReadTimeOut(t time.Duration) Option {
 // checkBackLog option
 type checkBackLog bool
 
-func (b checkBackLog) apply(o *Options) {
+func (b checkBackLog) Apply(o *Options) {
 	o.CheckBackLog = bool(b)
 }
 
@@ -148,8 +148,8 @@ func WithRefreshBufferWriteInfo(r bool) Option {
 // WithBufferFullWritingStrategy option
 type bufferFullWritingStrategy dfv1.BufferFullWritingStrategy
 
-func (s bufferFullWritingStrategy) apply(o *options) {
-	o.bufferFullWritingStrategy = dfv1.BufferFullWritingStrategy(s)
+func (s bufferFullWritingStrategy) Apply(o *Options) {
+	o.BufferFullWritingStrategy = dfv1.BufferFullWritingStrategy(s)
 }
 
 // WithBufferFullWritingStrategy sets the BufferFullWritingStrategy
