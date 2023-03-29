@@ -21,7 +21,6 @@ import "github.com/gin-gonic/gin"
 type Handler interface {
 	ListPipelines(c *gin.Context)
 	GetPipeline(c *gin.Context)
-	ListNamespaces(c *gin.Context)
 	ListInterStepBufferServices(c *gin.Context)
 	GetInterStepBufferService(c *gin.Context)
 	ListVertices(c *gin.Context)
@@ -34,4 +33,5 @@ type Handler interface {
 	ListPipelineEdges(c *gin.Context)
 	GetPipelineEdge(c *gin.Context)
 	GetPipelineWatermarks(c *gin.Context)
+	GetPipelineStatus(c *gin.Context)
 }
