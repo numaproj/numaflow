@@ -42,7 +42,7 @@ func Start(insecure bool, port int, namespaced bool, managedNamespace string) {
 	router.Use(gin.Logger())
 	router.RedirectTrailingSlash = true
 	router.Use(static.Serve("/", static.LocalFile("./ui/build", true)))
-	routes.Routes(router)
+	routes.Routes(router, routes.SystemInfo{ManagedNamespace: managedNamespace, Namespaced: namespaced})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
