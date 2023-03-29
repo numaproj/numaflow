@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
@@ -303,6 +304,45 @@ func TestProcessAndForward_Forward(t *testing.T) {
 					assert.Equal(t, ot, value.wmExpected[bufferName])
 				}
 			}
+		})
+	}
+}
+
+// TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
+func TestWriteToBuffer(t *testing.T) {
+	tests := []struct {
+		name       string
+		buffer     *simplebuffer.InMemoryBuffer
+		throwError bool
+	}{
+		{
+			name:   "test-discard-latest",
+			buffer: simplebuffer.NewInMemoryBuffer("buffer1", 10, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.DiscardLatest)),
+			// should not throw any error as we drop messages and finish writing before context is cancelled
+			throwError: false,
+		},
+		{
+			name:   "test-retry-until-success",
+			buffer: simplebuffer.NewInMemoryBuffer("buffer2", 10, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess)),
+			// should throw context closed error as we keep retrying writing until context is cancelled
+			throwError: true,
+		},
+	}
+	for _, value := range tests {
+		t.Run(value.name, func(t *testing.T) {
+			testStartTime := time.Unix(1636470000, 0).UTC()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			var pbqManager *pbq.Manager
+			pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores())
+			toBuffer := map[string]isb.BufferWriter{
+				"buffer": value.buffer,
+			}
+			pf, _ := createProcessAndForwardAndOTStore(ctx, value.name, pbqManager, toBuffer)
+			var err error
+			writeMessages := testutils.BuildTestWriteMessages(int64(15), testStartTime)
+			_, err = pf.writeToBuffer(ctx, "buffer", writeMessages)
+			assert.Equal(t, value.throwError, err != nil)
 		})
 	}
 }
