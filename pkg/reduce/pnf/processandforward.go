@@ -222,14 +222,12 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 				if errors.As(writeErrs[i], &isb.NoRetryableBufferWriteErr{}) {
 					// If toBuffer returns us a NoRetryableBufferWriteErr, we drop the message.
 					dropBytes += float64(len(message.Payload))
-					p.log.Debugw("Dropped message", zap.String("bufferID", bufferID), zap.Any("message", message), zap.Error(writeErrs[i]))
 				} else {
 					failedMessages = append(failedMessages, message)
 				}
 			} else {
 				writeCount++
 				writeBytes += float64(len(message.Payload))
-				p.log.Debugw("Forwarded message", zap.String("bufferID", bufferID), zap.Any("message", message))
 			}
 		}
 		// retry only the failed messages
