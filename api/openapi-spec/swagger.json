@@ -18844,7 +18844,7 @@
         }
       }
     },
-    "io.numaproj.numaflow.v1alpha1.RedisStreamSource": {
+    "io.numaproj.numaflow.v1alpha1.RedisStreamsSource": {
       "type": "object",
       "required": [
         "stream",
@@ -18991,7 +18991,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
         },
         "redisStreams": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisStreamSource"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisStreamsSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"

@@ -16,7 +16,7 @@ limitations under the License.
 
 package v1alpha1
 
-type RedisStreamSource struct {
+type RedisStreamsSource struct {
 	// RedisConfig contains connectivity info
 	RedisConfig   `json:",inline" protobuf:"bytes,1,opt,name=redisConfig"`
 	Stream        string `json:"stream" protobuf:"bytes,2,opt,name=stream"`

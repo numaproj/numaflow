@@ -203,7 +203,7 @@ func New(
 }
 
 // create a RedisClient from the RedisStreamsSource spec
-func newRedisClient(sourceSpec *dfv1.RedisStreamSource) (*redisclient.RedisClient, error) {
+func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClient, error) {
 	password, _ := sharedutil.GetSecretFromVolume(sourceSpec.Password)
 	opts := &redis.UniversalOptions{
 		Username:     sourceSpec.User,
@@ -228,7 +228,7 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamSource) (*redisclient.RedisClien
 	return redisclient.NewRedisClient(opts), nil
 }
 
-func (rsSource *redisStreamsSource) createConsumerGroup(ctx context.Context, sourceSpec *dfv1.RedisStreamSource) error {
+func (rsSource *redisStreamsSource) createConsumerGroup(ctx context.Context, sourceSpec *dfv1.RedisStreamsSource) error {
 	// user can configure to read stream either from the beginning or from the most recent messages
 	readFrom := redisclient.ReadFromLatest
 	if sourceSpec.ReadFromBeginning {

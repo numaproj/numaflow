@@ -905,7 +905,7 @@ message RedisSettings {
   optional string sentinel = 4;
 }
 
-message RedisStreamSource {
+message RedisStreamsSource {
   // RedisConfig contains connectivity info
   optional RedisConfig redisConfig = 1;
 
@@ -1003,7 +1003,7 @@ message Source {
   optional NatsSource nats = 4;
 
   // +optional
-  optional RedisStreamSource redisStreams = 5;
+  optional RedisStreamsSource redisStreams = 5;
 
   // +optional
   optional UDTransformer transformer = 6;
