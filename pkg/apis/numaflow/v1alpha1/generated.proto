@@ -319,6 +319,30 @@ message Function {
   map<string, string> kwargs = 3;
 }
 
+// GSSAPI represents a SASL GSSAPI config
+message GSSAPI {
+  optional string serviceName = 1;
+
+  optional string realm = 2;
+
+  optional string username = 3;
+
+  // valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH
+  optional string authType = 4;
+
+  // PasswordSecret refers to the secret that contains the password
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector passwordSecret = 5;
+
+  // KeytabSecret refers to the secret that contains the keytab
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector keytabSecret = 6;
+
+  // KerberosConfigSecret refers to the secret that contains the kerberos config
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector kerberosConfigSecret = 7;
+}
+
 message GeneratorSource {
   // +kubebuilder:default=5
   // +optional
@@ -632,6 +656,11 @@ message KafkaSource {
 
   // +optional
   optional string config = 5;
+
+  // SASL user to configure SASL connection for kafka broker
+  // SASL.enable=true default for SASL.
+  // +optional
+  optional SASL sasl = 6;
 }
 
 message Lifecycle {
@@ -918,6 +947,29 @@ message RedisStreamsSource {
 
   // +optional
   optional TLS tls = 5;
+}
+
+message SASL {
+  // SASL mechanism to use
+  optional string mechanism = 1;
+
+  // GSSAPI contains the kerberos config
+  // +optional
+  optional GSSAPI gssapi = 2;
+
+  // SASLPlain contains the sasl plain config
+  // +optional
+  optional SASLPlain plain = 3;
+}
+
+message SASLPlain {
+  optional string user = 1;
+
+  // PasswordSecret refers to the secret that contains the password
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector passwordSecret = 2;
+
+  optional bool handshake = 3;
 }
 
 // Scale defines the parameters for autoscaling.

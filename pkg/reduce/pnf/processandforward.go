@@ -67,7 +67,8 @@ func NewProcessAndForward(ctx context.Context,
 	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
 	toBuffers map[string]isb.BufferWriter,
-	whereToDecider forward.ToWhichStepDecider, pw map[string]publish.Publisher) *ProcessAndForward {
+	whereToDecider forward.ToWhichStepDecider,
+	pw map[string]publish.Publisher) *ProcessAndForward {
 	return &ProcessAndForward{
 		vertexName:       vertexName,
 		pipelineName:     pipelineName,
@@ -195,7 +196,12 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 // writeToBuffer writes to the ISBs.
 // TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
 func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
-	var totalBytes float64
+	var (
+		writeCount int
+		writeBytes float64
+		dropBytes  float64
+	)
+
 	var ISBWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
@@ -213,10 +219,15 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		offsets, writeErrs = p.toBuffers[bufferID].Write(ctx, writeMessages)
 		for i, message := range writeMessages {
 			if writeErrs[i] != nil {
-				failedMessages = append(failedMessages, message)
+				if errors.As(writeErrs[i], &isb.NoRetryableBufferWriteErr{}) {
+					// If toBuffer returns us a NoRetryableBufferWriteErr, we drop the message.
+					dropBytes += float64(len(message.Payload))
+				} else {
+					failedMessages = append(failedMessages, message)
+				}
 			} else {
-				totalBytes += float64(len(message.Payload))
-				p.log.Debugw("Forwarded message", zap.String("bufferID", bufferID), zap.Any("message", message))
+				writeCount++
+				writeBytes += float64(len(message.Payload))
 			}
 		}
 		// retry only the failed messages
@@ -233,17 +244,29 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		return true, nil
 	})
 
+	dropMessagesCount.With(map[string]string{
+		metrics.LabelVertex:             p.vertexName,
+		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+		"buffer":                        bufferID}).Add(float64(len(resultMessages) - writeCount))
+
+	dropBytesCount.With(map[string]string{
+		metrics.LabelVertex:             p.vertexName,
+		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+		"buffer":                        bufferID}).Add(dropBytes)
+
 	writeMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"buffer":                        bufferID}).Add(float64(len(resultMessages)))
+		"buffer":                        bufferID}).Add(float64(writeCount))
 
 	writeBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"buffer":                        bufferID}).Add(totalBytes)
+		"buffer":                        bufferID}).Add(writeBytes)
 	return offsets, ctxClosedErr
 }
 

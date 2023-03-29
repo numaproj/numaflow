@@ -21,7 +21,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -190,9 +189,8 @@ func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
 	}()
 
 	// In this test, we send a message with event time being now, apply event time extractor and verify from log that the message event time gets updated.
-	timeNow := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	testMsgOne := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-01-18T21:54:42.123Z"}]}`
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)).WithHeader("X-Numaflow-Event-Time", timeNow))
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)))
 	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1))
 
 	// Verify watermark is generated based on the new event time.
@@ -203,22 +201,36 @@ func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// TODO - Figure out a better way to wait for watermark to propagate.
-	time.Sleep(time.Second * 2)
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)).WithHeader("X-Numaflow-Event-Time", timeNow))
-	time.Sleep(time.Second * 2)
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgThree)).WithHeader("X-Numaflow-Event-Time", timeNow))
-	time.Sleep(time.Second * 2)
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgFour)).WithHeader("X-Numaflow-Event-Time", timeNow))
-	time.Sleep(time.Second * 2)
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgFive)).WithHeader("X-Numaflow-Event-Time", timeNow))
-	time.Sleep(time.Second * 2)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)))
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgThree)))
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgFour)))
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgFive)))
 
-	wm, err := client.GetPipelineWatermarks(ctx, pipelineName)
-	assert.NoError(s.T(), err)
-	edgeWM := wm[0].Watermarks[0]
-	// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark matches one of the assigned event times.
-	assert.True(s.T(), edgeWM == time.Date(2021, 4, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 3, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 2, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli())
+wmLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				s.T().Log("test timed out")
+				assert.Fail(s.T(), "timed out")
+				break wmLoop
+			}
+		default:
+			wm, err := client.GetPipelineWatermarks(ctx, pipelineName)
+			edgeWM := wm[0].Watermarks[0]
+			if wm[0].Watermarks[0] != -1 {
+				assert.NoError(s.T(), err)
+				if err != nil {
+					assert.Fail(s.T(), err.Error())
+				}
+				// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark matches one of the assigned event times.
+				assert.True(s.T(), edgeWM == time.Date(2021, 5, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 4, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 3, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 2, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() || edgeWM == time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli())
+				break wmLoop
+			}
+			w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgFive)))
+			time.Sleep(time.Second)
+		}
+	}
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {

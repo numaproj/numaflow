@@ -24,11 +24,20 @@ import (
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
 )
 
-func Routes(r *gin.Engine) {
+type SystemInfo struct {
+	ManagedNamespace string `json:"managedNamespace"`
+	Namespaced       bool   `json:"namespaced"`
+}
+
+func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	r.GET("/healthz", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
-	v1Routes(r.Group("/api/v1"))
+	rGroup := r.Group("/api/v1")
+	v1Routes(rGroup)
+	rGroup.GET("/sysinfo", func(c *gin.Context) {
+		c.JSON(http.StatusOK, sysinfo)
+	})
 }
 
 func v1Routes(r gin.IRouter) {

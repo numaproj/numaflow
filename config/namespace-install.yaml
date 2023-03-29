@@ -6410,6 +6410,83 @@ spec:
                               type: string
                             consumerGroup:
                               type: string
+                            sasl:
+                              properties:
+                                gssapi:
+                                  properties:
+                                    authType:
+                                      type: string
+                                    kerberosConfigSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    keytabSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    passwordSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    realm:
+                                      type: string
+                                    serviceName:
+                                      type: string
+                                    username:
+                                      type: string
+                                  required:
+                                  - authType
+                                  - realm
+                                  - serviceName
+                                  - username
+                                  type: object
+                                mechanism:
+                                  type: string
+                                plain:
+                                  properties:
+                                    handshake:
+                                      type: boolean
+                                    passwordSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    user:
+                                      type: string
+                                  required:
+                                  - handshake
+                                  - user
+                                  type: object
+                              required:
+                              - mechanism
+                              type: object
                             tls:
                               properties:
                                 caCertSecret:
@@ -10334,6 +10411,83 @@ spec:
                         type: string
                       consumerGroup:
                         type: string
+                      sasl:
+                        properties:
+                          gssapi:
+                            properties:
+                              authType:
+                                type: string
+                              kerberosConfigSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                              keytabSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                              passwordSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                              realm:
+                                type: string
+                              serviceName:
+                                type: string
+                              username:
+                                type: string
+                            required:
+                            - authType
+                            - realm
+                            - serviceName
+                            - username
+                            type: object
+                          mechanism:
+                            type: string
+                          plain:
+                            properties:
+                              handshake:
+                                type: boolean
+                              passwordSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                              user:
+                                type: string
+                            required:
+                            - handshake
+                            - user
+                            type: object
+                        required:
+                        - mechanism
+                        type: object
                       tls:
                         properties:
                           caCertSecret:

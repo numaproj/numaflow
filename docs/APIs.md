@@ -1113,6 +1113,105 @@ Description
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.GSSAPI">
+GSSAPI
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL">SASL</a>)
+</p>
+<p>
+<p>
+GSSAPI represents a SASL GSSAPI config
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>serviceName</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>realm</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>username</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>authType</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.KRB5AuthType"> KRB5AuthType </a>
+</em>
+</td>
+<td>
+<p>
+valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>passwordSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+PasswordSecret refers to the secret that contains the password
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>keytabSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+KeytabSecret refers to the secret that contains the keytab
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>kerberosConfigSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+KerberosConfigSecret refers to the secret that contains the kerberos
+config
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GeneratorSource">
 GeneratorSource
 </h3>
@@ -2251,6 +2350,19 @@ Numaflow defaults to 20
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.KRB5AuthType">
+KRB5AuthType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.GSSAPI">GSSAPI</a>)
+</p>
+<p>
+<p>
+KRB5AuthType describes the kerberos auth type
+</p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.KafkaSink">
 KafkaSink
 </h3>
@@ -2370,6 +2482,19 @@ default for TLS.
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>sasl</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL"> SASL </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASL user to configure SASL connection for kafka broker SASL.enable=true
+default for SASL.
+</p>
 </td>
 </tr>
 </tbody>
@@ -3546,6 +3671,127 @@ TLS </a> </em>
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SASL">
+SASL
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>mechanism</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLType"> SASLType </a> </em>
+</td>
+<td>
+<p>
+SASL mechanism to use
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>gssapi</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.GSSAPI"> GSSAPI </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+GSSAPI contains the kerberos config
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>plain</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASLPlain contains the sasl plain config
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SASLPlain">
+SASLPlain
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL">SASL</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>user</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>passwordSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+PasswordSecret refers to the secret that contains the password
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>handshake</code></br> <em> bool </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SASLType">
+SASLType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL">SASL</a>)
+</p>
+<p>
+<p>
+SASLType describes the SASL type
+</p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Scale">
 Scale
 </h3>
