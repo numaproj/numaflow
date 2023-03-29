@@ -40,10 +40,9 @@ import (
 )
 
 type Scaler struct {
-	client client.Client
-	// Key is the vertex namespaced name, Value is the corresponding *list.Element in the vertexList
+	client    client.Client
 	vertexMap map[string]*list.Element
-	// List of the vertex namespaced name, format is "namespace/vertex-name"
+	// List of the vertex namespaced name, format is "namespace/name"
 	vertexList *list.List
 	lock       *sync.RWMutex
 	options    *options
