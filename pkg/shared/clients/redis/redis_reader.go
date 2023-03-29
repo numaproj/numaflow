@@ -105,7 +105,7 @@ func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMes
 
 func (br *RedisStreamsRead) processReadError(xstreams []redis.XStream, messages []*isb.ReadMessage, err error) ([]*isb.ReadMessage, error) {
 	if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
-		br.Log.Debugw("checkBacklog false, redis.Nil", zap.Error(err))
+		br.Log.Debugf("redis.Nil/context cancelled, checkBackLog=%v, err=%v", br.Options.CheckBackLog, err)
 		return messages, nil
 	}
 
@@ -114,7 +114,7 @@ func (br *RedisStreamsRead) processReadError(xstreams []redis.XStream, messages 
 	}
 	// we should try to do our best effort to convert our data here, if there is data available in xstream from the previous loop
 	messages, errMsg := br.XStreamToMessages(xstreams, messages, map[string]string{"buffer": br.GetName()})
-	br.Log.Errorw("checkBacklog false, convertXStreamToMessages failed", zap.Error(errMsg))
+	br.Log.Errorf("convertXStreamToMessages failed, checkBackLog=%v, err=%s", br.Options.CheckBackLog, errMsg)
 	return messages, fmt.Errorf("XReadGroup failed, %w", err)
 }
 

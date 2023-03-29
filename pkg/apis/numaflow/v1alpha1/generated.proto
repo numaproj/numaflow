@@ -907,7 +907,7 @@ message RedisSettings {
 
 message RedisStreamsSource {
   // RedisConfig contains connectivity info
-  optional RedisConfig redisConfig = 6;
+  optional RedisConfig redisConfig = 1;
 
   optional string stream = 2;
 
