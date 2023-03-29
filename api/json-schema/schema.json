@@ -18858,7 +18858,7 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.RedisStreamsSource": {
+    "io.numaproj.numaflow.v1alpha1.RedisStreamSource": {
       "properties": {
         "consumerGroup": {
           "type": "string"
@@ -19004,7 +19004,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
         },
         "redisStreams": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisStreamsSource"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisStreamSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"

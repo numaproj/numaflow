@@ -3315,7 +3315,7 @@ RedisConfig
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">BufferServiceConfig</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamSource">RedisStreamSource</a>)
 </p>
 <p>
 </p>
@@ -3474,8 +3474,8 @@ config
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.RedisStreamsSource">
-RedisStreamsSource
+<h3 id="numaflow.numaproj.io/v1alpha1.RedisStreamSource">
+RedisStreamSource
 </h3>
 <p>
 (<em>Appears on:</em>
@@ -3862,8 +3862,8 @@ GeneratorSource </a> </em>
 <tr>
 <td>
 <code>redisStreams</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">
-RedisStreamsSource </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamSource">
+RedisStreamSource </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -3930,7 +3930,7 @@ TLS
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamSource">RedisStreamSource</a>)
 </p>
 <p>
 </p>
