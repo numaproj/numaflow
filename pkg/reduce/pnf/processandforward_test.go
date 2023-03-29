@@ -57,12 +57,6 @@ const (
 	publisherOTKeyspace = testPipelineName + "_" + testProcessorEntity + "_%s_" + "OT"
 )
 
-var (
-	testStartTime       = time.Unix(1636470000, 0).UTC()
-	testSourceWatermark = time.Unix(1636460000, 0).UTC()
-	testWMBWatermark    = time.Unix(1636470000, 0).UTC()
-)
-
 type myForwardTest struct {
 	buffers []string
 }
@@ -177,6 +171,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 	ctx := context.Background()
 
 	var pbqManager *pbq.Manager
+
 	pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores())
 
 	test1Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
@@ -335,6 +330,7 @@ func TestWriteToBuffer(t *testing.T) {
 	}
 	for _, value := range tests {
 		t.Run(value.name, func(t *testing.T) {
+			testStartTime := time.Unix(1636470000, 0).UTC()
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			var pbqManager *pbq.Manager
