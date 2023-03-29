@@ -457,6 +457,50 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		}, msgs[i].Header)
 	}
 
+	// publish a new idle wm to that is larger than the windowToClose.End()
+	// the len(read) == 0 now, so the window should be closed
+	// the active watermark would be int64(startTime+1000), which is older then int64(startTime+2000-1)
+	// so the PublishWatermark will be skipped, but the dataMessage should be published
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+6000))), offsets[0])
+
+	msgs = toBuffer.GetMessages(10)
+	// we didn't read/ack from the toBuffer, so the ctrl should still exist
+	assert.Equal(t, isb.WMB, msgs[0].Kind)
+	// the second message should be the data message from the closed window above
+	// in the test ApplyUDF above we've set the final message to have key="result"
+	for msgs[1].Key != "result" {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have data message in buffer", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			msgs = toBuffer.GetMessages(10)
+		}
+	}
+	assert.Equal(t, isb.Data, msgs[1].Kind)
+	// in the test ApplyUDF above we've set the final message to have ID="msgID"
+	assert.Equal(t, "msgID", msgs[1].ID)
+	// in the test ApplyUDF above we've set the final message to have eventTime = partitionID.End
+	assert.Equal(t, int64(1679961605000), msgs[1].EventTime.UnixMilli())
+	var result PayloadForTest
+	err = json.Unmarshal(msgs[1].Body.Payload, &result)
+	assert.NoError(t, err)
+	assert.Equal(t, "count", result.Key)
+	// because we are using count udf here, and we only send one data message
+	// so the value should be 1
+	assert.Equal(t, 1, result.Value)
+	for i := 2; i < len(msgs); i++ {
+		// all the other 8 msgs should be default value
+		assert.Equal(t, isb.Header{
+			MessageInfo: isb.MessageInfo{},
+			Kind:        0,
+			ID:          "",
+			Key:         "",
+		}, msgs[i].Header)
+	}
+
 }
 
 // Count operation with 1 min window
