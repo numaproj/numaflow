@@ -25,8 +25,8 @@ import (
 )
 
 type SystemInfo struct {
-	ManagedNamespace *string `json:"managedNamespace"`
-	Namespaced       *bool   `json:"namespaced"`
+	ManagedNamespace string `json:"managedNamespace"`
+	Namespaced       bool   `json:"namespaced"`
 }
 
 func Routes(r *gin.Engine, sysinfo SystemInfo) {
@@ -36,8 +36,7 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	rGroup := r.Group("/api/v1")
 	v1Routes(rGroup)
 	rGroup.GET("/sysinfo", func(c *gin.Context) {
-		resp := sysinfo
-		c.JSON(http.StatusOK, resp)
+		c.JSON(http.StatusOK, sysinfo)
 	})
 }
 

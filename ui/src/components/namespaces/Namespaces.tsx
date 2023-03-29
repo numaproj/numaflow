@@ -39,7 +39,7 @@ export function Namespaces() {
         setValue(systemInfo?.managedNamespace);
         setNamespace(systemInfo?.managedNamespace);
         setDisableSearch(true);
-      } else {
+      } else if (systemInfo && !systemInfo?.namespaced){
         setDisableSearch(false);
         // set namespace value in search box
         let curr_ns = localStorage.getItem("curr_namespace");

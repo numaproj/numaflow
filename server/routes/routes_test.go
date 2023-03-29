@@ -33,8 +33,8 @@ func TestRoutes(t *testing.T) {
 	managedNamespace := "numaflow-system"
 	namespaced := false
 	sysInfo := SystemInfo{
-		ManagedNamespace: &managedNamespace,
-		Namespaced:       &namespaced,
+		ManagedNamespace: managedNamespace,
+		Namespaced:       namespaced,
 	}
 	Routes(router, sysInfo)
 	t.Run("/404", func(t *testing.T) {
