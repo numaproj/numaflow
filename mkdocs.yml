@@ -86,6 +86,7 @@ nav:
       - user-guide/sidecar-containers.md
       - user-guide/pipeline-customization.md
       - user-guide/watermarks.md
+      - user-guide/kustomize/kustomize.md
       - APIs.md
   - Operator Manual:
       - Releases ⧉: "operations/releases.md"

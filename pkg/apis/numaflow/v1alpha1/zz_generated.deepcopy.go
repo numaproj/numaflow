@@ -345,6 +345,13 @@ func (in *ContainerTemplate) DeepCopyInto(out *ContainerTemplate) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.EnvFrom != nil {
+		in, out := &in.EnvFrom, &out.EnvFrom
+		*out = make([]v1.EnvFromSource, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	return
 }
 
@@ -406,6 +413,11 @@ func (in *Edge) DeepCopyInto(out *Edge) {
 	if in.Parallelism != nil {
 		in, out := &in.Parallelism, &out.Parallelism
 		*out = new(int32)
+		**out = **in
+	}
+	if in.OnFull != nil {
+		in, out := &in.OnFull, &out.OnFull
+		*out = new(BufferFullWritingStrategy)
 		**out = **in
 	}
 	return

@@ -26,10 +26,16 @@ type Edge struct {
 	// +optional
 	Limits *EdgeLimits `json:"limits,omitempty" protobuf:"bytes,4,opt,name=limits"`
 	// Parallelism is only effective when the "to" vertex is a reduce vertex,
-	// if it's provided, the default value is set to "1".
+	// if it's not provided, the default value is set to "1".
 	// Parallelism is ignored when the "to" vertex is not a reduce vertex.
 	// +optional
 	Parallelism *int32 `json:"parallelism" protobuf:"bytes,5,opt,name=parallelism"`
+	// OnFull specifies the behaviour for the write actions when the inter step buffer is full.
+	// There are currently two options, retryUntilSuccess and discardLatest.
+	// if not provided, the default value is set to "retryUntilSuccess"
+	// +kubebuilder:validation:Enum=retryUntilSuccess;discardLatest
+	// +optional
+	OnFull *BufferFullWritingStrategy `json:"onFull,omitempty" protobuf:"bytes,6,opt,name=onFull"`
 }
 
 type ForwardConditions struct {
@@ -46,3 +52,22 @@ type EdgeLimits struct {
 	// +optional
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,2,opt,name=bufferUsageLimit"`
 }
+
+func (e Edge) BufferFullWritingStrategy() BufferFullWritingStrategy {
+	if e.OnFull == nil {
+		return RetryUntilSuccess
+	}
+	switch *e.OnFull {
+	case RetryUntilSuccess, DiscardLatest:
+		return *e.OnFull
+	default:
+		return RetryUntilSuccess
+	}
+}
+
+type BufferFullWritingStrategy string
+
+const (
+	RetryUntilSuccess BufferFullWritingStrategy = "retryUntilSuccess"
+	DiscardLatest     BufferFullWritingStrategy = "discardLatest"
+)
