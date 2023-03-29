@@ -42,7 +42,7 @@ import (
 
 type redisStreamsSource struct {
 	// shared code to read from Redis Streams
-	*redisclient.RedisStreamsReader
+	*redisclient.RedisStreamsRead
 	// name of the pipeline
 	pipelineName string
 	// forwarder that writes the consumed data to destination
@@ -96,7 +96,7 @@ func New(
 	}
 
 	// RedisStreamsReader handles reading from Redis Streams
-	redisStreamsReader := &redisclient.RedisStreamsReader{
+	redisStreamsReader := &redisclient.RedisStreamsRead{
 		Name:        vertexSpec.Name,
 		Stream:      redisSpec.Stream,
 		Group:       redisSpec.ConsumerGroup,
@@ -115,11 +115,20 @@ func New(
 			},
 		},
 	}
-	redisStreamsReader.Log = logging.NewLogger()
 
 	redisStreamsSource := &redisStreamsSource{
-		RedisStreamsReader: redisStreamsReader,
-		pipelineName:       vertexSpec.PipelineName,
+		RedisStreamsRead: redisStreamsReader,
+		pipelineName:     vertexSpec.PipelineName,
+	}
+
+	for _, o := range opts {
+		operr := o(redisStreamsSource)
+		if operr != nil {
+			return nil, operr
+		}
+	}
+	if redisStreamsReader.Log == nil {
+		redisStreamsReader.Log = logging.NewLogger()
 	}
 
 	// Create InterStepDataForward
@@ -250,12 +259,12 @@ func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMess
 }
 
 func (rsSource *redisStreamsSource) Close() error {
-	rsSource.Log.Info("Shutting down nats source server...")
+	rsSource.Log.Info("Shutting down redis source server...")
 	rsSource.cancelfn()
 	if err := rsSource.sourcePublishWM.Close(); err != nil {
 		rsSource.Log.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
 	}
-	rsSource.Log.Info("Nats source server shutdown")
+	rsSource.Log.Info("Redis source server shutdown")
 	return nil
 }
 

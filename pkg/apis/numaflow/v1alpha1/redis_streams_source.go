@@ -18,7 +18,7 @@ package v1alpha1
 
 type RedisStreamsSource struct {
 	// RedisConfig contains connectivity info
-	RedisConfig   `json:",inline" protobuf:"bytes,6,opt,name=redisConfig"`
+	RedisConfig   `json:",inline" protobuf:"bytes,1,opt,name=redisConfig"`
 	Stream        string `json:"stream" protobuf:"bytes,2,opt,name=stream"`
 	ConsumerGroup string `json:"consumerGroup" protobuf:"bytes,3,opt,name=consumerGroup"`
 	// if true, stream starts being read from the beginning; otherwise, the latest

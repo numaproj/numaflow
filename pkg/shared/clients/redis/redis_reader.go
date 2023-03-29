@@ -26,8 +26,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// RedisStreamsReader is the read queue implementation powered by RedisClient.
-type RedisStreamsReader struct {
+// RedisStreamsRead is the read queue implementation powered by RedisClient.
+type RedisStreamsRead struct {
 	Name     string
 	Stream   string
 	Group    string
@@ -51,24 +51,24 @@ type Metrics struct {
 type MetricsIncrementFunc func()
 type MetricsAddFunc func(int)
 
-func (br *RedisStreamsReader) GetName() string {
+func (br *RedisStreamsRead) GetName() string {
 	return br.Name
 }
 
 // GetStreamName returns the stream name.
-func (br *RedisStreamsReader) GetStreamName() string {
+func (br *RedisStreamsRead) GetStreamName() string {
 	return br.Stream
 }
 
 // GetGroupName gets the name of the consumer group.
-func (br *RedisStreamsReader) GetGroupName() string {
+func (br *RedisStreamsRead) GetGroupName() string {
 	return br.Group
 }
 
 // Read reads the messages from the stream.
 // During a restart, we need to make sure all the un-acknowledged messages are reprocessed.
 // we need to replace `>` with `0-0` during restarts. We might run into data loss otherwise.
-func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
+func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var messages = make([]*isb.ReadMessage, 0, count)
 	var xstreams []redis.XStream
 	var err error
@@ -99,11 +99,11 @@ func (br *RedisStreamsReader) Read(_ context.Context, count int64) ([]*isb.ReadM
 	if br.Metrics.ReadsAdd != nil {
 		br.Metrics.ReadsAdd(len(messages))
 	}
-	br.Log.Debugf("received %d messages over Redis Streams Source, err=%v", len(msgs), err)
+	br.Log.Debugf("Received %d messages over Redis Streams Source, err=%v", len(msgs), err)
 	return msgs, err
 }
 
-func (br *RedisStreamsReader) processReadError(xstreams []redis.XStream, messages []*isb.ReadMessage, err error) ([]*isb.ReadMessage, error) {
+func (br *RedisStreamsRead) processReadError(xstreams []redis.XStream, messages []*isb.ReadMessage, err error) ([]*isb.ReadMessage, error) {
 	if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
 		br.Log.Debugw("checkBacklog false, redis.Nil", zap.Error(err))
 		return messages, nil
@@ -120,7 +120,7 @@ func (br *RedisStreamsReader) processReadError(xstreams []redis.XStream, message
 
 // Ack acknowledges the offset to the read queue. Ack is always pipelined, if you want to avoid it then
 // send array of 1 element.
-func (br *RedisStreamsReader) Ack(_ context.Context, offsets []isb.Offset) []error {
+func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error {
 	errs := make([]error, len(offsets))
 	strOffsets := []string{}
 	for _, o := range offsets {
@@ -138,7 +138,7 @@ func (br *RedisStreamsReader) Ack(_ context.Context, offsets []isb.Offset) []err
 }
 
 // processXReadResult is used to process the results of XREADGROUP
-func (br *RedisStreamsReader) processXReadResult(startIndex string, count int64) ([]redis.XStream, error) {
+func (br *RedisStreamsRead) processXReadResult(startIndex string, count int64) ([]redis.XStream, error) {
 	result := br.Client.XReadGroup(RedisContext, &redis.XReadGroupArgs{
 		Group:    br.Group,
 		Consumer: br.Consumer,

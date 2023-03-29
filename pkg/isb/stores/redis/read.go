@@ -33,7 +33,7 @@ import (
 
 // BufferRead is the read queue implementation powered by RedisClient.
 type BufferRead struct {
-	*redisclient.RedisStreamsReader
+	*redisclient.RedisStreamsRead
 	*BufferReadInfo
 }
 
@@ -60,7 +60,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 	}
 
 	rqr := &BufferRead{
-		RedisStreamsReader: &redisclient.RedisStreamsReader{
+		RedisStreamsRead: &redisclient.RedisStreamsRead{
 			Name:        name,
 			Stream:      redisclient.GetRedisStreamName(name),
 			Group:       group,

@@ -23,19 +23,21 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
-// TODO: add comments for all these
+// Total number of Redis Streams messages Read
 var redisStreamsSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "redis_streams_source",
 	Name:      "read_total",
 	Help:      "Total number of Redis Streams messages Read",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
 
+// Total number of Redis Streams messages Acknowledged
 var redisStreamsSourceAckCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "redis_streams_source",
 	Name:      "ack_total",
 	Help:      "Total number of Redis Streams messages Acknowledged",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
 
+// Total number of Redis Read Errors
 var redisStreamsSourceReadErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "redis_streams_source",
 	Name:      "read_error_total",
