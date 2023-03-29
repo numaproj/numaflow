@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package redisstream
+package redisstreams
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
