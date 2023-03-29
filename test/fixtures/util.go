@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -33,7 +32,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -306,32 +304,6 @@ func WaitForDaemonPodsRunning(kubeClient kubernetes.Interface, namespace, pipeli
 		}
 		time.Sleep(2 * time.Second)
 	}
-}
-
-func WaitForPodRunning(kubeClient kubernetes.Interface, namespace, podName string, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	// loop forever until we timeout
-	for {
-		pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				return fmt.Errorf("timed out waiting to Get pod named %q in namespace %q", podName, namespace)
-			}
-			if kubeerrors.IsNotFound(err) {
-				continue // just keep waiting for it
-			}
-			return fmt.Errorf("error attempting to Get pod named %q in namespace %q: %v", podName, namespace, err)
-		}
-
-		if pod != nil && pod.Status.Phase == corev1.PodRunning {
-			fmt.Printf("Pod confirmed running: %q in namespace %q", podName, namespace)
-			return nil
-		}
-
-		time.Sleep(2 * time.Second)
-	}
-
 }
 
 func VertexPodLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, pipelineName, vertexName, regex string, opts ...PodLogCheckOption) (bool, error) {
