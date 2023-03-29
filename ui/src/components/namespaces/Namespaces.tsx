@@ -15,11 +15,46 @@ import {
 } from "@mui/material";
 import ClearIcon from '@mui/icons-material/Clear'
 import SearchIcon from '@mui/icons-material/Search';
+import { useSystemInfoFetch } from "../../utils/fetchWrappers/systemInfoFetch";
+import {notifyError} from "../../utils/error";
 
 export function Namespaces() {
     const [nsArr, setnsArr] = useState([]);
     const [value, setValue] = useState("");
+    const [disableSearch, setDisableSearch] = useState(false);
     const [namespace, setNamespace] = useState("");
+    const { systemInfo, error: systemInfoError } = useSystemInfoFetch();
+
+    useEffect(() => {
+      if (systemInfoError) {
+        notifyError([{
+          error: "Failed to fetch the namespace scope installation info",
+          options: {toastId: "ns-scope", autoClose: false}
+        }]);
+      }
+    }, [systemInfoError])
+
+    useEffect(() => {
+      if (systemInfo && systemInfo?.namespaced) {
+        setValue(systemInfo?.managedNamespace);
+        setNamespace(systemInfo?.managedNamespace);
+        setDisableSearch(true);
+      } else if (systemInfo && !systemInfo?.namespaced){
+        setDisableSearch(false);
+        // set namespace value in search box
+        let curr_ns = localStorage.getItem("curr_namespace");
+        if (!curr_ns) curr_ns = "";
+        setValue(curr_ns);
+        setNamespace(curr_ns);
+
+        // set drop-down for previously entered namespaces
+        let ns_list = localStorage.getItem("namespaces");
+        if (!ns_list) ns_list = "";
+        const ns_arr = ns_list.split(",");
+        ns_arr.pop();
+        setnsArr(ns_arr);
+      }
+    }, [systemInfo])
 
     const handle = (namespaceVal) => {
         localStorage.setItem("curr_namespace", namespaceVal);
@@ -43,21 +78,6 @@ export function Namespaces() {
             localStorage.setItem("namespaces", ns_list);
         }
     };
-
-    useEffect(() => {
-        // set namespace value in search box
-        let curr_ns = localStorage.getItem("curr_namespace");
-        if (!curr_ns) curr_ns = "";
-        setValue(curr_ns);
-        setNamespace(curr_ns);
-
-        // set drop-down for previously entered namespaces
-        let ns_list = localStorage.getItem("namespaces");
-        if (!ns_list) ns_list = "";
-        const ns_arr = ns_list.split(",");
-        ns_arr.pop();
-        setnsArr(ns_arr);
-    }, []);
 
     const ns_List = [];
     nsArr.forEach((namespace) => (
@@ -107,6 +127,7 @@ export function Namespaces() {
                               onChange={e => {setValue(e.target.value)}}
                           />
                       }}
+                      disabled={disableSearch}
                   />
                   <Button
                       data-testid="namespace-search"
@@ -114,6 +135,7 @@ export function Namespaces() {
                           handle(value);
                           setNamespace(value);
                       }}
+                      disabled={disableSearch}
                       style={{marginTop: "15px", height: "30px"}}
                   >
                       <SearchIcon/>
@@ -125,6 +147,7 @@ export function Namespaces() {
                           setNamespace("");
                           setValue("");
                       }}
+                      disabled={disableSearch}
                       style={{marginTop: "15px", height: "30px"}}
                   >
                       <ClearIcon/>
