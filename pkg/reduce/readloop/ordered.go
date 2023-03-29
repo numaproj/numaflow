@@ -108,7 +108,7 @@ func (of *orderedForwarder) schedulePnF(
 	return t
 }
 
-// reduceOp invokes the reduce function. The reducer is a long running function since we stream in the data and it has
+// reduceOp invokes the reduce function. The reducer is a long-running function since we stream in the data and it has
 // to wait for the close-of-book on the PBQ to materialize the result.
 func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 	start := time.Now()
