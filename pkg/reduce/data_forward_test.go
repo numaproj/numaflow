@@ -634,7 +634,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	go reduceDataForward.Start()
 
 	// start the producer
-	publishMessages(ctx, startTime, messageValue, 300, 10, p, fromBuffer)
+	go publishMessages(ctx, startTime, messageValue, 300, 10, p, fromBuffer)
 
 	// wait until there is data in to buffer
 	for buffer.IsEmpty() {
@@ -1000,7 +1000,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// start the forwarder
 	go reduceDataForward.Start()
 	// window duration is 300s, we are sending only 200 messages with event time less than window end time, so the window will not be closed
-	publishMessages(cctx, startTime, messages, 200, 10, p, fromBuffer)
+	go publishMessages(cctx, startTime, messages, 200, 10, p, fromBuffer)
 	// wait for the partitions to be created
 	for {
 		partitionsList := pbqManager.ListPartitions()
