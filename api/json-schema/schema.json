@@ -17744,6 +17744,43 @@
       ],
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.GSSAPI": {
+      "description": "GSSAPI represents a SASL GSSAPI config",
+      "properties": {
+        "authType": {
+          "description": "valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH",
+          "type": "string"
+        },
+        "kerberosConfigSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "KerberosConfigSecret refers to the secret that contains the kerberos config"
+        },
+        "keytabSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "KeytabSecret refers to the secret that contains the keytab"
+        },
+        "passwordSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "PasswordSecret refers to the secret that contains the password"
+        },
+        "realm": {
+          "type": "string"
+        },
+        "serviceName": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serviceName",
+        "realm",
+        "username",
+        "authType"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.GeneratorSource": {
       "properties": {
         "duration": {
@@ -18409,6 +18446,10 @@
         "consumerGroup": {
           "type": "string"
         },
+        "sasl": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASL",
+          "description": "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL."
+        },
         "tls": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
           "description": "TLS user to configure TLS connection for kafka broker TLS.enable=true default for TLS."
@@ -18856,6 +18897,45 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.SASL": {
+      "properties": {
+        "gssapi": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GSSAPI",
+          "description": "GSSAPI contains the kerberos config"
+        },
+        "mechanism": {
+          "description": "SASL mechanism to use",
+          "type": "string"
+        },
+        "plain": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain",
+          "description": "SASLPlain contains the sasl plain config"
+        }
+      },
+      "required": [
+        "mechanism"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.SASLPlain": {
+      "properties": {
+        "handshake": {
+          "type": "boolean"
+        },
+        "passwordSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "PasswordSecret refers to the secret that contains the password"
+        },
+        "user": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "user",
+        "handshake"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Scale": {

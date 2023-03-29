@@ -308,6 +308,37 @@ func NewKafkaSource(
 			config.Net.TLS.Config = c
 		}
 	}
+	if sasl := source.SASL; sasl != nil {
+		switch *sasl.Mechanism {
+		case dfv1.SASLTypeGSSAPI:
+			if gssapi := sasl.GSSAPI; gssapi != nil {
+				config.Net.SASL.Enable = true
+				config.Net.SASL.Mechanism = sarama.SASLTypeGSSAPI
+				if gssapi, err := sharedutil.GetGSSAPIConfig(gssapi); err != nil {
+					return nil, fmt.Errorf("error loading gssapi config, %w", err)
+				} else {
+					config.Net.SASL.GSSAPI = *gssapi
+				}
+			}
+		case dfv1.SASLTypePlaintext:
+			if plain := sasl.Plain; plain != nil {
+				config.Net.SASL.Enable = true
+				config.Net.SASL.Mechanism = sarama.SASLTypePlaintext
+				config.Net.SASL.User = plain.User
+				if plain.PasswordSecret != nil {
+					password, err := sharedutil.GetSecretFromVolume(plain.PasswordSecret)
+					if err != nil {
+						return nil, err
+					} else {
+						config.Net.SASL.Password = password
+					}
+				}
+				config.Net.SASL.Handshake = plain.Handshake
+			}
+		default:
+			return nil, fmt.Errorf("SASL mechanism not supported: %s", *sasl.Mechanism)
+		}
+	}
 	kafkasource.config = config
 	// Best effort to initialize the clients for pending messages calculation
 	adminClient, err := sarama.NewClusterAdmin(kafkasource.brokers, config)

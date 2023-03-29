@@ -17748,6 +17748,43 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.GSSAPI": {
+      "description": "GSSAPI represents a SASL GSSAPI config",
+      "type": "object",
+      "required": [
+        "serviceName",
+        "realm",
+        "username",
+        "authType"
+      ],
+      "properties": {
+        "authType": {
+          "description": "valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH",
+          "type": "string"
+        },
+        "kerberosConfigSecret": {
+          "description": "KerberosConfigSecret refers to the secret that contains the kerberos config",
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "keytabSecret": {
+          "description": "KeytabSecret refers to the secret that contains the keytab",
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "passwordSecret": {
+          "description": "PasswordSecret refers to the secret that contains the password",
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "realm": {
+          "type": "string"
+        },
+        "serviceName": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.GeneratorSource": {
       "type": "object",
       "properties": {
@@ -18408,6 +18445,10 @@
         "consumerGroup": {
           "type": "string"
         },
+        "sasl": {
+          "description": "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASL"
+        },
         "tls": {
           "description": "TLS user to configure TLS connection for kafka broker TLS.enable=true default for TLS.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS"
@@ -18840,6 +18881,45 @@
         },
         "sentinel": {
           "description": "Sentinel settings, will override the global settings from controller config",
+          "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.SASL": {
+      "type": "object",
+      "required": [
+        "mechanism"
+      ],
+      "properties": {
+        "gssapi": {
+          "description": "GSSAPI contains the kerberos config",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GSSAPI"
+        },
+        "mechanism": {
+          "description": "SASL mechanism to use",
+          "type": "string"
+        },
+        "plain": {
+          "description": "SASLPlain contains the sasl plain config",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.SASLPlain": {
+      "type": "object",
+      "required": [
+        "user",
+        "handshake"
+      ],
+      "properties": {
+        "handshake": {
+          "type": "boolean"
+        },
+        "passwordSecret": {
+          "description": "PasswordSecret refers to the secret that contains the password",
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "user": {
           "type": "string"
         }
       }
