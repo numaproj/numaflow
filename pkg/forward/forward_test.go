@@ -613,92 +613,75 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	<-stopped
 }
 
-// TestWriteToBufferError_BufferFullWritingStrategyIsRetryUntilSuccess explicitly tests the case of retrying failed messages
-func TestWriteToBufferError_BufferFullWritingStrategyIsRetryUntilSuccess(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
+// TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
+func TestWriteToBuffer(t *testing.T) {
+	tests := []struct {
+		name       string
+		buffer     *simplebuffer.InMemoryBuffer
+		throwError bool
+	}{
+		{
+			name:   "test-discard-latest",
+			buffer: simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithBufferFullWritingStrategy(dfv1.DiscardLatest)),
+			// should not throw any error as we drop messages and finish writing before context is cancelled
+			throwError: false,
 		},
-	}}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-
-	go func() {
-		for !to1.IsFull() {
-			select {
-			case <-ctx.Done():
-				logging.FromContext(ctx).Fatalf("not full, %s", ctx.Err())
-			default:
-				time.Sleep(1 * time.Millisecond)
+		{
+			name:   "test-retry-until-success",
+			buffer: simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithBufferFullWritingStrategy(dfv1.RetryUntilSuccess)),
+			// should throw context closed error as we keep retrying writing until context is cancelled
+			throwError: true,
+		},
+	}
+	for _, value := range tests {
+		t.Run(value.name, func(t *testing.T) {
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": value.buffer,
 			}
-		}
-		// stop will cancel the contexts
-		f.Stop()
-	}()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
+			assert.NoError(t, err)
+			assert.False(t, value.buffer.IsFull())
+			assert.True(t, value.buffer.IsEmpty())
 
-	// try to write to buffer after it is full. This causes write to error and fail.
-	var messageToStep = make(map[string][]isb.Message)
-	messageToStep["to1"] = make([]isb.Message, 0)
-	messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:11]...)
+			stopped := f.Start()
+			go func() {
+				for !value.buffer.IsFull() {
+					select {
+					case <-ctx.Done():
+						logging.FromContext(ctx).Fatalf("not full, %s", ctx.Err())
+					default:
+						time.Sleep(1 * time.Millisecond)
+					}
+				}
+				// stop will cancel the context
+				f.Stop()
+			}()
 
-	// asserting the number of failed messages
-	_, err = f.writeToBuffers(ctx, messageToStep)
-	assert.True(t, strings.Contains(err.Error(), "with failed messages:1"))
+			// try to write to buffer after it is full.
+			var messageToStep = make(map[string][]isb.Message)
+			messageToStep["to1"] = make([]isb.Message, 0)
+			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+			messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:11]...)
+			_, err = f.writeToBuffers(ctx, messageToStep)
 
-	<-stopped
-}
-
-// TestWriteToBufferError_BufferFullWritingStrategyIsDiscardLatest explicitly tests the case of dropping messages when buffer is full
-func TestWriteToBufferError_BufferFullWritingStrategyIsDiscardLatest(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithBufferFullWritingStrategy(dfv1.DiscardLatest))
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
+			assert.Equal(t, value.throwError, err != nil)
+			if value.throwError {
+				// assert the number of failed messages
+				assert.True(t, strings.Contains(err.Error(), "with failed messages:1"))
+			}
+			<-stopped
+		})
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-		},
-	}}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-	var messageToStep = make(map[string][]isb.Message)
-	messageToStep["to1"] = make([]isb.Message, 0)
-	messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:11]...)
-	_, err = f.writeToBuffers(ctx, messageToStep)
-	// although we are writing 11 messages to a buffer of size 10, since we specify BufferFullWritingStrategy as DiscardLatest,
-	// the writeToBuffers() call should return no error.
-	assert.Nil(t, err)
-	// stop will cancel the contexts and therefore the forwarder stops without waiting
-	f.Stop()
-	<-stopped
 }
 
 // TestNewInterStepDataForwardToOneStep explicitly tests the case where we forward to only one buffer
