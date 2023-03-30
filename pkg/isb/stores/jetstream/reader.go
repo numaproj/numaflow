@@ -343,6 +343,9 @@ func (o *offset) NoAck() {
 	if o.cancelFunc != nil {
 		o.cancelFunc()
 	}
+	// Ignore the returned error as the worst case the message will
+	// take longer to be redelivered.
+	_ = o.msg.Nak()
 }
 
 func (o *offset) Sequence() (int64, error) {
