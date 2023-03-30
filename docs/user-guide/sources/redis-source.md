@@ -10,7 +10,7 @@ spec:
     - name: input
       source:
         redisStreams:
-          url: "redis:6379" # One URL, or multiple URLs separated by comma
+          url: redis:6379  # One URL, or multiple URLs separated by comma
           stream: test-stream
           consumerGroup: my-group
           readFromBeginning: true # Should we start from beginning of Stream or latest?
