@@ -327,3 +327,5 @@ func (w *writeOffset) Sequence() (int64, error) {
 func (w *writeOffset) AckIt() error {
 	return fmt.Errorf("not supported")
 }
+
+func (w *writeOffset) NoAck() {}

@@ -332,16 +332,20 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// let's figure out which vertex to send the results to.
 	// update the toBuffer(s) with writeMessages.
 	for _, m := range udfResults {
-		// look for errors in udf processing, if we see even 1 error let's return. handling partial retrying is not worth ATM.
+		// look for errors in udf processing, if we see even 1 error flag the error boolean and
+		// NoAck all messages then return. Handling partial retrying is not worth ATM.
 		if m.udfError != nil {
 			udfError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
 			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
+			// As there's no partial failure, non-ack all the readOffsets
+			isdf.fromBuffer.NoAck(ctx, readOffsets)
 			return
 		}
 		// update toBuffers
 		for _, message := range m.writeMessages {
 			if err := isdf.whereToStep(message, messageToStep, m.readMessage); err != nil {
 				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
+				isdf.fromBuffer.NoAck(ctx, readOffsets)
 				return
 			}
 		}
@@ -351,6 +355,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	writeOffsets, err := isdf.writeToBuffers(ctx, messageToStep)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
+		isdf.fromBuffer.NoAck(ctx, readOffsets)
 		return
 	}
 

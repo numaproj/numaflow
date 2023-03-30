@@ -270,6 +270,23 @@ func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error 
 	return errs
 }
 
+func (jr *jetStreamReader) NoAck(_ context.Context, offsets []isb.Offset) {
+	done := make(chan struct{})
+	wg := &sync.WaitGroup{}
+	for _, o := range offsets {
+		wg.Add(1)
+		go func(o isb.Offset) {
+			defer wg.Done()
+			o.NoAck()
+		}(o)
+	}
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	<-done
+}
+
 // offset implements ID interface for JetStream.
 type offset struct {
 	seq        uint64
@@ -283,7 +300,7 @@ func newOffset(msg *nats.Msg, tickDuration time.Duration, log *zap.SugaredLogger
 		seq: metadata.Sequence.Stream,
 		msg: msg,
 	}
-	// If tickDuration is 1s, which means ackWait is 1s or 2s, it doesn not make much sense to do it, instead, increasing ackWait is recommended.
+	// If tickDuration is 1s, which means ackWait is 1s or 2s, it does not make much sense to do it, instead, increasing ackWait is recommended.
 	if tickDuration.Seconds() > 1 {
 		ctx, cancel := context.WithCancel(context.Background())
 		go o.workInProgess(ctx, msg, tickDuration, log)
@@ -320,6 +337,12 @@ func (o *offset) AckIt() error {
 		return err
 	}
 	return nil
+}
+
+func (o *offset) NoAck() {
+	if o.cancelFunc != nil {
+		o.cancelFunc()
+	}
 }
 
 func (o *offset) Sequence() (int64, error) {

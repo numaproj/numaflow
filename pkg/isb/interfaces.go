@@ -65,6 +65,8 @@ type BufferReader interface {
 	Read(context.Context, int64) ([]*ReadMessage, error)
 	// Ack acknowledges an array of offset.
 	Ack(context.Context, []Offset) []error
+	// NoAck cancel acknowledgement of an array of offset.
+	NoAck(context.Context, []Offset)
 }
 
 // BufferReaderInformation has information regarding the buffer we are reading from.
@@ -92,6 +94,10 @@ type Offset interface {
 	// This is often used when the BufferReader can not simply use the offset identifier to ack the message,
 	// then the work can be done in this function, and call it in BufferReader Ack() function implementation.
 	AckIt() error
+	// NoAck to indicate the offset no longer needs to be acknowledged
+	// It is used when error occur, and we want to reprocess the batch to indicate acknowledgement no
+	// longer needed.
+	NoAck()
 }
 
 // SimpleStringOffset is an Offset convenient function for implementations without needing AckIt() when offset is a string.
@@ -109,6 +115,8 @@ func (so SimpleStringOffset) AckIt() error {
 	return nil
 }
 
+func (so SimpleStringOffset) NoAck() {}
+
 // SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
 type SimpleIntOffset func() int64
 
@@ -123,3 +131,5 @@ func (si SimpleIntOffset) Sequence() (int64, error) {
 func (si SimpleIntOffset) AckIt() error {
 	return nil
 }
+
+func (si SimpleIntOffset) NoAck() {}
