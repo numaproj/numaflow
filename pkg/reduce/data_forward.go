@@ -33,9 +33,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/readloop"
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -52,6 +54,9 @@ type DataForward struct {
 	watermarkPublishers map[string]publish.Publisher
 	windowingStrategy   window.Windower
 	keyed               bool
+	idleManager         *wmb.IdleManager
+	wmbChecker          wmb.WMBChecker
+	pbqManager          *pbq.Manager
 	opts                *Options
 	log                 *zap.SugaredLogger
 }
@@ -76,8 +81,10 @@ func NewDataForward(ctx context.Context,
 		}
 	}
 
+	idleManager := wmb.NewIdleManager(len(toBuffers))
+
 	rl, err := readloop.NewReadLoop(ctx, vertexInstance.Vertex.Spec.Name, vertexInstance.Vertex.Spec.PipelineName,
-		vertexInstance.Replica, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers)
+		vertexInstance.Replica, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers, idleManager)
 
 	df := &DataForward{
 		ctx:                 ctx,
@@ -91,6 +98,9 @@ func NewDataForward(ctx context.Context,
 		watermarkPublishers: watermarkPublishers,
 		windowingStrategy:   windowingStrategy,
 		keyed:               vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed,
+		idleManager:         idleManager,
+		pbqManager:          pbqManager,
+		wmbChecker:          wmb.NewWMBChecker(2), // TODO: make configurable
 		log:                 logging.FromContext(ctx),
 		opts:                options}
 
@@ -160,6 +170,48 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	if len(readMessages) == 0 {
+		// we use the HeadWMB as the watermark for the idle
+		var processorWMB = d.watermarkFetcher.GetHeadWMB()
+		if !d.wmbChecker.ValidateHeadWMB(processorWMB) {
+			// validation failed, skip publishing
+			d.log.Debugw("skip publishing idle watermark",
+				zap.Int("counter", d.wmbChecker.GetCounter()),
+				zap.Int64("offset", processorWMB.Offset),
+				zap.Int64("watermark", processorWMB.Watermark),
+				zap.Bool("Idle", processorWMB.Idle))
+			return
+		}
+
+		nextWin := d.pbqManager.NextWindowToBeClosed()
+		if nextWin == nil {
+			// if all the windows are closed already, and the len(readBatch) == 0
+			// then it means there's an idle situation
+			// in this case, send idle watermark to all the toBuffers
+			for _, toBuffer := range d.toBuffers {
+				if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
+					idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+				}
+			}
+		} else {
+			// if toBeClosed window exists, and the watermark we fetch has already passed the endTime of this window
+			// then it means the overall dataflow of the pipeline has already reached a later time point
+			// so we can close the window and process the data in this window
+			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); nextWin.EndTime().Before(watermark) {
+				closedWindows := d.windowingStrategy.RemoveWindows(watermark)
+				for _, win := range closedWindows {
+					d.readloop.ClosePartitions(win.Partitions())
+				}
+			} else {
+				// if toBeClosed window exists, but the watermark we fetch is still within the endTime of the window
+				// then we can't close the window because there could still be data after the idling situation ends
+				// so in this case, we publish an idle watermark
+				for _, toBuffer := range d.toBuffers {
+					if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
+						idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+					}
+				}
+			}
+		}
 		return
 	}
 	readMessagesCount.With(map[string]string{
