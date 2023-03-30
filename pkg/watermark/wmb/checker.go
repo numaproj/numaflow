@@ -16,11 +16,13 @@ limitations under the License.
 
 package wmb
 
-// WMBChecker checks if the idle watermark is valid.
+// WMBChecker checks if the idle watermark is valid. It checks by making sure the Idle WMB's offset has not been
+// changed in X iterations. This check is required because we have to make sure the time at which the idleness has been
+// detected matches with reality (processes could hang in between). The only way to do that is by multiple iterations.
 type WMBChecker struct {
-	counter int
-	max     int
-	w       WMB
+	iterationCounter int
+	iterations       int
+	w                WMB
 }
 
 // NewWMBChecker returns a WMBChecker to check if the wmb is idle.
@@ -28,9 +30,9 @@ type WMBChecker struct {
 // and will be used to publish a wmb to pods of the next vertex.
 func NewWMBChecker(numOfIteration int) WMBChecker {
 	return WMBChecker{
-		counter: 0,
-		max:     numOfIteration,
-		w:       WMB{},
+		iterationCounter: 0,
+		iterations:       numOfIteration,
+		w:                WMB{},
 	}
 }
 
@@ -38,25 +40,25 @@ func NewWMBChecker(numOfIteration int) WMBChecker {
 // If all the iterations get the same wmb offset, returns true.
 func (c *WMBChecker) ValidateHeadWMB(w WMB) bool {
 	if !w.Idle {
-		// if wmb is not idle, skip and reset the counter
-		c.counter = 0
+		// if wmb is not idle, skip and reset the iterationCounter
+		c.iterationCounter = 0
 		return false
 	}
-	// check the counter value
-	if c.counter == 0 {
-		c.counter++
-		// the wmb only writes once when counter is zero
+	// check the iterationCounter value
+	if c.iterationCounter == 0 {
+		c.iterationCounter++
+		// the wmb only writes once when iterationCounter is zero
 		c.w.Offset = w.Offset
-	} else if c.counter < c.max-1 {
-		c.counter++
+	} else if c.iterationCounter < c.iterations-1 {
+		c.iterationCounter++
 		if c.w.Offset == w.Offset {
 			// we get the same wmb, meaning the wmb is valid, continue
 		} else {
 			// else, start over
-			c.counter = 0
+			c.iterationCounter = 0
 		}
-	} else if c.counter >= c.max-1 {
-		c.counter = 0
+	} else if c.iterationCounter >= c.iterations-1 {
+		c.iterationCounter = 0
 		if c.w.Offset == w.Offset {
 			// reach max iteration, if still get the same wmb,
 			// then the wmb is considered as valid, return ture
@@ -66,7 +68,7 @@ func (c *WMBChecker) ValidateHeadWMB(w WMB) bool {
 	return false
 }
 
-// GetCounter gets the current counter value for the WMBChecker, it's used in log and tests
+// GetCounter gets the current iterationCounter value for the WMBChecker, it's used in log and tests
 func (c *WMBChecker) GetCounter() int {
-	return c.counter
+	return c.iterationCounter
 }
