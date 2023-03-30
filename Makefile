@@ -1,3 +1,5 @@
+_SHELL=$(shell [ -e /bin/bash ] && echo "/bin/bash" || echo "/bin/sh" )
+SHELL:=$(_SHELL)
 CURRENT_DIR=$(shell pwd)
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
