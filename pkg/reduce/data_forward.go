@@ -24,9 +24,10 @@ import (
 	"strconv"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -184,19 +185,27 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 
 		nextWin := d.pbqManager.NextWindowToBeClosed()
 		if nextWin == nil {
+			// if all the windows are closed already, and the len(readBatch) == 0
+			// then it means there's an idle situation
+			// in this case, send idle watermark to all the toBuffers
 			for _, toBuffer := range d.toBuffers {
 				if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
 					idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 				}
 			}
 		} else {
+			// if toBeClosed window exists, and the watermark we fetch has already passed the endTime of this window
+			// then it means the overall dataflow of the pipeline has already reached a later time point
+			// so we can close the window and process the data in this window
 			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); nextWin.EndTime().Before(watermark) {
-				// you can close the windows
 				closedWindows := d.windowingStrategy.RemoveWindows(watermark)
 				for _, win := range closedWindows {
 					d.readloop.ClosePartitions(win.Partitions())
 				}
 			} else {
+				// if toBeClosed window exists, but the watermark we fetch is still within the endTime of the window
+				// then we can't close the window because there could still be data after the idling situation ends
+				// so in this case, we publish an idle watermark
 				for _, toBuffer := range d.toBuffers {
 					if publisher, ok := d.watermarkPublishers[toBuffer.GetName()]; ok {
 						idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, d.idleManager, d.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))

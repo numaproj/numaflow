@@ -43,10 +43,10 @@ func PublishIdleWatermark(ctx context.Context, toBuffer isb.BufferWriter, publis
 			writeOffsets, errs := toBuffer.Write(ctx, ctrlMessage)
 			// we only write one ctrl message, so there's one and only one error in the array, use index=0 to get the error
 			if errs[0] != nil {
-				logger.Errorw("failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
+				logger.Errorw("Failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
 				return
 			}
-			logger.Debug("succeeded to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
+			logger.Debug("Succeeded to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
 
 			if len(writeOffsets) == 1 {
 				// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset

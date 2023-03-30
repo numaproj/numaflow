@@ -34,10 +34,11 @@ import (
 	"sync"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -189,7 +190,10 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	if nextWin := rl.pbqManager.NextWindowToBeClosed(); nextWin != nil {
 		// minus 1 ms because if it's the same as the end time the window would have already been closed
 		if watermark := time.Time(wm).Add(-1 * time.Millisecond); nextWin.EndTime().After(watermark) {
-			// publish idle watermark to solve watermark latency
+			// publish idle watermark so that the next vertex doesn't need to wait for the window to close to
+			// start processing data whose watermark is smaller than the endTime of the toBeClosed window
+
+			// this is to minimize watermark latency
 			for _, toBuffer := range rl.toBuffers {
 				if publisher, ok := rl.publishWatermark[toBuffer.GetName()]; ok {
 					idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, rl.idleManager, rl.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
