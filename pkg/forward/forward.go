@@ -332,8 +332,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// let's figure out which vertex to send the results to.
 	// update the toBuffer(s) with writeMessages.
 	for _, m := range udfResults {
-		// look for errors in udf processing, if we see even 1 error flag the error boolean and
-		// NoAck all messages then return. Handling partial retrying is not worth ATM.
+		// look for errors in udf processing, if we see even 1 error NoAck all messages
+		// then return. Handling partial retrying is not worth ATM.
 		if m.udfError != nil {
 			udfError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
 			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))

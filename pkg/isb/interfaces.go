@@ -97,7 +97,7 @@ type Offset interface {
 	// NoAck to indicate the offset no longer needs to be acknowledged
 	// It is used when error occur, and we want to reprocess the batch to indicate acknowledgement no
 	// longer needed.
-	NoAck()
+	NoAck(ctx context.Context)
 }
 
 // SimpleStringOffset is an Offset convenient function for implementations without needing AckIt() when offset is a string.
@@ -115,7 +115,7 @@ func (so SimpleStringOffset) AckIt() error {
 	return nil
 }
 
-func (so SimpleStringOffset) NoAck() {}
+func (so SimpleStringOffset) NoAck(context.Context) {}
 
 // SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
 type SimpleIntOffset func() int64
@@ -132,4 +132,4 @@ func (si SimpleIntOffset) AckIt() error {
 	return nil
 }
 
-func (si SimpleIntOffset) NoAck() {}
+func (si SimpleIntOffset) NoAck(context.Context) {}
