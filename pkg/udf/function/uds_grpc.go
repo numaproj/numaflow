@@ -90,7 +90,6 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
 	}
 
-	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: key}))
 	datumList, err := u.client.MapFn(ctx, d)
 	if err != nil {
 		return nil, ApplyUDFErr{

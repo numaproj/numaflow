@@ -701,8 +701,6 @@ github.com/numaproj/numaflow-go v0.3.4 h1:YMyq+dJLW5l68NWTNCUpLdox6tMXqmwcAebTON
 github.com/numaproj/numaflow-go v0.3.4/go.mod h1:U6a0JproBL8m/HT6Fh573WwMHG5kkX30ZB9i069uGWc=
 github.com/numaproj/numaflow-go v0.3.5-0.20230330065742-8d29fedf9c61 h1:9yjmHv2Pi8qQHWuO5wcAKcfAU6Y8QZAKVyJnwEizA8E=
 github.com/numaproj/numaflow-go v0.3.5-0.20230330065742-8d29fedf9c61/go.mod h1:U6a0JproBL8m/HT6Fh573WwMHG5kkX30ZB9i069uGWc=
-github.com/numaproj/numaflow-go v0.3.5-0.20230331032239-246438b3456f h1:LVKEdBq2gvpbtprhjR4wvZgJIBNCKtRA+yrWRXOg3dg=
-github.com/numaproj/numaflow-go v0.3.5-0.20230331032239-246438b3456f/go.mod h1:U6a0JproBL8m/HT6Fh573WwMHG5kkX30ZB9i069uGWc=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=

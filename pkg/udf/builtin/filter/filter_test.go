@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var _key = ""
+var _key = []string{""}
 var jsonMsg = `{"test": 21, "item": [{"id": 1, "name": "numa"},{"id": 2, "name": "numa"}]}`
 var strMsg = `welcome to numaflow`
 var base64Msg = base64.StdEncoding.EncodeToString([]byte(strMsg))

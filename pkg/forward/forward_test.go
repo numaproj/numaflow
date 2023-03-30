@@ -536,7 +536,7 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 		result := payload
 		// assign new event time
 		parentPaneInfo.EventTime = testSourceNewEventTime
-		var key string
+		var key []string
 
 		writeMessage := &isb.Message{
 			Header: isb.Header{

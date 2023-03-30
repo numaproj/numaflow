@@ -42,7 +42,7 @@ func TestMessageHandling(t *testing.T) {
 	partition := int32(1)
 	offset := int64(1)
 	value := "testvalue"
-	key := "testkey"
+	key := []string{"testkey"}
 
 	tobuffer := simplebuffer.NewInMemoryBuffer("test", 100)
 	dest := []isb.BufferWriter{tobuffer}
@@ -73,7 +73,7 @@ func TestMessageHandling(t *testing.T) {
 		Topic:     topic,
 		Partition: partition,
 		Offset:    offset,
-		Key:       []byte(key),
+		Key:       []byte(key[0]),
 		Value:     []byte(value),
 	}
 

@@ -92,7 +92,7 @@ func TestHeader(t *testing.T) {
 		MessageInfo MessageInfo
 		Kind        MessageKind
 		ID          string
-		Key         string
+		Key         []string
 	}
 	tests := []struct {
 		name               string
@@ -110,7 +110,7 @@ func TestHeader(t *testing.T) {
 				},
 				Kind: Data,
 				ID:   "TestID",
-				Key:  "TestKey",
+				Key:  []string{"TestKey", "TestKey2"},
 			},
 			wantData: Header{
 				MessageInfo: MessageInfo{
@@ -119,7 +119,7 @@ func TestHeader(t *testing.T) {
 				},
 				Kind: Data,
 				ID:   "TestID",
-				Key:  "TestKey",
+				Key:  []string{"TestKey", "TestKey2"},
 			},
 			wantMarshalError:   false,
 			wantUnmarshalError: false,
@@ -228,7 +228,7 @@ func TestMessage(t *testing.T) {
 					},
 					Kind: Data,
 					ID:   "TestID",
-					Key:  "TestKey",
+					Key:  []string{"TestKey"},
 				},
 				Body: Body{
 					Payload: []byte("TestBODY"),
@@ -242,7 +242,7 @@ func TestMessage(t *testing.T) {
 					},
 					Kind: Data,
 					ID:   "TestID",
-					Key:  "TestKey",
+					Key:  []string{"TestKey"},
 				},
 				Body: Body{
 					Payload: []byte("TestBODY"),
@@ -310,7 +310,7 @@ func TestReadMessage(t *testing.T) {
 						},
 						Kind: Data,
 						ID:   "TestID",
-						Key:  "TestKey",
+						Key:  []string{"TestKey"},
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),
@@ -330,7 +330,7 @@ func TestReadMessage(t *testing.T) {
 						},
 						Kind: Data,
 						ID:   "TestID",
-						Key:  "TestKey",
+						Key:  []string{"TestKey"},
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),
