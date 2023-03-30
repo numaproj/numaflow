@@ -107,6 +107,7 @@ test-e2e-suite-2:
 test-kafka-e2e:
 test-http-e2e:
 test-nats-e2e:
+test-redis-source-e2e:
 test-sdks-e2e:
 test-reduce-e2e:
 test-%: 

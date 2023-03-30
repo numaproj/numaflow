@@ -40,6 +40,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
 	"github.com/numaproj/numaflow/pkg/sources/nats"
+	"github.com/numaproj/numaflow/pkg/sources/redisstreams"
 	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -69,14 +70,14 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	switch sp.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			writeOpts := []redisisb.Option{
-				redisisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
+			writeOpts := []redisclient.Option{
+				redisclient.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 			}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
-				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
+				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 			buffers := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e)
 			for _, buffer := range buffers {
@@ -216,6 +217,14 @@ func (sp *SourceProcessor) getSourcer(
 			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
 		}
 		return nats.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
+	} else if x := src.RedisStreams; x != nil {
+		readOptions := []redisstreams.Option{
+			redisstreams.WithLogger(logger),
+		}
+		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
+			readOptions = append(readOptions, redisstreams.WithReadTimeOut(l.ReadTimeout.Duration))
+		}
+		return redisstreams.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }
