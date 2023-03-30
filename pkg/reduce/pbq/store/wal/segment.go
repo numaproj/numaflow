@@ -19,7 +19,6 @@ package wal
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"fmt"
 	"hash/crc32"
 	"os"
@@ -169,10 +168,10 @@ func (w *WAL) encodeReadMessage(message *isb.ReadMessage) (buf *bytes.Buffer, er
 	if err != nil {
 		return nil, err
 	}
-	checksum := calculateChecksum(body.Bytes())
+	checksum := calculateChecksum(body)
 
 	// Writes the message header
-	header, err := w.encodeReadMessageHeader(message, int64(body.Len()), checksum)
+	header, err := w.encodeReadMessageHeader(message, int64(len(body)), checksum)
 	if err != nil {
 		return nil, err
 	}
@@ -185,11 +184,11 @@ func (w *WAL) encodeReadMessage(message *isb.ReadMessage) (buf *bytes.Buffer, er
 	}
 
 	// Writes the message body
-	wrote, err = buf.Write(body.Bytes())
+	wrote, err = buf.Write(body)
 	if err != nil {
 		return nil, err
 	}
-	if wrote != body.Len() {
+	if wrote != len(body) {
 		return nil, fmt.Errorf("expected to write %d, but wrote only %d, %w", header.Len(), wrote, err)
 	}
 	return buf, nil
@@ -225,10 +224,8 @@ func (w *WAL) encodeReadMessageHeader(message *isb.ReadMessage, messageLen int64
 	return buf, nil
 }
 
-func (w *WAL) encodeReadMessageBody(message *isb.ReadMessage) (*bytes.Buffer, error) {
-	m := new(bytes.Buffer)
-	enc := gob.NewEncoder(m)
-	err := enc.Encode(message.Message)
+func (w *WAL) encodeReadMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
+	msgBinary, err := readMsg.Message.MarshalBinary()
 	if err != nil {
 		walErrors.With(map[string]string{
 			metrics.LabelPipeline:           w.walStores.pipelineName,
@@ -238,7 +235,7 @@ func (w *WAL) encodeReadMessageBody(message *isb.ReadMessage) (*bytes.Buffer, er
 		}).Inc()
 		return nil, fmt.Errorf("encodeReadMessageBody encountered encode err: %w", err)
 	}
-	return m, nil
+	return msgBinary, nil
 }
 
 func calculateChecksum(data []byte) uint32 {

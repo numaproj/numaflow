@@ -17,9 +17,7 @@ limitations under the License.
 package wal
 
 import (
-	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"os"
@@ -185,8 +183,7 @@ func decodeReadMessageBody(buf io.Reader, entryHeader *readMessageHeaderPreamble
 	}
 
 	var message = new(isb.Message)
-	dec := gob.NewDecoder(bytes.NewReader(body))
-	err = dec.Decode(&message)
+	err = message.UnmarshalBinary(body)
 	if err != nil {
 		return nil, err
 	}
