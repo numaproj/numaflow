@@ -367,14 +367,14 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1])
 					activeWatermarkBuffers[bufferName] = true
-					// reset because the toBuffer is not idling
+					// reset because the toBuffer is no longer idling
 					isdf.idleManager.Reset(bufferName)
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 			} else { // For Sink vertex, and it does not care about the offset during watermark publishing
 				publisher.PublishWatermark(processorWM, nil)
 				activeWatermarkBuffers[bufferName] = true
-				// reset because the toBuffer is not idling
+				// reset because the toBuffer is no longer idling
 				isdf.idleManager.Reset(bufferName)
 			}
 		}

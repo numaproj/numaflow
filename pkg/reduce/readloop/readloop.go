@@ -186,6 +186,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 		rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
 	}
 
+	// solve Reduce withholding of watermark where we do not send WM until the window is closed.
 	if nextWin := rl.pbqManager.NextWindowToBeClosed(); nextWin != nil {
 		// minus 1 ms because if it's the same as the end time the window would have already been closed
 		if watermark := time.Time(wm).Add(-1 * time.Millisecond); nextWin.EndTime().After(watermark) {
