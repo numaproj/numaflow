@@ -10,8 +10,8 @@ RELEASE_BASE_IMAGE:=scratch
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
 GIT_BRANCH=$(shell git rev-parse --symbolic-full-name --verify --quiet --abbrev-ref HEAD)
-GIT_TAG=$(shell if [ -z "`git status --porcelain`" ]; then git describe --exact-match --tags HEAD 2>/dev/null; fi)
-GIT_TREE_STATE=$(shell if [ -z "`git status --porcelain`" ]; then echo "clean" ; else echo "dirty"; fi)
+GIT_TAG=$(shell if [[ -z "`git status --porcelain`" ]]; then git describe --exact-match --tags HEAD 2>/dev/null; fi)
+GIT_TREE_STATE=$(shell if [[ -z "`git status --porcelain`" ]]; then echo "clean" ; else echo "dirty"; fi)
 
 DOCKER_PUSH?=false
 DOCKER_BUILD_ARGS?=
@@ -46,12 +46,12 @@ ifndef PYTHON
 $(error "Python is not available, please install.")
 endif
 
-IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [ "`kubectl config current-context`" =~ k3d-* ] && echo "k3d image import")
+IMAGE_IMPORT_CMD:=$(shell [[ "`command -v kubectl`" != '' ]] && [[ "`command -v k3d`" != '' ]] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo "k3d image import")
 ifndef IMAGE_IMPORT_CMD
-IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v minikube`" != '' ] && [ "`kubectl config current-context`" =~ minikube* ] && echo "minikube image load")
+IMAGE_IMPORT_CMD:=$(shell [[ "`command -v kubectl`" != '' ]] && [[ "`command -v minikube`" != '' ]] && [[ "`kubectl config current-context`" =~ minikube* ]] && echo "minikube image load")
 endif
 ifndef IMAGE_IMPORT_CMD
-IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v kind`" != '' ] && [ "`kubectl config current-context`" =~ kind-* ] && echo "kind load docker-image")
+IMAGE_IMPORT_CMD:=$(shell [[ "`command -v kubectl`" != '' ]] && [[ "`command -v kind`" != '' ]] && [[ "`kubectl config current-context`" =~ kind-* ]] && echo "kind load docker-image")
 endif
 
 DOCKER:=$(shell command -v docker 2> /dev/null)
@@ -63,7 +63,7 @@ endif
 build: dist/$(BINARY_NAME)-linux-amd64.gz dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-arm.gz dist/$(BINARY_NAME)-linux-ppc64le.gz dist/$(BINARY_NAME)-linux-s390x.gz dist/e2eapi
 
 dist/$(BINARY_NAME)-%.gz: dist/$(BINARY_NAME)-%
-	@[ -e dist/$(BINARY_NAME)-$*.gz ] || gzip -k dist/$(BINARY_NAME)-$*
+	@[[ -e dist/$(BINARY_NAME)-$*.gz ]] || gzip -k dist/$(BINARY_NAME)-$*
 
 dist/$(BINARY_NAME): GOARGS = GOOS= GOARCH=
 dist/$(BINARY_NAME)-linux-amd64: GOARGS = GOOS=linux GOARCH=amd64
@@ -153,7 +153,7 @@ ui-test: ui-build
 .PHONY: image
 image: clean ui-build dist/$(BINARY_NAME)-linux-amd64
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "ARCH=amd64" --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
-	@if [ "$(DOCKER_PUSH)" = "true" ]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
+	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
@@ -218,7 +218,7 @@ start: image
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
 	DOCKER_BUILDKIT=1 $(DOCKER) build . --build-arg "ARCH=amd64" --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
-	@if [ "$(DOCKER_PUSH)" = "true" ]; then $(DOCKER) push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
+	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
@@ -275,7 +275,7 @@ endif
 
 .PHONY: check-version-warning
 check-version-warning:
-	@if [ ! "$(VERSION)" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$  ]; then echo -n "It looks like you're not using a version format like 'v1.2.3', or 'v1.2.3-rc2', that version format is required for our releases. Do you wish to continue anyway? [y/N]" && read ans && [ $${ans:-N} = y ]; fi
+	@if [[ ! "$(VERSION)" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$  ]]; then echo -n "It looks like you're not using a version format like 'v1.2.3', or 'v1.2.3-rc2', that version format is required for our releases. Do you wish to continue anyway? [y/N]" && read ans && [[ $${ans:-N} = y ]]; fi
 
 .PHONY: update-manifests-version
 update-manifests-version:
