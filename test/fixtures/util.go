@@ -453,7 +453,6 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 				return s.Err()
 			}
 			data := s.Bytes()
-			fmt.Println(string(data))
 			if exp.Match(data) {
 				result <- true
 			}

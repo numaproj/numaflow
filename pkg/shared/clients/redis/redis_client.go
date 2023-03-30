@@ -29,6 +29,7 @@ import (
 )
 
 const ReadFromEarliest = "0-0"
+const ReadFromLatest = "$"
 
 // RedisContext is used to pass the context specifically for REDIS operations.
 // A cancelled context during SIGTERM or Ctrl-C that is propagated down will throw a context cancelled error because redis uses context to obtain connection from the connection pool.

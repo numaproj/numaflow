@@ -33,22 +33,22 @@ func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstan
 	writers := make(map[string]isb.BufferWriter)
 	redisClient := redisclient.NewInClusterRedisClient()
 	fromGroup := fromBufferName + "-group"
-	readerOpts := []redisisb.Option{}
+	readerOpts := []redisclient.Option{}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
-		readerOpts = append(readerOpts, redisisb.WithReadTimeOut(x.ReadTimeout.Duration))
+		readerOpts = append(readerOpts, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 	}
 	consumer := fmt.Sprintf("%s-%v", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	reader := redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readerOpts...)
 	for _, e := range vertexInstance.Vertex.Spec.ToEdges {
 
-		writeOpts := []redisisb.Option{
-			redisisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
+		writeOpts := []redisclient.Option{
+			redisclient.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 		}
 		if x := e.Limits; x != nil && x.BufferMaxLength != nil {
-			writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
+			writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 		}
 		if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
-			writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+			writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
 		buffers := dfv1.GenerateEdgeBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e)
 		for _, buffer := range buffers {

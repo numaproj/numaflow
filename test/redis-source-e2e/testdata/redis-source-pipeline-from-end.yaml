@@ -1,0 +1,33 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: redis-source-e2e
+spec:
+  vertices:
+    - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true"
+      scale:
+        min: 2
+      source:
+        redisStreams:
+          url: "redis:6379"
+          stream: test-stream-b
+          consumerGroup: my-group
+          readFromBeginning: false
+    - name: p1
+      udf:
+        builtin:
+          name: cat
+    - name: out
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+  edges:
+    - from: in
+      to: p1
+    - from: p1
+      to: out

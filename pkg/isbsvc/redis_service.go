@@ -129,7 +129,7 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*
 		return nil, fmt.Errorf("buffer infomation inquiry is not supported for type %q", buffer.Type)
 	}
 	group := fmt.Sprintf("%s-group", buffer.Name)
-	rqw := redis2.NewBufferWrite(ctx, redisclient.NewInClusterRedisClient(), buffer.Name, group, redis2.WithRefreshBufferWriteInfo(false))
+	rqw := redis2.NewBufferWrite(ctx, redisclient.NewInClusterRedisClient(), buffer.Name, group, redisclient.WithRefreshBufferWriteInfo(false))
 	var bufferWrite = rqw.(*redis2.BufferWrite)
 
 	bufferInfo := &BufferInfo{
