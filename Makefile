@@ -1,5 +1,3 @@
-#_SHELL=$(shell [ -e /bin/bash ] && echo "/bin/bash" || echo "/bin/sh" )
-#SHELL:=/bin/bash
 CURRENT_DIR=$(shell pwd)
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
@@ -46,12 +44,12 @@ ifndef PYTHON
 $(error "Python is not available, please install.")
 endif
 
-IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo "k3d image import")
+IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v k3d`" != '' ] && [ "`kubectl config current-context`" =~ k3d-* ] && echo "k3d image import")
 ifndef IMAGE_IMPORT_CMD
-IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v minikube`" != '' ] && [[ "`kubectl config current-context`" =~ minikube* ]] && echo "minikube image load")
+IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v minikube`" != '' ] && [ "`kubectl config current-context`" =~ minikube* ] && echo "minikube image load")
 endif
 ifndef IMAGE_IMPORT_CMD
-IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v kind`" != '' ] && [[ "`kubectl config current-context`" =~ kind-* ]] && echo "kind load docker-image")
+IMAGE_IMPORT_CMD:=$(shell [ "`command -v kubectl`" != '' ] && [ "`command -v kind`" != '' ] && [ "`kubectl config current-context`" =~ kind-* ] && echo "kind load docker-image")
 endif
 
 DOCKER:=$(shell command -v docker 2> /dev/null)
@@ -275,7 +273,7 @@ endif
 
 .PHONY: check-version-warning
 check-version-warning:
-	@if [[ ! "$(VERSION)" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$  ]]; then echo -n "It looks like you're not using a version format like 'v1.2.3', or 'v1.2.3-rc2', that version format is required for our releases. Do you wish to continue anyway? [y/N]" && read ans && [ $${ans:-N} = y ]; fi
+	@if [ ! "$(VERSION)" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$  ]; then echo -n "It looks like you're not using a version format like 'v1.2.3', or 'v1.2.3-rc2', that version format is required for our releases. Do you wish to continue anyway? [y/N]" && read ans && [ $${ans:-N} = y ]; fi
 
 .PHONY: update-manifests-version
 update-manifests-version:
