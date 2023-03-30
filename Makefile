@@ -1,3 +1,5 @@
+SHELL:=/bin/bash
+
 CURRENT_DIR=$(shell pwd)
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
