@@ -160,7 +160,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
 
 	// create pf using key and reducer
-	pf := NewProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string]isb.BufferWriter), myForwardTest{}, publishWatermark)
+	pf := NewProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string]isb.BufferWriter, 1), myForwardTest{}, publishWatermark, wmb.NewIdleManager(1))
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)
@@ -223,7 +223,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			buffers:  []*simplebuffer.InMemoryBuffer{test1Buffer1, test1Buffer2},
 			pf:       pf1,
 			otStores: otStores1,
-			expected: []bool{false, true},
+			expected: []bool{false, true}, // should have one ctrl message for buffer2
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
 					Offset:    0,
@@ -231,7 +231,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 					Idle:      false,
 				},
 				"buffer2": {
-					Offset:    -1,
+					Offset:    0,
 					Watermark: int64(119999),
 					Idle:      true,
 				},
@@ -271,15 +271,15 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			buffers:  []*simplebuffer.InMemoryBuffer{test3Buffer1, test3Buffer2},
 			pf:       pf3,
 			otStores: otStores3,
-			expected: []bool{true, true},
+			expected: []bool{true, true}, // should have one ctrl message for each buffer
 			wmExpected: map[string]wmb.WMB{
 				"buffer1": {
-					Offset:    -1,
+					Offset:    0,
 					Watermark: int64(119999),
 					Idle:      true,
 				},
 				"buffer2": {
-					Offset:    -1,
+					Offset:    0,
 					Watermark: int64(119999),
 					Idle:      true,
 				},
@@ -291,9 +291,14 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		t.Run(value.name, func(t *testing.T) {
 			err := value.pf.Forward(ctx)
 			assert.NoError(t, err)
-			assert.Equal(t, []bool{value.buffers[0].IsEmpty(), value.buffers[1].IsEmpty()}, value.expected)
+			msgs0, err := value.buffers[0].Read(ctx, 1)
+			assert.NoError(t, err)
+			assert.Equal(t, value.expected[0], msgs0[0].Header.Kind == isb.WMB)
+			msgs1, err := value.buffers[1].Read(ctx, 1)
+			assert.NoError(t, err)
+			assert.Equal(t, value.expected[1], msgs1[0].Header.Kind == isb.WMB)
 			// pbq entry from the manager will be removed after forwarding
-			assert.Equal(t, pbqManager.GetPBQ(value.id), nil)
+			assert.Equal(t, nil, pbqManager.GetPBQ(value.id))
 			for bufferName := range value.pf.publishWatermark {
 				// NOTE: in this test we only have one processor to publish
 				// so len(otKeys) should always be 1
@@ -301,7 +306,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 				for _, otKey := range otKeys {
 					otValue, _ := value.otStores[bufferName].GetValue(ctx, otKey)
 					ot, _ := wmb.DecodeToWMB(otValue)
-					assert.Equal(t, ot, value.wmExpected[bufferName])
+					assert.Equal(t, value.wmExpected[bufferName], ot)
 				}
 			}
 		})
@@ -397,6 +402,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		toBuffers:        toBuffers,
 		whereToDecider:   whereto,
 		publishWatermark: pw,
+		idleManager:      wmb.NewIdleManager(len(toBuffers)),
 	}
 
 	return pf, otStore

@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -139,7 +140,9 @@ func TestReadLoop_Startup(t *testing.T) {
 
 	window := fixed.NewFixed(60 * time.Second)
 
-	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", 0, &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
+	idleManager := wmb.NewIdleManager(len(toSteps))
+
+	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", 0, &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw, idleManager)
 	assert.NoError(t, err)
 	err = rl.Startup(ctx)
 	assert.NoError(t, err)
