@@ -328,4 +328,6 @@ func (w *writeOffset) AckIt() error {
 	return fmt.Errorf("not supported")
 }
 
-func (w *writeOffset) NoAck(context.Context) {}
+func (w *writeOffset) NoAck() error {
+	return fmt.Errorf("not supported")
+}

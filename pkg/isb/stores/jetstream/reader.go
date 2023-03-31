@@ -276,7 +276,11 @@ func (jr *jetStreamReader) NoAck(ctx context.Context, offsets []isb.Offset) {
 		wg.Add(1)
 		go func(o isb.Offset) {
 			defer wg.Done()
-			o.NoAck(ctx)
+			// Ignore the returned error as the worst case the message will
+			// take longer to be redelivered.
+			if err := o.NoAck(); err != nil {
+				jr.log.Errorw("Failed to nak JetStream msg", zap.Error(err))
+			}
 		}(o)
 	}
 	wg.Wait()
@@ -334,16 +338,11 @@ func (o *offset) AckIt() error {
 	return nil
 }
 
-func (o *offset) NoAck(ctx context.Context) {
+func (o *offset) NoAck() error {
 	if o.cancelFunc != nil {
 		o.cancelFunc()
 	}
-	// Ignore the returned error as the worst case the message will
-	// take longer to be redelivered.
-	log := logging.FromContext(ctx).With("Offset", o.String())
-	if err := o.msg.Nak(); err != nil {
-		log.Debug("Failed to nak the message")
-	}
+	return o.msg.Nak()
 }
 
 func (o *offset) Sequence() (int64, error) {
