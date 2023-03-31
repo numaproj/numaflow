@@ -1040,9 +1040,9 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string]isb.B
 				case <-ctx.Done():
 					return
 				case <-hbKVEntry:
-					// do nothing... just to consume the to buffer hb bucket
+					// do nothing... just to consume the toBuffer hbBucket
 				case <-otKVEntry:
-					// do nothing... just to consume the to buffer hb bucket
+					// do nothing... just to consume the toBuffer otBucket
 				}
 			}
 		}()
