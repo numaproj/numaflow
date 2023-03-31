@@ -20,10 +20,11 @@ import (
 	"context"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"go.uber.org/zap"
 )
 
 // inMemWatch implements the watermark's KV store backed up by in memory store.
