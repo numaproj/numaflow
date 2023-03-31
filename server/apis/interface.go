@@ -34,4 +34,5 @@ type Handler interface {
 	GetPipelineEdge(c *gin.Context)
 	GetPipelineWatermarks(c *gin.Context)
 	GetPipelineStatus(c *gin.Context)
+	ListNamespaces(c *gin.Context)
 }
