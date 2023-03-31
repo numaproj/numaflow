@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -39,7 +41,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"github.com/stretchr/testify/assert"
 )
 
 var keyedVertex = &dfv1.VertexInstance{
@@ -552,17 +553,6 @@ func TestReduceDataForward_Count(t *testing.T) {
 	// start the producer
 	go publishMessages(ctx, startTime, messageValue, 300, 10, p, fromBuffer)
 
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
-		select {
-		case <-ctx.Done():
-			assert.Fail(t, ctx.Err().Error())
-			return
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
 	msgs, readErr := buffer.Read(ctx, 1)
@@ -635,17 +625,6 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// start the producer
 	go publishMessages(ctx, startTime, messageValue, 300, 10, p, fromBuffer)
-
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
-		select {
-		case <-ctx.Done():
-			assert.Fail(t, ctx.Err().Error())
-			return
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
 
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
@@ -721,17 +700,6 @@ func TestReduceDataForward_Max(t *testing.T) {
 	// start the producer
 	go publishMessages(ctx, startTime, messageValue, 600, 10, p, fromBuffer)
 
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
-		select {
-		case <-ctx.Done():
-			assert.Fail(t, ctx.Err().Error())
-			return
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
 	msgs, readErr := buffer.Read(ctx, 1)
@@ -806,17 +774,6 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// start the forwarder
 	go reduceDataForward.Start()
-
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
-		select {
-		case <-ctx.Done():
-			assert.Fail(t, ctx.Err().Error())
-			return
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
 
 	msgs0, readErr := buffer.Read(ctx, 1)
 	assert.Nil(t, readErr)
@@ -910,17 +867,6 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	// start the producer
 	go publishMessages(ctx, startTime, messages, 600, 10, p, fromBuffer)
-
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
-		select {
-		case <-ctx.Done():
-			assert.Fail(t, ctx.Err().Error())
-			return
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
 
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
