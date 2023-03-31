@@ -53,6 +53,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
+	defer conn.Close()
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
@@ -67,6 +68,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
+	defer jw.Close()
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
 	messages := testutils.BuildTestWriteMessages(int64(10), startTime)
@@ -103,13 +105,13 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	// Forwarder logic tested here with a jetstream read and write
 	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName)
 	assert.NoError(t, err)
-
 	fromStep, _ := bufferReader.(*jetStreamReader)
+	defer fromStep.Close()
 
 	bufferWriter, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, toStreamName, toStreamName, toStreamName, WithMaxLength(10))
 	assert.NoError(t, err)
-
 	to1 := bufferWriter.(*jetStreamWriter)
+	defer to1.Close()
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
@@ -128,7 +130,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	for streamInfo.State.Msgs != 10 {
 		streamInfo, _ = to1js.StreamInfo(toStreamName)
 		if streamInfo.State.Msgs == 10 {
-			return
+			break
 		}
 		select {
 		case <-ctx.Done():
@@ -146,7 +148,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	assert.NoError(t, err)
 	fromStepInfo, err := fromStepJs.StreamInfo(streamName)
 	assert.NoError(t, err)
-	// Make sure all messages are cleared up from from buffer as DiscardOldPolicy is false
+	// Make sure all messages are cleared up from buffer as DiscardOldPolicy is false
 	assert.Equal(t, uint64(0), fromStepInfo.State.Msgs)
 
 	// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written
@@ -166,6 +168,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
+	defer conn.Close()
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
@@ -176,6 +179,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
+	defer jw.Close()
 	timeout := time.After(10 * time.Second)
 	for jw.isFull.Load() {
 		select {
@@ -223,6 +227,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
+	defer conn.Close()
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
@@ -233,6 +238,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2), WithBufferFullWritingStrategy(dfv1.DiscardLatest))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
+	defer jw.Close()
 	timeout := time.After(10 * time.Second)
 	for jw.isFull.Load() {
 		select {
@@ -279,6 +285,7 @@ func TestWriteGetName(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
+	defer conn.Close()
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
@@ -290,6 +297,7 @@ func TestWriteGetName(t *testing.T) {
 	assert.NoError(t, err)
 
 	bw := bufferWriter.(*jetStreamReader)
+	defer bw.Close()
 	assert.Equal(t, bw.GetName(), streamName)
 
 }
@@ -305,6 +313,7 @@ func TestWriteClose(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
+	defer conn.Close()
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
@@ -316,6 +325,6 @@ func TestWriteClose(t *testing.T) {
 	assert.NoError(t, err)
 
 	bw := bufferWriter.(*jetStreamWriter)
+	defer bw.Close()
 	assert.NoError(t, bw.Close())
-
 }

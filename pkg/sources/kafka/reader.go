@@ -193,6 +193,8 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
 
+func (r *KafkaSource) NoAck(_ context.Context, _ []isb.Offset) {}
+
 func (r *KafkaSource) Start() <-chan struct{} {
 	go r.startConsumer()
 	// wait for the consumer to setup.
