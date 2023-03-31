@@ -152,26 +152,27 @@ func (w *WAL) encodeWALHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	return buf, err
 }
 
-func (w *WAL) encodeReadMessage(message *isb.ReadMessage) (buf *bytes.Buffer, err error) {
+// encodeWALMessage builds the WAL message.
+func (w *WAL) encodeWALMessage(message *isb.ReadMessage) (buf *bytes.Buffer, err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
 				metrics.LabelPipeline:           w.walStores.pipelineName,
 				metrics.LabelVertex:             w.walStores.vertexName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
-				labelErrorKind:                  "encodeReadMessage",
+				labelErrorKind:                  "encodeWALMessage",
 			}).Inc()
 		}
 	}()
 	buf = new(bytes.Buffer)
-	body, err := w.encodeReadMessageBody(message)
+	body, err := w.encodeWALMessageBody(message)
 	if err != nil {
 		return nil, err
 	}
 	checksum := calculateChecksum(body)
 
 	// Writes the message header
-	header, err := w.encodeReadMessageHeader(message, int64(len(body)), checksum)
+	header, err := w.encodeWALMessageHeader(message, int64(len(body)), checksum)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +195,9 @@ func (w *WAL) encodeReadMessage(message *isb.ReadMessage) (buf *bytes.Buffer, er
 	return buf, nil
 }
 
-func (w *WAL) encodeReadMessageHeader(message *isb.ReadMessage, messageLen int64, checksum uint32) (*bytes.Buffer, error) {
+// encodeWALMessageHeader creates the header of the WAL message. The header is mainly for checksum, verifying the
+// correctness of the WALMessage.
+func (w *WAL) encodeWALMessageHeader(message *isb.ReadMessage, messageLen int64, checksum uint32) (*bytes.Buffer, error) {
 	watermark := message.Watermark.UnixMilli()
 
 	offset, err := message.ReadOffset.Sequence()
@@ -217,23 +220,25 @@ func (w *WAL) encodeReadMessageHeader(message *isb.ReadMessage, messageLen int64
 			metrics.LabelPipeline:           w.walStores.pipelineName,
 			metrics.LabelVertex:             w.walStores.vertexName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
-			labelErrorKind:                  "encodeReadMessageHeader",
+			labelErrorKind:                  "encodeWALMessageHeader",
 		}).Inc()
 		return nil, err
 	}
 	return buf, nil
 }
 
-func (w *WAL) encodeReadMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
+// encodeWALMessageBody uses ReadMessage.Message field as the body of the WAL message, encodes the
+// ReadMessage.Message, and returns.
+func (w *WAL) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
 	msgBinary, err := readMsg.Message.MarshalBinary()
 	if err != nil {
 		walErrors.With(map[string]string{
 			metrics.LabelPipeline:           w.walStores.pipelineName,
 			metrics.LabelVertex:             w.walStores.vertexName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
-			labelErrorKind:                  "encodeReadMessageBody",
+			labelErrorKind:                  "encodeWALMessageBody",
 		}).Inc()
-		return nil, fmt.Errorf("encodeReadMessageBody encountered encode err: %w", err)
+		return nil, fmt.Errorf("encodeWALMessageBody encountered encode err: %w", err)
 	}
 	return msgBinary, nil
 }
@@ -262,7 +267,7 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 		}
 	}()
 	encodeStart := time.Now()
-	entry, err := w.encodeReadMessage(message)
+	entry, err := w.encodeWALMessage(message)
 	entryEncodeLatency.With(map[string]string{
 		metrics.LabelPipeline:           w.walStores.pipelineName,
 		metrics.LabelVertex:             w.walStores.vertexName,
