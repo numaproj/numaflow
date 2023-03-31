@@ -132,7 +132,7 @@ func buildTestMessagesWithDistinctKeys(size int64) []*isb.Message {
 	// set key for test messages
 	var res []*isb.Message
 	for index := 0; index < len(messages); index++ {
-		messages[index].Key = fmt.Sprintf("key_%d", index)
+		messages[index].Key = []string{fmt.Sprintf("key_%d", index)}
 		res = append(res, &messages[index])
 	}
 	return res

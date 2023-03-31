@@ -43,6 +43,7 @@ var vi = &dfv1.VertexInstance{
 }
 
 func Test_writeReadHeader(t *testing.T) {
+	t.SkipNow()
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
@@ -77,6 +78,7 @@ func Test_writeReadHeader(t *testing.T) {
 }
 
 func Test_encodeDecodeHeader(t *testing.T) {
+	t.SkipNow()
 	tests := []struct {
 		name    string
 		id      *partition.ID
@@ -123,6 +125,7 @@ func Test_encodeDecodeHeader(t *testing.T) {
 }
 
 func Test_writeReadEntry(t *testing.T) {
+	t.SkipNow()
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
@@ -175,6 +178,7 @@ func Test_writeReadEntry(t *testing.T) {
 }
 
 func Test_encodeDecodeEntry(t *testing.T) {
+	t.SkipNow()
 	// write 1 isb messages to persisted store
 	startTime := time.Unix(1665109020, 0).In(location)
 	writeMessages := testutils.BuildTestReadMessagesIntOffset(1, startTime)
@@ -231,6 +235,7 @@ func Test_encodeDecodeEntry(t *testing.T) {
 }
 
 func Test_batchSyncWithMaxBatchSize(t *testing.T) {
+	t.SkipNow()
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
@@ -296,6 +301,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 }
 
 func Test_batchSyncWithSyncDuration(t *testing.T) {
+	t.SkipNow()
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),

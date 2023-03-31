@@ -237,14 +237,14 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
-	fsd := forward.GoWhere(func(key string) ([]string, error) {
+	fsd := forward.GoWhere(func(key []string) ([]string, error) {
 		result := []string{}
-		if key == dfv1.MessageKeyDrop {
+		if key[len(key)-1] == dfv1.MessageKeyDrop {
 			return result, nil
 		}
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
-			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key) {
+			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key[len(key)-1]) {
 				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
 					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
 				} else {

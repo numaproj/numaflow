@@ -29,7 +29,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -92,7 +91,6 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
 	}
 
-	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: key}))
 	datumList, err := u.client.MapTFn(ctx, d)
 	if err != nil {
 		return nil, function.ApplyUDFErr{

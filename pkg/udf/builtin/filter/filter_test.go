@@ -66,7 +66,7 @@ func TestExpression(t *testing.T) {
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, jsonMsg, string(result.Items()[0].Value))
+		assert.Equal(t, jsonMsg, string(result.Items()[0].Value()))
 	})
 
 	t.Run("invalid expression", func(t *testing.T) {
@@ -80,7 +80,7 @@ func TestExpression(t *testing.T) {
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, "", string(result.Items()[0].Value))
+		assert.Equal(t, "", string(result.Items()[0].Value()))
 	})
 
 	t.Run("Json expression invalid", func(t *testing.T) {
@@ -94,7 +94,7 @@ func TestExpression(t *testing.T) {
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, "", string(result.Items()[0].Value))
+		assert.Equal(t, "", string(result.Items()[0].Value()))
 	})
 
 	t.Run("String expression invalid", func(t *testing.T) {
@@ -108,7 +108,7 @@ func TestExpression(t *testing.T) {
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, "", string(result.Items()[0].Value))
+		assert.Equal(t, "", string(result.Items()[0].Value()))
 	})
 
 	t.Run("base64 expression valid", func(t *testing.T) {
@@ -122,7 +122,7 @@ func TestExpression(t *testing.T) {
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, base64Msg, string(result.Items()[0].Value))
+		assert.Equal(t, base64Msg, string(result.Items()[0].Value()))
 	})
 
 }
