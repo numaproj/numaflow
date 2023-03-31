@@ -1028,11 +1028,24 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string]isb.B
 	// create publisher for to Buffers
 	for key := range toBuffers {
 		publishEntity := processor.NewProcessorEntity(key)
-		hb, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
-		ot, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
+		hb, hbKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
+		ot, otKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
 		otStores[key] = ot
 		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
+
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-hbKVEntry:
+					// do nothing... just to consume the to buffer hb bucket
+				case <-otKVEntry:
+					// do nothing... just to consume the to buffer hb bucket
+				}
+			}
+		}()
 	}
 	return publishers, otStores
 }
@@ -1115,8 +1128,6 @@ func publishMessages(ctx context.Context, startTime int, messages []int, testDur
 					count = 0
 				}
 			}
-			// avoid busy loop
-			time.Sleep(100 * time.Millisecond)
 		case <-ctx.Done():
 			return
 		}
