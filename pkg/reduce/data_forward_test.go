@@ -1115,6 +1115,8 @@ func publishMessages(ctx context.Context, startTime int, messages []int, testDur
 					count = 0
 				}
 			}
+			// avoid busy loop
+			time.Sleep(100 * time.Millisecond)
 		case <-ctx.Done():
 			return
 		}
