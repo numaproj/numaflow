@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 
@@ -29,6 +31,10 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 )
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
 
 func TestJetStreamBufferRead(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
@@ -40,6 +46,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
+	defer conn.Close()
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
@@ -50,6 +57,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName)
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
+	defer jw.Close()
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
 	messages := testutils.BuildTestWriteMessages(int64(20), startTime)
@@ -77,6 +85,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	assert.NoError(t, err)
 
 	fromStep := bufferReader.(*jetStreamReader)
+	defer fromStep.Close()
 
 	readMessages, err := fromStep.Read(ctx, 20)
 	assert.NoError(t, err)
@@ -133,6 +142,7 @@ func TestGetName(t *testing.T) {
 	assert.NoError(t, err)
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
+	defer conn.Close()
 
 	streamName := "getName"
 	addStream(t, js, streamName)
@@ -142,6 +152,7 @@ func TestGetName(t *testing.T) {
 	assert.NoError(t, err)
 	br := bufferReader.(*jetStreamReader)
 	assert.Equal(t, br.GetName(), streamName)
+	defer br.Close()
 
 }
 
@@ -156,6 +167,7 @@ func TestClose(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 	conn, err := defaultJetStreamClient.Connect(ctx)
 	assert.NoError(t, err)
+	defer conn.Close()
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
@@ -172,8 +184,6 @@ func TestClose(t *testing.T) {
 }
 
 func addStream(t *testing.T, js *jsclient.JetStreamContext, streamName string) {
-	s := natstest.RunJetStreamServer(t)
-	defer natstest.ShutdownJetStreamServer(t, s)
 
 	_, err := js.AddStream(&nats.StreamConfig{
 		Name:       streamName,

@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -61,6 +63,10 @@ type testForwardFetcher struct {
 func (t *testForwardFetcher) Close() error {
 	// won't be used
 	return nil
+}
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 }
 
 // GetWatermark uses current time as the watermark because we want to make sure
@@ -1085,10 +1091,6 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -1097,16 +1099,21 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 		},
 	}}
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
+	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
 
 	stopped := f.Start()
 	// write some data
 	_, errs := fromStep.Write(ctx, writeMessages[0:5])
 	assert.Equal(t, make([]error, 5), errs)
-
 	assert.True(t, to1.IsEmpty())
 
 	f.Stop()

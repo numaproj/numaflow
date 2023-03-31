@@ -264,6 +264,8 @@ func (b *InMemoryBuffer) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return errs
 }
 
+func (b *InMemoryBuffer) NoAck(_ context.Context, _ []isb.Offset) {}
+
 // GetMessages gets the first num messages in the in mem buffer
 // this function is for testing purpose
 func (b *InMemoryBuffer) GetMessages(num int) []*isb.Message {

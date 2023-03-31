@@ -137,6 +137,8 @@ func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error
 	return errs
 }
 
+func (br *RedisStreamsRead) NoAck(_ context.Context, _ []isb.Offset) {}
+
 // processXReadResult is used to process the results of XREADGROUP
 func (br *RedisStreamsRead) processXReadResult(startIndex string, count int64) ([]redis.XStream, error) {
 	result := br.Client.XReadGroup(RedisContext, &redis.XReadGroupArgs{
