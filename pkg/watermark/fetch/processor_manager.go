@@ -250,31 +250,8 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					continue
 				}
 				if otValue.Idle {
-					if otValue.Offset != -1 {
-						// the idle watermark is not coming from a reduce vertex
-						// directly insert the idle watermark
-						p.offsetTimeline.PutIdle(otValue)
-						v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("idleWatermark", otValue.Watermark), zap.Int64("idleOffset", otValue.Offset))
-					} else {
-						var processors = v.GetAllProcessors()
-						for processorName, _processor := range processors {
-							// skip the idle processor itself, only use other processors as reference
-							if processorName != value.Key() {
-								// in any other Vn-1 processor's offset timeline, we can replace the idle watermark
-								// with any watermark whose watermark is <= otValue.Watermark
-								referredWMB := _processor.offsetTimeline.GetReferredWatermark(otValue.Watermark)
-								// if the referred watermark is empty, skip
-								if referredWMB.Watermark != -1 {
-									p.offsetTimeline.PutReferred(referredWMB)
-									v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("referredWatermark", referredWMB.Watermark), zap.Int64("referredOffset", referredWMB.Offset))
-									break
-								}
-							}
-						}
-						// if the break never happens, it's safe to do nothing ATM
-						// it could be the Vn-1's idle processor's speed is much slower
-						// than the others, or no data is flowing into this Vn's processor
-					}
+					p.offsetTimeline.PutIdle(otValue)
+					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("idleWatermark", otValue.Watermark), zap.Int64("idleOffset", otValue.Offset))
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					p.offsetTimeline.Put(otValue)

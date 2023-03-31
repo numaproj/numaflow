@@ -254,9 +254,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	// so the timeline should be empty
 	_, errs := fromStep.Write(ctx, ctrlMessage)
 	assert.Equal(t, make([]error, 1), errs)
-	if err != nil {
-		t.Fatal("expected the buffer not to be empty", err)
-	}
 	// waiting for the ctrl message to be acked
 	for !fromStep.IsEmpty() {
 		select {
@@ -811,15 +808,8 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 	stopped := f.Start()
 
 	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
-
-	// nothing to read some data, this is a dropping queue
-	assert.Equal(t, true, to1.IsEmpty())
-
-	// write some data
-	_, errs = fromStep.Write(ctx, writeMessages[5:20])
-	assert.Equal(t, make([]error, 15), errs)
+	_, errs := fromStep.Write(ctx, writeMessages)
+	assert.Equal(t, make([]error, 20), errs)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -855,6 +845,28 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 	otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
 	otDecode2, _ := wmb.DecodeToWMB(otValue2)
 	assert.True(t, otDecode2.Idle)
+
+	msgs := to1.GetMessages(1)
+	for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+		select {
+		case <-ctx.Done():
+			logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
+		default:
+			msgs = to1.GetMessages(1)
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	msgs = to2.GetMessages(1)
+	for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+		select {
+		case <-ctx.Done():
+			logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
+		default:
+			msgs = to2.GetMessages(1)
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
 
 	// since this is a dropping WhereTo, the buffer can never be full
 	f.Stop()
