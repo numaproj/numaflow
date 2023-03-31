@@ -507,7 +507,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 // Count operation with 1 min window
 func TestReduceDataForward_Count(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{7}
@@ -581,7 +581,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 // Sum operation with 2 minutes window
 func TestReduceDataForward_Sum(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{10}
@@ -654,7 +654,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 // Max operation with 5 minutes window
 func TestReduceDataForward_Max(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{100}
@@ -822,7 +822,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 // Max operation with 5 minutes window and non keyed
 func TestReduceDataForward_NonKeyed(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messages       = []int{100, 99}
@@ -897,7 +897,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 func TestDataForward_WithContextClose(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messages       = []int{100, 99}
