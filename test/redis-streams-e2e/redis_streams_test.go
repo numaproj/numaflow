@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package redis_source_e2e
+package redis_streams_e2e
 
 import (
 	"encoding/json"
@@ -28,7 +28,6 @@ import (
 	"github.com/numaproj/numaflow/test/fixtures"
 )
 
-//go:generate kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
 //go:generate kubectl apply -k ../../config/apps/redis -n numaflow-system
 type RedisSourceSuite struct {
 	fixtures.E2ESuite

@@ -40,9 +40,9 @@ jobs:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ hashFiles('**/go.mod') }}
       - name: Setup Golang
-        uses: actions/setup-go@v3.1.0
+        uses: actions/setup-go@v4.0.0
         with:
-          go-version: "1.19"
+          go-version: '1.19'
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -94,9 +94,9 @@ jobs:
           --health-retries 5
     steps:
       - name: Set up Go 1.x
-        uses: actions/setup-go@v3.1.0
+        uses: actions/setup-go@v4.0.0
         with:
-          go-version: "1.19"
+          go-version: '1.19'
         id: go
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
@@ -119,9 +119,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Setup Golang
-        uses: actions/setup-go@v3.1.0
+        uses: actions/setup-go@v4.0.0
         with:
-          go-version: "1.19"
+          go-version: '1.19'
       - name: Restore Go build cache
         uses: actions/cache@v3
         with:
@@ -139,7 +139,7 @@ jobs:
       max-parallel: 7
       matrix:
         driver: [jetstream]
-        case: [e2e-suite-1, e2e-suite-2, kafka-e2e, http-e2e, nats-e2e, redis-source-e2e, sdks-e2e, reduce-e2e]
+        case: [e2e-suite-1, e2e-suite-2, kafka-e2e, http-e2e, nats-e2e, redis-streams-e2e, sdks-e2e, reduce-e2e]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -149,9 +149,9 @@ jobs:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v2-${{ hashFiles('**/go.mod') }}
       - name: Setup Golang
-        uses: actions/setup-go@v3.1.0
+        uses: actions/setup-go@v4.0.0
         with:
-          go-version: "1.19"
+          go-version: '1.19'
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
