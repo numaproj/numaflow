@@ -284,6 +284,8 @@ func (mg *memgen) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
 
+func (mg *memgen) NoAck(_ context.Context, _ []isb.Offset) {}
+
 func (mg *memgen) Close() error {
 	if err := mg.sourcePublishWM.Close(); err != nil {
 		mg.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))

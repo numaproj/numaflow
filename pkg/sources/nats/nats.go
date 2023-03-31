@@ -252,6 +252,8 @@ func (ns *natsSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
 
+func (ns *natsSource) NoAck(_ context.Context, _ []isb.Offset) {}
+
 func (ns *natsSource) Close() error {
 	ns.logger.Info("Shutting down nats source server...")
 	ns.cancelfn()
