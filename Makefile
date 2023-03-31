@@ -46,7 +46,7 @@ ifndef PYTHON
 $(error "Python is not available, please install.")
 endif
 
-IMAGE_IMPORT_CMD:=$(shell [[ "`command -v kubectl`" != '' ]] && [[ "`command -v k3d`" != '' ]] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo "k3d image import")
+IMAGE_IMPORT_CMD:=$(shell [[ "`command -v kubectl`" != '' ]] && [[ "`command -v k3d`" != '' ]] && [[ "`kubectl config current-context`" =~ k3d-* ]] && echo "k3d image import -c `kubectl config current-context | cut -c 5-`")
 ifndef IMAGE_IMPORT_CMD
 IMAGE_IMPORT_CMD:=$(shell [[ "`command -v kubectl`" != '' ]] && [[ "`command -v minikube`" != '' ]] && [[ "`kubectl config current-context`" =~ minikube* ]] && echo "minikube image load")
 endif
