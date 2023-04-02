@@ -310,11 +310,11 @@ func NewKafkaSource(
 			config.Net.TLS.Config = c
 		}
 	}
-	if sasl := source.SASL; sasl != nil {
-		if c, err := sharedutil.GetSASL(sasl); err != nil {
+	if s := source.SASL; s != nil {
+		if sasl, err := sharedutil.GetSASL(s); err != nil {
 			return nil, err
 		} else {
-			config.Net.SASL = *c
+			config.Net.SASL = *sasl
 		}
 	}
 	kafkasource.config = config
