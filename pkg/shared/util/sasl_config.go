@@ -31,7 +31,6 @@ func GetGSSAPIConfig(config *dfv1.GSSAPI) (*sarama.GSSAPIConfig, error) {
 
 	c := &sarama.GSSAPIConfig{
 		ServiceName: config.ServiceName,
-		Username:    config.Username,
 		Realm:       config.Realm,
 	}
 
@@ -42,6 +41,15 @@ func GetGSSAPIConfig(config *dfv1.GSSAPI) (*sarama.GSSAPIConfig, error) {
 		c.AuthType = sarama.KRB5_KEYTAB_AUTH
 	default:
 		return nil, fmt.Errorf("failed to parse GSSAPI AuthType %v. Must be one of the following: ['KRB5_USER_AUTH', 'KRB5_KEYTAB_AUTH']", config.AuthType)
+	}
+
+	if config.UsernameSecret != nil {
+		username, err := GetSecretFromVolume(config.UsernameSecret)
+		if err != nil {
+			return nil, err
+		} else {
+			c.Username = username
+		}
 	}
 
 	if config.KeytabSecret != nil {
