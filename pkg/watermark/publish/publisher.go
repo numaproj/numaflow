@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -52,6 +53,7 @@ type publish struct {
 	otStore       store.WatermarkKVStorer
 	log           *zap.SugaredLogger
 	headWatermark wmb.Watermark
+	headWMLock    sync.RWMutex
 	opts          *publishOptions
 }
 
@@ -88,9 +90,23 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 	return p
 }
 
+// GetHeadWM gets the p.headWatermark field.
+func (p *publish) GetHeadWM() wmb.Watermark {
+	p.headWMLock.RLock()
+	defer p.headWMLock.RUnlock()
+	return p.headWatermark
+}
+
+// SetHeadWM sets the p.headWatermark field useing the given wm.
+func (p *publish) SetHeadWM(wm wmb.Watermark) {
+	p.headWMLock.Lock()
+	defer p.headWMLock.Unlock()
+	p.headWatermark = wm
+}
+
 // initialSetup inserts the default values as the ProcessorEntitier starts emitting watermarks.
 func (p *publish) initialSetup() {
-	p.headWatermark = p.loadLatestFromStore()
+	p.SetHeadWM(p.loadLatestFromStore())
 }
 
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
@@ -127,7 +143,7 @@ func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset) {
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
-			p.log.Debugw("New watermark published with offset", zap.Int64("head", p.headWatermark.UnixMilli()), zap.Int64("new", validWM.UnixMilli()), zap.Int64("offset", seq))
+			p.log.Debugw("New watermark published with offset", zap.Int64("head", p.GetHeadWM().UnixMilli()), zap.Int64("new", validWM.UnixMilli()), zap.Int64("offset", seq))
 			break
 		}
 	}
@@ -140,14 +156,15 @@ func (p *publish) validateWatermark(wm wmb.Watermark) (wmb.Watermark, bool) {
 		wm = wmb.Watermark(time.Time(wm).Add(-p.opts.delay))
 	}
 	// update p.headWatermark only if wm > p.headWatermark
-	if wm.After(time.Time(p.headWatermark)) {
-		p.log.Debugw("New watermark is updated for the head watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
-		p.headWatermark = wm
-	} else if wm.Before(time.Time(p.headWatermark)) {
-		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+	headWM := p.GetHeadWM()
+	if wm.After(time.Time(headWM)) {
+		p.log.Debugw("New watermark is updated for the head watermark", zap.String("head", headWM.String()), zap.String("new", wm.String()))
+		p.SetHeadWM(wm)
+	} else if wm.Before(time.Time(headWM)) {
+		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	} else {
-		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.String("head", p.headWatermark.String()), zap.String("new", wm.String()))
+		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	}
 	return wm, false
@@ -216,7 +233,7 @@ func (p *publish) loadLatestFromStore() wmb.Watermark {
 
 // GetLatestWatermark returns the latest watermark for that processor.
 func (p *publish) GetLatestWatermark() wmb.Watermark {
-	return p.headWatermark
+	return p.GetHeadWM()
 }
 
 func (p *publish) publishHeartbeat() {

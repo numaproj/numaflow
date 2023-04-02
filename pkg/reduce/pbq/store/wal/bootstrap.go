@@ -17,9 +17,7 @@ limitations under the License.
 package wal
 
 import (
-	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"os"
@@ -133,14 +131,14 @@ func (w *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 	return messages, false, nil
 }
 
-// decodeReadMessage decodes the header which is encoded by encodeReadMessage.
+// decodeReadMessage decodes the WALMessage which is encoded by encodeWALMessage.
 func decodeReadMessage(buf io.Reader) (*isb.ReadMessage, int64, error) {
-	entryHeader, err := decodeReadMessageHeader(buf)
+	entryHeader, err := decodeWALMessageHeader(buf)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	entryBody, err := decodeReadMessageBody(buf, entryHeader)
+	entryBody, err := decodeWALBody(buf, entryHeader)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -153,8 +151,8 @@ func decodeReadMessage(buf io.Reader) (*isb.ReadMessage, int64, error) {
 	}, size, nil
 }
 
-// decodeReadMessageHeader decodes the header which is encoded by encodeReadMessageHeader.
-func decodeReadMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
+// decodeWALMessageHeader decodes the WALMessage header which is encoded by encodeWALMessageHeader.
+func decodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
 	// read the fixed vals
 	var entryHeader = new(readMessageHeaderPreamble)
 	err := binary.Read(buf, binary.LittleEndian, entryHeader)
@@ -164,9 +162,9 @@ func decodeReadMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) 
 	return entryHeader, nil
 }
 
-// decodeReadMessageBody decodes the header which is encoded by encodeReadMessageBody.
+// decodeWALBody decodes the WALMessage body which is encoded by encodeWALMessageBody.
 // Returns errChecksumMismatch to indicate if corrupted entry is found.
-func decodeReadMessageBody(buf io.Reader, entryHeader *readMessageHeaderPreamble) (*isb.Message, error) {
+func decodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPreamble) (*isb.Message, error) {
 	var err error
 
 	body := make([]byte, entryHeader.MessageLen)
@@ -185,8 +183,7 @@ func decodeReadMessageBody(buf io.Reader, entryHeader *readMessageHeaderPreamble
 	}
 
 	var message = new(isb.Message)
-	dec := gob.NewDecoder(bytes.NewReader(body))
-	err = dec.Decode(&message)
+	err = message.UnmarshalBinary(body)
 	if err != nil {
 		return nil, err
 	}

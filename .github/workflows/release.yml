@@ -22,9 +22,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Go
-        uses: actions/setup-go@v3.1.0
+        uses: actions/setup-go@v4.0.0
         with:
-          go-version: 1.19
+          go-version: '1.19'
 
       - name: Build binaries
         run: |
@@ -99,9 +99,9 @@ jobs:
           else
             echo "VERSION=${GITHUB_REF##*/}" >> $GITHUB_ENV
           fi
-      - uses: actions/setup-go@v3.1.0
+      - uses: actions/setup-go@v4.0.0
         with:
-          go-version: 1.19
+          go-version: '1.19'
       - uses: actions/checkout@v3
       - run: go install sigs.k8s.io/bom/cmd/bom@v0.2.0
       - run: go install github.com/spdx/spdx-sbom-generator/cmd/generator@v0.0.13

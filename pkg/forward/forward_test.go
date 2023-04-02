@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -61,6 +63,10 @@ type testForwardFetcher struct {
 func (t *testForwardFetcher) Close() error {
 	// won't be used
 	return nil
+}
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 }
 
 // GetWatermark uses current time as the watermark because we want to make sure
@@ -254,9 +260,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	// so the timeline should be empty
 	_, errs := fromStep.Write(ctx, ctrlMessage)
 	assert.Equal(t, make([]error, 1), errs)
-	if err != nil {
-		t.Fatal("expected the buffer not to be empty", err)
-	}
 	// waiting for the ctrl message to be acked
 	for !fromStep.IsEmpty() {
 		select {
@@ -811,15 +814,8 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 	stopped := f.Start()
 
 	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
-
-	// nothing to read some data, this is a dropping queue
-	assert.Equal(t, true, to1.IsEmpty())
-
-	// write some data
-	_, errs = fromStep.Write(ctx, writeMessages[5:20])
-	assert.Equal(t, make([]error, 15), errs)
+	_, errs := fromStep.Write(ctx, writeMessages)
+	assert.Equal(t, make([]error, 20), errs)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -855,6 +851,28 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 	otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
 	otDecode2, _ := wmb.DecodeToWMB(otValue2)
 	assert.True(t, otDecode2.Idle)
+
+	msgs := to1.GetMessages(1)
+	for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+		select {
+		case <-ctx.Done():
+			logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
+		default:
+			msgs = to1.GetMessages(1)
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	msgs = to2.GetMessages(1)
+	for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+		select {
+		case <-ctx.Done():
+			logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
+		default:
+			msgs = to2.GetMessages(1)
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
 
 	// since this is a dropping WhereTo, the buffer can never be full
 	f.Stop()
@@ -1073,10 +1091,6 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -1085,16 +1099,21 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 		},
 	}}
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
+	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
 
 	stopped := f.Start()
 	// write some data
 	_, errs := fromStep.Write(ctx, writeMessages[0:5])
 	assert.Equal(t, make([]error, 5), errs)
-
 	assert.True(t, to1.IsEmpty())
 
 	f.Stop()

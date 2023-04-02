@@ -13,10 +13,10 @@ spec:
         min: 2
       source:
         redisStreams:
-          url: "redis:6379"
-          stream: test-stream-a
+          url: redis:6379
+          stream: test-stream-b
           consumerGroup: my-group
-          readFromBeginning: true
+          readFromBeginning: false
     - name: p1
       udf:
         builtin:

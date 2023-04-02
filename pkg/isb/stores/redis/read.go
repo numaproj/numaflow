@@ -261,6 +261,7 @@ func (br *BufferRead) setError(errMsg string, err error) {
 	br.BufferReadInfo.refreshEmptyError.Inc()
 	br.setIsEmptyFlag(false)
 }
+
 func (br *BufferRead) Pending(_ context.Context) (int64, error) {
 	// TODO: not implemented
 	return isb.PendingNotAvailable, nil

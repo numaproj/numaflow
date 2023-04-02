@@ -159,36 +159,6 @@ func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 	}
 }
 
-// PutReferred inserts the referred WMB, which is a validated watermark copied from other timelines, to replace
-// the idle watermark into list. It ensures that the list will remain sorted after the insert.
-// TODO: clean up and refine the other two put methods after we remove copying over strategy
-func (t *OffsetTimeline) PutReferred(node wmb.WMB) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	// when inserting a referred WMB, we only need to compare with the head
-	// and can safely skip insertion when any condition doesn't meet
-	if e := t.watermarks.Front(); e != nil {
-		var elementNode = e.Value.(wmb.WMB)
-		if node.Watermark > elementNode.Watermark {
-			if node.Offset > elementNode.Offset {
-				t.watermarks.InsertBefore(node, e)
-				t.watermarks.Remove(t.watermarks.Back())
-				return
-			}
-		} else if node.Watermark == elementNode.Watermark {
-			if node.Offset > elementNode.Offset {
-				e.Value = wmb.WMB{
-					Watermark: node.Watermark,
-					Offset:    node.Offset,
-				}
-				return
-			}
-		} else {
-			return
-		}
-	}
-}
-
 // GetHeadOffset returns the head offset, that is the most recent offset which will have the highest
 // Watermark.
 func (t *OffsetTimeline) GetHeadOffset() int64 {
@@ -215,26 +185,6 @@ func (t *OffsetTimeline) GetHeadWMB() wmb.WMB {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return t.watermarks.Front().Value.(wmb.WMB)
-}
-
-// GetReferredWatermark returns a referred watermark, which is a validated watermark copied from other timelines,
-// to replace the idle watermark value
-func (t *OffsetTimeline) GetReferredWatermark(idleWM int64) wmb.WMB {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	// find in the offset timeline where the WMB has an active watermark that is <= the idleWM
-	// because, when we replace the idleWM, we need to guarantee the referred watermark's value won't exceed
-	// the largest WM processed from Vn-1's idle processor (meaning the idle processor hasn't seen any data that
-	// is later than this idleWM)
-	for e := t.watermarks.Front(); e != nil; e = e.Next() {
-		if e.Value.(wmb.WMB).Watermark <= idleWM && !e.Value.(wmb.WMB).Idle {
-			return e.Value.(wmb.WMB)
-		}
-	}
-	return wmb.WMB{
-		Watermark: -1,
-		Offset:    -1,
-	}
 }
 
 // GetOffset will return the offset for the given event-time.

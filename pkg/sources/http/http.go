@@ -255,6 +255,8 @@ func (h *httpSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
 
+func (h *httpSource) NoAck(_ context.Context, _ []isb.Offset) {}
+
 func (h *httpSource) Close() error {
 	h.logger.Info("Shutting down http source server...")
 	h.cancelFunc()
