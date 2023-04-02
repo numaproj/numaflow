@@ -17769,14 +17769,15 @@
         "serviceName": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "usernameSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "UsernameSecret refers to the secret that contains the username"
         }
       },
       "required": [
         "serviceName",
         "realm",
-        "username",
+        "usernameSecret",
         "authType"
       ],
       "type": "object"
@@ -18419,6 +18420,10 @@
         "config": {
           "type": "string"
         },
+        "sasl": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASL",
+          "description": "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL."
+        },
         "tls": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
           "description": "TLS user to configure TLS connection for kafka broker TLS.enable=true default for TLS."
@@ -18975,12 +18980,13 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
           "description": "PasswordSecret refers to the secret that contains the password"
         },
-        "user": {
-          "type": "string"
+        "userSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "UserSecret refers to the secret that contains the user"
         }
       },
       "required": [
-        "user",
+        "userSecret",
         "handshake"
       ],
       "type": "object"
