@@ -23,7 +23,61 @@ import (
 	"os"
 )
 
-// A utility function to get sasl.gssapi.Config
+// GetSASLConfig A utility function to get sarama.Config.Net.SASL
+func GetSASL(saslConfig *dfv1.SASL) (*struct {
+	Enable                   bool
+	Mechanism                sarama.SASLMechanism
+	Version                  int16
+	Handshake                bool
+	AuthIdentity             string
+	User                     string
+	Password                 string
+	SCRAMAuthzID             string
+	SCRAMClientGeneratorFunc func() sarama.SCRAMClient
+	TokenProvider            sarama.AccessTokenProvider
+	GSSAPI                   sarama.GSSAPIConfig
+}, error) {
+	config := sarama.NewConfig()
+	switch *saslConfig.Mechanism {
+	case dfv1.SASLTypeGSSAPI:
+		if gssapi := saslConfig.GSSAPI; gssapi != nil {
+			config.Net.SASL.Enable = true
+			config.Net.SASL.Mechanism = sarama.SASLTypeGSSAPI
+			if gssapi, err := GetGSSAPIConfig(gssapi); err != nil {
+				return nil, fmt.Errorf("error loading gssapi config, %w", err)
+			} else {
+				config.Net.SASL.GSSAPI = *gssapi
+			}
+		}
+	case dfv1.SASLTypePlaintext:
+		if plain := saslConfig.Plain; plain != nil {
+			config.Net.SASL.Enable = true
+			config.Net.SASL.Mechanism = sarama.SASLTypePlaintext
+			if plain.UserSecret != nil {
+				user, err := GetSecretFromVolume(plain.UserSecret)
+				if err != nil {
+					return nil, err
+				} else {
+					config.Net.SASL.User = user
+				}
+			}
+			if plain.PasswordSecret != nil {
+				password, err := GetSecretFromVolume(plain.PasswordSecret)
+				if err != nil {
+					return nil, err
+				} else {
+					config.Net.SASL.Password = password
+				}
+			}
+			config.Net.SASL.Handshake = plain.Handshake
+		}
+	default:
+		return nil, fmt.Errorf("SASL mechanism not supported: %s", *saslConfig.Mechanism)
+	}
+	return &config.Net.SASL, nil
+}
+
+// GetGSSAPIConfig A utility function to get sasl.gssapi.Config
 func GetGSSAPIConfig(config *dfv1.GSSAPI) (*sarama.GSSAPIConfig, error) {
 	if config == nil {
 		return nil, nil
