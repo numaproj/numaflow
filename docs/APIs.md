@@ -1153,9 +1153,14 @@ Description
 </tr>
 <tr>
 <td>
-<code>username</code></br> <em> string </em>
+<code>usernameSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
 <td>
+<p>
+UsernameSecret refers to the secret that contains the username
+</p>
 </td>
 </tr>
 <tr>
@@ -2419,6 +2424,19 @@ default for TLS.
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>sasl</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL"> SASL </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASL user to configure SASL connection for kafka broker SASL.enable=true
+default for SASL.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.KafkaSource">
@@ -3676,6 +3694,7 @@ SASL
 </h3>
 <p>
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>)
 </p>
 <p>
@@ -3752,9 +3771,14 @@ Description
 <tbody>
 <tr>
 <td>
-<code>user</code></br> <em> string </em>
+<code>userSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
 <td>
+<p>
+UserSecret refers to the secret that contains the user
+</p>
 </td>
 </tr>
 <tr>
