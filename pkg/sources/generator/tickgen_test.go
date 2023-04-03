@@ -81,7 +81,8 @@ func TestStop(t *testing.T) {
 	// for use by the buffer reader on the other side of the stream
 	ctx := context.Background()
 
-	dest := simplebuffer.NewInMemoryBuffer("writer", 100)
+	// default rpu is 5. set the test to run for 2 ticks.
+	dest := simplebuffer.NewInMemoryBuffer("writer", 10)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "memgen",
