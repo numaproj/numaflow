@@ -328,7 +328,7 @@ func (mg *memgen) NewWorker(ctx context.Context, rate int) func(chan time.Time, 
 				tickgenSourceCount.With(map[string]string{metrics.LabelVertex: mg.name, metrics.LabelPipeline: mg.pipelineName})
 				// we would generate all the keys in a round robin fashion
 				// even if there are multiple pods, all the pods will generate same keys in the same order.
-				// alternatively, we could also think about generating a subset of keys per pod.
+				// TODO: alternatively, we could also think about generating a subset of keys per pod.
 				t := ts.UnixNano()
 				for i := 0; i < rate; i++ {
 					for k := int32(0); k < mg.keyCount; k++ {
@@ -353,6 +353,7 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 	go func() {
 		// capping the rate to 10000 msgs/sec
 		if rate > 10000 {
+			log.Infow("Capping the rate to 10000 msg/sec. rate has been changed from %d to 10000", rate)
 			rate = 10000
 		}
 
