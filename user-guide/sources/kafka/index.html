@@ -1730,6 +1730,38 @@
 <span class="w">            </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Private Key.</span>
 <span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk</span>
 <span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk-key</span>
+<span class="w">          </span><span class="nt">sasl</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional</span>
+<span class="w">            </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GSSAPI</span><span class="w"> </span><span class="c1"># PLAIN or GSSAPI, other mechanisms not supported</span>
+<span class="w">            </span><span class="nt">gssapi</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, for GSSAPI mechanism</span>
+<span class="w">              </span><span class="nt">serviceName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-service</span>
+<span class="w">              </span><span class="nt">realm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-realm</span>
+<span class="w">              </span><span class="c1"># KRB5_USER_AUTH for auth using password</span>
+<span class="w">              </span><span class="c1"># KRB5_KEYTAB_AUTH for auth using keytab</span>
+<span class="w">              </span><span class="nt">authType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KRB5_KEYTAB_AUTH</span><span class="w"> </span>
+<span class="w">              </span><span class="nt">usernameSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the username</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-username</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-username-key</span>
+<span class="w">              </span><span class="c1"># Pointing to a secret reference which contains the keytab (authType: KRB5_KEYTAB_AUTH)</span>
+<span class="w">              </span><span class="nt">keytabSecret</span><span class="p">:</span><span class="w"> </span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-keytab</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-keytab-key</span>
+<span class="w">              </span><span class="c1"># Pointing to a secret reference which contains the keytab (authType: KRB5_USER_AUTH)</span>
+<span class="w">              </span><span class="nt">passwordSecret</span><span class="p">:</span><span class="w"> </span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-password</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-password-key</span>
+<span class="w">              </span><span class="nt">kerberosConfigSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the kerberos config</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-kerberos-config</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-kerberos-config-key</span>
+<span class="w">            </span><span class="nt">plain</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, for PLAIN mechanism</span>
+<span class="w">              </span><span class="nt">userSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the user</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">plain-user</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">plain-user-key</span>
+<span class="w">              </span><span class="nt">passwordSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the password</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">plain-password</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">plain-password-key</span>
+<span class="w">              </span><span class="c1"># Send the Kafka SASL handshake first if enabled (defaults to true)</span>
+<span class="w">              </span><span class="c1"># Set this to false if using a non-Kafka SASL proxy</span>
+<span class="w">              </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span>
 </code></pre></div>
 
               
