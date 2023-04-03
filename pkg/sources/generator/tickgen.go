@@ -359,6 +359,10 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 		tickChan := make(chan time.Time, math.MaxInt32)
 		doneChan := make(chan struct{})
 		childCtx, cancel := context.WithCancel(ctx)
+
+		// make sure that there is only one worker all the time.
+		// even when there is back pressure, max number of go routines inflight should be 1.
+		// at the same time, we dont want to miss any ticks that cannot be processed.
 		worker := mg.NewWorker(childCtx, rate)
 		go worker(tickChan, doneChan)
 
