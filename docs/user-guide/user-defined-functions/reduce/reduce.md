@@ -70,11 +70,11 @@ chaining of windows, keyed streams, etc.
 
 ## Time Characteristics
 
-All windowing operations generate new records as an output of reduce operations. event time and watermark 
+All windowing operations generate new records as an output of reduce operations. Event-time and Watermark 
 are two main primitives that determine how the time propagates in a streaming application. so for all new 
 records generated in a reduce operation, event time is set to the end time of the window. 
 
-For example, for a reduce operation over a keyed/non-keyed window with start and end defined by 
+For example, for a reduce operation over a keyed/non-keyed window with a start and end defined by 
 `[2031-09-29T18:47:00Z, 2031-09-29T18:48:00Z)`, event time for all the records generated will be set to 
 `2031-09-29T18:47:59.999Z` since millisecond is the smallest granularity (as of now) event time is set to 
 the last timestamp that belongs to a window. 
