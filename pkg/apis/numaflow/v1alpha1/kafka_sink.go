@@ -28,5 +28,5 @@ type KafkaSink struct {
 	// SASL user to configure SASL connection for kafka broker
 	// SASL.enable=true default for SASL.
 	// +optional
-	SASL *SASL `json:"sasl" protobuf:"bytes,6,opt,name=sasl"`
+	SASL *SASL `json:"sasl" protobuf:"bytes,5,opt,name=sasl"`
 }

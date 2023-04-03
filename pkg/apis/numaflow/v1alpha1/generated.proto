@@ -645,7 +645,7 @@ message KafkaSink {
   // SASL user to configure SASL connection for kafka broker
   // SASL.enable=true default for SASL.
   // +optional
-  optional SASL sasl = 6;
+  optional SASL sasl = 5;
 }
 
 message KafkaSource {
