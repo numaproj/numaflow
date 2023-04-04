@@ -23,7 +23,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 	"time"
 
@@ -358,7 +357,7 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 			rate = 10000
 		}
 
-		tickChan := make(chan time.Time, math.MaxInt32)
+		tickChan := make(chan time.Time, 1000)
 		doneChan := make(chan struct{})
 		childCtx, cancel := context.WithCancel(ctx)
 
