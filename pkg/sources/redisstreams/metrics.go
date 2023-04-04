@@ -30,11 +30,11 @@ var redisStreamsSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of Redis Streams messages Read",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
 
-// Total number of Redis Streams messages Produced
-var redisStreamsSourceProducedCount = promauto.NewCounterVec(prometheus.CounterOpts{
+// Total number of Redis Read Errors
+var redisStreamsSourceReadErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "redis_streams_source",
-	Name:      "produced_total",
-	Help:      "Total number of Redis Streams messages Produced",
+	Name:      "read_error_total",
+	Help:      "Total number of Redis IsEmpty Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
 
 // Total number of Redis Streams messages Acknowledged
@@ -44,9 +44,9 @@ var redisStreamsSourceAckCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of Redis Streams messages Acknowledged",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
 
-// Total number of Redis Read Errors
-var redisStreamsSourceReadErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+// Total number of Redis Ack Errors
+var redisStreamsSourceAckErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "redis_streams_source",
-	Name:      "read_error_total",
-	Help:      "Total number of Redis IsEmpty Errors",
+	Name:      "ack_err_total",
+	Help:      "Total number of Redis Streams messages that failed Ack",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})

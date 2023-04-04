@@ -44,8 +44,8 @@ type RedisStreamsRead struct {
 type Metrics struct {
 	ReadErrorsInc metricsIncrementFunc
 	ReadsAdd      metricsAddFunc // number of actual messages read in
-	ProducedAdd   metricsAddFunc // number of outgoing messages produced based on the input (an incoming message can result in multiple)
 	AcksAdd       metricsAddFunc
+	AckErrorsAdd  metricsAddFunc
 }
 
 // need a function type which increments a particular counter
@@ -103,10 +103,6 @@ func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMes
 	}
 	// Generate messages from the XStream
 	msgs, err := br.XStreamToMessages(xstreams, messages, labels)
-	// Update metric for number of messages produced
-	if br.Metrics.ProducedAdd != nil {
-		br.Metrics.ProducedAdd(len(messages))
-	}
 	br.Log.Debugf("Received %d messages over Redis Streams Source, err=%v", len(msgs), err)
 	return msgs, err
 }
@@ -126,6 +122,7 @@ func (br *RedisStreamsRead) processReadError(xstreams []redis.XStream, messages 
 	return messages, fmt.Errorf("XReadGroup failed, %w", err)
 }
 
+// Todo: we can actually probably put the original code back here - we don't really need dedup
 // Ack acknowledges the offset to the read queue. Ack is always pipelined, if you want to avoid it then
 // send array of 1 element.
 func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error {

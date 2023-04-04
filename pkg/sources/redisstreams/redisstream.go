@@ -111,11 +111,11 @@ func New(
 			ReadsAdd: func(count int) {
 				redisStreamsSourceReadCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
 			},
-			ProducedAdd: func(count int) {
-				redisStreamsSourceProducedCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
-			},
 			AcksAdd: func(count int) {
 				redisStreamsSourceAckCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
+			},
+			AckErrorsAdd: func(count int) {
+				redisStreamsSourceAckErrors.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
 			},
 		},
 	}
@@ -177,11 +177,14 @@ func New(
 				var outMsg *isb.ReadMessage
 				var err error
 				if len(message.Values) > 1 {
+					// in this case since we have more than one k/v pair, we can't publish a key
+					// so just JSON serialize the k/v pairs
 					outMsg, err = redisStreamsSource.produceUnkeyedJSONMsg(message)
 					if err != nil {
 						return nil, err
 					}
 				} else if len(message.Values) == 1 {
+					// we just have one k/v pair, so we can use this key and the value can be raw
 					outMsg, err = redisStreamsSource.produceOneKeyedMsg(message)
 					if err != nil {
 						return nil, err
@@ -237,7 +240,7 @@ func (rsSource *redisStreamsSource) produceUnkeyedJSONMsg(inMsg redis.XMessage) 
 		}
 		kvMap[k] = strValue
 	}
-	jsonSerialized, err := json.Marshal(&kvMap)
+	jsonSerialized, err := json.Marshal(&kvMap) //todo: Vigith mentioned array - does he prefer that?
 	if err != nil {
 		return nil, fmt.Errorf("failed to json serialize RedisStream values: %+v;", jsonSerialized, inMsg)
 	}
@@ -282,7 +285,7 @@ func (rsSource *redisStreamsSource) produceOneKeyedMsg(inMsg redis.XMessage) (*i
 			Message:    isbMsg,
 		}, nil
 	}
-
+	return nil, nil // unreachable code
 }
 
 func (rsSource *redisStreamsSource) createConsumerGroup(ctx context.Context, sourceSpec *dfv1.RedisStreamsSource) error {
