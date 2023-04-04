@@ -33,7 +33,7 @@ var redisStreamsSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
 // Total number of Redis Read Errors
 var redisStreamsSourceReadErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "redis_streams_source",
-	Name:      "read_error_total",
+	Name:      "read_err_total",
 	Help:      "Total number of Redis IsEmpty Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
 
