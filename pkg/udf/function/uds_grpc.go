@@ -79,12 +79,12 @@ func (u *UDSgRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 }
 
 func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
-	key := readMessage.Keys
+	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
 	var d = &functionpb.Datum{
-		Key:       key,
+		Key:       keys,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
@@ -104,12 +104,12 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 
 	writeMessages := make([]*isb.Message, 0)
 	for i, datum := range datumList {
-		key := datum.Key
+		keys := datum.Key
 		writeMessage := &isb.Message{
 			Header: isb.Header{
 				MessageInfo: parentMessageInfo,
 				ID:          fmt.Sprintf("%s-%d", offset.String(), i),
-				Keys:        key,
+				Keys:        keys,
 			},
 			Body: isb.Body{
 				Payload: datum.Value,
@@ -184,14 +184,14 @@ readLoop:
 
 	writeMessages := make([]*isb.Message, 0)
 	for _, datum := range result {
-		key := datum.Key
+		keys := datum.Key
 		writeMessage := &isb.Message{
 			Header: isb.Header{
 				MessageInfo: isb.MessageInfo{
 					EventTime: partitionID.End.Add(-1 * time.Millisecond),
 					IsLate:    false,
 				},
-				Keys: key,
+				Keys: keys,
 			},
 			Body: isb.Body{
 				Payload: datum.Value,
@@ -203,12 +203,12 @@ readLoop:
 }
 
 func createDatum(readMessage *isb.ReadMessage) *functionpb.Datum {
-	key := readMessage.Keys
+	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	parentMessageInfo := readMessage.MessageInfo
 
 	var d = &functionpb.Datum{
-		Key:       key,
+		Key:       keys,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},

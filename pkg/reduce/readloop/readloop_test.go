@@ -54,8 +54,8 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
-		key := msg.Keys
-		sums[key[0]] += payload.Value
+		keys := msg.Keys
+		sums[keys[0]] += payload.Value
 	}
 
 	msgs := make([]*isb.Message, 0)
