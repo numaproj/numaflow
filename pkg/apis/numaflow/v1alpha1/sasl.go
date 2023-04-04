@@ -54,7 +54,8 @@ const (
 type GSSAPI struct {
 	ServiceName string `json:"serviceName" protobuf:"bytes,1,opt,name=serviceName"`
 	Realm       string `json:"realm" protobuf:"bytes,2,opt,name=realm"`
-	Username    string `json:"username" protobuf:"bytes,3,opt,name=username"`
+	// UsernameSecret refers to the secret that contains the username
+	UsernameSecret *corev1.SecretKeySelector `json:"usernameSecret" protobuf:"bytes,3,opt,name=usernameSecret"`
 	// valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH
 	AuthType *KRB5AuthType `json:"authType" protobuf:"bytes,4,opt,name=authType,casttype=KRB5AuthType"`
 	// PasswordSecret refers to the secret that contains the password
@@ -82,7 +83,8 @@ const (
 )
 
 type SASLPlain struct {
-	User string `json:"user" protobuf:"bytes,1,opt,name=user"`
+	// UserSecret refers to the secret that contains the user
+	UserSecret *corev1.SecretKeySelector `json:"userSecret" protobuf:"bytes,1,opt,name=userSecret"`
 	// PasswordSecret refers to the secret that contains the password
 	// +optional
 	PasswordSecret *corev1.SecretKeySelector `json:"passwordSecret" protobuf:"bytes,2,opt,name=passwordSecret"`

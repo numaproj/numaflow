@@ -25,4 +25,8 @@ type KafkaSink struct {
 	TLS *TLS `json:"tls" protobuf:"bytes,3,opt,name=tls"`
 	// +optional
 	Config string `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
+	// SASL user to configure SASL connection for kafka broker
+	// SASL.enable=true default for SASL.
+	// +optional
+	SASL *SASL `json:"sasl" protobuf:"bytes,5,opt,name=sasl"`
 }

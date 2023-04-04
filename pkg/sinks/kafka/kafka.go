@@ -111,6 +111,13 @@ func connect(kafkaSink *dfv1.KafkaSink) (sarama.AsyncProducer, error) {
 			config.Net.TLS.Config = c
 		}
 	}
+	if s := kafkaSink.SASL; s != nil {
+		if sasl, err := util.GetSASL(s); err != nil {
+			return nil, err
+		} else {
+			config.Net.SASL = *sasl
+		}
+	}
 	config.Producer.Return.Successes = true
 	config.Producer.Return.Errors = true
 	producer, err := sarama.NewAsyncProducer(kafkaSink.Brokers, config)
