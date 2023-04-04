@@ -323,6 +323,7 @@ func (mg *memgen) NewWorker(ctx context.Context, rate int) func(chan time.Time, 
 					<-tickChan
 				}
 				close(done)
+				close(mg.srcchan)
 				return
 			case ts := <-tickChan:
 				tickgenSourceCount.With(map[string]string{metrics.LabelVertex: mg.name, metrics.LabelPipeline: mg.pipelineName})
