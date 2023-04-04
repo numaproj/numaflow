@@ -69,6 +69,8 @@ func TestRead(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	msgs, err := dest.Read(ctx, 5)
 
+	mgen.Stop()
+
 	assert.Nil(t, err)
 	assert.Equal(t, 5, len(msgs))
 }
