@@ -378,8 +378,8 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 				MessageInfo: isb.MessageInfo{
 					EventTime: time.UnixMilli(60000),
 				},
-				ID:  "1",
-				Key: []string{key},
+				ID:   "1",
+				Keys: []string{key},
 			},
 			Body: isb.Body{Payload: resultPayload},
 		},

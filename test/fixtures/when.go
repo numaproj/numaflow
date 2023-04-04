@@ -41,7 +41,7 @@ type When struct {
 	kubeClient     kubernetes.Interface
 
 	portForwarderStopChannels map[string]chan struct{}
-	// Key: vertex label selector
+	// Keys: vertex label selector
 	// Value: the ip of, one of the pods matching the label selector
 	vertexToPodIpMapping map[string]string
 }

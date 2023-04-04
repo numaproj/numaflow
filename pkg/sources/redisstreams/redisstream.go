@@ -182,7 +182,7 @@ func New(
 						Header: isb.Header{
 							MessageInfo: isb.MessageInfo{EventTime: time.Now()}, //doesn't seem like Redis offers a timestamp
 							ID:          id,                                     // assumption is that this only needs to be unique for this source vertex
-							Key:         []string{f},
+							Keys:        []string{f},
 						},
 						Body: isb.Body{Payload: []byte(v.(string))},
 					}

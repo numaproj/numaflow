@@ -119,7 +119,7 @@ func TestHeader(t *testing.T) {
 				},
 				Kind: Data,
 				ID:   "TestID",
-				Key:  []string{"TestKey", "TestKey2"},
+				Keys: []string{"TestKey", "TestKey2"},
 			},
 			wantMarshalError:   false,
 			wantUnmarshalError: false,
@@ -131,7 +131,7 @@ func TestHeader(t *testing.T) {
 				MessageInfo: tt.fields.MessageInfo,
 				Kind:        tt.fields.Kind,
 				ID:          tt.fields.ID,
-				Key:         tt.fields.Key,
+				Keys:        tt.fields.Key,
 			}
 			gotData, err := h.MarshalBinary()
 			if (err != nil) != tt.wantMarshalError {
@@ -228,7 +228,7 @@ func TestMessage(t *testing.T) {
 					},
 					Kind: Data,
 					ID:   "TestID",
-					Key:  []string{"TestKey"},
+					Keys: []string{"TestKey"},
 				},
 				Body: Body{
 					Payload: []byte("TestBODY"),
@@ -242,7 +242,7 @@ func TestMessage(t *testing.T) {
 					},
 					Kind: Data,
 					ID:   "TestID",
-					Key:  []string{"TestKey"},
+					Keys: []string{"TestKey"},
 				},
 				Body: Body{
 					Payload: []byte("TestBODY"),
@@ -277,7 +277,7 @@ func TestMessage(t *testing.T) {
 				return
 			}
 			if tt.name == "good_empty" {
-				tt.wantData.Key = make([]string, 0)
+				tt.wantData.Keys = make([]string, 0)
 			}
 			if !reflect.DeepEqual(*newM, tt.wantData) {
 				t.Errorf("MarshalBinary() gotData = %v, want %v", newM, &tt.wantData)
@@ -310,7 +310,7 @@ func TestReadMessage(t *testing.T) {
 						},
 						Kind: Data,
 						ID:   "TestID",
-						Key:  []string{"TestKey"},
+						Keys: []string{"TestKey"},
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),
@@ -330,7 +330,7 @@ func TestReadMessage(t *testing.T) {
 						},
 						Kind: Data,
 						ID:   "TestID",
-						Key:  []string{"TestKey"},
+						Keys: []string{"TestKey"},
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),

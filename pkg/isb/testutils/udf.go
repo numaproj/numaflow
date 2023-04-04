@@ -39,7 +39,7 @@ func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb
 		Header: isb.Header{
 			MessageInfo: parentPaneInfo,
 			ID:          offset.String(),
-			Key:         key,
+			Keys:        key,
 		},
 		Body: isb.Body{
 			Payload: result,

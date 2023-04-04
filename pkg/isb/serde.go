@@ -74,7 +74,7 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 		MLen:    int16(len(msgInfo)),
 		MsgKind: h.Kind,
 		IDLen:   int16(len(h.ID)),
-		KeyLen:  int16(len(h.Key)),
+		KeyLen:  int16(len(h.Keys)),
 	}
 	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
 		return nil, err
@@ -88,14 +88,14 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 	if err = binary.Write(buf, binary.LittleEndian, []byte(h.ID)); err != nil {
 		return nil, err
 	}
-	if err = binary.Write(buf, binary.LittleEndian, int16(len(h.Key))); err != nil {
+	if err = binary.Write(buf, binary.LittleEndian, int16(len(h.Keys))); err != nil {
 		return nil, err
 	}
-	for i := 0; i < len(h.Key); i++ {
-		if err = binary.Write(buf, binary.LittleEndian, int16(len(h.Key[i]))); err != nil {
+	for i := 0; i < len(h.Keys); i++ {
+		if err = binary.Write(buf, binary.LittleEndian, int16(len(h.Keys[i]))); err != nil {
 			return nil, err
 		}
-		if err = binary.Write(buf, binary.LittleEndian, []byte(h.Key[i])); err != nil {
+		if err = binary.Write(buf, binary.LittleEndian, []byte(h.Keys[i])); err != nil {
 			return nil, err
 		}
 	}
@@ -128,7 +128,7 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 	if err = binary.Read(r, binary.LittleEndian, &keyLen); err != nil {
 		return err
 	}
-	h.Key = make([]string, 0)
+	h.Keys = make([]string, 0)
 	for i := int16(0); i < keyLen; i++ {
 		var kl int16
 		if err = binary.Read(r, binary.LittleEndian, &kl); err != nil {
@@ -138,7 +138,7 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 		if err = binary.Read(r, binary.LittleEndian, k); err != nil {
 			return err
 		}
-		h.Key = append(h.Key, string(k))
+		h.Keys = append(h.Keys, string(k))
 	}
 	h.MessageInfo = *msgInfo
 	h.Kind = preamble.MsgKind

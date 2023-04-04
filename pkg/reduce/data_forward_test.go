@@ -127,8 +127,8 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 			MessageInfo: isb.MessageInfo{
 				EventTime: partitionID.End,
 			},
-			ID:  "msgID",
-			Key: []string{"result"},
+			ID:   "msgID",
+			Keys: []string{"result"},
 		},
 		Body: isb.Body{Payload: b},
 	}
@@ -150,7 +150,7 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
-		key := msg.Key
+		key := msg.Keys
 		sums[key[0]] += payload.Value
 	}
 
@@ -164,8 +164,8 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 				MessageInfo: isb.MessageInfo{
 					EventTime: partitionID.End,
 				},
-				ID:  "msgID",
-				Key: []string{k},
+				ID:   "msgID",
+				Keys: []string{k},
 			},
 			Body: isb.Body{Payload: b},
 		}
@@ -184,12 +184,12 @@ func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
-		if max, ok := maxMap[msg.Key[0]]; ok {
+		if max, ok := maxMap[msg.Keys[0]]; ok {
 			mx = max
 		}
 		if payload.Value > mx {
 			mx = payload.Value
-			maxMap[msg.Key[0]] = mx
+			maxMap[msg.Keys[0]] = mx
 		}
 	}
 
@@ -202,8 +202,8 @@ func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 				MessageInfo: isb.MessageInfo{
 					EventTime: partitionID.End,
 				},
-				ID:  "msgID",
-				Key: []string{k},
+				ID:   "msgID",
+				Keys: []string{k},
 			},
 			Body: isb.Body{Payload: b},
 		}
@@ -468,7 +468,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	assert.Equal(t, isb.WMB, msgs[0].Kind)
 	// the second message should be the data message from the closed window above
 	// in the test ApplyUDF above we've set the final message to have key="result"
-	for len(msgs[1].Key) == 0 {
+	for len(msgs[1].Keys) == 0 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -1061,8 +1061,8 @@ func buildMessagesForReduce(count int, key string, publishTime time.Time) []isb.
 				MessageInfo: isb.MessageInfo{
 					EventTime: publishTime,
 				},
-				ID:  fmt.Sprintf("%d", i),
-				Key: []string{key},
+				ID:   fmt.Sprintf("%d", i),
+				Keys: []string{key},
 			},
 			Body: isb.Body{Payload: result},
 		}
@@ -1149,8 +1149,8 @@ func buildIsbMessage(messageValue int, eventTime time.Time) isb.Message {
 			MessageInfo: isb.MessageInfo{
 				EventTime: eventTime,
 			},
-			ID:  fmt.Sprintf("%d", messageValue),
-			Key: messageKey,
+			ID:   fmt.Sprintf("%d", messageValue),
+			Keys: messageKey,
 		},
 		Body: isb.Body{Payload: result},
 	}

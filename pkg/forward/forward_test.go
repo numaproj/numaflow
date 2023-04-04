@@ -542,7 +542,7 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 			Header: isb.Header{
 				MessageInfo: parentPaneInfo,
 				ID:          offset.String(),
-				Key:         key,
+				Keys:        key,
 			},
 			Body: isb.Body{
 				Payload: result,
@@ -601,7 +601,7 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	readMessages, err := to1.Read(ctx, count)
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, int(count))
-	assert.Equal(t, []interface{}{writeMessages[0].Header.Key, writeMessages[1].Header.Key}, []interface{}{readMessages[0].Header.Key, readMessages[1].Header.Key})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
 	assert.Equal(t, []interface{}{writeMessages[0].Header.ID, writeMessages[1].Header.ID}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.

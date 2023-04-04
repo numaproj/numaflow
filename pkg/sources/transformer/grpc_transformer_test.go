@@ -118,8 +118,8 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169600, 0),
 					},
-					ID:  "test_id",
-					Key: []string{"test_success_key"},
+					ID:   "test_id",
+					Keys: []string{"test_success_key"},
 				},
 				Body: isb.Body{
 					Payload: []byte(`forward_message`),
@@ -129,7 +129,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		},
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, req.Key, got[0].Key)
+		assert.Equal(t, req.Key, got[0].Keys)
 		assert.Equal(t, req.Value, got[0].Payload)
 	})
 
@@ -162,8 +162,8 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:  "test_id",
-					Key: []string{"test_error_key"},
+					ID:   "test_id",
+					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{
 					Payload: []byte(`forward_message`),
@@ -239,7 +239,7 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
 		apply, err := u.ApplyMap(ctx, &readMessage)
 		assert.NoError(t, err)
 		results[idx] = apply[0].Payload
-		resultKeys[idx] = apply[0].Header.Key
+		resultKeys[idx] = apply[0].Header.Keys
 	}
 
 	var expectedResults = make([][]byte, count)

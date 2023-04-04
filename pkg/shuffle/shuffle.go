@@ -66,7 +66,7 @@ func (s *Shuffle) Shuffle(key []string) string {
 func (s *Shuffle) ShuffleMessages(messages []*isb.Message) map[string][]*isb.Message {
 	hashMap := make(map[string][]*isb.Message)
 	for _, message := range messages {
-		identifier := s.Shuffle(message.Key)
+		identifier := s.Shuffle(message.Keys)
 		hashMap[identifier] = append(hashMap[identifier], message)
 	}
 	return hashMap

@@ -54,7 +54,7 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
-		key := msg.Key
+		key := msg.Keys
 		sums[key[0]] += payload.Value
 	}
 
@@ -68,8 +68,8 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 				MessageInfo: isb.MessageInfo{
 					EventTime: partitionID.End,
 				},
-				ID:  "msgID",
-				Key: []string{k},
+				ID:   "msgID",
+				Keys: []string{k},
 			},
 			Body: isb.Body{Payload: b},
 		}
@@ -155,8 +155,8 @@ func TestReadLoop_Startup(t *testing.T) {
 					EventTime: time.Unix(300, 0),
 					IsLate:    false,
 				},
-				ID:  "",
-				Key: []string{""},
+				ID:   "",
+				Keys: []string{""},
 			},
 			Body: isb.Body{},
 		},
@@ -210,8 +210,8 @@ func createStoreMessages(_ context.Context, key string, value int, eventTime tim
 					MessageInfo: isb.MessageInfo{
 						EventTime: eventTime,
 					},
-					ID:  fmt.Sprintf("%d", value+1),
-					Key: []string{key},
+					ID:   fmt.Sprintf("%d", value+1),
+					Keys: []string{key},
 				},
 				Body: isb.Body{Payload: result},
 			},

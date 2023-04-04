@@ -80,7 +80,7 @@ func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 }
 
 func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
-	key := readMessage.Key
+	key := readMessage.Keys
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
@@ -114,7 +114,7 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 			Header: isb.Header{
 				MessageInfo: parentMessageInfo,
 				ID:          fmt.Sprintf("%s-%d", offset.String(), i),
-				Key:         key,
+				Keys:        key,
 			},
 			Body: isb.Body{
 				Payload: datum.Value,

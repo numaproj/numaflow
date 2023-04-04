@@ -79,7 +79,7 @@ func (u *UDSgRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 }
 
 func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
-	key := readMessage.Key
+	key := readMessage.Keys
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
@@ -109,7 +109,7 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 			Header: isb.Header{
 				MessageInfo: parentMessageInfo,
 				ID:          fmt.Sprintf("%s-%d", offset.String(), i),
-				Key:         key,
+				Keys:        key,
 			},
 			Body: isb.Body{
 				Payload: datum.Value,
@@ -191,7 +191,7 @@ readLoop:
 					EventTime: partitionID.End.Add(-1 * time.Millisecond),
 					IsLate:    false,
 				},
-				Key: key,
+				Keys: key,
 			},
 			Body: isb.Body{
 				Payload: datum.Value,
@@ -203,7 +203,7 @@ readLoop:
 }
 
 func createDatum(readMessage *isb.ReadMessage) *functionpb.Datum {
-	key := readMessage.Key
+	key := readMessage.Keys
 	payload := readMessage.Body.Payload
 	parentMessageInfo := readMessage.MessageInfo
 
