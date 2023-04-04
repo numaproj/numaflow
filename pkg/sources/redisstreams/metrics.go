@@ -30,6 +30,13 @@ var redisStreamsSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of Redis Streams messages Read",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
 
+// Total number of Redis Streams messages Produced
+var redisStreamsSourceProducedCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "redis_streams_source",
+	Name:      "produced_total",
+	Help:      "Total number of Redis Streams messages Produced",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline})
+
 // Total number of Redis Streams messages Acknowledged
 var redisStreamsSourceAckCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "redis_streams_source",

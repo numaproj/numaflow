@@ -18,6 +18,7 @@ package redisstreams
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -110,6 +111,9 @@ func New(
 			ReadsAdd: func(count int) {
 				redisStreamsSourceReadCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
 			},
+			ProducedAdd: func(count int) {
+				redisStreamsSourceProducedCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
+			},
 			AcksAdd: func(count int) {
 				redisStreamsSourceAckCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
 			},
@@ -164,35 +168,26 @@ func New(
 
 	// function which takes the messages that have been read from the Stream and turns them into ReadMessages
 	redisStreamsSource.XStreamToMessages = func(xstreams []redis.XStream, messages []*isb.ReadMessage, labels map[string]string) ([]*isb.ReadMessage, error) {
-		// for each XMessage in []XStream
-		for _, xstream := range xstreams {
+		if len(xstreams) > 1 {
+			redisStreamsSource.Log.Warnf("redisStreamsSource shouldn't have more than one Stream; xstreams=%+v", xstreams)
+		} else if len(xstreams) == 1 {
+			xstream := xstreams[0]
+
 			for _, message := range xstream.Messages {
-				var readOffset = message.ID
-
-				valIndex := 0
-				for f, v := range message.Values {
-
-					// need to make sure the ID is unique: we can make it a combination of the original
-					// message ID from Redis (timestamp+sequence num) plus its ordinal in the key/value pairs
-					// contained in the message
-					id := fmt.Sprintf("%s-%d", message.ID, valIndex)
-					valIndex = valIndex + 1
-
-					isbMsg := isb.Message{
-						Header: isb.Header{
-							MessageInfo: isb.MessageInfo{EventTime: time.Now()}, //doesn't seem like Redis offers a timestamp
-							ID:          id,                                     // assumption is that this only needs to be unique for this source vertex
-							Key:         f,
-						},
-						Body: isb.Body{Payload: []byte(v.(string))},
+				var outMsg *isb.ReadMessage
+				var err error
+				if len(message.Values) > 1 {
+					outMsg, err = redisStreamsSource.produceUnkeyedJSONMsg(message)
+					if err != nil {
+						return nil, err
 					}
-
-					readMsg := &isb.ReadMessage{
-						ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }), // assumption is that this is just used for ack, so doesn't need to include stream name
-						Message:    isbMsg,
+				} else if len(message.Values) == 1 {
+					outMsg, err = redisStreamsSource.produceOneKeyedMsg(message)
+					if err != nil {
+						return nil, err
 					}
-					messages = append(messages, readMsg)
 				}
+				messages = append(messages, outMsg)
 			}
 		}
 
@@ -226,6 +221,68 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 	}
 
 	return redisclient.NewRedisClient(opts), nil
+}
+
+// incoming message should have multiple key/value pairs: produce a message with no Key, with value set to JSON serialization of the pairs
+func (rsSource *redisStreamsSource) produceUnkeyedJSONMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
+	var readOffset = inMsg.ID
+
+	// JSON serialize our key/value pairs
+	// need to first convert map[string]interface to map[string]string
+	kvMap := make(map[string]string)
+	for k, v := range inMsg.Values {
+		strValue, castOk := v.(string)
+		if !castOk {
+			return nil, fmt.Errorf("couldn't cast RedisStream interface type %v to string: inMsg=%+v", v, inMsg)
+		}
+		kvMap[k] = strValue
+	}
+	jsonSerialized, err := json.Marshal(&kvMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to json serialize RedisStream values: %+v;", jsonSerialized, inMsg)
+	}
+
+	isbMsg := isb.Message{
+		Header: isb.Header{
+			MessageInfo: isb.MessageInfo{EventTime: time.Now()}, //doesn't seem like Redis offers a timestamp
+			ID:          readOffset,
+		},
+		Body: isb.Body{Payload: []byte(jsonSerialized)},
+	}
+
+	return &isb.ReadMessage{
+		ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
+		Message:    isbMsg,
+	}, nil
+}
+
+// incoming message should only have a single key/value pair: produce a message Keyed by the Key with value as a raw value
+func (rsSource *redisStreamsSource) produceOneKeyedMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
+	var readOffset = inMsg.ID
+
+	if len(inMsg.Values) != 1 {
+		return nil, fmt.Errorf("expected len(inMsg.Values) to equal 1; actual=%d; inMsg=%+v", len(inMsg.Values), inMsg)
+	}
+	for k, v := range inMsg.Values { // only one pair but still using the loop construct
+		strValue, castOk := v.(string)
+		if !castOk {
+			return nil, fmt.Errorf("couldn't cast RedisStream interface type %v to string: inMsg=%+v", v, inMsg)
+		}
+		isbMsg := isb.Message{
+			Header: isb.Header{
+				MessageInfo: isb.MessageInfo{EventTime: time.Now()}, //doesn't seem like Redis offers a timestamp
+				ID:          readOffset,
+				Key:         k,
+			},
+			Body: isb.Body{Payload: []byte(strValue)},
+		}
+
+		return &isb.ReadMessage{
+			ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
+			Message:    isbMsg,
+		}, nil
+	}
+
 }
 
 func (rsSource *redisStreamsSource) createConsumerGroup(ctx context.Context, sourceSpec *dfv1.RedisStreamsSource) error {
