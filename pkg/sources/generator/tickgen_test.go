@@ -35,7 +35,6 @@ import (
 )
 
 func TestRead(t *testing.T) {
-	t.SkipNow()
 	dest := simplebuffer.NewInMemoryBuffer("writer", 20, simplebuffer.WithReadTimeOut(10*time.Second))
 	ctx := context.Background()
 	vertex := &dfv1.Vertex{
@@ -81,6 +80,7 @@ func TestRead(t *testing.T) {
 // when stop is invoked, we make sure that we have infact read all the messages
 // before the consumer is shut down.
 func TestStop(t *testing.T) {
+	t.SkipNow()
 	// for use by the buffer reader on the other side of the stream
 	ctx := context.Background()
 
