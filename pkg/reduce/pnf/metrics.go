@@ -60,8 +60,8 @@ var dropBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 
 // platformError is used to indicate the number of Internal/Platform errors
 var platformError = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "platform",
-	Name:      "error_total",
+	Subsystem: "reduce_pnf",
+	Name:      "platform_error_total",
 	Help:      "Total number of platform Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
 
