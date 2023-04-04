@@ -359,12 +359,9 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 
 		tickChan := make(chan time.Time, 1000)
 		doneChan := make(chan struct{})
-		childCtx, cancel := context.WithCancel(ctx)
+		childCtx, childCancel := context.WithCancel(ctx)
 
-		defer func() {
-			cancel()
-			<-doneChan
-		}()
+		defer childCancel()
 
 		// make sure that there is only one worker all the time.
 		// even when there is back pressure, max number of go routines inflight should be 1.
@@ -380,6 +377,8 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 			// when context closes
 			case <-ctx.Done():
 				log.Info("Context.Done is called. exiting generator loop.")
+				childCancel()
+				<-doneChan
 				return
 			case ts := <-ticker.C:
 				tickChan <- ts
