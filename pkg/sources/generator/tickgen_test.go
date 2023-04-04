@@ -73,6 +73,7 @@ func TestRead(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 5, len(msgs))
 
+	// wait for the context to be completely stopped.
 	for {
 		_, ok := <-mgen.srcchan
 		if !ok {
