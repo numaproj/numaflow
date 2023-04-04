@@ -62,6 +62,8 @@ type Header struct {
 	// Keys is (key,value) in the map-reduce paradigm will be used for reduce operation, last key in the list
 	// will be used for conditional forwarding
 	Keys []string
+	// NumDelivered is the number of times the message has been delivered.
+	NumDelivered uint64
 }
 
 // Body is the body of the message

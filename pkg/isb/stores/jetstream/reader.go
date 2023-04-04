@@ -234,6 +234,11 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal the message into isb.Message, %w", err)
 		}
+		msgMetadata, err := msg.Metadata()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get jetstream message metadata, %w", err)
+		}
+		m.NumDelivered = msgMetadata.NumDelivered
 		rm := &isb.ReadMessage{
 			ReadOffset: newOffset(msg, jr.inProgessTickDuration, jr.log),
 			Message:    *m,

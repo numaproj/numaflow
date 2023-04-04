@@ -83,6 +83,7 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
+	// TODO: add ID and numDelivered metadata to the Datum.
 	var d = &functionpb.Datum{
 		Keys:      keys,
 		Value:     payload,
@@ -205,7 +206,7 @@ func createDatum(readMessage *isb.ReadMessage) *functionpb.Datum {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	parentMessageInfo := readMessage.MessageInfo
-
+	// TODO: add ID and numDelivered metadata to the Datum.
 	var d = &functionpb.Datum{
 		Keys:      keys,
 		Value:     payload,
