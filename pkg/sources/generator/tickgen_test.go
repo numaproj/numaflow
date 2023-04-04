@@ -116,7 +116,7 @@ func TestStop(t *testing.T) {
 	starttime := time.Now()
 	// wait for some messages
 	for {
-		if dest.IsFull() {
+		if !dest.IsEmpty() {
 			break
 		}
 	}
@@ -124,7 +124,6 @@ func TestStop(t *testing.T) {
 
 	t.Logf("took [%v] millis to detect IsFull ", duration.Milliseconds())
 
-	rctx, _ := context.WithCancel(ctx)
 	// initiate shutdown
 	mgen.Stop()
 
@@ -141,10 +140,10 @@ func TestStop(t *testing.T) {
 			assert.Greater(t, msgsread, 0)
 			return
 		default:
-			msgs, rerr := dest.Read(rctx, 1)
+			msgs, rerr := dest.Read(ctx, 1)
 			assert.Nil(t, rerr)
 			if len(msgs) > 0 {
-				_ = dest.Ack(rctx, []isb.Offset{msgs[0].ReadOffset})
+				_ = dest.Ack(ctx, []isb.Offset{msgs[0].ReadOffset})
 			}
 		}
 		msgsread += 1
@@ -217,10 +216,11 @@ func TestWatermark(t *testing.T) {
 
 	t.Logf("took [%v] millis to detect IsFull ", duration.Milliseconds())
 
-	rctx, _ := context.WithCancel(ctx)
+	rctx, rcf := context.WithCancel(ctx)
 
 	// initiate shutdown
 	mgen.Stop()
+	rcf()
 
 	// reader should have drained all the messages
 	// try to read everything
