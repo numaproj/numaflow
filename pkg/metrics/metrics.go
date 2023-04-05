@@ -30,13 +30,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/shared/util"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
