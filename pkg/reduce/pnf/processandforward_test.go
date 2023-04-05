@@ -137,7 +137,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 		Elements: []*functionpb.Datum{
 			{
-				Key:   []string{"reduced_result_key"},
+				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
 			},
 		},
@@ -145,7 +145,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 		Elements: []*functionpb.Datum{
 			{
-				Key:   []string{"reduced_result_key"},
+				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
 			},
 		},

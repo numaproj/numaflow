@@ -85,7 +85,7 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
 	var d = &functionpb.Datum{
-		Key:       key,
+		Keys:      key,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
@@ -105,7 +105,7 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 
 	writeMessages := make([]*isb.Message, 0)
 	for i, datum := range datumList {
-		key := datum.Key
+		key := datum.Keys
 		if datum.EventTime != nil {
 			// Transformer supports changing event time.
 			parentMessageInfo.EventTime = datum.EventTime.EventTime.AsTime()

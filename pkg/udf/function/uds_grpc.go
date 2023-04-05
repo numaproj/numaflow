@@ -84,7 +84,7 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
 	var d = &functionpb.Datum{
-		Key:       keys,
+		Keys:      keys,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
@@ -104,7 +104,7 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 
 	writeMessages := make([]*isb.Message, 0)
 	for i, datum := range datumList {
-		keys := datum.Key
+		keys := datum.Keys
 		writeMessage := &isb.Message{
 			Header: isb.Header{
 				MessageInfo: parentMessageInfo,
@@ -131,7 +131,6 @@ func (u *UDSgRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partitio
 
 	// pass key and window information inside the context
 	mdMap := map[string]string{
-		functionsdk.DatumKey:     partitionID.Slot,
 		functionsdk.WinStartTime: strconv.FormatInt(partitionID.Start.UnixMilli(), 10),
 		functionsdk.WinEndTime:   strconv.FormatInt(partitionID.End.UnixMilli(), 10),
 	}
@@ -184,7 +183,7 @@ readLoop:
 
 	writeMessages := make([]*isb.Message, 0)
 	for _, datum := range result {
-		keys := datum.Key
+		keys := datum.Keys
 		writeMessage := &isb.Message{
 			Header: isb.Header{
 				MessageInfo: isb.MessageInfo{
@@ -208,7 +207,7 @@ func createDatum(readMessage *isb.ReadMessage) *functionpb.Datum {
 	parentMessageInfo := readMessage.MessageInfo
 
 	var d = &functionpb.Datum{
-		Key:       keys,
+		Keys:      keys,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},

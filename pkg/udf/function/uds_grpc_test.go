@@ -90,7 +90,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 		req := &functionpb.Datum{
-			Key:       []string{"test_success_key"},
+			Keys:      []string{"test_success_key"},
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
@@ -98,7 +98,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
-					Key:   []string{"test_success_key"},
+					Keys:  []string{"test_success_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -131,7 +131,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		},
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, req.Key, got[0].Keys)
+		assert.Equal(t, req.Keys, got[0].Keys)
 		assert.Equal(t, req.Value, got[0].Payload)
 	})
 
@@ -141,7 +141,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 		req := &functionpb.Datum{
-			Key:       []string{"test_error_key"},
+			Keys:      []string{"test_error_key"},
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
@@ -205,12 +205,12 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 			var elements []*functionpb.Datum
 			if originalValue.Value%2 == 0 {
 				elements = append(elements, &functionpb.Datum{
-					Key:   []string{"even"},
+					Keys:  []string{"even"},
 					Value: doubledValue,
 				})
 			} else {
 				elements = append(elements, &functionpb.Datum{
-					Key:   []string{"odd"},
+					Keys:  []string{"odd"},
 					Value: doubledValue,
 				})
 			}
@@ -276,7 +276,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
-					Key:   []string{"reduced_result_key"},
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -284,7 +284,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
-					Key:   []string{"reduced_result_key"},
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -336,7 +336,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
-					Key:   []string{"reduced_result_key"},
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -394,7 +394,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
-					Key:   []string{"reduced_result_key"},
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -403,7 +403,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
-					Key:   []string{"reduced_result_key"},
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -466,7 +466,7 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 			sumValue, _ := json.Marshal(result.(testutils.PayloadForTest))
 			var elements []*functionpb.Datum
 			elements = append(elements, &functionpb.Datum{
-				Key:   []string{"sum"},
+				Keys:  []string{"sum"},
 				Value: sumValue,
 			})
 			datumList := &functionpb.DatumList{
@@ -477,7 +477,7 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 		Elements: []*functionpb.Datum{
 			{
-				Key:   []string{"reduced_result_key"},
+				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
 			},
 		},

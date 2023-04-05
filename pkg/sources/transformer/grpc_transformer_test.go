@@ -88,7 +88,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 		req := &functionpb.Datum{
-			Key:       []string{"test_success_key"},
+			Keys:      []string{"test_success_key"},
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
@@ -96,7 +96,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		mockClient.EXPECT().MapTFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
 			Elements: []*functionpb.Datum{
 				{
-					Key:   []string{"test_success_key"},
+					Keys:  []string{"test_success_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -129,7 +129,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		},
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, req.Key, got[0].Keys)
+		assert.Equal(t, req.Keys, got[0].Keys)
 		assert.Equal(t, req.Value, got[0].Payload)
 	})
 
@@ -139,7 +139,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 		req := &functionpb.Datum{
-			Key:       []string{"test_error_key"},
+			Keys:      []string{"test_error_key"},
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
@@ -203,12 +203,12 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
 			var elements []*functionpb.Datum
 			if originalValue.Value%2 == 0 {
 				elements = append(elements, &functionpb.Datum{
-					Key:   []string{"even"},
+					Keys:  []string{"even"},
 					Value: doubledValue,
 				})
 			} else {
 				elements = append(elements, &functionpb.Datum{
-					Key:   []string{"odd"},
+					Keys:  []string{"odd"},
 					Value: doubledValue,
 				})
 			}
@@ -270,7 +270,7 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangeEventTime(t *testing.T) 
 		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
 			var elements []*functionpb.Datum
 			elements = append(elements, &functionpb.Datum{
-				Key:       []string{"even"},
+				Keys:      []string{"even"},
 				Value:     datum.Value,
 				EventTime: &functionpb.EventTime{EventTime: timestamppb.New(testEventTime)},
 			})
