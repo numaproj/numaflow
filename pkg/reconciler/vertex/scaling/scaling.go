@@ -216,17 +216,13 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	}
 	// Avg rate and pending for autoscaling are both in the map with key "default", see "pkg/metrics/metrics.go".
 	rate, existing := vMetrics[0].ProcessingRates["default"]
-	log.Info("KeranTest - rate: ", rate, " existing: ", existing, " vertex: ", vertex.Name, " key: ", key, " vMetrics: ", vMetrics[0].ProcessingRates["default"])
 	if !existing || rate < 0 || rate == isb.RateNotAvailable { // Rate not available
-		log.Info("KeranTest - rate not available")
 		log.Debugf("Vertex %s has no rate information, skip scaling", vertex.Name)
 		return nil
 	}
 	pending, existing := vMetrics[0].Pendings["default"]
-	log.Info("KeranTest - pending: ", pending, " existing: ", existing, " vertex: ", vertex.Name, " key: ", key, " vMetrics: ", vMetrics[0].Pendings["default"])
 	if !existing || pending < 0 || pending == isb.PendingNotAvailable {
 		// Pending not available, we don't do anything
-		log.Info("KeranTest - pending not available")
 		log.Debugf("Vertex %s has no pending messages information, skip scaling", vertex.Name)
 		return nil
 	}
@@ -249,9 +245,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		}
 	}
 	current := int32(vertex.GetReplicas())
-	log.Infof("KeranTest - calculating desired replicas, vertex: %s, rate: %f, pending: %d, totalBufferLength: %d, targetAvailableBufferLength: %d", vertex.Name, rate, pending, totalBufferLength, targetAvailableBufferLength)
 	desired := s.desiredReplicas(ctx, vertex, rate, pending, totalBufferLength, targetAvailableBufferLength)
-	log.Infof("KeranTest - current: %d, desired: %d, vertex: %s, key: %s", current, desired, vertex.Name, key)
 	log.Debugf("Calculated desired replica number of vertex %q is: %t", vertex.Name, desired)
 	max := vertex.Spec.Scale.GetMaxReplicas()
 	min := vertex.Spec.Scale.GetMinReplicas()

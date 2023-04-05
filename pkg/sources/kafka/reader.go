@@ -183,7 +183,6 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("suppliedoffset", offset.String()), zap.Error(err))
 			continue
 		}
-		r.logger.Infof("KeranTest - Marking offset %d as consumed for topic %s and partition %d", poffset, topic, partition)
 
 		// we need to mark the offset of the next message to read
 		r.handler.sess.MarkOffset(topic, partition, poffset+1, "")
@@ -246,19 +245,12 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 		return isb.PendingNotAvailable, nil
 	}
 	partitions, err := r.saramaClient.Partitions(r.topic)
-	r.logger.Infof("KeranTest - Partitions: %v", partitions)
-	// Always [0,1]
 	if err != nil {
-		// Never reached
-		r.logger.Errorf("KeranTest - Failed to get partitions: %v", err)
 		return isb.PendingNotAvailable, fmt.Errorf("failed to get partitions, %w", err)
 	}
 	totalPending := int64(0)
 	rep, err := r.adminClient.ListConsumerGroupOffsets(r.groupName, map[string][]int32{r.topic: partitions})
-	r.logger.Infof("KeranTest - OffsetFetchResponse: %v", rep)
 	if err != nil {
-		// Never reached
-		r.logger.Errorf("KeranTest - Failed to list consumer group offsets: %v", err)
 		return isb.PendingNotAvailable, fmt.Errorf("failed to list consumer group offsets, %w", err)
 	}
 	for _, partition := range partitions {
@@ -269,20 +261,11 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 			continue
 		}
 		partitionOffset, err := r.saramaClient.GetOffset(r.topic, partition, sarama.OffsetNewest)
-		// Partition: 0, Offset: 0 -> because partition 0 is empty. The next available offset is 0.
-		// Partition: 1, Offset: 26 -> because partition 1 has processed 26 messages. The next available offset is 25.
-		r.logger.Infof("KeranTest - Partition: %d, Offset: %d", partition, partitionOffset)
 		if err != nil {
-			// Never reached
-			r.logger.Errorf("KeranTest - Failed to get offset of topic %q, partition %v: %v", r.topic, partition, err)
 			return isb.PendingNotAvailable, fmt.Errorf("failed to get offset of topic %q, partition %v, %w", r.topic, partition, err)
 		}
-		// Block offset for one of the partition is -1, the other is 26.
-		r.logger.Infof("KeranTest - Block: %v, Block offset: %v", block, block.Offset)
-		r.logger.Infof("KeranTest - Adding to total pending: partitionOffset %d - block offset %d = %d", partitionOffset, block.Offset, partitionOffset-block.Offset)
 		totalPending += partitionOffset - block.Offset
 	}
-	r.logger.Infof("KeranTest - Total pending: %d", totalPending)
 	return totalPending, nil
 }
 

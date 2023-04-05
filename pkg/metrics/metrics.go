@@ -172,7 +172,7 @@ func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 	return m
 }
 
-// Enqueue pending information
+// Enqueue pending pending information
 func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 	if ms.lagReader == nil {
 		return
@@ -188,7 +188,6 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 			if pending, err := ms.lagReader.Pending(ctx); err != nil {
 				log.Errorw("Failed to get pending messages", zap.Error(err))
 			} else {
-				log.Infof("KeranTest - Number of pending messages: %d", pending)
 				if pending != isb.PendingNotAvailable {
 					ts := timestampedPending{pending: pending, timestamp: time.Now().Unix()}
 					ms.pendingInfo.Append(ts)
@@ -226,7 +225,7 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 			}
 			if ms.lagReader != nil {
 				for n, i := range lookbackSecondsMap {
-					if p := ms.calculatePending(i, log); p != isb.PendingNotAvailable {
+					if p := ms.calculatePending(i); p != isb.PendingNotAvailable {
 						pending.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(float64(p))
 					}
 				}
@@ -238,16 +237,13 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 }
 
 // Calculate the avg pending of last seconds
-func (ms *metricsServer) calculatePending(seconds int64, log *zap.SugaredLogger) int64 {
-	log.Infof("KeranTest - Calculate pending of last %d seconds", seconds)
+func (ms *metricsServer) calculatePending(seconds int64) int64 {
 	result := isb.PendingNotAvailable
 	items := ms.pendingInfo.Items()
 	total := int64(0)
 	num := int64(0)
 	now := time.Now().Unix()
-	log.Infof("KeranTest - Current timestamp: %d", now)
 	for i := len(items) - 1; i >= 0; i-- {
-		log.Infof("KeranTest - Pending message: %d, timestamp: %d", items[i].pending, items[i].timestamp)
 		if now-items[i].timestamp < seconds {
 			total += items[i].pending
 			num++
@@ -255,11 +251,9 @@ func (ms *metricsServer) calculatePending(seconds int64, log *zap.SugaredLogger)
 			break
 		}
 	}
-	log.Infof("KeranTest - Total pending: %d, number of timestampedPending: %d", total, num)
 	if num > 0 {
 		result = total / num
 	}
-	log.Infof("KeranTest - Avg pending: %d", result)
 	return result
 }
 
