@@ -52,6 +52,12 @@ type MessageInfo struct {
 	IsLate bool
 }
 
+// MessageMetadata is the metadata of the message
+type MessageMetadata struct {
+	// NumDelivered is the number of times the message has been delivered.
+	NumDelivered uint64
+}
+
 // Header is the header of the message
 type Header struct {
 	MessageInfo
@@ -62,8 +68,8 @@ type Header struct {
 	// Keys is (key,value) in the map-reduce paradigm will be used for reduce operation, last key in the list
 	// will be used for conditional forwarding
 	Keys []string
-	// NumDelivered is the number of times the message has been delivered.
-	NumDelivered uint64
+	// Metadata is the metadata of the message
+	Metadata MessageMetadata
 }
 
 // Body is the body of the message
