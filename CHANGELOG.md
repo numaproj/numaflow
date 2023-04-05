@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.7.3 (2023-04-02)
+
+ * [68a1479](https://github.com/numaproj/numaflow/commit/68a14793ff698f68d45e404e0269de32fd3c8ed3) Update manifests to v0.7.3
+ * [a17a41d](https://github.com/numaproj/numaflow/commit/a17a41df7324c7f72b4dcd09592593143c57fc76) feat: integrate serde WAL (#650)
+ * [096c6ac](https://github.com/numaproj/numaflow/commit/096c6acf6b82cf540e387c731b96ddad8e9861a2) fix: unit test (#653)
+ * [cce50ff](https://github.com/numaproj/numaflow/commit/cce50ffd16a39931fe031603e53256ffe593ccae) feat: handle idle watermark for reduce vertex (#627)
+ * [968cc5f](https://github.com/numaproj/numaflow/commit/968cc5f50acec697a482c2bcdd93935c71d202c2) feat: Redis streams source (#628)
+ * [38baae8](https://github.com/numaproj/numaflow/commit/38baae8aa1b4a7152b2aa9d537b6934fc1cb2f11) feat: Adds SASL (plain and gssapi) support for kafka source (#643)
+ * [563b85b](https://github.com/numaproj/numaflow/commit/563b85b19a5ec9f3c58ad86d6cdee1bab4849d12) feat: namespace scope api and disable namespace search on UI (#638)
+ * [c819469](https://github.com/numaproj/numaflow/commit/c8194690f383624fd0e27c75b87069266fb6590d) fix: GetHeadWatermark Logic (#636)
+ * [d37f4db](https://github.com/numaproj/numaflow/commit/d37f4db5c29155bf084ca8b84a642020041c92af) feat: enable edge-level kill switch to drop messages when buffer is full, for the non-reduce forwarder (#634)
+ * [a0dce69](https://github.com/numaproj/numaflow/commit/a0dce69a35c11a54a1c399e77a91bacb1a646882) fix: IdleWatermark unit test (#640)
+ * [f840e1c](https://github.com/numaproj/numaflow/commit/f840e1c30a94d8d0b0644304b2bec71bbb565869) fix: desired replicas should not be greater than pending (#639)
+ * [0ca5630](https://github.com/numaproj/numaflow/commit/0ca5630e6695fe9d526b8a1a000e44211a7610a2) fix: add timeout to the test (#618)
+ * [b049f0b](https://github.com/numaproj/numaflow/commit/b049f0b4e37fd9ff37bfffb18ab39baf5acf0d09) feat: kustomize integration (#637)
+ * [01305ea](https://github.com/numaproj/numaflow/commit/01305ea3ec8e34fdd92a239bcf4ca2f63cc00032) fix: exclude ack pending messages (#631)
+ * [4ec4b3d](https://github.com/numaproj/numaflow/commit/4ec4b3d7f450ed8f7d5da5838223f560750dde03) feat: UI error component (#613)
+ * [90ca505](https://github.com/numaproj/numaflow/commit/90ca505bb027ec9d1ae79c728d6af2a86110edae) fix: do not update status.replicas until pod operation succeeds (#620)
+ * [339db43](https://github.com/numaproj/numaflow/commit/339db43b65136a2339d77b12edca166e78d47845) feat: track and expose oldest work yet to be done to the reduce loop (#617)
+ * [1ce4c38](https://github.com/numaproj/numaflow/commit/1ce4c383caf29384e937f6686e52f6561f8d93d2) feat: handle watermark barrier for map vertex (#607)
+ * [90dbe1f](https://github.com/numaproj/numaflow/commit/90dbe1fab20ad1421706bba772ae9352d16e674b) fix: corrected reduce vertex replica number. Fixes #593 (#616)
+ * [a155f2a](https://github.com/numaproj/numaflow/commit/a155f2af09522b8fb87a14af3559e1a2a74ddb57) feat: add API for pipeline status check. Fixes #407. (#599)
+ * [d9e3a56](https://github.com/numaproj/numaflow/commit/d9e3a56f6ed25f4baf05f22ab058ac393a3ab4a3) chore(deps): bump webpack from 5.74.0 to 5.76.1 in /ui (#610)
+
+### Contributors
+
+ * Alex Ang HH
+ * Derek Wang
+ * Dillen Padhiar
+ * Juanlu Yu
+ * Julie Vogelman
+ * Keran Yang
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+ * dependabot[bot]
+
 ## v0.7.2 (2023-03-13)
 
  * [1196a24](https://github.com/numaproj/numaflow/commit/1196a24b7096273b60c072e803a336c79eef2c5b) Update manifests to v0.7.2

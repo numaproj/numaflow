@@ -322,6 +322,24 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, l)
 }
 
+// ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
+func (h *handler) ListNamespaces(c *gin.Context) {
+	l, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	m := make(map[string]bool)
+	for _, pl := range l.Items {
+		m[pl.Namespace] = true
+	}
+	var namespaces []string
+	for k := range m {
+		namespaces = append(namespaces, k)
+	}
+	c.JSON(http.StatusOK, namespaces)
+}
+
 func daemonSvcAddress(ns, pipeline string) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
 }

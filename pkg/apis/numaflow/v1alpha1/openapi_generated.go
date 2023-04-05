@@ -1079,11 +1079,10 @@ func schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref common.ReferenceCallback) comm
 							Format:  "",
 						},
 					},
-					"username": {
+					"usernameSecret": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "UsernameSecret refers to the secret that contains the username",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
 						},
 					},
 					"authType": {
@@ -1112,7 +1111,7 @@ func schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref common.ReferenceCallback) comm
 						},
 					},
 				},
-				Required: []string{"serviceName", "realm", "username", "authType"},
+				Required: []string{"serviceName", "realm", "usernameSecret", "authType"},
 			},
 		},
 		Dependencies: []string{
@@ -2285,12 +2284,18 @@ func schema_pkg_apis_numaflow_v1alpha1_KafkaSink(ref common.ReferenceCallback) c
 							Format: "",
 						},
 					},
+					"sasl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL"),
+						},
+					},
 				},
 				Required: []string{"topic"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
 	}
 }
 
@@ -3287,11 +3292,10 @@ func schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref common.ReferenceCallback) c
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"user": {
+					"userSecret": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "UserSecret refers to the secret that contains the user",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
 						},
 					},
 					"passwordSecret": {
@@ -3308,7 +3312,7 @@ func schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref common.ReferenceCallback) c
 						},
 					},
 				},
-				Required: []string{"user", "handshake"},
+				Required: []string{"userSecret", "handshake"},
 			},
 		},
 		Dependencies: []string{

@@ -325,7 +325,8 @@ message GSSAPI {
 
   optional string realm = 2;
 
-  optional string username = 3;
+  // UsernameSecret refers to the secret that contains the username
+  optional k8s.io.api.core.v1.SecretKeySelector usernameSecret = 3;
 
   // valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH
   optional string authType = 4;
@@ -640,6 +641,11 @@ message KafkaSink {
 
   // +optional
   optional string config = 4;
+
+  // SASL user to configure SASL connection for kafka broker
+  // SASL.enable=true default for SASL.
+  // +optional
+  optional SASL sasl = 5;
 }
 
 message KafkaSource {
@@ -963,7 +969,8 @@ message SASL {
 }
 
 message SASLPlain {
-  optional string user = 1;
+  // UserSecret refers to the secret that contains the user
+  optional k8s.io.api.core.v1.SecretKeySelector userSecret = 1;
 
   // PasswordSecret refers to the secret that contains the password
   // +optional
