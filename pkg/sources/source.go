@@ -237,16 +237,32 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
-	fsd := forward.GoWhere(func(key []string) ([]string, error) {
+	fsd := forward.GoWhere(func(keys []string) ([]string, error) {
 		result := []string{}
-		if key[len(key)-1] == dfv1.MessageKeyDrop {
+		// if there are no keys, treat is as "ALL" if there are no conditions?
+		// TODO: rethink when we have tags
+		if len(keys) == 0 {
+			for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
+				if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 {
+					if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
+					} else {
+						result = append(result, dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+					}
+				}
+			}
 			return result, nil
 		}
+
+		if keys[len(keys)-1] == dfv1.MessageKeyDrop {
+			return result, nil
+		}
+
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
-			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key[len(key)-1]) {
+			// If returned keys is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
+			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, keys[len(keys)-1]) {
 				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
-					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
+					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 				} else {
 					result = append(result, dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)...)
 				}
