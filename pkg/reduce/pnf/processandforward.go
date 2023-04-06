@@ -179,7 +179,7 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 				metrics.LabelPipeline:           p.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 			}).Inc()
-			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.Strings("key", msg.Keys), zap.Error(err), zap.Any("partitionID", p.PartitionID))
+			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.Strings("keys", msg.Keys), zap.Error(err), zap.Any("partitionID", p.PartitionID))
 			continue
 		}
 
