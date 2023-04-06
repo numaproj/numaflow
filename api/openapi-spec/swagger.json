@@ -19123,9 +19123,11 @@
       ],
       "properties": {
         "operator": {
+          "description": "Operator can be and, or, not, used to specify type of operation for conditional forwarding",
           "type": "string"
         },
         "values": {
+          "description": "Values tags for conditional forwarding",
           "type": "array",
           "items": {
             "type": "string"

@@ -3581,14 +3581,16 @@ func schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"operator": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "Operator can be and, or, not, used to specify type of operation for conditional forwarding",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"values": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "Values tags for conditional forwarding",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{

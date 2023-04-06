@@ -1095,10 +1095,13 @@ message TLS {
 }
 
 message TagConditions {
+  // Operator can be and, or, not, used to specify type of operation for
+  // conditional forwarding
   // +optional
-  optional string operator = 2;
+  optional string operator = 1;
 
-  repeated string values = 1;
+  // Values tags for conditional forwarding
+  repeated string values = 2;
 }
 
 message Templates {

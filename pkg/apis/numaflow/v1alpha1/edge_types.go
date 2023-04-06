@@ -43,10 +43,12 @@ type ForwardConditions struct {
 }
 
 type TagConditions struct {
+	// Operator specifies the type of operation that should be used for conditional forwarding
+	// value could be "and", "or", "not"
 	// +optional
-	Operator string `json:"operator" protobuf:"bytes,2,opt,name=operator"`
-
-	Values []string `json:"values" protobuf:"bytes,1,rep,name=values"`
+	Operator string `json:"operator" protobuf:"bytes,1,opt,name=operator"`
+	//Values tags for conditional forwarding
+	Values []string `json:"values" protobuf:"bytes,2,rep,name=values"`
 }
 
 type EdgeLimits struct {

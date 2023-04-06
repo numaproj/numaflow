@@ -4294,6 +4294,10 @@ Description
 </td>
 <td>
 <em>(Optional)</em>
+<p>
+Operator can be and, or, not, used to specify type of operation for
+conditional forwarding
+</p>
 </td>
 </tr>
 <tr>
@@ -4301,6 +4305,9 @@ Description
 <code>values</code></br> <em> \[\]string </em>
 </td>
 <td>
+<p>
+Values tags for conditional forwarding
+</p>
 </td>
 </tr>
 </tbody>

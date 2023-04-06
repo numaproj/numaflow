@@ -135,7 +135,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 				}
 			}
 		}
-		
+
 		return result, nil
 	})
 
