@@ -182,7 +182,7 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 		message := &sarama.ProducerMessage{
 			Topic:    tk.topic,
 			Value:    sarama.ByteEncoder(msg.Payload),
-			Metadata: index, // Use metadata to identify if it succeedes or fails in the async return.
+			Metadata: index, // Use metadata to identify if it succeeds or fails in the async return.
 		}
 		tk.producer.Input() <- message
 	}

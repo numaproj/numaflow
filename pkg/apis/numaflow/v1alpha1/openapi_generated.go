@@ -2037,7 +2037,7 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref common.Referen
 					},
 					"encryption": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Whether encrypt the data at rest, defaults to false Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail Toggling the value will impact encypting/decrypting existing messages.",
+							Description: "Whether encrypt the data at rest, defaults to false Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail Toggling the value will impact encrypting/decrypting existing messages.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -2821,14 +2821,14 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 					},
 					"bufferMaxLength": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertice as only they do buffer write. It can be overridden by the settings in vertex limits.",
+							Description: "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertices as only they do buffer write. It can be overridden by the settings in vertex limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"bufferUsageLimit": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertice as only they do buffer write. It will be overridden by the settings in vertex limits.",
+							Description: "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertices as only they do buffer write. It will be overridden by the settings in vertex limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},

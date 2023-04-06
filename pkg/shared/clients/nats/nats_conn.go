@@ -78,7 +78,7 @@ func (nc *NatsConn) IsClosed() bool {
 }
 
 // IsConnected function implements the magic to check if the connection is OK.
-// It utilize the dedicated JetStreamContext to call AccountInfo() function,
+// It utilizes the dedicated JetStreamContext to call AccountInfo() function,
 // and check if it works for determination. To reduce occasionality, it checks
 // 3 times if there's a failure.
 func (nc *NatsConn) IsConnected() bool {

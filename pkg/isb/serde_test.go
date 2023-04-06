@@ -92,7 +92,7 @@ func TestHeader(t *testing.T) {
 		MessageInfo MessageInfo
 		Kind        MessageKind
 		ID          string
-		Key         string
+		Key         []string
 	}
 	tests := []struct {
 		name               string
@@ -110,7 +110,7 @@ func TestHeader(t *testing.T) {
 				},
 				Kind: Data,
 				ID:   "TestID",
-				Key:  "TestKey",
+				Key:  []string{"TestKey", "TestKey2"},
 			},
 			wantData: Header{
 				MessageInfo: MessageInfo{
@@ -119,7 +119,7 @@ func TestHeader(t *testing.T) {
 				},
 				Kind: Data,
 				ID:   "TestID",
-				Key:  "TestKey",
+				Keys: []string{"TestKey", "TestKey2"},
 			},
 			wantMarshalError:   false,
 			wantUnmarshalError: false,
@@ -131,7 +131,7 @@ func TestHeader(t *testing.T) {
 				MessageInfo: tt.fields.MessageInfo,
 				Kind:        tt.fields.Kind,
 				ID:          tt.fields.ID,
-				Key:         tt.fields.Key,
+				Keys:        tt.fields.Key,
 			}
 			gotData, err := h.MarshalBinary()
 			if (err != nil) != tt.wantMarshalError {
@@ -228,7 +228,7 @@ func TestMessage(t *testing.T) {
 					},
 					Kind: Data,
 					ID:   "TestID",
-					Key:  "TestKey",
+					Keys: []string{"TestKey"},
 				},
 				Body: Body{
 					Payload: []byte("TestBODY"),
@@ -242,7 +242,7 @@ func TestMessage(t *testing.T) {
 					},
 					Kind: Data,
 					ID:   "TestID",
-					Key:  "TestKey",
+					Keys: []string{"TestKey"},
 				},
 				Body: Body{
 					Payload: []byte("TestBODY"),
@@ -276,8 +276,11 @@ func TestMessage(t *testing.T) {
 				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
 				return
 			}
+			if tt.name == "good_empty" {
+				tt.wantData.Keys = make([]string, 0)
+			}
 			if !reflect.DeepEqual(*newM, tt.wantData) {
-				t.Errorf("MarshalBinary() gotData = %v, want %v", newM, tt.wantData)
+				t.Errorf("MarshalBinary() gotData = %v, want %v", newM, &tt.wantData)
 			}
 		})
 	}
@@ -307,7 +310,7 @@ func TestReadMessage(t *testing.T) {
 						},
 						Kind: Data,
 						ID:   "TestID",
-						Key:  "TestKey",
+						Keys: []string{"TestKey"},
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),
@@ -327,7 +330,7 @@ func TestReadMessage(t *testing.T) {
 						},
 						Kind: Data,
 						ID:   "TestID",
-						Key:  "TestKey",
+						Keys: []string{"TestKey"},
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),

@@ -18219,7 +18219,7 @@
           "type": "string"
         },
         "encryption": {
-          "description": "Whether encrypt the data at rest, defaults to false Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail Toggling the value will impact encypting/decrypting existing messages.",
+          "description": "Whether encrypt the data at rest, defaults to false Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail Toggling the value will impact encrypting/decrypting existing messages.",
           "type": "boolean"
         },
         "imagePullSecrets": {
@@ -18717,12 +18717,12 @@
     "io.numaproj.numaflow.v1alpha1.PipelineLimits": {
       "properties": {
         "bufferMaxLength": {
-          "description": "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertice as only they do buffer write. It can be overridden by the settings in vertex limits.",
+          "description": "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertices as only they do buffer write. It can be overridden by the settings in vertex limits.",
           "format": "int64",
           "type": "integer"
         },
         "bufferUsageLimit": {
-          "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertice as only they do buffer write. It will be overridden by the settings in vertex limits.",
+          "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertices as only they do buffer write. It will be overridden by the settings in vertex limits.",
           "format": "int64",
           "type": "integer"
         },

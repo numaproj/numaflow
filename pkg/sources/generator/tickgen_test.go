@@ -35,7 +35,7 @@ import (
 )
 
 func TestRead(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("writer", 20, simplebuffer.WithReadTimeOut(10*time.Second))
+	dest := simplebuffer.NewInMemoryBuffer("writer", 100, simplebuffer.WithReadTimeOut(10*time.Second))
 	ctx := context.Background()
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
@@ -66,11 +66,21 @@ func TestRead(t *testing.T) {
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
-	time.Sleep(time.Millisecond)
 	msgs, err := dest.Read(ctx, 5)
+
+	mgen.Stop()
 
 	assert.Nil(t, err)
 	assert.Equal(t, 5, len(msgs))
+
+	// wait for the context to be completely stopped.
+	for {
+		_, ok := <-mgen.srcchan
+		if !ok {
+			break
+		}
+	}
+
 }
 
 // Intention of this test is test the wiring for stop.
@@ -81,7 +91,8 @@ func TestStop(t *testing.T) {
 	// for use by the buffer reader on the other side of the stream
 	ctx := context.Background()
 
-	dest := simplebuffer.NewInMemoryBuffer("writer", 100)
+	// default rpu is 5. set the test to run for 2 ticks.
+	dest := simplebuffer.NewInMemoryBuffer("writer", 10)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "memgen",
@@ -113,7 +124,7 @@ func TestStop(t *testing.T) {
 	starttime := time.Now()
 	// wait for some messages
 	for {
-		if dest.IsFull() {
+		if !dest.IsEmpty() {
 			break
 		}
 	}
@@ -121,11 +132,8 @@ func TestStop(t *testing.T) {
 
 	t.Logf("took [%v] millis to detect IsFull ", duration.Milliseconds())
 
-	rctx, rcf := context.WithCancel(ctx)
-
 	// initiate shutdown
 	mgen.Stop()
-	rcf()
 
 	// reader should have drained all the messages
 	// try to read everything
@@ -140,10 +148,10 @@ func TestStop(t *testing.T) {
 			assert.Greater(t, msgsread, 0)
 			return
 		default:
-			msgs, rerr := dest.Read(rctx, 1)
+			msgs, rerr := dest.Read(ctx, 1)
 			assert.Nil(t, rerr)
 			if len(msgs) > 0 {
-				_ = dest.Ack(rctx, []isb.Offset{msgs[0].ReadOffset})
+				_ = dest.Ack(ctx, []isb.Offset{msgs[0].ReadOffset})
 			}
 		}
 		msgsread += 1

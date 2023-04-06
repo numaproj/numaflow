@@ -286,7 +286,7 @@ func produceOneKeyedMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
 			Header: isb.Header{
 				MessageInfo: isb.MessageInfo{EventTime: msgTime},
 				ID:          readOffset,
-				Key:         k,
+				Keys:        []string{k},
 			},
 			Body: isb.Body{Payload: []byte(strValue)},
 		}

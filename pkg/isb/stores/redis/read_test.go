@@ -291,7 +291,7 @@ type ReadWritePerformance struct {
 type forwardReadWritePerformance struct {
 }
 
-func (f forwardReadWritePerformance) WhereTo(_ string) ([]string, error) {
+func (f forwardReadWritePerformance) WhereTo(_ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 

@@ -40,7 +40,7 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 		expression: expr,
 	}
 
-	return func(ctx context.Context, key string, datum functionsdk.Datum) functionsdk.MessageTs {
+	return func(ctx context.Context, keys []string, datum functionsdk.Datum) functionsdk.MessageTs {
 		log := logging.FromContext(ctx)
 		resultMsg, err := f.apply(datum.EventTime(), datum.Value())
 		if err != nil {

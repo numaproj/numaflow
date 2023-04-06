@@ -195,8 +195,10 @@ func Test_encodeDecodeEntry(t *testing.T) {
 			wantErr: assert.NoError,
 			message: &isb.ReadMessage{
 				Message: isb.Message{
-					Header: isb.Header{},
-					Body:   isb.Body{},
+					Header: isb.Header{
+						Keys: []string{},
+					},
+					Body: isb.Body{},
 				},
 				ReadOffset: isb.SimpleIntOffset(func() int64 { return int64(2) }),
 			},
@@ -259,7 +261,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	assert.NoError(t, err)
 	err = wal.Write(&message)
 	assert.NoError(t, err)
-	assert.Equal(t, int64(214), tempWAL.prevSyncedWOffset)
+	assert.Equal(t, int64(218), tempWAL.prevSyncedWOffset)
 
 	err = wal.Close()
 	assert.NoError(t, err)
@@ -316,7 +318,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	message := writeMessages[0]
 	storePrevSyncedTime := tempWAL.prevSyncedTime
 	err = wal.Write(&message)
-	assert.Equal(t, int64(126), tempWAL.prevSyncedWOffset)
+	assert.Equal(t, int64(128), tempWAL.prevSyncedWOffset)
 	assert.NotEqual(t, storePrevSyncedTime, tempWAL.prevSyncedTime)
 	assert.NoError(t, err)
 

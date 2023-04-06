@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var _key = ""
+var _keys = []string{""}
 var jsonMsg = `{"test": 21, "item": [{"id": 1, "name": "numa"},{"id": 2, "name": "numa"}]}`
 var strMsg = `welcome to numaflow`
 var base64Msg = base64.StdEncoding.EncodeToString([]byte(strMsg))
@@ -61,12 +61,12 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(jsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, jsonMsg, string(result.Items()[0].Value))
+		assert.Equal(t, jsonMsg, string(result.Items()[0].Value()))
 	})
 
 	t.Run("invalid expression", func(t *testing.T) {
@@ -75,12 +75,12 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(jsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, "", string(result.Items()[0].Value))
+		assert.Equal(t, "", string(result.Items()[0].Value()))
 	})
 
 	t.Run("Json expression invalid", func(t *testing.T) {
@@ -89,12 +89,12 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(jsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, "", string(result.Items()[0].Value))
+		assert.Equal(t, "", string(result.Items()[0].Value()))
 	})
 
 	t.Run("String expression invalid", func(t *testing.T) {
@@ -103,12 +103,12 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(jsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, "", string(result.Items()[0].Value))
+		assert.Equal(t, "", string(result.Items()[0].Value()))
 	})
 
 	t.Run("base64 expression valid", func(t *testing.T) {
@@ -117,12 +117,12 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(base64Msg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, base64Msg, string(result.Items()[0].Value))
+		assert.Equal(t, base64Msg, string(result.Items()[0].Value()))
 	})
 
 }
