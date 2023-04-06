@@ -68,7 +68,6 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 			RedisClient: client,
 			Options:     *options,
 			Metrics: redisclient.Metrics{
-				//todo: consider passing in the rest of these as well?
 				ReadErrorsInc: func() {
 					labels := map[string]string{"buffer": name}
 					isbReadErrors.With(labels).Inc()
