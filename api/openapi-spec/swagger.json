@@ -17714,14 +17714,11 @@
     "io.numaproj.numaflow.v1alpha1.ForwardConditions": {
       "type": "object",
       "required": [
-        "keyIn"
+        "tags"
       ],
       "properties": {
-        "keyIn": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "tags": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TagConditions"
         }
       }
     },
@@ -19116,6 +19113,23 @@
         },
         "insecureSkipVerify": {
           "type": "boolean"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.TagConditions": {
+      "type": "object",
+      "required": [
+        "values"
+      ],
+      "properties": {
+        "operator": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

@@ -39,7 +39,14 @@ type Edge struct {
 }
 
 type ForwardConditions struct {
-	KeyIn []string `json:"keyIn" protobuf:"bytes,1,rep,name=keyIn"`
+	Tags *TagConditions `json:"tags" protobuf:"bytes,1,rep,name=tags"`
+}
+
+type TagConditions struct {
+	// +optional
+	Operator string `json:"operator" protobuf:"bytes,2,opt,name=operator"`
+
+	Values []string `json:"values" protobuf:"bytes,1,rep,name=values"`
 }
 
 type EdgeLimits struct {

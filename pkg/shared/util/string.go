@@ -48,3 +48,31 @@ func StringSliceContains(list []string, str string) bool {
 	}
 	return false
 }
+
+func CompareSlice(operator string, sa []string, sb []string) bool {
+	switch operator {
+	case "and":
+		for _, val := range sa {
+			if !StringSliceContains(sb, val) {
+				return false
+			}
+		}
+		return true
+
+	case "not":
+		for _, val := range sa {
+			if StringSliceContains(sb, val) {
+				return false
+			}
+		}
+		return true
+
+	default:
+		for _, val := range sa {
+			if StringSliceContains(sb, val) {
+				return true
+			}
+		}
+		return false
+	}
+}

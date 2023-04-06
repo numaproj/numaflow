@@ -86,3 +86,8 @@ type ReadMessage struct {
 func (m *Message) ToReadMessage(ot Offset, wm time.Time) *ReadMessage {
 	return &ReadMessage{Message: *m, ReadOffset: ot, Watermark: wm}
 }
+
+type TaggedMessage struct {
+	Message
+	Tags []string
+}

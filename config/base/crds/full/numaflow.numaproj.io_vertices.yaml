@@ -594,12 +594,19 @@ spec:
                   properties:
                     conditions:
                       properties:
-                        keyIn:
-                          items:
-                            type: string
-                          type: array
+                        tags:
+                          properties:
+                            operator:
+                              type: string
+                            values:
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - values
+                          type: object
                       required:
-                      - keyIn
+                      - tags
                       type: object
                     from:
                       type: string
@@ -3060,12 +3067,19 @@ spec:
                   properties:
                     conditions:
                       properties:
-                        keyIn:
-                          items:
-                            type: string
-                          type: array
+                        tags:
+                          properties:
+                            operator:
+                              type: string
+                            values:
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - values
+                          type: object
                       required:
-                      - keyIn
+                      - tags
                       type: object
                     from:
                       type: string

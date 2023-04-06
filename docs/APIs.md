@@ -1060,7 +1060,9 @@ Description
 <tbody>
 <tr>
 <td>
-<code>keyIn</code></br> <em> \[\]string </em>
+<code>tags</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.TagConditions"> TagConditions
+</a> </em>
 </td>
 <td>
 </td>
@@ -4261,6 +4263,44 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 <p>
 KeySecret refers to the secret that contains the key
 </p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.TagConditions">
+TagConditions
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">ForwardConditions</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>operator</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>values</code></br> <em> \[\]string </em>
+</td>
+<td>
 </td>
 </tr>
 </tbody>

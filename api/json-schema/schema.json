@@ -17709,15 +17709,12 @@
     },
     "io.numaproj.numaflow.v1alpha1.ForwardConditions": {
       "properties": {
-        "keyIn": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "tags": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TagConditions"
         }
       },
       "required": [
-        "keyIn"
+        "tags"
       ],
       "type": "object"
     },
@@ -19131,6 +19128,23 @@
           "type": "boolean"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.TagConditions": {
+      "properties": {
+        "operator": {
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "values"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Templates": {

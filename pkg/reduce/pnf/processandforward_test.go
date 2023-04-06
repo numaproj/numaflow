@@ -70,7 +70,7 @@ func (f myForwardTest) WhereTo(key []string) ([]string, error) {
 	return []string{}, nil
 }
 
-func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -130,20 +130,20 @@ func TestProcessAndForward_Process(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-	mockReduceClient := udfcall.NewMockUserDefinedFunction_ReduceFnClient(ctrl)
+	mockReduceClient := funcmock.NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 
 	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-		Elements: []*functionpb.Datum{
+	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+		Elements: []*functionpb.DatumResponse{
 			{
 				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
 			},
 		},
 	}, nil).Times(1)
-	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-		Elements: []*functionpb.Datum{
+	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+		Elements: []*functionpb.DatumResponse{
 			{
 				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
@@ -372,16 +372,19 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		Value: 100,
 	})
 
-	var result = []*isb.Message{
+	var result = []*isb.TaggedMessage{
 		{
-			Header: isb.Header{
-				MessageInfo: isb.MessageInfo{
-					EventTime: time.UnixMilli(60000),
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: time.UnixMilli(60000),
+					},
+					ID:   "1",
+					Keys: []string{key},
 				},
-				ID:   "1",
-				Keys: []string{key},
+				Body: isb.Body{Payload: resultPayload},
 			},
-			Body: isb.Body{Payload: resultPayload},
+			Tags: []string{key},
 		},
 	}
 

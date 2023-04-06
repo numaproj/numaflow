@@ -22,7 +22,7 @@ import (
 
 var (
 	All  = GoWhere(func([]string) ([]string, error) { return []string{dfv1.MessageKeyAll}, nil })
-	Drop = GoWhere(func([]string) ([]string, error) { return []string{dfv1.MessageKeyDrop}, nil })
+	Drop = GoWhere(func([]string) ([]string, error) { return []string{dfv1.MessageTagDrop}, nil })
 )
 
 // ToWhichStepDecider decides which step to forward after applying the WhereTo function.

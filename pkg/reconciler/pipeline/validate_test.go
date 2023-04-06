@@ -328,16 +328,46 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "not supported")
 	})
 
-	t.Run("good conditional forwarding", func(t *testing.T) {
+	t.Run("or conditional forwarding", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Edges[1].Conditions = &dfv1.ForwardConditions{KeyIn: []string{"hello"}}
+		testObj.Spec.Edges[1].Conditions = &dfv1.ForwardConditions{Tags: &dfv1.TagConditions{
+			Operator: "or",
+			Values:   []string{"hello"}}}
+		err := ValidatePipeline(testObj)
+		assert.NoError(t, err)
+	})
+
+	t.Run("and conditional forwarding", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Edges[1].Conditions = &dfv1.ForwardConditions{Tags: &dfv1.TagConditions{
+			Operator: "and",
+			Values:   []string{"hello"}}}
+		err := ValidatePipeline(testObj)
+		assert.NoError(t, err)
+	})
+
+	t.Run("not conditional forwarding", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Edges[1].Conditions = &dfv1.ForwardConditions{Tags: &dfv1.TagConditions{
+			Operator: "not",
+			Values:   []string{"hello"}}}
+		err := ValidatePipeline(testObj)
+		assert.NoError(t, err)
+	})
+
+	t.Run("no operator conditional forwarding", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Edges[1].Conditions = &dfv1.ForwardConditions{Tags: &dfv1.TagConditions{
+			Values: []string{"hello"}}}
 		err := ValidatePipeline(testObj)
 		assert.NoError(t, err)
 	})
 
 	t.Run("allow conditional forwarding from source vertex", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Edges[0].Conditions = &dfv1.ForwardConditions{KeyIn: []string{"hello"}}
+		testObj.Spec.Edges[1].Conditions = &dfv1.ForwardConditions{Tags: &dfv1.TagConditions{
+			Operator: "or",
+			Values:   []string{"hello"}}}
 		err := ValidatePipeline(testObj)
 		assert.NoError(t, err)
 	})
