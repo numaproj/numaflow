@@ -81,9 +81,6 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 		w.Expect().SinkContains("out", `{"test-msg-1":"test-val-1","test-msg-2":"test-val-2"}`, fixtures.WithContainCount(tt.expectedNumMsgs))
 		w.Expect().SinkContains("out", "test-val-3", fixtures.WithContainCount(tt.expectedNumMsgs))
 
-		// todo: delete
-		time.Sleep(2 * time.Minute)
-
 		w.DeletePipelineAndWait()
 	}
 
