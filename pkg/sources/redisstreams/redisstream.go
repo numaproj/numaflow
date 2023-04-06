@@ -190,6 +190,8 @@ func New(
 					if err != nil {
 						return nil, err
 					}
+				} else {
+					continue
 				}
 				messages = append(messages, outMsg)
 			}
