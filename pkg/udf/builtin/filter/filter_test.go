@@ -61,7 +61,7 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(jsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
@@ -75,7 +75,7 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(jsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
@@ -89,7 +89,7 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(jsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
@@ -103,7 +103,7 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(jsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
@@ -117,7 +117,7 @@ func TestExpression(t *testing.T) {
 		handle, err := New(args)
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), _key, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(base64Msg),
 			eventTime: time.Time{},
 			watermark: time.Time{},

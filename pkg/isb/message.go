@@ -59,7 +59,8 @@ type Header struct {
 	Kind MessageKind
 	// ID is used for exactly-once-semantics. ID is usually populated from the offset, if offset is available.
 	ID string
-	// Keys is (key,value) in the map-reduce paradigm which will be used for conditional forwarding.
+	// Keys is (key,value) in the map-reduce paradigm will be used for reduce operation, last key in the list
+	// will be used for conditional forwarding
 	Keys []string
 }
 
