@@ -2,7 +2,7 @@
 
 ## Transformers
 
-Kustomize [Transformer Configurations](https://github.com/kubernetes-sigs/kustomize/tree/master/examples/transformerconfigs) can be used to do lots of powerful operations such as ConfigMap and Secret generations, applying common labels and annoations, updating image names and tags. To use thease features with Numaflow CRD objects, download [numaflow-transformer-config.yaml](numaflow-transformer-config.yaml) into your kustomize directory, and add it to `configurations` section.
+Kustomize [Transformer Configurations](https://github.com/kubernetes-sigs/kustomize/tree/master/examples/transformerconfigs) can be used to do lots of powerful operations such as ConfigMap and Secret generations, applying common labels and annotations, updating image names and tags. To use these features with Numaflow CRD objects, download [numaflow-transformer-config.yaml](numaflow-transformer-config.yaml) into your kustomize directory, and add it to `configurations` section.
 
 ```yaml
 kind: Kustomization

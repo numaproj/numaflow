@@ -581,7 +581,7 @@ message JetStreamBufferService {
 
   // Whether encrypt the data at rest, defaults to false
   // Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
-  // Toggling the value will impact encypting/decrypting existing messages.
+  // Toggling the value will impact encrypting/decrypting existing messages.
   // +optional
   optional bool encryption = 11;
 
@@ -812,14 +812,14 @@ message PipelineLimits {
   optional uint64 readBatchSize = 1;
 
   // BufferMaxLength is used to define the max length of a buffer
-  // Only applies to UDF and Source vertice as only they do buffer write.
+  // Only applies to UDF and Source vertices as only they do buffer write.
   // It can be overridden by the settings in vertex limits.
   // +kubebuilder:default=30000
   // +optional
   optional uint64 bufferMaxLength = 2;
 
   // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-  // Only applies to UDF and Source vertice as only they do buffer write.
+  // Only applies to UDF and Source vertices as only they do buffer write.
   // It will be overridden by the settings in vertex limits.
   // +kubebuilder:default=80
   // +optional

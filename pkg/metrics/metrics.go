@@ -157,7 +157,7 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler H
 func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 	m := new(metricsServer)
 	m.vertex = vertex
-	m.refreshInterval = 5 * time.Second             // Default refersh interval
+	m.refreshInterval = 5 * time.Second             // Default refresh interval
 	m.lagCheckingInterval = 3 * time.Second         // Default lag checking interval
 	m.lookbackSeconds = dfv1.DefaultLookbackSeconds // Default
 	for _, opt := range opts {
