@@ -300,7 +300,6 @@ func (rsSource *redisStreamsSource) produceOneKeyedMsg(inMsg redis.XMessage) (*i
 }
 
 // the ID of the message is formatted <msecTime>-<index> in the local time of the Redis node
-// todo: do we need to sanity check the value to make sure it's in UTC?
 func msgIdToTime(id string) (time.Time, error) {
 	splitStr := strings.Split(id, "-")
 	if len(splitStr) != 2 {
