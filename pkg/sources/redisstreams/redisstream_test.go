@@ -133,7 +133,8 @@ func TestProduceOneKeyedMsg(t *testing.T) {
 				assert.NotNil(t, err)
 			} else {
 				assert.Nil(t, err)
-				assert.Equal(t, tt.expectedKey, outMsg.Key)
+				assert.Equal(t, 1, len(outMsg.Keys))
+				assert.Equal(t, tt.expectedKey, outMsg.Keys[0])
 				assert.Equal(t, tt.expectedBody, string(outMsg.Payload))
 				assert.Equal(t, tt.expectedTime, outMsg.EventTime)
 			}
