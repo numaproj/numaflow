@@ -299,7 +299,7 @@ func (rsSource *redisStreamsSource) produceOneKeyedMsg(inMsg redis.XMessage) (*i
 	return nil, nil // unreachable code
 }
 
-// the ID of the message is formatted <msecTime>-<index> in the local time of the Redis node
+// the ID of the message is formatted <msecTime>-<index>
 func msgIdToTime(id string) (time.Time, error) {
 	splitStr := strings.Split(id, "-")
 	if len(splitStr) != 2 {
