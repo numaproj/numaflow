@@ -68,8 +68,6 @@ type Header struct {
 	// Keys is (key,value) in the map-reduce paradigm will be used for reduce operation, last key in the list
 	// will be used for conditional forwarding
 	Keys []string
-	// Metadata is the metadata of the message
-	Metadata MessageMetadata
 }
 
 // Body is the body of the message
@@ -88,6 +86,8 @@ type ReadMessage struct {
 	Message
 	ReadOffset Offset
 	Watermark  time.Time
+	// Metadata is the metadata of the message after a message is read from the buffer.
+	Metadata MessageMetadata
 }
 
 // ToReadMessage converts Message to a ReadMessage by providing the offset and watermark
