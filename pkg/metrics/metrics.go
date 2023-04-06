@@ -25,7 +25,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -36,6 +35,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (

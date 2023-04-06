@@ -254,11 +254,16 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 		return isb.PendingNotAvailable, fmt.Errorf("failed to list consumer group offsets, %w", err)
 	}
 	for _, partition := range partitions {
+		block := rep.GetBlock(r.topic, partition)
+		if block.Offset == -1 {
+			// This partition has not been processed yet.
+			// So, we can skip this partition.
+			continue
+		}
 		partitionOffset, err := r.saramaClient.GetOffset(r.topic, partition, sarama.OffsetNewest)
 		if err != nil {
 			return isb.PendingNotAvailable, fmt.Errorf("failed to get offset of topic %q, partition %v, %w", r.topic, partition, err)
 		}
-		block := rep.GetBlock(r.topic, partition)
 		totalPending += partitionOffset - block.Offset
 	}
 	return totalPending, nil
