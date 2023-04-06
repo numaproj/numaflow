@@ -1983,7 +1983,7 @@ been a restart of the reduce pod caused due to pod migrations, etc.</p>
 <h3 id="persistent-volume-claim-pvc">Persistent Volume Claim (PVC)<a class="headerlink" href="#persistent-volume-claim-pvc" title="Permanent link">&para;</a></h3>
 <p><code>persistentVolumeClaim</code> supports the following fields, <code>volumeSize</code>, <code>storageClassName</code>, and<code>accessMode</code>.
 As name suggests,<code>volumeSize</code> specifies the size of the volume. <code>accessMode</code> can be of many types, but for 
-reduce usecase we need only <code>ReadWriteOnce</code>. <code>storageClassName</code> can also be provided, more info on storage class
+reduce use case we need only <code>ReadWriteOnce</code>. <code>storageClassName</code> can also be provided, more info on storage class
 can be found <a href="https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1">here</a>. The default
 value of <code>storageClassName</code> is <code>default</code> which is default StorageClass may be deployed to a Kubernetes 
 cluster by addon manager during installation.</p>

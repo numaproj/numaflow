@@ -1767,7 +1767,7 @@
 
 <h1 id="kustomize-integration">Kustomize Integration<a class="headerlink" href="#kustomize-integration" title="Permanent link">&para;</a></h1>
 <h2 id="transformers">Transformers<a class="headerlink" href="#transformers" title="Permanent link">&para;</a></h2>
-<p>Kustomize <a href="https://github.com/kubernetes-sigs/kustomize/tree/master/examples/transformerconfigs">Transformer Configurations</a> can be used to do lots of powerful operations such as ConfigMap and Secret generations, applying common labels and annoations, updating image names and tags. To use thease features with Numaflow CRD objects, download <a href="../numaflow-transformer-config.yaml">numaflow-transformer-config.yaml</a> into your kustomize directory, and add it to <code>configurations</code> section.</p>
+<p>Kustomize <a href="https://github.com/kubernetes-sigs/kustomize/tree/master/examples/transformerconfigs">Transformer Configurations</a> can be used to do lots of powerful operations such as ConfigMap and Secret generations, applying common labels and annotations, updating image names and tags. To use these features with Numaflow CRD objects, download <a href="../numaflow-transformer-config.yaml">numaflow-transformer-config.yaml</a> into your kustomize directory, and add it to <code>configurations</code> section.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Kustomization</span>
 <span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kustomize.config.k8s.io/v1beta1</span>
 
