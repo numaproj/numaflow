@@ -41,7 +41,7 @@ func TestProduceUnkeyedJSONMsg(t *testing.T) {
 				},
 			},
 			`{"humidity":"50","temperature":"60"}`,
-			time.Date(2018, 2, 18, 2, 58, 0, 106000000, time.Local),
+			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
 		},
 		{
 			"SingleKeyValuePair",
@@ -52,7 +52,7 @@ func TestProduceUnkeyedJSONMsg(t *testing.T) {
 				},
 			},
 			`{"humidity":"50"}`,
-			time.Date(2018, 2, 18, 2, 58, 0, 106000000, time.Local),
+			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
 		},
 		{
 			"NoKeyValuePairs", // not really a valid Redis Streams message but we can test it anyway
@@ -61,7 +61,7 @@ func TestProduceUnkeyedJSONMsg(t *testing.T) {
 				Values: map[string]interface{}{},
 			},
 			`{}`,
-			time.Date(2018, 2, 18, 2, 58, 0, 106000000, time.Local),
+			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
 		},
 	}
 
@@ -71,7 +71,7 @@ func TestProduceUnkeyedJSONMsg(t *testing.T) {
 			assert.NotNil(t, outMsg)
 			assert.Nil(t, err)
 			assert.Equal(t, tt.expectedBody, string(outMsg.Payload))
-			assert.Equal(t, tt.expectedTime, outMsg.EventTime)
+			assert.Equal(t, tt.expectedTime.Local(), outMsg.EventTime)
 		})
 	}
 
@@ -110,7 +110,7 @@ func TestProduceOneKeyedMsg(t *testing.T) {
 			},
 			"humidity",
 			"50",
-			time.Date(2018, 2, 18, 2, 58, 0, 106000000, time.Local),
+			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
 			false,
 		},
 		{
@@ -136,7 +136,7 @@ func TestProduceOneKeyedMsg(t *testing.T) {
 				assert.Equal(t, 1, len(outMsg.Keys))
 				assert.Equal(t, tt.expectedKey, outMsg.Keys[0])
 				assert.Equal(t, tt.expectedBody, string(outMsg.Payload))
-				assert.Equal(t, tt.expectedTime, outMsg.EventTime)
+				assert.Equal(t, tt.expectedTime.Local(), outMsg.EventTime)
 			}
 		})
 	}
@@ -152,7 +152,7 @@ func TestMsgIdToTime(t *testing.T) {
 		{
 			"Valid",
 			"1518951480106-0",
-			time.Date(2018, 2, 18, 2, 58, 0, 106000000, time.Local),
+			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
 			false,
 		},
 		{
@@ -166,11 +166,11 @@ func TestMsgIdToTime(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testCase, func(t *testing.T) {
 			tm, err := msgIdToTime(tt.id)
-			assert.Equal(t, tt.expectedTime, tm)
 			if tt.expectedErr {
 				assert.NotNil(t, err)
 			} else {
 				assert.Nil(t, err)
+				assert.Equal(t, tt.expectedTime.Local(), tm)
 			}
 
 		})
