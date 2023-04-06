@@ -180,13 +180,13 @@ func New(
 				if len(message.Values) > 1 {
 					// in this case since we have more than one k/v pair, we can't publish a key
 					// so just JSON serialize the k/v pairs
-					outMsg, err = redisStreamsSource.produceUnkeyedJSONMsg(message)
+					outMsg, err = produceUnkeyedJSONMsg(message)
 					if err != nil {
 						return nil, err
 					}
 				} else if len(message.Values) == 1 {
 					// we just have one k/v pair, so we can use this key and the value can be raw
-					outMsg, err = redisStreamsSource.produceOneKeyedMsg(message)
+					outMsg, err = produceOneKeyedMsg(message)
 					if err != nil {
 						return nil, err
 					}
@@ -230,7 +230,7 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 }
 
 // incoming message should have multiple key/value pairs: produce a message with no Key, with value set to JSON serialization of the pairs
-func (rsSource *redisStreamsSource) produceUnkeyedJSONMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
+func produceUnkeyedJSONMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
 	var readOffset = inMsg.ID
 
 	// JSON serialize our key/value pairs
@@ -267,7 +267,7 @@ func (rsSource *redisStreamsSource) produceUnkeyedJSONMsg(inMsg redis.XMessage) 
 }
 
 // incoming message should only have a single key/value pair: produce a message Keyed by the Key with value as a raw value
-func (rsSource *redisStreamsSource) produceOneKeyedMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
+func produceOneKeyedMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
 	var readOffset = inMsg.ID
 
 	if len(inMsg.Values) != 1 {
