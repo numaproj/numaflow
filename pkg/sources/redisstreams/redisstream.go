@@ -245,7 +245,7 @@ func (rsSource *redisStreamsSource) produceUnkeyedJSONMsg(inMsg redis.XMessage) 
 	}
 	jsonSerialized, err := json.Marshal(&kvMap) //todo: Vigith mentioned array - does he prefer that?
 	if err != nil {
-		return nil, fmt.Errorf("failed to json serialize RedisStream values: %+v; inMsg=%+v", jsonSerialized, inMsg)
+		return nil, fmt.Errorf("failed to json serialize RedisStream values: %v; inMsg=%+v", err, inMsg)
 	}
 
 	msgTime, err := msgIdToTime(inMsg.ID)
