@@ -83,12 +83,17 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
-	// TODO: add ID and numDelivered metadata to the Datum.
+	id := readMessage.Message.ID
+	numDelivered := readMessage.Metadata.NumDelivered
 	var d = &functionpb.Datum{
 		Keys:      keys,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
+		Metadata: &functionpb.Metadata{
+			Id:           id,
+			NumDelivered: numDelivered,
+		},
 	}
 
 	datumList, err := u.client.MapFn(ctx, d)
@@ -206,12 +211,17 @@ func createDatum(readMessage *isb.ReadMessage) *functionpb.Datum {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	parentMessageInfo := readMessage.MessageInfo
-	// TODO: add ID and numDelivered metadata to the Datum.
+	id := readMessage.Message.ID
+	numDelivered := readMessage.Metadata.NumDelivered
 	var d = &functionpb.Datum{
 		Keys:      keys,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
+		Metadata: &functionpb.Metadata{
+			Id:           id,
+			NumDelivered: numDelivered,
+		},
 	}
 	return d
 }
