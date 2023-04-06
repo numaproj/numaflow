@@ -122,13 +122,12 @@ func (br *RedisStreamsRead) processReadError(xstreams []redis.XStream, messages 
 	return messages, fmt.Errorf("XReadGroup failed, %w", err)
 }
 
-// Todo: we can actually probably put the original code back here - we don't really need dedup
 // Ack acknowledges the offset to the read queue. Ack is always pipelined, if you want to avoid it then
 // send array of 1 element.
 func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error {
 	errs := make([]error, len(offsets))
-	// in the case of n messages produced from 1 incoming message, we could have
-	// the same offset more than once: need to deduplicate
+	// if we were to have n messages produced from 1 incoming message, we could have
+	// the same offset more than once: just in case, we can deduplicate
 	dedupOffsets := make(map[string]struct{}) // essentially a Set
 	strOffsets := []string{}
 	for _, o := range offsets {
