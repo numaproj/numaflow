@@ -21,3 +21,8 @@ Please see [API](https://github.com/numaproj/numaflow/blob/main/docs/APIs.md#red
 - Define TLS
 - Define username/password
 - Connect to Redis Sentinel 
+
+# Published message
+For any message that's published a single Key/Value pair, the published message will have OutKey=InKey, OutValue=InValue
+
+For any message that's published as multiple Key/Value pairs, the published message will have no key, and the Value will be a JSON-serialized map of the keys/values

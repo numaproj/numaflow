@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -242,12 +243,16 @@ func (rsSource *redisStreamsSource) produceUnkeyedJSONMsg(inMsg redis.XMessage) 
 	}
 	jsonSerialized, err := json.Marshal(&kvMap) //todo: Vigith mentioned array - does he prefer that?
 	if err != nil {
-		return nil, fmt.Errorf("failed to json serialize RedisStream values: %+v;", jsonSerialized, inMsg)
+		return nil, fmt.Errorf("failed to json serialize RedisStream values: %+v; inMsg=%+v", jsonSerialized, inMsg)
 	}
 
+	msgTime, err := msgIdToTime(inMsg.ID)
+	if err != nil {
+		return nil, err
+	}
 	isbMsg := isb.Message{
 		Header: isb.Header{
-			MessageInfo: isb.MessageInfo{EventTime: time.Now()}, //doesn't seem like Redis offers a timestamp
+			MessageInfo: isb.MessageInfo{EventTime: msgTime},
 			ID:          readOffset,
 		},
 		Body: isb.Body{Payload: []byte(jsonSerialized)},
@@ -271,9 +276,13 @@ func (rsSource *redisStreamsSource) produceOneKeyedMsg(inMsg redis.XMessage) (*i
 		if !castOk {
 			return nil, fmt.Errorf("couldn't cast RedisStream interface type %v to string: inMsg=%+v", v, inMsg)
 		}
+		msgTime, err := msgIdToTime(inMsg.ID)
+		if err != nil {
+			return nil, err
+		}
 		isbMsg := isb.Message{
 			Header: isb.Header{
-				MessageInfo: isb.MessageInfo{EventTime: time.Now()}, //doesn't seem like Redis offers a timestamp
+				MessageInfo: isb.MessageInfo{EventTime: msgTime},
 				ID:          readOffset,
 				Key:         k,
 			},
@@ -286,6 +295,24 @@ func (rsSource *redisStreamsSource) produceOneKeyedMsg(inMsg redis.XMessage) (*i
 		}, nil
 	}
 	return nil, nil // unreachable code
+}
+
+// the ID of the message is formatted <msecTime>-<index> in the local time of the Redis node
+// todo: do we need to sanity check the value to make sure it's in UTC?
+func msgIdToTime(id string) (time.Time, error) {
+	splitStr := strings.Split(id, "-")
+	if len(splitStr) != 2 {
+		return time.Time{}, fmt.Errorf("unexpected message ID value for Redis Streams: %s", id)
+	}
+	timeMsec, err := strconv.ParseInt(splitStr[0], 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+	mSecRemainder := timeMsec % 1000
+	t := time.Unix(timeMsec/1000, mSecRemainder*1000000)
+
+	return t, nil
+
 }
 
 func (rsSource *redisStreamsSource) createConsumerGroup(ctx context.Context, sourceSpec *dfv1.RedisStreamsSource) error {
