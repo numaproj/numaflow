@@ -61,10 +61,10 @@ type myForwardTest struct {
 	buffers []string
 }
 
-func (f myForwardTest) WhereTo(key string) ([]string, error) {
-	if strings.Compare(key, "test-forward-one") == 0 {
+func (f myForwardTest) WhereTo(key []string) ([]string, error) {
+	if strings.Compare(key[len(key)-1], "test-forward-one") == 0 {
 		return []string{"buffer1"}, nil
-	} else if strings.Compare(key, "test-forward-all") == 0 {
+	} else if strings.Compare(key[len(key)-1], "test-forward-all") == 0 {
 		return f.buffers, nil
 	}
 	return []string{}, nil
@@ -137,7 +137,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 		Elements: []*functionpb.Datum{
 			{
-				Key:   "reduced_result_key",
+				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
 			},
 		},
@@ -145,7 +145,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
 		Elements: []*functionpb.Datum{
 			{
-				Key:   "reduced_result_key",
+				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
 			},
 		},
@@ -378,8 +378,8 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 				MessageInfo: isb.MessageInfo{
 					EventTime: time.UnixMilli(60000),
 				},
-				ID:  "1",
-				Key: key,
+				ID:   "1",
+				Keys: []string{key},
 			},
 			Body: isb.Body{Payload: resultPayload},
 		},

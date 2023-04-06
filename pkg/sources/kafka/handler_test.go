@@ -42,7 +42,7 @@ func TestMessageHandling(t *testing.T) {
 	partition := int32(1)
 	offset := int64(1)
 	value := "testvalue"
-	key := "testkey"
+	keys := []string{"testkey"}
 
 	tobuffer := simplebuffer.NewInMemoryBuffer("test", 100)
 	dest := []isb.BufferWriter{tobuffer}
@@ -73,7 +73,7 @@ func TestMessageHandling(t *testing.T) {
 		Topic:     topic,
 		Partition: partition,
 		Offset:    offset,
-		Key:       []byte(key),
+		Key:       []byte(keys[0]),
 		Value:     []byte(value),
 	}
 
@@ -90,6 +90,6 @@ func TestMessageHandling(t *testing.T) {
 	readmsg := readmsgs[0]
 	assert.Equal(t, expectedoffset, readmsg.ID)
 	assert.Equal(t, []byte(value), readmsg.Body.Payload)
-	assert.Equal(t, key, readmsg.Header.Key)
+	assert.Equal(t, keys, readmsg.Header.Keys)
 	assert.Equal(t, expectedoffset, readmsg.ReadOffset.String())
 }

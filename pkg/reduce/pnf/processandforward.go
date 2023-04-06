@@ -163,7 +163,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	return nil
 }
 
-// whereToStep assigns a message to the ISBs based on the Message.Key.
+// whereToStep assigns a message to the ISBs based on the Message.Keys.
 // TODO: we have to introduce support for shuffle, output of a reducer can be input to the next reducer.
 func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	// writer doesn't accept array of pointers
@@ -172,14 +172,14 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	var to []string
 	var err error
 	for _, msg := range p.result {
-		to, err = p.whereToDecider.WhereTo(msg.Key)
+		to, err = p.whereToDecider.WhereTo(msg.Keys)
 		if err != nil {
 			platformError.With(map[string]string{
 				metrics.LabelVertex:             p.vertexName,
 				metrics.LabelPipeline:           p.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 			}).Inc()
-			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.String("key", msg.Key), zap.Error(err), zap.Any("partitionID", p.PartitionID))
+			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.Strings("keys", msg.Keys), zap.Error(err), zap.Any("partitionID", p.PartitionID))
 			continue
 		}
 

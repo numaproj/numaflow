@@ -44,7 +44,7 @@ type PayloadForTest struct {
 type SumReduceTest struct {
 }
 
-func (s *SumReduceTest) WhereTo(_ string) ([]string, error) {
+func (s *SumReduceTest) WhereTo(_ []string) ([]string, error) {
 	return []string{"reduce-buffer"}, nil
 }
 
@@ -54,8 +54,8 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
-		key := msg.Key
-		sums[key] += payload.Value
+		keys := msg.Keys
+		sums[keys[0]] += payload.Value
 	}
 
 	msgs := make([]*isb.Message, 0)
@@ -68,8 +68,8 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 				MessageInfo: isb.MessageInfo{
 					EventTime: partitionID.End,
 				},
-				ID:  "msgID",
-				Key: k,
+				ID:   "msgID",
+				Keys: []string{k},
 			},
 			Body: isb.Body{Payload: b},
 		}
@@ -155,8 +155,8 @@ func TestReadLoop_Startup(t *testing.T) {
 					EventTime: time.Unix(300, 0),
 					IsLate:    false,
 				},
-				ID:  "",
-				Key: "",
+				ID:   "",
+				Keys: []string{""},
 			},
 			Body: isb.Body{},
 		},
@@ -210,8 +210,8 @@ func createStoreMessages(_ context.Context, key string, value int, eventTime tim
 					MessageInfo: isb.MessageInfo{
 						EventTime: eventTime,
 					},
-					ID:  fmt.Sprintf("%d", value+1),
-					Key: key,
+					ID:   fmt.Sprintf("%d", value+1),
+					Keys: []string{key},
 				},
 				Body: isb.Body{Payload: result},
 			},

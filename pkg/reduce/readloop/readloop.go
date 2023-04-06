@@ -126,8 +126,8 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 		// insert the window to the list of active windows, since the active window list is in-memory
 		keyedWindow, _ := rl.windower.InsertIfNotPresent(alignedKeyedWindow)
 
-		// add key to the window, so that when a new message with the watermark greater than
-		// the window end time comes, key will not be lost and the windows will be closed as expected
+		// add slots to the window, so that when a new message with the watermark greater than
+		// the window end time comes, slots will not be lost and the windows will be closed as expected
 		keyedWindow.AddSlot(p.Slot)
 
 		// create and invoke process and forward for the partition

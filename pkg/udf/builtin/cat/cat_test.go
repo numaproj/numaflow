@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	funcsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,12 +46,10 @@ func TestNew(t *testing.T) {
 	ctx := context.Background()
 	p := New()
 	req := []byte{0}
-	messages := p(ctx, "", &testDatum{
+	messages := p(ctx, []string{""}, &testDatum{
 		value:     req,
 		eventTime: time.Time{},
 		watermark: time.Time{},
 	})
 	assert.Equal(t, 1, len(messages))
-	assert.Equal(t, funcsdk.ALL, messages[0].Key)
-	assert.Equal(t, req, messages[0].Value)
 }

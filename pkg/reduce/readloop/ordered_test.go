@@ -39,7 +39,7 @@ import (
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WhereTo(_ string) ([]string, error) {
+func (f myForwardTest) WhereTo(_ []string) ([]string, error) {
 	return []string{dfv1.MessageKeyDrop}, nil
 }
 

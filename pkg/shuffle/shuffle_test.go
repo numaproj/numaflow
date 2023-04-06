@@ -129,10 +129,10 @@ func buildBufferIdList(size int) []string {
 func buildTestMessagesWithDistinctKeys(size int64) []*isb.Message {
 	// build test messages
 	messages := testutils.BuildTestWriteMessages(size, time.Now())
-	// set key for test messages
+	// set keys for test messages
 	var res []*isb.Message
 	for index := 0; index < len(messages); index++ {
-		messages[index].Key = fmt.Sprintf("key_%d", index)
+		messages[index].Keys = []string{fmt.Sprintf("key_%d", index)}
 		res = append(res, &messages[index])
 	}
 	return res

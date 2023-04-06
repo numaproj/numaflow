@@ -225,8 +225,8 @@ func (d *DataForward) forwardAChunk(ctx context.Context) {
 	processorWM := d.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
 		if !d.keyed {
-			m.Key = dfv1.DefaultKeyForNonKeyedData
-			m.Message.Key = dfv1.DefaultKeyForNonKeyedData
+			m.Keys = []string{dfv1.DefaultKeyForNonKeyedData}
+			m.Message.Keys = []string{dfv1.DefaultKeyForNonKeyedData}
 		}
 		m.Watermark = time.Time(processorWM)
 		totalBytes += len(m.Payload)
