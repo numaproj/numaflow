@@ -65,7 +65,7 @@ type JetStreamBufferService struct {
 	BufferConfig *string `json:"bufferConfig,omitempty" protobuf:"bytes,10,opt,name=bufferConfig"`
 	// Whether encrypt the data at rest, defaults to false
 	// Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
-	// Toggling the value will impact encypting/decrypting existing messages.
+	// Toggling the value will impact encrypting/decrypting existing messages.
 	// +optional
 	Encryption bool `json:"encryption,omitempty" protobuf:"bytes,11,opt,name=encryption"`
 	// Whether enable TLS, defaults to false

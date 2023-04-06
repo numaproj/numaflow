@@ -97,7 +97,7 @@ func (p *publish) GetHeadWM() wmb.Watermark {
 	return p.headWatermark
 }
 
-// SetHeadWM sets the p.headWatermark field useing the given wm.
+// SetHeadWM sets the p.headWatermark field using the given wm.
 func (p *publish) SetHeadWM(wm wmb.Watermark) {
 	p.headWMLock.Lock()
 	defer p.headWMLock.Unlock()
