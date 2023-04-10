@@ -100,14 +100,11 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 	for i, m := range messages {
 		msgs[i] = &sinkpb.Datum{
 			// NOTE: key is not used anywhere ATM
+			Id:        m.ID,
 			Value:     m.Payload,
 			EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(m.EventTime)},
 			// Watermark is only available in readmessage....
 			Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
-			// NumDelivered is only available in ReadMessage
-			Metadata: &sinkpb.Metadata{
-				Id: m.ID,
-			},
 		}
 	}
 	return nil, s.udsink.Apply(ctx, msgs)

@@ -89,7 +89,7 @@ func (u *UDSgRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.Datum) [
 		resMap[res.GetId()] = res
 	}
 	for i, m := range dList {
-		if r, existing := resMap[m.Metadata.GetId()]; !existing {
+		if r, existing := resMap[m.GetId()]; !existing {
 			errs[i] = fmt.Errorf("not found in responseList")
 		} else {
 			if !r.Success {

@@ -18,10 +18,10 @@ package cat
 
 import (
 	"context"
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"testing"
 	"time"
 
+	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/stretchr/testify/assert"
 )
 
