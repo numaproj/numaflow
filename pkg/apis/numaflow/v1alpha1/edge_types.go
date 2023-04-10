@@ -39,6 +39,7 @@ type Edge struct {
 }
 
 type ForwardConditions struct {
+	// Tags used to specify tags for conditional forwarding
 	Tags *TagConditions `json:"tags" protobuf:"bytes,1,rep,name=tags"`
 }
 
@@ -47,7 +48,7 @@ type TagConditions struct {
 	// value could be "and", "or", "not"
 	// +optional
 	Operator string `json:"operator" protobuf:"bytes,1,opt,name=operator"`
-	//Values tags for conditional forwarding
+	//Values tag values for conditional forwarding
 	Values []string `json:"values" protobuf:"bytes,2,rep,name=values"`
 }
 

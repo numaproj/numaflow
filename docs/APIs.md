@@ -1065,6 +1065,9 @@ Description
 </a> </em>
 </td>
 <td>
+<p>
+Tags used to specify tags for conditional forwarding
+</p>
 </td>
 </tr>
 </tbody>
@@ -4295,8 +4298,8 @@ Description
 <td>
 <em>(Optional)</em>
 <p>
-Operator can be and, or, not, used to specify type of operation for
-conditional forwarding
+Operator specifies the type of operation that should be used for
+conditional forwarding value could be “and”, “or”, “not”
 </p>
 </td>
 </tr>
@@ -4306,7 +4309,7 @@ conditional forwarding
 </td>
 <td>
 <p>
-Values tags for conditional forwarding
+Values tag values for conditional forwarding
 </p>
 </td>
 </tr>

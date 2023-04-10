@@ -346,7 +346,7 @@ func (f myForwardRedisTest) WhereTo(_ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardRedisTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardRedisTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 

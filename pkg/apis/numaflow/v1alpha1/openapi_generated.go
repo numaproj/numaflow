@@ -991,7 +991,8 @@ func schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref common.ReferenceCal
 				Properties: map[string]spec.Schema{
 					"tags": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions"),
+							Description: "Tags used to specify tags for conditional forwarding",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions"),
 						},
 					},
 				},
@@ -3581,7 +3582,7 @@ func schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"operator": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Operator can be and, or, not, used to specify type of operation for conditional forwarding",
+							Description: "Operator specifies the type of operation that should be used for conditional forwarding value could be \"and\", \"or\", \"not\"",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -3589,7 +3590,7 @@ func schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref common.ReferenceCallbac
 					},
 					"values": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Values tags for conditional forwarding",
+							Description: "Values tag values for conditional forwarding",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

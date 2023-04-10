@@ -17718,6 +17718,7 @@
       ],
       "properties": {
         "tags": {
+          "description": "Tags used to specify tags for conditional forwarding",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TagConditions"
         }
       }
@@ -19123,11 +19124,11 @@
       ],
       "properties": {
         "operator": {
-          "description": "Operator can be and, or, not, used to specify type of operation for conditional forwarding",
+          "description": "Operator specifies the type of operation that should be used for conditional forwarding value could be \"and\", \"or\", \"not\"",
           "type": "string"
         },
         "values": {
-          "description": "Values tags for conditional forwarding",
+          "description": "Values tag values for conditional forwarding",
           "type": "array",
           "items": {
             "type": "string"

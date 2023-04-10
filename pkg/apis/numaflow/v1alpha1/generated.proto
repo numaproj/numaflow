@@ -305,6 +305,7 @@ message FixedWindow {
 }
 
 message ForwardConditions {
+  // Tags used to specify tags for conditional forwarding
   optional TagConditions tags = 1;
 }
 
@@ -1095,12 +1096,12 @@ message TLS {
 }
 
 message TagConditions {
-  // Operator can be and, or, not, used to specify type of operation for
-  // conditional forwarding
+  // Operator specifies the type of operation that should be used for conditional forwarding
+  // value could be "and", "or", "not"
   // +optional
   optional string operator = 1;
 
-  // Values tags for conditional forwarding
+  // Values tag values for conditional forwarding
   repeated string values = 2;
 }
 
