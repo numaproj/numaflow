@@ -20,9 +20,11 @@ import (
 	"crypto/rand"
 	"math/big"
 	"strings"
+
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-// generate a random string with given length
+// RandomString generate a random string with given length
 func RandomString(length int) string {
 	seeds := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, length)
@@ -49,9 +51,11 @@ func StringSliceContains(list []string, str string) bool {
 	return false
 }
 
-func CompareSlice(operator string, sa []string, sb []string) bool {
+// CompareSlice compares two slices based on operator
+func CompareSlice(operator v1alpha1.LogicOperator, sa []string, sb []string) bool {
 	switch operator {
-	case "and":
+	case v1alpha1.LogicOperatorAnd:
+		// returns true if all the elements of slice a are in slice b
 		for _, val := range sa {
 			if !StringSliceContains(sb, val) {
 				return false
@@ -59,7 +63,8 @@ func CompareSlice(operator string, sa []string, sb []string) bool {
 		}
 		return true
 
-	case "not":
+	case v1alpha1.LogicOperatorNot:
+		// returns false if any of the elements of slice a are in slice b
 		for _, val := range sa {
 			if StringSliceContains(sb, val) {
 				return false
@@ -67,7 +72,8 @@ func CompareSlice(operator string, sa []string, sb []string) bool {
 		}
 		return true
 
-	default:
+	case v1alpha1.LogicOperatorOr:
+		// returns true if any of the elements of slice a are in slice b
 		for _, val := range sa {
 			if StringSliceContains(sb, val) {
 				return true
@@ -75,4 +81,5 @@ func CompareSlice(operator string, sa []string, sb []string) bool {
 		}
 		return false
 	}
+	return false
 }

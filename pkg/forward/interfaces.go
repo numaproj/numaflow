@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	All  = GoWhere(func([]string) ([]string, error) { return []string{dfv1.MessageKeyAll}, nil })
+	All  = GoWhere(func([]string) ([]string, error) { return []string{dfv1.MessageTagAll}, nil })
 	Drop = GoWhere(func([]string) ([]string, error) { return []string{dfv1.MessageTagDrop}, nil })
 )
 

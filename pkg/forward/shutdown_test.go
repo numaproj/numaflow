@@ -34,7 +34,7 @@ type myShutdownTest struct {
 }
 
 func (s myShutdownTest) WhereTo(_ []string) ([]string, error) {
-	return []string{dfv1.MessageKeyAll}, nil
+	return []string{dfv1.MessageTagAll}, nil
 }
 
 func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {

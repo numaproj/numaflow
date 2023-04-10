@@ -2579,6 +2579,16 @@ Log
 </p>
 <p>
 </p>
+<h3 id="numaflow.numaproj.io/v1alpha1.LogicOperator">
+LogicOperator (<code>string</code> alias)
+</p>
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.TagConditions">TagConditions</a>)
+</p>
+<p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Metadata">
 Metadata
 </h3>
@@ -4293,7 +4303,9 @@ Description
 <tbody>
 <tr>
 <td>
-<code>operator</code></br> <em> string </em>
+<code>operator</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.LogicOperator"> LogicOperator
+</a> </em>
 </td>
 <td>
 <em>(Optional)</em>

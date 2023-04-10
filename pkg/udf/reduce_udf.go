@@ -126,7 +126,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 					result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge)...)
 				}
 			} else {
-				if sharedutil.CompareSlice(edge.Conditions.Tags.Operator, tags, edge.Conditions.Tags.Values) {
+				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
 					if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
 						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(tags))
 					} else {

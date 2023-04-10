@@ -153,7 +153,7 @@ const (
 
 var (
 	MessageTagDrop = fmt.Sprintf("%U__DROP__", '\\') // U+005C__DROP__
-	MessageKeyAll  = fmt.Sprintf("%U__ALL__", '\\')  // U+005C__ALL__
+	MessageTagAll  = fmt.Sprintf("%U__ALL__", '\\')  // U+005C__ALL__
 
 	// the standard resources used by the `init` and `main`containers.
 	standardResources = corev1.ResourceRequirements{

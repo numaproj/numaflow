@@ -608,11 +608,10 @@ func (isdf *InterStepDataForward) whereToStep(taggedMessage *isb.TaggedMessage, 
 	}
 
 	switch {
-	case sharedutil.StringSliceContains(to, dfv1.MessageKeyAll):
+	case sharedutil.StringSliceContains(to, dfv1.MessageTagAll):
 		for toStep := range isdf.toBuffers {
 			// update all the destination
 			messageToStep[toStep] = append(messageToStep[toStep], taggedMessage.Message)
-
 		}
 	default:
 		for _, t := range to {

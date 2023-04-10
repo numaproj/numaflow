@@ -62,6 +62,10 @@ spec:
                         tags:
                           properties:
                             operator:
+                              enum:
+                              - and
+                              - or
+                              - not
                               type: string
                             values:
                               items:

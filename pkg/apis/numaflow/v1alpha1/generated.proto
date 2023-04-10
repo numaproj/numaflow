@@ -1098,6 +1098,7 @@ message TLS {
 message TagConditions {
   // Operator specifies the type of operation that should be used for conditional forwarding
   // value could be "and", "or", "not"
+  // +kubebuilder:validation:Enum=and;or;not
   // +optional
   optional string operator = 1;
 

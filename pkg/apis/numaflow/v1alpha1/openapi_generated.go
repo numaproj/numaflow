@@ -3583,7 +3583,6 @@ func schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref common.ReferenceCallbac
 					"operator": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Operator specifies the type of operation that should be used for conditional forwarding value could be \"and\", \"or\", \"not\"",
-							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
