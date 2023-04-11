@@ -24,11 +24,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestProduceUnkeyedJSONMsg(t *testing.T) {
+func TestProduceMsg(t *testing.T) {
 	tests := []struct {
 		testCase     string
 		inMsg        redis.XMessage
 		expectedBody string
+		expectedKeys []string // in order
 		expectedTime time.Time
 	}{
 		{
@@ -41,6 +42,7 @@ func TestProduceUnkeyedJSONMsg(t *testing.T) {
 				},
 			},
 			`{"humidity":"50","temperature":"60"}`,
+			[]string{"humidity", "temperature"},
 			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
 		},
 		{
@@ -52,94 +54,24 @@ func TestProduceUnkeyedJSONMsg(t *testing.T) {
 				},
 			},
 			`{"humidity":"50"}`,
-			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
-		},
-		{
-			"NoKeyValuePairs", // not really a valid Redis Streams message but we can test it anyway
-			redis.XMessage{
-				ID:     "1518951480106-1",
-				Values: map[string]interface{}{},
-			},
-			`{}`,
+			[]string{"humidity"},
 			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.testCase, func(t *testing.T) {
-			outMsg, err := produceUnkeyedJSONMsg(tt.inMsg)
+			outMsg, err := produceMsg(tt.inMsg)
 			assert.NotNil(t, outMsg)
 			assert.Nil(t, err)
 			assert.Equal(t, tt.expectedBody, string(outMsg.Payload))
+			for i, key := range tt.expectedKeys {
+				assert.Equal(t, key, outMsg.Keys[i])
+			}
 			assert.Equal(t, tt.expectedTime.Local(), outMsg.EventTime)
 		})
 	}
 
-}
-
-func TestProduceOneKeyedMsg(t *testing.T) {
-	tests := []struct {
-		testCase     string
-		inMsg        redis.XMessage
-		expectedKey  string
-		expectedBody string
-		expectedTime time.Time
-		expectedErr  bool
-	}{
-		{
-			"MultiKeyValuePair",
-			redis.XMessage{
-				ID: "1518951480106-0",
-				Values: map[string]interface{}{
-					"humidity":    "50",
-					"temperature": "60",
-				},
-			},
-			"",
-			"",
-			time.Time{},
-			true,
-		},
-		{
-			"SingleKeyValuePair",
-			redis.XMessage{
-				ID: "1518951480106-0",
-				Values: map[string]interface{}{
-					"humidity": "50",
-				},
-			},
-			"humidity",
-			"50",
-			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
-			false,
-		},
-		{
-			"NoKeyValuePair",
-			redis.XMessage{
-				ID:     "1518951480106-0",
-				Values: map[string]interface{}{},
-			},
-			"",
-			"",
-			time.Time{},
-			true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.testCase, func(t *testing.T) {
-			outMsg, err := produceOneKeyedMsg(tt.inMsg)
-			if tt.expectedErr {
-				assert.NotNil(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, 1, len(outMsg.Keys))
-				assert.Equal(t, tt.expectedKey, outMsg.Keys[0])
-				assert.Equal(t, tt.expectedBody, string(outMsg.Payload))
-				assert.Equal(t, tt.expectedTime.Local(), outMsg.EventTime)
-			}
-		})
-	}
 }
 
 func TestMsgIdToTime(t *testing.T) {

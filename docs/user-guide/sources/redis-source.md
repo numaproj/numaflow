@@ -2,7 +2,7 @@
 
 A Redis Streams source is used to ingest messages from [Redis Streams](https://redis.io/docs/data-types/streams-tutorial/).
 
-Example:
+## Example:
 
 ```yaml
 spec:
@@ -23,6 +23,14 @@ Please see [API](https://github.com/numaproj/numaflow/blob/main/docs/APIs.md#red
 - Connect to Redis Sentinel 
 
 # Published message
-For any message that's published a single Key/Value pair, the published message will have OutKey=InKey, OutValue=InValue
+Incoming messages may have a single Key/Value pair or multiple. In either case, the published message will have Keys equivalent to the incoming Key(s) and Payload equivalent to the JSON serialization of the map of keys to values. 
 
-For any message that's published as multiple Key/Value pairs, the published message will have no key, and the Value will be a JSON-serialized map of the keys/values
+## Example:
+If you have this Incoming message: 
+```
+XADD * my-stream humidity 44 temperature 65
+```
+
+Then Outgoing message will be:
+ Keys: `["humidity", "temperature"]`
+ Payload: `{"humidity":"44","temperature":"65"}`

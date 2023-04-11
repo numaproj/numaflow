@@ -45,11 +45,6 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 	if err != nil {
 		rss.Fail(err.Error())
 	}
-	oneKeyValue := map[string]string{"test-msg-3": "test-val-3"}
-	oneKeyValueJson, err := json.Marshal(oneKeyValue)
-	if err != nil {
-		rss.Fail(err.Error())
-	}
 
 	// can do 2 tests
 	// 1. start from the beginning of the Stream
@@ -64,7 +59,6 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 	} {
 		// send some messages before creating the Pipeline so we can test both "ReadFromBeginning" and "ReadFromLatest"
 		fixtures.PumpRedisStream(tt.stream, 1, 20*time.Millisecond, 10, string(multipleKeysValuesJson))
-		fixtures.PumpRedisStream(tt.stream, 1, 20*time.Millisecond, 10, string(oneKeyValueJson))
 
 		w := rss.Given().Pipeline(tt.manifest).
 			When().
@@ -75,11 +69,8 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 
 		// send 100 of the messages that have multiple k/v pairs, which should result in json serialized values
 		fixtures.PumpRedisStream(tt.stream, 100, 20*time.Millisecond, 10, string(multipleKeysValuesJson))
-		// send 100 of the messages that have a single k/v pair, which should result in a raw value
-		fixtures.PumpRedisStream(tt.stream, 100, 20*time.Millisecond, 10, string(oneKeyValueJson))
 		time.Sleep(20 * time.Second)
 		w.Expect().SinkContains("out", `{"test-msg-1":"test-val-1","test-msg-2":"test-val-2"}`, fixtures.WithContainCount(tt.expectedNumMsgs))
-		w.Expect().SinkContains("out", "test-val-3", fixtures.WithContainCount(tt.expectedNumMsgs))
 
 		w.DeletePipelineAndWait()
 	}

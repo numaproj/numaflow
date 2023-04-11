@@ -177,20 +177,14 @@ func New(
 			for _, message := range xstream.Messages {
 				var outMsg *isb.ReadMessage
 				var err error
-				if len(message.Values) > 1 {
-					// in this case since we have more than one k/v pair, we can't publish a key
-					// so just JSON serialize the k/v pairs
-					outMsg, err = produceUnkeyedJSONMsg(message)
-					if err != nil {
-						return nil, err
-					}
-				} else if len(message.Values) == 1 {
-					// we just have one k/v pair, so we can use this key and the value can be raw
-					outMsg, err = produceOneKeyedMsg(message)
+				if len(message.Values) >= 1 {
+					outMsg, err = produceMsg(message)
 					if err != nil {
 						return nil, err
 					}
 				} else {
+					// don't think there should be a message with no values, but if there is...
+					redisStreamsSource.Log.Warnf("unexpected: RedisStreams message has no values? message=%+v", message)
 					continue
 				}
 				messages = append(messages, outMsg)
@@ -229,23 +223,16 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 	return redisclient.NewRedisClient(opts), nil
 }
 
-// incoming message should have multiple key/value pairs: produce a message with no Key, with value set to JSON serialization of the pairs
-func produceUnkeyedJSONMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
+func produceMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
 	var readOffset = inMsg.ID
 
-	// JSON serialize our key/value pairs
-	// need to first convert map[string]interface to map[string]string
-	kvMap := make(map[string]string)
-	for k, v := range inMsg.Values {
-		strValue, castOk := v.(string)
-		if !castOk {
-			return nil, fmt.Errorf("couldn't cast RedisStream interface type %v to string: inMsg=%+v", v, inMsg)
-		}
-		kvMap[k] = strValue
-	}
-	jsonSerialized, err := json.Marshal(&kvMap)
+	jsonSerialized, err := json.Marshal(inMsg.Values)
 	if err != nil {
 		return nil, fmt.Errorf("failed to json serialize RedisStream values: %v; inMsg=%+v", err, inMsg)
+	}
+	keys := []string{}
+	for k, _ := range inMsg.Values {
+		keys = append(keys, k)
 	}
 
 	msgTime, err := msgIdToTime(inMsg.ID)
@@ -256,6 +243,7 @@ func produceUnkeyedJSONMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{EventTime: msgTime},
 			ID:          readOffset,
+			Keys:        keys,
 		},
 		Body: isb.Body{Payload: []byte(jsonSerialized)},
 	}
@@ -264,39 +252,6 @@ func produceUnkeyedJSONMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
 		ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
 		Message:    isbMsg,
 	}, nil
-}
-
-// incoming message should only have a single key/value pair: produce a message Keyed by the Key with value as a raw value
-func produceOneKeyedMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
-	var readOffset = inMsg.ID
-
-	if len(inMsg.Values) != 1 {
-		return nil, fmt.Errorf("expected len(inMsg.Values) to equal 1; actual=%d; inMsg=%+v", len(inMsg.Values), inMsg)
-	}
-	for k, v := range inMsg.Values { // only one pair but still using the loop construct
-		strValue, castOk := v.(string)
-		if !castOk {
-			return nil, fmt.Errorf("couldn't cast RedisStream interface type %v to string: inMsg=%+v", v, inMsg)
-		}
-		msgTime, err := msgIdToTime(inMsg.ID)
-		if err != nil {
-			return nil, err
-		}
-		isbMsg := isb.Message{
-			Header: isb.Header{
-				MessageInfo: isb.MessageInfo{EventTime: msgTime},
-				ID:          readOffset,
-				Keys:        []string{k},
-			},
-			Body: isb.Body{Payload: []byte(strValue)},
-		}
-
-		return &isb.ReadMessage{
-			ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
-			Message:    isbMsg,
-		}, nil
-	}
-	return nil, nil // unreachable code
 }
 
 // the ID of the message is formatted <msecTime>-<index>
