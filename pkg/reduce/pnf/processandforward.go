@@ -52,7 +52,7 @@ type ProcessAndForward struct {
 	vertexReplica    int32
 	PartitionID      partition.ID
 	UDF              applier.ReduceApplier
-	result           []*isb.TaggedMessage
+	result           []*isb.WriteMessage
 	pbqReader        pbq.Reader
 	log              *zap.SugaredLogger
 	toBuffers        map[string]isb.BufferWriter

@@ -70,7 +70,7 @@ func (f myForwardTest) WhereTo(key []string) ([]string, error) {
 	return []string{}, nil
 }
 
-func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -372,7 +372,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		Value: 100,
 	})
 
-	var result = []*isb.TaggedMessage{
+	var result = []*isb.WriteMessage{
 		{
 			Message: isb.Message{
 				Header: isb.Header{

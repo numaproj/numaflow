@@ -78,7 +78,7 @@ func (u *UDSgRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
@@ -102,10 +102,10 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 		}
 	}
 
-	writeMessages := make([]*isb.TaggedMessage, 0)
+	writeMessages := make([]*isb.WriteMessage, 0)
 	for i, datum := range datumList {
 		keys := datum.Keys
-		taggedMessage := &isb.TaggedMessage{
+		taggedMessage := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: parentMessageInfo,
@@ -126,7 +126,7 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 // should we pass metadata information ?
 
 // ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *UDSgRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (u *UDSgRPCBasedUDF) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	datumCh := make(chan *functionpb.DatumRequest)
 	var wg sync.WaitGroup
 	var result []*functionpb.DatumResponse
@@ -184,10 +184,10 @@ readLoop:
 		}
 	}
 
-	taggedMessages := make([]*isb.TaggedMessage, 0)
+	taggedMessages := make([]*isb.WriteMessage, 0)
 	for _, datum := range result {
 		keys := datum.Keys
-		taggedMessage := &isb.TaggedMessage{
+		taggedMessage := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{

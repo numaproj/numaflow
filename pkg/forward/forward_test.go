@@ -92,7 +92,7 @@ func (f myForwardTest) WhereTo(_ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -523,8 +523,8 @@ func (f mySourceForwardTest) WhereTo(_ []string) ([]string, error) {
 // such that we can verify message IsLate attribute gets set to true.
 var testSourceNewEventTime = testSourceWatermark.Add(time.Duration(-1) * time.Minute)
 
-func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
-	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 		_ = ctx
 		offset := readMessage.ReadOffset
 		payload := readMessage.Body.Payload
@@ -548,7 +548,7 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 				Payload: result,
 			},
 		}
-		return []*isb.TaggedMessage{{Message: writeMessage}}, nil
+		return []*isb.WriteMessage{{Message: writeMessage}}, nil
 	}(ctx, message)
 }
 
@@ -779,7 +779,7 @@ func (f myForwardDropTest) WhereTo(_ []string) ([]string, error) {
 	return []string{}, nil
 }
 
-func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -887,7 +887,7 @@ func (f myForwardToAllTest) WhereTo(_ []string) ([]string, error) {
 	return []string{"to1", "to2"}, nil
 }
 
-func (f myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (f myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -981,7 +981,7 @@ func (f myForwardInternalErrTest) WhereTo(_ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardInternalErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (f myForwardInternalErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -1033,7 +1033,7 @@ func (f myForwardApplyWhereToErrTest) WhereTo(_ []string) ([]string, error) {
 	return []string{"to1"}, fmt.Errorf("whereToStep failed")
 }
 
-func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -1080,7 +1080,7 @@ func (f myForwardApplyUDFErrTest) WhereTo(_ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardApplyUDFErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (f myForwardApplyUDFErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, fmt.Errorf("UDF error")
 }
 

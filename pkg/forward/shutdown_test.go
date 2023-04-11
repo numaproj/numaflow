@@ -37,7 +37,7 @@ func (s myShutdownTest) WhereTo(_ []string) ([]string, error) {
 	return []string{dfv1.MessageTagAll}, nil
 }
 
-func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 

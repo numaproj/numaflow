@@ -114,7 +114,7 @@ type CounterReduceTest struct {
 }
 
 // Reduce returns a result with the count of messages
-func (f CounterReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (f CounterReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	count := 0
 	for range messageStream {
 		count += 1
@@ -132,7 +132,7 @@ func (f CounterReduceTest) ApplyReduce(ctx context.Context, partitionID *partiti
 		},
 		Body: isb.Body{Payload: b},
 	}
-	return []*isb.TaggedMessage{
+	return []*isb.WriteMessage{
 		{
 			Message: ret,
 			Tags:    nil,
@@ -147,7 +147,7 @@ func (f CounterReduceTest) WhereTo(_ []string) ([]string, error) {
 type SumReduceTest struct {
 }
 
-func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	sums := make(map[string]int)
 
 	for msg := range messageStream {
@@ -157,12 +157,12 @@ func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.I
 		sums[key[0]] += payload.Value
 	}
 
-	msgs := make([]*isb.TaggedMessage, 0)
+	msgs := make([]*isb.WriteMessage, 0)
 
 	for k, s := range sums {
 		payload := PayloadForTest{Key: k, Value: s}
 		b, _ := json.Marshal(payload)
-		msg := &isb.TaggedMessage{
+		msg := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -185,7 +185,7 @@ func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.I
 type MaxReduceTest struct {
 }
 
-func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	mx := math.MinInt64
 	maxMap := make(map[string]int)
 	for msg := range messageStream {
@@ -200,11 +200,11 @@ func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.I
 		}
 	}
 
-	result := make([]*isb.TaggedMessage, 0)
+	result := make([]*isb.WriteMessage, 0)
 	for k, max := range maxMap {
 		payload := PayloadForTest{Key: k, Value: max}
 		b, _ := json.Marshal(payload)
-		ret := &isb.TaggedMessage{
+		ret := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{

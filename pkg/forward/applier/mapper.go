@@ -25,20 +25,20 @@ import (
 // MapApplier applies the UDF on the read message and gives back a new message. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type MapApplier interface {
-	ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error)
+	ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
 }
 
 // ApplyMapFunc utility function used to create an Applier implementation
-type ApplyMapFunc func(context.Context, *isb.ReadMessage) ([]*isb.TaggedMessage, error)
+type ApplyMapFunc func(context.Context, *isb.ReadMessage) ([]*isb.WriteMessage, error)
 
-func (a ApplyMapFunc) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (a ApplyMapFunc) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return a(ctx, message)
 }
 
 var (
 	// Terminal Applier do not make any change to the message
-	Terminal = ApplyMapFunc(func(ctx context.Context, msg *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
-		return []*isb.TaggedMessage{{
+	Terminal = ApplyMapFunc(func(ctx context.Context, msg *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+		return []*isb.WriteMessage{{
 			Message: msg.Message,
 		}}, nil
 	})

@@ -23,7 +23,7 @@ import (
 )
 
 // CopyUDFTestApply applies a copy UDF that simply copies the input to output.
-func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	_ = ctx
 	offset := readMessage.ReadOffset
 	payload := readMessage.Body.Payload
@@ -45,5 +45,5 @@ func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb
 			Payload: result,
 		},
 	}
-	return []*isb.TaggedMessage{{Message: writeMessage}}, nil
+	return []*isb.WriteMessage{{Message: writeMessage}}, nil
 }

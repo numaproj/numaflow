@@ -182,9 +182,9 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 
 // readWriteMessagePair represents a read message and its processed (via UDF) write message.
 type readWriteMessagePair struct {
-	readMessage    *isb.ReadMessage
-	taggedMessages []*isb.TaggedMessage
-	udfError       error
+	readMessage   *isb.ReadMessage
+	writeMessages []*isb.WriteMessage
+	udfError      error
 }
 
 // forwardAChunk forwards a chunk of message from the fromBuffer to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
@@ -305,11 +305,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// if vertex type is source, it means we have finished the source data transformation.
 	// let's publish source watermark and assign IsLate attribute based on new event time.
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
-		var writeMessages []*isb.TaggedMessage
+		var writeMessages []*isb.WriteMessage
 		var transformedReadMessages []*isb.ReadMessage
 		for _, m := range udfResults {
-			writeMessages = append(writeMessages, m.taggedMessages...)
-			for _, message := range m.taggedMessages {
+			writeMessages = append(writeMessages, m.writeMessages...)
+			for _, message := range m.writeMessages {
 				// we convert each writeMessage to isb.ReadMessage by providing its parent ReadMessage's ReadOffset.
 				// since we use message event time instead of the watermark to determine and publish source watermarks, time.UnixMilli(-1) is assigned to the message watermark.
 				// transformedReadMessages are immediately used below for publishing source watermarks.
@@ -330,7 +330,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	// let's figure out which vertex to send the results to.
-	// update the toBuffer(s) with taggedMessages.
+	// update the toBuffer(s) with writeMessages.
 	for _, m := range udfResults {
 		// look for errors in udf processing, if we see even 1 error NoAck all messages
 		// then return. Handling partial retrying is not worth ATM.
@@ -342,7 +342,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 		// update toBuffers
-		for _, message := range m.taggedMessages {
+		for _, message := range m.writeMessages {
 			if err := isdf.whereToStep(message, messageToStep, m.readMessage); err != nil {
 				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
 				isdf.fromBuffer.NoAck(ctx, readOffsets)
@@ -555,7 +555,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 		udfReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
 		writeMessages, err := isdf.applyUDF(ctx, message.readMessage)
 		udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(writeMessages)))
-		message.taggedMessages = append(message.taggedMessages, writeMessages...)
+		message.writeMessages = append(message.writeMessages, writeMessages...)
 		message.udfError = err
 		udfProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 	}
@@ -564,7 +564,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 // applyUDF applies the UDF and will block if there is any InternalErr. On the other hand, if this is a UserError
 // the skip flag is set. ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the ApplyUDF.
-func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
 		writeMessages, err := isdf.UDF.ApplyMap(ctx, readMessage)
 		if err != nil {
@@ -593,9 +593,9 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
-func (isdf *InterStepDataForward) whereToStep(taggedMessage *isb.TaggedMessage, messageToStep map[string][]isb.Message, readMessage *isb.ReadMessage) error {
+func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-	to, err := isdf.FSD.WhereTo(taggedMessage.Tags)
+	to, err := isdf.FSD.WhereTo(writeMessage.Tags)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.fromBuffer.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
 		// a shutdown can break the blocking loop caused due to InternalErr
@@ -611,14 +611,14 @@ func (isdf *InterStepDataForward) whereToStep(taggedMessage *isb.TaggedMessage, 
 	case sharedutil.StringSliceContains(to, dfv1.MessageTagAll):
 		for toStep := range isdf.toBuffers {
 			// update all the destination
-			messageToStep[toStep] = append(messageToStep[toStep], taggedMessage.Message)
+			messageToStep[toStep] = append(messageToStep[toStep], writeMessage.Message)
 		}
 	default:
 		for _, t := range to {
 			if _, ok := messageToStep[t]; !ok {
 				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.fromBuffer.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("no such destination (%s)", t)}))
 			}
-			messageToStep[t] = append(messageToStep[t], taggedMessage.Message)
+			messageToStep[t] = append(messageToStep[t], writeMessage.Message)
 		}
 	}
 	return nil

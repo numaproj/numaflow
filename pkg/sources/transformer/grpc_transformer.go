@@ -79,7 +79,7 @@ func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.TaggedMessage, error) {
+func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
@@ -103,14 +103,14 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 		}
 	}
 
-	taggedMessages := make([]*isb.TaggedMessage, 0)
+	taggedMessages := make([]*isb.WriteMessage, 0)
 	for i, datum := range datumList {
 		keys := datum.Keys
 		if datum.EventTime != nil {
 			// Transformer supports changing event time.
 			parentMessageInfo.EventTime = datum.EventTime.EventTime.AsTime()
 		}
-		taggedMessage := &isb.TaggedMessage{
+		taggedMessage := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: parentMessageInfo,
