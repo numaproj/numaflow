@@ -259,6 +259,7 @@ type readMessagePreamble struct {
 	// TODO: currently only support simple int offset
 	SimpleIntOffset int64
 	WMEpoch         int64
+	NumDelivered    uint64
 }
 
 // MarshalBinary encodes ReadMessage to the binary format
@@ -278,10 +279,12 @@ func (rm ReadMessage) MarshalBinary() (data []byte, err error) {
 	default:
 		return nil, fmt.Errorf("currently only support SimpleIntOffset")
 	}
+
 	var preamble = readMessagePreamble{
 		MLen:            int16(len(message)),
 		SimpleIntOffset: offset,
 		WMEpoch:         rm.Watermark.UnixMilli(),
+		NumDelivered:    rm.Metadata.NumDelivered,
 	}
 	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
 		return nil, err
@@ -319,5 +322,8 @@ func (rm *ReadMessage) UnmarshalBinary(data []byte) (err error) {
 		return preamble.SimpleIntOffset
 	})
 	rm.Watermark = time.UnixMilli(preamble.WMEpoch).UTC()
+	rm.Metadata = MessageMetadata{
+		NumDelivered: preamble.NumDelivered,
+	}
 	return err
 }

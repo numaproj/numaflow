@@ -18,7 +18,7 @@ package queue
 
 import "sync"
 
-// OverflowQeueue is a thread safe queue implementation with max size, and the oldest elements automatically overflow.
+// OverflowQueue is a thread safe queue implementation with max size, and the oldest elements automatically overflow.
 type OverflowQueue[T any] struct {
 	elements []T
 	maxSize  int

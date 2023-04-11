@@ -94,6 +94,10 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+			Metadata: &functionpb.Metadata{
+				Id:           "test_id",
+				NumDelivered: 1,
+			},
 		}
 		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumResponseList{
 			Elements: []*functionpb.DatumResponse{
@@ -128,6 +132,9 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 				},
 			},
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
+			Metadata: isb.MessageMetadata{
+				NumDelivered: 1,
+			},
 		},
 		)
 		assert.NoError(t, err)
@@ -145,6 +152,9 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+			Metadata: &functionpb.Metadata{
+				Id: "test_id",
+			},
 		}
 		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
 
