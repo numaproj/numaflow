@@ -35,7 +35,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
-	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
@@ -130,13 +129,11 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler H
 		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
 	}
 	if serverHandler != nil {
-		if util.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
-			metricsOpts = append(metricsOpts, WithHealthCheckExecutor(func() error {
-				cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-				defer cancel()
-				return serverHandler.IsHealthy(cctx)
-			}))
-		}
+		metricsOpts = append(metricsOpts, WithHealthCheckExecutor(func() error {
+			cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			return serverHandler.IsHealthy(cctx)
+		}))
 	}
 	if x, ok := reader.(isb.LagReader); ok {
 		metricsOpts = append(metricsOpts, WithLagReader(x))
