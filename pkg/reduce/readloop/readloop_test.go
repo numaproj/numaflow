@@ -48,7 +48,7 @@ func (s *SumReduceTest) WhereTo(_ []string) ([]string, error) {
 	return []string{"reduce-buffer"}, nil
 }
 
-func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	sums := make(map[string]int)
 
 	for msg := range messageStream {

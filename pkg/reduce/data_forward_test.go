@@ -114,7 +114,7 @@ type CounterReduceTest struct {
 }
 
 // Reduce returns a result with the count of messages
-func (f CounterReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	count := 0
 	for range messageStream {
 		count += 1

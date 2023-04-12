@@ -69,7 +69,7 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 func (e eventTimeExtractor) apply(et time.Time, payload []byte) (functionsdk.MessageT, error) {
 	timeStr, err := expr.EvalStr(e.expression, payload)
 	if err != nil {
-		return functionsdk.NewMessageT(payload).WithEventTime(et), err
+		return functionsdk.NewMessageT(et, payload), err
 	}
 
 	var newEventTime time.Time
@@ -80,8 +80,8 @@ func (e eventTimeExtractor) apply(et time.Time, payload []byte) (functionsdk.Mes
 		newEventTime, err = dateparse.ParseStrict(timeStr)
 	}
 	if err != nil {
-		return functionsdk.NewMessageT(payload).WithEventTime(et), err
+		return functionsdk.NewMessageT(et, payload), err
 	} else {
-		return functionsdk.NewMessageT(payload).WithEventTime(newEventTime), nil
+		return functionsdk.NewMessageT(newEventTime, payload), nil
 	}
 }

@@ -56,7 +56,7 @@ func (f filter) apply(et time.Time, msg []byte) (functionsdk.MessageT, error) {
 		return functionsdk.MessageTToDrop(), err
 	}
 	if result {
-		return functionsdk.NewMessageT(msg).WithEventTime(et), nil
+		return functionsdk.NewMessageT(et, msg), nil
 	}
 	return functionsdk.MessageTToDrop(), nil
 }
