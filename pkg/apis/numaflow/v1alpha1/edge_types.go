@@ -62,6 +62,9 @@ type TagConditions struct {
 }
 
 func (tc TagConditions) GetOperator() LogicOperator {
+	if tc.Operator == nil {
+		return LogicOperatorOr
+	}
 	return *tc.Operator
 }
 
