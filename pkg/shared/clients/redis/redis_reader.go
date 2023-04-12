@@ -42,14 +42,15 @@ type RedisStreamsRead struct {
 }
 
 type Metrics struct {
-	ReadErrorsInc MetricsIncrementFunc
-	ReadsAdd      MetricsAddFunc
-	AcksAdd       MetricsAddFunc
+	ReadErrorsInc metricsIncrementFunc
+	ReadsAdd      metricsAddFunc // number of actual messages read in
+	AcksAdd       metricsAddFunc
+	AckErrorsAdd  metricsAddFunc
 }
 
 // need a function type which increments a particular counter
-type MetricsIncrementFunc func()
-type MetricsAddFunc func(int)
+type metricsIncrementFunc func()
+type metricsAddFunc func(int)
 
 func (br *RedisStreamsRead) GetName() string {
 	return br.Name
@@ -94,11 +95,14 @@ func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMes
 		}
 	}
 
-	// for each XMessage in []XStream
-	msgs, err := br.XStreamToMessages(xstreams, messages, labels)
-	if br.Metrics.ReadsAdd != nil {
-		br.Metrics.ReadsAdd(len(messages))
+	// Update metric for number of messages read in
+	for _, xstream := range xstreams {
+		if br.Metrics.ReadsAdd != nil {
+			br.Metrics.ReadsAdd(len(xstream.Messages))
+		}
 	}
+	// Generate messages from the XStream
+	msgs, err := br.XStreamToMessages(xstreams, messages, labels)
 	br.Log.Debugf("Received %d messages over Redis Streams Source, err=%v", len(msgs), err)
 	return msgs, err
 }
@@ -122,17 +126,28 @@ func (br *RedisStreamsRead) processReadError(xstreams []redis.XStream, messages 
 // send array of 1 element.
 func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error {
 	errs := make([]error, len(offsets))
+	// if we were to have n messages produced from 1 incoming message, we could have
+	// the same offset more than once: just in case, we can deduplicate
+	dedupOffsets := make(map[string]struct{}) // essentially a Set
 	strOffsets := []string{}
 	for _, o := range offsets {
-		strOffsets = append(strOffsets, o.String())
+		_, found := dedupOffsets[o.String()]
+		if !found {
+			dedupOffsets[o.String()] = struct{}{}
+			strOffsets = append(strOffsets, o.String())
+		}
 	}
 	if err := br.Client.XAck(RedisContext, br.Stream, br.Group, strOffsets...).Err(); err != nil {
 		for i := 0; i < len(offsets); i++ {
-			errs[i] = err
+			errs[i] = err // 'errs' is indexed the same as 'offsets'
 		}
-	}
-	if br.Metrics.AcksAdd != nil {
-		br.Metrics.AcksAdd(len(offsets))
+		if br.Metrics.AckErrorsAdd != nil {
+			br.Metrics.AckErrorsAdd(len(strOffsets))
+		}
+	} else {
+		if br.Metrics.AcksAdd != nil {
+			br.Metrics.AcksAdd(len(strOffsets))
+		}
 	}
 	return errs
 }

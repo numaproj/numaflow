@@ -18,8 +18,10 @@ package redisstreams
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,6 +115,9 @@ func New(
 			AcksAdd: func(count int) {
 				redisStreamsSourceAckCount.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
 			},
+			AckErrorsAdd: func(count int) {
+				redisStreamsSourceAckErrors.With(map[string]string{metrics.LabelVertex: vertexSpec.Name, metrics.LabelPipeline: vertexSpec.PipelineName}).Add(float64(count))
+			},
 		},
 	}
 
@@ -164,35 +169,25 @@ func New(
 
 	// function which takes the messages that have been read from the Stream and turns them into ReadMessages
 	redisStreamsSource.XStreamToMessages = func(xstreams []redis.XStream, messages []*isb.ReadMessage, labels map[string]string) ([]*isb.ReadMessage, error) {
-		// for each XMessage in []XStream
-		for _, xstream := range xstreams {
+		if len(xstreams) > 1 {
+			redisStreamsSource.Log.Warnf("redisStreamsSource shouldn't have more than one Stream; xstreams=%+v", xstreams)
+		} else if len(xstreams) == 1 {
+			xstream := xstreams[0]
+
 			for _, message := range xstream.Messages {
-				var readOffset = message.ID
-
-				valIndex := 0
-				for f, v := range message.Values {
-
-					// need to make sure the ID is unique: we can make it a combination of the original
-					// message ID from Redis (timestamp+sequence num) plus its ordinal in the key/value pairs
-					// contained in the message
-					id := fmt.Sprintf("%s-%d", message.ID, valIndex)
-					valIndex = valIndex + 1
-
-					isbMsg := isb.Message{
-						Header: isb.Header{
-							MessageInfo: isb.MessageInfo{EventTime: time.Now()}, //doesn't seem like Redis offers a timestamp
-							ID:          id,                                     // assumption is that this only needs to be unique for this source vertex
-							Keys:        []string{f},
-						},
-						Body: isb.Body{Payload: []byte(v.(string))},
+				var outMsg *isb.ReadMessage
+				var err error
+				if len(message.Values) >= 1 {
+					outMsg, err = produceMsg(message)
+					if err != nil {
+						return nil, err
 					}
-
-					readMsg := &isb.ReadMessage{
-						ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }), // assumption is that this is just used for ack, so doesn't need to include stream name
-						Message:    isbMsg,
-					}
-					messages = append(messages, readMsg)
+				} else {
+					// don't think there should be a message with no values, but if there is...
+					redisStreamsSource.Log.Warnf("unexpected: RedisStreams message has no values? message=%+v", message)
+					continue
 				}
+				messages = append(messages, outMsg)
 			}
 		}
 
@@ -226,6 +221,54 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 	}
 
 	return redisclient.NewRedisClient(opts), nil
+}
+
+func produceMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
+	var readOffset = inMsg.ID
+
+	jsonSerialized, err := json.Marshal(inMsg.Values)
+	if err != nil {
+		return nil, fmt.Errorf("failed to json serialize RedisStream values: %v; inMsg=%+v", err, inMsg)
+	}
+	keys := []string{}
+	for k := range inMsg.Values {
+		keys = append(keys, k)
+	}
+
+	msgTime, err := msgIdToTime(inMsg.ID)
+	if err != nil {
+		return nil, err
+	}
+	isbMsg := isb.Message{
+		Header: isb.Header{
+			MessageInfo: isb.MessageInfo{EventTime: msgTime},
+			ID:          readOffset,
+			Keys:        keys,
+		},
+		Body: isb.Body{Payload: []byte(jsonSerialized)},
+	}
+
+	return &isb.ReadMessage{
+		ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
+		Message:    isbMsg,
+	}, nil
+}
+
+// the ID of the message is formatted <msecTime>-<index>
+func msgIdToTime(id string) (time.Time, error) {
+	splitStr := strings.Split(id, "-")
+	if len(splitStr) != 2 {
+		return time.Time{}, fmt.Errorf("unexpected message ID value for Redis Streams: %s", id)
+	}
+	timeMsec, err := strconv.ParseInt(splitStr[0], 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+	mSecRemainder := timeMsec % 1000
+	t := time.Unix(timeMsec/1000, mSecRemainder*1000000)
+
+	return t, nil
+
 }
 
 func (rsSource *redisStreamsSource) createConsumerGroup(ctx context.Context, sourceSpec *dfv1.RedisStreamsSource) error {
