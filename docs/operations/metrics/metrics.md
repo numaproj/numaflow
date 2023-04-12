@@ -35,6 +35,15 @@ These metrics can be used to determine throughput of your pipeline.
 | `kafka_source_read_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages read by the Kafka Source Vertex/Processor.        |
 | `kafka_source_ack_total`  | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages acknowledged by the Kafka Source Vertex/Processor |
 
+#### Redis Streams Source
+
+| Metric name                           | Metric type | Labels                                                 | Description                                                                                           |
+| ------------------------------------- | ----------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `redis_streams_source_read_total`     | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages read by the Redis Streams Source Vertex/Processor                     |
+| `redis_streams_source_read_err_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of read failures for the Redis Streams Source Vertex/Processor                    |
+| `redis_streams_source_ack_total`      | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages acked by the Redis Streams Source Vertex/Processor                    |
+| `redis_streams_source_ack_err_total`  | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of errors attempting to ack by the Redis Streams Source Vertex/Processor          |
+
 #### Generator Source
 
 | Metric name                 | Metric type | Labels                                                 | Description                                                                    |

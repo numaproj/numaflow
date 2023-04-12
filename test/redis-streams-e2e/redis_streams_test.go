@@ -40,8 +40,8 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 	// so for now just using a timer
 	time.Sleep(10 * time.Second)
 
-	keysValues := map[string]string{"test-msg-1": "test-val-1", "test-msg-2": "test-val-2"}
-	keysValuesJson, err := json.Marshal(keysValues)
+	multipleKeysValues := map[string]string{"test-msg-1": "test-val-1", "test-msg-2": "test-val-2"}
+	multipleKeysValuesJson, err := json.Marshal(multipleKeysValues)
 	if err != nil {
 		rss.Fail(err.Error())
 	}
@@ -58,7 +58,7 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 		{"test-stream-b", "@testdata/redis-source-pipeline-from-end.yaml", 100},
 	} {
 		// send some messages before creating the Pipeline so we can test both "ReadFromBeginning" and "ReadFromLatest"
-		fixtures.PumpRedisStream(tt.stream, 1, 20*time.Millisecond, 10, string(keysValuesJson))
+		fixtures.PumpRedisStream(tt.stream, 1, 20*time.Millisecond, 10, string(multipleKeysValuesJson))
 
 		w := rss.Given().Pipeline(tt.manifest).
 			When().
@@ -67,10 +67,10 @@ func (rss *RedisSourceSuite) TestRedisSource() {
 		// wait for all the pods to come up
 		w.Expect().VertexPodsRunning()
 
-		fixtures.PumpRedisStream(tt.stream, 100, 20*time.Millisecond, 10, string(keysValuesJson))
+		// send 100 of the messages that have multiple k/v pairs, which should result in json serialized values
+		fixtures.PumpRedisStream(tt.stream, 100, 20*time.Millisecond, 10, string(multipleKeysValuesJson))
 		time.Sleep(20 * time.Second)
-		w.Expect().SinkContains("out", "test-val-1", fixtures.WithContainCount(tt.expectedNumMsgs))
-		w.Expect().SinkContains("out", "test-val-2", fixtures.WithContainCount(tt.expectedNumMsgs))
+		w.Expect().SinkContains("out", `{"test-msg-1":"test-val-1","test-msg-2":"test-val-2"}`, fixtures.WithContainCount(tt.expectedNumMsgs))
 
 		w.DeletePipelineAndWait()
 	}
