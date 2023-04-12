@@ -231,7 +231,7 @@ func produceMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
 		return nil, fmt.Errorf("failed to json serialize RedisStream values: %v; inMsg=%+v", err, inMsg)
 	}
 	keys := []string{}
-	for k, _ := range inMsg.Values {
+	for k := range inMsg.Values {
 		keys = append(keys, k)
 	}
 
