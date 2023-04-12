@@ -1496,6 +1496,13 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#redis-streams-source" class="md-nav__link">
+    Redis Streams Source
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#generator-source" class="md-nav__link">
     Generator Source
   </a>
@@ -1888,6 +1895,13 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#redis-streams-source" class="md-nav__link">
+    Redis Streams Source
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#generator-source" class="md-nav__link">
     Generator Source
   </a>
@@ -2130,6 +2144,43 @@
 <td>Counter</td>
 <td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Provides the number of messages acknowledged by the Kafka Source Vertex/Processor</td>
+</tr>
+</tbody>
+</table>
+<h4 id="redis-streams-source">Redis Streams Source<a class="headerlink" href="#redis-streams-source" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>redis_streams_source_read_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td>Provides the number of messages read by the Redis Streams Source Vertex/Processor</td>
+</tr>
+<tr>
+<td><code>redis_streams_source_read_err_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td>Provides the number of read failures for the Redis Streams Source Vertex/Processor</td>
+</tr>
+<tr>
+<td><code>redis_streams_source_ack_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td>Provides the number of messages acked by the Redis Streams Source Vertex/Processor</td>
+</tr>
+<tr>
+<td><code>redis_streams_source_ack_err_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td>Provides the number of errors attempting to ack by the Redis Streams Source Vertex/Processor</td>
 </tr>
 </tbody>
 </table>

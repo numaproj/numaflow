@@ -620,9 +620,40 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Redis Streams Source
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         Redis Streams Source
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example:
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1691,6 +1722,21 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example:
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1709,7 +1755,7 @@
 
 <h1 id="redis-streams-source">Redis Streams Source<a class="headerlink" href="#redis-streams-source" title="Permanent link">&para;</a></h1>
 <p>A Redis Streams source is used to ingest messages from <a href="https://redis.io/docs/data-types/streams-tutorial/">Redis Streams</a>.</p>
-<p>Example:</p>
+<h2 id="example">Example:<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input</span>
@@ -1724,6 +1770,15 @@
 - Define TLS
 - Define username/password
 - Connect to Redis Sentinel </p>
+<h1 id="published-message">Published message<a class="headerlink" href="#published-message" title="Permanent link">&para;</a></h1>
+<p>Incoming messages may have a single Key/Value pair or multiple. In either case, the published message will have Keys equivalent to the incoming Key(s) and Payload equivalent to the JSON serialization of the map of keys to values. </p>
+<h2 id="example_1">Example:<a class="headerlink" href="#example_1" title="Permanent link">&para;</a></h2>
+<p>If you have this Incoming message: 
+<div class="highlight"><pre><span></span><code>XADD * my-stream humidity 44 temperature 65
+</code></pre></div></p>
+<p>Then Outgoing message will be:
+ Keys: <code>["humidity", "temperature"]</code>
+ Payload: <code>{"humidity":"44","temperature":"65"}</code></p>
 
               
             </article>
