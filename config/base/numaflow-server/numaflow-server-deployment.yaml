@@ -38,7 +38,7 @@ spec:
               memory: 200Mi
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /livez
               port: 8443
               scheme: HTTPS
             initialDelaySeconds: 3

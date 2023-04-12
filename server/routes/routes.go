@@ -30,7 +30,7 @@ type SystemInfo struct {
 }
 
 func Routes(r *gin.Engine, sysinfo SystemInfo) {
-	r.GET("/healthz", func(c *gin.Context) {
+	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 	rGroup := r.Group("/api/v1")

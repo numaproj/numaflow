@@ -269,7 +269,7 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
 		if len(ms.healthCheckExecutors) > 0 {
 			for _, ex := range ms.healthCheckExecutors {
 				if err := ex(); err != nil {
