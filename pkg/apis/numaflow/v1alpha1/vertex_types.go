@@ -223,7 +223,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 90,
+		InitialDelaySeconds: 30,
 		PeriodSeconds:       60,
 		TimeoutSeconds:      30,
 	}
