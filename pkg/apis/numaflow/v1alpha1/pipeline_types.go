@@ -233,9 +233,9 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 3,
-		PeriodSeconds:       3,
-		TimeoutSeconds:      1,
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       60,
+		TimeoutSeconds:      30,
 	}
 
 	labels := map[string]string{

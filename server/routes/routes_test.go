@@ -45,9 +45,9 @@ func TestRoutes(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
 
-	t.Run("/healthz", func(t *testing.T) {
+	t.Run("/livez", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, "/healthz", nil)
+		req, err := http.NewRequest(http.MethodGet, "/livez", nil)
 		require.NoError(t, err)
 		router.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)

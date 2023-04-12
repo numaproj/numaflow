@@ -218,14 +218,14 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	containers[0].LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
-				Path:   "/healthz",
+				Path:   "/livez",
 				Port:   intstr.FromInt(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 3,
-		PeriodSeconds:       3,
-		TimeoutSeconds:      1,
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       60,
+		TimeoutSeconds:      30,
 	}
 
 	if len(containers) > 1 { // udf, udsink or source vertex specifies a udtransformer

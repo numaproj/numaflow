@@ -112,7 +112,7 @@ spec:
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /livez
             port: 8443
             scheme: HTTPS
           initialDelaySeconds: 3
