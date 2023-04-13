@@ -65,7 +65,12 @@ func (tc TagConditions) GetOperator() LogicOperator {
 	if tc.Operator == nil {
 		return LogicOperatorOr
 	}
-	return *tc.Operator
+	switch *tc.Operator {
+	case LogicOperatorOr, LogicOperatorNot, LogicOperatorAnd:
+		return *tc.Operator
+	default:
+		return LogicOperatorOr
+	}
 }
 
 type EdgeLimits struct {
