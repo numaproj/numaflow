@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 type Source struct {
@@ -92,5 +93,18 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
 		}
 	}
-	return c.build()
+	container := c.build()
+	container.LivenessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/sidecar-livez",
+				Port:   intstr.FromInt(VertexMetricsPort),
+				Scheme: corev1.URISchemeHTTPS,
+			},
+		},
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       60,
+		TimeoutSeconds:      30,
+	}
+	return container
 }

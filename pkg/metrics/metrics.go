@@ -132,7 +132,7 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler H
 	if serverHandler != nil {
 		if util.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
 			metricsOpts = append(metricsOpts, WithHealthCheckExecutor(func() error {
-				cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				defer cancel()
 				return serverHandler.IsHealthy(cctx)
 			}))
@@ -269,11 +269,14 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/sidecar-livez", func(w http.ResponseWriter, r *http.Request) {
 		if len(ms.healthCheckExecutors) > 0 {
 			for _, ex := range ms.healthCheckExecutors {
 				if err := ex(); err != nil {
-					log.Errorw("Failed to execute health check", zap.Error(err))
+					log.Errorw("Failed to execute sidecar health check", zap.Error(err))
 					w.WriteHeader(http.StatusInternalServerError)
 					_, _ = w.Write([]byte(err.Error()))
 					return
