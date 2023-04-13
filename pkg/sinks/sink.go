@@ -111,7 +111,16 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			return
 		}
 	}()
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, reader, nil)
+	var metricsOpts []metrics.Option
+	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
+		if serverHandler, ok := sinker.(*udsink.UserDefinedSink); ok {
+			metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, serverHandler, reader, nil)
+		} else {
+			return fmt.Errorf("unable to get the metrics options for the udsink")
+		}
+	} else {
+		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, reader, nil)
+	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
