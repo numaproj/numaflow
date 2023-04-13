@@ -52,9 +52,12 @@ func (s *FunctionalSuite) TestDropOnFull() {
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")))
 	// give buffer writer some time to update the isFull attribute.
-	// 5s is a carefully chosen number to create a stable buffer full scenario, it is a bit higher than the buffer writer's refresh interval.
-	time.Sleep(time.Second * 5)
+	// 10s is a carefully chosen number to create a stable buffer full scenario.
+	time.Sleep(time.Second * 10)
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
+	// there could be a race condition between the buffer write and the sink scaling up, if the buffer write happens after the sink scaling up, message 2 will not be dropped.
+	// wait for 5s for message 2 to be dropped.
+	time.Sleep(time.Second * 5)
 
 	// scale the sinks up to 1 pod to process the message from the buffer.
 	scaleUpArgs := "kubectl scale vtx drop-on-full-drop-sink --replicas=1 -n numaflow-system"
