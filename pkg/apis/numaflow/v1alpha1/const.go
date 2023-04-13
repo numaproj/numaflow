@@ -105,6 +105,7 @@ const (
 	EnvLeaderElectionDisabled         = "NUMAFLOW_LEADER_ELECTION_DISABLED"
 	EnvDebug                          = "NUMAFLOW_DEBUG"
 	EnvPPROF                          = "NUMAFLOW_PPROF"
+	EnvHealthCheckDisabled            = "NUMAFLOW_HEALTH_CHECK_DISABLED"
 	EnvGRPCMaxMessageSize             = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE"
 
 	PathVarRun            = "/var/run/numaflow"

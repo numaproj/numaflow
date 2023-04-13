@@ -95,6 +95,7 @@ func Test_getTransformerContainer(t *testing.T) {
 		assert.NotNil(t, c.SecurityContext)
 		assert.Equal(t, x.UDTransformer.Container.EnvFrom, c.EnvFrom)
 		assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
+		assert.True(t, c.LivenessProbe != nil)
 	})
 
 	t.Run("with built-in transformers", func(t *testing.T) {
@@ -128,6 +129,7 @@ func Test_getTransformerContainer(t *testing.T) {
 			envNames = append(envNames, e.Name)
 		}
 		assert.NotContains(t, envNames, "a")
+		assert.True(t, c.LivenessProbe != nil)
 	})
 
 	t.Run("with built-in transformers, with multiple KWArgs", func(t *testing.T) {

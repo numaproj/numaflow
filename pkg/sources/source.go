@@ -126,6 +126,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
 	}
 	var sourcer Sourcer
+	var readyChecker metrics.HealthChecker
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		t, err := transformer.NewGRPCBasedTransformer()
 		if err != nil {
@@ -141,6 +142,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
+		readyChecker = t
 		sourcer, err = sp.getSourcer(writers, sp.getTransformerGoWhereDecider(), t, fetchWatermark, publishWatermark, sourcePublisherStores, log)
 	} else {
 		sourcer, err = sp.getSourcer(writers, forward.All, applier.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
@@ -161,7 +163,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, nil, sourcer, writers[0])
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, sourcer, writers[0])
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
