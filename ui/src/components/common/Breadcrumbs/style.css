@@ -1,0 +1,16 @@
+.Breadcrumbs {
+  margin-bottom: 15px !important;
+}
+
+.Breadcrumbs-typ {
+  color: slategray;
+}
+
+.Breadcrumbs-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.Breadcrumbs-link:hover {
+  text-decoration: underline;
+}
