@@ -111,7 +111,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	conditionalForwarder := forward.GoWhere(func(tags []string) ([]string, error) {
+	conditionalForwarder := forward.GoWhere(func(tags []string, keys []string) ([]string, error) {
 		result := []string{}
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil
@@ -128,7 +128,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			} else {
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
 					if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
-						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(tags))
+						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 					} else {
 						result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge)...)
 					}

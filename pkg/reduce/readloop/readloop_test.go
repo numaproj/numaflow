@@ -44,7 +44,7 @@ type PayloadForTest struct {
 type SumReduceTest struct {
 }
 
-func (s *SumReduceTest) WhereTo(_ []string) ([]string, error) {
+func (s *SumReduceTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"reduce-buffer"}, nil
 }
 

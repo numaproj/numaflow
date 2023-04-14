@@ -140,7 +140,7 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 	}, nil
 }
 
-func (f CounterReduceTest) WhereTo(_ []string) ([]string, error) {
+func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"reduce-to-buffer"}, nil
 }
 
