@@ -19,11 +19,13 @@ limitations under the License.
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/suite"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
@@ -40,15 +42,13 @@ func (s *FunctionalSuite) TestDropOnFull() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.VertexPodPortForward("in", 8001, dfv1.VertexMetricsPort).
+		TerminateAllPodPortForwards()
 
 	// scale the sinks down to 0 pod to create a buffer full scenario.
-	scaleDownArgs := "kubectl scale vtx drop-on-full-drop-sink --replicas=0 -n numaflow-system"
+	scaleDownArgs := "kubectl scale vtx drop-on-full-sink --replicas=0 -n numaflow-system"
 	w.Exec("/bin/sh", []string{"-c", scaleDownArgs}, CheckVertexScaled)
-	scaleDownArgs = "kubectl scale vtx drop-on-full-retry-sink --replicas=0 -n numaflow-system"
-	w.Exec("/bin/sh", []string{"-c", scaleDownArgs}, CheckVertexScaled)
-	w.Expect().
-		VertexSizeScaledTo("retry-sink", 0).
-		VertexSizeScaledTo("drop-sink", 0)
+	w.Expect().VertexSizeScaledTo("sink", 0)
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")))
 	// give buffer writer some time to update the isFull attribute.
@@ -59,19 +59,24 @@ func (s *FunctionalSuite) TestDropOnFull() {
 	// wait for 5s for message 2 to be dropped.
 	time.Sleep(time.Second * 5)
 
-	// scale the sinks up to 1 pod to process the message from the buffer.
-	scaleUpArgs := "kubectl scale vtx drop-on-full-drop-sink --replicas=1 -n numaflow-system"
-	w.Exec("/bin/sh", []string{"-c", scaleUpArgs}, CheckVertexScaled)
-	scaleUpArgs = "kubectl scale vtx drop-on-full-retry-sink --replicas=1 -n numaflow-system"
-	w.Exec("/bin/sh", []string{"-c", scaleUpArgs}, CheckVertexScaled)
-	w.Expect().
-		VertexSizeScaledTo("retry-sink", 1).
-		VertexSizeScaledTo("drop-sink", 1)
-
-	w.Expect().SinkContains("retry-sink", "1")
-	w.Expect().SinkContains("retry-sink", "2")
-	w.Expect().SinkContains("drop-sink", "1")
-	w.Expect().SinkNotContains("drop-sink", "2")
+	expectedDropMetric := `forwarder_drop_total{buffer="numaflow-system-drop-on-full-in-sink",pipeline="drop-on-full",vertex="in"} 1`
+	// wait for the drop metric to be updated, time out after 10s.
+	timeoutChan := time.After(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 2)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			metricsString := HTTPExpect(s.T(), "https://localhost:8001").GET("/metrics").
+				Expect().
+				Status(200).Body().Raw()
+			if strings.Contains(metricsString, expectedDropMetric) {
+				return
+			}
+		case <-timeoutChan:
+			s.T().Fatalf("timeout waiting for metrics to be updated")
+		}
+	}
 }
 
 func TestFunctionalSuite(t *testing.T) {
