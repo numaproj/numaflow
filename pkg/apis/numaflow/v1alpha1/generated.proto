@@ -305,7 +305,8 @@ message FixedWindow {
 }
 
 message ForwardConditions {
-  repeated string keyIn = 1;
+  // Tags used to specify tags for conditional forwarding
+  optional TagConditions tags = 1;
 }
 
 message Function {
@@ -1092,6 +1093,17 @@ message TLS {
   // KeySecret refers to the secret that contains the key
   // +optional
   optional k8s.io.api.core.v1.SecretKeySelector keySecret = 4;
+}
+
+message TagConditions {
+  // Operator specifies the type of operation that should be used for conditional forwarding
+  // value could be "and", "or", "not"
+  // +kubebuilder:validation:Enum=and;or;not
+  // +optional
+  optional string operator = 1;
+
+  // Values tag values for conditional forwarding
+  repeated string values = 2;
 }
 
 message Templates {

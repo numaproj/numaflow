@@ -107,6 +107,10 @@ const (
 	EnvPPROF                          = "NUMAFLOW_PPROF"
 	EnvHealthCheckDisabled            = "NUMAFLOW_HEALTH_CHECK_DISABLED"
 	EnvGRPCMaxMessageSize             = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE"
+	EnvCPURequest                     = "NUMAFLOW_CPU_REQUEST"
+	EnvCPULimit                       = "NUMAFLOW_CPU_LIMIT"
+	EnvMemoryRequest                  = "NUMAFLOW_MEMORY_REQUEST"
+	EnvMemoryLimit                    = "NUMAFLOW_MEMORY_LIMIT"
 
 	PathVarRun            = "/var/run/numaflow"
 	VertexMetricsPort     = 2469
@@ -152,8 +156,8 @@ const (
 )
 
 var (
-	MessageKeyDrop = fmt.Sprintf("%U__DROP__", '\\') // U+005C__DROP__
-	MessageKeyAll  = fmt.Sprintf("%U__ALL__", '\\')  // U+005C__ALL__
+	MessageTagDrop = fmt.Sprintf("%U__DROP__", '\\') // U+005C__DROP__
+	MessageTagAll  = fmt.Sprintf("%U__ALL__", '\\')  // U+005C__ALL__
 
 	// the standard resources used by the `init` and `main`containers.
 	standardResources = corev1.ResourceRequirements{

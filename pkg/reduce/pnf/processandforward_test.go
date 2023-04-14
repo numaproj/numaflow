@@ -61,16 +61,16 @@ type myForwardTest struct {
 	buffers []string
 }
 
-func (f myForwardTest) WhereTo(key []string) ([]string, error) {
-	if strings.Compare(key[len(key)-1], "test-forward-one") == 0 {
+func (f myForwardTest) WhereTo(keys []string, _ []string) ([]string, error) {
+	if strings.Compare(keys[len(keys)-1], "test-forward-one") == 0 {
 		return []string{"buffer1"}, nil
-	} else if strings.Compare(key[len(key)-1], "test-forward-all") == 0 {
+	} else if strings.Compare(keys[len(keys)-1], "test-forward-all") == 0 {
 		return f.buffers, nil
 	}
 	return []string{}, nil
 }
 
-func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -130,20 +130,20 @@ func TestProcessAndForward_Process(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-	mockReduceClient := udfcall.NewMockUserDefinedFunction_ReduceFnClient(ctrl)
+	mockReduceClient := funcmock.NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 
 	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-		Elements: []*functionpb.Datum{
+	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+		Elements: []*functionpb.DatumResponse{
 			{
 				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
 			},
 		},
 	}, nil).Times(1)
-	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-		Elements: []*functionpb.Datum{
+	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+		Elements: []*functionpb.DatumResponse{
 			{
 				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
@@ -372,16 +372,19 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		Value: 100,
 	})
 
-	var result = []*isb.Message{
+	var result = []*isb.WriteMessage{
 		{
-			Header: isb.Header{
-				MessageInfo: isb.MessageInfo{
-					EventTime: time.UnixMilli(60000),
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: time.UnixMilli(60000),
+					},
+					ID:   "1",
+					Keys: []string{key},
 				},
-				ID:   "1",
-				Keys: []string{key},
+				Body: isb.Body{Payload: resultPayload},
 			},
-			Body: isb.Body{Payload: resultPayload},
+			Tags: []string{key},
 		},
 	}
 

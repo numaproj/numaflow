@@ -17714,14 +17714,12 @@
     "io.numaproj.numaflow.v1alpha1.ForwardConditions": {
       "type": "object",
       "required": [
-        "keyIn"
+        "tags"
       ],
       "properties": {
-        "keyIn": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "tags": {
+          "description": "Tags used to specify tags for conditional forwarding",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TagConditions"
         }
       }
     },
@@ -19116,6 +19114,25 @@
         },
         "insecureSkipVerify": {
           "type": "boolean"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.TagConditions": {
+      "type": "object",
+      "required": [
+        "values"
+      ],
+      "properties": {
+        "operator": {
+          "description": "Operator specifies the type of operation that should be used for conditional forwarding value could be \"and\", \"or\", \"not\"",
+          "type": "string"
+        },
+        "values": {
+          "description": "Values tag values for conditional forwarding",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
