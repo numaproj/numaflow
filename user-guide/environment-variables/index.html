@@ -1753,13 +1753,17 @@
 
 <h1 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h1>
 <p>For the <code>numa</code> container of vertex pods, environment variable <code>NUMAFLOW_DEBUG</code> can be set to <code>true</code> for <a href="../../development/debugging/">debugging</a>.</p>
-<p>In <a href="../user-defined-functions/map/map/"><code>udf</code></a> and <a href="../sinks/user-defined-sinks/"><code>udsink</code></a> containers, there are some preset environment variables that can be used directly.</p>
+<p>In <a href="../user-defined-functions/map/map/"><code>udf</code></a>, <a href="../sinks/user-defined-sinks/"><code>udsink</code></a> and <a href="../sources/transformer/overview/"><code>transformer</code></a> containers, there are some preset environment variables that can be used directly.</p>
 <ul>
 <li><code>NUMAFLOW_NAMESPACE</code> - Namespace.</li>
 <li><code>NUMAFLOW_POD</code> - Pod name.</li>
 <li><code>NUMAFLOW_REPLICA</code> - Replica index.</li>
 <li><code>NUMAFLOW_PIPELINE_NAME</code> - Name of the pipeline.</li>
 <li><code>NUMAFLOW_VERTEX_NAME</code> - Name of the vertex.</li>
+<li><code>NUMAFLOW_CPU_REQUEST</code> - <code>resources.requests.cpu</code>, roundup to N cores, <code>0</code> if missing.</li>
+<li><code>NUMAFLOW_CPU_LIMIT</code> - <code>resources.limits.cpu</code>, roundup to N cores, use host cpu cores if missing.</li>
+<li><code>NUMAFLOW_MEMORY_REQUEST</code> - <code>resources.requests.memory</code> in bytes, <code>0</code> if missing.</li>
+<li><code>NUMAFLOW_MEMORY_LIMIT</code> - <code>resources.limits.memory</code> in bytes, use host memory if missing.</li>
 </ul>
 <p>For setting environment variables on pods not owned by a vertex, see <a href="../pipeline-customization/">Pipeline Customization</a>.</p>
 <h2 id="your-own-environment-variables">Your Own Environment Variables<a class="headerlink" href="#your-own-environment-variables" title="Permanent link">&para;</a></h2>
