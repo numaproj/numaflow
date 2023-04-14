@@ -70,7 +70,7 @@ To do managed namespace installation, besides `--namespaced`, add `--managed-nam
         - my-namespace
 ```
 
-# High Availability
+## High Availability
 
 By default, the Numaflow controller is installed with `Active-Passive` HA strategy enabled, which means you can run the controller with multiple replicas (defaults to 1 in the manifests).
 

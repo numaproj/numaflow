@@ -95,7 +95,7 @@ spec:
 
 With the configuration above, Kubernetes HPA controller will keep the target utilization of the pods of the Vertex at 50%.
 
-Kubernetes HPA autoscaling is useful for those Source vertices not able to count pending messages, such as [HTTP](sources/http.md).
+Kubernetes HPA autoscaling is useful for those Source vertices not able to count pending messages, such as [HTTP](../sources/http.md).
 
 ### Third Party Autoscaling
 

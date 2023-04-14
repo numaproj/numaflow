@@ -1,6 +1,6 @@
 # Vertex
 
-The `Vertex` is also a key component of Numaflow `Pipeline` where the data processing happens. `Vertex` is defined as a list in the [pipeline](./pipeline.md) spec, each representing a data processing task.
+The `Vertex` is also a key component of Numaflow `Pipeline` where the data processing happens. `Vertex` is defined as a list in the [pipeline](pipeline.md) spec, each representing a data processing task.
 
 There are 3 types of `Vertex` in Numaflow today:
 
@@ -10,7 +10,7 @@ There are 3 types of `Vertex` in Numaflow today:
 
 We have defined a [Kubernetes Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) defined for `Vertex`. A `Pipeline` containing multiple vertices will automatically generate multiple `Vertex` objects by the controller. As a user, you should NOT create a `Vertex` object directly.
 
-In a `Pipeline`, the vertices are not connected directly, but through [Inter-Step Buffers](./inter-step-buffer.md).
+In a `Pipeline`, the vertices are not connected directly, but through [Inter-Step Buffers](inter-step-buffer.md).
 
 To query `Vertex` objects with `kubectl`:
 

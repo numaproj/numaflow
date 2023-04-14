@@ -4,7 +4,7 @@
 
 In the world of data processing on an unbounded stream, Windowing is a concept
 of grouping data using temporal boundaries. We use event-time to discover
-temporal boundaries on an unbounded, infinite stream and [Watermark](../../../watermarks.md) to ensure
+temporal boundaries on an unbounded, infinite stream and [Watermark](../../../../core-concepts/watermarks.md) to ensure
 the datasets within the boundaries are complete. The [reduce](../reduce.md) is
 applied on these grouped datasets.
 For example, when we say, we want to find number of users online per minute, we use

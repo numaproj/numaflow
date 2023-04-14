@@ -2,7 +2,7 @@
 
 [Container Resources](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) can be customized for all the types of vertices.
 
-For configuring container resources on pods not owned by a vertex, see [Pipeline Customization](./pipeline-customization.md).
+For configuring container resources on pods not owned by a vertex, see [Pipeline Customization](pipeline-customization.md).
 
 ## Numa Container
 
@@ -95,4 +95,4 @@ spec:
             memory: 4Gi
 ```
 
-Container resources for [user init-containers](./init-containers.md) are instead specified at `.spec.vertices[*].initContainers[*].resources`.
+Container resources for [user init-containers](init-containers.md) are instead specified at `.spec.vertices[*].initContainers[*].resources`.
