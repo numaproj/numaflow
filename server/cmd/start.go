@@ -39,7 +39,7 @@ var (
 func Start(insecure bool, port int, namespaced bool, managedNamespace string) {
 	logger := logging.NewLogger().Named("server")
 	router := gin.New()
-	router.Use(gin.Logger())
+	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.RedirectTrailingSlash = true
 	router.Use(static.Serve("/", static.LocalFile("./ui/build", true)))
 	routes.Routes(router, routes.SystemInfo{ManagedNamespace: managedNamespace, Namespaced: namespaced})
