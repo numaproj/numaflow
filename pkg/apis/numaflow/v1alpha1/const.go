@@ -107,6 +107,10 @@ const (
 	EnvPPROF                          = "NUMAFLOW_PPROF"
 	EnvHealthCheckDisabled            = "NUMAFLOW_HEALTH_CHECK_DISABLED"
 	EnvGRPCMaxMessageSize             = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE"
+	EnvCPURequest                     = "NUMAFLOW_CPU_REQUEST"
+	EnvCPULimit                       = "NUMAFLOW_CPU_LIMIT"
+	EnvMemoryRequest                  = "NUMAFLOW_MEMORY_REQUEST"
+	EnvMemoryLimit                    = "NUMAFLOW_MEMORY_LIMIT"
 
 	PathVarRun            = "/var/run/numaflow"
 	VertexMetricsPort     = 2469
