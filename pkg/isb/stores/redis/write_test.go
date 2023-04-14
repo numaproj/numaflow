@@ -342,11 +342,11 @@ func Test_GetRefreshFullError(t *testing.T) {
 type myForwardRedisTest struct {
 }
 
-func (f myForwardRedisTest) WhereTo(_ []string) ([]string, error) {
+func (f myForwardRedisTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardRedisTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardRedisTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 

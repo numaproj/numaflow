@@ -44,11 +44,11 @@ type PayloadForTest struct {
 type SumReduceTest struct {
 }
 
-func (s *SumReduceTest) WhereTo(_ []string) ([]string, error) {
+func (s *SumReduceTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"reduce-buffer"}, nil
 }
 
-func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	sums := make(map[string]int)
 
 	for msg := range messageStream {
@@ -58,20 +58,23 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 		sums[keys[0]] += payload.Value
 	}
 
-	msgs := make([]*isb.Message, 0)
+	msgs := make([]*isb.WriteMessage, 0)
 
 	for k, s := range sums {
 		payload := PayloadForTest{Key: k, Value: s}
 		b, _ := json.Marshal(payload)
-		msg := &isb.Message{
-			Header: isb.Header{
-				MessageInfo: isb.MessageInfo{
-					EventTime: partitionID.End,
+		msg := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: partitionID.End,
+					},
+					ID:   "msgID",
+					Keys: []string{k},
 				},
-				ID:   "msgID",
-				Keys: []string{k},
+				Body: isb.Body{Payload: b},
 			},
-			Body: isb.Body{Payload: b},
+			Tags: nil,
 		}
 		msgs = append(msgs, msg)
 	}

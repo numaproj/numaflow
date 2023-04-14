@@ -1060,9 +1060,14 @@ Description
 <tbody>
 <tr>
 <td>
-<code>keyIn</code></br> <em> \[\]string </em>
+<code>tags</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.TagConditions"> TagConditions
+</a> </em>
 </td>
 <td>
+<p>
+Tags used to specify tags for conditional forwarding
+</p>
 </td>
 </tr>
 </tbody>
@@ -2571,6 +2576,16 @@ Log
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+</p>
+<p>
+</p>
+<h3 id="numaflow.numaproj.io/v1alpha1.LogicOperator">
+LogicOperator (<code>string</code> alias)
+</p>
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.TagConditions">TagConditions</a>)
 </p>
 <p>
 </p>
@@ -4260,6 +4275,53 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 <em>(Optional)</em>
 <p>
 KeySecret refers to the secret that contains the key
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.TagConditions">
+TagConditions
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">ForwardConditions</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>operator</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.LogicOperator"> LogicOperator
+</a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Operator specifies the type of operation that should be used for
+conditional forwarding value could be “and”, “or”, “not”
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>values</code></br> <em> \[\]string </em>
+</td>
+<td>
+<p>
+Values tag values for conditional forwarding
 </p>
 </td>
 </tr>

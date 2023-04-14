@@ -39,20 +39,20 @@ import (
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WhereTo(_ []string) ([]string, error) {
-	return []string{dfv1.MessageKeyDrop}, nil
+func (f myForwardTest) WhereTo(_ []string, _ []string) ([]string, error) {
+	return []string{dfv1.MessageTagDrop}, nil
 }
 
-func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
 func TestOrderedProcessing(t *testing.T) {
 	// Test Reducer returns the messages as is
-	identityReducer := applier.ApplyReduceFunc(func(ctx context.Context, partitionID *partition.ID, input <-chan *isb.ReadMessage) ([]*isb.Message, error) {
-		messages := make([]*isb.Message, 0)
+	identityReducer := applier.ApplyReduceFunc(func(ctx context.Context, partitionID *partition.ID, input <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+		messages := make([]*isb.WriteMessage, 0)
 		for msg := range input {
-			messages = append(messages, &msg.Message)
+			messages = append(messages, &isb.WriteMessage{Message: msg.Message})
 		}
 		return messages, nil
 	})

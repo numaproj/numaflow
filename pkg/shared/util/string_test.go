@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -40,4 +41,111 @@ func TestStringSliceContains(t *testing.T) {
 	list := []string{"a", "b", "c"}
 	assert.True(t, StringSliceContains(list, "b"))
 	assert.False(t, StringSliceContains(list, "e"))
+}
+
+func TestCompareSlice(t *testing.T) {
+	tests := []struct {
+		name     string
+		sliceA   []string
+		sliceB   []string
+		operator v1alpha1.LogicOperator
+		expected bool
+	}{
+		{
+			name: "or_true",
+			sliceA: []string{
+				"even",
+				"odd",
+				"prime",
+			},
+			sliceB: []string{
+				"even",
+				"ab",
+				"bc",
+			},
+			operator: v1alpha1.LogicOperatorOr,
+			expected: true,
+		},
+		{
+			name: "and_true",
+			sliceA: []string{
+				"even",
+				"odd",
+				"prime",
+			},
+			sliceB: []string{
+				"even",
+				"odd",
+				"prime",
+				"abc",
+			},
+			operator: v1alpha1.LogicOperatorAnd,
+			expected: true,
+		},
+		{
+			name: "not_true",
+			sliceA: []string{
+				"even",
+				"odd",
+				"prime",
+			},
+			sliceB: []string{
+				"abc",
+				"bca",
+				"cab",
+			},
+			operator: v1alpha1.LogicOperatorNot,
+			expected: true,
+		},
+		{
+			name: "or_false",
+			sliceA: []string{
+				"even",
+				"odd",
+				"prime",
+			},
+			sliceB: []string{
+				"abc",
+				"bca",
+				"cab",
+			},
+			operator: v1alpha1.LogicOperatorOr,
+			expected: false,
+		},
+		{
+			name: "not_false",
+			sliceA: []string{
+				"even",
+				"odd",
+				"prime",
+			},
+			sliceB: []string{
+				"even",
+				"bca",
+				"cab",
+			},
+			operator: v1alpha1.LogicOperatorNot,
+			expected: false,
+		},
+		{
+			name: "and_false",
+			sliceA: []string{
+				"even",
+				"odd",
+				"prime",
+			},
+			sliceB: []string{
+				"even",
+				"odd",
+				"abc",
+			},
+			operator: v1alpha1.LogicOperatorAnd,
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, CompareSlice(tt.operator, tt.sliceA, tt.sliceB), tt.expected)
+		})
+	}
 }

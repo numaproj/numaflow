@@ -74,7 +74,7 @@ type ForwardToAllVertex struct {
 }
 
 func (f ForwardToAllVertex) WhereTo(_ []byte) (string, error) {
-	return dfv1.MessageKeyAll, nil
+	return dfv1.MessageTagAll, nil
 }
 
 // TestToLog_ForwardToTwoVertex writes to 2 vertices and have a logger sinks attached to each vertex.

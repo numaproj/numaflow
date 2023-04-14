@@ -52,7 +52,7 @@ type ProcessAndForward struct {
 	vertexReplica    int32
 	PartitionID      partition.ID
 	UDF              applier.ReduceApplier
-	result           []*isb.Message
+	result           []*isb.WriteMessage
 	pbqReader        pbq.Reader
 	log              *zap.SugaredLogger
 	toBuffers        map[string]isb.BufferWriter
@@ -164,7 +164,6 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.
-// TODO: we have to introduce support for shuffle, output of a reducer can be input to the next reducer.
 func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][]isb.Message)
@@ -172,7 +171,7 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	var to []string
 	var err error
 	for _, msg := range p.result {
-		to, err = p.whereToDecider.WhereTo(msg.Keys)
+		to, err = p.whereToDecider.WhereTo(msg.Keys, msg.Tags)
 		if err != nil {
 			platformError.With(map[string]string{
 				metrics.LabelVertex:             p.vertexName,
@@ -191,7 +190,7 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 			if _, ok := messagesToStep[bufferID]; !ok {
 				messagesToStep[bufferID] = make([]isb.Message, 0)
 			}
-			messagesToStep[bufferID] = append(messagesToStep[bufferID], *msg)
+			messagesToStep[bufferID] = append(messagesToStep[bufferID], msg.Message)
 		}
 
 	}
