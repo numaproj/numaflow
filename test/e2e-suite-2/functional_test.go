@@ -52,12 +52,9 @@ func (s *FunctionalSuite) TestDropOnFull() {
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")))
 	// give buffer writer some time to update the isFull attribute.
-	// 10s is a carefully chosen number to create a stable buffer full scenario.
-	time.Sleep(time.Second * 10)
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
-	// there could be a race condition between the buffer write and the sink scaling up, if the buffer write happens after the sink scaling up, message 2 will not be dropped.
-	// wait for 5s for message 2 to be dropped.
+	// 5s is a carefully chosen number to create a stable buffer full scenario.
 	time.Sleep(time.Second * 5)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
 
 	expectedDropMetric := `forwarder_drop_total{buffer="numaflow-system-drop-on-full-in-sink",pipeline="drop-on-full",vertex="in"} 1`
 	// wait for the drop metric to be updated, time out after 10s.
