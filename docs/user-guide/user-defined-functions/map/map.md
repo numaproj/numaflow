@@ -61,8 +61,8 @@ Some environment variables are available in the user defined function Pods, they
 
 Configuration data can be provided to the UDF container at runtime multiple ways.
 
-* [`environment variables`](../../environment-variables.md)
+* [`environment variables`](../../reference/configuration/environment-variables.md)
 * `args`
 * `command`
-* [`volumes`](../../volumes.md)
-* [`init containers`](../../init-containers.md)
+* [`volumes`](../../reference/configuration/volumes.md)
+* [`init containers`](../../reference/configuration/init-containers.md)
