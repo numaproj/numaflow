@@ -9,8 +9,8 @@ In [`udf`](user-defined-functions/map/map.md), [`udsink`](./sinks/user-defined-s
 - `NUMAFLOW_REPLICA` - Replica index.
 - `NUMAFLOW_PIPELINE_NAME` - Name of the pipeline.
 - `NUMAFLOW_VERTEX_NAME` - Name of the vertex.
-- `NUMAFLOW_CPU_REQUEST` - `resources.requests.cpu`, roundup to n cores, `0` if missing.
-- `NUMAFLOW_CPU_LIMIT` - `resources.limits.cpu`, roundup to n cores, use host cpu cores if missing.
+- `NUMAFLOW_CPU_REQUEST` - `resources.requests.cpu`, roundup to N cores, `0` if missing.
+- `NUMAFLOW_CPU_LIMIT` - `resources.limits.cpu`, roundup to N cores, use host cpu cores if missing.
 - `NUMAFLOW_MEMORY_REQUEST` - `resources.requests.memory` in bytes, `0` if missing.
 - `NUMAFLOW_MEMORY_LIMIT` - `resources.limits.memory` in bytes, use host memory if missing.
 
