@@ -16,9 +16,7 @@ spec:
         http: {}
     - name: sink
       sink:
-        udsink:
-          container:
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+        log: {}
   edges:
     - from: in
       to: sink
