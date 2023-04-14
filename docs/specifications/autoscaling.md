@@ -62,4 +62,4 @@ When the calculated desired replicas is greater than current replicas:
 
 ## Autoscaling Tuning
 
-Numaflow autoscaling can be tuned by updating some parameters, find the details at the [doc](../user-guide/autoscaling.md).
+Numaflow autoscaling can be tuned by updating some parameters, find the details at the [doc](../user-guide/reference/autoscaling.md).

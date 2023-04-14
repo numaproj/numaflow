@@ -2,7 +2,7 @@
 
 There is an optional `.spec.templates` field in the `Pipeline` resource which may be used to customize kubernetes resources owned by the Pipeline.
 
-Vertex customization is described separately in more detail (i.e. [Environment Variables](./environment-variables.md), [Container Resources](./container-resources.md), etc.).
+Vertex customization is described separately in more detail (i.e. [Environment Variables](environment-variables.md), [Container Resources](container-resources.md), etc.).
 
 ## Daemon Deployment
 

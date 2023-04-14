@@ -1,8 +1,8 @@
 # Environment Variables
 
-For the `numa` container of vertex pods, environment variable `NUMAFLOW_DEBUG` can be set to `true` for [debugging](../development/debugging.md).
+For the `numa` container of vertex pods, environment variable `NUMAFLOW_DEBUG` can be set to `true` for [debugging](../../../development/debugging.md).
 
-In [`udf`](user-defined-functions/map/map.md), [`udsink`](./sinks/user-defined-sinks.md) and [`transformer`](./sources/transformer/overview.md) containers, there are some preset environment variables that can be used directly.
+In [`udf`](../../user-defined-functions/map/map.md), [`udsink`](../../sinks/user-defined-sinks.md) and [`transformer`](../../sources/transformer/overview.md) containers, there are some preset environment variables that can be used directly.
 
 - `NUMAFLOW_NAMESPACE` - Namespace.
 - `NUMAFLOW_POD` - Pod name.
@@ -14,7 +14,7 @@ In [`udf`](user-defined-functions/map/map.md), [`udsink`](./sinks/user-defined-s
 - `NUMAFLOW_MEMORY_REQUEST` - `resources.requests.memory` in bytes, `0` if missing.
 - `NUMAFLOW_MEMORY_LIMIT` - `resources.limits.memory` in bytes, use host memory if missing.
 
-For setting environment variables on pods not owned by a vertex, see [Pipeline Customization](./pipeline-customization.md).
+For setting environment variables on pods not owned by a vertex, see [Pipeline Customization](pipeline-customization.md).
 
 ## Your Own Environment Variables
 
