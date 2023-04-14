@@ -69,4 +69,5 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 		imagePullPolicy: corev1.PullAlways,
 	})
 	assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
+	assert.True(t, c.LivenessProbe != nil)
 }

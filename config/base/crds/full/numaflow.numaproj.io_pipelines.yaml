@@ -59,12 +59,23 @@ spec:
                   properties:
                     conditions:
                       properties:
-                        keyIn:
-                          items:
-                            type: string
-                          type: array
+                        tags:
+                          properties:
+                            operator:
+                              enum:
+                              - and
+                              - or
+                              - not
+                              type: string
+                            values:
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - values
+                          type: object
                       required:
-                      - keyIn
+                      - tags
                       type: object
                     from:
                       type: string

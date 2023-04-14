@@ -94,3 +94,10 @@ type ReadMessage struct {
 func (m *Message) ToReadMessage(ot Offset, wm time.Time) *ReadMessage {
 	return &ReadMessage{Message: *m, ReadOffset: ot, Watermark: wm}
 }
+
+// WriteMessage is a wrapper for an isb message with tag information which will be used
+// for conditional forwarding.
+type WriteMessage struct {
+	Message
+	Tags []string
+}

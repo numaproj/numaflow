@@ -183,7 +183,7 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 // readWriteMessagePair represents a read message and its processed (via UDF) write message.
 type readWriteMessagePair struct {
 	readMessage   *isb.ReadMessage
-	writeMessages []*isb.Message
+	writeMessages []*isb.WriteMessage
 	udfError      error
 }
 
@@ -305,7 +305,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// if vertex type is source, it means we have finished the source data transformation.
 	// let's publish source watermark and assign IsLate attribute based on new event time.
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
-		var writeMessages []*isb.Message
+		var writeMessages []*isb.WriteMessage
 		var transformedReadMessages []*isb.ReadMessage
 		for _, m := range udfResults {
 			writeMessages = append(writeMessages, m.writeMessages...)
@@ -564,7 +564,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 // applyUDF applies the UDF and will block if there is any InternalErr. On the other hand, if this is a UserError
 // the skip flag is set. ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the ApplyUDF.
-func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
+func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
 		writeMessages, err := isdf.UDF.ApplyMap(ctx, readMessage)
 		if err != nil {
@@ -593,10 +593,9 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
-func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, messageToStep map[string][]isb.Message, readMessage *isb.ReadMessage) error {
+func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-	to, err := isdf.FSD.WhereTo(writeMessage.Keys)
-
+	to, err := isdf.FSD.WhereTo(writeMessage.Keys, writeMessage.Tags)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.fromBuffer.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
 		// a shutdown can break the blocking loop caused due to InternalErr
@@ -609,19 +608,17 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.Message, message
 	}
 
 	switch {
-	case sharedutil.StringSliceContains(to, dfv1.MessageKeyAll):
+	case sharedutil.StringSliceContains(to, dfv1.MessageTagAll):
 		for toStep := range isdf.toBuffers {
 			// update all the destination
-			messageToStep[toStep] = append(messageToStep[toStep], *writeMessage)
-
+			messageToStep[toStep] = append(messageToStep[toStep], writeMessage.Message)
 		}
-	case sharedutil.StringSliceContains(to, dfv1.MessageKeyDrop):
 	default:
 		for _, t := range to {
 			if _, ok := messageToStep[t]; !ok {
 				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.fromBuffer.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("no such destination (%s)", t)}))
 			}
-			messageToStep[t] = append(messageToStep[t], *writeMessage)
+			messageToStep[t] = append(messageToStep[t], writeMessage.Message)
 		}
 	}
 	return nil

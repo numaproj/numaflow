@@ -55,7 +55,7 @@ func (f filter) apply(msg []byte) (functionsdk.Message, error) {
 		return functionsdk.MessageToDrop(), err
 	}
 	if result {
-		return functionsdk.MessageToAll(msg), nil
+		return functionsdk.NewMessage(msg), nil
 	}
 	return functionsdk.MessageToDrop(), nil
 }

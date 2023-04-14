@@ -31,12 +31,16 @@ spec:
     - from: in
       to: sink-within-2022
       conditions:
-        keyIn:
-          - within_year_2022
+        tags:
+          operator: or
+          values:
+            - within_year_2022
     - from: in
       to: sink-after-2022
       conditions:
-        keyIn:
-          - after_year_2022
+        tags:
+          operator: or
+          values:
+            - after_year_2022
     - from: in
       to: sink-all

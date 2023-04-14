@@ -152,6 +152,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int, servicePortN
 	return svc
 }
 
+// CommonEnvs returns the common envs for all vertex pod containers.
 func (v Vertex) commonEnvs() []corev1.EnvVar {
 	return []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
@@ -159,6 +160,20 @@ func (v Vertex) commonEnvs() []corev1.EnvVar {
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
 		{Name: EnvVertexName, Value: v.Spec.Name},
+	}
+}
+
+// SidecarEnvs returns the envs for sidecar containers.
+func (v Vertex) sidecarEnvs() []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{Name: EnvCPULimit, ValueFrom: &corev1.EnvVarSource{
+			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "limits.cpu"}}},
+		{Name: EnvCPURequest, ValueFrom: &corev1.EnvVarSource{
+			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "requests.cpu"}}},
+		{Name: EnvMemoryLimit, ValueFrom: &corev1.EnvVarSource{
+			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "limits.memory"}}},
+		{Name: EnvMemoryRequest, ValueFrom: &corev1.EnvVarSource{
+			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "requests.memory"}}},
 	}
 }
 
@@ -223,13 +238,16 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 30,
+		InitialDelaySeconds: 20,
 		PeriodSeconds:       60,
 		TimeoutSeconds:      30,
 	}
 
 	if len(containers) > 1 { // udf, udsink or source vertex specifies a udtransformer
-		containers[1].Env = append(containers[1].Env, v.commonEnvs()...)
+		for i := 1; i < len(containers); i++ {
+			containers[i].Env = append(containers[i].Env, v.commonEnvs()...)
+			containers[i].Env = append(containers[i].Env, v.sidecarEnvs()...)
+		}
 	}
 
 	spec := &corev1.PodSpec{

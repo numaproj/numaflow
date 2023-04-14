@@ -79,12 +79,12 @@ func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
+func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
-	var d = &functionpb.Datum{
+	var d = &functionpb.DatumRequest{
 		Keys:      keys,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
@@ -103,24 +103,27 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 		}
 	}
 
-	writeMessages := make([]*isb.Message, 0)
+	taggedMessages := make([]*isb.WriteMessage, 0)
 	for i, datum := range datumList {
 		keys := datum.Keys
 		if datum.EventTime != nil {
 			// Transformer supports changing event time.
 			parentMessageInfo.EventTime = datum.EventTime.EventTime.AsTime()
 		}
-		writeMessage := &isb.Message{
-			Header: isb.Header{
-				MessageInfo: parentMessageInfo,
-				ID:          fmt.Sprintf("%s-%d", offset.String(), i),
-				Keys:        keys,
+		taggedMessage := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: parentMessageInfo,
+					ID:          fmt.Sprintf("%s-%d", offset.String(), i),
+					Keys:        keys,
+				},
+				Body: isb.Body{
+					Payload: datum.Value,
+				},
 			},
-			Body: isb.Body{
-				Payload: datum.Value,
-			},
+			Tags: datum.Tags,
 		}
-		writeMessages = append(writeMessages, writeMessage)
+		taggedMessages = append(taggedMessages, taggedMessage)
 	}
-	return writeMessages, nil
+	return taggedMessages, nil
 }
