@@ -16,8 +16,6 @@ limitations under the License.
 
 package isb
 
-// TODO: integrate with the WAL segment and JetStream
-
 import (
 	"bytes"
 	"encoding/binary"
