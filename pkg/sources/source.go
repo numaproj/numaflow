@@ -237,7 +237,7 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
-	fsd := forward.GoWhere(func(tags []string, keys []string) ([]string, error) {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]string, error) {
 		result := []string{}
 
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {

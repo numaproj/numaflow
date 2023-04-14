@@ -61,10 +61,10 @@ type myForwardTest struct {
 	buffers []string
 }
 
-func (f myForwardTest) WhereTo(key []string, _ []string) ([]string, error) {
-	if strings.Compare(key[len(key)-1], "test-forward-one") == 0 {
+func (f myForwardTest) WhereTo(keys []string, _ []string) ([]string, error) {
+	if strings.Compare(keys[len(keys)-1], "test-forward-one") == 0 {
 		return []string{"buffer1"}, nil
-	} else if strings.Compare(key[len(key)-1], "test-forward-all") == 0 {
+	} else if strings.Compare(keys[len(keys)-1], "test-forward-all") == 0 {
 		return f.buffers, nil
 	}
 	return []string{}, nil

@@ -171,7 +171,7 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	var to []string
 	var err error
 	for _, msg := range p.result {
-		to, err = p.whereToDecider.WhereTo(msg.Tags, msg.Keys)
+		to, err = p.whereToDecider.WhereTo(msg.Keys, msg.Tags)
 		if err != nil {
 			platformError.With(map[string]string{
 				metrics.LabelVertex:             p.vertexName,

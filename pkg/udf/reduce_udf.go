@@ -111,7 +111,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	conditionalForwarder := forward.GoWhere(func(tags []string, keys []string) ([]string, error) {
+	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]string, error) {
 		result := []string{}
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil

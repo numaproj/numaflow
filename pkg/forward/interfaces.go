@@ -37,7 +37,7 @@ type ToWhichStepDecider interface {
 type GoWhere func([]string, []string) ([]string, error)
 
 // WhereTo decides where the data goes to.
-func (gw GoWhere) WhereTo(ts []string, ks []string) ([]string, error) {
+func (gw GoWhere) WhereTo(ks []string, ts []string) ([]string, error) {
 	return gw(ts, ks)
 }
 

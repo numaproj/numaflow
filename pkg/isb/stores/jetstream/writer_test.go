@@ -35,7 +35,7 @@ import (
 type myForwardJetStreamTest struct {
 }
 
-func (f myForwardJetStreamTest) WhereTo(_ []string, strings []string) ([]string, error) {
+func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
