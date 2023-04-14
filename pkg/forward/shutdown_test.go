@@ -33,7 +33,7 @@ import (
 type myShutdownTest struct {
 }
 
-func (s myShutdownTest) WhereTo(_ []string, strings []string) ([]string, error) {
+func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{dfv1.MessageTagAll}, nil
 }
 
