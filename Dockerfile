@@ -41,14 +41,6 @@ FROM alpine:3.17 as testbase
 RUN apk update && apk upgrade && \
   apk add ca-certificates && \
   apk --no-cache add tzdata
-RUN adduser \
-  -h "/dev/null" \
-  -g "" \
-  -s "/sbin/nologin" \
-  -D \
-  -H \
-  -u 1000 \
-  numaflow
 
 COPY dist/e2eapi /bin/e2eapi
 RUN chmod +x /bin/e2eapi
@@ -58,6 +50,4 @@ RUN chmod +x /bin/e2eapi
 ####################################################################################################
 FROM scratch AS e2eapi
 COPY --from=testbase /bin/e2eapi .
-COPY --from=testbase /etc/passwd /etc/passwd
-USER numaflow
 ENTRYPOINT ["/e2eapi"]
