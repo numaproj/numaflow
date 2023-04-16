@@ -10,41 +10,15 @@ spec:
     - name: atoi
       scale:
         min: 1
-      securityContext:
-        fsGroup: 1000
-      containerTemplate:
-        securityContext:
-          readOnlyRootFilesystem: true
-          runAsNonRoot: true
-          runAsUser: 1000
-          runAsGroup: 1000
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd
-          securityContext:
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
     - name: compute-sum
-      securityContext:
-#        fsGroup: 1000
-      containerTemplate:
-        securityContext:
-          readOnlyRootFilesystem: true
-          runAsNonRoot: true
-          runAsUser: 1000
-          runAsGroup: 1000
       udf:
         container:
           # compute the sum
           image: quay.io/numaio/numaflow-go/reduce-sum
-          securityContext:
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
         groupBy:
           window:
             fixed:
@@ -52,7 +26,7 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 1Gi
+              volumeSize: 10Gi
               accessMode: ReadWriteOnce
     - name: sink
       scale:
@@ -64,5 +38,6 @@ spec:
       to: atoi
     - from: atoi
       to: compute-sum
+      parallelism: 2
     - from: compute-sum
       to: sink
