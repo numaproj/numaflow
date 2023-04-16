@@ -61,7 +61,7 @@ func (ws *walStores) CreateStore(_ context.Context, partitionID partition.ID) (s
 	// Create wal dir if not exist
 	var err error
 	if _, err = os.Stat(ws.storePath); os.IsNotExist(err) {
-		err = os.Mkdir(ws.storePath, 0644)
+		err = os.Mkdir(ws.storePath, 0755)
 		if err != nil {
 			return nil, err
 		}
