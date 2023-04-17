@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 
 let mockPATH = "";
+
 jest.mock("react-router-dom", () => ({
   ...jest.requireActual("react-router-dom"),
   useLocation: () => ({
@@ -21,9 +22,7 @@ describe("Breadcrumbs", () => {
     expect(screen.getByTestId("namespace-breadcrumb")).toBeInTheDocument();
     expect(screen.getByTestId("mui-breadcrumbs")).toBeInTheDocument();
   });
-});
 
-describe("Breadcrumbs", () => {
   it("loads pipeline screen", () => {
     mockPATH = "/namespaces/numaflow-system/pipelines/simple-pipeline";
     render(
@@ -34,9 +33,7 @@ describe("Breadcrumbs", () => {
     expect(screen.getByTestId("pipeline-breadcrumb")).toBeInTheDocument();
     expect(screen.getByTestId("mui-breadcrumbs")).toBeInTheDocument();
   });
-});
 
-describe("Breadcrumbs", () => {
   it("loads pipeline screen", () => {
     mockPATH = "/random";
     render(

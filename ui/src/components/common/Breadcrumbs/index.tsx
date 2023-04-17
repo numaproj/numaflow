@@ -16,7 +16,6 @@ export function Breadcrumbs() {
         <Typography
           data-testid="namespace-breadcrumb"
           className="Breadcrumbs-typ"
-          sx={{ fontWeight: 600 }}
         >
           Namespaces
         </Typography>
@@ -33,7 +32,6 @@ export function Breadcrumbs() {
             key={"pipeline-typ"}
             data-testid="pipeline-breadcrumb"
             className="Breadcrumbs-typ"
-            sx={{ fontWeight: 600 }}
           >
             {`${pathParts[2]} (${pathParts[4]})`}
           </Typography>,
@@ -44,7 +42,6 @@ export function Breadcrumbs() {
           <Typography
             data-testid="unknown-breadcrumb"
             className="Breadcrumbs-typ"
-            sx={{ fontWeight: 600 }}
           >
             Unknown
           </Typography>
