@@ -17,9 +17,10 @@ limitations under the License.
 package pnf
 
 import (
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
 // writeMessagesCount is used to indicate the number of messages written
@@ -43,10 +44,24 @@ var writeMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of Write Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "buffer"})
 
+// dropMessagesCount is used to indicate the number of messages dropped
+var dropMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "reduce_isb_writer",
+	Name:      "drop_total",
+	Help:      "Total number of Messages Dropped",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "buffer"})
+
+// dropBytesCount is used to indicate the number of bytes dropped
+var dropBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "reduce_isb_writer",
+	Name:      "drop_bytes_total",
+	Help:      "Total number of Bytes Dropped",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "buffer"})
+
 // platformError is used to indicate the number of Internal/Platform errors
 var platformError = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "platform",
-	Name:      "error_total",
+	Subsystem: "reduce_pnf",
+	Name:      "platform_error_total",
 	Help:      "Total number of platform Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
 

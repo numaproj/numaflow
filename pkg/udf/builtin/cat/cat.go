@@ -23,7 +23,7 @@ import (
 )
 
 func New() functionsdk.MapFunc {
-	return func(ctx context.Context, key string, datum functionsdk.Datum) functionsdk.Messages {
-		return functionsdk.MessagesBuilder().Append(functionsdk.MessageToAll(datum.Value()))
+	return func(ctx context.Context, keys []string, datum functionsdk.Datum) functionsdk.Messages {
+		return functionsdk.MessagesBuilder().Append(functionsdk.NewMessage(datum.Value()))
 	}
 }

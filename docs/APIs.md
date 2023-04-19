@@ -1060,9 +1060,14 @@ Description
 <tbody>
 <tr>
 <td>
-<code>keyIn</code></br> <em> \[\]string </em>
+<code>tags</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.TagConditions"> TagConditions
+</a> </em>
 </td>
 <td>
+<p>
+Tags used to specify tags for conditional forwarding
+</p>
 </td>
 </tr>
 </tbody>
@@ -1109,6 +1114,110 @@ Description
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.GSSAPI">
+GSSAPI
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL">SASL</a>)
+</p>
+<p>
+<p>
+GSSAPI represents a SASL GSSAPI config
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>serviceName</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>realm</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>usernameSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<p>
+UsernameSecret refers to the secret that contains the username
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>authType</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.KRB5AuthType"> KRB5AuthType </a>
+</em>
+</td>
+<td>
+<p>
+valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>passwordSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+PasswordSecret refers to the secret that contains the password
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>keytabSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+KeytabSecret refers to the secret that contains the keytab
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>kerberosConfigSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+KerberosConfigSecret refers to the secret that contains the kerberos
+config
+</p>
 </td>
 </tr>
 </tbody>
@@ -2094,7 +2203,7 @@ fields under “otBucket” include “maxValueSize”, “history”, “ttl”
 Whether encrypt the data at rest, defaults to false Enabling encryption
 might impact the performance, see
 <a href="https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest">https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest</a>
-for the detail Toggling the value will impact encypting/decrypting
+for the detail Toggling the value will impact encrypting/decrypting
 existing messages.
 </p>
 </td>
@@ -2251,6 +2360,19 @@ Numaflow defaults to 20
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.KRB5AuthType">
+KRB5AuthType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.GSSAPI">GSSAPI</a>)
+</p>
+<p>
+<p>
+KRB5AuthType describes the kerberos auth type
+</p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.KafkaSink">
 KafkaSink
 </h3>
@@ -2305,6 +2427,19 @@ default for TLS.
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>sasl</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL"> SASL </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASL user to configure SASL connection for kafka broker SASL.enable=true
+default for SASL.
+</p>
 </td>
 </tr>
 </tbody>
@@ -2372,6 +2507,19 @@ default for TLS.
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>sasl</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL"> SASL </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASL user to configure SASL connection for kafka broker SASL.enable=true
+default for SASL.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Lifecycle">
@@ -2428,6 +2576,16 @@ Log
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+</p>
+<p>
+</p>
+<h3 id="numaflow.numaproj.io/v1alpha1.LogicOperator">
+LogicOperator (<code>string</code> alias)
+</p>
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.TagConditions">TagConditions</a>)
 </p>
 <p>
 </p>
@@ -3025,7 +3183,7 @@ by the vertex’s limit settings
 <em>(Optional)</em>
 <p>
 BufferMaxLength is used to define the max length of a buffer Only
-applies to UDF and Source vertice as only they do buffer write. It can
+applies to UDF and Source vertices as only they do buffer write. It can
 be overridden by the settings in vertex limits.
 </p>
 </td>
@@ -3039,7 +3197,7 @@ be overridden by the settings in vertex limits.
 <p>
 BufferUsageLimit is used to define the percentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. Only
-applies to UDF and Source vertice as only they do buffer write. It will
+applies to UDF and Source vertices as only they do buffer write. It will
 be overridden by the settings in vertex limits.
 </p>
 </td>
@@ -3314,7 +3472,8 @@ RedisConfig
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">BufferServiceConfig</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
 </p>
 <p>
 </p>
@@ -3473,6 +3632,205 @@ config
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.RedisStreamsSource">
+RedisStreamsSource
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>RedisConfig</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisConfig"> RedisConfig </a>
+</em>
+</td>
+<td>
+<p>
+(Members of <code>RedisConfig</code> are embedded into this type.)
+</p>
+<p>
+RedisConfig contains connectivity info
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>stream</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>consumerGroup</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>readFromBeginning</code></br> <em> bool </em>
+</td>
+<td>
+<p>
+if true, stream starts being read from the beginning; otherwise, the
+latest
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+TLS </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SASL">
+SASL
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>mechanism</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLType"> SASLType </a> </em>
+</td>
+<td>
+<p>
+SASL mechanism to use
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>gssapi</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.GSSAPI"> GSSAPI </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+GSSAPI contains the kerberos config
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>plain</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASLPlain contains the sasl plain config
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SASLPlain">
+SASLPlain
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL">SASL</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>userSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<p>
+UserSecret refers to the secret that contains the user
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>passwordSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+PasswordSecret refers to the secret that contains the password
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>handshake</code></br> <em> bool </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SASLType">
+SASLType (<code>string</code> alias)
+</p>
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL">SASL</a>)
+</p>
+<p>
+<p>
+SASLType describes the SASL type
+</p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Scale">
 Scale
 </h3>
@@ -3788,6 +4146,16 @@ GeneratorSource </a> </em>
 </tr>
 <tr>
 <td>
+<code>redisStreams</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">
+RedisStreamsSource </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
 <code>transformer</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDTransformer"> UDTransformer
 </a> </em>
@@ -3846,7 +4214,8 @@ TLS
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
 </p>
 <p>
 </p>
@@ -3906,6 +4275,53 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 <em>(Optional)</em>
 <p>
 KeySecret refers to the secret that contains the key
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.TagConditions">
+TagConditions
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">ForwardConditions</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>operator</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.LogicOperator"> LogicOperator
+</a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Operator specifies the type of operation that should be used for
+conditional forwarding value could be “and”, “or”, “not”
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>values</code></br> <em> \[\]string </em>
+</td>
+<td>
+<p>
+Values tag values for conditional forwarding
 </p>
 </td>
 </tr>

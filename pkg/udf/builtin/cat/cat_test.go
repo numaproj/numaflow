@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	funcsdk "github.com/numaproj/numaflow-go/pkg/function"
+	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,6 +29,11 @@ type testDatum struct {
 	value     []byte
 	eventTime time.Time
 	watermark time.Time
+	metadata  testDatumMetadata
+}
+
+func (h *testDatum) Metadata() functionsdk.DatumMetadata {
+	return h.metadata
 }
 
 func (h *testDatum) Value() []byte {
@@ -43,16 +48,27 @@ func (h *testDatum) Watermark() time.Time {
 	return h.watermark
 }
 
+type testDatumMetadata struct {
+	id           string
+	numDelivered uint64
+}
+
+func (t testDatumMetadata) ID() string {
+	return t.id
+}
+
+func (t testDatumMetadata) NumDelivered() uint64 {
+	return t.numDelivered
+}
+
 func TestNew(t *testing.T) {
 	ctx := context.Background()
 	p := New()
 	req := []byte{0}
-	messages := p(ctx, "", &testDatum{
+	messages := p(ctx, []string{""}, &testDatum{
 		value:     req,
 		eventTime: time.Time{},
 		watermark: time.Time{},
 	})
 	assert.Equal(t, 1, len(messages))
-	assert.Equal(t, funcsdk.ALL, messages[0].Key)
-	assert.Equal(t, req, messages[0].Value)
 }

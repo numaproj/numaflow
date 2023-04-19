@@ -25,7 +25,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -36,6 +35,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
@@ -132,7 +132,7 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler H
 	if serverHandler != nil {
 		if util.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
 			metricsOpts = append(metricsOpts, WithHealthCheckExecutor(func() error {
-				cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				defer cancel()
 				return serverHandler.IsHealthy(cctx)
 			}))
@@ -157,7 +157,7 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler H
 func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 	m := new(metricsServer)
 	m.vertex = vertex
-	m.refreshInterval = 5 * time.Second             // Default refersh interval
+	m.refreshInterval = 5 * time.Second             // Default refresh interval
 	m.lagCheckingInterval = 3 * time.Second         // Default lag checking interval
 	m.lookbackSeconds = dfv1.DefaultLookbackSeconds // Default
 	for _, opt := range opts {
@@ -269,11 +269,14 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/sidecar-livez", func(w http.ResponseWriter, r *http.Request) {
 		if len(ms.healthCheckExecutors) > 0 {
 			for _, ex := range ms.healthCheckExecutors {
 				if err := ex(); err != nil {
-					log.Errorw("Failed to execute health check", zap.Error(err))
+					log.Errorw("Failed to execute sidecar health check", zap.Error(err))
 					w.WriteHeader(http.StatusInternalServerError)
 					_, _ = w.Write([]byte(err.Error()))
 					return

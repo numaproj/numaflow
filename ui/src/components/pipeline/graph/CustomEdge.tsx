@@ -13,7 +13,7 @@ const CustomEdge: FC<EdgeProps> = ({
                                        targetPosition,
                                        data,
                                    }) => {
-    const [edgePath, labelX, labelY] = getSmoothStepPath({
+    const obj = getSmoothStepPath({
         sourceX,
         sourceY,
         sourcePosition,
@@ -22,23 +22,31 @@ const CustomEdge: FC<EdgeProps> = ({
         targetPosition,
     });
 
+  const [edgePath, labelX, ] = obj
+  let [, , labelY ] = obj
+
     // Color the edge on isFull
     let edgeStyle;
     if (data.isFull) {
         edgeStyle = {
             stroke: "red",
-            strokeWidth: "4px",
+            strokeWidth: "2px",
             fontWeight: 700,
         };
     }
     let wmStyle;
     let pendingStyle;
     if (sourceY === targetY) {
-        wmStyle = { marginTop: "-12px" }
+        wmStyle = { marginTop: "-13px" }
         pendingStyle = { marginTop: "1px" }
     } else {
         wmStyle = { right: "1px" }
         pendingStyle = { left: "1px" }
+        if (sourceY < targetY) {
+          labelY = targetY - 13
+        } else {
+          labelY = targetY + 1
+        }
     }
 
     return (

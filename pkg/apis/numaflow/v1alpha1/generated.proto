@@ -305,7 +305,8 @@ message FixedWindow {
 }
 
 message ForwardConditions {
-  repeated string keyIn = 1;
+  // Tags used to specify tags for conditional forwarding
+  optional TagConditions tags = 1;
 }
 
 message Function {
@@ -317,6 +318,31 @@ message Function {
 
   // +optional
   map<string, string> kwargs = 3;
+}
+
+// GSSAPI represents a SASL GSSAPI config
+message GSSAPI {
+  optional string serviceName = 1;
+
+  optional string realm = 2;
+
+  // UsernameSecret refers to the secret that contains the username
+  optional k8s.io.api.core.v1.SecretKeySelector usernameSecret = 3;
+
+  // valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH
+  optional string authType = 4;
+
+  // PasswordSecret refers to the secret that contains the password
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector passwordSecret = 5;
+
+  // KeytabSecret refers to the secret that contains the keytab
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector keytabSecret = 6;
+
+  // KerberosConfigSecret refers to the secret that contains the kerberos config
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector kerberosConfigSecret = 7;
 }
 
 message GeneratorSource {
@@ -556,7 +582,7 @@ message JetStreamBufferService {
 
   // Whether encrypt the data at rest, defaults to false
   // Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail
-  // Toggling the value will impact encypting/decrypting existing messages.
+  // Toggling the value will impact encrypting/decrypting existing messages.
   // +optional
   optional bool encryption = 11;
 
@@ -616,6 +642,11 @@ message KafkaSink {
 
   // +optional
   optional string config = 4;
+
+  // SASL user to configure SASL connection for kafka broker
+  // SASL.enable=true default for SASL.
+  // +optional
+  optional SASL sasl = 5;
 }
 
 message KafkaSource {
@@ -632,6 +663,11 @@ message KafkaSource {
 
   // +optional
   optional string config = 5;
+
+  // SASL user to configure SASL connection for kafka broker
+  // SASL.enable=true default for SASL.
+  // +optional
+  optional SASL sasl = 6;
 }
 
 message Lifecycle {
@@ -777,14 +813,14 @@ message PipelineLimits {
   optional uint64 readBatchSize = 1;
 
   // BufferMaxLength is used to define the max length of a buffer
-  // Only applies to UDF and Source vertice as only they do buffer write.
+  // Only applies to UDF and Source vertices as only they do buffer write.
   // It can be overridden by the settings in vertex limits.
   // +kubebuilder:default=30000
   // +optional
   optional uint64 bufferMaxLength = 2;
 
   // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-  // Only applies to UDF and Source vertice as only they do buffer write.
+  // Only applies to UDF and Source vertices as only they do buffer write.
   // It will be overridden by the settings in vertex limits.
   // +kubebuilder:default=80
   // +optional
@@ -905,6 +941,45 @@ message RedisSettings {
   optional string sentinel = 4;
 }
 
+message RedisStreamsSource {
+  // RedisConfig contains connectivity info
+  optional RedisConfig redisConfig = 1;
+
+  optional string stream = 2;
+
+  optional string consumerGroup = 3;
+
+  // if true, stream starts being read from the beginning; otherwise, the latest
+  optional bool readFromBeginning = 4;
+
+  // +optional
+  optional TLS tls = 5;
+}
+
+message SASL {
+  // SASL mechanism to use
+  optional string mechanism = 1;
+
+  // GSSAPI contains the kerberos config
+  // +optional
+  optional GSSAPI gssapi = 2;
+
+  // SASLPlain contains the sasl plain config
+  // +optional
+  optional SASLPlain plain = 3;
+}
+
+message SASLPlain {
+  // UserSecret refers to the secret that contains the user
+  optional k8s.io.api.core.v1.SecretKeySelector userSecret = 1;
+
+  // PasswordSecret refers to the secret that contains the password
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector passwordSecret = 2;
+
+  optional bool handshake = 3;
+}
+
 // Scale defines the parameters for autoscaling.
 message Scale {
   // Whether to disable autoscaling.
@@ -988,7 +1063,10 @@ message Source {
   optional NatsSource nats = 4;
 
   // +optional
-  optional UDTransformer transformer = 5;
+  optional RedisStreamsSource redisStreams = 5;
+
+  // +optional
+  optional UDTransformer transformer = 6;
 }
 
 // Status is a common structure which can be used for Status field.
@@ -1015,6 +1093,17 @@ message TLS {
   // KeySecret refers to the secret that contains the key
   // +optional
   optional k8s.io.api.core.v1.SecretKeySelector keySecret = 4;
+}
+
+message TagConditions {
+  // Operator specifies the type of operation that should be used for conditional forwarding
+  // value could be "and", "or", "not"
+  // +kubebuilder:validation:Enum=and;or;not
+  // +optional
+  optional string operator = 1;
+
+  // Values tag values for conditional forwarding
+  repeated string values = 2;
 }
 
 message Templates {

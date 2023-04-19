@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/stretchr/testify/assert"
 
@@ -38,20 +39,20 @@ import (
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WhereTo(_ string) ([]string, error) {
-	return []string{dfv1.MessageKeyDrop}, nil
+func (f myForwardTest) WhereTo(_ []string, _ []string) ([]string, error) {
+	return []string{dfv1.MessageTagDrop}, nil
 }
 
-func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
 func TestOrderedProcessing(t *testing.T) {
 	// Test Reducer returns the messages as is
-	identityReducer := applier.ApplyReduceFunc(func(ctx context.Context, partitionID *partition.ID, input <-chan *isb.ReadMessage) ([]*isb.Message, error) {
-		messages := make([]*isb.Message, 0)
+	identityReducer := applier.ApplyReduceFunc(func(ctx context.Context, partitionID *partition.ID, input <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+		messages := make([]*isb.WriteMessage, 0)
 		for msg := range input {
-			messages = append(messages, &msg.Message)
+			messages = append(messages, &isb.WriteMessage{Message: msg.Message})
 		}
 		return messages, nil
 	})
@@ -59,6 +60,7 @@ func TestOrderedProcessing(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
+	idleManager := wmb.NewIdleManager(len(toSteps))
 	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
 
 	ctx := context.Background()
@@ -114,7 +116,7 @@ func TestOrderedProcessing(t *testing.T) {
 				kw.AddSlot(_partition.Slot)
 
 				p, _ := pbqManager.CreateNewPBQ(ctx, _partition, kw)
-				t := op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw)
+				t := op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw, idleManager)
 				op.insertTask(t)
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)

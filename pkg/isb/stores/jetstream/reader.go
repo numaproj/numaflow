@@ -35,15 +35,15 @@ import (
 )
 
 type jetStreamReader struct {
-	name                  string
-	stream                string
-	subject               string
-	conn                  *jsclient.NatsConn
-	js                    *jsclient.JetStreamContext
-	sub                   *nats.Subscription
-	opts                  *readOptions
-	inProgessTickDuration time.Duration
-	log                   *zap.SugaredLogger
+	name                   string
+	stream                 string
+	subject                string
+	conn                   *jsclient.NatsConn
+	js                     *jsclient.JetStreamContext
+	sub                    *nats.Subscription
+	opts                   *readOptions
+	inProgressTickDuration time.Duration
+	log                    *zap.SugaredLogger
 	// ackedInfo stores a list of ack seq/timestamp(seconds) information
 	ackedInfo *sharedqueue.OverflowQueue[timestampedSequence]
 }
@@ -132,10 +132,10 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 	result.conn = conn
 	result.js = js
 	result.sub = sub
-	result.inProgessTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
+	result.inProgressTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
 	if o.useAckInfoAsRate {
 		result.ackedInfo = sharedqueue.New[timestampedSequence](1800)
-		go result.runAckInfomationChecker(ctx)
+		go result.runAckInformationChecker(ctx)
 	}
 	return result, nil
 }
@@ -156,7 +156,7 @@ func (jr *jetStreamReader) Close() error {
 	return nil
 }
 
-func (jr *jetStreamReader) runAckInfomationChecker(ctx context.Context) {
+func (jr *jetStreamReader) runAckInformationChecker(ctx context.Context) {
 	js, err := jr.conn.JetStream()
 	if err != nil {
 		// Let it exit if it fails to start the information checker
@@ -234,9 +234,16 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal the message into isb.Message, %w", err)
 		}
+		msgMetadata, err := msg.Metadata()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get jetstream message metadata, %w", err)
+		}
 		rm := &isb.ReadMessage{
-			ReadOffset: newOffset(msg, jr.inProgessTickDuration, jr.log),
+			ReadOffset: newOffset(msg, jr.inProgressTickDuration, jr.log),
 			Message:    *m,
+			Metadata: isb.MessageMetadata{
+				NumDelivered: msgMetadata.NumDelivered,
+			},
 		}
 		result = append(result, rm)
 	}
@@ -270,6 +277,22 @@ func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error 
 	return errs
 }
 
+func (jr *jetStreamReader) NoAck(ctx context.Context, offsets []isb.Offset) {
+	wg := &sync.WaitGroup{}
+	for _, o := range offsets {
+		wg.Add(1)
+		go func(o isb.Offset) {
+			defer wg.Done()
+			// Ignore the returned error as the worst case the message will
+			// take longer to be redelivered.
+			if err := o.NoAck(); err != nil {
+				jr.log.Errorw("Failed to nak JetStream msg", zap.Error(err))
+			}
+		}(o)
+	}
+	wg.Wait()
+}
+
 // offset implements ID interface for JetStream.
 type offset struct {
 	seq        uint64
@@ -283,7 +306,7 @@ func newOffset(msg *nats.Msg, tickDuration time.Duration, log *zap.SugaredLogger
 		seq: metadata.Sequence.Stream,
 		msg: msg,
 	}
-	// If tickDuration is 1s, which means ackWait is 1s or 2s, it doesn not make much sense to do it, instead, increasing ackWait is recommended.
+	// If tickDuration is 1s, which means ackWait is 1s or 2s, it does not make much sense to do it, instead, increasing ackWait is recommended.
 	if tickDuration.Seconds() > 1 {
 		ctx, cancel := context.WithCancel(context.Background())
 		go o.workInProgess(ctx, msg, tickDuration, log)
@@ -320,6 +343,13 @@ func (o *offset) AckIt() error {
 		return err
 	}
 	return nil
+}
+
+func (o *offset) NoAck() error {
+	if o.cancelFunc != nil {
+		o.cancelFunc()
+	}
+	return o.msg.Nak()
 }
 
 func (o *offset) Sequence() (int64, error) {

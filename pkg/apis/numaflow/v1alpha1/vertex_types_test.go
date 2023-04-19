@@ -295,6 +295,14 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, "cmd", s.Containers[1].Command[0])
 		assert.Equal(t, 1, len(s.Containers[1].Args))
 		assert.Equal(t, "arg0", s.Containers[1].Args[0])
+		sidecarEnvNames := []string{}
+		for _, env := range s.Containers[1].Env {
+			sidecarEnvNames = append(sidecarEnvNames, env.Name)
+		}
+		assert.Contains(t, sidecarEnvNames, EnvCPULimit)
+		assert.Contains(t, sidecarEnvNames, EnvMemoryLimit)
+		assert.Contains(t, sidecarEnvNames, EnvCPURequest)
+		assert.Contains(t, sidecarEnvNames, EnvMemoryRequest)
 	})
 
 	t.Run("test udf", func(t *testing.T) {
@@ -326,6 +334,14 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeMapUDF))
 		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		sidecarEnvNames := []string{}
+		for _, env := range s.Containers[1].Env {
+			sidecarEnvNames = append(sidecarEnvNames, env.Name)
+		}
+		assert.Contains(t, sidecarEnvNames, EnvCPULimit)
+		assert.Contains(t, sidecarEnvNames, EnvMemoryLimit)
+		assert.Contains(t, sidecarEnvNames, EnvCPURequest)
+		assert.Contains(t, sidecarEnvNames, EnvMemoryRequest)
 	})
 }
 

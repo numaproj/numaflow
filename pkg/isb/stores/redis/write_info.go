@@ -60,7 +60,7 @@ func (bw *BufferWrite) updateIsFullAndLag(ctx context.Context) {
 	// consumerLag as metric
 	isbConsumerLag.With(labels).Set(float64(consumerLag))
 
-	lagDuration := bw.lagDuration.Milliseconds()
+	lagDuration := bw.LagDuration.Milliseconds()
 
 	// if specified consumerLag duration is 0, that means we do not want to use consumerLag to determine isFull.
 	// if lagDuration is specified we use that to compare against the consumer consumerLag (lastGenerated - lastDelivered)
@@ -87,7 +87,7 @@ func (bw *BufferWrite) updateIsFullAndLag(ctx context.Context) {
 	}
 	isbBufferUsage.With(labels).Set(usage)
 
-	if usage >= bw.bufferUsageLimit {
+	if usage >= bw.BufferUsageLimit {
 		bw.log.Infow("usage is greater than bufferUsageLimit", zap.Float64("usage", usage))
 		bw.setIsFull(true)
 		return
@@ -108,7 +108,7 @@ func (bw *BufferWrite) getUsage(ctx context.Context) (float64, error) {
 	// set stream length
 	bw.setBufferLength(streamLen)
 
-	maxLen := bw.maxLength
+	maxLen := bw.MaxLength
 	var usage = float64(streamLen) / float64(maxLen)
 
 	return usage, err

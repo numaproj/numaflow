@@ -27,7 +27,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-func Test_BadicOperations(t *testing.T) {
+func Test_BasicOperations(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	s := NewScaler(cl)
 	assert.NotNil(t, s)

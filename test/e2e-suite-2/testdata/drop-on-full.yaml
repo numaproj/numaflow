@@ -3,6 +3,9 @@ kind: Pipeline
 metadata:
   name: drop-on-full
 spec:
+  lifecycle:
+    # Such that pipeline can be deleted when we have unprocessed messages.
+    deleteGracePeriodSeconds: 1
   limits:
     # Using the following limits for generating a buffer full scenario.
     bufferMaxLength: 1
@@ -11,24 +14,10 @@ spec:
     - name: in
       source:
         http: {}
-    - name: drop-sink
-      scale:
-        disabled: true
+    - name: sink
       sink:
-        udsink:
-          container:
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
-    - name: retry-sink
-      scale:
-        disabled: true
-      sink:
-        udsink:
-          container:
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+        log: {}
   edges:
     - from: in
-      to: drop-sink
+      to: sink
       onFull: discardLatest
-    - from: in
-      to: retry-sink
-      onFull: retryUntilSuccess

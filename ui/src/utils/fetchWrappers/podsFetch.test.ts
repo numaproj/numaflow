@@ -374,7 +374,7 @@ describe("podsFetch test", () => {
                     "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount"
                 }],
                 "livenessProbe": {
-                    "httpGet": {"path": "/healthz", "port": 2469, "scheme": "HTTPS"},
+                    "httpGet": {"path": "/livez", "port": 2469, "scheme": "HTTPS"},
                     "initialDelaySeconds": 3,
                     "timeoutSeconds": 1,
                     "periodSeconds": 3,

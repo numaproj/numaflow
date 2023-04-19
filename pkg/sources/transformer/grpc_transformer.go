@@ -29,7 +29,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -80,19 +79,18 @@ func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
-	key := readMessage.Key
+func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
-	var d = &functionpb.Datum{
-		Key:       key,
+	var d = &functionpb.DatumRequest{
+		Keys:      keys,
 		Value:     payload,
 		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
 		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(readMessage.Watermark)},
 	}
 
-	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{functionsdk.DatumKey: key}))
 	datumList, err := u.client.MapTFn(ctx, d)
 	if err != nil {
 		return nil, function.ApplyUDFErr{
@@ -105,24 +103,27 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 		}
 	}
 
-	writeMessages := make([]*isb.Message, 0)
+	taggedMessages := make([]*isb.WriteMessage, 0)
 	for i, datum := range datumList {
-		key := datum.Key
+		keys := datum.Keys
 		if datum.EventTime != nil {
 			// Transformer supports changing event time.
 			parentMessageInfo.EventTime = datum.EventTime.EventTime.AsTime()
 		}
-		writeMessage := &isb.Message{
-			Header: isb.Header{
-				MessageInfo: parentMessageInfo,
-				ID:          fmt.Sprintf("%s-%d", offset.String(), i),
-				Key:         key,
+		taggedMessage := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: parentMessageInfo,
+					ID:          fmt.Sprintf("%s-%d", offset.String(), i),
+					Keys:        keys,
+				},
+				Body: isb.Body{
+					Payload: datum.Value,
+				},
 			},
-			Body: isb.Body{
-				Payload: datum.Value,
-			},
+			Tags: datum.Tags,
 		}
-		writeMessages = append(writeMessages, writeMessage)
+		taggedMessages = append(taggedMessages, taggedMessage)
 	}
-	return writeMessages, nil
+	return taggedMessages, nil
 }

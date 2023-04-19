@@ -87,16 +87,16 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		req := &functionpb.Datum{
-			Key:       "test_success_key",
+		req := &functionpb.DatumRequest{
+			Keys:      []string{"test_success_key"},
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
 		}
-		mockClient.EXPECT().MapTFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
+		mockClient.EXPECT().MapTFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumResponseList{
+			Elements: []*functionpb.DatumResponse{
 				{
-					Key:   "test_success_key",
+					Keys:  []string{"test_success_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -118,8 +118,8 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169600, 0),
 					},
-					ID:  "test_id",
-					Key: `test_success_key`,
+					ID:   "test_id",
+					Keys: []string{"test_success_key"},
 				},
 				Body: isb.Body{
 					Payload: []byte(`forward_message`),
@@ -129,7 +129,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		},
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, req.Key, string(got[0].Key))
+		assert.Equal(t, req.Keys, got[0].Keys)
 		assert.Equal(t, req.Value, got[0].Payload)
 	})
 
@@ -138,8 +138,8 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		req := &functionpb.Datum{
-			Key:       "test_error_key",
+		req := &functionpb.DatumRequest{
+			Keys:      []string{"test_error_key"},
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
@@ -162,8 +162,8 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:  "test_id",
-					Key: `test_error_key`,
+					ID:   "test_id",
+					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{
 					Payload: []byte(`forward_message`),
@@ -196,23 +196,23 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 	mockClient.EXPECT().MapTFn(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
+		func(_ context.Context, datum *functionpb.DatumRequest, opts ...grpc.CallOption) (*functionpb.DatumResponseList, error) {
 			var originalValue testutils.PayloadForTest
 			_ = json.Unmarshal(datum.GetValue(), &originalValue)
 			doubledValue, _ := json.Marshal(multiplyBy2(datum.GetValue()).(testutils.PayloadForTest))
-			var elements []*functionpb.Datum
+			var elements []*functionpb.DatumResponse
 			if originalValue.Value%2 == 0 {
-				elements = append(elements, &functionpb.Datum{
-					Key:   "even",
+				elements = append(elements, &functionpb.DatumResponse{
+					Keys:  []string{"even"},
 					Value: doubledValue,
 				})
 			} else {
-				elements = append(elements, &functionpb.Datum{
-					Key:   "odd",
+				elements = append(elements, &functionpb.DatumResponse{
+					Keys:  []string{"odd"},
 					Value: doubledValue,
 				})
 			}
-			datumList := &functionpb.DatumList{
+			datumList := &functionpb.DatumResponseList{
 				Elements: elements,
 			}
 			return datumList, nil
@@ -234,23 +234,23 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
 	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
 
 	var results = make([][]byte, len(readMessages))
-	var resultKeys = make([]string, len(readMessages))
+	var resultKeys = make([][]string, len(readMessages))
 	for idx, readMessage := range readMessages {
 		apply, err := u.ApplyMap(ctx, &readMessage)
 		assert.NoError(t, err)
 		results[idx] = apply[0].Payload
-		resultKeys[idx] = string(apply[0].Header.Key)
+		resultKeys[idx] = apply[0].Header.Keys
 	}
 
 	var expectedResults = make([][]byte, count)
-	var expectedKeys = make([]string, count)
+	var expectedKeys = make([][]string, count)
 	for idx, readMessage := range readMessages {
 		var readMessagePayload testutils.PayloadForTest
 		_ = json.Unmarshal(readMessage.Payload, &readMessagePayload)
 		if readMessagePayload.Value%2 == 0 {
-			expectedKeys[idx] = "even"
+			expectedKeys[idx] = []string{"even"}
 		} else {
-			expectedKeys[idx] = "odd"
+			expectedKeys[idx] = []string{"odd"}
 		}
 		marshal, _ := json.Marshal(multiplyBy2(readMessage.Payload))
 		expectedResults[idx] = marshal
@@ -267,14 +267,14 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangeEventTime(t *testing.T) 
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 	mockClient.EXPECT().MapTFn(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
-			var elements []*functionpb.Datum
-			elements = append(elements, &functionpb.Datum{
-				Key:       "even",
+		func(_ context.Context, datum *functionpb.DatumRequest, opts ...grpc.CallOption) (*functionpb.DatumResponseList, error) {
+			var elements []*functionpb.DatumResponse
+			elements = append(elements, &functionpb.DatumResponse{
+				Keys:      []string{"even"},
 				Value:     datum.Value,
 				EventTime: &functionpb.EventTime{EventTime: timestamppb.New(testEventTime)},
 			})
-			datumList := &functionpb.DatumList{
+			datumList := &functionpb.DatumResponseList{
 				Elements: elements,
 			}
 			return datumList, nil

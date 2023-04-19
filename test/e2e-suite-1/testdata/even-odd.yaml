@@ -33,16 +33,22 @@ spec:
     - from: even-or-odd
       to: even-sink
       conditions:
-        keyIn:
-          - even
+        tags:
+          operator: or
+          values:
+            - even-tag
     - from: even-or-odd
       to: odd-sink
       conditions:
-        keyIn:
-          - odd
+        tags:
+          operator: or
+          values:
+            - odd-tag
     - from: even-or-odd
       to: number-sink
       conditions:
-        keyIn:
-          - even
-          - odd
+        tags:
+          operator: or
+          values:
+            - odd-tag
+            - even-tag

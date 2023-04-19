@@ -165,7 +165,7 @@ func Test_writeReadEntry(t *testing.T) {
 	actualOffset, err := actualMessage.ReadOffset.Sequence()
 	assert.NoError(t, err)
 	assert.Equalf(t, expectedOffset, actualOffset, "Read(%v)", message.ReadOffset)
-	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeReadMessage(%v)", message.Watermark)
+	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeWALMessage(%v)", message.Watermark)
 
 	// Start to write an entry again
 	err = newWal.Write(&message)
@@ -195,8 +195,10 @@ func Test_encodeDecodeEntry(t *testing.T) {
 			wantErr: assert.NoError,
 			message: &isb.ReadMessage{
 				Message: isb.Message{
-					Header: isb.Header{},
-					Body:   isb.Body{},
+					Header: isb.Header{
+						Keys: []string{},
+					},
+					Body: isb.Body{},
 				},
 				ReadOffset: isb.SimpleIntOffset(func() int64 { return int64(2) }),
 			},
@@ -210,20 +212,20 @@ func Test_encodeDecodeEntry(t *testing.T) {
 			assert.NoError(t, err)
 			newWal := wal.(*WAL)
 
-			got, err := newWal.encodeReadMessage(tt.message)
-			if !tt.wantErr(t, err, fmt.Sprintf("encodeReadMessage(%v)", tt.message)) {
+			got, err := newWal.encodeWALMessage(tt.message)
+			if !tt.wantErr(t, err, fmt.Sprintf("encodeWALMessage(%v)", tt.message)) {
 				return
 			}
 
 			result, _, err := decodeReadMessage(bytes.NewReader(got.Bytes()))
 			assert.NoError(t, err)
-			assert.Equalf(t, tt.message.Message, result.Message, "encodeReadMessage(%v)", tt.message.Message)
+			assert.Equalf(t, tt.message.Message, result.Message, "encodeWALMessage(%v)", tt.message.Message)
 			expectedOffset, err := tt.message.ReadOffset.Sequence()
 			assert.NoError(t, err)
 			actualOffset, err := result.ReadOffset.Sequence()
 			assert.NoError(t, err)
-			assert.Equalf(t, expectedOffset, actualOffset, "encodeReadMessage(%v)", tt.message.ReadOffset)
-			assert.Equalf(t, tt.message.Watermark, result.Watermark, "encodeReadMessage(%v)", tt.message.Watermark)
+			assert.Equalf(t, expectedOffset, actualOffset, "encodeWALMessage(%v)", tt.message.ReadOffset)
+			assert.Equalf(t, tt.message.Watermark, result.Watermark, "encodeWALMessage(%v)", tt.message.Watermark)
 			err = newWal.Close()
 			assert.NoError(t, err)
 		})
@@ -259,7 +261,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	assert.NoError(t, err)
 	err = wal.Write(&message)
 	assert.NoError(t, err)
-	assert.Equal(t, int64(418), tempWAL.prevSyncedWOffset)
+	assert.Equal(t, int64(218), tempWAL.prevSyncedWOffset)
 
 	err = wal.Close()
 	assert.NoError(t, err)
@@ -286,7 +288,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	actualOffset, err := actualMessage.ReadOffset.Sequence()
 	assert.NoError(t, err)
 	assert.Equalf(t, expectedOffset, actualOffset, "Read(%v)", message.ReadOffset)
-	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeReadMessage(%v)", message.Watermark)
+	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeWALMessage(%v)", message.Watermark)
 
 	// Start to write an entry again
 	err = newWal.Write(&message)
@@ -316,7 +318,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	message := writeMessages[0]
 	storePrevSyncedTime := tempWAL.prevSyncedTime
 	err = wal.Write(&message)
-	assert.Equal(t, int64(228), tempWAL.prevSyncedWOffset)
+	assert.Equal(t, int64(128), tempWAL.prevSyncedWOffset)
 	assert.NotEqual(t, storePrevSyncedTime, tempWAL.prevSyncedTime)
 	assert.NoError(t, err)
 
@@ -352,7 +354,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	actualOffset, err := actualMessage.ReadOffset.Sequence()
 	assert.NoError(t, err)
 	assert.Equalf(t, expectedOffset, actualOffset, "Read(%v)", message.ReadOffset)
-	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeReadMessage(%v)", message.Watermark)
+	assert.Equalf(t, message.Watermark, actualMessage.Watermark, "encodeWALMessage(%v)", message.Watermark)
 
 	// Start to write an entry again
 	err = newWal.Write(&message)

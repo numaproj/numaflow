@@ -20,9 +20,9 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/function/server"
 )
 
-func mapHandle(_ context.Context, key string, d functionsdk.Datum) functionsdk.Messages {
+func mapHandle(_ context.Context, keys []string, d functionsdk.Datum) functionsdk.Messages {
 	// Directly forward the input to the output
-	return functionsdk.MessagesBuilder().Append(functionsdk.MessageToAll(d.Value()))
+	return functionsdk.MessagesBuilder().Append(functionsdk.NewMessage(d.Value()).WithKeys(keys))
 }
 
 func main() {
@@ -61,8 +61,8 @@ Some environment variables are available in the user defined function Pods, they
 
 Configuration data can be provided to the UDF container at runtime multiple ways.
 
-* [`environment variables`](../../environment-variables.md)
+* [`environment variables`](../../reference/configuration/environment-variables.md)
 * `args`
 * `command`
-* [`volumes`](../../volumes.md)
-* [`init containers`](../../init-containers.md)
+* [`volumes`](../../reference/configuration/volumes.md)
+* [`init containers`](../../reference/configuration/init-containers.md)

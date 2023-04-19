@@ -96,9 +96,9 @@ func (s *UserDefinedSink) IsFull() bool {
 
 // Write writes to the UDSink container.
 func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	msgs := make([]*sinkpb.Datum, len(messages))
+	msgs := make([]*sinkpb.DatumRequest, len(messages))
 	for i, m := range messages {
-		msgs[i] = &sinkpb.Datum{
+		msgs[i] = &sinkpb.DatumRequest{
 			// NOTE: key is not used anywhere ATM
 			Id:        m.ID,
 			Value:     m.Payload,

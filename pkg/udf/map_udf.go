@@ -82,18 +82,28 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	conditionalForwarder := forward.GoWhere(func(key string) ([]string, error) {
+	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]string, error) {
 		result := []string{}
-		if key == dfv1.MessageKeyDrop {
+
+		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil
 		}
+
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-			// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
-			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key) {
+			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
+			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
 				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
-					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
+					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 				} else {
 					result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+				}
+			} else {
+				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
+					if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
+					} else {
+						result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+					}
 				}
 			}
 		}

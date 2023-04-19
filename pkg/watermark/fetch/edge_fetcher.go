@@ -118,30 +118,42 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(headWatermark))
 }
 
-// GetHeadWMB returns the latest idle WMB among all processors
+// GetHeadWMB returns the latest idle WMB with the smallest watermark among all processors
 func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
+	var debugString strings.Builder
+
 	var headWMB = wmb.WMB{
-		// we find the head WMB only based on Offset
-		Offset: math.MinInt64,
+		// we find the head WMB based on watermark
+		Offset:    math.MaxInt64,
+		Watermark: math.MaxInt64,
 	}
 	// if any head wmb from Vn-1 processors is not idle, we skip publishing
 	var allProcessors = e.processorManager.GetAllProcessors()
 	for _, p := range allProcessors {
+		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
 		if !p.IsActive() {
 			continue
 		}
+		// we only consider the latest wmb in the offset timeline
 		var curHeadWMB = p.offsetTimeline.GetHeadWMB()
 		if !curHeadWMB.Idle {
+			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bufferName)
 			return wmb.WMB{}
 		}
-		if curHeadWMB.Offset != -1 && curHeadWMB.Offset > headWMB.Offset {
-			headWMB = curHeadWMB
+		if curHeadWMB.Watermark != -1 {
+			// find the smallest head offset of the smallest watermark
+			if curHeadWMB.Watermark < headWMB.Watermark {
+				headWMB = curHeadWMB
+			} else if curHeadWMB.Watermark == headWMB.Watermark && curHeadWMB.Offset < headWMB.Offset {
+				headWMB = curHeadWMB
+			}
 		}
 	}
-	if headWMB.Offset == math.MinInt64 {
+	if headWMB.Watermark == math.MaxInt64 {
 		// there is no valid watermark yet
 		return wmb.WMB{}
 	}
+	e.log.Debugf("GetHeadWMB: %s[%s] get idle head wmb for offset", debugString.String(), e.bufferName)
 	return headWMB
 }
 

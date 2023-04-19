@@ -31,12 +31,14 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -50,12 +52,13 @@ type ProcessAndForward struct {
 	vertexReplica    int32
 	PartitionID      partition.ID
 	UDF              applier.ReduceApplier
-	result           []*isb.Message
+	result           []*isb.WriteMessage
 	pbqReader        pbq.Reader
 	log              *zap.SugaredLogger
 	toBuffers        map[string]isb.BufferWriter
 	whereToDecider   forward.ToWhichStepDecider
 	publishWatermark map[string]publish.Publisher
+	idleManager      *wmb.IdleManager
 }
 
 // NewProcessAndForward will return a new ProcessAndForward instance
@@ -67,7 +70,9 @@ func NewProcessAndForward(ctx context.Context,
 	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
 	toBuffers map[string]isb.BufferWriter,
-	whereToDecider forward.ToWhichStepDecider, pw map[string]publish.Publisher) *ProcessAndForward {
+	whereToDecider forward.ToWhichStepDecider,
+	pw map[string]publish.Publisher,
+	idleManager *wmb.IdleManager) *ProcessAndForward {
 	return &ProcessAndForward{
 		vertexName:       vertexName,
 		pipelineName:     pipelineName,
@@ -79,6 +84,7 @@ func NewProcessAndForward(ctx context.Context,
 		toBuffers:        toBuffers,
 		whereToDecider:   whereToDecider,
 		publishWatermark: pw,
+		idleManager:      idleManager,
 	}
 }
 
@@ -148,7 +154,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 		return errors.New("failed to forward the messages to isb")
 	}
 
-	p.publishWM(processorWM, writeOffsets)
+	p.publishWM(ctx, processorWM, writeOffsets)
 	// delete the persisted messages
 	err := p.pbqReader.GC()
 	if err != nil {
@@ -157,8 +163,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	return nil
 }
 
-// whereToStep assigns a message to the ISBs based on the Message.Key.
-// TODO: we have to introduce support for shuffle, output of a reducer can be input to the next reducer.
+// whereToStep assigns a message to the ISBs based on the Message.Keys.
 func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][]isb.Message)
@@ -166,14 +171,14 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 	var to []string
 	var err error
 	for _, msg := range p.result {
-		to, err = p.whereToDecider.WhereTo(msg.Key)
+		to, err = p.whereToDecider.WhereTo(msg.Keys, msg.Tags)
 		if err != nil {
 			platformError.With(map[string]string{
 				metrics.LabelVertex:             p.vertexName,
 				metrics.LabelPipeline:           p.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 			}).Inc()
-			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.String("key", msg.Key), zap.Error(err), zap.Any("partitionID", p.PartitionID))
+			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.Strings("keys", msg.Keys), zap.Error(err), zap.Any("partitionID", p.PartitionID))
 			continue
 		}
 
@@ -185,7 +190,7 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 			if _, ok := messagesToStep[bufferID]; !ok {
 				messagesToStep[bufferID] = make([]isb.Message, 0)
 			}
-			messagesToStep[bufferID] = append(messagesToStep[bufferID], *msg)
+			messagesToStep[bufferID] = append(messagesToStep[bufferID], msg.Message)
 		}
 
 	}
@@ -195,7 +200,12 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 // writeToBuffer writes to the ISBs.
 // TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
 func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
-	var totalBytes float64
+	var (
+		writeCount int
+		writeBytes float64
+		dropBytes  float64
+	)
+
 	var ISBWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
 		Duration: 100 * time.Millisecond,
@@ -213,10 +223,15 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		offsets, writeErrs = p.toBuffers[bufferID].Write(ctx, writeMessages)
 		for i, message := range writeMessages {
 			if writeErrs[i] != nil {
-				failedMessages = append(failedMessages, message)
+				if errors.As(writeErrs[i], &isb.NoRetryableBufferWriteErr{}) {
+					// If toBuffer returns us a NoRetryableBufferWriteErr, we drop the message.
+					dropBytes += float64(len(message.Payload))
+				} else {
+					failedMessages = append(failedMessages, message)
+				}
 			} else {
-				totalBytes += float64(len(message.Payload))
-				p.log.Debugw("Forwarded message", zap.String("bufferID", bufferID), zap.Any("message", message))
+				writeCount++
+				writeBytes += float64(len(message.Payload))
 			}
 		}
 		// retry only the failed messages
@@ -233,22 +248,34 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		return true, nil
 	})
 
+	dropMessagesCount.With(map[string]string{
+		metrics.LabelVertex:             p.vertexName,
+		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+		"buffer":                        bufferID}).Add(float64(len(resultMessages) - writeCount))
+
+	dropBytesCount.With(map[string]string{
+		metrics.LabelVertex:             p.vertexName,
+		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+		"buffer":                        bufferID}).Add(dropBytes)
+
 	writeMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"buffer":                        bufferID}).Add(float64(len(resultMessages)))
+		"buffer":                        bufferID}).Add(float64(writeCount))
 
 	writeBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"buffer":                        bufferID}).Add(totalBytes)
+		"buffer":                        bufferID}).Add(writeBytes)
 	return offsets, ctxClosedErr
 }
 
 // publishWM publishes the watermark to each edge.
-func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string][]isb.Offset) {
+func (p *ProcessAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][]isb.Offset) {
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
@@ -258,6 +285,8 @@ func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string]
 			if len(offsets) > 0 {
 				publisher.PublishWatermark(wm, offsets[len(offsets)-1])
 				activeWatermarkBuffers[bufferName] = true
+				// reset because the toBuffer is not idling
+				p.idleManager.Reset(bufferName)
 			}
 		}
 	}
@@ -266,10 +295,9 @@ func (p *ProcessAndForward) publishWM(wm wmb.Watermark, writeOffsets map[string]
 		// batch processing cycle, send an idle watermark
 		for bufferName := range p.publishWatermark {
 			if !activeWatermarkBuffers[bufferName] {
-				// use the watermark of the current read batch for the idle watermark
-				// we don't care about the offset here because, in this use case,
-				// we will use a referred watermark to replace this idle watermark
-				p.publishWatermark[bufferName].PublishIdleWatermark(wm, isb.SimpleIntOffset(func() int64 { return -1 }))
+				if publisher, ok := p.publishWatermark[bufferName]; ok {
+					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[bufferName], publisher, p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
+				}
 			}
 		}
 	}

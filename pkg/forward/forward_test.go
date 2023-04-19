@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -63,6 +65,10 @@ func (t *testForwardFetcher) Close() error {
 	return nil
 }
 
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
+
 // GetWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
 func (t *testForwardFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
@@ -82,11 +88,11 @@ func (t *testForwardFetcher) GetHeadWMB() wmb.WMB {
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WhereTo(_ string) ([]string, error) {
+func (f myForwardTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -254,9 +260,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	// so the timeline should be empty
 	_, errs := fromStep.Write(ctx, ctrlMessage)
 	assert.Equal(t, make([]error, 1), errs)
-	if err != nil {
-		t.Fatal("expected the buffer not to be empty", err)
-	}
 	// waiting for the ctrl message to be acked
 	for !fromStep.IsEmpty() {
 		select {
@@ -512,7 +515,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 type mySourceForwardTest struct {
 }
 
-func (f mySourceForwardTest) WhereTo(_ string) ([]string, error) {
+func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
@@ -520,8 +523,8 @@ func (f mySourceForwardTest) WhereTo(_ string) ([]string, error) {
 // such that we can verify message IsLate attribute gets set to true.
 var testSourceNewEventTime = testSourceWatermark.Add(time.Duration(-1) * time.Minute)
 
-func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
-	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.Message, error) {
+func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 		_ = ctx
 		offset := readMessage.ReadOffset
 		payload := readMessage.Body.Payload
@@ -533,19 +536,19 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 		result := payload
 		// assign new event time
 		parentPaneInfo.EventTime = testSourceNewEventTime
-		var key string
+		var key []string
 
-		writeMessage := &isb.Message{
+		writeMessage := isb.Message{
 			Header: isb.Header{
 				MessageInfo: parentPaneInfo,
 				ID:          offset.String(),
-				Key:         key,
+				Keys:        key,
 			},
 			Body: isb.Body{
 				Payload: result,
 			},
 		}
-		return []*isb.Message{writeMessage}, nil
+		return []*isb.WriteMessage{{Message: writeMessage}}, nil
 	}(ctx, message)
 }
 
@@ -598,7 +601,7 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	readMessages, err := to1.Read(ctx, count)
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, int(count))
-	assert.Equal(t, []interface{}{writeMessages[0].Header.Key, writeMessages[1].Header.Key}, []interface{}{readMessages[0].Header.Key, readMessages[1].Header.Key})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
 	assert.Equal(t, []interface{}{writeMessages[0].Header.ID, writeMessages[1].Header.ID}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
@@ -613,92 +616,75 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	<-stopped
 }
 
-// TestWriteToBufferError_BufferFullWritingStrategyIsRetryUntilSuccess explicitly tests the case of retrying failed messages
-func TestWriteToBufferError_BufferFullWritingStrategyIsRetryUntilSuccess(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
+// TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
+func TestWriteToBuffer(t *testing.T) {
+	tests := []struct {
+		name       string
+		buffer     *simplebuffer.InMemoryBuffer
+		throwError bool
+	}{
+		{
+			name:   "test-discard-latest",
+			buffer: simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithBufferFullWritingStrategy(dfv1.DiscardLatest)),
+			// should not throw any error as we drop messages and finish writing before context is cancelled
+			throwError: false,
 		},
-	}}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-
-	go func() {
-		for !to1.IsFull() {
-			select {
-			case <-ctx.Done():
-				logging.FromContext(ctx).Fatalf("not full, %s", ctx.Err())
-			default:
-				time.Sleep(1 * time.Millisecond)
+		{
+			name:   "test-retry-until-success",
+			buffer: simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithBufferFullWritingStrategy(dfv1.RetryUntilSuccess)),
+			// should throw context closed error as we keep retrying writing until context is cancelled
+			throwError: true,
+		},
+	}
+	for _, value := range tests {
+		t.Run(value.name, func(t *testing.T) {
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": value.buffer,
 			}
-		}
-		// stop will cancel the contexts
-		f.Stop()
-	}()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
+			assert.NoError(t, err)
+			assert.False(t, value.buffer.IsFull())
+			assert.True(t, value.buffer.IsEmpty())
 
-	// try to write to buffer after it is full. This causes write to error and fail.
-	var messageToStep = make(map[string][]isb.Message)
-	messageToStep["to1"] = make([]isb.Message, 0)
-	messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:11]...)
+			stopped := f.Start()
+			go func() {
+				for !value.buffer.IsFull() {
+					select {
+					case <-ctx.Done():
+						logging.FromContext(ctx).Fatalf("not full, %s", ctx.Err())
+					default:
+						time.Sleep(1 * time.Millisecond)
+					}
+				}
+				// stop will cancel the context
+				f.Stop()
+			}()
 
-	// asserting the number of failed messages
-	_, err = f.writeToBuffers(ctx, messageToStep)
-	assert.True(t, strings.Contains(err.Error(), "with failed messages:1"))
+			// try to write to buffer after it is full.
+			var messageToStep = make(map[string][]isb.Message)
+			messageToStep["to1"] = make([]isb.Message, 0)
+			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+			messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:11]...)
+			_, err = f.writeToBuffers(ctx, messageToStep)
 
-	<-stopped
-}
-
-// TestWriteToBufferError_BufferFullWritingStrategyIsDiscardLatest explicitly tests the case of dropping messages when buffer is full
-func TestWriteToBufferError_BufferFullWritingStrategyIsDiscardLatest(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithBufferFullWritingStrategy(dfv1.DiscardLatest))
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
+			assert.Equal(t, value.throwError, err != nil)
+			if value.throwError {
+				// assert the number of failed messages
+				assert.True(t, strings.Contains(err.Error(), "with failed messages:1"))
+			}
+			<-stopped
+		})
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-		},
-	}}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-	var messageToStep = make(map[string][]isb.Message)
-	messageToStep["to1"] = make([]isb.Message, 0)
-	messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:11]...)
-	_, err = f.writeToBuffers(ctx, messageToStep)
-	// although we are writing 11 messages to a buffer of size 10, since we specify BufferFullWritingStrategy as DiscardLatest,
-	// the writeToBuffers() call should return no error.
-	assert.Nil(t, err)
-	// stop will cancel the contexts and therefore the forwarder stops without waiting
-	f.Stop()
-	<-stopped
 }
 
 // TestNewInterStepDataForwardToOneStep explicitly tests the case where we forward to only one buffer
@@ -789,11 +775,11 @@ func TestNewInterStepDataForwardToOneStep(t *testing.T) {
 type myForwardDropTest struct {
 }
 
-func (f myForwardDropTest) WhereTo(_ string) ([]string, error) {
-	return []string{dfv1.MessageKeyDrop}, nil
+func (f myForwardDropTest) WhereTo(_ []string, _ []string) ([]string, error) {
+	return []string{}, nil
 }
 
-func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -828,15 +814,8 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 	stopped := f.Start()
 
 	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
-
-	// nothing to read some data, this is a dropping queue
-	assert.Equal(t, true, to1.IsEmpty())
-
-	// write some data
-	_, errs = fromStep.Write(ctx, writeMessages[5:20])
-	assert.Equal(t, make([]error, 15), errs)
+	_, errs := fromStep.Write(ctx, writeMessages)
+	assert.Equal(t, make([]error, 20), errs)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -873,6 +852,28 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 	otDecode2, _ := wmb.DecodeToWMB(otValue2)
 	assert.True(t, otDecode2.Idle)
 
+	msgs := to1.GetMessages(1)
+	for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+		select {
+		case <-ctx.Done():
+			logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
+		default:
+			msgs = to1.GetMessages(1)
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	msgs = to2.GetMessages(1)
+	for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+		select {
+		case <-ctx.Done():
+			logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
+		default:
+			msgs = to2.GetMessages(1)
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
 	// since this is a dropping WhereTo, the buffer can never be full
 	f.Stop()
 
@@ -882,11 +883,11 @@ func TestNewInterStepDataForward_dropAll(t *testing.T) {
 type myForwardToAllTest struct {
 }
 
-func (f myForwardToAllTest) WhereTo(_ string) ([]string, error) {
-	return []string{dfv1.MessageKeyAll}, nil
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]string, error) {
+	return []string{"to1", "to2"}, nil
 }
 
-func (f myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -976,11 +977,11 @@ func TestNewInterStepData_forwardToAll(t *testing.T) {
 type myForwardInternalErrTest struct {
 }
 
-func (f myForwardInternalErrTest) WhereTo(_ string) ([]string, error) {
+func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardInternalErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -1028,11 +1029,11 @@ func TestNewInterStepDataForward_WithInternalError(t *testing.T) {
 type myForwardApplyWhereToErrTest struct {
 }
 
-func (f myForwardApplyWhereToErrTest) WhereTo(_ string) ([]string, error) {
+func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"to1"}, fmt.Errorf("whereToStep failed")
 }
 
-func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -1075,11 +1076,11 @@ func TestNewInterStepDataForward_WhereToError(t *testing.T) {
 type myForwardApplyUDFErrTest struct {
 }
 
-func (f myForwardApplyUDFErrTest) WhereTo(_ string) ([]string, error) {
+func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"to1"}, nil
 }
 
-func (f myForwardApplyUDFErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.Message, error) {
+func (f myForwardApplyUDFErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, fmt.Errorf("UDF error")
 }
 
@@ -1090,10 +1091,6 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 	toSteps := map[string]isb.BufferWriter{
 		"to1": to1,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -1102,16 +1099,21 @@ func TestNewInterStepDataForward_UDFError(t *testing.T) {
 		},
 	}}
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
 	assert.NoError(t, err)
+	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
 
 	stopped := f.Start()
 	// write some data
 	_, errs := fromStep.Write(ctx, writeMessages[0:5])
 	assert.Equal(t, make([]error, 5), errs)
-
 	assert.True(t, to1.IsEmpty())
 
 	f.Stop()

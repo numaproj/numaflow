@@ -52,6 +52,12 @@ type MessageInfo struct {
 	IsLate bool
 }
 
+// MessageMetadata is the metadata of the message
+type MessageMetadata struct {
+	// NumDelivered is the number of times the message has been delivered.
+	NumDelivered uint64
+}
+
 // Header is the header of the message
 type Header struct {
 	MessageInfo
@@ -59,8 +65,9 @@ type Header struct {
 	Kind MessageKind
 	// ID is used for exactly-once-semantics. ID is usually populated from the offset, if offset is available.
 	ID string
-	// Key is (key,value) in the map-reduce paradigm which will be used for conditional forwarding.
-	Key string
+	// Keys is (key,value) in the map-reduce paradigm will be used for reduce operation, last key in the list
+	// will be used for conditional forwarding
+	Keys []string
 }
 
 // Body is the body of the message
@@ -79,9 +86,18 @@ type ReadMessage struct {
 	Message
 	ReadOffset Offset
 	Watermark  time.Time
+	// Metadata is the metadata of the message after a message is read from the buffer.
+	Metadata MessageMetadata
 }
 
 // ToReadMessage converts Message to a ReadMessage by providing the offset and watermark
 func (m *Message) ToReadMessage(ot Offset, wm time.Time) *ReadMessage {
 	return &ReadMessage{Message: *m, ReadOffset: ot, Watermark: wm}
+}
+
+// WriteMessage is a wrapper for an isb message with tag information which will be used
+// for conditional forwarding.
+type WriteMessage struct {
+	Message
+	Tags []string
 }
