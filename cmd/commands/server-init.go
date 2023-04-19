@@ -31,14 +31,16 @@ func NewServerInitCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "server-init",
 		Short: "Initialize base path for Numaflow server",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 
 			reactVar := fmt.Sprintf("REACT_APP_BASE_HREF=%s", baseHref)
-
-			os.WriteFile("/ui/.env", []byte(reactVar), 0666)
+			if err := os.WriteFile("/ui/.env", []byte(reactVar), 0666); err != nil {
+				return fmt.Errorf("failed to create .env file: %s", err)
+			}
+			return nil
 		},
 	}
 
-	command.Flags().StringVar(&baseHref, "base-href", "/", "Set React environment variable to change basepath of the server.")
+	command.Flags().StringVar(&baseHref, "base-href", "/", "Change base path to access Numaflow UI.")
 	return command
 }
