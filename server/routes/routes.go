@@ -18,6 +18,7 @@ package routes
 
 import (
 	"net/http"
+	"path"
 
 	"github.com/gin-gonic/gin"
 
@@ -33,11 +34,7 @@ func Routes(r *gin.Engine, sysinfo SystemInfo, baseHref string) {
 	r.GET("/healthz", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
-	rGroup := r.Group("/api/v1")
-	if baseHref != "/" {
-		rGroup = r.Group(baseHref + "/api/v1")
-
-	}
+	rGroup := r.Group(path.Join(baseHref, "api/v1"))
 	v1Routes(rGroup)
 	rGroup.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, sysinfo)
