@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Pod, PodContainerSpec } from "../models/pods";
 import { useFetch } from "./fetch";
-import { quantityToScalar } from "../index";
+import { getBaseHref, quantityToScalar } from "../index";
 
 export const usePodsFetch = (
   namespaceId: string,
@@ -16,7 +16,7 @@ export const usePodsFetch = (
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods`
+    getBaseHref() + `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods`
   );
 
   useEffect(() => {

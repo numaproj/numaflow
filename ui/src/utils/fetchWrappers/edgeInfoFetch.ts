@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { EdgeInfo } from "../models/pipeline";
 import { useFetch } from "./fetch";
+import { getBaseHref } from "..";
 
 export const useEdgesInfoFetch = (
   namespaceId: string | undefined,
@@ -15,7 +16,7 @@ export const useEdgesInfoFetch = (
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/edges?refreshKey=${requestKey}`
+    getBaseHref() + `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/edges?refreshKey=${requestKey}`
   );
 
   useEffect(() => {

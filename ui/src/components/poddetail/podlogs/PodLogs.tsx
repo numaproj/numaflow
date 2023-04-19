@@ -11,6 +11,7 @@ import Checkbox from "@mui/material/Checkbox";
 import Highlighter from "react-highlight-words";
 import "@stardazed/streams-polyfill";
 import "./PodLogs.css";
+import { getBaseHref } from "../../../utils";
 
 export interface PodLogsProps {
   namespaceId: string;
@@ -88,7 +89,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
     setLogRequestKey(requestKey);
     setLogs(["Loading logs..."]);
     fetch(
-      `/api/v1/namespaces/${namespaceId}/pods/${podName}/log?container=${containerName}&follow=true&tailLines=${MAX_LOGS}`
+      getBaseHref() + `/api/v1/namespaces/${namespaceId}/pods/${podName}/log?container=${containerName}&follow=true&tailLines=${MAX_LOGS}`
     )
       .then((response) => {
         if (response && response.body) {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "./index.css";
@@ -6,6 +6,7 @@ import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { createTheme } from "@material-ui/core/styles";
 import { ThemeProvider } from "@mui/material";
+import { getBaseHref } from "./utils";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
@@ -23,10 +24,11 @@ const theme = createTheme({
 
 });
 
+const basename = getBaseHref()
 
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <ThemeProvider theme={theme}>
         <App />
       </ThemeProvider>

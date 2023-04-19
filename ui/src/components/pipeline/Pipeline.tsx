@@ -7,6 +7,7 @@ import { useEdgesInfoFetch } from "../../utils/fetchWrappers/edgeInfoFetch";
 import { VertexMetrics, EdgeWatermark } from "../../utils/models/pipeline";
 import "./Pipeline.css";
 import { notifyError } from "../../utils/error";
+import { getBaseHref } from "../../utils";
 
 export function Pipeline() {
   const [vertexPods, setVertexPods] =
@@ -98,7 +99,7 @@ export function Pipeline() {
       Promise.allSettled(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/pods`
+            getBaseHref() + `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/pods`
           )
             .then((response) => {
               if (response.ok) {
@@ -141,7 +142,7 @@ export function Pipeline() {
       Promise.allSettled(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/metrics`
+            getBaseHref() + `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/metrics`
           )
             .then((response) => {
               if (response.ok) {
@@ -227,7 +228,7 @@ export function Pipeline() {
       } else {
         Promise.allSettled( [
               fetch(
-                  `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
+                getBaseHref() + `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
               )
                   .then((response) => {
                     if (response.ok) {

@@ -1,5 +1,12 @@
 import { Pod, PodDetail, ResourceUsage } from "./models/pods";
 
+export function getBaseHref(): string {
+  if (process.env.REACT_APP_BASE_HREF) {
+    return process.env.REACT_APP_BASE_HREF
+  }
+  return "";
+}
+
 export function isDev() {
   return !process.env.NODE_ENV || process.env.NODE_ENV === "development";
 }

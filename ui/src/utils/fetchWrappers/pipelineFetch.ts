@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pipeline } from "../models/pipeline";
 import { useFetch } from "./fetch";
+import { getBaseHref } from "..";
 
 export const usePipelineFetch = (
   namespaceId: string | undefined,
@@ -15,7 +16,7 @@ export const usePipelineFetch = (
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?refreshKey=${requestKey}`
+    getBaseHref() + `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?refreshKey=${requestKey}`
   );
 
   useEffect(() => {

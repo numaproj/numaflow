@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { PodContainerSpec, PodDetail } from "../models/pods";
 import { useFetch } from "./fetch";
-import { quantityToScalar } from "../index";
+import { getBaseHref, quantityToScalar } from "../index";
 
 export const usePodsDetailFetch = (namespaceId: string, requestKey: string) => {
   const [podsDetailMap, setPodsDetailMap] = useState<
@@ -14,7 +14,7 @@ export const usePodsDetailFetch = (namespaceId: string, requestKey: string) => {
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
+    getBaseHref() + `/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
   );
 
   useEffect(() => {

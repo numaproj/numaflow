@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { SystemInfo } from "../models/systemInfo";
 import { useFetch } from "./fetch";
+import { getBaseHref } from "..";
 
 export const useSystemInfoFetch = () => {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | undefined>(undefined);
@@ -11,7 +12,7 @@ export const useSystemInfoFetch = () => {
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/sysinfo`
+    getBaseHref() + `/api/v1/sysinfo`
   );
 
   useEffect(() => {
