@@ -122,7 +122,23 @@ spec:
           requests:
             cpu: 100m
             memory: 200Mi
+        volumeMounts:
+        - mountPath: /ui/.env
+          name: env-volume
+          subPath: .env
+      initContainers:
+      - args:
+        - server-init
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        name: server-init
+        volumeMounts:
+        - mountPath: /ui
+          name: env-volume
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737
       serviceAccountName: numaflow-server-sa
+      volumes:
+      - emptyDir: {}
+        name: env-volume

@@ -2,7 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: interstepbufferservices.numaflow.numaproj.io
 spec:
@@ -2448,7 +2448,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: pipelines.numaflow.numaproj.io
 spec:
@@ -7834,7 +7834,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: vertices.numaflow.numaproj.io
 spec:
@@ -12105,7 +12105,23 @@ spec:
           requests:
             cpu: 100m
             memory: 200Mi
+        volumeMounts:
+        - mountPath: /ui/.env
+          name: env-volume
+          subPath: .env
+      initContainers:
+      - args:
+        - server-init
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        name: server-init
+        volumeMounts:
+        - mountPath: /ui
+          name: env-volume
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737
       serviceAccountName: numaflow-server-sa
+      volumes:
+      - emptyDir: {}
+        name: env-volume

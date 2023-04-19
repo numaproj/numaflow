@@ -18,12 +18,28 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737
+      volumes:
+      - name: env-volume
+        emptyDir: {}
+      initContainers:
+      - name: server-init
+        image: quay.io/numaproj/numaflow:latest
+        args:
+        - server-init
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /ui
+          name: env-volume
       containers:
         - name: main
           image: quay.io/numaproj/numaflow:latest
           args:
           - "server"
           imagePullPolicy: Always
+          volumeMounts:
+          - mountPath: /ui/.env
+            name: env-volume
+            subPath: .env
           env:
             - name: NAMESPACE
               valueFrom:
