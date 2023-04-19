@@ -20,9 +20,9 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/function/server"
 )
 
-func mapHandle(_ context.Context, key string, d functionsdk.Datum) functionsdk.Messages {
+func mapHandle(_ context.Context, keys []string, d functionsdk.Datum) functionsdk.Messages {
 	// Directly forward the input to the output
-	return functionsdk.MessagesBuilder().Append(functionsdk.MessageToAll(d.Value()))
+	return functionsdk.MessagesBuilder().Append(functionsdk.NewMessage(d.Value()).WithKeys(keys))
 }
 
 func main() {

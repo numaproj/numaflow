@@ -31,7 +31,7 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/function/server"
 )
 
-func Handle(_ context.Context, key string, data functionsdk.Datum) functionsdk.MessageTs {
+func Handle(_ context.Context, keys []string, data functionsdk.Datum) functionsdk.MessageTs {
 	/*
 		Input messages are in JSON format. Sample: {"timestamp": "1673239888", "filterOut": "true"}.
 		Field "timestamp" shows the real event time of the message, in format of epoch.
@@ -48,14 +48,14 @@ func Handle(_ context.Context, key string, data functionsdk.Datum) functionsdk.M
 	}
 	
 	// data filtering
-	var shouldFilter bool
+	var filterOut bool
 	if f, ok := jsonObject["filterOut"]; ok {
-		shouldFilter = f.(bool)
+		filterOut = f.(bool)
 	}
-	if shouldFilter {
+	if filterOut {
 		return functionsdk.MessageTsBuilder().Append(functionsdk.MessageTToDrop())
 	} else {
-		return functionsdk.MessageTsBuilder().Append(functionsdk.MessageTTo(eventTime, key, data.Value()))
+		return functionsdk.MessageTsBuilder().Append(functionsdk.NewMessageT(eventTime, data.Value()).WithKeys(keys))
 	}
 }
 
