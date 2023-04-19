@@ -40,6 +40,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
 	"github.com/numaproj/numaflow/pkg/sources/nats"
+	"github.com/numaproj/numaflow/pkg/sources/redisstreams"
 	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -69,14 +70,14 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	switch sp.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			writeOpts := []redisisb.Option{
-				redisisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
+			writeOpts := []redisclient.Option{
+				redisclient.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 			}
 			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
-				writeOpts = append(writeOpts, redisisb.WithMaxLength(int64(*x.BufferMaxLength)))
+				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
 			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, redisisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 			buffers := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e)
 			for _, buffer := range buffers {
@@ -216,6 +217,14 @@ func (sp *SourceProcessor) getSourcer(
 			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
 		}
 		return nats.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
+	} else if x := src.RedisStreams; x != nil {
+		readOptions := []redisstreams.Option{
+			redisstreams.WithLogger(logger),
+		}
+		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
+			readOptions = append(readOptions, redisstreams.WithReadTimeOut(l.ReadTimeout.Duration))
+		}
+		return redisstreams.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, publishWM, publishWMStores, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }
@@ -228,18 +237,28 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
-	fsd := forward.GoWhere(func(key string) ([]string, error) {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]string, error) {
 		result := []string{}
-		if key == dfv1.MessageKeyDrop {
+
+		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil
 		}
+
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			// If returned key is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
-			if edge.Conditions == nil || len(edge.Conditions.KeyIn) == 0 || sharedutil.StringSliceContains(edge.Conditions.KeyIn, key) {
+			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
+			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
 				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
-					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(key))
+					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 				} else {
 					result = append(result, dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+				}
+			} else {
+				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
+					if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
+					} else {
+						result = append(result, dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+					}
 				}
 			}
 		}

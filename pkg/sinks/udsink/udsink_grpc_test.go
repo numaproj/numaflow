@@ -62,7 +62,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		testDatumList := []*sinkpb.Datum{
+		testDatumList := []*sinkpb.DatumRequest{
 			{
 				Id:        "test_id_0",
 				Value:     []byte(`sink_message_success`),
@@ -119,7 +119,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		testDatumList := []*sinkpb.Datum{
+		testDatumList := []*sinkpb.DatumRequest{
 			{
 				Id:        "test_id_0",
 				Value:     []byte(`sink_message_grpc_err`),

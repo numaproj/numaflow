@@ -193,6 +193,8 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
 
+func (r *KafkaSource) NoAck(_ context.Context, _ []isb.Offset) {}
+
 func (r *KafkaSource) Start() <-chan struct{} {
 	go r.startConsumer()
 	// wait for the consumer to setup.
@@ -252,11 +254,17 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 		return isb.PendingNotAvailable, fmt.Errorf("failed to list consumer group offsets, %w", err)
 	}
 	for _, partition := range partitions {
+		block := rep.GetBlock(r.topic, partition)
+		if block.Offset == -1 {
+			// Note: if there is no offset associated with the partition under the consumer group, offset fetch sets the offset field to -1.
+			// This is not an error and usually means that there has been no data published to this particular partition yet.
+			// In this case, we can safely skip this partition from the pending calculation.
+			continue
+		}
 		partitionOffset, err := r.saramaClient.GetOffset(r.topic, partition, sarama.OffsetNewest)
 		if err != nil {
 			return isb.PendingNotAvailable, fmt.Errorf("failed to get offset of topic %q, partition %v, %w", r.topic, partition, err)
 		}
-		block := rep.GetBlock(r.topic, partition)
 		totalPending += partitionOffset - block.Offset
 	}
 	return totalPending, nil
@@ -306,6 +314,13 @@ func NewKafkaSource(
 			return nil, err
 		} else {
 			config.Net.TLS.Config = c
+		}
+	}
+	if s := source.SASL; s != nil {
+		if sasl, err := sharedutil.GetSASL(s); err != nil {
+			return nil, err
+		} else {
+			config.Net.SASL = *sasl
 		}
 	}
 	kafkasource.config = config
@@ -395,7 +410,7 @@ func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{EventTime: m.Timestamp},
 			ID:          offset,
-			Key:         string(m.Key),
+			Keys:        []string{string(m.Key)},
 		},
 		Body: isb.Body{Payload: m.Value},
 	}

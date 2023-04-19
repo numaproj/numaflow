@@ -26,12 +26,12 @@ import (
 // ReduceApplier applies the HTTPBasedUDF on the read message and gives back a new message. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type ReduceApplier interface {
-	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error)
+	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error)
 }
 
 // ApplyReduceFunc utility function used to create a Reducer implementation
-type ApplyReduceFunc func(context.Context, *partition.ID, <-chan *isb.ReadMessage) ([]*isb.Message, error)
+type ApplyReduceFunc func(context.Context, *partition.ID, <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error)
 
-func (a ApplyReduceFunc) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (a ApplyReduceFunc) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return a(ctx, partitionID, messageStream)
 }

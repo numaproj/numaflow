@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -284,6 +283,8 @@ func (mg *memgen) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
 
+func (mg *memgen) NoAck(_ context.Context, _ []isb.Offset) {}
+
 func (mg *memgen) Close() error {
 	if err := mg.sourcePublishWM.Close(); err != nil {
 		mg.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
@@ -310,12 +311,64 @@ func (mg *memgen) Start() <-chan struct{} {
 	return mg.forwarder.Start()
 }
 
+func (mg *memgen) NewWorker(ctx context.Context, rate int) func(chan time.Time, chan struct{}) {
+
+	return func(tickChan chan time.Time, done chan struct{}) {
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info("Context.Done is called. emptying any pending ticks")
+				for len(tickChan) > 0 {
+					<-tickChan
+				}
+				close(done)
+				close(mg.srcchan)
+				return
+			case ts := <-tickChan:
+				tickgenSourceCount.With(map[string]string{metrics.LabelVertex: mg.name, metrics.LabelPipeline: mg.pipelineName})
+				// we would generate all the keys in a round robin fashion
+				// even if there are multiple pods, all the pods will generate same keys in the same order.
+				// TODO: alternatively, we could also think about generating a subset of keys per pod.
+				t := ts.UnixNano()
+				for i := 0; i < rate; i++ {
+					for k := int32(0); k < mg.keyCount; k++ {
+						key := fmt.Sprintf("key-%d", k)
+						payload := mg.genfn(mg.msgSize, mg.value, t)
+						r := record{data: payload, offset: time.Now().UTC().UnixNano(), key: key}
+						select {
+						case <-ctx.Done():
+							log.Info("Context.Done is called. returning from the inner function")
+							return
+						case mg.srcchan <- r:
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 // generator fires once per time unit and generates records and writes them to the channel
 func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duration) {
 	go func() {
-		var rCount int32 = 0
-		// we are capping the limit at 10000 msgs / second
-		var limit = int32(10000 / rate)
+		// capping the rate to 10000 msgs/sec
+		if rate > 10000 {
+			log.Infow("Capping the rate to 10000 msg/sec. rate has been changed from %d to 10000", rate)
+			rate = 10000
+		}
+
+		tickChan := make(chan time.Time, 1000)
+		doneChan := make(chan struct{})
+		childCtx, childCancel := context.WithCancel(ctx)
+
+		defer childCancel()
+
+		// make sure that there is only one worker all the time.
+		// even when there is back pressure, max number of go routines inflight should be 1.
+		// at the same time, we dont want to miss any ticks that cannot be processed.
+		worker := mg.NewWorker(childCtx, rate)
+		go worker(tickChan, doneChan)
+
 		ticker := time.NewTicker(timeunit)
 		defer ticker.Stop()
 		for {
@@ -324,32 +377,11 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 			// when context closes
 			case <-ctx.Done():
 				log.Info("Context.Done is called. exiting generator loop.")
+				childCancel()
+				<-doneChan
 				return
 			case ts := <-ticker.C:
-				tickgenSourceCount.With(map[string]string{metrics.LabelVertex: mg.name, metrics.LabelPipeline: mg.pipelineName})
-				// swapped implies that the rCount is at limit
-				if !atomic.CompareAndSwapInt32(&rCount, limit-1, limit) {
-					go func(t int64) {
-						atomic.AddInt32(&rCount, 1)
-						defer atomic.AddInt32(&rCount, -1)
-						// we would generate all the keys in a round robin fashion
-						// even if there are multiple pods, all the pods will generate same keys in the same order.
-						// alternatively, we could also think about generating a subset of keys per pod.
-						for i := 0; i < rate; i++ {
-							for k := int32(0); k < mg.keyCount; k++ {
-								key := fmt.Sprintf("key-%d", k)
-								payload := mg.genfn(mg.msgSize, mg.value, t)
-								r := record{data: payload, offset: time.Now().UTC().UnixNano(), key: key}
-								select {
-								case <-ctx.Done():
-									log.Info("Context.Done is called. returning from the inner function")
-									return
-								case mg.srcchan <- r:
-								}
-							}
-						}
-					}(ts.UnixNano())
-				}
+				tickChan <- ts
 			}
 		}
 	}()
@@ -361,7 +393,7 @@ func (mg *memgen) newReadMessage(key string, payload []byte, offset int64) *isb.
 			// TODO: insert the right time based on the generator
 			MessageInfo: isb.MessageInfo{EventTime: timeFromNanos(parseTime(payload))},
 			ID:          strconv.FormatInt(offset, 10) + "-" + strconv.FormatInt(int64(mg.vertexInstance.Replica), 10),
-			Key:         key,
+			Keys:        []string{key},
 		},
 		Body: isb.Body{Payload: payload},
 	}

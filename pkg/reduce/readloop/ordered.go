@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -80,15 +81,17 @@ func (of *orderedForwarder) insertTask(t *task) {
 }
 
 // schedulePnF creates and schedules the PnF routine.
-func (of *orderedForwarder) schedulePnF(ctx context.Context,
+func (of *orderedForwarder) schedulePnF(
+	ctx context.Context,
 	udf applier.ReduceApplier,
 	pbq pbq.Reader,
 	partitionID partition.ID,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
-	pw map[string]publish.Publisher) *task {
+	pw map[string]publish.Publisher,
+	idleManager *wmb.IdleManager) *task {
 
-	pf := pnf.NewProcessAndForward(ctx, of.vertexName, of.pipelineName, of.vertexReplica, partitionID, udf, pbq, toBuffers, whereToDecider, pw)
+	pf := pnf.NewProcessAndForward(ctx, of.vertexName, of.pipelineName, of.vertexReplica, partitionID, udf, pbq, toBuffers, whereToDecider, pw, idleManager)
 	doneCh := make(chan struct{})
 	t := &task{
 		doneCh: doneCh,
@@ -105,7 +108,7 @@ func (of *orderedForwarder) schedulePnF(ctx context.Context,
 	return t
 }
 
-// reduceOp invokes the reduce function. The reducer is a long running function since we stream in the data and it has
+// reduceOp invokes the reduce function. The reducer is a long-running function since we stream in the data and it has
 // to wait for the close-of-book on the PBQ to materialize the result.
 func (of *orderedForwarder) reduceOp(ctx context.Context, t *task) {
 	start := time.Now()

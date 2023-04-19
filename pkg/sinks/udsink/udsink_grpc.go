@@ -66,7 +66,7 @@ func (u *UDSgRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *UDSgRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.Datum) []error {
+func (u *UDSgRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.DatumRequest) []error {
 	errs := make([]error, len(dList))
 
 	responseList, err := u.client.SinkFn(ctx, dList)

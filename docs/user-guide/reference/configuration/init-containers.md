@@ -21,7 +21,7 @@ spec:
           image: my-function:latest
 ```
 
-The following example shows how to use init-containers and [`volumes`](./volumes.md) together to provide a `udf` container files on startup.
+The following example shows how to use init-containers and [`volumes`](volumes.md) together to provide a `udf` container files on startup.
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline

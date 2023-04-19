@@ -39,7 +39,38 @@ type Edge struct {
 }
 
 type ForwardConditions struct {
-	KeyIn []string `json:"keyIn" protobuf:"bytes,1,rep,name=keyIn"`
+	// Tags used to specify tags for conditional forwarding
+	Tags *TagConditions `json:"tags" protobuf:"bytes,1,opt,name=tags"`
+}
+
+type LogicOperator string
+
+const (
+	LogicOperatorAnd LogicOperator = "and"
+	LogicOperatorOr  LogicOperator = "or"
+	LogicOperatorNot LogicOperator = "not"
+)
+
+type TagConditions struct {
+	// Operator specifies the type of operation that should be used for conditional forwarding
+	// value could be "and", "or", "not"
+	// +kubebuilder:validation:Enum=and;or;not
+	// +optional
+	Operator *LogicOperator `json:"operator" protobuf:"bytes,1,opt,name=operator"`
+	// Values tag values for conditional forwarding
+	Values []string `json:"values" protobuf:"bytes,2,rep,name=values"`
+}
+
+func (tc TagConditions) GetOperator() LogicOperator {
+	if tc.Operator == nil {
+		return LogicOperatorOr
+	}
+	switch *tc.Operator {
+	case LogicOperatorOr, LogicOperatorNot, LogicOperatorAnd:
+		return *tc.Operator
+	default:
+		return LogicOperatorOr
+	}
 }
 
 type EdgeLimits struct {

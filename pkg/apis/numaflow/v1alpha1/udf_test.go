@@ -63,6 +63,7 @@ func TestUDF_getContainers(t *testing.T) {
 		imagePullPolicy: corev1.PullAlways,
 	})
 	assert.Equal(t, testImagePullPolicy, c[1].ImagePullPolicy)
+	assert.True(t, c[1].LivenessProbe != nil)
 }
 
 func Test_getUDFContainer(t *testing.T) {
@@ -88,6 +89,7 @@ func Test_getUDFContainer(t *testing.T) {
 		assert.Contains(t, c.Args, "my-arg")
 		assert.Equal(t, 1, len(c.EnvFrom))
 		assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
+		assert.True(t, c.LivenessProbe != nil)
 	})
 
 	t.Run("with built-in functions", func(t *testing.T) {
@@ -119,6 +121,7 @@ func Test_getUDFContainer(t *testing.T) {
 		}
 		assert.Contains(t, envNames, "e")
 		assert.NotContains(t, envNames, "a")
+		assert.True(t, c.LivenessProbe != nil)
 	})
 
 	t.Run("with built-in functions, with multiple KWArgs", func(t *testing.T) {

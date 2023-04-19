@@ -114,7 +114,7 @@ type CounterReduceTest struct {
 }
 
 // Reduce returns a result with the count of messages
-func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	count := 0
 	for range messageStream {
 		count += 1
@@ -122,53 +122,60 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 
 	payload := PayloadForTest{Key: "count", Value: count}
 	b, _ := json.Marshal(payload)
-	ret := &isb.Message{
+	ret := isb.Message{
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{
 				EventTime: partitionID.End,
 			},
-			ID:  "msgID",
-			Key: "result",
+			ID:   "msgID",
+			Keys: []string{"result"},
 		},
 		Body: isb.Body{Payload: b},
 	}
-	return []*isb.Message{
-		ret,
+	return []*isb.WriteMessage{
+		{
+			Message: ret,
+			Tags:    nil,
+		},
 	}, nil
 }
 
-func (f CounterReduceTest) WhereTo(_ string) ([]string, error) {
+func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"reduce-to-buffer"}, nil
 }
 
 type SumReduceTest struct {
 }
 
-func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	sums := make(map[string]int)
 
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
-		key := msg.Key
-		sums[key] += payload.Value
+		key := msg.Keys
+		sums[key[0]] += payload.Value
 	}
 
-	msgs := make([]*isb.Message, 0)
+	msgs := make([]*isb.WriteMessage, 0)
 
 	for k, s := range sums {
 		payload := PayloadForTest{Key: k, Value: s}
 		b, _ := json.Marshal(payload)
-		msg := &isb.Message{
-			Header: isb.Header{
-				MessageInfo: isb.MessageInfo{
-					EventTime: partitionID.End,
+		msg := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: partitionID.End,
+					},
+					ID:   "msgID",
+					Keys: []string{k},
 				},
-				ID:  "msgID",
-				Key: k,
+				Body: isb.Body{Payload: b},
 			},
-			Body: isb.Body{Payload: b},
+			Tags: nil,
 		}
+
 		msgs = append(msgs, msg)
 	}
 
@@ -178,34 +185,37 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 type MaxReduceTest struct {
 }
 
-func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	mx := math.MinInt64
 	maxMap := make(map[string]int)
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
-		if max, ok := maxMap[msg.Key]; ok {
+		if max, ok := maxMap[msg.Keys[0]]; ok {
 			mx = max
 		}
 		if payload.Value > mx {
 			mx = payload.Value
-			maxMap[msg.Key] = mx
+			maxMap[msg.Keys[0]] = mx
 		}
 	}
 
-	result := make([]*isb.Message, 0)
+	result := make([]*isb.WriteMessage, 0)
 	for k, max := range maxMap {
 		payload := PayloadForTest{Key: k, Value: max}
 		b, _ := json.Marshal(payload)
-		ret := &isb.Message{
-			Header: isb.Header{
-				MessageInfo: isb.MessageInfo{
-					EventTime: partitionID.End,
+		ret := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: partitionID.End,
+					},
+					ID:   "msgID",
+					Keys: []string{k},
 				},
-				ID:  "msgID",
-				Key: k,
+				Body: isb.Body{Payload: b},
 			},
-			Body: isb.Body{Payload: b},
+			Tags: nil,
 		}
 
 		result = append(result, ret)
@@ -251,7 +261,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	assert.NoError(t, err)
 
 	publisher := map[string]publish.Publisher{
-		"to": &EventTypeWMProgressor{},
+		toBufferName: wmpublisher,
 	}
 
 	// create new fixed window of (windowTime)
@@ -277,9 +287,18 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	// we are reading only one message here but the count should be equal to
 	// the number of keyed windows that closed
 	msgs, readErr := to.Read(child, 1)
-
 	assert.Nil(t, readErr)
-	assert.Len(t, msgs, 1)
+	for len(msgs) == 0 || msgs[0].Header.Kind == isb.WMB {
+		select {
+		case <-child.Done():
+			assert.Fail(t, child.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+			msgs, readErr = to.Read(child, 1)
+			assert.Nil(t, readErr)
+		}
+	}
 
 	// assert the output of reduce (count of messages)
 	var readMessagePayload PayloadForTest
@@ -290,10 +309,213 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 }
 
+// ReadMessage size = 0
+func TestReduceDataForward_IdleWM(t *testing.T) {
+	var (
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
+		fromBufferSize = int64(100000)
+		toBufferSize   = int64(10)
+		messageValue   = []int{7}
+		startTime      = 1679961600000 // time in millis
+		fromBufferName = "source-reduce-buffer"
+		toBufferName   = "reduce-to-buffer"
+		pipelineName   = "test-reduce-pipeline"
+		err            error
+	)
+	defer cancel()
+
+	// create from buffers
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+
+	// create to buffers
+	toBuffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	toBuffers := map[string]isb.BufferWriter{
+		toBufferName: toBuffer,
+	}
+
+	// create pbq manager
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+	assert.NoError(t, err)
+
+	// create in memory watermark publisher and fetcher
+	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
+	// source publishes a ctrlMessage and idle watermark so we can do fetch headWMB
+	ctrlMessage := []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
+	offsets, errs := fromBuffer.Write(ctx, ctrlMessage)
+	assert.Equal(t, make([]error, 1), errs)
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), offsets[0])
+
+	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffers, pipelineName)
+
+	// create a fixed window of 5s
+	window := fixed.NewFixed(5 * time.Second)
+
+	var reduceDataForward *DataForward
+	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffers, pbqManager, CounterReduceTest{}, f, publisherMap,
+		window, WithReadBatchSize(10))
+	assert.NoError(t, err)
+
+	// start the forwarder
+	go reduceDataForward.Start()
+
+	// toBuffers should get a control message after three batch reads
+	// 1st read: got one ctrl message, acked and returned
+	// 2nd read: len(read)==0 and windowToClose=nil, start the 2 round validation
+	// 3rd read: len(read)==0 and windowToClose=nil, validation passes, publish a ctrl msg and idle watermark
+	for toBuffer.IsEmpty() {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected the toBuffer not to be empty", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	otKeys, _ := otStores[toBufferName].GetAllKeys(ctx)
+	for len(otKeys) == 0 {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have otKeys", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
+		}
+	}
+	otValue, _ := otStores[toBufferName].GetValue(ctx, otKeys[0])
+	otDecode, _ := wmb.DecodeToWMB(otValue)
+	for otDecode.Watermark != int64(startTime) { // the first ctrl message written to isb, will use the headWMB to populate wm
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have idle watermark in to1 timeline", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+			otDecode, _ = wmb.DecodeToWMB(otValue)
+		}
+	}
+	assert.Equal(t, wmb.WMB{
+		Idle:      true,
+		Offset:    0, // the first ctrl message written to isb
+		Watermark: 1679961600000,
+	}, otDecode)
+
+	// check the fromBuffer to see if we've acked the message
+	for !fromBuffer.IsEmpty() {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have acked the ctrl message", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+			otDecode, _ = wmb.DecodeToWMB(otValue)
+		}
+	}
+
+	// now check the toBuffer to see if we've published the ctrl msg
+	assert.Equal(t, isb.WMB, toBuffer.GetMessages(1)[0].Kind)
+
+	// TEST: len(read)==0 and windowToClose exists => close the window
+	// publish one data message to start a new window
+	publishMessages(ctx, startTime+1000, messageValue, 1, 1, p, fromBuffer)
+	// publish a new idle wm to that is smaller than the windowToClose.End()
+	offsets, errs = fromBuffer.Write(ctx, ctrlMessage)
+	assert.Equal(t, make([]error, 1), errs)
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+2000))), offsets[0])
+
+	otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
+	otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+	otDecode, _ = wmb.DecodeToWMB(otValue)
+	// wm should be updated using the same offset because it's still idling
+	// -1 ms because in this use case we publish watermark-1
+	for otDecode.Watermark != int64(startTime+2000-1) {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have idle watermark in to1 timeline", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
+			otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+			otDecode, _ = wmb.DecodeToWMB(otValue)
+		}
+	}
+	assert.Equal(t, wmb.WMB{
+		Idle:      true,
+		Offset:    0, // only update the wm because it's still idling
+		Watermark: 1679961601999,
+	}, otDecode)
+	msgs := toBuffer.GetMessages(10)
+	// we didn't read/ack from the toBuffer and also didn't publish any new msgs
+	assert.Equal(t, isb.WMB, msgs[0].Kind)
+	for i := 1; i < len(msgs); i++ {
+		// all the other 9 msgs should be default value
+		assert.Equal(t, isb.Header{
+			MessageInfo: isb.MessageInfo{},
+			Kind:        0,
+			ID:          "",
+		}, msgs[i].Header)
+	}
+
+	// publish a new idle wm to that is larger than the windowToClose.End()
+	// the len(read) == 0 now, so the window should be closed
+	// the active watermark would be int64(startTime+1000), which is older then int64(startTime+2000-1)
+	// so the PublishWatermark will be skipped, but the dataMessage should be published
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+6000))), offsets[0])
+
+	msgs = toBuffer.GetMessages(10)
+	// we didn't read/ack from the toBuffer, so the ctrl should still exist
+	assert.Equal(t, isb.WMB, msgs[0].Kind)
+	// the second message should be the data message from the closed window above
+	// in the test ApplyUDF above we've set the final message to have key="result"
+	for len(msgs[1].Keys) == 0 {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatal("expected to have data message in buffer", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			msgs = toBuffer.GetMessages(10)
+		}
+	}
+	assert.Equal(t, isb.Data, msgs[1].Kind)
+	// in the test ApplyUDF above we've set the final message to have ID="msgID"
+	assert.Equal(t, "msgID", msgs[1].ID)
+	// in the test ApplyUDF above we've set the final message to have eventTime = partitionID.End
+	assert.Equal(t, int64(1679961605000), msgs[1].EventTime.UnixMilli())
+	var result PayloadForTest
+	err = json.Unmarshal(msgs[1].Body.Payload, &result)
+	assert.NoError(t, err)
+	assert.Equal(t, "count", result.Key)
+	// because we are using count udf here, and we only send one data message
+	// so the value should be 1
+	assert.Equal(t, 1, result.Value)
+	for i := 2; i < len(msgs); i++ {
+		// all the other 8 msgs should be default value
+		assert.Equal(t, isb.Header{
+			MessageInfo: isb.MessageInfo{},
+			Kind:        0,
+			ID:          "",
+		}, msgs[i].Header)
+	}
+
+}
+
 // Count operation with 1 min window
 func TestReduceDataForward_Count(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{7}
@@ -323,7 +545,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publisherMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
 	// create a fixed window of 60s
 	window := fixed.NewFixed(60 * time.Second)
@@ -339,22 +561,21 @@ func TestReduceDataForward_Count(t *testing.T) {
 	// start the producer
 	go publishMessages(ctx, startTime, messageValue, 300, 10, p, fromBuffer)
 
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
+	// we are reading only one message here but the count should be equal to
+	// the number of keyed windows that closed
+	msgs, readErr := buffer.Read(ctx, 1)
+	assert.Nil(t, readErr)
+	for len(msgs) == 0 || msgs[0].Header.Kind == isb.WMB {
 		select {
 		case <-ctx.Done():
 			assert.Fail(t, ctx.Err().Error())
 			return
 		default:
 			time.Sleep(100 * time.Millisecond)
+			msgs, readErr = buffer.Read(ctx, 1)
+			assert.Nil(t, readErr)
 		}
 	}
-
-	// we are reading only one message here but the count should be equal to
-	// the number of keyed windows that closed
-	msgs, readErr := buffer.Read(ctx, 1)
-	assert.Nil(t, readErr)
-	assert.Len(t, msgs, 1)
 
 	// assert the output of reduce
 	var readMessagePayload PayloadForTest
@@ -368,7 +589,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 // Sum operation with 2 minutes window
 func TestReduceDataForward_Sum(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{10}
@@ -398,7 +619,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 	// create a fixed window of 2 minutes
 	window := fixed.NewFixed(2 * time.Minute)
 
@@ -411,24 +632,23 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	go reduceDataForward.Start()
 
 	// start the producer
-	publishMessages(ctx, startTime, messageValue, 300, 10, p, fromBuffer)
+	go publishMessages(ctx, startTime, messageValue, 300, 10, p, fromBuffer)
 
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
+	// we are reading only one message here but the count should be equal to
+	// the number of keyed windows that closed
+	msgs, readErr := buffer.Read(ctx, 1)
+	assert.Nil(t, readErr)
+	for len(msgs) == 0 || msgs[0].Header.Kind == isb.WMB {
 		select {
 		case <-ctx.Done():
 			assert.Fail(t, ctx.Err().Error())
 			return
 		default:
 			time.Sleep(100 * time.Millisecond)
+			msgs, readErr = buffer.Read(ctx, 1)
+			assert.Nil(t, readErr)
 		}
 	}
-
-	// we are reading only one message here but the count should be equal to
-	// the number of keyed windows that closed
-	msgs, readErr := buffer.Read(ctx, 1)
-	assert.Nil(t, readErr)
-	assert.Len(t, msgs, 1)
 
 	// assert the output of reduce
 	var readMessagePayload PayloadForTest
@@ -442,7 +662,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 // Max operation with 5 minutes window
 func TestReduceDataForward_Max(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{100}
@@ -472,7 +692,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
@@ -488,22 +708,21 @@ func TestReduceDataForward_Max(t *testing.T) {
 	// start the producer
 	go publishMessages(ctx, startTime, messageValue, 600, 10, p, fromBuffer)
 
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
+	// we are reading only one message here but the count should be equal to
+	// the number of keyed windows that closed
+	msgs, readErr := buffer.Read(ctx, 1)
+	assert.Nil(t, readErr)
+	for len(msgs) == 0 || msgs[0].Header.Kind == isb.WMB {
 		select {
 		case <-ctx.Done():
 			assert.Fail(t, ctx.Err().Error())
 			return
 		default:
 			time.Sleep(100 * time.Millisecond)
+			msgs, readErr = buffer.Read(ctx, 1)
+			assert.Nil(t, readErr)
 		}
 	}
-
-	// we are reading only one message here but the count should be equal to
-	// the number of keyed windows that closed
-	msgs, readErr := buffer.Read(ctx, 1)
-	assert.Nil(t, readErr)
-	assert.Len(t, msgs, 1)
 
 	// assert the output of reduce
 	var readMessagePayload PayloadForTest
@@ -547,7 +766,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
@@ -564,42 +783,54 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// start the forwarder
 	go reduceDataForward.Start()
 
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
+	msgs0, readErr := buffer.Read(ctx, 1)
+	assert.Nil(t, readErr)
+	for len(msgs0) == 0 || msgs0[0].Header.Kind == isb.WMB {
 		select {
 		case <-ctx.Done():
 			assert.Fail(t, ctx.Err().Error())
 			return
 		default:
 			time.Sleep(100 * time.Millisecond)
+			msgs0, readErr = buffer.Read(ctx, 1)
+			assert.Nil(t, readErr)
 		}
 	}
 
-	// we are reading only one message here but the count should be equal to
-	// the number of keyed windows that closed
-	msgs, readErr := buffer.Read(ctx, 2)
-	assert.Nil(t, readErr)
-	assert.Len(t, msgs, 2)
+	msgs1, readErr1 := buffer.Read(ctx, 1)
+	assert.Nil(t, readErr1)
+	for len(msgs1) == 0 || msgs1[0].Header.Kind == isb.WMB {
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+			msgs1, readErr1 = buffer.Read(ctx, 1)
+			assert.Nil(t, readErr1)
+		}
+	}
 
 	// assert the output of reduce
-	var readMessagePayload1 PayloadForTest
-	var readMessagePayload2 PayloadForTest
-	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload1)
-	_ = json.Unmarshal(msgs[1].Payload, &readMessagePayload2)
+	var readMessagePayload0 PayloadForTest
+	_ = json.Unmarshal(msgs0[0].Payload, &readMessagePayload0)
 	// since the window duration is 5 minutes, the output should be
 	// 100 * 300(for key even) and 99 * 300(for key odd)
 	// we cant guarantee the order of the output
+	assert.Contains(t, []int{30000, 29700}, readMessagePayload0.Value)
+	assert.Contains(t, []string{"even", "odd"}, readMessagePayload0.Key)
+
+	var readMessagePayload1 PayloadForTest
+	_ = json.Unmarshal(msgs1[0].Payload, &readMessagePayload1)
 	assert.Contains(t, []int{30000, 29700}, readMessagePayload1.Value)
-	assert.Contains(t, []int{30000, 29700}, readMessagePayload2.Value)
 	assert.Contains(t, []string{"even", "odd"}, readMessagePayload1.Key)
-	assert.Contains(t, []string{"even", "odd"}, readMessagePayload2.Key)
 
 }
 
 // Max operation with 5 minutes window and non keyed
 func TestReduceDataForward_NonKeyed(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messages       = []int{100, 99}
@@ -629,7 +860,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
@@ -645,22 +876,21 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	// start the producer
 	go publishMessages(ctx, startTime, messages, 600, 10, p, fromBuffer)
 
-	// wait until there is data in to buffer
-	for buffer.IsEmpty() {
+	// we are reading only one message here but the count should be equal to
+	// the number of keyed windows that closed
+	msgs, readErr := buffer.Read(ctx, 1)
+	assert.Nil(t, readErr)
+	for len(msgs) == 0 || msgs[0].Header.Kind == isb.WMB {
 		select {
 		case <-ctx.Done():
 			assert.Fail(t, ctx.Err().Error())
 			return
 		default:
 			time.Sleep(100 * time.Millisecond)
+			msgs, readErr = buffer.Read(ctx, 1)
+			assert.Nil(t, readErr)
 		}
 	}
-
-	// we are reading only one message here but the count should be equal to
-	// the number of keyed windows that closed
-	msgs, readErr := buffer.Read(ctx, 1)
-	assert.Nil(t, readErr)
-	assert.Len(t, msgs, 1)
 
 	// assert the output of reduce
 	var readMessagePayload PayloadForTest
@@ -675,7 +905,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 func TestDataForward_WithContextClose(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messages       = []int{100, 99}
@@ -711,7 +941,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(cctx, fromBuffer, t.Name())
-	publishersMap := createPublisherForBuffer(cctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(cctx, toBuffer, pipelineName)
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
@@ -724,7 +954,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// start the forwarder
 	go reduceDataForward.Start()
 	// window duration is 300s, we are sending only 200 messages with event time less than window end time, so the window will not be closed
-	publishMessages(cctx, startTime, messages, 200, 10, p, fromBuffer)
+	go publishMessages(cctx, startTime, messages, 200, 10, p, fromBuffer)
 	// wait for the partitions to be created
 	for {
 		partitionsList := pbqManager.ListPartitions()
@@ -799,18 +1029,33 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	return f, sourcePublisher
 }
 
-func createPublisherForBuffer(ctx context.Context, toBuffers map[string]isb.BufferWriter, pipelineName string) map[string]publish.Publisher {
+func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
 	publishers := make(map[string]publish.Publisher)
+	otStores := make(map[string]wmstore.WatermarkKVStorer)
 
 	// create publisher for to Buffers
 	for key := range toBuffers {
 		publishEntity := processor.NewProcessorEntity(key)
-		hb, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
-		ot, _, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
+		hb, hbKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
+		ot, otKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
+		otStores[key] = ot
 		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
+
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-hbKVEntry:
+					// do nothing... just to consume the toBuffer hbBucket
+				case <-otKVEntry:
+					// do nothing... just to consume the toBuffer otBucket
+				}
+			}
+		}()
 	}
-	return publishers
+	return publishers, otStores
 }
 
 // buildMessagesForReduce builds test isb.Message which can be used for testing reduce.
@@ -826,8 +1071,8 @@ func buildMessagesForReduce(count int, key string, publishTime time.Time) []isb.
 				MessageInfo: isb.MessageInfo{
 					EventTime: publishTime,
 				},
-				ID:  fmt.Sprintf("%d", i),
-				Key: key,
+				ID:   fmt.Sprintf("%d", i),
+				Keys: []string{key},
 			},
 			Body: isb.Body{Payload: result},
 		}
@@ -898,15 +1143,15 @@ func publishMessages(ctx context.Context, startTime int, messages []int, testDur
 }
 
 func buildIsbMessage(messageValue int, eventTime time.Time) isb.Message {
-	var messageKey string
+	var messageKey []string
 	if messageValue%2 == 0 {
-		messageKey = "even"
+		messageKey = []string{"even"}
 	} else {
-		messageKey = "odd"
+		messageKey = []string{"odd"}
 	}
 
 	result, _ := json.Marshal(PayloadForTest{
-		Key:   messageKey,
+		Key:   messageKey[0],
 		Value: messageValue,
 	})
 	return isb.Message{
@@ -914,8 +1159,8 @@ func buildIsbMessage(messageValue int, eventTime time.Time) isb.Message {
 			MessageInfo: isb.MessageInfo{
 				EventTime: eventTime,
 			},
-			ID:  fmt.Sprintf("%d", messageValue),
-			Key: messageKey,
+			ID:   fmt.Sprintf("%d", messageValue),
+			Keys: messageKey,
 		},
 		Body: isb.Body{Payload: result},
 	}

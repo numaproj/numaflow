@@ -111,6 +111,13 @@ func connect(kafkaSink *dfv1.KafkaSink) (sarama.AsyncProducer, error) {
 			config.Net.TLS.Config = c
 		}
 	}
+	if s := kafkaSink.SASL; s != nil {
+		if sasl, err := util.GetSASL(s); err != nil {
+			return nil, err
+		} else {
+			config.Net.SASL = *sasl
+		}
+	}
 	config.Producer.Return.Successes = true
 	config.Producer.Return.Errors = true
 	producer, err := sarama.NewAsyncProducer(kafkaSink.Brokers, config)
@@ -175,7 +182,7 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 		message := &sarama.ProducerMessage{
 			Topic:    tk.topic,
 			Value:    sarama.ByteEncoder(msg.Payload),
-			Metadata: index, // Use metadata to identify if it succeedes or fails in the async return.
+			Metadata: index, // Use metadata to identify if it succeeds or fails in the async return.
 		}
 		tk.producer.Input() <- message
 	}

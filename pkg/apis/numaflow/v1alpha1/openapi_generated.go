@@ -45,6 +45,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                    schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions":              schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function":                       schema_pkg_apis_numaflow_v1alpha1_Function(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI":                         schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource":                schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetDaemonDeploymentReq":         schema_pkg_apis_numaflow_v1alpha1_GetDaemonDeploymentReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetJetStreamServiceSpecReq":     schema_pkg_apis_numaflow_v1alpha1_GetJetStreamServiceSpecReq(ref),
@@ -79,12 +80,16 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisBufferService":             schema_pkg_apis_numaflow_v1alpha1_RedisBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig":                    schema_pkg_apis_numaflow_v1alpha1_RedisConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings":                  schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisStreamsSource":             schema_pkg_apis_numaflow_v1alpha1_RedisStreamsSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                           schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                      schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                          schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink":                           schema_pkg_apis_numaflow_v1alpha1_Sink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow":                  schema_pkg_apis_numaflow_v1alpha1_SlidingWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source":                         schema_pkg_apis_numaflow_v1alpha1_Source(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Status":                         schema_pkg_apis_numaflow_v1alpha1_Status(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS":                            schema_pkg_apis_numaflow_v1alpha1_TLS(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions":                  schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates":                      schema_pkg_apis_numaflow_v1alpha1_Templates(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer":                    schema_pkg_apis_numaflow_v1alpha1_Transformer(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF":                            schema_pkg_apis_numaflow_v1alpha1_UDF(ref),
@@ -984,24 +989,18 @@ func schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref common.ReferenceCal
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"keyIn": {
+					"tags": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
+							Description: "Tags used to specify tags for conditional forwarding",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions"),
 						},
 					},
 				},
-				Required: []string{"keyIn"},
+				Required: []string{"tags"},
 			},
 		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions"},
 	}
 }
 
@@ -1051,6 +1050,67 @@ func schema_pkg_apis_numaflow_v1alpha1_Function(ref common.ReferenceCallback) co
 				Required: []string{"name"},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "GSSAPI represents a SASL GSSAPI config",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"serviceName": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"realm": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"usernameSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UsernameSecret refers to the secret that contains the username",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"authType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"passwordSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PasswordSecret refers to the secret that contains the password",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"keytabSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KeytabSecret refers to the secret that contains the keytab",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"kerberosConfigSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KerberosConfigSecret refers to the secret that contains the kerberos config",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+				},
+				Required: []string{"serviceName", "realm", "usernameSecret", "authType"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.SecretKeySelector"},
 	}
 }
 
@@ -1972,7 +2032,7 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref common.Referen
 					},
 					"encryption": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Whether encrypt the data at rest, defaults to false Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail Toggling the value will impact encypting/decrypting existing messages.",
+							Description: "Whether encrypt the data at rest, defaults to false Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail Toggling the value will impact encrypting/decrypting existing messages.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -2219,12 +2279,18 @@ func schema_pkg_apis_numaflow_v1alpha1_KafkaSink(ref common.ReferenceCallback) c
 							Format: "",
 						},
 					},
+					"sasl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL"),
+						},
+					},
 				},
 				Required: []string{"topic"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
 	}
 }
 
@@ -2273,12 +2339,18 @@ func schema_pkg_apis_numaflow_v1alpha1_KafkaSource(ref common.ReferenceCallback)
 							Format: "",
 						},
 					},
+					"sasl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL"),
+						},
+					},
 				},
 				Required: []string{"topic"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
 	}
 }
 
@@ -2744,14 +2816,14 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 					},
 					"bufferMaxLength": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertice as only they do buffer write. It can be overridden by the settings in vertex limits.",
+							Description: "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertices as only they do buffer write. It can be overridden by the settings in vertex limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"bufferUsageLimit": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertice as only they do buffer write. It will be overridden by the settings in vertex limits.",
+							Description: "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertices as only they do buffer write. It will be overridden by the settings in vertex limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3093,6 +3165,156 @@ func schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref common.ReferenceCallbac
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_RedisStreamsSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Redis URL",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sentinelUrl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Sentinel URL, will be ignored if Redis URL is provided",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"masterName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Only required when Sentinel is used",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"user": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Redis user",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"password": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Redis password secret selector",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"sentinelPassword": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Sentinel password secret selector",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"stream": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"consumerGroup": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"readFromBeginning": {
+						SchemaProps: spec.SchemaProps{
+							Description: "if true, stream starts being read from the beginning; otherwise, the latest",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
+						},
+					},
+				},
+				Required: []string{"stream", "consumerGroup", "readFromBeginning"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS", "k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_SASL(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"mechanism": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASL mechanism to use",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"gssapi": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GSSAPI contains the kerberos config",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI"),
+						},
+					},
+					"plain": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASLPlain contains the sasl plain config",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"),
+						},
+					},
+				},
+				Required: []string{"mechanism"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"userSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UserSecret refers to the secret that contains the user",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"passwordSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PasswordSecret refers to the secret that contains the password",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"handshake": {
+						SchemaProps: spec.SchemaProps{
+							Default: false,
+							Type:    []string{"boolean"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"userSecret", "handshake"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3261,6 +3483,11 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource"),
 						},
 					},
+					"redisStreams": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisStreamsSource"),
+						},
+					},
 					"transformer": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"),
@@ -3270,7 +3497,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisStreamsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
 	}
 }
 
@@ -3344,6 +3571,41 @@ func schema_pkg_apis_numaflow_v1alpha1_TLS(ref common.ReferenceCallback) common.
 		},
 		Dependencies: []string{
 			"k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"operator": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Operator specifies the type of operation that should be used for conditional forwarding value could be \"and\", \"or\", \"not\"",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"values": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Values tag values for conditional forwarding",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"values"},
+			},
+		},
 	}
 }
 

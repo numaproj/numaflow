@@ -17709,15 +17709,13 @@
     },
     "io.numaproj.numaflow.v1alpha1.ForwardConditions": {
       "properties": {
-        "keyIn": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "tags": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TagConditions",
+          "description": "Tags used to specify tags for conditional forwarding"
         }
       },
       "required": [
-        "keyIn"
+        "tags"
       ],
       "type": "object"
     },
@@ -17741,6 +17739,44 @@
       },
       "required": [
         "name"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.GSSAPI": {
+      "description": "GSSAPI represents a SASL GSSAPI config",
+      "properties": {
+        "authType": {
+          "description": "valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH",
+          "type": "string"
+        },
+        "kerberosConfigSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "KerberosConfigSecret refers to the secret that contains the kerberos config"
+        },
+        "keytabSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "KeytabSecret refers to the secret that contains the keytab"
+        },
+        "passwordSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "PasswordSecret refers to the secret that contains the password"
+        },
+        "realm": {
+          "type": "string"
+        },
+        "serviceName": {
+          "type": "string"
+        },
+        "usernameSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "UsernameSecret refers to the secret that contains the username"
+        }
+      },
+      "required": [
+        "serviceName",
+        "realm",
+        "usernameSecret",
+        "authType"
       ],
       "type": "object"
     },
@@ -18181,7 +18217,7 @@
           "type": "string"
         },
         "encryption": {
-          "description": "Whether encrypt the data at rest, defaults to false Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail Toggling the value will impact encypting/decrypting existing messages.",
+          "description": "Whether encrypt the data at rest, defaults to false Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail Toggling the value will impact encrypting/decrypting existing messages.",
           "type": "boolean"
         },
         "imagePullSecrets": {
@@ -18382,6 +18418,10 @@
         "config": {
           "type": "string"
         },
+        "sasl": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASL",
+          "description": "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL."
+        },
         "tls": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
           "description": "TLS user to configure TLS connection for kafka broker TLS.enable=true default for TLS."
@@ -18408,6 +18448,10 @@
         },
         "consumerGroup": {
           "type": "string"
+        },
+        "sasl": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASL",
+          "description": "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL."
         },
         "tls": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
@@ -18671,12 +18715,12 @@
     "io.numaproj.numaflow.v1alpha1.PipelineLimits": {
       "properties": {
         "bufferMaxLength": {
-          "description": "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertice as only they do buffer write. It can be overridden by the settings in vertex limits.",
+          "description": "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertices as only they do buffer write. It can be overridden by the settings in vertex limits.",
           "format": "int64",
           "type": "integer"
         },
         "bufferUsageLimit": {
-          "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertice as only they do buffer write. It will be overridden by the settings in vertex limits.",
+          "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertices as only they do buffer write. It will be overridden by the settings in vertex limits.",
           "format": "int64",
           "type": "integer"
         },
@@ -18858,6 +18902,93 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.RedisStreamsSource": {
+      "properties": {
+        "consumerGroup": {
+          "type": "string"
+        },
+        "masterName": {
+          "description": "Only required when Sentinel is used",
+          "type": "string"
+        },
+        "password": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "Redis password secret selector"
+        },
+        "readFromBeginning": {
+          "description": "if true, stream starts being read from the beginning; otherwise, the latest",
+          "type": "boolean"
+        },
+        "sentinelPassword": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "Sentinel password secret selector"
+        },
+        "sentinelUrl": {
+          "description": "Sentinel URL, will be ignored if Redis URL is provided",
+          "type": "string"
+        },
+        "stream": {
+          "type": "string"
+        },
+        "tls": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS"
+        },
+        "url": {
+          "description": "Redis URL",
+          "type": "string"
+        },
+        "user": {
+          "description": "Redis user",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stream",
+        "consumerGroup",
+        "readFromBeginning"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.SASL": {
+      "properties": {
+        "gssapi": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GSSAPI",
+          "description": "GSSAPI contains the kerberos config"
+        },
+        "mechanism": {
+          "description": "SASL mechanism to use",
+          "type": "string"
+        },
+        "plain": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain",
+          "description": "SASLPlain contains the sasl plain config"
+        }
+      },
+      "required": [
+        "mechanism"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.SASLPlain": {
+      "properties": {
+        "handshake": {
+          "type": "boolean"
+        },
+        "passwordSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "PasswordSecret refers to the secret that contains the password"
+        },
+        "userSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "UserSecret refers to the secret that contains the user"
+        }
+      },
+      "required": [
+        "userSecret",
+        "handshake"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.Scale": {
       "description": "Scale defines the parameters for autoscaling.",
       "properties": {
@@ -18956,6 +19087,9 @@
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
         },
+        "redisStreams": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisStreamsSource"
+        },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
         }
@@ -18995,6 +19129,25 @@
           "type": "boolean"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.TagConditions": {
+      "properties": {
+        "operator": {
+          "description": "Operator specifies the type of operation that should be used for conditional forwarding value could be \"and\", \"or\", \"not\"",
+          "type": "string"
+        },
+        "values": {
+          "description": "Values tag values for conditional forwarding",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "values"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Templates": {

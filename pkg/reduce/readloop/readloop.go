@@ -37,12 +37,14 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -64,6 +66,7 @@ type ReadLoop struct {
 	whereToDecider        forward.ToWhichStepDecider
 	publishWatermark      map[string]publish.Publisher
 	udfInvocationTracking map[partition.ID]*task
+	idleManager           *wmb.IdleManager
 }
 
 // NewReadLoop initializes  and returns ReadLoop.
@@ -77,6 +80,7 @@ func NewReadLoop(ctx context.Context,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
+	idleManager *wmb.IdleManager,
 ) (*ReadLoop, error) {
 	op := newOrderedForwarder(ctx, vertexName, pipelineName, vr)
 
@@ -93,6 +97,7 @@ func NewReadLoop(ctx context.Context,
 		whereToDecider:        whereToDecider,
 		publishWatermark:      pw,
 		udfInvocationTracking: make(map[partition.ID]*task),
+		idleManager:           idleManager,
 	}
 
 	err := rl.Startup(ctx)
@@ -121,8 +126,8 @@ func (rl *ReadLoop) Startup(ctx context.Context) error {
 		// insert the window to the list of active windows, since the active window list is in-memory
 		keyedWindow, _ := rl.windower.InsertIfNotPresent(alignedKeyedWindow)
 
-		// add key to the window, so that when a new message with the watermark greater than
-		// the window end time comes, key will not be lost and the windows will be closed as expected
+		// add slots to the window, so that when a new message with the watermark greater than
+		// the window end time comes, slots will not be lost and the windows will be closed as expected
 		keyedWindow.AddSlot(p.Slot)
 
 		// create and invoke process and forward for the partition
@@ -177,8 +182,24 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 
 	for _, cw := range closedWindows {
 		partitions := cw.Partitions()
-		rl.closePartitions(partitions)
+		rl.ClosePartitions(partitions)
 		rl.log.Debugw("Closing Window", zap.Int64("windowStart", cw.StartTime().UnixMilli()), zap.Int64("windowEnd", cw.EndTime().UnixMilli()))
+	}
+
+	// solve Reduce withholding of watermark where we do not send WM until the window is closed.
+	if nextWin := rl.pbqManager.NextWindowToBeClosed(); nextWin != nil {
+		// minus 1 ms because if it's the same as the end time the window would have already been closed
+		if watermark := time.Time(wm).Add(-1 * time.Millisecond); nextWin.EndTime().After(watermark) {
+			// publish idle watermark so that the next vertex doesn't need to wait for the window to close to
+			// start processing data whose watermark is smaller than the endTime of the toBeClosed window
+
+			// this is to minimize watermark latency
+			for _, toBuffer := range rl.toBuffers {
+				if publisher, ok := rl.publishWatermark[toBuffer.GetName()]; ok {
+					idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, rl.idleManager, rl.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+				}
+			}
+		}
 	}
 }
 
@@ -189,18 +210,31 @@ func (rl *ReadLoop) writeMessagesToWindows(ctx context.Context, messages []*isb.
 
 messagesLoop:
 	for _, message := range messages {
-		// drop the late messages
+		// drop the late messages only if there is no window open
 		if message.IsLate {
-			rl.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
-			droppedMessagesCount.With(map[string]string{
-				metrics.LabelVertex:             rl.vertexName,
-				metrics.LabelPipeline:           rl.pipelineName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
-				LabelReason:                     "late"}).Inc()
+			// we should be able to get the late message in as long as there is an open window
+			nextWin := rl.pbqManager.NextWindowToBeClosed()
+			if nextWin != nil && message.EventTime.Before(nextWin.StartTime()) {
+				rl.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWin.StartTime()))
+				droppedMessagesCount.With(map[string]string{
+					metrics.LabelVertex:             rl.vertexName,
+					metrics.LabelPipeline:           rl.pipelineName,
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+					LabelReason:                     "late"}).Inc()
 
-			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
-			writtenMessages = append(writtenMessages, message)
-			continue
+				// mark it as a successfully written message as the message will be acked to avoid subsequent retries
+				writtenMessages = append(writtenMessages, message)
+				continue
+			} else {
+				var startTime time.Time
+				// bit of an overkill, but this is an unlikely path
+				if nextWin == nil {
+					startTime = time.Time{}
+				} else {
+					startTime = nextWin.StartTime()
+				}
+				rl.log.Debugw("Accepting the late message because COB has not happened yet", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", startTime))
+			}
 		}
 
 		// NOTE(potential bug): if we get a message where the event time is < watermark, skip processing the message.
@@ -384,7 +418,7 @@ func (rl *ReadLoop) associatePBQAndPnF(ctx context.Context, partitionID partitio
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
-		t := rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark)
+		t := rl.op.schedulePnF(ctx, rl.UDF, q, partitionID, rl.toBuffers, rl.whereToDecider, rl.publishWatermark, rl.idleManager)
 		rl.udfInvocationTracking[partitionID] = t
 		rl.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
@@ -418,8 +452,8 @@ func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKey
 	return kWindows
 }
 
-// closePartitions closes the partitions by invoking close-of-book (COB).
-func (rl *ReadLoop) closePartitions(partitions []partition.ID) {
+// ClosePartitions closes the partitions by invoking close-of-book (COB).
+func (rl *ReadLoop) ClosePartitions(partitions []partition.ID) {
 	for _, p := range partitions {
 		q := rl.pbqManager.GetPBQ(p)
 		rl.log.Infow("Close of book", zap.String("partitionID", p.String()))

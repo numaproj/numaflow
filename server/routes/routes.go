@@ -30,7 +30,7 @@ type SystemInfo struct {
 }
 
 func Routes(r *gin.Engine, sysinfo SystemInfo, baseHref string) {
-	r.GET("/healthz", func(c *gin.Context) {
+	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 	rGroup := r.Group("/api/v1")
@@ -64,4 +64,5 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics", handler.GetVertexMetrics)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks", handler.GetPipelineWatermarks)
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/status", handler.GetPipelineStatus)
+	r.GET("/namespaces", handler.ListNamespaces)
 }

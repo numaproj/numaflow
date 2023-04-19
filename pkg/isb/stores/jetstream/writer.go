@@ -90,7 +90,7 @@ func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClie
 
 func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 	labels := map[string]string{"buffer": jw.GetName()}
-	// Use a separated JetStrea context for status checker
+	// Use a separated JetStream context for status checker
 	js, err := jw.conn.JetStream()
 	if err != nil {
 		// Let it exit if it fails to start the status checker
@@ -164,7 +164,7 @@ func (jw *jetStreamWriter) Close() error {
 	return nil
 }
 
-// Rate returns the writting rate (tps) in the past seconds
+// Rate returns the writing rate (tps) in the past seconds
 func (jw *jetStreamWriter) Rate(_ context.Context, seconds int64) (float64, error) {
 	if !jw.opts.useWriteInfoAsRate {
 		return isb.RateNotAvailable, nil
@@ -325,5 +325,9 @@ func (w *writeOffset) Sequence() (int64, error) {
 }
 
 func (w *writeOffset) AckIt() error {
+	return fmt.Errorf("not supported")
+}
+
+func (w *writeOffset) NoAck() error {
 	return fmt.Errorf("not supported")
 }

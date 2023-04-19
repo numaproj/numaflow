@@ -307,7 +307,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 			processorManager: processorManager1,
 			want: wmb.WMB{
 				Idle:      true,
-				Offset:    28,
+				Offset:    24,
 				Watermark: 17,
 			},
 		},

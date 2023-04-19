@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -43,34 +44,37 @@ type PayloadForTest struct {
 type SumReduceTest struct {
 }
 
-func (s *SumReduceTest) WhereTo(_ string) ([]string, error) {
+func (s *SumReduceTest) WhereTo(_ []string, _ []string) ([]string, error) {
 	return []string{"reduce-buffer"}, nil
 }
 
-func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.Message, error) {
+func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	sums := make(map[string]int)
 
 	for msg := range messageStream {
 		var payload PayloadForTest
 		_ = json.Unmarshal(msg.Payload, &payload)
-		key := msg.Key
-		sums[key] += payload.Value
+		keys := msg.Keys
+		sums[keys[0]] += payload.Value
 	}
 
-	msgs := make([]*isb.Message, 0)
+	msgs := make([]*isb.WriteMessage, 0)
 
 	for k, s := range sums {
 		payload := PayloadForTest{Key: k, Value: s}
 		b, _ := json.Marshal(payload)
-		msg := &isb.Message{
-			Header: isb.Header{
-				MessageInfo: isb.MessageInfo{
-					EventTime: partitionID.End,
+		msg := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: partitionID.End,
+					},
+					ID:   "msgID",
+					Keys: []string{k},
 				},
-				ID:  "msgID",
-				Key: k,
+				Body: isb.Body{Payload: b},
 			},
-			Body: isb.Body{Payload: b},
+			Tags: nil,
 		}
 		msgs = append(msgs, msg)
 	}
@@ -139,7 +143,9 @@ func TestReadLoop_Startup(t *testing.T) {
 
 	window := fixed.NewFixed(60 * time.Second)
 
-	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", 0, &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw)
+	idleManager := wmb.NewIdleManager(len(toSteps))
+
+	rl, err := NewReadLoop(ctx, "reduce", "test-pipeline", 0, &SumReduceTest{}, pManager, window, toSteps, &SumReduceTest{}, pw, idleManager)
 	assert.NoError(t, err)
 	err = rl.Startup(ctx)
 	assert.NoError(t, err)
@@ -152,8 +158,8 @@ func TestReadLoop_Startup(t *testing.T) {
 					EventTime: time.Unix(300, 0),
 					IsLate:    false,
 				},
-				ID:  "",
-				Key: "",
+				ID:   "",
+				Keys: []string{""},
 			},
 			Body: isb.Body{},
 		},
@@ -207,8 +213,8 @@ func createStoreMessages(_ context.Context, key string, value int, eventTime tim
 					MessageInfo: isb.MessageInfo{
 						EventTime: eventTime,
 					},
-					ID:  fmt.Sprintf("%d", value+1),
-					Key: key,
+					ID:   fmt.Sprintf("%d", value+1),
+					Keys: []string{key},
 				},
 				Body: isb.Body{Payload: result},
 			},

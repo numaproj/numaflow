@@ -89,16 +89,20 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		req := &functionpb.Datum{
-			Key:       "test_success_key",
+		req := &functionpb.DatumRequest{
+			Keys:      []string{"test_success_key"},
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169600, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+			Metadata: &functionpb.Metadata{
+				Id:           "test_id",
+				NumDelivered: 1,
+			},
 		}
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumResponseList{
+			Elements: []*functionpb.DatumResponse{
 				{
-					Key:   "test_success_key",
+					Keys:  []string{"test_success_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -120,18 +124,21 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169600, 0),
 					},
-					ID:  "test_id",
-					Key: `test_success_key`,
+					ID:   "test_id",
+					Keys: []string{"test_success_key"},
 				},
 				Body: isb.Body{
 					Payload: []byte(`forward_message`),
 				},
 			},
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
+			Metadata: isb.MessageMetadata{
+				NumDelivered: 1,
+			},
 		},
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, req.Key, string(got[0].Key))
+		assert.Equal(t, req.Keys, got[0].Keys)
 		assert.Equal(t, req.Value, got[0].Payload)
 	})
 
@@ -140,11 +147,14 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		req := &functionpb.Datum{
-			Key:       "test_error_key",
+		req := &functionpb.DatumRequest{
+			Keys:      []string{"test_error_key"},
 			Value:     []byte(`forward_message`),
 			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
 			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+			Metadata: &functionpb.Metadata{
+				Id: "test_id",
+			},
 		}
 		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
 
@@ -164,8 +174,8 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:  "test_id",
-					Key: `test_error_key`,
+					ID:   "test_id",
+					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{
 					Payload: []byte(`forward_message`),
@@ -198,23 +208,23 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
 	mockClient.EXPECT().MapFn(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, datum *functionpb.Datum, opts ...grpc.CallOption) (*functionpb.DatumList, error) {
+		func(_ context.Context, datum *functionpb.DatumRequest, opts ...grpc.CallOption) (*functionpb.DatumResponseList, error) {
 			var originalValue testutils.PayloadForTest
 			_ = json.Unmarshal(datum.GetValue(), &originalValue)
 			doubledValue, _ := json.Marshal(multiplyBy2(datum.GetValue()).(testutils.PayloadForTest))
-			var elements []*functionpb.Datum
+			var elements []*functionpb.DatumResponse
 			if originalValue.Value%2 == 0 {
-				elements = append(elements, &functionpb.Datum{
-					Key:   "even",
+				elements = append(elements, &functionpb.DatumResponse{
+					Keys:  []string{"even"},
 					Value: doubledValue,
 				})
 			} else {
-				elements = append(elements, &functionpb.Datum{
-					Key:   "odd",
+				elements = append(elements, &functionpb.DatumResponse{
+					Keys:  []string{"odd"},
 					Value: doubledValue,
 				})
 			}
-			datumList := &functionpb.DatumList{
+			datumList := &functionpb.DatumResponseList{
 				Elements: elements,
 			}
 			return datumList, nil
@@ -236,23 +246,23 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
 
 	var results = make([][]byte, len(readMessages))
-	var resultKeys = make([]string, len(readMessages))
+	var resultKeys = make([][]string, len(readMessages))
 	for idx, readMessage := range readMessages {
 		apply, err := u.ApplyMap(ctx, &readMessage)
 		assert.NoError(t, err)
 		results[idx] = apply[0].Payload
-		resultKeys[idx] = string(apply[0].Header.Key)
+		resultKeys[idx] = apply[0].Header.Keys
 	}
 
 	var expectedResults = make([][]byte, count)
-	var expectedKeys = make([]string, count)
+	var expectedKeys = make([][]string, count)
 	for idx, readMessage := range readMessages {
 		var readMessagePayload testutils.PayloadForTest
 		_ = json.Unmarshal(readMessage.Payload, &readMessagePayload)
 		if readMessagePayload.Value%2 == 0 {
-			expectedKeys[idx] = "even"
+			expectedKeys[idx] = []string{"even"}
 		} else {
-			expectedKeys[idx] = "odd"
+			expectedKeys[idx] = []string{"odd"}
 		}
 		marshal, _ := json.Marshal(multiplyBy2(readMessage.Payload))
 		expectedResults[idx] = marshal
@@ -269,22 +279,22 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
+		mockReduceClient := funcmock.NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+			Elements: []*functionpb.DatumResponse{
 				{
-					Key:   "reduced_result_key",
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
 		}, nil).Times(1)
-		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+			Elements: []*functionpb.DatumResponse{
 				{
-					Key:   "reduced_result_key",
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -330,13 +340,13 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
+		mockReduceClient := funcmock.NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+			Elements: []*functionpb.DatumResponse{
 				{
-					Key:   "reduced_result_key",
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -388,22 +398,22 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-		mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
+		mockReduceClient := funcmock.NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+			Elements: []*functionpb.DatumResponse{
 				{
-					Key:   "reduced_result_key",
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
 		}, nil).Times(1)
 
-		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-			Elements: []*functionpb.Datum{
+		mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+			Elements: []*functionpb.DatumResponse{
 				{
-					Key:   "reduced_result_key",
+					Keys:  []string{"reduced_result_key"},
 					Value: []byte(`forward_message`),
 				},
 			},
@@ -430,7 +440,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 }
 
 func TestHGRPCBasedUDF_Reduce(t *testing.T) {
-	sumFunc := func(dataStreamCh <-chan *functionpb.Datum) interface{} {
+	sumFunc := func(dataStreamCh <-chan *functionpb.DatumRequest) interface{} {
 		var sum testutils.PayloadForTest
 		for datum := range dataStreamCh {
 			var payLoad testutils.PayloadForTest
@@ -444,7 +454,7 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 	defer ctrl.Finish()
 
 	messageCh := make(chan *isb.ReadMessage, 10)
-	datumStreamCh := make(chan *functionpb.Datum, 10)
+	datumStreamCh := make(chan *functionpb.DatumRequest, 10)
 	messages := testutils.BuildTestReadMessages(10, time.Now())
 
 	go func() {
@@ -457,27 +467,27 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 	}()
 
 	mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
-	mockReduceClient := NewMockUserDefinedFunction_ReduceFnClient(ctrl)
+	mockReduceClient := funcmock.NewMockUserDefinedFunction_ReduceFnClient(ctrl)
 	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 	mockReduceClient.EXPECT().Recv().DoAndReturn(
-		func() (*functionpb.DatumList, error) {
+		func() (*functionpb.DatumResponseList, error) {
 			result := sumFunc(datumStreamCh)
 			sumValue, _ := json.Marshal(result.(testutils.PayloadForTest))
-			var elements []*functionpb.Datum
-			elements = append(elements, &functionpb.Datum{
-				Key:   "sum",
+			var elements []*functionpb.DatumResponse
+			elements = append(elements, &functionpb.DatumResponse{
+				Keys:  []string{"sum"},
 				Value: sumValue,
 			})
-			datumList := &functionpb.DatumList{
+			datumList := &functionpb.DatumResponseList{
 				Elements: elements,
 			}
 			return datumList, nil
 		}).Times(1)
-	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumList{
-		Elements: []*functionpb.Datum{
+	mockReduceClient.EXPECT().Recv().Return(&functionpb.DatumResponseList{
+		Elements: []*functionpb.DatumResponse{
 			{
-				Key:   "reduced_result_key",
+				Keys:  []string{"reduced_result_key"},
 				Value: []byte(`forward_message`),
 			},
 		},
@@ -508,7 +518,7 @@ func TestHGRPCBasedUDF_Reduce(t *testing.T) {
 	_ = json.Unmarshal(result[0].Payload, &resultPayload)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "sum", result[0].Key)
+	assert.Equal(t, []string{"sum"}, result[0].Keys)
 	assert.Equal(t, int64(45), resultPayload.Value)
 	assert.Equal(t, time.Unix(120, 0).Add(-1*time.Millisecond), result[0].EventTime)
 }
