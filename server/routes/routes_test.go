@@ -32,11 +32,12 @@ func TestRoutes(t *testing.T) {
 	router := gin.Default()
 	managedNamespace := "numaflow-system"
 	namespaced := false
+	baseHref := "/"
 	sysInfo := SystemInfo{
 		ManagedNamespace: managedNamespace,
 		Namespaced:       namespaced,
 	}
-	Routes(router, sysInfo)
+	Routes(router, sysInfo, baseHref)
 	t.Run("/404", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, "/404", nil)

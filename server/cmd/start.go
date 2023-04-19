@@ -36,13 +36,14 @@ var (
 	}
 )
 
-func Start(insecure bool, port int, namespaced bool, managedNamespace string) {
+// add accessPath to change base path for URL
+func Start(insecure bool, port int, namespaced bool, managedNamespace string, baseHref string) {
 	logger := logging.NewLogger().Named("server")
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.RedirectTrailingSlash = true
-	router.Use(static.Serve("/", static.LocalFile("./ui/build", true)))
-	routes.Routes(router, routes.SystemInfo{ManagedNamespace: managedNamespace, Namespaced: namespaced})
+	router.Use(static.Serve(baseHref, static.LocalFile("./ui/build", true)))
+	routes.Routes(router, routes.SystemInfo{ManagedNamespace: managedNamespace, Namespaced: namespaced}, baseHref)
 	router.Use(UrlRewrite(router))
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
