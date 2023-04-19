@@ -19,7 +19,7 @@ powerful functions can be applied using this reduce semantics.
 
 ```python
 # reduceFn func is a generic reduce function that processes a set of elements
-def reduceFn(key: str, datums: Iterator[Datum], md: Metadata) -> Messages:
+def reduceFn(keys: List[str], datums: Iterator[Datum], md: Metadata) -> Messages:
     # initialize_accumalor could be any function that starts of with an empty
     # state. eg, accumulator = 0
     accumulator = initialize_accumalor()
@@ -30,7 +30,7 @@ def reduceFn(key: str, datums: Iterator[Datum], md: Metadata) -> Messages:
         accumulator.add_input(d)
     # once we are done with iterating on the elements, we return the result
     # acumulator.result() can be str.encode(accumulator)
-    return Messages(Message.to_vtx(key, acumulator.result()))
+    return Messages(Message(acumulator.result(), keys))
 ```
 
 ## Specification
