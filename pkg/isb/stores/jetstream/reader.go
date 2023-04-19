@@ -35,15 +35,15 @@ import (
 )
 
 type jetStreamReader struct {
-	name                  string
-	stream                string
-	subject               string
-	conn                  *jsclient.NatsConn
-	js                    *jsclient.JetStreamContext
-	sub                   *nats.Subscription
-	opts                  *readOptions
-	inProgessTickDuration time.Duration
-	log                   *zap.SugaredLogger
+	name                   string
+	stream                 string
+	subject                string
+	conn                   *jsclient.NatsConn
+	js                     *jsclient.JetStreamContext
+	sub                    *nats.Subscription
+	opts                   *readOptions
+	inProgressTickDuration time.Duration
+	log                    *zap.SugaredLogger
 	// ackedInfo stores a list of ack seq/timestamp(seconds) information
 	ackedInfo *sharedqueue.OverflowQueue[timestampedSequence]
 }
@@ -132,10 +132,10 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 	result.conn = conn
 	result.js = js
 	result.sub = sub
-	result.inProgessTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
+	result.inProgressTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
 	if o.useAckInfoAsRate {
 		result.ackedInfo = sharedqueue.New[timestampedSequence](1800)
-		go result.runAckInfomationChecker(ctx)
+		go result.runAckInformationChecker(ctx)
 	}
 	return result, nil
 }
@@ -156,7 +156,7 @@ func (jr *jetStreamReader) Close() error {
 	return nil
 }
 
-func (jr *jetStreamReader) runAckInfomationChecker(ctx context.Context) {
+func (jr *jetStreamReader) runAckInformationChecker(ctx context.Context) {
 	js, err := jr.conn.JetStream()
 	if err != nil {
 		// Let it exit if it fails to start the information checker
@@ -239,7 +239,7 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 			return nil, fmt.Errorf("failed to get jetstream message metadata, %w", err)
 		}
 		rm := &isb.ReadMessage{
-			ReadOffset: newOffset(msg, jr.inProgessTickDuration, jr.log),
+			ReadOffset: newOffset(msg, jr.inProgressTickDuration, jr.log),
 			Message:    *m,
 			Metadata: isb.MessageMetadata{
 				NumDelivered: msgMetadata.NumDelivered,
