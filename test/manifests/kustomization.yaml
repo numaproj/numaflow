@@ -31,7 +31,7 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent
-      - opp: add
+      - op: add
         path: /spec/template/spec/initContainers/0/imagePullPolicy
         value: IfNotPresent
     target:
