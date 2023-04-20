@@ -16,7 +16,7 @@ export const useEdgesInfoFetch = (
     loading: fetchLoading,
     error,
   } = useFetch(
-    getBaseHref() + `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/edges?refreshKey=${requestKey}`
+    getBaseHref() + `api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/edges?refreshKey=${requestKey}`
   );
 
   useEffect(() => {

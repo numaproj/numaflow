@@ -4,7 +4,7 @@ export function getBaseHref(): string {
   if (process.env.REACT_APP_BASE_HREF) {
     return process.env.REACT_APP_BASE_HREF
   }
-  return "";
+  return "/";
 }
 
 export function isDev() {

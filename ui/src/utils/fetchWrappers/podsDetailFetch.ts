@@ -14,7 +14,7 @@ export const usePodsDetailFetch = (namespaceId: string, requestKey: string) => {
     loading: fetchLoading,
     error,
   } = useFetch(
-    getBaseHref() + `/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
+    getBaseHref() + `api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
   );
 
   useEffect(() => {
