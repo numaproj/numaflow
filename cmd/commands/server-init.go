@@ -36,7 +36,7 @@ func NewServerInitCommand() *cobra.Command {
 
 			reactVar := fmt.Sprintf("REACT_APP_BASE_HREF=%s", strings.TrimSuffix(baseHref, "/"))
 			if err := os.WriteFile("/ui/.env", []byte(reactVar), 0666); err != nil {
-				return fmt.Errorf("failed to create .env file: %s", err)
+				return fmt.Errorf("failed to create .env file: %w", err)
 			}
 			return nil
 		},

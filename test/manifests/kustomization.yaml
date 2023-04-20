@@ -31,6 +31,9 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent
+      - opp: add
+        path: /spec/template/spec/initContainers/0/imagePullPolicy
+        value: IfNotPresent
     target:
       kind: Deployment
       name: numaflow-server
