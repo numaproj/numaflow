@@ -34,7 +34,11 @@ func NewServerInitCommand() *cobra.Command {
 		Short: "Initialize base path for Numaflow server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 
-			reactVar := fmt.Sprintf("REACT_APP_BASE_HREF=%s", strings.TrimSuffix(baseHref, "/"))
+			if !strings.HasSuffix(baseHref, "/") {
+				baseHref = baseHref + "/"
+			}
+
+			reactVar := fmt.Sprintf("REACT_APP_BASE_HREF=%s", baseHref)
 			if err := os.WriteFile("/ui/.env", []byte(reactVar), 0666); err != nil {
 				return fmt.Errorf("failed to create .env file: %w", err)
 			}
@@ -42,6 +46,6 @@ func NewServerInitCommand() *cobra.Command {
 		},
 	}
 
-	command.Flags().StringVar(&baseHref, "base-href", "", "Change base path to access Numaflow UI, default to empty string.")
+	command.Flags().StringVar(&baseHref, "base-href", "/", "Change base path to access Numaflow UI, default to empty string.")
 	return command
 }

@@ -17,6 +17,8 @@ limitations under the License.
 package commands
 
 import (
+	"strings"
+
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	svrcmd "github.com/numaproj/numaflow/server/cmd"
 
@@ -39,6 +41,9 @@ func NewServerCommand() *cobra.Command {
 			if !cmd.Flags().Changed("port") && insecure {
 				port = 8080
 			}
+			if !strings.HasSuffix(baseHref, "/") {
+				baseHref = baseHref + "/"
+			}
 			svrcmd.Start(insecure, port, namespaced, managedNamespace, baseHref)
 		},
 	}
@@ -46,6 +51,6 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().IntVarP(&port, "port", "p", 8443, "Port to listen on, defaults to 8443 or 8080 if insecure is set")
 	command.Flags().BoolVar(&namespaced, "namespaced", false, "Whether to run in namespaced scope, defaults to false.")
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", sharedutil.LookupEnvStringOr("NAMESPACE", "numaflow-system"), "The namespace that the server watches when \"--namespaced\" is \"true\".")
-	command.Flags().StringVar(&baseHref, "base-href", "", "Change path to access UI, defaults to empty string")
+	command.Flags().StringVar(&baseHref, "base-href", "/", "Change path to access UI, defaults to empty string")
 	return command
 }
