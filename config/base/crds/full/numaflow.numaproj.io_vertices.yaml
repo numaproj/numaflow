@@ -3349,6 +3349,8 @@ spec:
                     type: object
                   groupBy:
                     properties:
+                      allowedLateness:
+                        type: string
                       keyed:
                         type: boolean
                       storage:

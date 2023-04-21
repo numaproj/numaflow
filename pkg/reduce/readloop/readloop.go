@@ -67,9 +67,10 @@ type ReadLoop struct {
 	publishWatermark      map[string]publish.Publisher
 	udfInvocationTracking map[partition.ID]*task
 	idleManager           *wmb.IdleManager
+	allowedLateness       time.Duration
 }
 
-// NewReadLoop initializes  and returns ReadLoop.
+// NewReadLoop initializes and returns ReadLoop.
 func NewReadLoop(ctx context.Context,
 	vertexName string,
 	pipelineName string,
@@ -81,6 +82,7 @@ func NewReadLoop(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
 	idleManager *wmb.IdleManager,
+	allowedLateness time.Duration,
 ) (*ReadLoop, error) {
 	op := newOrderedForwarder(ctx, vertexName, pipelineName, vr)
 
@@ -98,6 +100,7 @@ func NewReadLoop(ctx context.Context,
 		publishWatermark:      pw,
 		udfInvocationTracking: make(map[partition.ID]*task),
 		idleManager:           idleManager,
+		allowedLateness:       allowedLateness,
 	}
 
 	err := rl.Startup(ctx)
@@ -176,7 +179,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	var closedWindows []window.AlignedKeyedWindower
 	wm := wmb.Watermark(successfullyWrittenMessages[0].Watermark)
 
-	closedWindows = rl.windower.RemoveWindows(time.Time(wm))
+	closedWindows = rl.windower.RemoveWindows(time.Time(wm).Add(-1 * rl.allowedLateness))
 
 	rl.log.Debugw("Windows eligible for closing", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
 
