@@ -56,7 +56,7 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 
 	return func(ctx context.Context, keys []string, datum functionsdk.Datum) functionsdk.MessageTs {
 		log := logging.FromContext(ctx)
-		resultMsg, err := e.apply(datum.EventTime(), datum.Value())
+		resultMsg, err := e.apply(datum.Value(), datum.EventTime())
 		if err != nil {
 			log.Warnf("event time extractor got an error: %v, skip updating event time...", err)
 		}
@@ -66,10 +66,10 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 
 // apply compiles the payload to extract the new event time. If there is any error during extraction,
 // we pass on the original input event time. Otherwise, we assign the new event time to the message.
-func (e eventTimeExtractor) apply(et time.Time, payload []byte) (functionsdk.MessageT, error) {
+func (e eventTimeExtractor) apply(payload []byte, et time.Time) (functionsdk.MessageT, error) {
 	timeStr, err := expr.EvalStr(e.expression, payload)
 	if err != nil {
-		return functionsdk.NewMessageT(et, payload), err
+		return functionsdk.NewMessageT(payload, et), err
 	}
 
 	var newEventTime time.Time
@@ -80,8 +80,8 @@ func (e eventTimeExtractor) apply(et time.Time, payload []byte) (functionsdk.Mes
 		newEventTime, err = dateparse.ParseStrict(timeStr)
 	}
 	if err != nil {
-		return functionsdk.NewMessageT(et, payload), err
+		return functionsdk.NewMessageT(payload, et), err
 	} else {
-		return functionsdk.NewMessageT(newEventTime, payload), nil
+		return functionsdk.NewMessageT(payload, newEventTime), nil
 	}
 }
