@@ -46,6 +46,6 @@ func NewServerInitCommand() *cobra.Command {
 		},
 	}
 
-	command.Flags().StringVar(&baseHref, "base-href", "/", "Change base path to access Numaflow UI, default to empty string.")
+	command.Flags().StringVar(&baseHref, "base-href", "/", "Base href for Numaflow server, defaults to '/'.")
 	return command
 }
