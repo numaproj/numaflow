@@ -1,9 +1,9 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { useLocation, Link } from "react-router-dom";
 import MUIBreadcrumbs from "@mui/material/Breadcrumbs";
 import Typography from "@mui/material/Typography";
 
-import "./Breadcrumbs.css";
+import "./style.css";
 
 export function Breadcrumbs() {
   const location = useLocation();
@@ -13,7 +13,12 @@ export function Breadcrumbs() {
     if (pathname === "/") {
       // Namespaces (home)
       return (
-        <Typography data-testid="namespace-breadcrumb">Namespaces</Typography>
+        <Typography
+          data-testid="namespace-breadcrumb"
+          className="Breadcrumbs-typ"
+        >
+          Namespaces
+        </Typography>
       );
     }
     const pathParts = pathname.split("/");
@@ -23,29 +28,34 @@ export function Breadcrumbs() {
           <Link key={"pipeline-view"} to="/" className="Breadcrumbs-link">
             Namespaces
           </Link>,
-          <Typography key={"pipeline-typ"} data-testid="pipeline-breadcrumb">{`${pathParts[2]} (${pathParts[4]})`}</Typography>,
-        ];
-      case 7: // pods view
-        return [
-          <Link key={"pods-view"} to="/" className="Breadcrumbs-link">
-            Namespaces
-          </Link>,
-          <Link key={"namespaces-view"}
-            to={`/namespaces/${pathParts[2]}/pipelines/${pathParts[4]}`}
-            className="Breadcrumbs-link"
+          <Typography
+            key={"pipeline-typ"}
+            data-testid="pipeline-breadcrumb"
+            className="Breadcrumbs-typ"
           >
             {`${pathParts[2]} (${pathParts[4]})`}
-          </Link>,
-          <Typography key={"pods-typo"}>{pathParts[6]}</Typography>,
+          </Typography>,
         ];
       default:
         // Unsupported path
-        return <Typography key={"default"}>Unknown</Typography>;
+        return (
+          <Typography
+            data-testid="unknown-breadcrumb"
+            className="Breadcrumbs-typ"
+          >
+            Unknown
+          </Typography>
+        );
     }
   }, [location]);
 
   return (
-    <MUIBreadcrumbs data-testid="mui-breadcrumbs" className="Breadcrumbs">
+    <MUIBreadcrumbs
+      data-testid="mui-breadcrumbs"
+      className="Breadcrumbs"
+      separator="›"
+      aria-label="breadcrumb"
+    >
       {crumbs}
     </MUIBreadcrumbs>
   );
