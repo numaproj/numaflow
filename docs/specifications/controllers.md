@@ -18,7 +18,7 @@ The source code of the controllers is located at `./pkg/reconciler/`.
 
 Pipeline Controller is used to watch `Pipeline` objects, it does following major things when there's a pipeline object created.
 
-- Spawn a Kubernetes Job to create [buffers](./edges-and-buffers.md) in the [Inter-Step Buffer Services](../core-concepts/inter-step-buffer-service.md).
+- Spawn a Kubernetes Job to create [buffers and buckets](./edges-buffers-buckets.md) in the [Inter-Step Buffer Services](../core-concepts/inter-step-buffer-service.md).
 - Create `Vertex` objects according to `.spec.vertices` defined in `Pipeline` object.
 - Create some other Kubernetes objects used for the Pipeline, such as a Deployment and a Service for daemon service application.
 
