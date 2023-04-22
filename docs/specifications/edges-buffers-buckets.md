@@ -1,5 +1,7 @@
 # Edges, Buffers and Buckets
 
+This document describes the concepts of `Edge`, `Buffer` and `Bucket` in a pipeline.
+
 ## Edges
 
 `Edge` is the connection between the vertices, specifically, `edge` is defined in the pipeline spec under `.spec.edges`. No matter the to vertex is a map, or a reduce with multiple partitions, it is considered as one edge.
