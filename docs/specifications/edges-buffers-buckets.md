@@ -2,7 +2,7 @@
 
 ## Edges
 
-`Edge` is the connection between the vertices, specifically, `edge` is defined in the pipeline spec under `.spec.edges`. No matter the to vertex is a map, or a reduce with `parallelism > 1`, it is considered as one edge.
+`Edge` is the connection between the vertices, specifically, `edge` is defined in the pipeline spec under `.spec.edges`. No matter the to vertex is a map, or a reduce with multiple partitions, it is considered as one edge.
 
 In the following pipeline , there are 3 edges defined (`in` - `aoti`, `aoti` - `compute-sum`, `compute-sum` - `sink`).
 
