@@ -210,18 +210,31 @@ func (rl *ReadLoop) writeMessagesToWindows(ctx context.Context, messages []*isb.
 
 messagesLoop:
 	for _, message := range messages {
-		// drop the late messages
+		// drop the late messages only if there is no window open
 		if message.IsLate {
-			rl.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
-			droppedMessagesCount.With(map[string]string{
-				metrics.LabelVertex:             rl.vertexName,
-				metrics.LabelPipeline:           rl.pipelineName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
-				LabelReason:                     "late"}).Inc()
+			// we should be able to get the late message in as long as there is an open window
+			nextWin := rl.pbqManager.NextWindowToBeClosed()
+			if nextWin != nil && message.EventTime.Before(nextWin.StartTime()) {
+				rl.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWin.StartTime()))
+				droppedMessagesCount.With(map[string]string{
+					metrics.LabelVertex:             rl.vertexName,
+					metrics.LabelPipeline:           rl.pipelineName,
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(rl.vertexReplica)),
+					LabelReason:                     "late"}).Inc()
 
-			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
-			writtenMessages = append(writtenMessages, message)
-			continue
+				// mark it as a successfully written message as the message will be acked to avoid subsequent retries
+				writtenMessages = append(writtenMessages, message)
+				continue
+			} else {
+				var startTime time.Time
+				// bit of an overkill, but this is an unlikely path
+				if nextWin == nil {
+					startTime = time.Time{}
+				} else {
+					startTime = nextWin.StartTime()
+				}
+				rl.log.Debugw("Accepting the late message because COB has not happened yet", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", startTime))
+			}
 		}
 
 		// NOTE(potential bug): if we get a message where the event time is < watermark, skip processing the message.

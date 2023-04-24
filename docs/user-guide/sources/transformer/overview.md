@@ -31,7 +31,7 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/function/server"
 )
 
-func Handle(_ context.Context, key string, data functionsdk.Datum) functionsdk.MessageTs {
+func Handle(_ context.Context, keys []string, data functionsdk.Datum) functionsdk.MessageTs {
 	/*
 		Input messages are in JSON format. Sample: {"timestamp": "1673239888", "filterOut": "true"}.
 		Field "timestamp" shows the real event time of the message, in format of epoch.
@@ -48,14 +48,14 @@ func Handle(_ context.Context, key string, data functionsdk.Datum) functionsdk.M
 	}
 	
 	// data filtering
-	var shouldFilter bool
+	var filterOut bool
 	if f, ok := jsonObject["filterOut"]; ok {
-		shouldFilter = f.(bool)
+		filterOut = f.(bool)
 	}
-	if shouldFilter {
+	if filterOut {
 		return functionsdk.MessageTsBuilder().Append(functionsdk.MessageTToDrop())
 	} else {
-		return functionsdk.MessageTsBuilder().Append(functionsdk.MessageTTo(eventTime, key, data.Value()))
+		return functionsdk.MessageTsBuilder().Append(functionsdk.NewMessageT(data.Value(), eventTime).WithKeys(keys))
 	}
 }
 
@@ -97,8 +97,8 @@ Some environment variables are available in the source vertex Pods, they might b
 
 Configuration data can be provided to the transformer container at runtime multiple ways.
 
-* [`environment variables`](../../environment-variables.md)
+* [`environment variables`](../../reference/configuration/environment-variables.md)
 * `args`
 * `command`
-* [`volumes`](../../volumes.md)
-* [`init containers`](../../init-containers.md)
+* [`volumes`](../../reference/configuration/volumes.md)
+* [`init containers`](../../reference/configuration/init-containers.md)

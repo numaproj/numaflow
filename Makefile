@@ -225,7 +225,7 @@ ifdef IMAGE_IMPORT_CMD
 endif
 
 /usr/local/bin/mkdocs:
-	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9
+	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9 mkdocs-embed-external-markdown==2.3.0
 
 # docs
 
@@ -265,12 +265,17 @@ prepare-release: check-version-warning clean update-manifests-version codegen
 
 .PHONY: release
 release: check-version-warning
-	@echo "\n1. Make sure you have run 'VERSION=$(VERSION) make prepare-release', and confirmed all the changes are expected."
-	@echo "\n2. Run following commands to commit the changes to the release branch, add give a tag.\n"
+	@echo
+	@echo "1. Make sure you have run 'VERSION=$(VERSION) make prepare-release', and confirmed all the changes are expected."
+	@echo
+	@echo "2. Run following commands to commit the changes to the release branch, add give a tag."
+	@echo
 	@echo "git commit -am \"Update manifests to $(VERSION)\""
-	@echo "git push {your-remote}\n"
+	@echo "git push {your-remote}"
+	@echo
 	@echo "git tag -a $(VERSION) -m $(VERSION)"
-	@echo "git push {your-remote} $(VERSION)\n"
+	@echo "git push {your-remote} $(VERSION)"
+	@echo
 
 endif
 

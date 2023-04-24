@@ -1,5 +1,94 @@
 # Changelog
 
+## v0.8.0-rc1 (2023-04-14)
+
+ * [ca88313](https://github.com/numaproj/numaflow/commit/ca88313d52c67700b7d7d74a6e326235783a06f6) Update manifests to v0.8.0-rc1
+ * [b83525d](https://github.com/numaproj/numaflow/commit/b83525dfa60cabea55797ad6a0d27f0e43f26d88) feat: introducing tags for conditional forwarding (#668)
+ * [a6e8174](https://github.com/numaproj/numaflow/commit/a6e81746b43787a42a4a0e78808ea99aef5bfc9a) feat: expose cpu/mem info to sidecar containers (#678)
+ * [c7b853a](https://github.com/numaproj/numaflow/commit/c7b853aad2cc4189e5666ee4e21b9c60913f3ad0) feat: Redis Streams source fixes (#669)
+ * [2f73b5b](https://github.com/numaproj/numaflow/commit/2f73b5b84b7ed771cbd18f76c9455aa86003b8d3) fix: skip empty Kafka partitions when calculating pending count (#666)
+ * [eeb37d8](https://github.com/numaproj/numaflow/commit/eeb37d8b6842e29e17491cde327cad503d06f143) feat: support for multi keys (#658)
+ * [91b516b](https://github.com/numaproj/numaflow/commit/91b516b8ad6ad3940f8721613a7d12c982ce6ed2) feat: Adds SASL (plain and gssapi) support for kafka sink (#656)
+ * [196f887](https://github.com/numaproj/numaflow/commit/196f887d31378a6ad6868bb1eb5e837512c31b04) fix: vertex overlapping watermark (#660)
+ * [0db3248](https://github.com/numaproj/numaflow/commit/0db3248d0e0618f2d4b6fac9266414681e2bedb0) feat: incremental search and namespace preview in search bar (#654)
+ * [46bb875](https://github.com/numaproj/numaflow/commit/46bb875053f82b0b8ee21cbcd91d55d72bef9d17) feat: integrate serde WAL (#650)
+ * [b056087](https://github.com/numaproj/numaflow/commit/b056087626034f6775f8da8def906a4e9d0131c5) fix: unit test (#653)
+ * [1b0ea08](https://github.com/numaproj/numaflow/commit/1b0ea088134b464252f3c2296556bd97fa4acb9b) feat: handle idle watermark for reduce vertex (#627)
+ * [3388262](https://github.com/numaproj/numaflow/commit/33882628adadb2f8f36c5519c41c50398ffd86eb) feat: Redis streams source (#628)
+ * [d85bf93](https://github.com/numaproj/numaflow/commit/d85bf93fd5f99ce37d4e0c36cc27ae417e938fec) feat: Adds SASL (plain and gssapi) support for kafka source (#643)
+ * [60bb2bb](https://github.com/numaproj/numaflow/commit/60bb2bb96a66b495a8243433f9e31c87ee303c9e) feat: namespace scope api and disable namespace search on UI (#638)
+ * [38b5a9e](https://github.com/numaproj/numaflow/commit/38b5a9ec8115f4bb77f34a793fcbaf3e701e0b19) fix: GetHeadWatermark Logic (#636)
+ * [927b95c](https://github.com/numaproj/numaflow/commit/927b95cd007b71a1494cf11cc9614048e5b45898) feat: enable edge-level kill switch to drop messages when buffer is full, for the non-reduce forwarder (#634)
+ * [0c79113](https://github.com/numaproj/numaflow/commit/0c79113c53619e30bc51b7687f9cdc313f752679) fix: IdleWatermark unit test (#640)
+ * [924ad33](https://github.com/numaproj/numaflow/commit/924ad33eb516eda4295d7af276bff130216e3e0a) fix: desired replicas should not be greater than pending (#639)
+ * [150c5c2](https://github.com/numaproj/numaflow/commit/150c5c23e6898be41937d8f0331bef7742ce7baa) fix: add timeout to the test (#618)
+ * [2f112fb](https://github.com/numaproj/numaflow/commit/2f112fb29ad4723937f95d73a93b16526f6aec20) feat: kustomize integration (#637)
+ * [5062aac](https://github.com/numaproj/numaflow/commit/5062aac603421c4d95a94133852643104c9f3337) fix: exclude ack pending messages (#631)
+ * [e533ba3](https://github.com/numaproj/numaflow/commit/e533ba3572dffaf58e807000b00fe84b48b4539e) feat: UI error component (#613)
+ * [20aaca9](https://github.com/numaproj/numaflow/commit/20aaca9de98db83a43ebb59773c425cd269759d1) fix: do not update status.replicas until pod operation succeeds (#620)
+ * [cc62c81](https://github.com/numaproj/numaflow/commit/cc62c81c72b4d5025af35a1467c59cb3c77804a4) feat: track and expose oldest work yet to be done to the reduce loop (#617)
+ * [4bbe80b](https://github.com/numaproj/numaflow/commit/4bbe80bb39deb4b723a4f6e239581a7791c5cb9f) feat: handle watermark barrier for map vertex (#607)
+ * [f9f0544](https://github.com/numaproj/numaflow/commit/f9f05442fdf5f2c498066b45e2e10dd36193fb10) fix: corrected reduce vertex replica number. Fixes #593 (#616)
+ * [c981513](https://github.com/numaproj/numaflow/commit/c9815132b1f747be09af7c7e005f93c050ecdfca) feat: add API for pipeline status check. Fixes #407. (#599)
+ * [5282766](https://github.com/numaproj/numaflow/commit/5282766d074e57fd5581650f372858e5c8b7519c) chore(deps): bump webpack from 5.74.0 to 5.76.1 in /ui (#610)
+ * [927bfc0](https://github.com/numaproj/numaflow/commit/927bfc047033098480f0f861fabcee3d60b60daa) feat: use randomized shuffle using vertex name as the seed (#601)
+ * [d667d79](https://github.com/numaproj/numaflow/commit/d667d799fc1e56eb46d33fa4daf4dfb5cf5367a0) fix: ack the dropped messages as well (#603)
+ * [64e17d8](https://github.com/numaproj/numaflow/commit/64e17d884a325f04171afe642c17aff3818c79ab) feat: enable controller HA (#602)
+ * [20ba722](https://github.com/numaproj/numaflow/commit/20ba722f6c478d5d07a84f45ff9869216e0a246b) feat: expose dnspolicy and dnsconfig to pod template (#598)
+ * [abfdd78](https://github.com/numaproj/numaflow/commit/abfdd78fe138721f6311c0260a348706f68469f2) Chore: tickgen changes to test reduce pipelines (#587)
+ * [b2f8a12](https://github.com/numaproj/numaflow/commit/b2f8a12a49405a8a29e530fc50f01b410e0ef3de) feat: bidirectional streaming (#553)
+ * [148663e](https://github.com/numaproj/numaflow/commit/148663e7583af02dcb665b922d687e215ab7a5df) feat: use customized binary serde for nats message payload (#585)
+ * [8d339b6](https://github.com/numaproj/numaflow/commit/8d339b68421e8490425a2168b969aec01823949b) fix: Idle watermark fix for read batch size > 0 and partial idle outgoing edges (#575)
+ * [87ab1e3](https://github.com/numaproj/numaflow/commit/87ab1e3d34d4e550fe6973225036ce891066fc5e) feat: implement watermark propagation for source data transformer (#557)
+ * [d561867](https://github.com/numaproj/numaflow/commit/d561867f69d1bac96eb26624e830c7193424d091) feat: namespace search (#559)
+ * [1b4800a](https://github.com/numaproj/numaflow/commit/1b4800afe96797cea557ab15ccd9ee0af03965d3) fix: refine log for buffer validation. Fixes #185 (#573)
+ * [4eb27ef](https://github.com/numaproj/numaflow/commit/4eb27effe0fbcfc0f369b5dbeb185aab182fcc87) feat: add readiness and liveness check for daemon server. Fixes #543 (#571)
+ * [8ae2116](https://github.com/numaproj/numaflow/commit/8ae2116d280fb1faf30525d2eeb1f1c72fd84986) feat: marshal/unmarshal binary for read message (#565)
+ * [a0505e6](https://github.com/numaproj/numaflow/commit/a0505e67f71db63cfc9bbbd4b83d27f773cdae54) chore(deps): bump golang.org/x/net from 0.0.0-20220722155237-a158d28d115b to 0.7.0 (#568)
+ * [fbf3689](https://github.com/numaproj/numaflow/commit/fbf36894e26f0f832077dfc0baf35b88fbe579e5) chore(deps): bump golang.org/x/text from 0.3.7 to 0.3.8 (#567)
+ * [92c8009](https://github.com/numaproj/numaflow/commit/92c8009dedd760beb3a01331e3db05a726157718) feat: expose image pull policy to user defined containers (#563)
+ * [88a41c2](https://github.com/numaproj/numaflow/commit/88a41c2b0404975d875b12f87c4e856b7168defc) fix: typos in reduce examples (#556)
+ * [97567f3](https://github.com/numaproj/numaflow/commit/97567f3cc7901845ea59d4a76741e13df6989048) feat: edge-watermark (#537)
+ * [1e06ba2](https://github.com/numaproj/numaflow/commit/1e06ba2f708c6061f36f8e870fcde257a2014984) feat: enable envFrom for user defined containers (#554)
+ * [0dc85f6](https://github.com/numaproj/numaflow/commit/0dc85f694e6f1048d4616705b3fa85fdb5bda9cd) feat: remove secret watch privilege dependency (#542)
+ * [8b7e397](https://github.com/numaproj/numaflow/commit/8b7e397e5ffbb28f70f01b20446c909ced7a4f25) fix: Use a copied object to update (#541)
+ * [943e7bd](https://github.com/numaproj/numaflow/commit/943e7bd83dbdee38af28c4ee1c445ba31564d53f) chore(deps): bump github.com/emicklei/go-restful from 2.9.5+incompatible to 2.16.0+incompatible (#539)
+ * [93753c1](https://github.com/numaproj/numaflow/commit/93753c1527104f86748444a321663d52b15dea98) feat: improve reduce performance (#501)
+ * [b502fa9](https://github.com/numaproj/numaflow/commit/b502fa93c5f2a59aa38c8ed7d3fa626aff39436c) feat: Offset time idle watermark put (#529)
+ * [4551505](https://github.com/numaproj/numaflow/commit/4551505c5ca59b56018827aa657995766cd24e94) fix: securityContext not applied to container templates (#528)
+ * [2727e62](https://github.com/numaproj/numaflow/commit/2727e62ac3271c7178bd6bc797c68979b1617538) feat: idle watermark v0 (#520)
+ * [1e34e31](https://github.com/numaproj/numaflow/commit/1e34e31542816f99ba377e6d85121ac6a6df9b4a) feat: Reduce UI Support (#500)
+ * [39ecae4](https://github.com/numaproj/numaflow/commit/39ecae427080800cb062bd65713b16b37ff596bf) feat: enable RuntimeClassName for vertex pod (#519)
+ * [b965318](https://github.com/numaproj/numaflow/commit/b965318d21e264682b868bff9268d7ecf54a8c92) feat: add builtin filter and event time extractor for source transformer (#517)
+ * [077771c](https://github.com/numaproj/numaflow/commit/077771cef79e798241f2cda5e01385834f451ee6) chore(deps): bump ua-parser-js from 0.7.32 to 0.7.33 in /ui (#507)
+ * [58b12ec](https://github.com/numaproj/numaflow/commit/58b12ec3eb996045428df215011da1d88a3aa8a5) Add an e2e test for source data transformer (#505)
+ * [2af9193](https://github.com/numaproj/numaflow/commit/2af91933ee9b5dfc3feb1dfaebe81364c22a949d) feat: Implement source data transformer and apply to all existing sources (#487)
+ * [a3024f4](https://github.com/numaproj/numaflow/commit/a3024f4e26c5a3467c3b526f7083ab57948a8678) fix: -ve metrics and return early if isLate (#495)
+ * [2298615](https://github.com/numaproj/numaflow/commit/2298615374ff699179384627cfe6e5b13da793af) fix: JetStream context KV store/watch fix (#460)
+ * [2177d62](https://github.com/numaproj/numaflow/commit/2177d6213184d4a0eebc69981c1d363848d09b42) doc: reduce persistent store (#458)
+ * [3c62120](https://github.com/numaproj/numaflow/commit/3c62120725aa940831b901881a2d17192bcb0ee8) doc: reduce documentation (#448)
+ * [784fe15](https://github.com/numaproj/numaflow/commit/784fe15cba31ccdfc986bf7bd8a526ef409805b0) chore(deps): bump json5 from 1.0.1 to 1.0.2 in /ui (#454)
+ * [659a98b](https://github.com/numaproj/numaflow/commit/659a98b5e8ffcbc3fc62775f8ce21df8f3ff2f6b) refactor: simplify http request construction in test cases (#444)
+ * [cc9c194](https://github.com/numaproj/numaflow/commit/cc9c194bf05671071f6416dea4d0b0d92f67617f) refactor: use exact matching instead of regex to perform e2e data validation. (#443)
+ * [f7f712b](https://github.com/numaproj/numaflow/commit/f7f712b34a640103cec327cf862ff2a11ef6a4c7) doc: windowing fixed and sliding (#439)
+ * [9ad504b](https://github.com/numaproj/numaflow/commit/9ad504b5791ddd22516aabe721fb94dd252dc289) refactor: move redis sink resources creation to E2ESuite (#437)
+ * [0148258](https://github.com/numaproj/numaflow/commit/0148258daa7b87fca65f04f70b8d769bb7796468) refactor: a prototype for enhancing E2E test framework (#424)
+ * [8579dc6](https://github.com/numaproj/numaflow/commit/8579dc67516ec6c85f61c0b3e473d02c688296ff) feat: pipeline watermark (#416)
+
+### Contributors
+
+ * Alex Ang HH
+ * Derek Wang
+ * Dillen Padhiar
+ * Juanlu Yu
+ * Julie Vogelman
+ * Keran Yang
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+ * ashwinidulams
+ * dependabot[bot]
+
 ## v0.7.3 (2023-04-02)
 
  * [68a1479](https://github.com/numaproj/numaflow/commit/68a14793ff698f68d45e404e0269de32fd3c8ed3) Update manifests to v0.7.3
