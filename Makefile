@@ -4,7 +4,7 @@ CURRENT_DIR=$(shell pwd)
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
-DEV_BASE_IMAGE:=debian:stable-slim
+DEV_BASE_IMAGE:=alpine:3.17
 RELEASE_BASE_IMAGE:=scratch
 
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
