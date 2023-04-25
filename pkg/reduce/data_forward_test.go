@@ -655,7 +655,8 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	// assert the output of reduce
 	var readMessagePayload PayloadForTest
 	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
-	assert.Equal(t, int64(59), int64(readMessagePayload.Value))
+	// since the window duration is 60s and tps is 1, the count should be 60
+	assert.Equal(t, int64(60), int64(readMessagePayload.Value))
 	assert.Equal(t, "count", readMessagePayload.Key)
 }
 
@@ -1249,7 +1250,7 @@ func publishMessagesAllowedLatency(ctx context.Context, startTime int, messages 
 		for i := 1; i <= testDuration; i++ {
 			if i%60 == 0 {
 				// every 60 seconds add 500 latency to the message
-				inputChan <- eventTime + (i * 1000) + 500
+				inputChan <- eventTime + (i * 1000) - 500
 			} else {
 				inputChan <- eventTime + (i * 1000)
 			}
@@ -1269,9 +1270,12 @@ func publishMessagesAllowedLatency(ctx context.Context, startTime int, messages 
 
 			for _, message := range messages {
 				inputMsg := buildIsbMessage(message, time.UnixMilli(int64(et)))
+				wm := wmb.Watermark(time.UnixMilli(int64(et)))
 				if et%1000 == 500 {
-					// use 500 because we added 500 latency above
+					// the message has eventTime = x+500 and watermark = x+1000 where x is some timestamp
+					// the message eventTime is smaller than watermark, so set isLate to true
 					inputMsg = buildIsbMessageAllowedLatency(message, time.UnixMilli(int64(et)))
+					wm = wmb.Watermark(time.UnixMilli(int64(et + 500)))
 				}
 				inputMsgs[count] = inputMsg
 				count += 1
@@ -1280,7 +1284,7 @@ func publishMessagesAllowedLatency(ctx context.Context, startTime int, messages 
 					offsets, _ := fromBuffer.Write(ctx, inputMsgs)
 					if len(offsets) > 0 {
 						fmt.Println("published", et, offsets[len(offsets)-1])
-						publish.PublishWatermark(wmb.Watermark(time.UnixMilli(int64(et))), offsets[len(offsets)-1])
+						publish.PublishWatermark(wm, offsets[len(offsets)-1])
 					}
 					count = 0
 				}
