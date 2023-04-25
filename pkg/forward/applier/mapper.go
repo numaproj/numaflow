@@ -26,20 +26,39 @@ import (
 // InternalErr can be returned and could be retried by the callee.
 type MapApplier interface {
 	ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
+	ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error)
 }
 
 // ApplyMapFunc utility function used to create an Applier implementation
-type ApplyMapFunc func(context.Context, *isb.ReadMessage) ([]*isb.WriteMessage, error)
+type ApplyMapFunc struct {
+	applyMap       func(context.Context, *isb.ReadMessage) ([]*isb.WriteMessage, error)
+	applyMapStream func(context.Context, *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error)
+}
 
 func (a ApplyMapFunc) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return a(ctx, message)
+	return a.applyMap(ctx, message)
+}
+
+func (a ApplyMapFunc) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return a.applyMapStream(ctx, message)
 }
 
 var (
 	// Terminal Applier do not make any change to the message
-	Terminal = ApplyMapFunc(func(ctx context.Context, msg *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-		return []*isb.WriteMessage{{
-			Message: msg.Message,
-		}}, nil
-	})
+	Terminal = ApplyMapFunc{
+		applyMap: func(ctx context.Context, msg *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+			return []*isb.WriteMessage{{
+				Message: msg.Message,
+			}}, nil
+		},
+		applyMapStream: func(ctx context.Context, msg *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+			writeMessageCh := make(chan isb.WriteMessage)
+			errorCh := make(chan error)
+			writeMessage := &isb.WriteMessage{
+				Message: msg.Message,
+			}
+			writeMessageCh <- *writeMessage
+			return writeMessageCh, errorCh
+		},
+	}
 )

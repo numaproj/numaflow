@@ -96,6 +96,10 @@ func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) (
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
+func (f myForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return testutils.CopyUDFTestApplyStream(ctx, message)
+}
+
 func TestNewInterStepDataForward(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
 	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
@@ -552,6 +556,38 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 	}(ctx, message)
 }
 
+func (f mySourceForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return func(ctx context.Context, readMessage *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+		_ = ctx
+		offset := readMessage.ReadOffset
+		payload := readMessage.Body.Payload
+		parentPaneInfo := readMessage.MessageInfo
+
+		// apply source data transformer
+		_ = payload
+		// copy the payload
+		result := payload
+		// assign new event time
+		parentPaneInfo.EventTime = testSourceNewEventTime
+		var key []string
+
+		writeMessage := isb.Message{
+			Header: isb.Header{
+				MessageInfo: parentPaneInfo,
+				ID:          offset.String(),
+				Keys:        key,
+			},
+			Body: isb.Body{
+				Payload: result,
+			},
+		}
+		writeMessages := make(chan isb.WriteMessage)
+		errors := make(chan error)
+		writeMessages <- isb.WriteMessage{Message: writeMessage}
+		return writeMessages, errors
+	}(ctx, message)
+}
+
 // TestSourceWatermarkPublisher is a dummy implementation of isb.SourceWatermarkPublisher interface
 type TestSourceWatermarkPublisher struct {
 }
@@ -675,7 +711,8 @@ func TestWriteToBuffer(t *testing.T) {
 			messageToStep["to1"] = make([]isb.Message, 0)
 			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 			messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:11]...)
-			_, err = f.writeToBuffers(ctx, messageToStep)
+			writeOffsets := make(map[string][]isb.Offset, len(messageToStep))
+			err = f.writeToBuffers(ctx, messageToStep, &writeOffsets)
 
 			assert.Equal(t, value.throwError, err != nil)
 			if value.throwError {
@@ -781,6 +818,10 @@ func (f myForwardDropTest) WhereTo(_ []string, _ []string) ([]string, error) {
 
 func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
+}
+
+func (f myForwardDropTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return testutils.CopyUDFTestApplyStream(ctx, message)
 }
 
 // TestNewInterStepDataForwardToOneStep explicitly tests the case where we drop all events
@@ -891,6 +932,10 @@ func (f myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessa
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
+func (f myForwardToAllTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return testutils.CopyUDFTestApplyStream(ctx, message)
+}
+
 // TestNewInterStepDataForwardToOneStep explicitly tests the case where we forward to all buffers
 func TestNewInterStepData_forwardToAll(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
@@ -981,7 +1026,7 @@ func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]string, err
 	return []string{"to1"}, nil
 }
 
-func (f myForwardInternalErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -990,6 +1035,10 @@ func (f myForwardInternalErrTest) ApplyMap(ctx context.Context, message *isb.Rea
 		}{Flag: true, MainCarDown: false},
 		Message: "InternalErr test",
 	}
+}
+
+func (f myForwardInternalErrTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return nil, nil
 }
 
 func TestNewInterStepDataForward_WithInternalError(t *testing.T) {
@@ -1037,6 +1086,10 @@ func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
+func (f myForwardApplyWhereToErrTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return testutils.CopyUDFTestApplyStream(ctx, message)
+}
+
 // TestNewInterStepDataForward_WhereToError is used to test the scenario with error
 func TestNewInterStepDataForward_WhereToError(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
@@ -1082,6 +1135,10 @@ func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string) ([]string, err
 
 func (f myForwardApplyUDFErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, fmt.Errorf("UDF error")
+}
+
+func (f myForwardApplyUDFErrTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return nil, nil
 }
 
 // TestNewInterStepDataForward_UDFError is used to test the scenario with UDF error

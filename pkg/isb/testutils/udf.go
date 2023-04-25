@@ -47,3 +47,31 @@ func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb
 	}
 	return []*isb.WriteMessage{{Message: writeMessage}}, nil
 }
+
+func CopyUDFTestApplyStream(ctx context.Context, readMessage *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	_ = ctx
+	offset := readMessage.ReadOffset
+	payload := readMessage.Body.Payload
+	parentPaneInfo := readMessage.MessageInfo
+
+	// apply UDF
+	_ = payload
+	// copy the payload
+	result := payload
+	var keys []string
+
+	writeMessage := isb.Message{
+		Header: isb.Header{
+			MessageInfo: parentPaneInfo,
+			ID:          offset.String(),
+			Keys:        keys,
+		},
+		Body: isb.Body{
+			Payload: result,
+		},
+	}
+	writeMessageCh := make(chan isb.WriteMessage)
+	errorCh := make(chan error)
+	writeMessageCh <- isb.WriteMessage{Message: writeMessage}
+	return writeMessageCh, errorCh
+}

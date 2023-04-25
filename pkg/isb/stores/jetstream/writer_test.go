@@ -43,6 +43,10 @@ func (f myForwardJetStreamTest) ApplyMap(ctx context.Context, message *isb.ReadM
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
+func (f myForwardJetStreamTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return testutils.CopyUDFTestApplyStream(ctx, message)
+}
+
 // TestForwarderJetStreamBuffer is a test that is used to test forwarder with jetstream buffer
 func TestForwarderJetStreamBuffer(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)

@@ -127,3 +127,7 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 	}
 	return taggedMessages, nil
 }
+
+func (u *gRPCBasedTransformer) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return nil, nil
+}

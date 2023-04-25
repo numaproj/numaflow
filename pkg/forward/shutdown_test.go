@@ -41,6 +41,10 @@ func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) 
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
+func (s myShutdownTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	return testutils.CopyUDFTestApplyStream(ctx, message)
+}
+
 func TestInterStepDataForward_Stop(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
 	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)

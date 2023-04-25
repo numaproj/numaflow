@@ -129,6 +129,58 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 	return writeMessages, nil
 }
 
+func (u *UDSgRPCBasedUDF) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+	keys := message.Keys
+	payload := message.Body.Payload
+	offset := message.ReadOffset
+	parentMessageInfo := message.MessageInfo
+	id := message.Message.ID
+	numDelivered := message.Metadata.NumDelivered
+	var d = &functionpb.DatumRequest{
+		Keys:      keys,
+		Value:     payload,
+		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
+		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(message.Watermark)},
+		Metadata: &functionpb.Metadata{
+			Id:           id,
+			NumDelivered: numDelivered,
+		},
+	}
+
+	writeMessageCh := make(chan isb.WriteMessage)
+	errorCh := make(chan error)
+	go func() {
+		// TODO: change to Stream API MapFnStream
+		datumList, err := u.client.MapFn(ctx, d)
+		if err != nil {
+			errorCh <- err
+			return
+		}
+
+		for i, datum := range datumList {
+			keys := datum.Keys
+			taggedMessage := &isb.WriteMessage{
+				Message: isb.Message{
+					Header: isb.Header{
+						MessageInfo: parentMessageInfo,
+						ID:          fmt.Sprintf("%s-%d", offset.String(), i),
+						Keys:        keys,
+					},
+					Body: isb.Body{
+						Payload: datum.Value,
+					},
+				},
+				Tags: datum.Tags,
+			}
+			writeMessageCh <- *taggedMessage
+		}
+		close(writeMessageCh)
+		close(errorCh)
+	}()
+
+	return writeMessageCh, errorCh
+}
+
 // should we pass metadata information ?
 
 // ApplyReduce accepts a channel of isbMessages and returns the aggregated result
