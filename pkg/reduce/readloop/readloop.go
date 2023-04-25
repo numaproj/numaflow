@@ -236,7 +236,7 @@ messagesLoop:
 				} else {
 					startTime = nextWin.StartTime()
 				}
-				rl.log.Infow("Accepting the late message because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", startTime.UnixMilli()))
+				rl.log.Debugw("Accepting the late message because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", startTime.UnixMilli()))
 			}
 		}
 
