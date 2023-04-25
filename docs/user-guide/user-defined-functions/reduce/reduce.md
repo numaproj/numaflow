@@ -84,6 +84,22 @@ So for the example above, the value of the watermark will be set to the last tim
 
 This applies to all the window types regardless of whether they are keyed or non-keyed windows. 
 
+## Allowed Lateness
+
+By default, a late message will be dropped if the window has already been closed, but sometimes user may want to accept
+late messages. Therefore, we support the `allowedLateness` feature for the reduce operations to allow late data to be 
+processed by slowing the down the close-of-book operation of the desired reduce vertex. Late data will be included for
+the reduce operation as long as the late data is not later than `(CurrentWatermark - AllowedLateness)`. Each reduce 
+vertex can have its own `allowedLateness`.
+
+```yaml
+vertices:
+  - name: my-udf
+    udf:
+      groupBy:
+        allowedLateness: 1s # Optional, allowedLateness is disabled by default
+```
+
 ## Storage
 
 Reduce unlike map requires persistence. To support persistence user has to define the 
