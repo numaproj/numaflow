@@ -438,7 +438,7 @@ func (rl *ReadLoop) ShutDown(ctx context.Context) {
 // because windows are created out of order, but they will be closed in-order.
 func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKeyedWindower {
 
-	processingWindows := rl.windower.AssignWindow(m.EventTime.Add(-1 * rl.allowedLateness))
+	processingWindows := rl.windower.AssignWindow(m.EventTime)
 	var kWindows []window.AlignedKeyedWindower
 	for _, win := range processingWindows {
 		w, isPresent := rl.windower.InsertIfNotPresent(win)

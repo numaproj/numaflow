@@ -655,8 +655,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	// assert the output of reduce
 	var readMessagePayload PayloadForTest
 	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
-	// since the window duration is 60s and tps is 1, the count should be 60
-	assert.Equal(t, int64(60), int64(readMessagePayload.Value))
+	assert.Equal(t, int64(59), int64(readMessagePayload.Value))
 	assert.Equal(t, "count", readMessagePayload.Key)
 }
 
