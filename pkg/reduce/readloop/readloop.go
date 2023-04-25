@@ -240,11 +240,11 @@ messagesLoop:
 			}
 		}
 
-		// NOTE(potential bug): if we get a message where the event time is < watermark, skip processing the message.
+		// NOTE(potential bug): if we get a message where the event-time is < (watermark-allowedLateness), skip processing the message.
 		// This could be due to a couple of problem, eg. ack was not registered, etc.
 		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
 		// to be violated.
-		if message.EventTime.Before(message.Watermark) {
+		if message.EventTime.Before(message.Watermark.Add(-1 * rl.allowedLateness)) {
 			// TODO: track as a counter metric
 			rl.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
 			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
