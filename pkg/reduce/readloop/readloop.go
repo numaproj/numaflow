@@ -236,7 +236,7 @@ messagesLoop:
 				} else {
 					startTime = nextWin.StartTime()
 				}
-				rl.log.Debugw("Accepting the late message because COB has not happened yet", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", startTime))
+				rl.log.Infow("Accepting the late message because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", startTime.UnixMilli()))
 			}
 		}
 
@@ -438,7 +438,7 @@ func (rl *ReadLoop) ShutDown(ctx context.Context) {
 // because windows are created out of order, but they will be closed in-order.
 func (rl *ReadLoop) upsertWindowsAndKeys(m *isb.ReadMessage) []window.AlignedKeyedWindower {
 
-	processingWindows := rl.windower.AssignWindow(m.EventTime)
+	processingWindows := rl.windower.AssignWindow(m.EventTime.Add(-1 * rl.allowedLateness))
 	var kWindows []window.AlignedKeyedWindower
 	for _, win := range processingWindows {
 		w, isPresent := rl.windower.InsertIfNotPresent(win)
