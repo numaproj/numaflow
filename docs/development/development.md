@@ -16,7 +16,9 @@ This doc explains how to set up a development environment for Numaflow.
 ### Example: Create a local Kubernetes cluster with `kind`
 
 ```shell
+# Install kind on macOS
 brew install kind
+
 # Create a cluster with default name kind
 kind create cluster
 
