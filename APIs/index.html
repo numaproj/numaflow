@@ -3548,6 +3548,21 @@ Window describes the windowing strategy.
 </tr>
 <tr>
 <td>
+<code>allowedLateness</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+AllowedLateness allows late data to be included for the Reduce operation
+as long as the late data is not later than (Watermark -
+AllowedLateness).
+</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>storage</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.PBQStorage"> PBQStorage </a>
 </em>
