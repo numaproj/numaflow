@@ -86,7 +86,7 @@ This applies to all the window types regardless of whether they are keyed or non
 
 ## Allowed Lateness
 
-`allowedLateness` flag on the Reduce vertex that will allow late data to be 
+`allowedLateness` flag on the Reduce vertex will allow late data to be 
 processed by slowing the down the close-of-book operation of the Reduce vertex. Late data will be included for
 the Reduce operation as long as the late data is not later than `(CurrentWatermark - AllowedLateness)`. Without `allowedLateness`, late data will be rejected and will not be included in the Reduce operation. Each Reduce 
 vertex can have its own `allowedLateness`.
