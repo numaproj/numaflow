@@ -12,7 +12,7 @@ require (
 	github.com/gavv/httpexpect/v2 v2.3.1
 	github.com/gin-contrib/static v0.0.2-0.20220606235426-ae09b2ea7e39
 	github.com/gin-gonic/gin v1.8.1
-	github.com/go-redis/redis/v8 v8.11.4
+	//github.com/go-redis/redis/v8 v8.11.4
 	github.com/go-swagger/go-swagger v0.28.0
 	github.com/goccy/go-json v0.9.7
 	github.com/gogo/protobuf v1.3.2
@@ -30,6 +30,7 @@ require (
 	github.com/numaproj/numaflow-go v0.4.4
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/common v0.32.1
+	github.com/redis/go-redis/v9 v9.0.3
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72
 	github.com/spf13/cobra v1.2.1
