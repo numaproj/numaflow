@@ -86,10 +86,9 @@ This applies to all the window types regardless of whether they are keyed or non
 
 ## Allowed Lateness
 
-By default, a late message will be dropped if the window has already been closed, but sometimes user may want to accept
-late messages. Therefore, we support the `allowedLateness` feature for the reduce operations to allow late data to be 
-processed by slowing the down the close-of-book operation of the desired reduce vertex. Late data will be included for
-the reduce operation as long as the late data is not later than `(CurrentWatermark - AllowedLateness)`. Each reduce 
+`allowedLateness` flag on the Reduce vertex that will allow late data to be 
+processed by slowing the down the close-of-book operation of the Reduce vertex. Late data will be included for
+the Reduce operation as long as the late data is not later than `(CurrentWatermark - AllowedLateness)`. Without `allowedLateness`, late data will be rejected and will not be included in the Reduce operation. Each Reduce 
 vertex can have its own `allowedLateness`.
 
 ```yaml
@@ -97,7 +96,7 @@ vertices:
   - name: my-udf
     udf:
       groupBy:
-        allowedLateness: 1s # Optional, allowedLateness is disabled by default
+        allowedLateness: 5s # Optional, allowedLateness is disabled by default
 ```
 
 ## Storage
