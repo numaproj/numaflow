@@ -55,7 +55,7 @@ func Handle(_ context.Context, keys []string, data functionsdk.Datum) functionsd
 	if filterOut {
 		return functionsdk.MessageTsBuilder().Append(functionsdk.MessageTToDrop())
 	} else {
-		return functionsdk.MessageTsBuilder().Append(functionsdk.NewMessageT(eventTime, data.Value()).WithKeys(keys))
+		return functionsdk.MessageTsBuilder().Append(functionsdk.NewMessageT(data.Value(), eventTime).WithKeys(keys))
 	}
 }
 
