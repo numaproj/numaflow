@@ -18063,6 +18063,10 @@
     "io.numaproj.numaflow.v1alpha1.GroupBy": {
       "description": "GroupBy indicates it is a reducer UDF",
       "properties": {
+        "allowedLateness": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later than (Watermark - AllowedLateness)."
+        },
         "keyed": {
           "type": "boolean"
         },
