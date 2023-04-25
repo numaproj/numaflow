@@ -32,6 +32,9 @@ kind export kubeconfig
 - `make build`
   Binaries are placed in `./dist`.
 
+- `make manifests`
+  Regenerate all the manifests after making any base manifest changes. This is also covered by `make codegen`.
+
 - `make codegen`
   Run after making changes to `./pkg/api/`.
 
@@ -39,7 +42,7 @@ kind export kubeconfig
   Run unit tests.
 
 - `make image`
-  Build container image, and import it to `k3d`, `kind`, or `minikube` cluster if corresponding `kubeconfig` is sourced.
+  Build container image, and import it to `k3d`, `kind`, or `minikube` cluster if corresponding `KUBECONFIG` is sourced.
 
 - `make docs`
   Convert the docs to Github pages, check if there's any error.
