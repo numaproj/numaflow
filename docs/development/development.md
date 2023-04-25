@@ -13,7 +13,7 @@ This doc explains how to set up a development environment for Numaflow.
 1. [`yarn`](https://classic.yarnpkg.com/en/).
 1. A local Kubernetes cluster for development usage, pick either one of [`k3d`](https://k3d.io/), [`kind`](https://kind.sigs.k8s.io/), or [`minikube`](https://minikube.sigs.k8s.io/docs/start/).
 
-### Example: Create a `KIND` cluster
+### Example: Create a local Kubernetes cluster with `kind`
 
 ```shell
 brew install kind
