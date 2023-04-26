@@ -38,9 +38,9 @@ func NewServerInitCommand() *cobra.Command {
 				baseHref = baseHref + "/"
 			}
 
-			reactVar := fmt.Sprintf("REACT_APP_BASE_HREF=%s", baseHref)
-			if err := os.WriteFile("/ui/.env", []byte(reactVar), 0666); err != nil {
-				return fmt.Errorf("failed to create .env file: %w", err)
+			reactVar := fmt.Sprintf(`window.__RUNTIME_CONFIG__ = {"BASE_HREF":"%s"};`, baseHref)
+			if err := os.WriteFile("/ui/build/runtime-env.js", []byte(reactVar), 0666); err != nil {
+				return fmt.Errorf("failed to create runtime-env.js file: %w", err)
 			}
 			return nil
 		},

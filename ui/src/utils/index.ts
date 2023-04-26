@@ -1,8 +1,8 @@
 import { Pod, PodDetail, ResourceUsage } from "./models/pods";
 
 export function getBaseHref(): string {
-  if (process.env.REACT_APP_BASE_HREF) {
-    return process.env.REACT_APP_BASE_HREF
+  if (window.__RUNTIME_CONFIG__.BASE_HREF) {
+    return window.__RUNTIME_CONFIG__.BASE_HREF;
   }
   return "/";
 }

@@ -25,10 +25,10 @@ spec:
       - name: server-init
         image: quay.io/numaproj/numaflow:latest
         args:
-        - server-init
+        - "server-init"
         imagePullPolicy: Always
         volumeMounts:
-        - mountPath: /ui
+        - mountPath: /ui/build
           name: env-volume
       containers:
         - name: main
@@ -37,9 +37,9 @@ spec:
           - "server"
           imagePullPolicy: Always
           volumeMounts:
-          - mountPath: /ui/.env
+          - mountPath: /ui/build/runtime-env.js
             name: env-volume
-            subPath: .env
+            subPath: runtime-env.js
           env:
             - name: NAMESPACE
               valueFrom:
