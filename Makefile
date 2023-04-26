@@ -103,7 +103,7 @@ test-coverage-with-isb:
 
 .PHONY: test-code
 test-code:
-	go test -tags=isb_redis -race -v $(shell go list github.com/numaproj/numaflow/pkg/reduce | grep -v /vendor/ | grep -v /numaflow/test/) -timeout 600s
+	go test -tags=isb_redis -race -v $(shell go list github.com/numaproj/numaflow/pkg/reduce | grep -v /vendor/ | grep -v /numaflow/test/) -timeout 120s
 
 test-e2e-suite-1:
 test-e2e-suite-2:
@@ -113,7 +113,7 @@ test-nats-e2e:
 test-redis-streams-e2e:
 test-sdks-e2e:
 test-reduce-e2e:
-test-%:
+test-%: 
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
@@ -122,7 +122,7 @@ test-%:
 	go generate $(shell find ./test/$* -name '*.go')
 	go test -v -timeout 10m -count 1 --tags test -p 1 ./test/$*
 	$(MAKE) cleanup-e2e
-
+	
 
 .PHONY: cleanup-e2e
 cleanup-e2e:
@@ -191,7 +191,7 @@ clean:
 
 .PHONY: crds
 crds:
-	./hack/crdgen.sh
+	./hack/crdgen.sh	
 
 .PHONY: manifests
 manifests: crds
