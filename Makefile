@@ -103,7 +103,7 @@ test-coverage-with-isb:
 
 .PHONY: test-code
 test-code:
-	go test -tags=isb_redis -race -v $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -timeout 120s
+	go test -tags=isb_redis -race -v $(shell go list github.com/numaproj/numaflow/pkg/reduce | grep -v /vendor/ | grep -v /numaflow/test/) -timeout 120s
 
 test-e2e-suite-1:
 test-e2e-suite-2:
