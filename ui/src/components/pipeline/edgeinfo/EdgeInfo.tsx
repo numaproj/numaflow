@@ -116,25 +116,25 @@ export default function EdgeInfo(props: EdgeInfoProps) {
                     return (
                       <TableRow key={idx}>
                         <TableCell>
-                          {singleEdge.data.bufferName.slice(
+                          {singleEdge?.data?.bufferName.slice(
                             singleEdge.data.bufferName.indexOf("-") + 1
                           )}
                         </TableCell>
                         <TableCell data-testid="isFull">{isFull}</TableCell>
                         <TableCell data-testid="ackPending">
-                          {singleEdge.data.ackPending}
+                          {singleEdge?.data?.ackPending}
                         </TableCell>
                         <TableCell data-testid="pending">
-                          {singleEdge.data.pending}
+                          {singleEdge?.data?.pending}
                         </TableCell>
                         <TableCell data-testid="bufferLength">
-                          {singleEdge.data.bufferLength}
+                          {singleEdge?.data?.bufferLength}
                         </TableCell>
                         <TableCell data-testid="usage">
                           {bufferUsage}%
                         </TableCell>
                         <TableCell data-testid="totalMessages">
-                          {singleEdge.data.totalMessages}
+                          {singleEdge?.data?.totalMessages}
                         </TableCell>
                       </TableRow>
                     );

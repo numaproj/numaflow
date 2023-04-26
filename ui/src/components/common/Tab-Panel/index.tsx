@@ -11,6 +11,7 @@ export default function TabPanel(props: TabPanelProps) {
       hidden={value !== index}
       id={`info-tabpanel-${index}`}
       aria-labelledby={`info-tab-${index}`}
+      data-testid="info-tabpanel"
       {...other}
     >
       {value === index && <Box sx={{ p: "1.5rem" }}>{children}</Box>}
