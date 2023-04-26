@@ -1,7 +1,7 @@
 import { Pod, PodDetail, ResourceUsage } from "./models/pods";
 
 export function getBaseHref(): string {
-  if (window.__RUNTIME_CONFIG__.BASE_HREF) {
+  if (window.__RUNTIME_CONFIG__?.BASE_HREF) {
     return window.__RUNTIME_CONFIG__.BASE_HREF;
   }
   return "/";
