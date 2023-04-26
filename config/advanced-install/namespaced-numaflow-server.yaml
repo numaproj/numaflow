@@ -123,9 +123,9 @@ spec:
             cpu: 100m
             memory: 200Mi
         volumeMounts:
-        - mountPath: /ui/.env
+        - mountPath: /ui/build/runtime-env.js
           name: env-volume
-          subPath: .env
+          subPath: runtime-env.js
       initContainers:
       - args:
         - server-init
@@ -133,7 +133,7 @@ spec:
         imagePullPolicy: Always
         name: server-init
         volumeMounts:
-        - mountPath: /ui
+        - mountPath: /ui/build
           name: env-volume
       securityContext:
         runAsNonRoot: true
