@@ -118,8 +118,12 @@ type GroupBy struct {
 	Window Window `json:"window" protobuf:"bytes,1,opt,name=window"`
 	// +optional
 	Keyed bool `json:"keyed" protobuf:"bytes,2,opt,name=keyed"`
+	// AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later
+	// than (Watermark - AllowedLateness).
+	// +optional
+	AllowedLateness *metav1.Duration `json:"allowedLateness,omitempty" protobuf:"bytes,3,opt,name=allowedLateness"`
 	// Storage is used to define the PBQ storage for a reduce vertex.
-	Storage *PBQStorage `json:"storage,omitempty" protobuf:"bytes,3,opt,name=storage"`
+	Storage *PBQStorage `json:"storage,omitempty" protobuf:"bytes,4,opt,name=storage"`
 }
 
 // Window describes windowing strategy

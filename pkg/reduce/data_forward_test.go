@@ -583,7 +583,82 @@ func TestReduceDataForward_Count(t *testing.T) {
 	// since the window duration is 60s and tps is 1, the count should be 60
 	assert.Equal(t, int64(60), int64(readMessagePayload.Value))
 	assert.Equal(t, "count", readMessagePayload.Key)
+}
 
+func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
+	var (
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
+		batchSize      = 1
+		fromBufferSize = int64(100000)
+		toBufferSize   = int64(10)
+		messageValue   = 7
+		startTime      = 60000 // time in millis
+		fromBufferName = "source-reduce-buffer"
+		toBufferName   = "reduce-to-buffer"
+		pipelineName   = "test-reduce-pipeline"
+		err            error
+	)
+
+	defer cancel()
+
+	// create from buffers
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+
+	// create to buffers
+	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	toBuffer := map[string]isb.BufferWriter{
+		toBufferName: buffer,
+	}
+
+	// create pbq manager
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+	assert.NoError(t, err)
+
+	// create in memory watermark publisher and fetcher
+	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
+	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// create a fixed window of 10s
+	window := fixed.NewFixed(5 * time.Second)
+
+	var reduceDataForward *DataForward
+	allowedLatency := 1000
+	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
+		window, WithReadBatchSize(int64(batchSize)),
+		WithAllowedLateness(time.Duration(allowedLatency)*time.Millisecond),
+	)
+	assert.NoError(t, err)
+
+	// start the forwarder
+	go reduceDataForward.Start()
+
+	// start the producer
+	go publishMessagesAllowedLatency(ctx, startTime, messageValue, allowedLatency, 5, batchSize, p, fromBuffer)
+
+	// we are reading only one message here but the count should be equal to
+	// the number of keyed windows that closed
+	msgs, readErr := buffer.Read(ctx, 1)
+	assert.Nil(t, readErr)
+	for len(msgs) == 0 || msgs[0].Header.Kind == isb.WMB {
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+			msgs, readErr = buffer.Read(ctx, 1)
+			assert.Nil(t, readErr)
+		}
+	}
+
+	// assert the output of reduce
+	var readMessagePayload PayloadForTest
+	_ = json.Unmarshal(msgs[0].Payload, &readMessagePayload)
+	// without allowedLatency the value would be 4
+	assert.Equal(t, int64(5), int64(readMessagePayload.Value))
+	assert.Equal(t, "count", readMessagePayload.Key)
 }
 
 // Sum operation with 2 minutes window
@@ -1158,6 +1233,83 @@ func buildIsbMessage(messageValue int, eventTime time.Time) isb.Message {
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{
 				EventTime: eventTime,
+			},
+			ID:   fmt.Sprintf("%d", messageValue),
+			Keys: messageKey,
+		},
+		Body: isb.Body{Payload: result},
+	}
+}
+
+// publishMessagesAllowedLatency is only used for xxxAllowedLatency test
+func publishMessagesAllowedLatency(ctx context.Context, startTime int, message int, allowedLatency int, windowSize int, batchSize int, publish publish.Publisher, fromBuffer *simplebuffer.InMemoryBuffer) {
+	counter := 0
+	inputMsgs := make([]isb.Message, batchSize)
+	for i := 0; i <= windowSize; i++ {
+		// to simulate real usage
+		time.Sleep(time.Second)
+		et := startTime + i*1000
+		// normal cases, eventTime = watermark
+		wm := wmb.Watermark(time.UnixMilli(int64(et)))
+		inputMsg := buildIsbMessage(message, time.UnixMilli(int64(et)))
+		if i == windowSize-1 {
+			// et is now (window.EndTime - 1000)
+			et = et + 1000
+			// set wm to be the window.EndTime
+			// because we've set allowedLatency, so COB is not triggered
+			wm = wmb.Watermark(time.UnixMilli(int64(et)))
+			// set the eventTime = wm
+			inputMsg = buildIsbMessage(message, time.UnixMilli(int64(et)))
+		}
+		if i == windowSize {
+			// et is now window.EndTime
+			// set wm to be the window.EndTime + allowedLatency to trigger COB
+			wm = wmb.Watermark(time.UnixMilli(int64(et + allowedLatency)))
+			// set message eventTime to still be inside the window
+			// so the eventTime is now smaller than wm, the message isLate is set to true
+			et = et - 100
+			inputMsg = buildIsbMessageAllowedLatency(message, time.UnixMilli(int64(et)))
+		}
+		inputMsgs[counter] = inputMsg
+		counter += 1
+
+		if counter >= batchSize {
+			offsets, _ := fromBuffer.Write(ctx, inputMsgs)
+			if len(offsets) > 0 {
+				publish.PublishWatermark(wm, offsets[len(offsets)-1])
+			}
+			counter = 0
+		}
+	}
+
+	// dummy message to start a new window
+	// COB won't happen for this window
+	et := 6000000
+	wm := wmb.Watermark(time.UnixMilli(int64(et)))
+	inputMsgs = []isb.Message{buildIsbMessage(message, time.UnixMilli(int64(et)))}
+	offsets, _ := fromBuffer.Write(ctx, inputMsgs)
+	if len(offsets) > 0 {
+		publish.PublishWatermark(wm, offsets[len(offsets)-1])
+	}
+}
+
+func buildIsbMessageAllowedLatency(messageValue int, eventTime time.Time) isb.Message {
+	var messageKey []string
+	if messageValue%2 == 0 {
+		messageKey = []string{"even"}
+	} else {
+		messageKey = []string{"odd"}
+	}
+
+	result, _ := json.Marshal(PayloadForTest{
+		Key:   messageKey[0],
+		Value: messageValue,
+	})
+	return isb.Message{
+		Header: isb.Header{
+			MessageInfo: isb.MessageInfo{
+				EventTime: eventTime,
+				IsLate:    true,
 			},
 			ID:   fmt.Sprintf("%d", messageValue),
 			Keys: messageKey,
