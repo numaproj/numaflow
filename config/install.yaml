@@ -12694,12 +12694,12 @@ spec:
         - controller
         env:
         - name: NUMAFLOW_IMAGE
-          value: quay.io/numaproj/numaflow:v0.8.0-rc1
+          value: quay.io/numaproj/numaflow:v0.8.0
         - name: NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: quay.io/numaproj/numaflow:v0.8.0-rc1
+        image: quay.io/numaproj/numaflow:v0.8.0
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -12758,7 +12758,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: quay.io/numaproj/numaflow:v0.8.0-rc1
+        image: quay.io/numaproj/numaflow:v0.8.0
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
