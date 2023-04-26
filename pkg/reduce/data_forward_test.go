@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -587,8 +586,6 @@ func TestReduceDataForward_Count(t *testing.T) {
 }
 
 func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
-	os.Setenv("NUMAFLOW_DEBUG", "true")
-	defer os.Unsetenv("NUMAFLOW_DEBUG")
 	var (
 		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		batchSize      = 1
