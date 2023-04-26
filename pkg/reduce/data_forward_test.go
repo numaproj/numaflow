@@ -1282,14 +1282,24 @@ func publishMessagesAllowedLatency(ctx context.Context, startTime int, message i
 		}
 	}
 
-	// dummy message to start a new window
+	// dummy messages to
+	//  - start a new window
+	//  - make sure readloop can
+	//    read a message,
+	//    get the `6000000` watermark,
+	//    and close the first window.
 	// COB won't happen for this window
-	et := 6000000
-	wm := wmb.Watermark(time.UnixMilli(int64(et)))
-	inputMsgs = []isb.Message{buildIsbMessage(message, time.UnixMilli(int64(et)))}
-	offsets, _ := fromBuffer.Write(ctx, inputMsgs)
-	if len(offsets) > 0 {
-		publish.PublishWatermark(wm, offsets[len(offsets)-1])
+	// will exit early when the test is done
+	for i := 0; i <= 10; i++ {
+		// to simulate real usage
+		time.Sleep(time.Second)
+		et := 6000000 + i
+		wm := wmb.Watermark(time.UnixMilli(int64(et)))
+		inputMsgs = []isb.Message{buildIsbMessage(message, time.UnixMilli(int64(et)))}
+		offsets, _ := fromBuffer.Write(ctx, inputMsgs)
+		if len(offsets) > 0 {
+			publish.PublishWatermark(wm, offsets[len(offsets)-1])
+		}
 	}
 }
 
