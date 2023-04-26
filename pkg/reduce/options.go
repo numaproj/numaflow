@@ -17,6 +17,8 @@ limitations under the License.
 package reduce
 
 import (
+	"time"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
@@ -24,13 +26,16 @@ import (
 type Options struct {
 	// readBatchSize is the default batch size
 	readBatchSize int64
+	// allowedLateness is the time.Duration it waits after the watermark has progressed for late-date to be included
+	allowedLateness time.Duration
 }
 
 type Option func(*Options) error
 
 func DefaultOptions() *Options {
 	return &Options{
-		readBatchSize: dfv1.DefaultReadBatchSize,
+		readBatchSize:   dfv1.DefaultReadBatchSize,
+		allowedLateness: time.Duration(0),
 	}
 }
 
@@ -38,6 +43,14 @@ func DefaultOptions() *Options {
 func WithReadBatchSize(f int64) Option {
 	return func(o *Options) error {
 		o.readBatchSize = f
+		return nil
+	}
+}
+
+// WithAllowedLateness sets allowedLateness
+func WithAllowedLateness(t time.Duration) Option {
+	return func(o *Options) error {
+		o.allowedLateness = t
 		return nil
 	}
 }

@@ -67,9 +67,10 @@ type ReadLoop struct {
 	publishWatermark      map[string]publish.Publisher
 	udfInvocationTracking map[partition.ID]*task
 	idleManager           *wmb.IdleManager
+	allowedLateness       time.Duration
 }
 
-// NewReadLoop initializes  and returns ReadLoop.
+// NewReadLoop initializes and returns ReadLoop.
 func NewReadLoop(ctx context.Context,
 	vertexName string,
 	pipelineName string,
@@ -81,6 +82,7 @@ func NewReadLoop(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
 	idleManager *wmb.IdleManager,
+	allowedLateness time.Duration,
 ) (*ReadLoop, error) {
 	op := newOrderedForwarder(ctx, vertexName, pipelineName, vr)
 
@@ -98,6 +100,7 @@ func NewReadLoop(ctx context.Context,
 		publishWatermark:      pw,
 		udfInvocationTracking: make(map[partition.ID]*task),
 		idleManager:           idleManager,
+		allowedLateness:       allowedLateness,
 	}
 
 	err := rl.Startup(ctx)
@@ -176,7 +179,7 @@ func (rl *ReadLoop) Process(ctx context.Context, messages []*isb.ReadMessage) {
 	var closedWindows []window.AlignedKeyedWindower
 	wm := wmb.Watermark(successfullyWrittenMessages[0].Watermark)
 
-	closedWindows = rl.windower.RemoveWindows(time.Time(wm))
+	closedWindows = rl.windower.RemoveWindows(time.Time(wm).Add(-1 * rl.allowedLateness))
 
 	rl.log.Debugw("Windows eligible for closing", zap.Int("length", len(closedWindows)), zap.Time("watermark", time.Time(wm)))
 
@@ -233,15 +236,15 @@ messagesLoop:
 				} else {
 					startTime = nextWin.StartTime()
 				}
-				rl.log.Debugw("Accepting the late message because COB has not happened yet", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", startTime))
+				rl.log.Debugw("Keeping the late message for next condition check because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", startTime.UnixMilli()))
 			}
 		}
 
-		// NOTE(potential bug): if we get a message where the event time is < watermark, skip processing the message.
+		// NOTE(potential bug): if we get a message where the event-time is < (watermark-allowedLateness), skip processing the message.
 		// This could be due to a couple of problem, eg. ack was not registered, etc.
 		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
 		// to be violated.
-		if message.EventTime.Before(message.Watermark) {
+		if message.EventTime.Before(message.Watermark.Add(-1 * rl.allowedLateness)) {
 			// TODO: track as a counter metric
 			rl.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
 			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
