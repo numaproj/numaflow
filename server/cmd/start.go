@@ -36,7 +36,6 @@ var (
 	}
 )
 
-// add accessPath to change base path for URL
 func Start(insecure bool, port int, namespaced bool, managedNamespace string, baseHref string) {
 	logger := logging.NewLogger().Named("server")
 	router := gin.New()
