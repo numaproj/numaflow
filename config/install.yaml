@@ -2,7 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: interstepbufferservices.numaflow.numaproj.io
 spec:
@@ -2448,7 +2448,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: pipelines.numaflow.numaproj.io
 spec:
@@ -8116,7 +8116,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: vertices.numaflow.numaproj.io
 spec:
@@ -12552,10 +12552,10 @@ data:
             sentinel failover-timeout mymaster 2000
             sentinel parallel-syncs mymaster 1
         versions:
-        - version: 6.2.6
-          redisImage: bitnami/redis:6.2.6-debian-10-r97
-          sentinelImage: bitnami/redis-sentinel:6.2.6-debian-10-r95
-          redisExporterImage: bitnami/redis-exporter:1.33.0-debian-10-r21
+        - version: 7.0.11
+          redisImage: bitnami/redis:7.0.11-debian-11-r3
+          sentinelImage: bitnami/redis-sentinel:7.0.11-debian-11-r3
+          redisExporterImage: bitnami/redis-exporter:1.50.0-debian-11-r4
           initContainerImage: debian:latest
       jetstream:
         # Default JetStream settings, could be overridden by InterStepBufferService specs
