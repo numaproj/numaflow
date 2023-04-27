@@ -1,12 +1,11 @@
 # Sinks
 
-A sink serves as the endpoint for processed data that has been outputted from the platform,
-which is then sent to an external system or application. The purpose of a sink is to deliver 
+The Sink serves as the endpoint for processed data that has been outputted from the platform,
+which is then sent to an external system or application. The purpose of the Sink is to deliver 
 the processed data to its ultimate destination, such as a database, data warehouse, visualization 
-tool, or alerting system. It's the opposite of a source, which receives input data into the platform.
-To fulfill its role, a sink component may require the transformation or formatting of data prior to 
-sending it to the target system. Depending on the target system's needs, this transformation can be 
-simple or complex.
+tool, or alerting system. It's the opposite of the Source vettex, which receives input data into the platform.
+Sink vertex may require transformation or formatting of data prior to sending it to the target system. Depending on the 
+target system's needs, this transformation can be simple or complex.
 
 A pipeline can have many Sink vertices, unlike the Source vertex.
 
