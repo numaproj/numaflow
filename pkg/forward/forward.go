@@ -244,11 +244,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][]isb.Message)
-	var toBuffers string // logging purpose
 	for buffer := range isdf.toBuffers {
 		// over allocating to have a predictable pattern
 		messageToStep[buffer] = make([]isb.Message, 0, len(dataMessages))
-		toBuffers += buffer + ","
 	}
 
 	// udf concurrent processing request channel
@@ -415,7 +413,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	ackMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(readOffsets)))
 
 	// ProcessingTimes of the entire forwardAChunk
-	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "from": isdf.fromBuffer.GetName(), "to": toBuffers}).Observe(float64(time.Since(start).Microseconds()))
+	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 }
 
 // ackFromBuffer acknowledges an array of offsets back to fromBuffer and is a blocking call or until shutdown has been initiated.
