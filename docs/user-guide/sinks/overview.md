@@ -20,3 +20,4 @@ supported by the platform's built-in sinks.
 As an example, once we have processed the input messages, 
 we can use Elasticsearch as a User defined sink to store the processed data and enable search and analysis
 on the data.
+
