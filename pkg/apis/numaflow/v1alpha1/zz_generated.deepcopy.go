@@ -753,6 +753,11 @@ func (in *GetVertexPodSpecReq) DeepCopy() *GetVertexPodSpecReq {
 func (in *GroupBy) DeepCopyInto(out *GroupBy) {
 	*out = *in
 	in.Window.DeepCopyInto(&out.Window)
+	if in.AllowedLateness != nil {
+		in, out := &in.AllowedLateness, &out.AllowedLateness
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	if in.Storage != nil {
 		in, out := &in.Storage, &out.Storage
 		*out = new(PBQStorage)

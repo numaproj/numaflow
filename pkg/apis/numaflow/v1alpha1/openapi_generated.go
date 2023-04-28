@@ -1622,6 +1622,12 @@ func schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref common.ReferenceCallback) com
 							Format:  "",
 						},
 					},
+					"allowedLateness": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later than (Watermark - AllowedLateness).",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 					"storage": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Storage is used to define the PBQ storage for a reduce vertex.",
@@ -1633,7 +1639,7 @@ func schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
