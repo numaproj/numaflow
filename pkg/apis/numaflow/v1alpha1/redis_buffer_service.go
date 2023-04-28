@@ -200,6 +200,8 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 					{Name: "REDIS_MASTER_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
 					{Name: "REDIS_TLS_ENABLED", Value: "no"},
 					{Name: "REDIS_PORT", Value: fmt.Sprint(req.RedisContainerPort)},
+					{Name: "REDIS_SENTINEL_TLS_ENABLED", Value: "no"},
+					{Name: "REDIS_SENTINEL_PORT", Value: fmt.Sprint(req.SentinelContainerPort)},
 					{Name: "REDIS_DATA_DIR", Value: "/data"},
 				},
 				Lifecycle: &corev1.Lifecycle{
