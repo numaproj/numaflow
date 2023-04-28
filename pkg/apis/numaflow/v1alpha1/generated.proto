@@ -476,8 +476,13 @@ message GroupBy {
   // +optional
   optional bool keyed = 2;
 
+  // AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later
+  // than (Watermark - AllowedLateness).
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration allowedLateness = 3;
+
   // Storage is used to define the PBQ storage for a reduce vertex.
-  optional PBQStorage storage = 3;
+  optional PBQStorage storage = 4;
 }
 
 message HTTPSource {
