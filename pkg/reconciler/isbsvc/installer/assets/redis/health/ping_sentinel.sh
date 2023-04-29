@@ -8,6 +8,10 @@ response=$(
     -p $REDIS_SENTINEL_PORT \
     ping
 )
+if [ "$?" -eq "124" ]; then
+  echo "Timed out"
+  exit 1
+fi
 if [ "$response" != "PONG" ]; then
   echo "$response"
   exit 1

@@ -9,7 +9,12 @@ response=$(
     -p $REDIS_MASTER_PORT_NUMBER \
     ping
 )
-if [ "$response" != "PONG" ] && [ "$response" != "LOADING Redis is loading the dataset in memory" ]; then
+if [ "$?" -eq "124" ]; then
+  echo "Timed out"
+  exit 1
+fi
+responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
+if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ]; then
   echo "$response"
   exit 1
 fi
