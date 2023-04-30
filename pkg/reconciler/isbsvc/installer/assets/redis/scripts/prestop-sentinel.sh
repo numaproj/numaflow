@@ -6,6 +6,7 @@
 HEADLESS_SERVICE="{{.HeadlessServiceName}}.{{.Namespace}}.svc.cluster.local"
 SENTINEL_SERVICE_ENV_NAME=REDIS_SENTINEL_SERVICE_PORT_TCP_SENTINEL
 SENTINEL_SERVICE_PORT=${!SENTINEL_SERVICE_ENV_NAME}
+REDIS_SERVICE="{{.ServiceName}}.{{.Namespace}}.svc.cluster.local"
 
 get_full_hostname() {
     hostname="$1"
@@ -26,7 +27,6 @@ sentinel_failover_finished() {
     [[ "$REDIS_MASTER_HOST" != "$(get_full_hostname $HOSTNAME)" ]]
 }
 
-REDIS_SERVICE="redis-helm-17-8-5-default.numaflow-system.svc.cluster.local"
 
 # redis-cli automatically consumes credentials from the REDISCLI_AUTH variable
 [[ -n "$REDIS_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_PASSWORD"

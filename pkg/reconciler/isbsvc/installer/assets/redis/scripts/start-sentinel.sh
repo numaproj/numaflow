@@ -36,7 +36,7 @@ get_full_hostname() {
 
 SERVPORT=$(get_port "$HOSTNAME" "SENTINEL")
 REDISPORT=$(get_port "$HOSTNAME" "REDIS")
-SENTINEL_SERVICE_PORT=$(get_port "redis-helm-17-8-5-default" "TCP_SENTINEL")
+SENTINEL_SERVICE_PORT=$(get_port "{{.ServiceName}}" "TCP_SENTINEL")
 
 sentinel_conf_set() {
     local -r key="${1:?missing key}"
@@ -123,7 +123,7 @@ add_known_replica() {
 
 # Add available hosts on the network as known replicas & sentinels
 for node in $(seq 0 $((3-1))); do
-    hostname="redis-helm-17-8-5-default-node-$node"
+    hostname="{{.StatefulSetName}}-$node"
     ip="$(getent hosts "$hostname.$HEADLESS_SERVICE" | awk '{ print $1 }')"
     add_known_sentinel "$hostname" "$ip"
     add_known_replica "$hostname" "$ip"
