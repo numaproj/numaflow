@@ -1,4 +1,3 @@
-
 #!/bin/bash
 [[ -f $REDIS_MASTER_PASSWORD_FILE ]] && export REDIS_MASTER_PASSWORD="$(<
 "${REDIS_MASTER_PASSWORD_FILE}")"
