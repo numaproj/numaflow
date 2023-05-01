@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.8.0 (2023-04-26)
+
+ * [e57ca73](https://github.com/numaproj/numaflow/commit/e57ca739d3ca7539f2090c2509580174269b0e44) Update manifests to v0.8.0
+ * [652be8d](https://github.com/numaproj/numaflow/commit/652be8d60c13c6b43f9aabe0f317876dcbdcda23) feat: allowedLateness to support late data ingestion (#703)
+ * [8e7e3b6](https://github.com/numaproj/numaflow/commit/8e7e3b61efaf2c1b695d4c6e2c14a4c631b8baee) fix: allow late message as long as window is not closed (#696)
+ * [fcaed47](https://github.com/numaproj/numaflow/commit/fcaed47d0a4654376bed2e500274dee370e7f848) fix: add wal dir x permission (#689)
+ * [aae08fa](https://github.com/numaproj/numaflow/commit/aae08fa1b93cb156af1b977608e7bf73dabcd42f) chore(doc): refactor doc struct (#685)
+
+### Contributors
+
+ * Derek Wang
+ * Vigith Maurice
+
 ## v0.8.0-rc1 (2023-04-14)
 
  * [ca88313](https://github.com/numaproj/numaflow/commit/ca88313d52c67700b7d7d74a6e326235783a06f6) Update manifests to v0.8.0-rc1

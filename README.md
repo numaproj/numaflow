@@ -37,8 +37,12 @@ full-featured stream processing platforms.
 
 ## Roadmap
 
-- User Defined Transformer at Source for better deserialization and filter for cost reduction (v0.8)
 - Multi partitioned edges for higher throughput (v0.9)
+- Decentralized ISB (v0.10)
+
+## Demo
+
+[![Numaflow Demo](https://img.youtube.com/vi/hJS714arX6Q/0.jpg)](https://youtu.be/hJS714arX6Q)
 
 ## Resources
 

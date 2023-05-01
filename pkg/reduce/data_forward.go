@@ -84,7 +84,8 @@ func NewDataForward(ctx context.Context,
 	idleManager := wmb.NewIdleManager(len(toBuffers))
 
 	rl, err := readloop.NewReadLoop(ctx, vertexInstance.Vertex.Spec.Name, vertexInstance.Vertex.Spec.PipelineName,
-		vertexInstance.Replica, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers, idleManager)
+		vertexInstance.Replica, udf, pbqManager, windowingStrategy, toBuffers, whereToDecider, watermarkPublishers,
+		idleManager, options.allowedLateness)
 
 	df := &DataForward{
 		ctx:                 ctx,

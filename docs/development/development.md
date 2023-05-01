@@ -13,14 +13,17 @@ This doc explains how to set up a development environment for Numaflow.
 1. [`yarn`](https://classic.yarnpkg.com/en/).
 1. A local Kubernetes cluster for development usage, pick either one of [`k3d`](https://k3d.io/), [`kind`](https://kind.sigs.k8s.io/), or [`minikube`](https://minikube.sigs.k8s.io/docs/start/).
 
-### Example: Create a k8s cluster with k3d
+### Example: Create a local Kubernetes cluster with `kind`
 
 ```shell
-# Create a cluster with default name k3s-default
-k3d cluster create -i rancher/k3s:v1.24.4-k3s1
+# Install kind on macOS
+brew install kind
+
+# Create a cluster with default name kind
+kind create cluster
 
 # Get kubeconfig for the cluster
-k3d kubeconfig get k3s-default
+kind export kubeconfig
 ```
 
 ### Useful Commands
@@ -31,6 +34,9 @@ k3d kubeconfig get k3s-default
 - `make build`
   Binaries are placed in `./dist`.
 
+- `make manifests`
+  Regenerate all the manifests after making any base manifest changes. This is also covered by `make codegen`.
+
 - `make codegen`
   Run after making changes to `./pkg/api/`.
 
@@ -38,7 +44,7 @@ k3d kubeconfig get k3s-default
   Run unit tests.
 
 - `make image`
-  Build container image, and import it to `k3d`, `kind`, or `minikube` cluster if corresponding `kubeconfig` is sourced.
+  Build container image, and import it to `k3d`, `kind`, or `minikube` cluster if corresponding `KUBECONFIG` is sourced.
 
 - `make docs`
   Convert the docs to Github pages, check if there's any error.
