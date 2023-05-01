@@ -17,10 +17,10 @@ get_port() {
     if [ -z "$port" ]; then
         case $type in
             "SENTINEL")
-                echo 26379
+                echo {{.SentinelPort}}
                 ;;
             "REDIS")
-                echo 6379
+                echo {{.RedisPort}}
                 ;;
         esac
     else
