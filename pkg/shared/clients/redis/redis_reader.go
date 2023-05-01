@@ -154,22 +154,6 @@ func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error
 
 func (br *RedisStreamsRead) NoAck(_ context.Context, _ []isb.Offset) {}
 
-func (br *RedisStreamsRead) Pending(_ context.Context) (int64, error) {
-	// try calling XINFO GROUPS <stream> and look for 'Lag' key. For Redis Server < 7.0, this should always return 0.
-
-	result := br.Client.XInfoGroups(RedisContext, br.Stream)
-	groups, err := result.Result()
-	fmt.Printf("deletethis: groups=%+v, err=%v\n", groups, err)
-	// find our ConsumerGroup
-	for _, group := range groups {
-		if group.Name == br.Group {
-			fmt.Printf("deletethis: lag=%d\n", group.Lag)
-			return group.Lag, nil
-		}
-	}
-	return isb.PendingNotAvailable, fmt.Errorf("ConsumerGroup %q not found in XInfoGroups result %+v", br.Group, groups)
-}
-
 // processXReadResult is used to process the results of XREADGROUP
 func (br *RedisStreamsRead) processXReadResult(startIndex string, count int64) ([]redis.XStream, error) {
 	result := br.Client.XReadGroup(RedisContext, &redis.XReadGroupArgs{

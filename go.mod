@@ -12,7 +12,6 @@ require (
 	github.com/gavv/httpexpect/v2 v2.3.1
 	github.com/gin-contrib/static v0.0.2-0.20220606235426-ae09b2ea7e39
 	github.com/gin-gonic/gin v1.8.1
-	//github.com/go-redis/redis/v8 v8.11.4
 	github.com/go-swagger/go-swagger v0.28.0
 	github.com/goccy/go-json v0.9.7
 	github.com/gogo/protobuf v1.3.2
