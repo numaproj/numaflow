@@ -8,7 +8,7 @@
 
 `Edge` is the connection between the vertices, specifically, `edge` is defined in the pipeline spec under `.spec.edges`. No matter the to vertex is a map, or a reduce with multiple partitions, it is considered as one edge.
 
-In the following pipeline , there are 3 edges defined (`in` - `aoti`, `aoti` - `compute-sum`, `compute-sum` - `sink`).
+In the following pipeline , there are 3 edges defined (`in` - `aoti`, `aoti` - `compute-sum`, `compute-sum` - `out`).
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -35,7 +35,7 @@ spec:
             fixed:
               length: 60s
           keyed: true
-    - name: sink
+    - name: out
       scale:
         min: 1
       sink:
@@ -47,7 +47,7 @@ spec:
       to: compute-sum
       parallelism: 2
     - from: compute-sum
-      to: sink
+      to: out
 ```
 
 Each `edge` could have a name for internal usage, the naming convention is `{pipeline-name}-{from-vertex-name}-{to-vertex-name}`.
@@ -58,7 +58,7 @@ Each `edge` could have a name for internal usage, the naming convention is `{pip
 
 When multiple vertices connecting to the same vertex, if the to vertex is a map, the data from all the from vertices will be forwarded to the group of partitoned buffers round-robinly. If the to vertex is a reduce, the data from all the from vertices will be forwarded to the group of partitoned buffers based on the partitioning key.
 
-A source vertex does not have any owned buffers. But a pipeline may have multiple source vertices, followed by one vertex. Same as above, if the following vertex is a map, the data from all the source vertices will be forwarded to the group of partitoned buffers round-robinly. If it is a reduce, the data from all the source vertices will be forwarded to the group of partitoned buffers based on the partitioning key.
+A Source vertex does not have any owned buffers. But a pipeline may have multiple Source vertices, followed by one vertex. Same as above, if the following vertex is a map, the data from all the Source vertices will be forwarded to the group of partitoned buffers round-robinly. If it is a reduce, the data from all the Source vertices will be forwarded to the group of partitoned buffers based on the partitioning key.
 
 ## Buckets
 
@@ -66,9 +66,9 @@ A source vertex does not have any owned buffers. But a pipeline may have multipl
 
 There are 3 types of buckets in a pipeline:
 
-- `Edge Bucket`: used for edge watermark propagation. For Map vertices or Sink vertices, each of them has one bucket; for Reduce vertices, each of them has N buckets, where N is the partitions.
-- `Source Bucket`: used for source watermark propagation.
-- `Sink Bucket`: sitting on the right side of a sink vertex, used for sink watermark.
+- `Edge Bucket`: Each edge has a bucket, used for edge watermark propagation, no matter the vertex that the edge leads to is a map or a reduce .
+- `Source Bucket`: Each Source vertex has a source bucket, used for source watermark propagation.
+- `Sink Bucket`: Sitting on the right side of a Sink vertex, used for sink watermark.
 
 ## Diagrams
 
