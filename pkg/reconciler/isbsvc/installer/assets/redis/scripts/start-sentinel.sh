@@ -122,7 +122,7 @@ add_known_replica() {
 }
 
 # Add available hosts on the network as known replicas & sentinels
-for node in $(seq 0 $((3-1))); do
+for node in $(seq 0 $(({{.Replicas}}-1))); do
     hostname="{{.StatefulSetName}}-$node"
     ip="$(getent hosts "$hostname.$HEADLESS_SERVICE" | awk '{ print $1 }')"
     add_known_sentinel "$hostname" "$ip"
