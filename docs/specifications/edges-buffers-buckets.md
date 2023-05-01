@@ -66,9 +66,9 @@ A Source vertex does not have any owned buffers. But a pipeline may have multipl
 
 There are 3 types of buckets in a pipeline:
 
-- `Edge Bucket`: Each edge has a bucket, used for edge watermark propagation, no matter the vertex that the edge leads to is a map or a reduce .
-- `Source Bucket`: Each Source vertex has a source bucket, used for source watermark propagation.
-- `Sink Bucket`: Sitting on the right side of a Sink vertex, used for sink watermark.
+- `Edge Bucket`: Each edge has a bucket, used for edge watermark propagation, no matter the vertex that the edge leads to is a map or a reduce. The naming convention of an edge bucket is `{pipeline-name}-{from-vertex-name}-{to-vertex-name}`.
+- `Source Bucket`: Each Source vertex has a source bucket, used for source watermark propagation. The naming convention of a source bucket is `{pipeline-name}-{vertex-name}-SOURCE`.
+- `Sink Bucket`: Sitting on the right side of a Sink vertex, used for sink watermark. The naming convention of a sink bucket is `{pipeline-name}-{vertex-name}-SINK`.
 
 ## Diagrams
 
