@@ -106,7 +106,7 @@ nav:
           - Overview: "specifications/overview.md"
           - specifications/controllers.md
           - specifications/autoscaling.md
-          - specifications/edges-and-buffers.md
+          - Edges, Buffers and Buckets: "specifications/edges-buffers-buckets.md"
       - development/debugging.md
       - development/static-code-analysis.md
       - development/releasing.md
