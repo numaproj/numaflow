@@ -33,7 +33,7 @@ export default function Spec(props: SpecProps) {
         <Tabs
           value={value}
           onChange={handleChange}
-          aria-label="basic tabs example"
+          aria-label="pipeline details"
         >
           <Tab
             sx={{

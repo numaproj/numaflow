@@ -11,6 +11,7 @@ import Checkbox from "@mui/material/Checkbox";
 import Highlighter from "react-highlight-words";
 import "@stardazed/streams-polyfill";
 import "./PodLogs.css";
+import { ReadableStreamDefaultReadResult } from "stream/web";
 
 export interface PodLogsProps {
   namespaceId: string;
@@ -214,7 +215,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
       >
         {filteredLogs.map((l: string, idx) => (
           <Box
-            key={idx}
+            key={l + "-" + idx}
             component="span"
             sx={{
               whiteSpace: "nowrap",

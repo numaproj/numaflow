@@ -1,6 +1,6 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import { TabPanelProps } from "../../../utils/types/declarations/tabpanel";
+import { TabPanelProps } from "../../../types/declarations/tabpanel";
 
 export default function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
