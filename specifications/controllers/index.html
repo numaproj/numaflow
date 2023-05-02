@@ -1732,8 +1732,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../edges-and-buffers/" class="md-nav__link">
-        Edges And Buffers
+      <a href="../edges-buffers-buckets/" class="md-nav__link">
+        Edges, Buffers and Buckets
       </a>
     </li>
   
@@ -1889,7 +1889,7 @@
 <h2 id="pipeline-controller">Pipeline Controller<a class="headerlink" href="#pipeline-controller" title="Permanent link">&para;</a></h2>
 <p>Pipeline Controller is used to watch <code>Pipeline</code> objects, it does following major things when there's a pipeline object created.</p>
 <ul>
-<li>Spawn a Kubernetes Job to create <a href="../edges-and-buffers/">buffers</a> in the <a href="../../core-concepts/inter-step-buffer-service/">Inter-Step Buffer Services</a>.</li>
+<li>Spawn a Kubernetes Job to create <a href="../edges-buffers-buckets/">buffers and buckets</a> in the <a href="../../core-concepts/inter-step-buffer-service/">Inter-Step Buffer Services</a>.</li>
 <li>Create <code>Vertex</code> objects according to <code>.spec.vertices</code> defined in <code>Pipeline</code> object.</li>
 <li>Create some other Kubernetes objects used for the Pipeline, such as a Deployment and a Service for daemon service application.</li>
 </ul>

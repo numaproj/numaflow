@@ -13,7 +13,7 @@
     
     
       
-        <title>Edges And Buffers - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Edges, Buffers and Buckets - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#edges-and-buffers" class="md-skip">
+        <a href="#edges-buffers-and-buckets" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Edges And Buffers
+              Edges, Buffers and Buckets
             
           </span>
         </div>
@@ -1686,9 +1686,61 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Edges, Buffers and Buckets
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
-        Edges And Buffers
+        Edges, Buffers and Buckets
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#edges" class="md-nav__link">
+    Edges
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buffers" class="md-nav__link">
+    Buffers
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buckets" class="md-nav__link">
+    Buckets
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diagrams" class="md-nav__link">
+    Diagrams
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1785,6 +1837,42 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#edges" class="md-nav__link">
+    Edges
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buffers" class="md-nav__link">
+    Buffers
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buckets" class="md-nav__link">
+    Buckets
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diagrams" class="md-nav__link">
+    Diagrams
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1795,16 +1883,20 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/specifications/edges-and-buffers.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/specifications/edges-buffers-buckets.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="edges-and-buffers">Edges And Buffers<a class="headerlink" href="#edges-and-buffers" title="Permanent link">&para;</a></h1>
-<p><code>Edge</code> and <code>Buffer</code> are two logic concepts used in <code>Numaflow</code>, this page is used to describe the definition of them.</p>
-<p><code>Edge</code> means the connection between the vertices, specifically, <code>edge</code> is defined in the pipeline spec under <code>.spec.egdes</code>. For each <code>edge</code> definition, no matter the to vertex is a map, or a reduce with <code>parallelism &gt; 1</code>, it is considered as one edge.</p>
-<p>In the following pipeline example, there are 3 edges defined (<code>in</code> - <code>aoti</code>, <code>aoti</code> - <code>compute-sum</code>, <code>compute-sum</code> - <code>sink</code>).</p>
+<h1 id="edges-buffers-and-buckets">Edges, Buffers and Buckets<a class="headerlink" href="#edges-buffers-and-buckets" title="Permanent link">&para;</a></h1>
+<p><img alt="Proposal" src="../../assets/proposal.svg" /></p>
+<blockquote>
+<p>This document describes the concepts of <code>Edge</code>, <code>Buffer</code> and <code>Bucket</code> in a pipeline.</p>
+</blockquote>
+<h2 id="edges">Edges<a class="headerlink" href="#edges" title="Permanent link">&para;</a></h2>
+<p><code>Edge</code> is the connection between the vertices, specifically, <code>edge</code> is defined in the pipeline spec under <code>.spec.edges</code>. No matter if the <code>to</code> vertex is a Map, or a Reduce with multiple partitions, it is considered as one edge.</p>
+<p>In the following pipeline , there are 3 edges defined (<code>in</code> - <code>aoti</code>, <code>aoti</code> - <code>compute-sum</code>, <code>compute-sum</code> - <code>out</code>).</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -1829,7 +1921,7 @@
 <span class="w">            </span><span class="nt">fixed</span><span class="p">:</span>
 <span class="w">              </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span>
 <span class="w">          </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sink</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 <span class="w">      </span><span class="nt">scale</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">min</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
@@ -1841,18 +1933,26 @@
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
 <span class="w">      </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">compute-sum</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sink</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
-<p><code>Buffer</code> is a concept different from <code>edge</code> but has lots of connections. Usually, each <code>edge</code> has one or more corresponding buffers, depending on the to vertex type (map or reduce). If the to vertex is a reduce and the edge parallelism &gt; 1, there will be multiple buffers defined for that edge.</p>
-<p><code>Buffers</code> are not only defined for <code>edges</code>, but also for <code>Source</code> and <code>Sink</code> vertices - each <code>Source</code> and <code>Sink</code> vertex has a corresponding <code>buffer</code>.</p>
-<p>In summary, there are 3 types of <code>buffers</code> in a pipeline:</p>
+<p>Each <code>edge</code> could have a name for internal usage, the naming convention is <code>{pipeline-name}-{from-vertex-name}-{to-vertex-name}</code>.</p>
+<h2 id="buffers">Buffers<a class="headerlink" href="#buffers" title="Permanent link">&para;</a></h2>
+<p><code>Buffer</code> is <code>InterStepBuffer</code>. Each buffer has an owner, which is the vertex who reads from it. Each <code>udf</code> and <code>sink</code> vertex in a pipeline owns a group of partitioned buffers. Each buffer has a name with the naming convention <code>{pipeline-name}-{vertex-name}-{index}</code>, where the <code>index</code> is the partition index, starting from 0. This naming convention applies to the buffers of both map and reduce udf vertices.</p>
+<p>When multiple vertices connecting to the same vertex, if the <code>to</code> vertex is a Map, the data from all the from vertices will be forwarded to the group of partitoned buffers round-robinly. If the <code>to</code> vertex is a Reduce, the data from all the from vertices will be forwarded to the group of partitoned buffers based on the partitioning key.</p>
+<p>A Source vertex does not have any owned buffers. But a pipeline may have multiple Source vertices, followed by one vertex. Same as above, if the following vertex is a map, the data from all the Source vertices will be forwarded to the group of partitoned buffers round-robinly. If it is a reduce, the data from all the Source vertices will be forwarded to the group of partitoned buffers based on the partitioning key.</p>
+<h2 id="buckets">Buckets<a class="headerlink" href="#buckets" title="Permanent link">&para;</a></h2>
+<p><code>Bucket</code> is a K/V store (or a pair of stores) used for watermark propagation.</p>
+<p>There are 3 types of buckets in a pipeline:</p>
 <ul>
-<li>Edge Buffer</li>
-<li>Source Buffer</li>
-<li>Sink Buffer</li>
+<li><code>Edge Bucket</code>: Each edge has a bucket, used for edge watermark propagation, no matter if the vertex that the edge leads to is a Map or a Reduce. The naming convention of an edge bucket is <code>{pipeline-name}-{from-vertex-name}-{to-vertex-name}</code>.</li>
+<li><code>Source Bucket</code>: Each Source vertex has a source bucket, used for source watermark propagation. The naming convention of a source bucket is <code>{pipeline-name}-{vertex-name}-SOURCE</code>.</li>
+<li><code>Sink Bucket</code>: Sitting on the right side of a Sink vertex, used for sink watermark. The naming convention of a sink bucket is <code>{pipeline-name}-{vertex-name}-SINK</code>.</li>
 </ul>
-<p>Each buffer has a name, the naming conversions for different type of buffers can be found in the <a href="https://github.com/numaproj/numaflow/blob/main/pkg/apis/numaflow/v1alpha1/vertex_types.go">source code</a>.</p>
-<p><code>Buffer</code> is only used internally, it's transparent to the users. Each Inter-Step Buffer implementation should have something physical to map to the <code>buffers</code>. For example, In JetStream Inter-Step ISB implementation, a K/V bucket will be created for a <code>Source Buffer</code> or a <code>Sink Buffer</code>, and a K/V bucket plus a Stream will be created for a <code>Edge Buffer</code>. These buffer management operations are done by K8s jobs spawned by the controllers during pipeline creation and deletion.</p>
+<h2 id="diagrams">Diagrams<a class="headerlink" href="#diagrams" title="Permanent link">&para;</a></h2>
+<p><strong>Map</strong>
+<img alt="Diagram" src="../../assets/map-edges-buffers-buckets.png" /></p>
+<p><strong>Reduce</strong>
+<img alt="Diagram" src="../../assets/reduce-edges-buffers-buckets.png" /></p>
 
               
             </article>
