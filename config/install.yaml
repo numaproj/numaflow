@@ -12535,17 +12535,16 @@ data:
             min-replicas-to-write 1
             # Disable RDB persistence, AOF persistence already enabled.
             save ""
-            maxmemory 512mb
-            maxmemory-policy allkeys-lru
-          # Special config only used by master
-          master: |
-            appendonly no
-          # Special config only used by replicas
-          replica: |
             # Enable AOF https://redis.io/topics/persistence#append-only-file
             appendonly yes
             auto-aof-rewrite-percentage 100
             auto-aof-rewrite-min-size 64mb
+            maxmemory 512mb
+            maxmemory-policy allkeys-lru
+          # Special config only used by master
+          master: ""
+          # Special config only used by replicas
+          replica: ""
           # Sentinel config
           sentinel: |
             sentinel down-after-milliseconds mymaster 10000
