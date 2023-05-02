@@ -41,7 +41,7 @@ export default function NodeInfo(props: NodeInfoProps) {
   return (
     <Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs value={value}>
+        <Tabs value={0}>
           <Tab data-testid={node?.id} label={label} {...a11yProps(0)} />
         </Tabs>
       </Box>

@@ -35,7 +35,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
   return (
     <Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs value={value}>
+        <Tabs value={0}>
           <Tab data-testid={edge?.id} label={label} {...a11yProps(0)} />
         </Tabs>
       </Box>
