@@ -215,7 +215,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
       >
         {filteredLogs.map((l: string, idx) => (
           <Box
-            key={l + "-" + idx}
+            key={`${l}-${idx}`}
             component="span"
             sx={{
               whiteSpace: "nowrap",

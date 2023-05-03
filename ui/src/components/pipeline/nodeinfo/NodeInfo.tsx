@@ -126,7 +126,7 @@ export default function NodeInfo(props: NodeInfoProps) {
                 <TableBody>
                   {node.data.vertexMetrics.podMetrics.map((podMetric, idx) => {
                     return (
-                      <TableRow key={"vertex-processingRate-" + idx}>
+                      <TableRow key={`vertex-processingRate-${idx}`}>
                         <TableCell>{idx}</TableCell>
                         <TableCell>
                           {"processingRates" in podMetric &&

@@ -114,7 +114,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
                       ).toFixed(2);
                     }
                     return (
-                      <TableRow key={"edge-info-" + idx}>
+                      <TableRow key={`edge-info-${idx}`}>
                         <TableCell>
                           {singleEdge?.data?.bufferName.slice(
                             singleEdge.data.bufferName.indexOf("-") + 1
@@ -162,7 +162,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
               <TableBody>
                 {edge.data.edgeWatermark?.watermarks &&
                   edge.data.edgeWatermark.watermarks.map((Watermark, idx) => (
-                    <TableRow key={"edge-watermark-" + idx}>
+                    <TableRow key={`edge-watermark-${idx}`}>
                       <TableCell>{idx}</TableCell>
                       <TableCell>
                         {Watermark} ({new Date(Watermark).toISOString()})
@@ -186,7 +186,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
               return (
                 <ReactJson
                   name="conditions"
-                  key={"edge-condition-" + idx}
+                  key={`edge-condition-${idx}`}
                   enableClipboard={handleCopy}
                   theme="apathy:inverted"
                   src={singleEdge.data.conditions}
