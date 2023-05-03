@@ -226,17 +226,31 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 					},
 					InitialDelaySeconds: 20,
 					TimeoutSeconds:      5,
+					PeriodSeconds:       5,
 					FailureThreshold:    5,
 				},
 				ReadinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						Exec: &corev1.ExecAction{
-							Command: []string{"sh", "-c", "/health/ping_readiness_local.sh 5"},
+							Command: []string{"sh", "-c", "/health/ping_readiness_local.sh 1"},
 						},
 					},
 					InitialDelaySeconds: 20,
-					TimeoutSeconds:      5,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       5,
 					FailureThreshold:    5,
+				},
+				StartupProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_liveness_local.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 10,
+					TimeoutSeconds:      5,
+					PeriodSeconds:       10,
+					FailureThreshold:    22,
+					SuccessThreshold:    1,
 				},
 			},
 			{
@@ -270,16 +284,30 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 					InitialDelaySeconds: 20,
 					TimeoutSeconds:      5,
 					FailureThreshold:    5,
+					PeriodSeconds:       5,
 				},
 				ReadinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_sentinel.sh 1"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       5,
+					FailureThreshold:    5,
+				},
+				StartupProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						Exec: &corev1.ExecAction{
 							Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
 						},
 					},
-					InitialDelaySeconds: 20,
+					InitialDelaySeconds: 10,
 					TimeoutSeconds:      5,
-					FailureThreshold:    5,
+					PeriodSeconds:       10,
+					FailureThreshold:    22,
+					SuccessThreshold:    1,
 				},
 				VolumeMounts: []corev1.VolumeMount{
 					{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
@@ -306,8 +334,24 @@ redis_exporter`},
 				},
 			},
 		},
+		Affinity: &corev1.Affinity{
+			PodAntiAffinity: &corev1.PodAntiAffinity{
+				PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+					{
+						PodAffinityTerm: corev1.PodAffinityTerm{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: req.Labels,
+							},
+							TopologyKey: "kubernetes.io/hostname",
+						},
+						Weight: 1,
+					},
+				},
+			},
+		},
 	}
 	nr.AbstractPodTemplate.ApplyToPodSpec(podSpec)
+
 	spec := appv1.StatefulSetSpec{
 		Replicas:    &replicas,
 		ServiceName: req.ServiceName,
