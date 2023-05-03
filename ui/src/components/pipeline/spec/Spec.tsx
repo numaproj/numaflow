@@ -10,7 +10,7 @@ import {
   Tabs,
 } from "@mui/material";
 import { SyntheticEvent, useState } from "react";
-import TabPanel from "../tab-panel/TabPanel";
+import TabPanel from "../../common/Tab-Panel";
 import { a11yProps } from "../../../utils";
 import { Pipeline } from "../../../utils/models/pipeline";
 
@@ -28,12 +28,12 @@ export default function Spec(props: SpecProps) {
   };
 
   return (
-    <div>
+    <Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Tabs
           value={value}
           onChange={handleChange}
-          aria-label="basic tabs example"
+          aria-label="pipeline details"
         >
           <Tab
             sx={{
@@ -46,38 +46,36 @@ export default function Spec(props: SpecProps) {
           />
         </Tabs>
       </Box>
-      <Box>
-        <TabPanel value={value} index={0}>
-          <TableContainer
-            component={Paper}
-            sx={{ borderBottom: 1, borderColor: "divider", width: 500 }}
+      <TabPanel value={value} index={0}>
+        <TableContainer
+          component={Paper}
+          sx={{ borderBottom: 1, borderColor: "divider", width: 500 }}
+        >
+          <Table
+            sx={{ borderBottom: 1, borderColor: "divider" }}
+            aria-label="pipeline-spec"
           >
-            <Table
-              sx={{ borderBottom: 1, borderColor: "divider" }}
-              aria-label="pipeline-spec"
-            >
-              <TableBody>
-                <TableRow data-testid="phase">
-                  <TableCell>Phase</TableCell>
-                  <TableCell align="left">{pipeline?.status?.phase}</TableCell>
-                </TableRow>
-                <TableRow data-testid="creation-timestamp">
-                  <TableCell>Creation Timestamp</TableCell>
-                  <TableCell align="left">
-                    {pipeline?.metadata?.creationTimestamp}
-                  </TableCell>
-                </TableRow>
-                <TableRow data-testid="last-updated-timestamp">
-                  <TableCell>Last Updated Timestamp</TableCell>
-                  <TableCell align="left">
-                    {pipeline?.status?.lastUpdated}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </TabPanel>
-      </Box>
-    </div>
+            <TableBody>
+              <TableRow data-testid="phase">
+                <TableCell>Phase</TableCell>
+                <TableCell align="left">{pipeline?.status?.phase}</TableCell>
+              </TableRow>
+              <TableRow data-testid="creation-timestamp">
+                <TableCell>Creation Timestamp</TableCell>
+                <TableCell align="left">
+                  {pipeline?.metadata?.creationTimestamp}
+                </TableCell>
+              </TableRow>
+              <TableRow data-testid="last-updated-timestamp">
+                <TableCell>Last Updated Timestamp</TableCell>
+                <TableCell align="left">
+                  {pipeline?.status?.lastUpdated}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+    </Box>
   );
 }

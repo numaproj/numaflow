@@ -119,8 +119,9 @@ export default function Graph(props: GraphProps) {
   const [edge, setEdge] = useState<Edge>();
 
   const handleEdgeClick = (event: MouseEvent, edge: Edge) => {
-    setEdgeOpen(true);
+    setEdge(edge);
     setEdgeId(edge.id);
+    setEdgeOpen(true);
     setShowSpec(false);
     setNodeOpen(false);
   };
@@ -146,8 +147,9 @@ export default function Graph(props: GraphProps) {
   const [node, setNode] = useState<Node>();
 
   const handleNodeClick = (event: MouseEvent, node: Node) => {
-    setNodeOpen(true);
+    setNode(node);
     setNodeId(node.id);
+    setNodeOpen(true);
     setShowSpec(false);
     setEdgeOpen(false);
   };
@@ -205,7 +207,7 @@ export default function Graph(props: GraphProps) {
           zoomOnScroll={true}
           panOnDrag={true}
         >
-          <Controls/>
+          <Controls />
         </ReactFlow>
       </div>
 
@@ -215,7 +217,9 @@ export default function Graph(props: GraphProps) {
         variant={"outlined"}
       >
         {showSpec && <Spec pipeline={data.pipeline} />}
-        {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} edges={edges}/>}
+        {edgeOpen && (
+          <EdgeInfo data-testid="edge-info" edge={edge} edges={edges} />
+        )}
         {nodeOpen && (
           <NodeInfo
             data-testid="node-info"
