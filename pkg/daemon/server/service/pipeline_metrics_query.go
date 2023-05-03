@@ -186,6 +186,11 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		podNum = int64(*obj[0].Parallelism)
 	}
 
+	var vertexLevelRates map[string]float64
+	if ps.useNewRateCalculation {
+		vertexLevelRates = ps.rateCalculators[req.GetVertex()].GetRates()
+	}
+
 	// Get the headless service name
 	headlessServiceName := vertex.GetHeadlessServiceName()
 
@@ -227,8 +232,6 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 						}
 					}
 				}
-			} else {
-				println("TODO - add proposed implementation.")
 			}
 
 			if value, ok := result[metrics.VertexPendingMessages]; ok {
@@ -250,9 +253,16 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 					Vertex:          req.Vertex,
 					ProcessingRates: processingRates,
 					Pendings:        pendings,
+					// not setting vertex level rates for old rate calculation
 				}
 			} else {
-				println("TODO - add proposed implementation.")
+				metricsArr[i] = &daemon.VertexMetrics{
+					Pipeline: &ps.pipeline.Name,
+					Vertex:   req.Vertex,
+					// not setting processing rates for new rate calculation
+					Pendings:              pendings,
+					VertexProcessingRates: vertexLevelRates,
+				}
 			}
 		}
 	}
@@ -284,16 +294,32 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 
 		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
 		for _, vertexMetrics := range vertexResp.VertexMetrics {
-			if pending, ok := vertexMetrics.GetPendings()["default"]; ok {
-				if processingRate, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
-					if pending > 0 && processingRate == 0 {
-						resp.Status = &daemon.PipelineStatus{
-							Status:  pointer.String(PipelineStatusError),
-							Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
-						}
-						return resp, nil
-					}
+			var pending int64
+			var processingRate float64
+			if p, ok := vertexMetrics.GetPendings()["default"]; ok {
+				pending = p
+			} else {
+				continue
+			}
+
+			if ps.useNewRateCalculation {
+				if p, ok := vertexMetrics.GetVertexProcessingRates()["default"]; ok {
+					processingRate = p
+				} else {
+					continue
 				}
+			} else if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
+				processingRate = p
+			} else {
+				continue
+			}
+
+			if pending > 0 && processingRate == 0 {
+				resp.Status = &daemon.PipelineStatus{
+					Status:  pointer.String(PipelineStatusError),
+					Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
+				}
+				return resp, nil
 			}
 		}
 	}

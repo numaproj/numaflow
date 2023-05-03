@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
 	"time"
@@ -25,6 +26,9 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
+// fixedLookbackSeconds Always maintain rate metrics for the following lookback seconds (1m, 5m, 15m)
+var fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
+
 // RateCalculator is a struct that calculates the processing rate of a vertex.
 type RateCalculator struct {
 	vertexName string
@@ -32,6 +36,10 @@ type RateCalculator struct {
 
 	timestampedTotalCounts *sharedqueue.OverflowQueue[TimestampedCount]
 	lastSawPodCounts       map[string]int64
+	processingRates        map[string]float64
+	refreshInterval        time.Duration
+
+	userSpecifiedLookback int64
 }
 
 // NewRateCalculator creates a new rate calculator.
@@ -45,12 +53,46 @@ func NewRateCalculator(v *v1alpha1.AbstractVertex) *RateCalculator {
 			},
 			Timeout: time.Second * 3,
 		},
-		timestampedTotalCounts: sharedqueue.New[TimestampedCount](100),
+		// maintain the total counts of the last 30 minutes since we support 1m, 5m, 15m lookback seconds.
+		timestampedTotalCounts: sharedqueue.New[TimestampedCount](1800),
 		lastSawPodCounts:       make(map[string]int64),
+		processingRates:        make(map[string]float64),
+		refreshInterval:        5 * time.Second, // Default refresh interval
+
+		userSpecifiedLookback: int64(v.Scale.GetLookbackSeconds()),
 	}
 	return &rc
 }
 
-func (rc *RateCalculator) CalculateRate(lookback int64) float64 {
-	return float64(0)
+// Start TODO - how to stop and how to handle errors?
+// Start starts the rate calculator that periodically fetches the total counts, calculates and updates the rates.
+func (rc *RateCalculator) Start(ctx context.Context) error {
+	lookbackSecondsMap := map[string]int64{"default": rc.userSpecifiedLookback}
+	for k, v := range fixedLookbackSeconds {
+		lookbackSecondsMap[k] = v
+	}
+
+	go func() {
+		ticker := time.NewTicker(rc.refreshInterval)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				// TODO - fetch total counts from the vertex and update the timestamped total counts queue
+
+				// calculate rates for each lookback seconds
+				for n, i := range lookbackSecondsMap {
+					r := CalculateRate(rc.timestampedTotalCounts, i)
+					rc.processingRates[n] = r
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (rc *RateCalculator) GetRates() map[string]float64 {
+	return rc.processingRates
 }

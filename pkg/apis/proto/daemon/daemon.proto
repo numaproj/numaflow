@@ -46,7 +46,7 @@ message VertexMetrics {
   map<string, double> processingRates = 3;
   map<string, int64> pendings = 4;
   // Processing rate of the entire vertex.
-  optional string processingRate = 5;
+  map<string, double> vertexProcessingRates = 5;
 }
 
 // PipelineStatus

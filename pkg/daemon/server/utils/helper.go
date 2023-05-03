@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
@@ -33,12 +34,12 @@ type TimestampedCount struct {
 // CalculateRate calculates the processing rate over the last lookback seconds.
 // It uses the timestamped count queue to retrieve the first and last count in the lookback window and calculate the rate using formula:
 // rate = (lastCount - firstCount) / (lastTimestamp - firstTimestamp)
-func CalculateRate(tc queue.OverflowQueue[TimestampedCount], lookback int64) float64 {
+func CalculateRate(tc *queue.OverflowQueue[TimestampedCount], lookback int64) float64 {
 	// TODO - This is a dummy implementation. It should be replaced with a real one.
 	_ = tc
 	_ = lookback
 
 	_ = tc.Items()[0].timestamp
 	_ = tc.Items()[0].count
-	return float64(0)
+	return isb.RateNotAvailable
 }
