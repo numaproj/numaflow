@@ -133,7 +133,7 @@ export function getPodContainerUsePercentages(
 
 export function a11yProps(index: number) {
   return {
-    id: `simple-tab-${index}`,
-    "aria-controls": `simple-tabpanel-${index}`,
+    id: `info-tab-${index}`,
+    "aria-controls": `info-tabpanel-${index}`,
   };
 }
