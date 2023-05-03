@@ -46,6 +46,7 @@ const (
 
 	VertexProcessingRate  = "vertex_processing_rate"
 	VertexPendingMessages = "vertex_pending_messages"
+	ForwarderReadTotal    = "forwarder_read_total"
 )
 
 var (

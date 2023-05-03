@@ -36,6 +36,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/daemon/server/service"
+	server "github.com/numaproj/numaflow/pkg/daemon/server/utils"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -47,6 +48,8 @@ import (
 type daemonServer struct {
 	pipeline   *v1alpha1.Pipeline
 	isbSvcType v1alpha1.ISBSvcType
+
+	// rateCalculators map[string]*server.RateCalculator
 }
 
 func NewDaemonServer(pl *v1alpha1.Pipeline, isbSvcType v1alpha1.ISBSvcType) *daemonServer {
@@ -87,6 +90,12 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
+	// Prepare rate calculators
+	rateCalculators := make(map[string]*server.RateCalculator, 0)
+	for _, v := range ds.pipeline.Spec.Vertices {
+		rateCalculators[v.Name] = server.NewRateCalculator(&v)
+	}
+
 	// Start listener
 	var conn net.Listener
 	var listerErr error
@@ -102,7 +111,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-	grpcServer, err := ds.newGRPCServer(isbSvcClient, wmFetchers)
+	grpcServer, err := ds.newGRPCServer(isbSvcClient, wmFetchers, rateCalculators)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
@@ -123,7 +132,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService, wmFetchers map[string][]fetch.Fetcher) (*grpc.Server, error) {
+func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService, wmFetchers map[string][]fetch.Fetcher, rateCalculators map[string]*server.RateCalculator) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -137,7 +146,7 @@ func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService, wmFetchers
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers)
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rateCalculators, false)
 	if err != nil {
 		return nil, err
 	}

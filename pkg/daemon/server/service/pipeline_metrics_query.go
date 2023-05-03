@@ -31,6 +31,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
+	server "github.com/numaproj/numaflow/pkg/daemon/server/utils"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -49,6 +50,11 @@ type pipelineMetadataQuery struct {
 	pipeline          *v1alpha1.Pipeline
 	httpClient        metricsHttpClient
 	watermarkFetchers map[string][]fetch.Fetcher
+	// rateCalculators is a map of vertex name to rate calculator
+	rateCalculators map[string]*server.RateCalculator
+
+	// temporary flag to help with testing new rate calculation approach
+	useNewRateCalculation bool
 }
 
 const (
@@ -58,18 +64,26 @@ const (
 )
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
-func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline, wmFetchers map[string][]fetch.Fetcher) (*pipelineMetadataQuery, error) {
+func NewPipelineMetadataQuery(
+	isbSvcClient isbsvc.ISBService,
+	pipeline *v1alpha1.Pipeline,
+	wmFetchers map[string][]fetch.Fetcher,
+	rateCalculators map[string]*server.RateCalculator,
+	useNewRateCalculation bool) (*pipelineMetadataQuery, error) {
+	// TODO - there is never an error thrown here, so this can be removed.
 	var err error
 	ps := pipelineMetadataQuery{
-		isbSvcClient:      isbSvcClient,
-		pipeline:          pipeline,
-		watermarkFetchers: wmFetchers,
+		isbSvcClient: isbSvcClient,
+		pipeline:     pipeline,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
 			Timeout: time.Second * 3,
 		},
+		watermarkFetchers:     wmFetchers,
+		rateCalculators:       rateCalculators,
+		useNewRateCalculation: useNewRateCalculation,
 	}
 	if err != nil {
 		return nil, err
@@ -199,18 +213,22 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 				return nil, err
 			}
 
-			// Check if the resultant metrics list contains the processingRate, if it does look for the period label
-			if value, ok := result[metrics.VertexProcessingRate]; ok {
-				metricsList := value.GetMetric()
-				for _, metric := range metricsList {
-					labels := metric.GetLabel()
-					for _, label := range labels {
-						if label.GetName() == metrics.LabelPeriod {
-							lookback := label.GetValue()
-							processingRates[lookback] = metric.Gauge.GetValue()
+			if !ps.useNewRateCalculation {
+				// Check if the resultant metrics list contains the processingRate, if it does look for the period label
+				if value, ok := result[metrics.VertexProcessingRate]; ok {
+					metricsList := value.GetMetric()
+					for _, metric := range metricsList {
+						labels := metric.GetLabel()
+						for _, label := range labels {
+							if label.GetName() == metrics.LabelPeriod {
+								lookback := label.GetValue()
+								processingRates[lookback] = metric.Gauge.GetValue()
+							}
 						}
 					}
 				}
+			} else {
+				println("TODO - add proposed implementation.")
 			}
 
 			if value, ok := result[metrics.VertexPendingMessages]; ok {
@@ -226,11 +244,15 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 				}
 			}
 
-			metricsArr[i] = &daemon.VertexMetrics{
-				Pipeline:        &ps.pipeline.Name,
-				Vertex:          req.Vertex,
-				ProcessingRates: processingRates,
-				Pendings:        pendings,
+			if !ps.useNewRateCalculation {
+				metricsArr[i] = &daemon.VertexMetrics{
+					Pipeline:        &ps.pipeline.Name,
+					Vertex:          req.Vertex,
+					ProcessingRates: processingRates,
+					Pendings:        pendings,
+				}
+			} else {
+				println("TODO - add proposed implementation.")
 			}
 		}
 	}
