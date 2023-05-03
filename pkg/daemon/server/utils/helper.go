@@ -17,7 +17,6 @@ limitations under the License.
 package server
 
 import (
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
@@ -39,7 +38,10 @@ func CalculateRate(tc *queue.OverflowQueue[TimestampedCount], lookback int64) fl
 	_ = tc
 	_ = lookback
 
-	_ = tc.Items()[0].timestamp
-	_ = tc.Items()[0].count
-	return isb.RateNotAvailable
+	if len(tc.Items()) > 0 {
+		_ = tc.Items()[0].timestamp
+		_ = tc.Items()[0].count
+	}
+
+	return float64(421)
 }

@@ -253,15 +253,13 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 					Vertex:          req.Vertex,
 					ProcessingRates: processingRates,
 					Pendings:        pendings,
-					// not setting vertex level rates for old rate calculation
 				}
 			} else {
 				metricsArr[i] = &daemon.VertexMetrics{
-					Pipeline: &ps.pipeline.Name,
-					Vertex:   req.Vertex,
-					// not setting processing rates for new rate calculation
-					Pendings:              pendings,
-					VertexProcessingRates: vertexLevelRates,
+					Pipeline:        &ps.pipeline.Name,
+					Vertex:          req.Vertex,
+					ProcessingRates: vertexLevelRates,
+					Pendings:        pendings,
 				}
 			}
 		}
@@ -302,13 +300,7 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 				continue
 			}
 
-			if ps.useNewRateCalculation {
-				if p, ok := vertexMetrics.GetVertexProcessingRates()["default"]; ok {
-					processingRate = p
-				} else {
-					continue
-				}
-			} else if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
+			if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
 				processingRate = p
 			} else {
 				continue

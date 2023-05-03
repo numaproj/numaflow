@@ -48,8 +48,6 @@ import (
 type daemonServer struct {
 	pipeline   *v1alpha1.Pipeline
 	isbSvcType v1alpha1.ISBSvcType
-
-	// rateCalculators map[string]*server.RateCalculator
 }
 
 func NewDaemonServer(pl *v1alpha1.Pipeline, isbSvcType v1alpha1.ISBSvcType) *daemonServer {
@@ -90,10 +88,15 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
-	// Prepare rate calculators
+	// start the rate calculator for each of the vertices
+	// TODO - start calculators in parallel
 	rateCalculators := make(map[string]*server.RateCalculator, 0)
 	for _, v := range ds.pipeline.Spec.Vertices {
-		rateCalculators[v.Name] = server.NewRateCalculator(&v)
+		rc := server.NewRateCalculator(&v)
+		if err := rc.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start rate calculator for vertex %s, %w", v.Name, err)
+		}
+		rateCalculators[v.Name] = rc
 	}
 
 	// Start listener
@@ -146,7 +149,7 @@ func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService, wmFetchers
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rateCalculators, false)
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rateCalculators, true)
 	if err != nil {
 		return nil, err
 	}

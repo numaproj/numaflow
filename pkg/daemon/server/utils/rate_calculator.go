@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
@@ -64,13 +65,18 @@ func NewRateCalculator(v *v1alpha1.AbstractVertex) *RateCalculator {
 	return &rc
 }
 
-// Start TODO - how to stop and how to handle errors?
+// Start TODO - how to stop and how to handle errors? seems the caller will do ctx done as signal to stop.
 // Start starts the rate calculator that periodically fetches the total counts, calculates and updates the rates.
 func (rc *RateCalculator) Start(ctx context.Context) error {
+	log := logging.FromContext(ctx).Named("RateCalculator")
+	log.Infof("Starting rate calculator for vertex %s...", rc.vertexName)
+
 	lookbackSecondsMap := map[string]int64{"default": rc.userSpecifiedLookback}
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}
+
+	log.Infof("Keran is testing, the refresh interval is %v", rc.refreshInterval)
 
 	go func() {
 		ticker := time.NewTicker(rc.refreshInterval)
@@ -84,6 +90,7 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 				// calculate rates for each lookback seconds
 				for n, i := range lookbackSecondsMap {
 					r := CalculateRate(rc.timestampedTotalCounts, i)
+					log.Infof("Updating rate for vertex %s, lookback period is %s, rate is %v", rc.vertexName, n, r)
 					rc.processingRates[n] = r
 				}
 			}
