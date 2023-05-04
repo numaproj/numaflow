@@ -110,8 +110,8 @@ func (nr NativeRedis) GetServiceSpec(req GetRedisServiceSpecReq) corev1.ServiceS
 			{Name: "tcp-redis", Port: req.RedisContainerPort},
 			{Name: "tcp-sentinel", Port: req.SentinelContainerPort},
 		},
-		Type:     corev1.ServiceTypeClusterIP,
-		Selector: req.Labels,
+		Selector:                 req.Labels,
+		PublishNotReadyAddresses: true,
 	}
 }
 
@@ -321,9 +321,9 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 				Image:           req.MetricsExporterImage,
 				ImagePullPolicy: metricsContainerPullPolicy,
 				Command: []string{"/bin/bash", "-c", `if [[ -f '/secrets/redis-password' ]]; then
-export REDIS_PASSWORD=$(cat /secrets/redis-password)
-fi
-redis_exporter`},
+			export REDIS_PASSWORD=$(cat /secrets/redis-password)
+			fi
+			redis_exporter`},
 				Ports: []corev1.ContainerPort{
 					{Name: "metrics", ContainerPort: req.RedisMetricsContainerPort},
 				},
@@ -331,21 +331,6 @@ redis_exporter`},
 					{Name: "REDIS_ALIAS", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 					{Name: "REDIS_USER", Value: "default"},
 					{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
-				},
-			},
-		},
-		Affinity: &corev1.Affinity{
-			PodAntiAffinity: &corev1.PodAntiAffinity{
-				PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
-					{
-						PodAffinityTerm: corev1.PodAffinityTerm{
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: req.Labels,
-							},
-							TopologyKey: "kubernetes.io/hostname",
-						},
-						Weight: 1,
-					},
 				},
 			},
 		},
