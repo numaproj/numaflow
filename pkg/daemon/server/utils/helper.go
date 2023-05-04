@@ -17,6 +17,8 @@ limitations under the License.
 package server
 
 import (
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
@@ -34,22 +36,38 @@ type TimestampedCount struct {
 // It uses the timestamped count queue to retrieve the first and last count in the lookback window and calculate the rate using formula:
 // rate = (lastCount - firstCount) / (lastTimestamp - firstTimestamp)
 func CalculateRate(tc *queue.OverflowQueue[TimestampedCount], lookback int64) float64 {
-	// TODO - This is a dummy implementation. It should be replaced with a real one.
-	_ = tc
-	_ = lookback
-
-	if len(tc.Items()) > 0 {
-		_ = tc.Items()[0].timestamp
-		_ = tc.Items()[0].count
+	if tc.Length() < 2 {
+		return 0
 	}
-
-	return float64(421)
+	counts := tc.Items()
+	endCountInfo := counts[len(counts)-1]
+	startCountInfo := counts[len(counts)-2]
+	now := time.Now().Unix()
+	if now-startCountInfo.timestamp > lookback {
+		return 0
+	}
+	for i := len(counts) - 3; i >= 0; i-- {
+		if now-counts[i].timestamp <= lookback {
+			startCountInfo = counts[i]
+		} else {
+			break
+		}
+	}
+	return float64(endCountInfo.count-startCountInfo.count) / float64(endCountInfo.timestamp-startCountInfo.timestamp)
 }
 
 // UpdateCountTrackers updates the count trackers using the latest count numbers podTotalCounts.
 // It updates the lastSawPodCounts and timestampedTotalCounts to reflect the latest counts.
 func UpdateCountTrackers(tc *queue.OverflowQueue[TimestampedCount], lastSawPodCounts, podTotalCounts map[string]float64) {
-	// TODO - This is a dummy implementation. It should be replaced with a real one.
+	// This is a simple implementation. It assumes no pod crashes and no pod restarts.
+	// TODO - It should be replaced with a real one.
+	totalCount := 0
+	for _, count := range podTotalCounts {
+		totalCount += int(count)
+	}
+
+	tc.Append(TimestampedCount{count: int64(totalCount), timestamp: time.Now().Unix()})
+
 	_ = tc
 	_ = lastSawPodCounts
 	_ = podTotalCounts

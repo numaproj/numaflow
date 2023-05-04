@@ -201,7 +201,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		pendings := make(map[string]int64, 0)
 
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
-		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.svc.cluster.local:2469/metrics
+		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
 		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 		if res, err := ps.httpClient.Get(url); err != nil {
 			log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())

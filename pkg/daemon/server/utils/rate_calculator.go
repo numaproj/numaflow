@@ -21,15 +21,9 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/prometheus/common/expfmt"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -45,7 +39,6 @@ type RateCalculator struct {
 	pipeline   *v1alpha1.Pipeline
 	vertex     *v1alpha1.AbstractVertex
 	httpClient *http.Client
-	kubeClient kubernetes.Interface
 
 	timestampedTotalCounts *sharedqueue.OverflowQueue[TimestampedCount]
 	lastSawPodCounts       map[string]float64
@@ -75,35 +68,6 @@ func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) *RateCa
 
 		userSpecifiedLookback: int64(v.Scale.GetLookbackSeconds()),
 	}
-
-	var err error
-	kubeConfig := os.Getenv("KUBECONFIG")
-	if kubeConfig == "" {
-		home, _ := os.UserHomeDir()
-		kubeConfig = home + "/.kube/config"
-		if _, err := os.Stat(kubeConfig); err != nil && os.IsNotExist(err) {
-			kubeConfig = ""
-		}
-	}
-	var restConfig *rest.Config
-	if kubeConfig != "" {
-		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeConfig)
-	} else {
-		restConfig, err = rest.InClusterConfig()
-	}
-	if err != nil {
-		// TODO - logger
-		fmt.Println("Failed to create rest config")
-		return nil
-	}
-	rc.kubeClient, err = kubernetes.NewForConfig(restConfig)
-
-	if err != nil {
-		// TODO - logger
-		fmt.Println("Failed to create kube client")
-		return nil
-	}
-
 	return &rc
 }
 
@@ -117,9 +81,6 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}
-
-	log.Infof("Keran is testing, the refresh interval is %v", rc.refreshInterval)
-
 	go func() {
 		ticker := time.NewTicker(rc.refreshInterval)
 		for {
@@ -132,7 +93,7 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 				if err != nil {
 					println("Keran is testing, the err is ", err.Error())
 				} else {
-					println("Keran is testing, the podTotalCounts is ", podTotalCounts)
+					fmt.Printf("Keran is testing, the podTotalCounts is %v", podTotalCounts)
 				}
 
 				// update counts trackers
@@ -157,39 +118,49 @@ func (rc *RateCalculator) GetRates() map[string]float64 {
 
 // TODO - rethink about error handling
 func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1alpha1.AbstractVertex) (map[string]float64, error) {
-	selector := v1alpha1.KeyPipelineName + "=" + rc.pipeline.Name + "," + v1alpha1.KeyVertexName + "=" + vertex.Name
-	var pods *v1.PodList
 	var err error
-	if pods, err = rc.kubeClient.CoreV1().Pods(rc.pipeline.Namespace).List(ctx, metav1.ListOptions{LabelSelector: selector}); err != nil {
-		return nil, fmt.Errorf("failed to list pods: %v", err.Error())
-	}
 	var result = make(map[string]float64)
-	for _, v := range pods.Items {
-		count, err := rc.getTotalCount(ctx, vertex, v)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get total count for pod %s: %v", v.Name, err.Error())
+
+	index := 0
+	for {
+		podName := fmt.Sprintf("%s-%s-%d", rc.pipeline.Name, vertex.Name, index)
+		if rc.podExists(vertex.Name, podName) {
+			fmt.Printf("Keran is testing, found pod %s\n", podName)
+			result[podName], err = rc.getTotalCount(ctx, vertex, podName)
+			// TODO - maybe just COUNT_NOT_AVAILABLE?
+			if err != nil {
+				fmt.Printf("Keran is testing, failed to get total count for pod %s: %v\n", podName, err.Error())
+				return nil, fmt.Errorf("failed to get total count for pod %s: %v", podName, err.Error())
+			}
 		} else {
-			result[v.Name] = count
+			fmt.Printf("Keran is testing, didn't find pod %s\n", podName)
+			// TODO - only break when 3 consecutive pods are not found
+			break
 		}
+		index++
 	}
 	return result, nil
 }
 
-func (rc *RateCalculator) getTotalCount(_ context.Context, vertex *v1alpha1.AbstractVertex, pod v1.Pod) (float64, error) {
-	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", pod.Name, vertex.Name+"-headless", rc.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+func (rc *RateCalculator) getTotalCount(_ context.Context, vertex *v1alpha1.AbstractVertex, podName string) (float64, error) {
+	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, rc.pipeline.Name+"-"+vertex.Name+"-headless", rc.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if res, err := rc.httpClient.Get(url); err != nil {
 		// TODO - replace 0 with COUNT_NOT_AVAILABLE
+		fmt.Printf("Keran is testing, failed reading the metrics endpoint, %v", err.Error())
 		return 0, fmt.Errorf("failed reading the metrics endpoint, %v", err.Error())
 	} else {
 		// parse the metrics
 		textParser := expfmt.TextParser{}
 		result, err := textParser.TextToMetricFamilies(res.Body)
 		if err != nil {
+			fmt.Printf("Keran is testing, failed parsing to prometheus metric families, %v", err.Error())
 			return 0, fmt.Errorf("failed parsing to prometheus metric families, %v", err.Error())
 		}
 
+		// TODO - reducer is using a different name, need to differentiate between the two
 		if value, ok := result["forwarder_read_total"]; ok && value != nil && len(value.GetMetric()) > 0 {
 			metricsList := value.GetMetric()
+			fmt.Printf("Keran is testing, got the count for pod %s is %v\n", podName, metricsList[0].Counter.GetValue())
 			return metricsList[0].Counter.GetValue(), nil
 		} else {
 			return 0, fmt.Errorf("forwarder_read_total metric not found")
@@ -197,10 +168,15 @@ func (rc *RateCalculator) getTotalCount(_ context.Context, vertex *v1alpha1.Abst
 	}
 }
 
-/*
-func (rc *RateCalculator) podExists(podName string) bool {
-
-	return false
+func (rc *RateCalculator) podExists(vertexName, podName string) bool {
+	// we can query the metrics endpoint of the (i)th pod to obtain this value.
+	// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
+	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, rc.pipeline.Name+"-"+vertexName+"-headless", rc.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+	// TODO - Head is enough?
+	if _, err := rc.httpClient.Get(url); err != nil {
+		fmt.Printf("Keran is testing, didn't find pod %s, err is %v", podName, err.Error())
+		return false
+	}
+	fmt.Printf("Keran is testing, found pod %s", podName)
+	return true
 }
-
-*/
