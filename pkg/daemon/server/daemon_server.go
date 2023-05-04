@@ -92,7 +92,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	// TODO - start calculators in parallel
 	rateCalculators := make(map[string]*server.RateCalculator, 0)
 	for _, v := range ds.pipeline.Spec.Vertices {
-		rc := server.NewRateCalculator(&v)
+		rc := server.NewRateCalculator(ds.pipeline, &v)
 		if err := rc.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start rate calculator for vertex %s, %w", v.Name, err)
 		}

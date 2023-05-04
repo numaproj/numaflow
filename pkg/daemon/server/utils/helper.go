@@ -45,3 +45,12 @@ func CalculateRate(tc *queue.OverflowQueue[TimestampedCount], lookback int64) fl
 
 	return float64(421)
 }
+
+// UpdateCountTrackers updates the count trackers using the latest count numbers podTotalCounts.
+// It updates the lastSawPodCounts and timestampedTotalCounts to reflect the latest counts.
+func UpdateCountTrackers(tc *queue.OverflowQueue[TimestampedCount], lastSawPodCounts, podTotalCounts map[string]float64) {
+	// TODO - This is a dummy implementation. It should be replaced with a real one.
+	_ = tc
+	_ = lastSawPodCounts
+	_ = podTotalCounts
+}
