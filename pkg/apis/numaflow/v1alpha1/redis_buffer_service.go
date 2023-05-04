@@ -321,9 +321,9 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 				Image:           req.MetricsExporterImage,
 				ImagePullPolicy: metricsContainerPullPolicy,
 				Command: []string{"/bin/bash", "-c", `if [[ -f '/secrets/redis-password' ]]; then
-			export REDIS_PASSWORD=$(cat /secrets/redis-password)
-			fi
-			redis_exporter`},
+export REDIS_PASSWORD=$(cat /secrets/redis-password)
+fi
+redis_exporter`},
 				Ports: []corev1.ContainerPort{
 					{Name: "metrics", ContainerPort: req.RedisMetricsContainerPort},
 				},
@@ -405,8 +405,8 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 		runAsUser := int64(1001)
 		fsGroup := int64(1001)
 		runAsUser0 := int64(0)
-		spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser}
-		spec.Template.Spec.Containers[1].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser}
+		spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser, RunAsGroup: &fsGroup}
+		spec.Template.Spec.Containers[1].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser, RunAsGroup: &fsGroup}
 		spec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:            "volume-permissions",
