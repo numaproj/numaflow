@@ -158,13 +158,21 @@ func (rc *RateCalculator) getTotalCount(_ context.Context, vertex *v1alpha1.Abst
 			return 0, fmt.Errorf("failed parsing to prometheus metric families, %v", err.Error())
 		}
 
-		// TODO - reducer is using a different name, need to differentiate between the two
-		if value, ok := result["forwarder_read_total"]; ok && value != nil && len(value.GetMetric()) > 0 {
+		var readTotalMetricName string
+		// Should we move IsReduceUDF from the concrete vertex to the abstract vertex?
+		if vertex.UDF != nil && vertex.UDF.GroupBy != nil {
+			// vertex is a reducer
+			readTotalMetricName = "reduce_isb_reader_read_total"
+		} else {
+			readTotalMetricName = "forwarder_read_total"
+		}
+
+		if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 			metricsList := value.GetMetric()
 			fmt.Printf("Keran is testing, got the count for pod %s is %v\n", podName, metricsList[0].Counter.GetValue())
 			return metricsList[0].Counter.GetValue(), nil
 		} else {
-			return 0, fmt.Errorf("forwarder_read_total metric not found")
+			return 0, fmt.Errorf("read_total metric not found")
 		}
 	}
 }
