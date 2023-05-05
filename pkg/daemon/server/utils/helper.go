@@ -57,16 +57,36 @@ func CalculateRate(tc *queue.OverflowQueue[TimestampedCount], lookback int64) fl
 }
 
 // UpdateCountTrackers updates the count trackers using the latest count numbers podTotalCounts.
-// It updates the lastSawPodCounts and timestampedTotalCounts to reflect the latest counts.
+// it updates the lastSawPodCounts and timestampedTotalCounts to reflect the latest counts.
 func UpdateCountTrackers(tc *queue.OverflowQueue[TimestampedCount], lastSawPodCounts, podTotalCounts map[string]float64) {
-	// This is a simple implementation. It assumes no pod crashes and restarts.
-	// TODO - replace it with a new one that aligns with the design doc.
-	totalCount := 0
-	for _, count := range podTotalCounts {
-		if count != CountNotAvailable {
-			totalCount += int(count)
+	delta := float64(0)
+	for podName, newCount := range podTotalCounts {
+		if newCount == CountNotAvailable {
+			// this is the case where the count is not available for this particular pod.
+			// we assume that the count is not available when the pod is not running.
+			// hence skip counting this pod.
+			continue
 		}
+
+		lastCount, existing := lastSawPodCounts[podName]
+		if existing && newCount >= lastCount {
+			// this is the normal case where the count increases.
+			delta += newCount - lastCount
+		} else {
+			// this is the case where the pod is restarted.
+			// we assume that the count is reset to 0 when the pod is restarted.
+			delta += newCount
+		}
+		lastSawPodCounts[podName] = newCount
 	}
-	tc.Append(TimestampedCount{count: int64(totalCount), timestamp: time.Now().Unix()})
-	_ = lastSawPodCounts
+
+	var lastSawTotalCount float64
+	if tc.Length() > 0 {
+		lastSawTotalCount = float64(tc.Peek().count)
+	} else {
+		lastSawTotalCount = 0
+	}
+
+	newTotalCount := lastSawTotalCount + delta
+	tc.Append(TimestampedCount{count: int64(newTotalCount), timestamp: time.Now().Unix()})
 }

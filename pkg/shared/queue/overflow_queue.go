@@ -64,6 +64,19 @@ func (q *OverflowQueue[T]) Length() int {
 	return len(q.elements)
 }
 
+// Peek returns the element at peek of the queue.
+// It does not remove the element from the queue.
+// If the queue is empty, it returns the zero value of type T.
+func (q *OverflowQueue[T]) Peek() T {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+	var item T
+	if q.elements != nil && len(q.elements) != 0 {
+		item = q.elements[len(q.elements)-1]
+	}
+	return item
+}
+
 func reverse[T any](input []T) []T {
 	if len(input) == 0 {
 		return input
