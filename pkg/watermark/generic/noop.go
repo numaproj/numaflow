@@ -17,7 +17,6 @@ limitations under the License.
 package generic
 
 import (
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -70,10 +69,10 @@ func (n NoOpWMProgressor) Close() error {
 	return nil
 }
 
-func BuildNoOpWatermarkProgressorsFromEdgeList(bufferList []string) (fetch.Fetcher, map[string]publish.Publisher) {
+func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.Fetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
-	for _, buffer := range bufferList {
+	for _, buffer := range toBuffers {
 		publishWatermark[buffer] = NewNoOpWMProgressor()
 	}
 	return fetchWatermark, publishWatermark
@@ -86,12 +85,4 @@ func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string]isb.BufferW
 		publishWatermark[buffName] = NewNoOpWMProgressor()
 	}
 	return fetchWatermark, publishWatermark
-}
-
-func GetBufferNameList(bufferList []v1alpha1.Buffer) []string {
-	bufferName := make([]string, len(bufferList))
-	for idx, buffer := range bufferList {
-		bufferName[idx] = buffer.Name
-	}
-	return bufferName
 }

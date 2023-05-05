@@ -95,23 +95,46 @@ func (p Pipeline) ListAllEdges() []Edge {
 		if toVertex.UDF == nil || toVertex.UDF.GroupBy == nil {
 			// Clean up parallelism if downstream vertex is not a reduce UDF.
 			// This has been validated by the controller, harmless to do it here.
-			edgeCopy.Parallelism = nil
-		} else if edgeCopy.Parallelism == nil || *edgeCopy.Parallelism < 1 || !toVertex.UDF.GroupBy.Keyed {
+			edgeCopy.DeprecatedParallelism = nil
+		} else if edgeCopy.DeprecatedParallelism == nil || *edgeCopy.DeprecatedParallelism < 1 || !toVertex.UDF.GroupBy.Keyed {
 			// Set parallelism = 1 if it's not set, or it's a non-keyed reduce.
 			// Already validated by the controller to make sure parallelism is not > 1 if it's not keyed, harmless to check it again.
-			edgeCopy.Parallelism = pointer.Int32(1)
+			edgeCopy.DeprecatedParallelism = pointer.Int32(1)
 		}
 		edges = append(edges, *edgeCopy)
 	}
 	return edges
 }
 
-// FindEdgeWithBuffer is used to locate the edge of the buffer.
-func (p Pipeline) FindEdgeWithBuffer(buffer string) *Edge {
-	for _, e := range p.ListAllEdges() {
-		for _, b := range GenerateEdgeBufferNames(p.Namespace, p.Name, e) {
+// NumOfPartitions returns the number of partitions for a vertex.
+func (p Pipeline) NumOfPartitions(vertex string) int {
+	v := p.GetVertex(vertex)
+	if v == nil {
+		return 0
+	}
+	partitions := 1
+	if v.Partitions != nil {
+		partitions = v.GetPartitions()
+	}
+	// TODO: remove this after we deprecate partitions.
+	if v.IsReduceUDF() {
+		if !v.UDF.GroupBy.Keyed {
+			return 1
+		}
+		e := p.GetFromEdges(vertex)[0]
+		if e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 1 {
+			partitions = int(*e.DeprecatedParallelism)
+		}
+	}
+	// end TODO
+	return partitions
+}
+
+func (p Pipeline) FindVertexWithBuffer(buffer string) *AbstractVertex {
+	for _, v := range p.Spec.Vertices {
+		for _, b := range v.OwnedBufferNames(p.Namespace, p.Name) {
 			if buffer == b {
-				return &e
+				return &v
 			}
 		}
 	}
@@ -138,19 +161,53 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 	return edges
 }
 
-func (p Pipeline) GetAllBuffers() []Buffer {
-	r := []Buffer{}
-	for _, e := range p.ListAllEdges() {
-		for _, b := range GenerateEdgeBufferNames(p.Namespace, p.Name, e) {
-			r = append(r, Buffer{b, EdgeBuffer})
+func (p Pipeline) GetAllBuffers() []string {
+	r := []string{}
+	// TODO: Use following code after we deprecate partitions.
+
+	// for _, v := range p.Spec.Vertices {
+	// 	r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
+	// }
+
+	// TODO: remove this after we deprecate partitions.
+	for _, v := range p.Spec.Vertices {
+		if v.IsASource() {
+			continue
 		}
+		if v.IsReduceUDF() {
+			partitions := p.NumOfPartitions(v.Name)
+			r = append(r, GenerateBufferNames(p.Namespace, p.Name, v.Name, partitions)...)
+		} else {
+			r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
+		}
+	}
+	return r
+}
+
+func (p Pipeline) GetAllBuckets() []string {
+	r := []string{}
+	for _, e := range p.ListAllEdges() {
+		r = append(r, GenerateEdgeBucketName(p.Namespace, p.Name, e.From, e.To))
 	}
 	for _, v := range p.Spec.Vertices {
 		if v.Source != nil {
-			r = append(r, Buffer{GenerateSourceBufferName(p.Namespace, p.Name, v.Name), SourceBuffer})
+			r = append(r, GenerateSourceBucketName(p.Namespace, p.Name, v.Name))
 		} else if v.Sink != nil {
-			r = append(r, Buffer{GenerateSinkBufferName(p.Namespace, p.Name, v.Name), SinkBuffer})
+			r = append(r, GenerateSinkBucketName(p.Namespace, p.Name, v.Name))
 		}
+		// TODO(one bucket): remove it.
+		if v.IsReduceUDF() {
+			for _, e := range p.GetFromEdges(v.Name) {
+				partitions := 1
+				if e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 1 {
+					partitions = int(*e.DeprecatedParallelism)
+				}
+				for i := 0; i < partitions; i++ {
+					r = append(r, fmt.Sprintf("%s-%d", GenerateEdgeBucketName(p.Namespace, p.Name, e.From, e.To), i))
+				}
+			}
+		}
+		// end of TODO(one bucket).
 	}
 	return r
 }
@@ -291,13 +348,10 @@ func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.C
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
 		Resources:       standardResources,
-		Args:            []string{"isbsvc-buffer-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
+		Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
-	bfs := []string{}
-	for _, b := range p.GetAllBuffers() {
-		bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
-	}
-	c.Args = append(c.Args, "--buffers="+strings.Join(bfs, ","))
+	c.Args = append(c.Args, "--buffers="+strings.Join(p.GetAllBuffers(), ","))
+	c.Args = append(c.Args, "--buckets="+strings.Join(p.GetAllBuckets(), ","))
 	if p.Spec.Templates != nil && p.Spec.Templates.DaemonTemplate != nil && p.Spec.Templates.DaemonTemplate.InitContainerTemplate != nil {
 		p.Spec.Templates.DaemonTemplate.InitContainerTemplate.ApplyToContainer(&c)
 	}

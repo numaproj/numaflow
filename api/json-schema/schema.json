@@ -17381,6 +17381,11 @@
           "description": "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
           "type": "object"
         },
+        "partitions": {
+          "description": "Number of partitions of the vertex owned buffers. It applies to udf and sink vertices only.",
+          "format": "int32",
+          "type": "integer"
+        },
         "priority": {
           "description": "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
           "format": "int32",
@@ -17470,21 +17475,6 @@
       "description": "Blackhole is a sink to emulate /dev/null",
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.Buffer": {
-      "properties": {
-        "Name": {
-          "type": "string"
-        },
-        "Type": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "Name",
-        "Type"
-      ],
-      "type": "object"
-    },
     "io.numaproj.numaflow.v1alpha1.BufferServiceConfig": {
       "properties": {
         "jetstream": {
@@ -17494,6 +17484,64 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisConfig"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.CombinedEdge": {
+      "properties": {
+        "conditions": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
+          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF."
+        },
+        "from": {
+          "type": "string"
+        },
+        "fromVertexLimits": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
+        },
+        "fromVertexPartitions": {
+          "description": "The number of partitions of the from vertex, if not provided, the default value is set to \"1\".",
+          "format": "int32",
+          "type": "integer"
+        },
+        "fromVertexType": {
+          "description": "From vertex type.",
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.DeprecatedEdgeLimits",
+          "description": "Deprecated, use vertex.spec.limits instead.\n\nLimits define the limitations such as buffer read batch size for the edge, will override pipeline level settings."
+        },
+        "onFull": {
+          "description": "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
+          "type": "string"
+        },
+        "parallelism": {
+          "description": "Deprecated, use vertex.spec.partitions instead.\n\nParallelism is only effective when the \"to\" vertex is a reduce vertex, if it's not provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "to": {
+          "type": "string"
+        },
+        "toVertexLimits": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
+        },
+        "toVertexPartitions": {
+          "description": "The number of partitions of the to vertex, if not provided, the default value is set to \"1\".",
+          "format": "int32",
+          "type": "integer"
+        },
+        "toVertexType": {
+          "description": "To vertex type.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "fromVertexType",
+        "toVertexType"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Container": {
@@ -17651,39 +17699,7 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.Edge": {
-      "properties": {
-        "conditions": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
-          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF."
-        },
-        "from": {
-          "type": "string"
-        },
-        "limits": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.EdgeLimits",
-          "description": "Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings."
-        },
-        "onFull": {
-          "description": "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
-          "type": "string"
-        },
-        "parallelism": {
-          "description": "Parallelism is only effective when the \"to\" vertex is a reduce vertex, if it's not provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
-          "format": "int32",
-          "type": "integer"
-        },
-        "to": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "from",
-        "to"
-      ],
-      "type": "object"
-    },
-    "io.numaproj.numaflow.v1alpha1.EdgeLimits": {
+    "io.numaproj.numaflow.v1alpha1.DeprecatedEdgeLimits": {
       "properties": {
         "bufferMaxLength": {
           "description": "BufferMaxLength is used to define the max length of a buffer. It overrides the settings from pipeline limits.",
@@ -17696,6 +17712,38 @@
           "type": "integer"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.Edge": {
+      "properties": {
+        "conditions": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
+          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF."
+        },
+        "from": {
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.DeprecatedEdgeLimits",
+          "description": "Deprecated, use vertex.spec.limits instead.\n\nLimits define the limitations such as buffer read batch size for the edge, will override pipeline level settings."
+        },
+        "onFull": {
+          "description": "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
+          "type": "string"
+        },
+        "parallelism": {
+          "description": "Deprecated, use vertex.spec.partitions instead.\n\nParallelism is only effective when the \"to\" vertex is a reduce vertex, if it's not provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.FixedWindow": {
@@ -18315,7 +18363,7 @@
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsAuth"
         },
-        "bufferConfig": {
+        "streamConfig": {
           "type": "string"
         },
         "tlsEnabled": {
@@ -19278,6 +19326,16 @@
     },
     "io.numaproj.numaflow.v1alpha1.VertexLimits": {
       "properties": {
+        "bufferMaxLength": {
+          "description": "BufferMaxLength is used to define the max length of a buffer. It overrides the settings from pipeline limits.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "bufferUsageLimit": {
+          "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
+          "format": "int64",
+          "type": "integer"
+        },
         "readBatchSize": {
           "description": "Read batch size from the source or buffer. It overrides the settings from pipeline limits.",
           "format": "int64",
@@ -19338,7 +19396,7 @@
         },
         "fromEdges": {
           "items": {
-            "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Edge"
+            "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.CombinedEdge"
           },
           "type": "array"
         },
@@ -19381,6 +19439,11 @@
           },
           "description": "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
           "type": "object"
+        },
+        "partitions": {
+          "description": "Number of partitions of the vertex owned buffers. It applies to udf and sink vertices only.",
+          "format": "int32",
+          "type": "integer"
         },
         "pipelineName": {
           "type": "string"
@@ -19429,7 +19492,7 @@
         },
         "toEdges": {
           "items": {
-            "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Edge"
+            "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.CombinedEdge"
           },
           "type": "array"
         },

@@ -155,7 +155,7 @@ func Test_buildVertices(t *testing.T) {
 func Test_buildReducesVertices(t *testing.T) {
 	pl := testReducePipeline.DeepCopy()
 	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
-	pl.Spec.Edges[0].Parallelism = pointer.Int32(2)
+	pl.Spec.Vertices[1].Partitions = pointer.Int32(2)
 	r := buildVertices(pl)
 	assert.Equal(t, 5, len(r))
 	_, existing := r[pl.Name+"-"+pl.Spec.Vertices[1].Name]
@@ -193,33 +193,34 @@ func Test_copyVertexLimits(t *testing.T) {
 	assert.Equal(t, "3s", v.Limits.ReadTimeout.Duration.String())
 }
 
-func Test_copyEdgeLimits(t *testing.T) {
+func Test_copyEdges(t *testing.T) {
 	pl := testPipeline.DeepCopy()
-	edges := []dfv1.Edge{{From: "in", To: "out"}}
-	result := copyEdgeLimits(pl, edges)
+	edges := []dfv1.Edge{{From: "input", To: "p1"}}
+	result := copyEdges(pl, edges)
 	for _, e := range result {
-		assert.NotNil(t, e.Limits)
-		assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*e.Limits.BufferMaxLength))
+		assert.NotNil(t, e.ToVertexLimits)
+		assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*e.ToVertexLimits.BufferMaxLength))
 	}
 	onethouand := uint64(1000)
 	eighty := uint32(80)
 	pl.Spec.Limits = &dfv1.PipelineLimits{BufferMaxLength: &onethouand, BufferUsageLimit: &eighty}
-	result = copyEdgeLimits(pl, edges)
+	result = copyEdges(pl, edges)
 	for _, e := range result {
-		assert.NotNil(t, e.Limits)
-		assert.NotNil(t, e.Limits.BufferMaxLength)
-		assert.NotNil(t, e.Limits.BufferUsageLimit)
+		assert.NotNil(t, e.ToVertexLimits)
+		assert.NotNil(t, e.ToVertexLimits.BufferMaxLength)
+		assert.NotNil(t, e.ToVertexLimits.BufferUsageLimit)
 	}
 
 	twothouand := uint64(2000)
-	edges = []dfv1.Edge{{From: "in", To: "out", Limits: &dfv1.EdgeLimits{BufferMaxLength: &twothouand}}}
-	result = copyEdgeLimits(pl, edges)
+	pl.Spec.Vertices[2].Limits = &dfv1.VertexLimits{BufferMaxLength: &twothouand}
+	edges = []dfv1.Edge{{From: "p1", To: "output"}}
+	result = copyEdges(pl, edges)
 	for _, e := range result {
-		assert.NotNil(t, e.Limits)
-		assert.NotNil(t, e.Limits.BufferMaxLength)
-		assert.Equal(t, twothouand, *e.Limits.BufferMaxLength)
-		assert.NotNil(t, e.Limits.BufferUsageLimit)
-		assert.Equal(t, eighty, *e.Limits.BufferUsageLimit)
+		assert.NotNil(t, e.ToVertexLimits)
+		assert.NotNil(t, e.ToVertexLimits.BufferMaxLength)
+		assert.Equal(t, twothouand, *e.ToVertexLimits.BufferMaxLength)
+		assert.NotNil(t, e.ToVertexLimits.BufferUsageLimit)
+		assert.Equal(t, eighty, *e.ToVertexLimits.BufferUsageLimit)
 	}
 }
 
@@ -329,7 +330,7 @@ func Test_cleanupBuffers(t *testing.T) {
 
 	t.Run("test create cleanup buffer job no isbsvc", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		assert.Equal(t, 4, len(testObj.GetAllBuffers()))
+		assert.Equal(t, 2, len(testObj.GetAllBuffers()))
 		err := r.cleanUpBuffers(ctx, testObj, zaptest.NewLogger(t).Sugar())
 		assert.NoError(t, err)
 		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testObj.Name)

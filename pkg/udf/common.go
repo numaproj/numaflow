@@ -44,13 +44,19 @@ func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstan
 		writeOpts := []redisclient.Option{
 			redisclient.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 		}
-		if x := e.Limits; x != nil && x.BufferMaxLength != nil {
+		if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
+			writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
+		} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
+			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 		}
-		if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
+		if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
+			writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+		} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
+			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
-		buffers := dfv1.GenerateEdgeBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e)
+		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
 		for _, buffer := range buffers {
 			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
 			writers[buffer] = writer
@@ -62,7 +68,7 @@ func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstan
 
 func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexInstance *dfv1.VertexInstance) (isb.BufferReader, map[string]isb.BufferWriter, error) {
 	writers := make(map[string]isb.BufferWriter)
-	fromStreamName := isbsvc.JetStreamName(vertexInstance.Vertex.Spec.PipelineName, fromBufferName)
+	fromStreamName := isbsvc.JetStreamName(fromBufferName)
 	readOptions := []jetstreamisb.ReadOption{
 		jetstreamisb.WithUsingAckInfoAsRate(true),
 	}
@@ -78,15 +84,21 @@ func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexIn
 		writeOpts := []jetstreamisb.WriteOption{
 			jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 		}
-		if x := e.Limits; x != nil && x.BufferMaxLength != nil {
+		if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
+			writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
+		} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
+			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 		}
-		if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
+		if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
+			writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+		} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
+			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
-		buffers := dfv1.GenerateEdgeBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e)
+		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
 		for _, buffer := range buffers {
-			streamName := isbsvc.JetStreamName(vertexInstance.Vertex.Spec.PipelineName, buffer)
+			streamName := isbsvc.JetStreamName(buffer)
 			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
 			if err != nil {
 				return nil, nil, err

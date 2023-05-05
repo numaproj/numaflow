@@ -68,27 +68,31 @@ type Vertex struct {
 }
 
 func (v Vertex) IsASource() bool {
-	return v.Spec.Source != nil
+	return v.Spec.IsASource()
 }
 
 func (v Vertex) HasUDTransformer() bool {
-	return v.Spec.Source != nil && v.Spec.Source.UDTransformer != nil
+	return v.Spec.HasUDTransformer()
 }
 
 func (v Vertex) IsASink() bool {
-	return v.Spec.Sink != nil
+	return v.Spec.IsASink()
 }
 
 func (v Vertex) IsUDSink() bool {
-	return v.IsASink() && v.Spec.Sink.UDSink != nil
+	return v.Spec.IsUDSink()
 }
 
 func (v Vertex) IsMapUDF() bool {
-	return v.Spec.UDF != nil && v.Spec.UDF.GroupBy == nil
+	return v.Spec.IsMapUDF()
 }
 
 func (v Vertex) IsReduceUDF() bool {
-	return v.Spec.UDF != nil && v.Spec.UDF.GroupBy != nil
+	return v.Spec.IsReduceUDF()
+}
+
+func (v Vertex) GetVertexType() VertexType {
+	return v.Spec.GetVertexType()
 }
 
 func (v Vertex) Scalable() bool {
@@ -105,6 +109,10 @@ func (v Vertex) Scalable() bool {
 		}
 	}
 	return false
+}
+
+func (v Vertex) GetPartitions() int {
+	return v.Spec.GetPartitions()
 }
 
 func (v Vertex) GetHeadlessServiceName() string {
@@ -276,7 +284,7 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
 			Resources:       standardResources,
-			Args:            []string{"isbsvc-buffer-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
+			Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 		},
 	}
 	if v.Spec.InitContainerTemplate != nil {
@@ -292,42 +300,45 @@ func (vs VertexSpec) WithOutReplicas() VertexSpec {
 	return x
 }
 
-type BufferType string
-
-const (
-	SourceBuffer BufferType = "so"
-	SinkBuffer   BufferType = "si"
-	EdgeBuffer   BufferType = "ed"
-)
-
-type Buffer struct {
-	Name string     `protobuf:"bytes,1,opt,name=name"`
-	Type BufferType `protobuf:"bytes,2,opt,name=type,casttype=BufferType"`
+// OwnedBuffers returns the buffers that the vertex owns
+func (v Vertex) OwnedBuffers() []string {
+	return v.Spec.OwnedBufferNames(v.Namespace, v.Spec.PipelineName)
 }
 
-func (v Vertex) GetFromBuffers() []Buffer {
-	r := []Buffer{}
+// GetFromBuckets returns the buckets that the vertex reads from.
+// For a source vertex, it returns the source bucket name.
+func (v Vertex) GetFromBuckets() []string {
 	if v.IsASource() {
-		r = append(r, Buffer{GenerateSourceBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SourceBuffer})
-	} else {
-		for _, vt := range v.Spec.FromEdges {
-			for _, b := range GenerateEdgeBufferNames(v.Namespace, v.Spec.PipelineName, vt) {
-				r = append(r, Buffer{b, EdgeBuffer})
-			}
-		}
+		return []string{GenerateSourceBucketName(v.Namespace, v.Spec.PipelineName, v.Spec.Name)}
+	}
+	r := []string{}
+	for _, vt := range v.Spec.FromEdges {
+		r = append(r, GenerateEdgeBucketName(v.Namespace, v.Spec.PipelineName, vt.From, vt.To))
 	}
 	return r
 }
 
-func (v Vertex) GetToBuffers() []Buffer {
-	r := []Buffer{}
+// GetToBuckets returns the buckets that the vertex writes to.
+// For a sink vertex, it returns the sink bucket name.
+func (v Vertex) GetToBuckets() []string {
 	if v.IsASink() {
-		r = append(r, Buffer{GenerateSinkBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SinkBuffer})
-	} else {
-		for _, vt := range v.Spec.ToEdges {
-			for _, b := range GenerateEdgeBufferNames(v.Namespace, v.Spec.PipelineName, vt) {
-				r = append(r, Buffer{b, EdgeBuffer})
-			}
+		return []string{GenerateSinkBucketName(v.Namespace, v.Spec.PipelineName, v.Spec.Name)}
+	}
+	r := []string{}
+	for _, vt := range v.Spec.ToEdges {
+		r = append(r, GenerateEdgeBucketName(v.Namespace, v.Spec.PipelineName, vt.From, vt.To))
+	}
+	return r
+}
+
+func (v Vertex) GetToBuffers() []string {
+	r := []string{}
+	if v.IsASink() {
+		return r
+	}
+	for _, vt := range v.Spec.ToEdges {
+		for i := 0; i < vt.GetToVertexPartitions(); i++ {
+			r = append(r, GenerateBufferName(v.Namespace, v.Spec.PipelineName, vt.To, i))
 		}
 	}
 	return r
@@ -335,12 +346,8 @@ func (v Vertex) GetToBuffers() []Buffer {
 
 func (v Vertex) GetReplicas() int {
 	if v.IsReduceUDF() {
-		// Replica of a reduce vertex is determined by the parallelism.
-		if v.Spec.Replicas != nil && *v.Spec.Replicas == int32(0) {
-			// 0 is also allowed, which is for paused pipeline.
-			return 0
-		}
-		return len(v.GetFromBuffers())
+		// Replica of a reduce vertex is determined by the partitions.
+		return v.GetPartitions()
 	}
 	if v.Spec.Replicas == nil {
 		return 1
@@ -357,9 +364,9 @@ type VertexSpec struct {
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,4,opt,name=replicas"`
 	// +optional
-	FromEdges []Edge `json:"fromEdges,omitempty" protobuf:"bytes,5,rep,name=fromEdges"`
+	FromEdges []CombinedEdge `json:"fromEdges,omitempty" protobuf:"bytes,5,rep,name=fromEdges"`
 	// +optional
-	ToEdges []Edge `json:"toEdges,omitempty" protobuf:"bytes,6,rep,name=toEdges"`
+	ToEdges []CombinedEdge `json:"toEdges,omitempty" protobuf:"bytes,6,rep,name=toEdges"`
 	// Watermark indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.
 	// +kubebuilder:default={"disabled": false}
 	// +optional
@@ -397,6 +404,69 @@ type AbstractVertex struct {
 	// List of sidecar containers belonging to the pod.
 	// +optional
 	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,12,rep,name=sidecars"`
+	// Number of partitions of the vertex owned buffers.
+	// It applies to udf and sink vertices only.
+	// +optional
+	Partitions *int32 `json:"partitions,omitempty" protobuf:"bytes,13,rep,name=partitions"`
+}
+
+func (av AbstractVertex) GetVertexType() VertexType {
+	if av.IsASource() {
+		return VertexTypeSource
+	} else if av.IsASink() {
+		return VertexTypeSink
+	} else if av.IsMapUDF() {
+		return VertexTypeMapUDF
+	} else if av.IsReduceUDF() {
+		return VertexTypeReduceUDF
+	}
+	// This won't happen
+	return ""
+}
+
+func (av AbstractVertex) GetPartitions() int {
+	if av.Partitions == nil || *av.Partitions < 1 {
+		return 1
+	}
+	if av.IsReduceUDF() && !av.UDF.GroupBy.Keyed {
+		return 1
+	}
+	return int(*av.Partitions)
+}
+
+func (av AbstractVertex) IsASource() bool {
+	return av.Source != nil
+}
+
+func (av AbstractVertex) HasUDTransformer() bool {
+	return av.Source != nil && av.Source.UDTransformer != nil
+}
+
+func (av AbstractVertex) IsASink() bool {
+	return av.Sink != nil
+}
+
+func (av AbstractVertex) IsUDSink() bool {
+	return av.IsASink() && av.Sink.UDSink != nil
+}
+
+func (av AbstractVertex) IsMapUDF() bool {
+	return av.UDF != nil && av.UDF.GroupBy == nil
+}
+
+func (av AbstractVertex) IsReduceUDF() bool {
+	return av.UDF != nil && av.UDF.GroupBy != nil
+}
+
+func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {
+	r := []string{}
+	if av.IsASource() {
+		return r
+	}
+	for i := 0; i < av.GetPartitions(); i++ {
+		r = append(r, GenerateBufferName(namespace, pipeline, av.Name, i))
+	}
+	return r
 }
 
 // Scale defines the parameters for autoscaling.
@@ -512,6 +582,14 @@ type VertexLimits struct {
 	// It overrides the settings from pipeline limits.
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
+	// BufferMaxLength is used to define the max length of a buffer.
+	// It overrides the settings from pipeline limits.
+	// +optional
+	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,3,opt,name=bufferMaxLength"`
+	// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+	// It overrides the settings from pipeline limits.
+	// +optional
+	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
 }
 
 func (v VertexSpec) getType() containerSupplier {
@@ -557,26 +635,30 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-// GenerateEdgeBufferNames generates buffer names for an edge
-func GenerateEdgeBufferNames(namespace, pipelineName string, edge Edge) []string {
-	buffers := []string{}
-	// Pipeline controller makes sure the parallelism is always nil for an edge leading to a non-reduce vertex.
-	if edge.Parallelism == nil {
-		buffers = append(buffers, fmt.Sprintf("%s-%s-%s-%s", namespace, pipelineName, edge.From, edge.To))
-		return buffers
-	}
-	// Pipeline controller makes sure the parallelism is always not nil for an edge leading to a reduce vertex.
-	// It also makes sure parallelism = 1 if it's a non-keyed reduce.
-	for i := int32(0); i < *edge.Parallelism; i++ {
-		buffers = append(buffers, fmt.Sprintf("%s-%s-%s-%s-%d", namespace, pipelineName, edge.From, edge.To, i))
-	}
-	return buffers
-}
-
-func GenerateSourceBufferName(namespace, pipelineName, vertex string) string {
+func OldGenerateSourceBufferName(namespace, pipelineName, vertex string) string {
 	return fmt.Sprintf("%s-%s-%s_SOURCE", namespace, pipelineName, vertex)
 }
 
-func GenerateSinkBufferName(namespace, pipelineName, vertex string) string {
+func OldGenerateSinkBufferName(namespace, pipelineName, vertex string) string {
+	return fmt.Sprintf("%s-%s-%s_SINK", namespace, pipelineName, vertex)
+}
+
+func GenerateBufferName(namespace, pipelineName, vertex string, partition int) string {
+	return fmt.Sprintf("%s-%s-%s-%d", namespace, pipelineName, vertex, partition)
+}
+
+func GenerateBufferNames(namespace, pipelineName, vertex string, numOfPartitions int) []string {
+	result := []string{}
+	for i := 0; i < numOfPartitions; i++ {
+		result = append(result, GenerateBufferName(namespace, pipelineName, vertex, i))
+	}
+	return result
+}
+
+func GenerateSourceBucketName(namespace, pipeline, vertex string) string {
+	return fmt.Sprintf("%s-%s-%s_SOURCE", namespace, pipeline, vertex)
+}
+
+func GenerateSinkBucketName(namespace, pipelineName, vertex string) string {
 	return fmt.Sprintf("%s-%s-%s_SINK", namespace, pipelineName, vertex)
 }

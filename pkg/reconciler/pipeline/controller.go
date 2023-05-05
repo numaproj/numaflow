@@ -190,21 +190,51 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		pl.Status.MarkDeployFailed("ListVerticesFailed", err.Error())
 		return ctrl.Result{}, err
 	}
-	oldBuffers := make(map[string]dfv1.Buffer)
-	newBuffers := make(map[string]dfv1.Buffer)
+	oldBuffers := make(map[string]string)
+	newBuffers := make(map[string]string)
+	oldBuckets := make(map[string]string)
+	newBuckets := make(map[string]string)
 	for _, v := range existingObjs {
-		for _, b := range v.GetFromBuffers() {
-			oldBuffers[b.Name] = b
+		for _, b := range v.OwnedBuffers() {
+			oldBuffers[b] = b
 		}
-		for _, b := range v.GetToBuffers() {
-			oldBuffers[b.Name] = b
+		for _, b := range v.GetFromBuckets() {
+			oldBuckets[b] = b
 		}
+		for _, b := range v.GetToBuckets() {
+			oldBuckets[b] = b
+		}
+		// TODO(one bucket): remove this after one bucket is fully supported
+		for _, e := range v.Spec.FromEdges {
+			if e.FromVertexType == dfv1.VertexTypeReduceUDF {
+				for i := 0; i < e.GetFromVertexPartitions(); i++ {
+					indexedBucket := fmt.Sprintf("%s-%d", dfv1.GenerateEdgeBucketName(pl.Namespace, pl.Name, e.From, e.To), i)
+					oldBuckets[indexedBucket] = indexedBucket
+				}
+			}
+		}
+		for _, e := range v.Spec.ToEdges {
+			if e.ToVertexType == dfv1.VertexTypeReduceUDF {
+				for i := 0; i < e.GetFromVertexPartitions(); i++ {
+					indexedBucket := fmt.Sprintf("%s-%d", dfv1.GenerateEdgeBucketName(pl.Namespace, pl.Name, e.From, e.To), i)
+					oldBuckets[indexedBucket] = indexedBucket
+				}
+			}
+		}
+		// end of TODO(one bucket)
 	}
 	for _, b := range pl.GetAllBuffers() {
-		if _, existing := oldBuffers[b.Name]; existing {
-			delete(oldBuffers, b.Name)
+		if _, existing := oldBuffers[b]; existing {
+			delete(oldBuffers, b)
 		} else {
-			newBuffers[b.Name] = b
+			newBuffers[b] = b
+		}
+	}
+	for _, b := range pl.GetAllBuckets() {
+		if _, existing := oldBuckets[b]; existing {
+			delete(oldBuckets, b)
+		} else {
+			newBuckets[b] = b
 		}
 	}
 	newObjs := buildVertices(pl)
@@ -240,32 +270,40 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	}
 
 	// create batch job
-	if len(newBuffers) > 0 {
+	if len(newBuffers) > 0 || len(newBuckets) > 0 {
 		bfs := []string{}
-		for _, v := range newBuffers {
-			bfs = append(bfs, fmt.Sprintf("%s=%s", v.Name, v.Type))
+		for k := range newBuffers {
+			bfs = append(bfs, k)
 		}
-		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ","))}
-		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-buffer-create", args, "create")
+		bks := []string{}
+		for k := range newBuckets {
+			bks = append(bks, k)
+		}
+		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
+		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "create")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			pl.Status.MarkDeployFailed("CreateBufferCreatingJobFailed", err.Error())
-			return ctrl.Result{}, fmt.Errorf("failed to create buffer creating job, err: %w", err)
+			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
+			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc creating job, err: %w", err)
 		}
-		log.Infow("Created buffer creating job successfully", zap.Any("buffers", bfs))
+		log.Infow("Created ISB Svc creating job successfully", zap.Any("buffers", bfs), zap.Any("buckets", bks))
 	}
 
-	if len(oldBuffers) > 0 {
+	if len(oldBuffers) > 0 || len(oldBuckets) > 0 {
 		bfs := []string{}
-		for _, v := range oldBuffers {
-			bfs = append(bfs, fmt.Sprintf("%s=%s", v.Name, v.Type))
+		for k := range oldBuffers {
+			bfs = append(bfs, k)
 		}
-		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ","))}
-		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-buffer-delete", args, "delete")
+		bks := []string{}
+		for k := range oldBuckets {
+			bks = append(bks, k)
+		}
+		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
+		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "delete")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			pl.Status.MarkDeployFailed("CreateBufferDeletingJobFailed", err.Error())
-			return ctrl.Result{}, fmt.Errorf("failed to create buffer deleting job, err: %w", err)
+			pl.Status.MarkDeployFailed("CreateISBSvcDeletingJobFailed", err.Error())
+			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc deleting job, err: %w", err)
 		}
-		log.Infow("Created buffer deleting job successfully", zap.Any("buffers", bfs))
+		log.Infow("Created ISB Svc deleting job successfully", zap.Any("buffers", bfs), zap.Any("buckets", bks))
 	}
 
 	// Daemon service
@@ -375,7 +413,8 @@ func (r *pipelineReconciler) findExistingVertices(ctx context.Context, pl *dfv1.
 
 func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeline, log *zap.SugaredLogger) error {
 	allBuffers := pl.GetAllBuffers()
-	if len(allBuffers) > 0 {
+	allBuckets := pl.GetAllBuckets()
+	if len(allBuffers) > 0 || len(allBuckets) > 0 {
 		isbSvc := &dfv1.InterStepBufferService{}
 		isbSvcName := dfv1.DefaultISBSvcName
 		if len(pl.Spec.InterStepBufferServiceName) > 0 {
@@ -391,13 +430,10 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		}
 
 		args := []string{}
-		bfs := []string{}
-		for _, b := range allBuffers {
-			bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
-		}
-		args = append(args, fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")))
+		args = append(args, fmt.Sprintf("--buffers=%s", strings.Join(allBuffers, ",")))
+		args = append(args, fmt.Sprintf("--buckets=%s", strings.Join(allBuckets, ",")))
 
-		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-buffer-delete", args, "cleanup")
+		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cleanup")
 		batchJob.OwnerReferences = []metav1.OwnerReference{}
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create buffer clean up job, err: %w", err)
@@ -428,18 +464,21 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			dfv1.KeyPipelineName: pl.Name,
 			dfv1.KeyVertexName:   v.Name,
 		}
-		fromEdges := copyEdgeLimits(pl, pl.GetFromEdges(v.Name))
-		toEdges := copyEdgeLimits(pl, pl.GetToEdges(v.Name))
+		fromEdges := copyEdges(pl, pl.GetFromEdges(v.Name))
+		toEdges := copyEdges(pl, pl.GetToEdges(v.Name))
 		vCopy := v.DeepCopy()
 		copyVertexLimits(pl, vCopy)
 		replicas := int32(1)
 		if pl.Status.Phase == dfv1.PipelinePhasePaused {
 			replicas = int32(0)
-		} else if v.UDF != nil && v.UDF.GroupBy != nil {
-			// check first edge only since there is only one fromEdge for a vertex
-			if fromEdges[0].Parallelism != nil {
-				replicas = *fromEdges[0].Parallelism
+		} else if v.IsReduceUDF() {
+			partitions := pl.NumOfPartitions(v.Name)
+			replicas = int32(partitions)
+			// TODO: remove this after remove deprecated parallelism
+			if vCopy.Partitions == nil {
+				vCopy.Partitions = pointer.Int32(int32(partitions))
 			}
+			// end of TODO
 		} else {
 			x := vCopy.Scale
 			if x.Min != nil && *x.Min > 1 && replicas < *x.Min {
@@ -480,32 +519,65 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 }
 
 func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
-	plLimits := pl.GetPipelineLimits()
-	if v.Limits == nil {
-		v.Limits = &dfv1.VertexLimits{}
-	}
-	if v.Limits.ReadBatchSize == nil {
-		v.Limits.ReadBatchSize = plLimits.ReadBatchSize
-	}
-	if v.Limits.ReadTimeout == nil {
-		v.Limits.ReadTimeout = plLimits.ReadTimeout
-	}
+	mergedLimits := mergeLimits(pl.GetPipelineLimits(), v.Limits)
+	v.Limits = &mergedLimits
 }
 
-func copyEdgeLimits(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.Edge {
+func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.VertexLimits {
+	result := dfv1.VertexLimits{}
+	if vLimits != nil {
+		result.BufferMaxLength = vLimits.BufferMaxLength
+		result.BufferUsageLimit = vLimits.BufferUsageLimit
+		result.ReadBatchSize = vLimits.ReadBatchSize
+		result.ReadTimeout = vLimits.ReadTimeout
+	}
+	if result.ReadBatchSize == nil {
+		result.ReadBatchSize = plLimits.ReadBatchSize
+	}
+	if result.ReadTimeout == nil {
+		result.ReadTimeout = plLimits.ReadTimeout
+	}
+	if result.BufferMaxLength == nil {
+		result.BufferMaxLength = plLimits.BufferMaxLength
+	}
+	if result.BufferUsageLimit == nil {
+		result.BufferUsageLimit = plLimits.BufferUsageLimit
+	}
+	return result
+}
+
+func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 	plLimits := pl.GetPipelineLimits()
-	result := []dfv1.Edge{}
+	result := []dfv1.CombinedEdge{}
 	for _, e := range edges {
-		if e.Limits == nil {
-			e.Limits = &dfv1.EdgeLimits{}
+		if e.DeprecatedLimits == nil {
+			e.DeprecatedLimits = &dfv1.DeprecatedEdgeLimits{}
 		}
-		if e.Limits.BufferMaxLength == nil {
-			e.Limits.BufferMaxLength = plLimits.BufferMaxLength
+		if e.DeprecatedLimits.BufferMaxLength == nil {
+			e.DeprecatedLimits.BufferMaxLength = plLimits.BufferMaxLength
 		}
-		if e.Limits.BufferUsageLimit == nil {
-			e.Limits.BufferUsageLimit = plLimits.BufferUsageLimit
+		if e.DeprecatedLimits.BufferUsageLimit == nil {
+			e.DeprecatedLimits.BufferUsageLimit = plLimits.BufferUsageLimit
 		}
-		result = append(result, e)
+		vFrom := pl.GetVertex(e.From)
+		vTo := pl.GetVertex(e.To)
+		fromVertexLimits := mergeLimits(pl.GetPipelineLimits(), vFrom.Limits)
+		toVertexLimits := mergeLimits(pl.GetPipelineLimits(), vTo.Limits)
+		combinedEdge := dfv1.CombinedEdge{
+			Edge:                 e,
+			FromVertexType:       vFrom.GetVertexType(),
+			FromVertexPartitions: pointer.Int32(int32(vFrom.GetPartitions())),
+			FromVertexLimits:     &fromVertexLimits,
+			ToVertexLimits:       &toVertexLimits,
+			ToVertexType:         vTo.GetVertexType(),
+			ToVertexPartitions:   pointer.Int32(int32(vTo.GetPartitions())),
+		}
+		// TODO: remove this after parallelism is removed
+		if e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 0 {
+			combinedEdge.ToVertexPartitions = e.DeprecatedParallelism
+		}
+		// end of TODO
+		result = append(result, combinedEdge)
 	}
 	return result
 }

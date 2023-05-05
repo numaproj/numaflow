@@ -49,7 +49,7 @@ var (
 				Name:   testVertexSpecName,
 				Source: &Source{},
 			},
-			ToEdges: []Edge{{From: testVertexSpecName, To: "output"}},
+			ToEdges: []CombinedEdge{{Edge: Edge{From: testVertexSpecName, To: "output"}}},
 		},
 	}
 
@@ -65,7 +65,7 @@ var (
 				Name: testVertexSpecName,
 				Sink: &Sink{},
 			},
-			FromEdges: []Edge{{From: "input", To: testVertexSpecName}},
+			FromEdges: []CombinedEdge{{Edge: Edge{From: "input", To: testVertexSpecName}}},
 		},
 	}
 
@@ -80,33 +80,41 @@ var (
 			AbstractVertex: AbstractVertex{
 				Name: testVertexSpecName,
 			},
-			FromEdges: []Edge{{From: "input", To: testVertexSpecName}},
-			ToEdges:   []Edge{{From: testVertexSpecName, To: "output"}},
+			FromEdges: []CombinedEdge{{Edge: Edge{From: "input", To: testVertexSpecName}}},
+			ToEdges:   []CombinedEdge{{Edge: Edge{From: testVertexSpecName, To: "output"}}},
 		},
 	}
 )
 
-func TestGetFromBuffers(t *testing.T) {
-	f := testVertex.GetFromBuffers()
+func TestOwnedBuffers(t *testing.T) {
+	f := testVertex.OwnedBuffers()
 	assert.Equal(t, 1, len(f))
-	assert.Equal(t, f[0].Name, fmt.Sprintf("%s-%s-%s-%s", testVertex.Namespace, testVertex.Spec.PipelineName, "input", testVertex.Spec.Name))
+	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name))
 }
 
-func TestGetFromBuffersSource(t *testing.T) {
-	f := testSrcVertex.GetFromBuffers()
+func TestOwnedBuffersSource(t *testing.T) {
+	f := testSrcVertex.OwnedBuffers()
+	assert.Equal(t, 0, len(f))
+}
+
+func TestGetFromBuckets(t *testing.T) {
+	f := testVertex.GetFromBuckets()
 	assert.Equal(t, 1, len(f))
-	assert.Equal(t, f[0].Name, fmt.Sprintf("%s-%s-%s_SOURCE", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name))
+	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s-%s", testVertex.Namespace, testVertex.Spec.PipelineName, "input", testVertex.Spec.Name))
+	f = testSrcVertex.GetFromBuckets()
+	assert.Equal(t, 1, len(f))
+	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s_SOURCE", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name))
 }
 
 func TestGetToBuffers(t *testing.T) {
 	f := testVertex.GetToBuffers()
 	assert.Equal(t, 1, len(f))
-	assert.Contains(t, f[0].Name, fmt.Sprintf("%s-%s-%s-%s", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name, "output"))
+	assert.Contains(t, f[0], fmt.Sprintf("%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, "output"))
 }
 
 func TestGetToBuffersSink(t *testing.T) {
 	f := testSinkVertex.GetToBuffers()
-	assert.Equal(t, f[0].Name, fmt.Sprintf("%s-%s-%s_SINK", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name))
+	assert.Equal(t, 0, len(f))
 }
 
 func TestWithoutReplicas(t *testing.T) {
@@ -132,12 +140,14 @@ func TestGetVertexReplicas(t *testing.T) {
 	v.Spec.UDF = &UDF{
 		GroupBy: &GroupBy{},
 	}
-	v.Spec.FromEdges = []Edge{
-		{From: "a", To: "b", Parallelism: pointer.Int32(5)},
+	v.Spec.FromEdges = []CombinedEdge{
+		{Edge: Edge{From: "a", To: "b"}},
 	}
-	assert.Equal(t, 0, v.GetReplicas())
+	assert.Equal(t, 1, v.GetReplicas())
 	v.Spec.Replicas = pointer.Int32(1000)
-	assert.Equal(t, 5, v.GetReplicas())
+	assert.Equal(t, 1, v.GetReplicas())
+	v.Spec.UDF.GroupBy = nil
+	assert.Equal(t, 1000, v.GetReplicas())
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {
@@ -434,10 +444,6 @@ func Test_VertexGetInitContainers(t *testing.T) {
 	for _, env := range s[0].Env {
 		assert.Contains(t, a, env.Name)
 	}
-}
-
-func TestGenerateEdgeBufferName(t *testing.T) {
-	assert.Equal(t, []string{"a-b-c-d"}, GenerateEdgeBufferNames("a", "b", Edge{From: "c", To: "d"}))
 }
 
 func TestScalable(t *testing.T) {

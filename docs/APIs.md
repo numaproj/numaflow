@@ -387,6 +387,18 @@ List of sidecar containers belonging to the pod.
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>partitions</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Number of partitions of the vertex owned buffers. It applies to udf and
+sink vertices only.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Authorization">
@@ -491,41 +503,6 @@ Blackhole
 Blackhole is a sink to emulate /dev/null
 </p>
 </p>
-<h3 id="numaflow.numaproj.io/v1alpha1.Buffer">
-Buffer
-</h3>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>
-Field
-</th>
-<th>
-Description
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>Name</code></br> <em> string </em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>Type</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.BufferType"> BufferType </a>
-</em>
-</td>
-<td>
-</td>
-</tr>
-</tbody>
-</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.BufferFullWritingStrategy">
 BufferFullWritingStrategy (<code>string</code> alias)
 </p>
@@ -577,16 +554,108 @@ JetStreamConfig </a> </em>
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.BufferType">
-BufferType (<code>string</code> alias)
-</p>
+<h3 id="numaflow.numaproj.io/v1alpha1.CombinedEdge">
+CombinedEdge
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Buffer">Buffer</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
 </p>
 <p>
 </p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>Edge</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Edge"> Edge </a> </em>
+</td>
+<td>
+<p>
+(Members of <code>Edge</code> are embedded into this type.)
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>fromVertexType</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexType"> VertexType </a>
+</em>
+</td>
+<td>
+<p>
+From vertex type.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>fromVertexPartitions</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+The number of partitions of the from vertex, if not provided, the
+default value is set to “1”.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>fromVertexLimits</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexLimits"> VertexLimits </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>toVertexType</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexType"> VertexType </a>
+</em>
+</td>
+<td>
+<p>
+To vertex type.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>toVertexPartitions</code></br> <em> int32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+The number of partitions of the to vertex, if not provided, the default
+value is set to “1”.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>toVertexLimits</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexLimits"> VertexLimits </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.ConditionType">
 ConditionType (<code>string</code> alias)
 </p>
@@ -860,13 +929,61 @@ ContainerTemplate </a> </em>
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.DeprecatedEdgeLimits">
+DeprecatedEdgeLimits
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>bufferMaxLength</code></br> <em> uint64 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+BufferMaxLength is used to define the max length of a buffer. It
+overrides the settings from pipeline limits.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>bufferUsageLimit</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+BufferUsageLimit is used to define the percentage of the buffer usage
+limit, a valid value should be less than 100, for example, 85. It
+overrides the settings from pipeline limits.
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Edge">
 Edge
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge">CombinedEdge</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
 </p>
 <p>
 </p>
@@ -912,11 +1029,14 @@ Conditional forwarding, only allowed when “From” is a Sink or UDF.
 <tr>
 <td>
 <code>limits</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.EdgeLimits"> EdgeLimits </a>
-</em>
+<a href="#numaflow.numaproj.io/v1alpha1.DeprecatedEdgeLimits">
+DeprecatedEdgeLimits </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
+<p>
+Deprecated, use vertex.spec.limits instead.
+</p>
 <p>
 Limits define the limitations such as buffer read batch size for the
 edge, will override pipeline level settings.
@@ -929,6 +1049,9 @@ edge, will override pipeline level settings.
 </td>
 <td>
 <em>(Optional)</em>
+<p>
+Deprecated, use vertex.spec.partitions instead.
+</p>
 <p>
 Parallelism is only effective when the “to” vertex is a reduce vertex,
 if it’s not provided, the default value is set to “1”. Parallelism is
@@ -949,54 +1072,6 @@ OnFull specifies the behaviour for the write actions when the inter step
 buffer is full. There are currently two options, retryUntilSuccess and
 discardLatest. if not provided, the default value is set to
 “retryUntilSuccess”
-</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="numaflow.numaproj.io/v1alpha1.EdgeLimits">
-EdgeLimits
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>)
-</p>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>
-Field
-</th>
-<th>
-Description
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>bufferMaxLength</code></br> <em> uint64 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-BufferMaxLength is used to define the max length of a buffer. It
-overrides the settings from pipeline limits.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>bufferUsageLimit</code></br> <em> uint32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-BufferUsageLimit is used to define the percentage of the buffer usage
-limit, a valid value should be less than 100, for example, 85. It
-overrides the settings from pipeline limits.
 </p>
 </td>
 </tr>
@@ -2278,7 +2353,7 @@ JetStream (NATS) URL
 </tr>
 <tr>
 <td>
-<code>bufferConfig</code></br> <em> string </em>
+<code>streamConfig</code></br> <em> string </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -4639,7 +4714,8 @@ Refer to the Kubernetes API documentation for the fields of the
 <tr>
 <td>
 <code>fromEdges</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge"> \[\]CombinedEdge
+</a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -4648,7 +4724,8 @@ Refer to the Kubernetes API documentation for the fields of the
 <tr>
 <td>
 <code>toEdges</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge"> \[\]CombinedEdge
+</a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -4733,7 +4810,8 @@ VertexLimits
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge">CombinedEdge</a>)
 </p>
 <p>
 </p>
@@ -4772,6 +4850,31 @@ Kubernetes meta/v1.Duration </a> </em>
 <p>
 Read timeout duration from the source or buffer It overrides the
 settings from pipeline limits.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>bufferMaxLength</code></br> <em> uint64 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+BufferMaxLength is used to define the max length of a buffer. It
+overrides the settings from pipeline limits.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>bufferUsageLimit</code></br> <em> uint32 </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+BufferUsageLimit is used to define the percentage of the buffer usage
+limit, a valid value should be less than 100, for example, 85. It
+overrides the settings from pipeline limits.
 </p>
 </td>
 </tr>
@@ -4846,7 +4949,8 @@ Description
 <tr>
 <td>
 <code>fromEdges</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge"> \[\]CombinedEdge
+</a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -4855,7 +4959,8 @@ Description
 <tr>
 <td>
 <code>toEdges</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Edge"> \[\]Edge </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge"> \[\]CombinedEdge
+</a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -4949,6 +5054,10 @@ Kubernetes meta/v1.Time </a> </em>
 VertexType (<code>string</code> alias)
 </p>
 </h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge">CombinedEdge</a>)
+</p>
 <p>
 </p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Watermark">

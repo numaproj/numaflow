@@ -47,28 +47,28 @@ func (m *mockHttpClient) Get(url string) (*http.Response, error) {
 type mockIsbSvcClient struct {
 }
 
-func (ms *mockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer v1alpha1.Buffer) (*isbsvc.BufferInfo, error) {
+func (ms *mockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer string) (*isbsvc.BufferInfo, error) {
 	return &isbsvc.BufferInfo{
-		Name:            buffer.Name,
+		Name:            buffer,
 		PendingCount:    10,
 		AckPendingCount: 15,
 		TotalMessages:   20,
 	}, nil
 }
 
-func (ms *mockIsbSvcClient) CreateBuffers(ctx context.Context, buffers []v1alpha1.Buffer, opts ...isbsvc.BufferCreateOption) error {
+func (ms *mockIsbSvcClient) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...isbsvc.CreateOption) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) DeleteBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
+func (ms *mockIsbSvcClient) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) ValidateBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
+func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bucketName string) (fetch.Fetcher, error) {
 	return nil, nil
 }
 

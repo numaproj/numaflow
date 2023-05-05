@@ -369,20 +369,17 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 	}
 
 	bfs := []string{}
-	// Only source vertices need to check all the pipeline buffers
+	bks := []string{}
+	// Only source vertices need to check all the pipeline buffers and buckets
 	if vertex.IsASource() {
-		for _, b := range pl.GetAllBuffers() {
-			bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
-		}
+		bfs = append(bfs, pl.GetAllBuffers()...)
+		bks = append(bks, pl.GetAllBuckets()...)
 	} else {
-		for _, b := range vertex.GetFromBuffers() {
-			bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
-		}
-		for _, b := range vertex.GetToBuffers() {
-			bfs = append(bfs, fmt.Sprintf("%s=%s", b.Name, b.Type))
-		}
+		bfs = append(bfs, vertex.OwnedBuffers()...)
+		bks = append(bks, vertex.GetFromBuckets()...)
+		bks = append(bks, vertex.GetToBuckets()...)
 	}
-	podSpec.InitContainers[0].Args = append(podSpec.InitContainers[0].Args, "--buffers="+strings.Join(bfs, ","))
+	podSpec.InitContainers[0].Args = append(podSpec.InitContainers[0].Args, "--buffers="+strings.Join(bfs, ","), "--buckets="+strings.Join(bks, ","))
 	return podSpec, nil
 }
 

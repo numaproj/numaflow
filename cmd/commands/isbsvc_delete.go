@@ -30,21 +30,18 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-func NewISBSvcBufferDeleteCommand() *cobra.Command {
+func NewISBSvcDeleteCommand() *cobra.Command {
 	var (
 		isbSvcType string
-		buffers    map[string]string
+		buffers    []string
+		buckets    []string
 	)
 
 	command := &cobra.Command{
-		Use:   "isbsvc-buffer-delete",
-		Short: "Delete ISB Service buffers",
+		Use:   "isbsvc-delete",
+		Short: "Delete ISB Service buffers and buckets",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("isbsvc-buffer-delete")
-			if len(buffers) == 0 {
-				cmd.HelpFunc()(cmd, args)
-				return fmt.Errorf("buffer not supplied")
-			}
+			logger := logging.NewLogger().Named("isbsvc-delete")
 			pipelineName, defined := os.LookupEnv(v1alpha1.EnvPipelineName)
 			if !defined {
 				return fmt.Errorf("required environment variable '%s' not defined", v1alpha1.EnvPipelineName)
@@ -65,19 +62,16 @@ func NewISBSvcBufferDeleteCommand() *cobra.Command {
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
-			bfs := []v1alpha1.Buffer{}
-			for k, v := range buffers {
-				bfs = append(bfs, v1alpha1.Buffer{Name: k, Type: v1alpha1.BufferType(v)})
-			}
-			if err = isbsClient.DeleteBuffers(ctx, bfs); err != nil {
-				logger.Errorw("Failed buffer deletion.", zap.Error(err))
+			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets); err != nil {
+				logger.Errorw("Failed on buffer and buckets deletion.", zap.Error(err))
 				return err
 			}
-			logger.Info("Deleted Buffers successfully")
+			logger.Info("Deleted Buffers and buckets successfully")
 			return nil
 		},
 	}
-	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "jetstream", "ISB Service type, e.g. jetstream")
-	command.Flags().StringToStringVar(&buffers, "buffers", map[string]string{}, "Buffers to delete") // --buffers=a=so,c=si,e=ed
+	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "", "ISB Service type, e.g. jetstream")
+	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to create") // --buffers=a,b, --buffers=c
+	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to create") // --buckets=xxa,xxb --buckets=xxc	return command
 	return command
 }

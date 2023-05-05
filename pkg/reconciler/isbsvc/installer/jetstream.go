@@ -135,7 +135,7 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 					},
 				},
 			},
-			BufferConfig: string(b),
+			StreamConfig: string(b),
 			TLSEnabled:   r.isbs.Spec.JetStream.TLS,
 		},
 	}, nil
