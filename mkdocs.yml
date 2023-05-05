@@ -46,6 +46,7 @@ nav:
           - core-concepts/inter-step-buffer-service.md
           - core-concepts/watermarks.md
       - Sources:
+          - Overview: "user-guide/sources/overview.md"
           - user-guide/sources/generator.md
           - user-guide/sources/http.md
           - user-guide/sources/kafka.md
@@ -58,6 +59,7 @@ nav:
                   - Filter: "user-guide/sources/transformer/builtin-transformers/filter.md"
                   - Event Time Extractor: "user-guide/sources/transformer/builtin-transformers/event-time-extractor.md"
       - Sinks:
+          - Overview: "user-guide/sinks/overview.md"
           - user-guide/sinks/kafka.md
           - user-guide/sinks/log.md
           - user-guide/sinks/blackhole.md
@@ -104,7 +106,7 @@ nav:
           - Overview: "specifications/overview.md"
           - specifications/controllers.md
           - specifications/autoscaling.md
-          - specifications/edges-and-buffers.md
+          - Edges, Buffers and Buckets: "specifications/edges-buffers-buckets.md"
       - development/debugging.md
       - development/static-code-analysis.md
       - development/releasing.md
