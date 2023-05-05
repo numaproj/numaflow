@@ -63,18 +63,20 @@ func UpdateCountTrackers(tc *queue.OverflowQueue[TimestampedCount], lastSawPodCo
 	for podName, newCount := range podTotalCounts {
 		if newCount == CountNotAvailable {
 			// this is the case where the count is not available for this particular pod.
-			// we assume that the count is not available when the pod is not running.
-			// hence skip counting this pod.
+			// we assume that it indicates the pod is not running.
+			// hence we skip counting this pod.
+			lastSawPodCounts[podName] = newCount
 			continue
 		}
 
-		lastCount, existing := lastSawPodCounts[podName]
-		if existing && newCount >= lastCount {
+		lastCount, exist := lastSawPodCounts[podName]
+		if exist && lastCount != CountNotAvailable && newCount >= lastCount {
 			// this is the normal case where the count increases.
 			delta += newCount - lastCount
 		} else {
-			// this is the case where the pod is restarted.
-			// we assume that the count is reset to 0 when the pod is restarted.
+			// if the pod doesn't exist in last check, or the count decreases,
+			// or for certain reasons last saw count is CountNotAvailable,
+			// we assume that the pod either was restarted or a new pod just coming up.
 			delta += newCount
 		}
 		lastSawPodCounts[podName] = newCount
