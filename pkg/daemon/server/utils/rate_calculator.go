@@ -161,13 +161,9 @@ func (rc *RateCalculator) getTotalCount(_ context.Context, vertex *v1alpha1.Abst
 		}
 
 		var readTotalMetricName string
-		// TODO - should we move IsReduceUDF interface impl from the concrete vertex to the abstract vertex?
-		// TODO - should we use the same metric name for both reducer and non-reducer?
-		if vertex.UDF != nil && vertex.UDF.GroupBy != nil {
-			// the vertex is a reducer
+		if vertex.IsReduceUDF() {
 			readTotalMetricName = "reduce_isb_reader_read_total"
 		} else {
-			// the vertex is a non-reducer
 			readTotalMetricName = "forwarder_read_total"
 		}
 

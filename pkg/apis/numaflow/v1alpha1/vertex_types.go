@@ -88,7 +88,7 @@ func (v Vertex) IsMapUDF() bool {
 }
 
 func (v Vertex) IsReduceUDF() bool {
-	return v.Spec.UDF != nil && v.Spec.UDF.GroupBy != nil
+	return v.Spec.IsReduceUDF()
 }
 
 func (v Vertex) Scalable() bool {
@@ -397,6 +397,10 @@ type AbstractVertex struct {
 	// List of sidecar containers belonging to the pod.
 	// +optional
 	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,12,rep,name=sidecars"`
+}
+
+func (v *AbstractVertex) IsReduceUDF() bool {
+	return v.UDF != nil && v.UDF.GroupBy != nil
 }
 
 // Scale defines the parameters for autoscaling.
