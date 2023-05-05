@@ -28,8 +28,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/montanaflynn/stats"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 

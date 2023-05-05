@@ -21,8 +21,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
