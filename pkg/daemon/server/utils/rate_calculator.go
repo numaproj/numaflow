@@ -82,6 +82,7 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 		lookbackSecondsMap[k] = v
 	}
 	go func() {
+		log.Infof("Running rate calculator for vertex %s...", rc.vertex.Name)
 		ticker := time.NewTicker(rc.refreshInterval)
 		for {
 			select {

@@ -89,23 +89,15 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
-	// start the rate calculator for each of the vertices
 	// create a pool of rate calculators
 	var wg sync.WaitGroup
 	rateCalculators := make(map[string]*server.RateCalculator, len(ds.pipeline.Spec.Vertices))
-	log.Infof("Starting rate calculators for %d vertices", len(ds.pipeline.Spec.Vertices))
 	for _, v := range ds.pipeline.Spec.Vertices {
 		log.Infof("Starting rate calculator for vertex %s", v.Name)
 		wg.Add(1)
-		rc := server.NewRateCalculator(ds.pipeline, &v)
-		go func() {
-			defer wg.Done()
-			err := rc.Start(ctx)
-			if err != nil {
-				log.Errorw("failed to start rate calculator", zap.Error(err))
-			}
-		}()
-		rateCalculators[v.Name] = rc
+		go func(vertex v1alpha1.AbstractVertex) {
+			rateCalculators[vertex.Name] = ds.startRateCalculator(ctx, &wg, ds.pipeline, &vertex)
+		}(v)
 	}
 
 	// Start listener
@@ -140,8 +132,9 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = tcpm.Serve() }()
 
 	log.Infof("Daemon server started successfully on %s", address)
-	wg.Wait()
 	<-ctx.Done()
+	// TODO - where should I put wg.Wait()?
+	wg.Wait()
 	return nil
 }
 
@@ -206,4 +199,14 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	mux.Handle("/metrics", promhttp.Handler())
 
 	return &httpServer
+}
+
+func (ds *daemonServer) startRateCalculator(ctx context.Context, wg *sync.WaitGroup, pl *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) *server.RateCalculator {
+	log := logging.FromContext(ctx)
+	defer wg.Done()
+	rc := server.NewRateCalculator(pl, v)
+	if err := rc.Start(ctx); err != nil {
+		log.Errorw("failed to start rate calculator", zap.Error(err))
+	}
+	return rc
 }
