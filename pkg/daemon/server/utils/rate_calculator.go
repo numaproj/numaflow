@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -30,12 +31,18 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
+const (
+	// CountNotAvailable indicates that the rate calculator was not able to retrieve the count
+	CountNotAvailable = float64(math.MinInt)
+	// RateNotAvailable indicates that the rate calculator was not able to calculate the rate.
+	RateNotAvailable = float64(math.MinInt)
+)
+
 // fixedLookbackSeconds Always maintain rate metrics for the following lookback seconds (1m, 5m, 15m)
 var fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
 
 // RateCalculator is a struct that calculates the processing rate of a vertex.
 type RateCalculator struct {
-	// TODO - do we need to pass in the entire pipeline or just the vertex?
 	pipeline   *v1alpha1.Pipeline
 	vertex     *v1alpha1.AbstractVertex
 	httpClient *http.Client
@@ -53,7 +60,6 @@ func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) *RateCa
 	rc := RateCalculator{
 		pipeline: p,
 		vertex:   v,
-		// TODO - should we create a new client for each vertex or share one client for all vertices?
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -71,7 +77,6 @@ func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) *RateCa
 	return &rc
 }
 
-// Start TODO - how to stop and how to handle errors? seems the caller will do ctx done as signal to stop.
 // Start starts the rate calculator that periodically fetches the total counts, calculates and updates the rates.
 func (rc *RateCalculator) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx).Named("RateCalculator")
@@ -89,7 +94,6 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				// TODO - fetch total counts from the vertex and update the timestamped total counts queue
 				podTotalCounts, err := rc.findCurrentTotalCounts(ctx, rc.vertex)
 				if err != nil {
 					println("Keran is testing, the err is ", err.Error())
@@ -118,6 +122,7 @@ func (rc *RateCalculator) GetRates() map[string]float64 {
 }
 
 // TODO - rethink about error handling
+// Printing error can be useful for debugging, but should we just assign CountNotAvailable when error happens?
 func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1alpha1.AbstractVertex) (map[string]float64, error) {
 	var err error
 	var result = make(map[string]float64)
@@ -128,14 +133,15 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 		if rc.podExists(vertex.Name, podName) {
 			fmt.Printf("Keran is testing, found pod %s\n", podName)
 			result[podName], err = rc.getTotalCount(ctx, vertex, podName)
-			// TODO - maybe just COUNT_NOT_AVAILABLE?
 			if err != nil {
 				fmt.Printf("Keran is testing, failed to get total count for pod %s: %v\n", podName, err.Error())
-				return nil, fmt.Errorf("failed to get total count for pod %s: %v", podName, err.Error())
 			}
 		} else {
+			// we assume all the pods are in order, so if we don't find one, we can break
+			// this is because when we scale down, we always scale down from the last pod
+			// there can be a case when a pod in the middle crashes, hence we miss counting the following pods
+			// but this is rare, and if it happens, we will just have a slightly lower rate and wait for the next refresh to recover
 			fmt.Printf("Keran is testing, didn't find pod %s\n", podName)
-			// TODO - only break when 3 consecutive pods are not found
 			break
 		}
 		index++
@@ -146,24 +152,22 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 func (rc *RateCalculator) getTotalCount(_ context.Context, vertex *v1alpha1.AbstractVertex, podName string) (float64, error) {
 	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, rc.pipeline.Name+"-"+vertex.Name+"-headless", rc.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if res, err := rc.httpClient.Get(url); err != nil {
-		// TODO - replace 0 with COUNT_NOT_AVAILABLE
-		fmt.Printf("Keran is testing, failed reading the metrics endpoint, %v", err.Error())
-		return 0, fmt.Errorf("failed reading the metrics endpoint, %v", err.Error())
+		return CountNotAvailable, fmt.Errorf("failed reading the metrics endpoint, %v", err.Error())
 	} else {
-		// parse the metrics
 		textParser := expfmt.TextParser{}
 		result, err := textParser.TextToMetricFamilies(res.Body)
 		if err != nil {
-			fmt.Printf("Keran is testing, failed parsing to prometheus metric families, %v", err.Error())
-			return 0, fmt.Errorf("failed parsing to prometheus metric families, %v", err.Error())
+			return CountNotAvailable, fmt.Errorf("failed parsing to prometheus metric families, %v", err.Error())
 		}
 
 		var readTotalMetricName string
-		// Should we move IsReduceUDF from the concrete vertex to the abstract vertex?
+		// TODO - should we move IsReduceUDF interface impl from the concrete vertex to the abstract vertex?
+		// TODO - should we use the same metric name for both reducer and non-reducer?
 		if vertex.UDF != nil && vertex.UDF.GroupBy != nil {
-			// vertex is a reducer
+			// the vertex is a reducer
 			readTotalMetricName = "reduce_isb_reader_read_total"
 		} else {
+			// the vertex is a non-reducer
 			readTotalMetricName = "forwarder_read_total"
 		}
 
@@ -172,7 +176,7 @@ func (rc *RateCalculator) getTotalCount(_ context.Context, vertex *v1alpha1.Abst
 			fmt.Printf("Keran is testing, got the count for pod %s is %v\n", podName, metricsList[0].Counter.GetValue())
 			return metricsList[0].Counter.GetValue(), nil
 		} else {
-			return 0, fmt.Errorf("read_total metric not found")
+			return CountNotAvailable, fmt.Errorf("read_total metric not found")
 		}
 	}
 }

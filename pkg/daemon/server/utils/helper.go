@@ -59,16 +59,14 @@ func CalculateRate(tc *queue.OverflowQueue[TimestampedCount], lookback int64) fl
 // UpdateCountTrackers updates the count trackers using the latest count numbers podTotalCounts.
 // It updates the lastSawPodCounts and timestampedTotalCounts to reflect the latest counts.
 func UpdateCountTrackers(tc *queue.OverflowQueue[TimestampedCount], lastSawPodCounts, podTotalCounts map[string]float64) {
-	// This is a simple implementation. It assumes no pod crashes and no pod restarts.
-	// TODO - It should be replaced with a real one.
+	// This is a simple implementation. It assumes no pod crashes and restarts.
+	// TODO - replace it with a new one that aligns with the design doc.
 	totalCount := 0
 	for _, count := range podTotalCounts {
-		totalCount += int(count)
+		if count != CountNotAvailable {
+			totalCount += int(count)
+		}
 	}
-
 	tc.Append(TimestampedCount{count: int64(totalCount), timestamp: time.Now().Unix()})
-
-	_ = tc
 	_ = lastSawPodCounts
-	_ = podTotalCounts
 }

@@ -90,7 +90,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}()
 
 	// create a pool of rate calculators
-	var wg sync.WaitGroup
+	wg := sync.WaitGroup{}
 	rateCalculators := make(map[string]*server.RateCalculator, len(ds.pipeline.Spec.Vertices))
 	for _, v := range ds.pipeline.Spec.Vertices {
 		log.Infof("Starting rate calculator for vertex %s", v.Name)
@@ -133,7 +133,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 
 	log.Infof("Daemon server started successfully on %s", address)
 	<-ctx.Done()
-	// TODO - where should I put wg.Wait()?
+	// after ctx is done, the rate calculators wait group should be done
 	wg.Wait()
 	return nil
 }
