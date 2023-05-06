@@ -87,7 +87,6 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 		lookbackSecondsMap[k] = v
 	}
 	go func() {
-		log.Infof("Running rate calculator for vertex %s...", rc.vertex.Name)
 		ticker := time.NewTicker(rc.refreshInterval)
 		for {
 			select {
@@ -123,6 +122,7 @@ func (rc *RateCalculator) GetRates() map[string]float64 {
 
 // TODO - rethink about error handling
 // Printing error can be useful for debugging, but should we just assign CountNotAvailable when error happens?
+// Print error and return CountNotAvailable for now.
 func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1alpha1.AbstractVertex) (map[string]float64, error) {
 	var err error
 	var result = make(map[string]float64)
@@ -131,7 +131,6 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 	for {
 		podName := fmt.Sprintf("%s-%s-%d", rc.pipeline.Name, vertex.Name, index)
 		if rc.podExists(vertex.Name, podName) {
-			fmt.Printf("Keran is testing, found pod %s\n", podName)
 			result[podName], err = rc.getTotalCount(ctx, vertex, podName)
 			if err != nil {
 				fmt.Printf("Keran is testing, failed to get total count for pod %s: %v\n", podName, err.Error())
@@ -141,7 +140,6 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 			// this is because when we scale down, we always scale down from the last pod
 			// there can be a case when a pod in the middle crashes, hence we miss counting the following pods
 			// but this is rare, and if it happens, we will just have a slightly lower rate and wait for the next refresh to recover
-			fmt.Printf("Keran is testing, didn't find pod %s\n", podName)
 			break
 		}
 		index++
