@@ -93,16 +93,9 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				podTotalCounts, err := rc.findCurrentTotalCounts(ctx, rc.vertex)
-				if err != nil {
-					println("Keran is testing, the err is ", err.Error())
-				} else {
-					fmt.Printf("Keran is testing, the podTotalCounts is %v", podTotalCounts)
-				}
-
+				podTotalCounts := rc.findCurrentTotalCounts(ctx, rc.vertex)
 				// update counts trackers
 				UpdateCountTrackers(rc.timestampedTotalCounts, rc.lastSawPodCounts, podTotalCounts)
-
 				// calculate rates for each lookback seconds
 				for n, i := range lookbackSecondsMap {
 					r := CalculateRate(rc.timestampedTotalCounts, i)
@@ -112,7 +105,6 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 			}
 		}
 	}()
-
 	return nil
 }
 
@@ -120,21 +112,14 @@ func (rc *RateCalculator) GetRates() map[string]float64 {
 	return rc.processingRates
 }
 
-// TODO - rethink about error handling
-// Printing error can be useful for debugging, but should we just assign CountNotAvailable when error happens?
-// Print error and return CountNotAvailable for now.
-func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1alpha1.AbstractVertex) (map[string]float64, error) {
-	var err error
+// findCurrentTotalCounts build a total count map with key being the pod name and value being the current total number of messages read by the pod
+func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1alpha1.AbstractVertex) map[string]float64 {
 	var result = make(map[string]float64)
-
 	index := 0
 	for {
 		podName := fmt.Sprintf("%s-%s-%d", rc.pipeline.Name, vertex.Name, index)
 		if rc.podExists(vertex.Name, podName) {
-			result[podName], err = rc.getTotalCount(ctx, vertex, podName)
-			if err != nil {
-				fmt.Printf("Keran is testing, failed to get total count for pod %s: %v\n", podName, err.Error())
-			}
+			result[podName] = rc.getTotalCount(ctx, vertex, podName)
 		} else {
 			// we assume all the pods are in order, so if we don't find one, we can break
 			// this is because when we scale down, we always scale down from the last pod
@@ -144,18 +129,22 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 		}
 		index++
 	}
-	return result, nil
+	return result
 }
 
-func (rc *RateCalculator) getTotalCount(_ context.Context, vertex *v1alpha1.AbstractVertex, podName string) (float64, error) {
+func (rc *RateCalculator) getTotalCount(ctx context.Context, vertex *v1alpha1.AbstractVertex, podName string) float64 {
+	log := logging.FromContext(ctx).Named("RateCalculator")
+	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, rc.pipeline.Name+"-"+vertex.Name+"-headless", rc.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if res, err := rc.httpClient.Get(url); err != nil {
-		return CountNotAvailable, fmt.Errorf("failed reading the metrics endpoint, %v", err.Error())
+		log.Errorw("failed reading the metrics endpoint, %v", err.Error())
+		return CountNotAvailable
 	} else {
 		textParser := expfmt.TextParser{}
 		result, err := textParser.TextToMetricFamilies(res.Body)
 		if err != nil {
-			return CountNotAvailable, fmt.Errorf("failed parsing to prometheus metric families, %v", err.Error())
+			log.Errorw("failed parsing to prometheus metric families, %v", err.Error())
+			return CountNotAvailable
 		}
 
 		var readTotalMetricName string
@@ -167,23 +156,19 @@ func (rc *RateCalculator) getTotalCount(_ context.Context, vertex *v1alpha1.Abst
 
 		if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 			metricsList := value.GetMetric()
-			fmt.Printf("Keran is testing, got the count for pod %s is %v\n", podName, metricsList[0].Counter.GetValue())
-			return metricsList[0].Counter.GetValue(), nil
+			return metricsList[0].Counter.GetValue()
 		} else {
-			return CountNotAvailable, fmt.Errorf("read_total metric not found")
+			return CountNotAvailable
 		}
 	}
 }
 
 func (rc *RateCalculator) podExists(vertexName, podName string) bool {
-	// we can query the metrics endpoint of the (i)th pod to obtain this value.
+	// using the vertex headless service to check if a pod exists or not.
 	// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
 	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, rc.pipeline.Name+"-"+vertexName+"-headless", rc.pipeline.Namespace, v1alpha1.VertexMetricsPort)
-	// TODO - Head is enough?
-	if _, err := rc.httpClient.Get(url); err != nil {
-		fmt.Printf("Keran is testing, didn't find pod %s, err is %v", podName, err.Error())
+	if _, err := rc.httpClient.Head(url); err != nil {
 		return false
 	}
-	fmt.Printf("Keran is testing, found pod %s", podName)
 	return true
 }
