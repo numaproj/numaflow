@@ -22,8 +22,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
-// TODO - rename this file
-
 // TimestampedCount is a helper struct to wrap a count number and timestamp pair
 type TimestampedCount struct {
 	// count is the number of messages processed

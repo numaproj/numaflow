@@ -34,10 +34,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	server "github.com/numaproj/numaflow/pkg/daemon/server/service/rate"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/daemon/server/service"
-	server "github.com/numaproj/numaflow/pkg/daemon/server/utils"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -93,10 +94,10 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	wg := sync.WaitGroup{}
 	rateCalculators := make(map[string]*server.RateCalculator, len(ds.pipeline.Spec.Vertices))
 	for _, v := range ds.pipeline.Spec.Vertices {
-		log.Infof("Starting rate calculator for vertex %s", v.Name)
+		log.Infof("Starting the rate calculator for vertex %s", v.Name)
 		wg.Add(1)
 		go func(vertex v1alpha1.AbstractVertex) {
-			rateCalculators[vertex.Name] = ds.startRateCalculator(ctx, &wg, ds.pipeline, &vertex)
+			rateCalculators[vertex.Name] = startRateCalculator(ctx, &wg, ds.pipeline, &vertex)
 		}(v)
 	}
 
@@ -133,12 +134,14 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 
 	log.Infof("Daemon server started successfully on %s", address)
 	<-ctx.Done()
-	// after ctx is done, the rate calculators wait group should be done
 	wg.Wait()
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer(isbSvcClient isbsvc.ISBService, wmFetchers map[string][]fetch.Fetcher, rateCalculators map[string]*server.RateCalculator) (*grpc.Server, error) {
+func (ds *daemonServer) newGRPCServer(
+	isbSvcClient isbsvc.ISBService,
+	wmFetchers map[string][]fetch.Fetcher,
+	rateCalculators map[string]*server.RateCalculator) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -201,12 +204,16 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	return &httpServer
 }
 
-func (ds *daemonServer) startRateCalculator(ctx context.Context, wg *sync.WaitGroup, pl *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) *server.RateCalculator {
+func startRateCalculator(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	pl *v1alpha1.Pipeline,
+	v *v1alpha1.AbstractVertex) *server.RateCalculator {
 	log := logging.FromContext(ctx)
 	defer wg.Done()
 	rc := server.NewRateCalculator(pl, v)
 	if err := rc.Start(ctx); err != nil {
-		log.Errorw("failed to start rate calculator", zap.Error(err))
+		log.Errorw("failed to start the rate calculator", zap.Error(err))
 	}
 	return rc
 }
