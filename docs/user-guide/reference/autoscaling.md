@@ -15,6 +15,7 @@ Numaflow is able to run with both `Horizontal Pod Autoscaling` and `Vertical Pod
 Numaflow provides `0 - N` autoscaling capability out of the box, it's available for all the `UDF`, `Sink` and following `Source` vertices.
 
 - Kafka
+- Redis Streams
 
 Numaflow autoscaling is enabled by default, there are some parameters can be tuned to achieve better results.
 
