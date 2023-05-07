@@ -144,8 +144,10 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}()
 		readyChecker = t
 		sourcer, err = sp.getSourcer(writers, sp.getTransformerGoWhereDecider(), t, fetchWatermark, publishWatermark, sourcePublisherStores, log)
+		fmt.Printf("getSourcer returned err: %+v\n", err)
 	} else {
 		sourcer, err = sp.getSourcer(writers, forward.All, applier.Terminal, fetchWatermark, publishWatermark, sourcePublisherStores, log)
+		fmt.Printf("getSourcer returned err: %+v\n", err)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)

@@ -164,6 +164,7 @@ func New(
 	// create the ConsumerGroup here if not already created
 	err = redisStreamsSource.createConsumerGroup(ctx, redisSpec)
 	if err != nil {
+		fmt.Printf("deletethis: returning error: %+v\n", err)
 		return nil, err
 	}
 
@@ -174,9 +175,12 @@ func New(
 		} else if len(xstreams) == 1 {
 			xstream := xstreams[0]
 
+			fmt.Println("deletethis: reading messages")
+
 			for _, message := range xstream.Messages {
 				var outMsg *isb.ReadMessage
 				var err error
+				fmt.Printf("deletethis: message.Values=%+v\n", message.Values)
 				if len(message.Values) >= 1 {
 					outMsg, err = produceMsg(message)
 					if err != nil {
@@ -286,6 +290,8 @@ func (rsSource *redisStreamsSource) createConsumerGroup(ctx context.Context, sou
 			return fmt.Errorf("failed to create consumer group %q on redis stream %q: err=%v", rsSource.Group, rsSource.Stream, err)
 		}
 	}
+	result := rsSource.RedisClient.Client.Ping(context.Background())
+	fmt.Printf("deletethis: result from Pinging redis=%+v\n", result)
 	return nil
 }
 
