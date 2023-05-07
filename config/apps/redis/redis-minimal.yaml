@@ -55,8 +55,6 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: redis
-          #image: redis:5.0.4
-          #image: bitnami/redis:7.0.11-debian-11-r3
           image: redis:7.0.11
           ports:
             - containerPort: 6379

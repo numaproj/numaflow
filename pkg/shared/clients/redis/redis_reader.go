@@ -126,7 +126,6 @@ func (br *RedisStreamsRead) processReadError(xstreams []redis.XStream, messages 
 // send array of 1 element.
 func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error {
 	errs := make([]error, len(offsets))
-
 	// if we were to have n messages produced from 1 incoming message, we could have
 	// the same offset more than once: just in case, we can deduplicate
 	dedupOffsets := make(map[string]struct{}) // essentially a Set
