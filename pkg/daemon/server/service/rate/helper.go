@@ -81,7 +81,7 @@ func UpdateCountTrackers(tc *queue.OverflowQueue[TimestampedCount], lastSawPodCo
 
 	lastSawTotalCount := 0.0
 	if tc.Length() > 0 {
-		lastSawTotalCount = float64(tc.Peek().count)
+		lastSawTotalCount = float64(tc.Newest().count)
 	}
 
 	newTotalCount := lastSawTotalCount + delta

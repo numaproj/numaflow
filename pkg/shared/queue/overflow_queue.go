@@ -64,10 +64,10 @@ func (q *OverflowQueue[T]) Length() int {
 	return len(q.elements)
 }
 
-// Peek returns the element at peek of the queue.
+// Newest returns the most recently added element in the queue.
 // It does not remove the element from the queue.
 // If the queue is empty, it returns the zero value of type T.
-func (q *OverflowQueue[T]) Peek() T {
+func (q *OverflowQueue[T]) Newest() T {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 	var item T

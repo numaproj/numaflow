@@ -31,12 +31,8 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
-const (
-	// CountNotAvailable indicates that the rate calculator was not able to retrieve the count
-	CountNotAvailable = float64(math.MinInt)
-	// RateNotAvailable indicates that the rate calculator was not able to calculate the rate.
-	RateNotAvailable = float64(math.MinInt)
-)
+// CountNotAvailable indicates that the rate calculator was not able to retrieve the count
+const CountNotAvailable = float64(math.MinInt)
 
 // fixedLookbackSeconds Always maintain rate metrics for the following lookback seconds (1m, 5m, 15m)
 var fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
@@ -108,6 +104,7 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 	return nil
 }
 
+// GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
 func (rc *RateCalculator) GetRates() map[string]float64 {
 	return rc.processingRates
 }
@@ -124,7 +121,7 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 			// we assume all the pods are in order, so if we don't find one, we can break
 			// this is because when we scale down, we always scale down from the last pod
 			// there can be a case when a pod in the middle crashes, hence we miss counting the following pods
-			// but this is rare, and if it happens, we will just have a slightly lower rate and wait for the next refresh to recover
+			// but this is rare, if it happens, we end up getting a rate that's lower than the real one and wait for the next refresh to recover
 			break
 		}
 		index++
@@ -132,6 +129,7 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 	return result
 }
 
+// getTotalCount returns the total number of messages read by the pod
 func (rc *RateCalculator) getTotalCount(ctx context.Context, vertex *v1alpha1.AbstractVertex, podName string) float64 {
 	log := logging.FromContext(ctx).Named("RateCalculator")
 	// scrape the read total metric from pod metric port

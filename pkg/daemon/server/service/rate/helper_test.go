@@ -246,9 +246,9 @@ func TestUpdateCountTrackers(t *testing.T) {
 			UpdateCountTrackers(tcQueue, tc.initialLastSawCounts, tc.podTotalCounts)
 			var delta float64
 			if len(tc.initialTimestampedCounts) > 0 {
-				delta = float64(tcQueue.Peek().count) - float64(tc.initialTimestampedCounts[len(tc.initialTimestampedCounts)-1].count)
+				delta = float64(tcQueue.Newest().count) - float64(tc.initialTimestampedCounts[len(tc.initialTimestampedCounts)-1].count)
 			} else {
-				delta = float64(tcQueue.Peek().count)
+				delta = float64(tcQueue.Newest().count)
 			}
 			assert.Equal(t, tc.expectedDelta, delta)
 			// verify that lastSawPodCounts is updated
