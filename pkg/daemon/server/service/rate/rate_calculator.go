@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/prometheus/common/expfmt"
@@ -112,9 +113,56 @@ func (rc *RateCalculator) GetRates() map[string]float64 {
 // findCurrentTotalCounts build a total count map with key being the pod name and value being the current total number of messages read by the pod
 func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1alpha1.AbstractVertex) map[string]float64 {
 	var result = make(map[string]float64)
+	resultChan := make(chan struct {
+		podName string
+		count   float64
+	})
+	existChan := make(chan struct {
+		podName string
+		exists  bool
+	})
+	var wg sync.WaitGroup
+
+	// Collect the results
+	go func() {
+		for podResult := range resultChan {
+			result[podResult.podName] = podResult.count
+		}
+	}()
+
 	index := 0
 	for {
 		podName := fmt.Sprintf("%s-%s-%d", rc.pipeline.Name, vertex.Name, index)
+
+		// run podExists calls in parallel
+		wg.Add(1)
+		go func(podName string) {
+			defer wg.Done()
+			exists := rc.podExists(vertex.Name, podName)
+			existChan <- struct {
+				podName string
+				exists  bool
+			}{podName: podName, exists: exists}
+		}(podName)
+
+		// wait for the podExists result and break if the pod doesn't exist
+		podExistsResult := <-existChan
+		if podExistsResult.exists {
+			// run getTotalCount calls in parallel
+			wg.Add(1)
+			go func(podName string) {
+				defer wg.Done()
+				count := rc.getTotalCount(ctx, vertex, podName)
+				resultChan <- struct {
+					podName string
+					count   float64
+				}{podName, count}
+			}(podName)
+		} else {
+			break
+		}
+		index++
+
 		if rc.podExists(vertex.Name, podName) {
 			result[podName] = rc.getTotalCount(ctx, vertex, podName)
 		} else {
@@ -126,6 +174,12 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 		}
 		index++
 	}
+
+	// wait for all the goroutines to finish and close the channels
+	wg.Wait()
+	close(resultChan)
+	close(existChan)
+
 	return result
 }
 
