@@ -74,14 +74,11 @@ func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMes
 	var xstreams []redis.XStream
 	var err error
 
-	result := br.Client.Ping(context.Background())
-	fmt.Printf("deletethis: Read(): result from Pinging redis=%+v\n", result)
-
 	// start with 0-0 if CheckBackLog is true
 	labels := map[string]string{"buffer": br.GetName()}
 	if br.Options.CheckBackLog {
 		xstreams, err = br.processXReadResult("0-0", count)
-		if err != nil /*&& !errors.Is(err, redis.Nil) */ {
+		if err != nil {
 			return br.processReadError(xstreams, messages, err)
 		}
 
@@ -94,7 +91,7 @@ func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMes
 	}
 	if !br.Options.CheckBackLog {
 		xstreams, err = br.processXReadResult(">", count)
-		if err != nil /*&& !errors.Is(err, redis.Nil)*/ {
+		if err != nil {
 			return br.processReadError(xstreams, messages, err)
 		}
 	}
@@ -114,10 +111,6 @@ func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMes
 func (br *RedisStreamsRead) processReadError(xstreams []redis.XStream, messages []*isb.ReadMessage, err error) ([]*isb.ReadMessage, error) {
 	if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
 		br.Log.Debugf("redis.Nil/context cancelled, checkBackLog=%v, err=%v", br.Options.CheckBackLog, err)
-		if err != nil {
-			result := br.Client.Ping(context.Background())
-			fmt.Printf("deletethis: processReadError: result from Pinging redis=%+v\n", result)
-		}
 		return messages, nil
 	}
 
@@ -167,11 +160,12 @@ func (br *RedisStreamsRead) Pending(_ context.Context) (int64, error) {
 
 	result := br.Client.XInfoGroups(RedisContext, br.Stream)
 	groups, err := result.Result()
-	fmt.Printf("deletethis: groups=%+v, err=%v\n", groups, err)
+	if err != nil {
+		return 0, fmt.Errorf("error calling XInfoGroups: %v", err)
+	}
 	// find our ConsumerGroup
 	for _, group := range groups {
 		if group.Name == br.Group {
-			fmt.Printf("deletethis: lag=%d\n", group.Lag)
 			return group.Lag, nil
 		}
 	}
@@ -187,7 +181,5 @@ func (br *RedisStreamsRead) processXReadResult(startIndex string, count int64) (
 		Count:    count,
 		Block:    br.Options.ReadTimeOut,
 	})
-	xstreams, _ := result.Result()
-	fmt.Printf("deletethis: processXReadResult: result=%+v\n", xstreams)
 	return result.Result()
 }
