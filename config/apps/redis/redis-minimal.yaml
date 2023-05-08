@@ -30,6 +30,7 @@ data:
   redis-config:  |
     maxmemory 10mb
     maxmemory-policy allkeys-lru
+    protected-mode no
 ---
 #
 # Redis stateful set
@@ -54,7 +55,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: redis
-          image: redis:5.0.4
+          image: redis:7.0.11
           ports:
             - containerPort: 6379
               name: client
