@@ -156,12 +156,13 @@ func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error
 func (br *RedisStreamsRead) NoAck(_ context.Context, _ []isb.Offset) {}
 
 func (br *RedisStreamsRead) Pending(_ context.Context) (int64, error) {
-	// try calling XINFO GROUPS <stream> and look for 'Lag' key. For Redis Server < 7.0, this should always return 0.
+	// try calling XINFO GROUPS <stream> and look for 'Lag' key.
+	// For Redis Server < v7.0, this always returns 0; therefore it's recommended to use >= v7.0
 
 	result := br.Client.XInfoGroups(RedisContext, br.Stream)
 	groups, err := result.Result()
 	if err != nil {
-		return 0, fmt.Errorf("error calling XInfoGroups: %v", err)
+		return isb.PendingNotAvailable, fmt.Errorf("error calling XInfoGroups: %v", err)
 	}
 	// find our ConsumerGroup
 	for _, group := range groups {
