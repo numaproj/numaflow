@@ -17,76 +17,244 @@ limitations under the License.
 package server
 
 import (
+	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/queue"
+	"github.com/stretchr/testify/assert"
+
+	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
-// TimestampedCount is a helper struct to wrap a count number and timestamp pair
-type TimestampedCount struct {
-	// count is the number of messages processed
-	count int64
-	// timestamp in seconds, is the time when the count is recorded
-	timestamp int64
+func TestCalculateRate(t *testing.T) {
+	testCases := []struct {
+		name              string
+		timestampedCounts []TimestampedCount
+		lookback          int64
+		expectedRate      float64
+	}{
+		{
+			name:              "empty queue",
+			timestampedCounts: []TimestampedCount{},
+			lookback:          60,
+			expectedRate:      0,
+		},
+		{
+			name: "single count in queue",
+			timestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 10, count: 5},
+			},
+			lookback:     60,
+			expectedRate: 0,
+		},
+		{
+			name: "all counts outside lookback",
+			timestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 120, count: 3},
+				{timestamp: time.Now().Unix() - 100, count: 5},
+				{timestamp: time.Now().Unix() - 80, count: 8},
+			},
+			lookback:     60,
+			expectedRate: 0,
+		},
+		{
+			name: "lookback is zero",
+			timestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 40, count: 5},
+				{timestamp: time.Now().Unix() - 10, count: 10},
+			},
+			lookback:     0,
+			expectedRate: 0,
+		},
+		{
+			name: "two counts in queue within lookback",
+			timestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 40, count: 5},
+				{timestamp: time.Now().Unix() - 10, count: 10},
+			},
+			lookback:     60,
+			expectedRate: 0.166,
+		},
+		{
+			name: "multiple counts in queue, some outside lookback",
+			timestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 100, count: 3},
+				{timestamp: time.Now().Unix() - 70, count: 5},
+				{timestamp: time.Now().Unix() - 40, count: 8},
+				{timestamp: time.Now().Unix() - 10, count: 12},
+			},
+			lookback:     60,
+			expectedRate: 0.133,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tcQueue := sharedqueue.New[TimestampedCount](1800)
+			for _, item := range tc.timestampedCounts {
+				tcQueue.Append(item)
+			}
+			actualRate := CalculateRate(tcQueue, tc.lookback)
+			assert.InDelta(t, tc.expectedRate, actualRate, 0.001)
+		})
+	}
 }
 
-// CalculateRate calculates the processing rate over the last lookback seconds.
-// It uses the timestamped count queue to retrieve the first and last count in the lookback window and calculate the rate using formula:
-// rate = (lastCount - firstCount) / (lastTimestamp - firstTimestamp)
-func CalculateRate(tc *queue.OverflowQueue[TimestampedCount], lookback int64) float64 {
-	if tc.Length() < 2 {
-		return 0
+func TestUpdateCountTrackers(t *testing.T) {
+	testCases := []struct {
+		name                     string
+		initialTimestampedCounts []TimestampedCount
+		initialLastSawCounts     map[string]float64
+		podTotalCounts           map[string]float64
+		expectedDelta            float64
+	}{
+		{
+			name: "normal case",
+			initialTimestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 10, count: 5},
+			},
+			initialLastSawCounts: map[string]float64{
+				"pod1": 2,
+				"pod2": 3,
+			},
+			podTotalCounts: map[string]float64{
+				"pod1": 4,
+				"pod2": 4,
+			},
+			expectedDelta: 3,
+		},
+		{
+			name: "podTotalCounts count not available",
+			initialTimestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 10, count: 5},
+			},
+			initialLastSawCounts: map[string]float64{
+				"pod1": 2,
+				"pod2": 3,
+			},
+			podTotalCounts: map[string]float64{
+				"pod1": CountNotAvailable,
+				"pod2": 4,
+			},
+			expectedDelta: 1,
+		},
+		{
+			name: "initialLastSawCounts count not available",
+			initialTimestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 10, count: 5},
+			},
+			initialLastSawCounts: map[string]float64{
+				"pod1": CountNotAvailable,
+				"pod2": 3,
+			},
+			podTotalCounts: map[string]float64{
+				"pod1": 2,
+				"pod2": 4,
+			},
+			expectedDelta: 3,
+		},
+		{
+			name: "pod count decrease",
+			initialTimestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 10, count: 5},
+			},
+			initialLastSawCounts: map[string]float64{
+				"pod1": 2,
+				"pod2": 3,
+			},
+			podTotalCounts: map[string]float64{
+				"pod1": 1,
+				"pod2": 4,
+			},
+			expectedDelta: 2,
+		},
+		{
+			name: "new pod in podTotalCounts",
+			initialTimestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 10, count: 5},
+			},
+			initialLastSawCounts: map[string]float64{
+				"pod1": 2,
+			},
+			podTotalCounts: map[string]float64{
+				"pod1": 3,
+				"pod2": 2,
+			},
+			expectedDelta: 3,
+		},
+		{
+			name: "all counts lower than lastSawPodCounts",
+			initialTimestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 10, count: 10},
+			},
+			initialLastSawCounts: map[string]float64{
+				"pod1": 6,
+				"pod2": 4,
+			},
+			podTotalCounts: map[string]float64{
+				"pod1": 3,
+				"pod2": 2,
+			},
+			expectedDelta: 5,
+		},
+		{
+			name: "mix of count increases, decreases, and not available",
+			initialTimestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 10, count: 10},
+			},
+			initialLastSawCounts: map[string]float64{
+				"pod1": 4,
+				"pod2": 4,
+				"pod3": 2,
+			},
+			podTotalCounts: map[string]float64{
+				"pod1": 6,                 // Count increase
+				"pod2": 2,                 // Count decrease
+				"pod3": CountNotAvailable, // Count not available
+			},
+			expectedDelta: 4,
+		},
+		{
+			name:                     "empty lastSawPodCounts",
+			initialTimestampedCounts: []TimestampedCount{},
+			initialLastSawCounts:     map[string]float64{},
+			podTotalCounts: map[string]float64{
+				"pod1": 3,
+				"pod2": 2,
+			},
+			expectedDelta: 5,
+		},
+		{
+			name: "empty podTotalCounts",
+			initialTimestampedCounts: []TimestampedCount{
+				{timestamp: time.Now().Unix() - 10, count: 5},
+			},
+			initialLastSawCounts: map[string]float64{
+				"pod1": 2,
+				"pod2": 3,
+			},
+			podTotalCounts: map[string]float64{},
+			expectedDelta:  0,
+		},
 	}
-	counts := tc.Items()
-	endCountInfo := counts[len(counts)-1]
-	startCountInfo := counts[len(counts)-2]
-	now := time.Now().Unix()
-	if now-startCountInfo.timestamp > lookback {
-		return 0
-	}
-	for i := len(counts) - 3; i >= 0; i-- {
-		if now-counts[i].timestamp <= lookback {
-			startCountInfo = counts[i]
-		} else {
-			break
-		}
-	}
-	return float64(endCountInfo.count-startCountInfo.count) / float64(endCountInfo.timestamp-startCountInfo.timestamp)
-}
 
-// UpdateCountTrackers updates the count trackers using the latest count numbers podTotalCounts.
-// it updates the lastSawPodCounts and timestampedTotalCounts to reflect the latest counts.
-func UpdateCountTrackers(tc *queue.OverflowQueue[TimestampedCount], lastSawPodCounts, podTotalCounts map[string]float64) {
-	delta := float64(0)
-	for podName, newCount := range podTotalCounts {
-		if newCount == CountNotAvailable {
-			// this is the case where the count is not available for this particular pod.
-			// we assume that it indicates the pod is not running.
-			// hence we skip counting this pod.
-			lastSawPodCounts[podName] = newCount
-			continue
-		}
-
-		lastCount, exist := lastSawPodCounts[podName]
-		if exist && lastCount != CountNotAvailable && newCount >= lastCount {
-			// this is the normal case where the count increases.
-			delta += newCount - lastCount
-		} else {
-			// if the pod doesn't exist in last check, or the count decreases,
-			// or for certain reasons last saw count is CountNotAvailable,
-			// we assume that the pod either was restarted or a new pod just coming up.
-			delta += newCount
-		}
-		lastSawPodCounts[podName] = newCount
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tcQueue := sharedqueue.New[TimestampedCount](1800)
+			for _, item := range tc.initialTimestampedCounts {
+				tcQueue.Append(item)
+			}
+			UpdateCountTrackers(tcQueue, tc.initialLastSawCounts, tc.podTotalCounts)
+			var delta float64
+			if len(tc.initialTimestampedCounts) > 0 {
+				delta = float64(tcQueue.Peek().count) - float64(tc.initialTimestampedCounts[len(tc.initialTimestampedCounts)-1].count)
+			} else {
+				delta = float64(tcQueue.Peek().count)
+			}
+			assert.Equal(t, tc.expectedDelta, delta)
+			// verify that lastSawPodCounts is updated
+			for pod, count := range tc.podTotalCounts {
+				assert.Equal(t, tc.initialLastSawCounts[pod], count)
+			}
+		})
 	}
-
-	var lastSawTotalCount float64
-	if tc.Length() > 0 {
-		lastSawTotalCount = float64(tc.Peek().count)
-	} else {
-		lastSawTotalCount = 0
-	}
-
-	newTotalCount := lastSawTotalCount + delta
-	tc.Append(TimestampedCount{count: int64(newTotalCount), timestamp: time.Now().Unix()})
 }
