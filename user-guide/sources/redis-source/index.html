@@ -1849,6 +1849,7 @@
 
 <h1 id="redis-streams-source">Redis Streams Source<a class="headerlink" href="#redis-streams-source" title="Permanent link">&para;</a></h1>
 <p>A Redis Streams source is used to ingest messages from <a href="https://redis.io/docs/data-types/streams-tutorial/">Redis Streams</a>.</p>
+<p>It is recommended to use this with Redis versions &gt;= 7.0 (in order for autoscaling to work).</p>
 <h2 id="example">Example:<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
@@ -1861,9 +1862,9 @@
 <span class="w">          </span><span class="nt">readFromBeginning</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># Should we start from beginning of Stream or latest?</span>
 </code></pre></div>
 <p>Please see <a href="https://github.com/numaproj/numaflow/blob/main/docs/APIs.md#redisstreamssource">API</a> for details on how to optionally do the following:
-- Define TLS
-- Define username/password
-- Connect to Redis Sentinel </p>
+* Define TLS
+* Define username/password
+* Connect to Redis Sentinel </p>
 <h1 id="published-message">Published message<a class="headerlink" href="#published-message" title="Permanent link">&para;</a></h1>
 <p>Incoming messages may have a single Key/Value pair or multiple. In either case, the published message will have Keys equivalent to the incoming Key(s) and Payload equivalent to the JSON serialization of the map of keys to values. </p>
 <h2 id="example_1">Example:<a class="headerlink" href="#example_1" title="Permanent link">&para;</a></h2>
