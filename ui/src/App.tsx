@@ -11,11 +11,11 @@ import ListItem from "@mui/material/ListItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
-import { Namespaces } from "./components/namespaces/Namespaces";
+import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pipeline/Pipeline";
 import logo from "./images/icon-on-blue-bg.png";
 import "./App.css";
-import {Slide, ToastContainer} from "react-toastify";
+import { Slide, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 const drawerWidth = 240;
@@ -43,12 +43,12 @@ function App() {
               }}
             >
               <Toolbar>
-                  <img src={logo} alt="logo" className={'logo'}/>
+                <img src={logo} alt="logo" className={"logo"} />
                 <Typography
                   sx={{
                     fontSize: "1.25rem",
                     fontWeight: 500,
-                      marginLeft: "20px"
+                    marginLeft: "20px",
                   }}
                   variant="h6"
                   noWrap
