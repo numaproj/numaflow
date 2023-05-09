@@ -60,8 +60,17 @@ type RateCalculator struct {
 	userSpecifiedLookback int64
 }
 
+type Option func(*RateCalculator)
+
+// WithRefreshInterval sets how often to refresh the rate metrics.
+func WithRefreshInterval(d time.Duration) Option {
+	return func(r *RateCalculator) {
+		r.refreshInterval = d
+	}
+}
+
 // NewRateCalculator creates a new rate calculator.
-func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) *RateCalculator {
+func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex, opts ...Option) *RateCalculator {
 	rc := RateCalculator{
 		pipeline: p,
 		vertex:   v,
@@ -79,6 +88,12 @@ func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) *RateCa
 		refreshInterval:        5 * time.Second, // Default refresh interval
 
 		userSpecifiedLookback: int64(v.Scale.GetLookbackSeconds()),
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&rc)
+		}
 	}
 	return &rc
 }
@@ -100,11 +115,11 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				rc.processingRatesLock.Lock()
 				podTotalCounts := rc.findCurrentTotalCounts(ctx, rc.vertex)
 				// update counts trackers
 				UpdateCountTrackers(rc.timestampedTotalCounts, rc.lastSawPodCounts, podTotalCounts)
 				// calculate rates for each lookback seconds
+				rc.processingRatesLock.Lock()
 				for n, i := range lookbackSecondsMap {
 					r := CalculateRate(rc.timestampedTotalCounts, i)
 					rc.processingRates[n] = r
