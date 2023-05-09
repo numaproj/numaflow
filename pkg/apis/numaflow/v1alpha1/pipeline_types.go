@@ -116,7 +116,7 @@ func (p Pipeline) NumOfPartitions(vertex string) int {
 	if v.Partitions != nil {
 		partitions = v.GetPartitions()
 	}
-	// TODO: remove this after we deprecate partitions.
+	// TODO: remove this after we deprecate edge.parallelism.
 	if v.IsReduceUDF() {
 		if !v.UDF.GroupBy.Keyed {
 			return 1
@@ -163,13 +163,13 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 
 func (p Pipeline) GetAllBuffers() []string {
 	r := []string{}
-	// TODO: Use following code after we deprecate partitions.
+	// TODO: Use following code after we deprecate edge.parallelism.
 
 	// for _, v := range p.Spec.Vertices {
 	// 	r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
 	// }
 
-	// TODO: remove this after we deprecate partitions.
+	// TODO: remove this after we deprecate edge.parallelism.
 	for _, v := range p.Spec.Vertices {
 		if v.IsASource() {
 			continue
