@@ -53,6 +53,7 @@ type RateCalculator struct {
 
 	timestampedTotalCounts *sharedqueue.OverflowQueue[TimestampedCount]
 	lastSawPodCounts       map[string]float64
+	totalCountsLock        *sync.Mutex
 	processingRates        map[string]float64
 	processingRatesLock    *sync.RWMutex
 	refreshInterval        time.Duration
@@ -83,6 +84,7 @@ func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex, opts ..
 		// maintain the total counts of the last 30 minutes since we support 1m, 5m, 15m lookback seconds.
 		timestampedTotalCounts: sharedqueue.New[TimestampedCount](1800),
 		lastSawPodCounts:       make(map[string]float64),
+		totalCountsLock:        new(sync.Mutex),
 		processingRates:        make(map[string]float64),
 		processingRatesLock:    new(sync.RWMutex),
 		refreshInterval:        5 * time.Second, // Default refresh interval
@@ -116,8 +118,10 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 				return
 			case <-ticker.C:
 				podTotalCounts := rc.findCurrentTotalCounts(ctx, rc.vertex)
-				// update counts trackers
+				// update count trackers
+				rc.totalCountsLock.Lock()
 				UpdateCountTrackers(rc.timestampedTotalCounts, rc.lastSawPodCounts, podTotalCounts)
+				rc.totalCountsLock.Unlock()
 				// calculate rates for each lookback seconds
 				rc.processingRatesLock.Lock()
 				for n, i := range lookbackSecondsMap {
@@ -150,15 +154,16 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 	// Collect the results
 	go func() {
 		for podResult := range resultChan {
+			rc.totalCountsLock.Lock()
 			result[podResult.podName] = podResult.count
+			rc.totalCountsLock.Unlock()
 		}
 	}()
 
 	index := 0
 	for {
 		podName := fmt.Sprintf("%s-%s-%d", rc.pipeline.Name, vertex.Name, index)
-		exists := rc.podExists(vertex.Name, podName)
-		if exists {
+		if rc.podExists(vertex.Name, podName) {
 			// run getTotalCount calls in parallel
 			wg.Add(1)
 			go func(podName string) {
