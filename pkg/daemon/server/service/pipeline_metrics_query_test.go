@@ -156,14 +156,13 @@ func TestGetBuffer(t *testing.T) {
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil)
 	assert.NoError(t, err)
 
-	bufferName := "numaflow-system-simple-pipeline-in-cat"
+	bufferName := "numaflow-system-simple-pipeline-cat-0"
 
 	req := &daemon.GetBufferRequest{Pipeline: &pipelineName, Buffer: &bufferName}
 
 	resp, err := pipelineMetricsQueryService.GetBuffer(context.Background(), req)
 	assert.NoError(t, err)
 	assert.Equal(t, *resp.Buffer.BufferUsage, 0.0006666666666666666)
-
 }
 
 func TestListBuffers(t *testing.T) {

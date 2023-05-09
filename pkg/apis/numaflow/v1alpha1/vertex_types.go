@@ -635,14 +635,6 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-func OldGenerateSourceBufferName(namespace, pipelineName, vertex string) string {
-	return fmt.Sprintf("%s-%s-%s_SOURCE", namespace, pipelineName, vertex)
-}
-
-func OldGenerateSinkBufferName(namespace, pipelineName, vertex string) string {
-	return fmt.Sprintf("%s-%s-%s_SINK", namespace, pipelineName, vertex)
-}
-
 func GenerateBufferName(namespace, pipelineName, vertex string, partition int) string {
 	return fmt.Sprintf("%s-%s-%s-%d", namespace, pipelineName, vertex, partition)
 }

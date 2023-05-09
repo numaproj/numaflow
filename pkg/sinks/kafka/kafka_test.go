@@ -98,7 +98,7 @@ func TestWriteFailureToKafka(t *testing.T) {
 			},
 		},
 	}}
-	toSteps := map[string]isb.BufferWriter{vertex.GetToBuffers()[0]: toKafka}
+	toSteps := map[string]isb.BufferWriter{vertex.Spec.Name: toKafka}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
