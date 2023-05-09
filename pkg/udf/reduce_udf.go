@@ -23,6 +23,8 @@ import (
 	"sync"
 
 	"github.com/numaproj/numaflow-go/pkg/function/client"
+	"github.com/numaproj/numaflow/pkg/reduce/pnf"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -189,12 +191,22 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if allowedLateness := u.VertexInstance.Vertex.Spec.UDF.GroupBy.AllowedLateness; allowedLateness != nil {
 		opts = append(opts, reduce.WithAllowedLateness(allowedLateness.Duration))
 	}
+	idleManager := wmb.NewIdleManager(len(writers))
 
-	dataForwarder, err := reduce.NewDataForward(ctx, udfHandler, u.VertexInstance, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, opts...)
+	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, udfHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager)
+
+	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}
 
+	// read the persisted messages before reading the messages from ISB
+	err = dataForwarder.Startup(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to read and process persisted messages, %w", err)
+	}
+
+	// start reading the ISB messages.
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {

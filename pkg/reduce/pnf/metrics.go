@@ -65,7 +65,7 @@ var platformError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of platform Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
 
-// reduceProcessTime reduce task processing latency
+// reduceProcessTime reduce ForwardTask processing latency
 var reduceProcessTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "reduce_pnf",
 	Name:      "process_time",
@@ -80,3 +80,17 @@ var reduceForwardTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Help:      "Reduce forward time (1 to 100000 microseconds)",
 	Buckets:   prometheus.ExponentialBucketsRange(1, 100000, 5),
 }, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
+
+// partitionsInFlight is used to indicate the partitions in flight
+var partitionsInFlight = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Subsystem: "reduce_pnf",
+	Name:      "partitions_inflight",
+	Help:      "Total number of partitions in flight",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
+
+// udfError is used to indicate the number of UDF errors
+var udfError = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "reduce_udf",
+	Name:      "error_total",
+	Help:      "Total number of UDF Errors",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
