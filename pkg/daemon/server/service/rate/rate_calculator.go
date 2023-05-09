@@ -32,6 +32,13 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
+// metricsHttpClient interface for the GET/HEAD call to metrics endpoint.
+// Had to add this an interface for testing
+type metricsHttpClient interface {
+	Get(url string) (*http.Response, error)
+	Head(url string) (*http.Response, error)
+}
+
 // CountNotAvailable indicates that the rate calculator was not able to retrieve the count
 const CountNotAvailable = float64(math.MinInt)
 
@@ -42,11 +49,12 @@ var fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
 type RateCalculator struct {
 	pipeline   *v1alpha1.Pipeline
 	vertex     *v1alpha1.AbstractVertex
-	httpClient *http.Client
+	httpClient metricsHttpClient
 
 	timestampedTotalCounts *sharedqueue.OverflowQueue[TimestampedCount]
 	lastSawPodCounts       map[string]float64
 	processingRates        map[string]float64
+	processingRatesLock    *sync.RWMutex
 	refreshInterval        time.Duration
 
 	userSpecifiedLookback int64
@@ -67,6 +75,7 @@ func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex) *RateCa
 		timestampedTotalCounts: sharedqueue.New[TimestampedCount](1800),
 		lastSawPodCounts:       make(map[string]float64),
 		processingRates:        make(map[string]float64),
+		processingRatesLock:    new(sync.RWMutex),
 		refreshInterval:        5 * time.Second, // Default refresh interval
 
 		userSpecifiedLookback: int64(v.Scale.GetLookbackSeconds()),
@@ -85,20 +94,22 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 	}
 	go func() {
 		ticker := time.NewTicker(rc.refreshInterval)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				rc.processingRatesLock.Lock()
 				podTotalCounts := rc.findCurrentTotalCounts(ctx, rc.vertex)
 				// update counts trackers
 				UpdateCountTrackers(rc.timestampedTotalCounts, rc.lastSawPodCounts, podTotalCounts)
 				// calculate rates for each lookback seconds
 				for n, i := range lookbackSecondsMap {
 					r := CalculateRate(rc.timestampedTotalCounts, i)
-					log.Infof("Updating rate for vertex %s, lookback period is %s, rate is %v", rc.vertex.Name, n, r)
 					rc.processingRates[n] = r
 				}
+				rc.processingRatesLock.Unlock()
 			}
 		}
 	}()
@@ -107,6 +118,8 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 
 // GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
 func (rc *RateCalculator) GetRates() map[string]float64 {
+	rc.processingRatesLock.RLock()
+	defer rc.processingRatesLock.RUnlock()
 	return rc.processingRates
 }
 
@@ -116,10 +129,6 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 	resultChan := make(chan struct {
 		podName string
 		count   float64
-	})
-	existChan := make(chan struct {
-		podName string
-		exists  bool
 	})
 	var wg sync.WaitGroup
 
@@ -133,21 +142,8 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 	index := 0
 	for {
 		podName := fmt.Sprintf("%s-%s-%d", rc.pipeline.Name, vertex.Name, index)
-
-		// run podExists calls in parallel
-		wg.Add(1)
-		go func(podName string) {
-			defer wg.Done()
-			exists := rc.podExists(vertex.Name, podName)
-			existChan <- struct {
-				podName string
-				exists  bool
-			}{podName: podName, exists: exists}
-		}(podName)
-
-		// wait for the podExists result and break if the pod doesn't exist
-		podExistsResult := <-existChan
-		if podExistsResult.exists {
+		exists := rc.podExists(vertex.Name, podName)
+		if exists {
 			// run getTotalCount calls in parallel
 			wg.Add(1)
 			go func(podName string) {
@@ -159,14 +155,7 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 				}{podName, count}
 			}(podName)
 		} else {
-			break
-		}
-		index++
-
-		if rc.podExists(vertex.Name, podName) {
-			result[podName] = rc.getTotalCount(ctx, vertex, podName)
-		} else {
-			// we assume all the pods are in order, so if we don't find one, we can break
+			// we assume all the pods are in order, hence if we don't find one, we can stop looking
 			// this is because when we scale down, we always scale down from the last pod
 			// there can be a case when a pod in the middle crashes, hence we miss counting the following pods
 			// but this is rare, if it happens, we end up getting a rate that's lower than the real one and wait for the next refresh to recover
@@ -174,12 +163,8 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 		}
 		index++
 	}
-
-	// wait for all the goroutines to finish and close the channels
 	wg.Wait()
 	close(resultChan)
-	close(existChan)
-
 	return result
 }
 
@@ -189,13 +174,13 @@ func (rc *RateCalculator) getTotalCount(ctx context.Context, vertex *v1alpha1.Ab
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, rc.pipeline.Name+"-"+vertex.Name+"-headless", rc.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if res, err := rc.httpClient.Get(url); err != nil {
-		log.Errorw("failed reading the metrics endpoint, %v", err.Error())
+		log.Errorf("failed reading the metrics endpoint, %v", err.Error())
 		return CountNotAvailable
 	} else {
 		textParser := expfmt.TextParser{}
 		result, err := textParser.TextToMetricFamilies(res.Body)
 		if err != nil {
-			log.Errorw("failed parsing to prometheus metric families, %v", err.Error())
+			log.Errorf("failed parsing to prometheus metric families, %v", err.Error())
 			return CountNotAvailable
 		}
 

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -90,15 +89,10 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
-	// create a pool of rate calculators
-	wg := sync.WaitGroup{}
 	rateCalculators := make(map[string]*server.RateCalculator, len(ds.pipeline.Spec.Vertices))
 	for _, v := range ds.pipeline.Spec.Vertices {
 		log.Infof("Starting the rate calculator for vertex %s", v.Name)
-		wg.Add(1)
-		go func(vertex v1alpha1.AbstractVertex) {
-			rateCalculators[vertex.Name] = startRateCalculator(ctx, &wg, ds.pipeline, &vertex)
-		}(v)
+		rateCalculators[v.Name] = startRateCalculator(ctx, ds.pipeline, &v)
 	}
 
 	// Start listener
@@ -134,7 +128,6 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 
 	log.Infof("Daemon server started successfully on %s", address)
 	<-ctx.Done()
-	wg.Wait()
 	return nil
 }
 
@@ -206,11 +199,9 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 
 func startRateCalculator(
 	ctx context.Context,
-	wg *sync.WaitGroup,
 	pl *v1alpha1.Pipeline,
 	v *v1alpha1.AbstractVertex) *server.RateCalculator {
 	log := logging.FromContext(ctx)
-	defer wg.Done()
 	rc := server.NewRateCalculator(pl, v)
 	if err := rc.Start(ctx); err != nil {
 		log.Errorw("failed to start the rate calculator", zap.Error(err))
