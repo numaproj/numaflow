@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Package forward does the Read (fromBuffer) -> Process (UDF) -> forward (toBuffers) -> Ack (fromBuffer) loop.
+Package forward does the Read (fromBuffer) -> Process (UDF) -> Forward (toBuffers) -> Ack (fromBuffer) loop.
 */
 package forward
 
@@ -187,7 +187,7 @@ type readWriteMessagePair struct {
 	udfError      error
 }
 
-// forwardAChunk forwards a chunk of message from the fromBuffer to the toBuffers. It does the Read -> Process -> forward -> Ack chain
+// forwardAChunk forwards a chunk of message from the fromBuffer to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
 // buffer-not-reachable, etc., but does not include errors due to user code UDFs, WhereTo, etc.
