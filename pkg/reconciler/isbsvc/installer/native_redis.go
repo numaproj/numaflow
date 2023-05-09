@@ -187,7 +187,7 @@ func (r *redisInstaller) createScriptsConfigMap(ctx context.Context) error {
 		SentinelPort:        sentinelPort,
 	}
 
-	tplFileNames := []string{"prestop-sentinel.sh", "start-node.sh", "start-sentinel.sh"}
+	tplFileNames := []string{"prestop-sentinel.sh", "start-node.sh", "start-sentinel.sh", "prestop-redis.sh"}
 	for _, fileName := range tplFileNames {
 		t := template.Must(template.ParseFS(redisScriptsAssets, fmt.Sprintf("assets/redis/scripts/%s", fileName)))
 		var tplOutput bytes.Buffer
@@ -195,15 +195,6 @@ func (r *redisInstaller) createScriptsConfigMap(ctx context.Context) error {
 			return fmt.Errorf("failed to parse script templates, error: %w", err)
 		}
 		data[fileName] = tplOutput.String()
-	}
-
-	fileNames := []string{"prestop-redis.sh"}
-	for _, fileName := range fileNames {
-		if d, err := redisScriptsAssets.ReadFile(fmt.Sprintf("assets/redis/scripts/%s", fileName)); err != nil {
-			return fmt.Errorf("failed to read file assets/redis/scripts/%s", fileName)
-		} else {
-			data[fileName] = string(d)
-		}
 	}
 
 	hash := sharedutil.MustHash(data)

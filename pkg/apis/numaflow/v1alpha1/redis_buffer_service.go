@@ -110,8 +110,8 @@ func (nr NativeRedis) GetServiceSpec(req GetRedisServiceSpecReq) corev1.ServiceS
 			{Name: "tcp-redis", Port: req.RedisContainerPort},
 			{Name: "tcp-sentinel", Port: req.SentinelContainerPort},
 		},
-		Type:     corev1.ServiceTypeClusterIP,
-		Selector: req.Labels,
+		Selector:                 req.Labels,
+		PublishNotReadyAddresses: true,
 	}
 }
 
@@ -200,6 +200,8 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 					{Name: "REDIS_MASTER_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
 					{Name: "REDIS_TLS_ENABLED", Value: "no"},
 					{Name: "REDIS_PORT", Value: fmt.Sprint(req.RedisContainerPort)},
+					{Name: "REDIS_SENTINEL_TLS_ENABLED", Value: "no"},
+					{Name: "REDIS_SENTINEL_PORT", Value: fmt.Sprint(req.SentinelContainerPort)},
 					{Name: "REDIS_DATA_DIR", Value: "/data"},
 				},
 				Lifecycle: &corev1.Lifecycle{
@@ -224,17 +226,31 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 					},
 					InitialDelaySeconds: 20,
 					TimeoutSeconds:      5,
+					PeriodSeconds:       5,
 					FailureThreshold:    5,
 				},
 				ReadinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						Exec: &corev1.ExecAction{
-							Command: []string{"sh", "-c", "/health/ping_readiness_local.sh 5"},
+							Command: []string{"sh", "-c", "/health/ping_readiness_local.sh 1"},
 						},
 					},
 					InitialDelaySeconds: 20,
-					TimeoutSeconds:      5,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       5,
 					FailureThreshold:    5,
+				},
+				StartupProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_liveness_local.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 10,
+					TimeoutSeconds:      5,
+					PeriodSeconds:       10,
+					FailureThreshold:    22,
+					SuccessThreshold:    1,
 				},
 			},
 			{
@@ -268,16 +284,30 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 					InitialDelaySeconds: 20,
 					TimeoutSeconds:      5,
 					FailureThreshold:    5,
+					PeriodSeconds:       5,
 				},
 				ReadinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_sentinel.sh 1"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       5,
+					FailureThreshold:    5,
+				},
+				StartupProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						Exec: &corev1.ExecAction{
 							Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
 						},
 					},
-					InitialDelaySeconds: 20,
+					InitialDelaySeconds: 10,
 					TimeoutSeconds:      5,
-					FailureThreshold:    5,
+					PeriodSeconds:       10,
+					FailureThreshold:    22,
+					SuccessThreshold:    1,
 				},
 				VolumeMounts: []corev1.VolumeMount{
 					{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
@@ -306,6 +336,7 @@ redis_exporter`},
 		},
 	}
 	nr.AbstractPodTemplate.ApplyToPodSpec(podSpec)
+
 	spec := appv1.StatefulSetSpec{
 		Replicas:    &replicas,
 		ServiceName: req.ServiceName,
@@ -374,8 +405,8 @@ redis_exporter`},
 		runAsUser := int64(1001)
 		fsGroup := int64(1001)
 		runAsUser0 := int64(0)
-		spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser}
-		spec.Template.Spec.Containers[1].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser}
+		spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser, RunAsGroup: &fsGroup}
+		spec.Template.Spec.Containers[1].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser, RunAsGroup: &fsGroup}
 		spec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:            "volume-permissions",
