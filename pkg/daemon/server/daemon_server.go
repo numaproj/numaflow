@@ -90,7 +90,9 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}()
 
 	rateCalculators := make(map[string]*server.RateCalculator, len(ds.pipeline.Spec.Vertices))
-	for _, v := range ds.pipeline.Spec.Vertices {
+	for _, vertex := range ds.pipeline.Spec.Vertices {
+		// assigning vertex to a new variable to avoid the closure problem, ensure each rate calculator has its own unique vertex pointer to work with.
+		v := vertex
 		log.Infof("Starting the rate calculator for vertex %s", v.Name)
 		rateCalculators[v.Name] = startRateCalculator(ctx, ds.pipeline, &v)
 	}
@@ -148,7 +150,7 @@ func (ds *daemonServer) newGRPCServer(
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rateCalculators, false)
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rateCalculators, true)
 	if err != nil {
 		return nil, err
 	}
