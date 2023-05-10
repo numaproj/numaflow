@@ -635,8 +635,8 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-func GenerateBufferName(namespace, pipelineName, vertex string, partition int) string {
-	return fmt.Sprintf("%s-%s-%s-%d", namespace, pipelineName, vertex, partition)
+func GenerateBufferName(namespace, pipelineName, vertex string, index int) string {
+	return fmt.Sprintf("%s-%s-%s-%d", namespace, pipelineName, vertex, index)
 }
 
 func GenerateBufferNames(namespace, pipelineName, vertex string, numOfPartitions int) []string {
