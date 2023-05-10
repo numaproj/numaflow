@@ -131,11 +131,20 @@ func (p Pipeline) NumOfPartitions(vertex string) int {
 }
 
 func (p Pipeline) FindVertexWithBuffer(buffer string) *AbstractVertex {
+	// TODO: Use following code after we deprecate edge.parallelism.
+	// for _, v := range p.Spec.Vertices {
+	// 	for _, b := range v.OwnedBufferNames(p.Namespace, p.Name) {
+	// 		if buffer == b {
+	// 			return &v
+	// 		}
+	// 	}
+	// }
+
+	// TODO: remove this after we deprecate edge.parallelism.
 	for _, v := range p.Spec.Vertices {
-		for _, b := range v.OwnedBufferNames(p.Namespace, p.Name) {
-			if buffer == b {
-				return &v
-			}
+		bufferPrefix := fmt.Sprintf("%s-%s-%s-", p.Namespace, p.Name, v.Name)
+		if strings.HasPrefix(buffer, bufferPrefix) {
+			return &v
 		}
 	}
 	return nil

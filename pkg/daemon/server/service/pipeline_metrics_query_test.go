@@ -185,9 +185,9 @@ func TestListBuffers(t *testing.T) {
 		},
 		Spec: v1alpha1.PipelineSpec{
 			Vertices: []v1alpha1.AbstractVertex{
-				{Name: "in"},
-				{Name: "cat"},
-				{Name: "out"},
+				{Name: "in", Source: &v1alpha1.Source{}},
+				{Name: "cat", UDF: &v1alpha1.UDF{}},
+				{Name: "out", Sink: &v1alpha1.Sink{}},
 			},
 			Edges: edges,
 		},
