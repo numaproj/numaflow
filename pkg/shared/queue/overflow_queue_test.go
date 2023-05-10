@@ -51,7 +51,7 @@ func TestReverse(t *testing.T) {
 	assert.Equal(t, 1, l1[2])
 }
 
-func TestPeek(t *testing.T) {
+func TestNewest(t *testing.T) {
 	q := New[int](2)
 	assert.Equal(t, 0, q.Newest())
 	q.Append(1)
