@@ -48,7 +48,8 @@ func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb
 	return []*isb.WriteMessage{{Message: writeMessage}}, nil
 }
 
-func CopyUDFTestApplyStream(ctx context.Context, readMessage *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+func CopyUDFTestApplyStream(ctx context.Context, readMessage *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	defer close(writeMessageCh)
 	_ = ctx
 	offset := readMessage.ReadOffset
 	payload := readMessage.Body.Payload
@@ -70,8 +71,7 @@ func CopyUDFTestApplyStream(ctx context.Context, readMessage *isb.ReadMessage) (
 			Payload: result,
 		},
 	}
-	writeMessageCh := make(chan isb.WriteMessage)
-	errorCh := make(chan error)
+
 	writeMessageCh <- isb.WriteMessage{Message: writeMessage}
-	return writeMessageCh, errorCh
+	return nil
 }

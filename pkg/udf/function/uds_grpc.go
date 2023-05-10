@@ -129,7 +129,9 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 	return writeMessages, nil
 }
 
-func (u *UDSgRPCBasedUDF) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
+func (u *UDSgRPCBasedUDF) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	defer close(writeMessageCh)
+
 	keys := message.Keys
 	payload := message.Body.Payload
 	offset := message.ReadOffset
@@ -147,38 +149,44 @@ func (u *UDSgRPCBasedUDF) ApplyMapStream(ctx context.Context, message *isb.ReadM
 		},
 	}
 
-	writeMessageCh := make(chan isb.WriteMessage)
-	errorCh := make(chan error)
+	var err error
+	datumCh := make(chan *functionpb.DatumResponse)
 	go func() {
-		// TODO: change to Stream API MapFnStream
-		datumList, err := u.client.MapFn(ctx, d)
+		err = u.client.MapStreamFn(ctx, d, datumCh)
 		if err != nil {
-			errorCh <- err
+			err = ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapStreamFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
 			return
 		}
-
-		for i, datum := range datumList {
-			keys := datum.Keys
-			taggedMessage := &isb.WriteMessage{
-				Message: isb.Message{
-					Header: isb.Header{
-						MessageInfo: parentMessageInfo,
-						ID:          fmt.Sprintf("%s-%d", offset.String(), i),
-						Keys:        keys,
-					},
-					Body: isb.Body{
-						Payload: datum.Value,
-					},
-				},
-				Tags: datum.Tags,
-			}
-			writeMessageCh <- *taggedMessage
-		}
-		close(writeMessageCh)
-		close(errorCh)
 	}()
 
-	return writeMessageCh, errorCh
+	i := 0
+	for datum := range datumCh {
+		i++
+		keys := datum.Keys
+		taggedMessage := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: parentMessageInfo,
+					ID:          fmt.Sprintf("%s-%d", offset.String(), i),
+					Keys:        keys,
+				},
+				Body: isb.Body{
+					Payload: datum.Value,
+				},
+			},
+			Tags: datum.Tags,
+		}
+		writeMessageCh <- *taggedMessage
+	}
+
+	return err
 }
 
 // should we pass metadata information ?

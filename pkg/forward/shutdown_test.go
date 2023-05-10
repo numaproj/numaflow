@@ -41,79 +41,102 @@ func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) 
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
-func (s myShutdownTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
-	return testutils.CopyUDFTestApplyStream(ctx, message)
+func (s myShutdownTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
 }
 
-func TestInterStepDataForward_Stop(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	startTime := time.Unix(1636470000, 0)
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), startTime)
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
+func TestInterStepDataForward(t *testing.T) {
+	tests := []struct {
+		name          string
+		batchSize     int64
+		streamEnabled bool
+	}{
+		{
+			name:          "stream_forward",
+			batchSize:     1,
+			streamEnabled: true,
 		},
-	}}
-
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
-	assert.NoError(t, err)
-	stopped := f.Start()
-	// write some data but buffer is not full even though we are not reading
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
-
-	f.Stop()
-	// we cannot assert the result of IsShuttingDown because it might take a couple of iterations to be successful.
-	_, _ = f.IsShuttingDown()
-	<-stopped
-}
-
-func TestInterStepDataForward_ForceStop(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	startTime := time.Unix(1636470000, 0)
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), startTime)
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
+		{
+			name:          "batch_forward",
+			batchSize:     5,
+			streamEnabled: false,
 		},
-	}}
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+"_stop", func(t *testing.T) {
+			batchSize := tt.batchSize
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": to1,
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
-	assert.NoError(t, err)
-	stopped := f.Start()
-	// write some data such that the fromBuffer can be empty, that is toBuffer gets full
-	_, errs := fromStep.Write(ctx, writeMessages[0:20])
-	assert.Equal(t, make([]error, 20), errs)
+			startTime := time.Unix(1636470000, 0)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime)
 
-	f.Stop()
-	canIShutdown, _ := f.IsShuttingDown()
-	assert.Equal(t, true, canIShutdown)
-	time.Sleep(1 * time.Millisecond)
-	// only for canIShutdown will work as from buffer is not empty
-	f.ForceStop()
-	canIShutdown, err = f.IsShuttingDown()
-	assert.NoError(t, err)
-	assert.Equal(t, true, canIShutdown)
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
 
-	<-stopped
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			assert.NoError(t, err)
+			stopped := f.Start()
+			// write some data but buffer is not full even though we are not reading
+			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+			assert.Equal(t, make([]error, batchSize), errs)
+
+			f.Stop()
+			// we cannot assert the result of IsShuttingDown because it might take a couple of iterations to be successful.
+			_, _ = f.IsShuttingDown()
+			<-stopped
+		})
+		t.Run(tt.name+"_forceStop", func(t *testing.T) {
+			batchSize := tt.batchSize
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
+			to1 := simplebuffer.NewInMemoryBuffer("to", 2*batchSize)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": to1,
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			startTime := time.Unix(1636470000, 0)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime)
+
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			assert.NoError(t, err)
+			stopped := f.Start()
+			// write some data such that the fromBuffer can be empty, that is toBuffer gets full
+			_, errs := fromStep.Write(ctx, writeMessages[0:4*batchSize])
+			assert.Equal(t, make([]error, 4*batchSize), errs)
+
+			f.Stop()
+			canIShutdown, _ := f.IsShuttingDown()
+			assert.Equal(t, true, canIShutdown)
+			time.Sleep(1 * time.Millisecond)
+			// only for canIShutdown will work as from buffer is not empty
+			f.ForceStop()
+			canIShutdown, err = f.IsShuttingDown()
+			assert.NoError(t, err)
+			assert.Equal(t, true, canIShutdown)
+
+			<-stopped
+		})
+	}
 }

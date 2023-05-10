@@ -26,21 +26,21 @@ import (
 // InternalErr can be returned and could be retried by the callee.
 type MapApplier interface {
 	ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
-	ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error)
+	ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error
 }
 
 // ApplyMapFunc utility function used to create an Applier implementation
 type ApplyMapFunc struct {
 	applyMap       func(context.Context, *isb.ReadMessage) ([]*isb.WriteMessage, error)
-	applyMapStream func(context.Context, *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error)
+	applyMapStream func(context.Context, *isb.ReadMessage, chan<- isb.WriteMessage) error
 }
 
 func (a ApplyMapFunc) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return a.applyMap(ctx, message)
 }
 
-func (a ApplyMapFunc) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
-	return a.applyMapStream(ctx, message)
+func (a ApplyMapFunc) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return a.applyMapStream(ctx, message, writeMessageCh)
 }
 
 var (
@@ -51,14 +51,14 @@ var (
 				Message: msg.Message,
 			}}, nil
 		},
-		applyMapStream: func(ctx context.Context, msg *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
-			writeMessageCh := make(chan isb.WriteMessage)
-			errorCh := make(chan error)
+		applyMapStream: func(ctx context.Context, msg *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+			defer close(writeMessageCh)
 			writeMessage := &isb.WriteMessage{
 				Message: msg.Message,
 			}
+
 			writeMessageCh <- *writeMessage
-			return writeMessageCh, errorCh
+			return nil
 		},
 	}
 )

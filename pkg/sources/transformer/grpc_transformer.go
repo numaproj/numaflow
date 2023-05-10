@@ -128,6 +128,6 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 	return taggedMessages, nil
 }
 
-func (u *gRPCBasedTransformer) ApplyMapStream(ctx context.Context, message *isb.ReadMessage) (<-chan isb.WriteMessage, <-chan error) {
-	return nil, nil
+func (u *gRPCBasedTransformer) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, _ chan<- isb.WriteMessage) error {
+	return fmt.Errorf("method ApplyMapStream not implemented")
 }
