@@ -19249,6 +19249,10 @@
         },
         "groupBy": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GroupBy"
+        },
+        "mapStream": {
+          "description": "MapStream specifies whether to enable streaming in map udf. If it is not provided, the default value is set to false.",
+          "type": "boolean"
         }
       },
       "type": "object"

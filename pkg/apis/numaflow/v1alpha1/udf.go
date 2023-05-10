@@ -43,6 +43,10 @@ type UDF struct {
 	Builtin *Function `json:"builtin" protobuf:"bytes,2,opt,name=builtin"`
 	// +optional
 	GroupBy *GroupBy `json:"groupBy" protobuf:"bytes,3,opt,name=groupBy"`
+	// MapStream specifies whether to enable streaming in map udf. If it is
+	// not provided, the default value is set to false.
+	// +optional
+	MapStream bool `json:"mapStream" protobuf:"bytes,4,opt,name=mapStream"`
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, error) {

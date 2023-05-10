@@ -218,6 +218,12 @@ func validateVertex(v dfv1.AbstractVertex) error {
 			return fmt.Errorf("vertex %q: sidecar container name %q is reserved for containers created by numaflow", v.Name, sc.Name)
 		}
 	}
+	if v.UDF.MapStream {
+		if v.Limits == nil || v.Limits.ReadBatchSize == nil || *v.Limits.ReadBatchSize != uint64(1) {
+			return fmt.Errorf("vertex %q: UDF map streaming is enabled, but read batch size is not 1", v.Name)
+		}
+	}
+
 	if v.UDF != nil {
 		return validateUDF(*v.UDF)
 	}
@@ -225,6 +231,7 @@ func validateVertex(v dfv1.AbstractVertex) error {
 }
 
 func validateUDF(udf dfv1.UDF) error {
+
 	if udf.GroupBy != nil {
 		f := udf.GroupBy.Window.Fixed
 		s := udf.GroupBy.Window.Sliding

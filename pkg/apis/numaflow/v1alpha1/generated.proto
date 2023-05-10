@@ -1172,6 +1172,11 @@ message UDF {
 
   // +optional
   optional GroupBy groupBy = 3;
+
+  // MapStream specifies whether to enable streaming in map udf. If it is
+  // not provided, the default value is set to false.
+  // +optional
+  optional bool mapStream = 4;
 }
 
 message UDSink {

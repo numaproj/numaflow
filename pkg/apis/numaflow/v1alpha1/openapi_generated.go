@@ -3787,6 +3787,14 @@ func schema_pkg_apis_numaflow_v1alpha1_UDF(ref common.ReferenceCallback) common.
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy"),
 						},
 					},
+					"mapStream": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MapStream specifies whether to enable streaming in map udf. If it is not provided, the default value is set to false.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
