@@ -21,8 +21,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -73,6 +73,7 @@ func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMes
 	var messages = make([]*isb.ReadMessage, 0, count)
 	var xstreams []redis.XStream
 	var err error
+
 	// start with 0-0 if CheckBackLog is true
 	labels := map[string]string{"buffer": br.GetName()}
 	if br.Options.CheckBackLog {
@@ -153,6 +154,24 @@ func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error
 }
 
 func (br *RedisStreamsRead) NoAck(_ context.Context, _ []isb.Offset) {}
+
+func (br *RedisStreamsRead) Pending(_ context.Context) (int64, error) {
+	// try calling XINFO GROUPS <stream> and look for 'Lag' key.
+	// For Redis Server < v7.0, this always returns 0; therefore it's recommended to use >= v7.0
+
+	result := br.Client.XInfoGroups(RedisContext, br.Stream)
+	groups, err := result.Result()
+	if err != nil {
+		return isb.PendingNotAvailable, fmt.Errorf("error calling XInfoGroups: %v", err)
+	}
+	// find our ConsumerGroup
+	for _, group := range groups {
+		if group.Name == br.Group {
+			return group.Lag, nil
+		}
+	}
+	return isb.PendingNotAvailable, fmt.Errorf("ConsumerGroup %q not found in XInfoGroups result %+v", br.Group, groups)
+}
 
 // processXReadResult is used to process the results of XREADGROUP
 func (br *RedisStreamsRead) processXReadResult(startIndex string, count int64) ([]redis.XStream, error) {

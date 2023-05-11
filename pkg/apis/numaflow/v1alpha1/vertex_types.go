@@ -100,7 +100,7 @@ func (v Vertex) Scalable() bool {
 	}
 	if v.IsASource() {
 		src := v.Spec.Source
-		if src.Kafka != nil {
+		if src.Kafka != nil || src.RedisStreams != nil {
 			return true
 		}
 	}
