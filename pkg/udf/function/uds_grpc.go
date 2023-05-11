@@ -19,6 +19,7 @@ package function
 import (
 	"context"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"strconv"
 	"sync"
 	"time"
@@ -149,10 +150,10 @@ func (u *UDSgRPCBasedUDF) ApplyMapStream(ctx context.Context, message *isb.ReadM
 		},
 	}
 
-	var err error
 	datumCh := make(chan *functionpb.DatumResponse)
-	go func() {
-		err = u.client.MapStreamFn(ctx, d, datumCh)
+	errs, ctx := errgroup.WithContext(ctx)
+	errs.Go(func() error {
+		err := u.client.MapStreamFn(ctx, d, datumCh)
 		if err != nil {
 			err = ApplyUDFErr{
 				UserUDFErr: false,
@@ -162,9 +163,10 @@ func (u *UDSgRPCBasedUDF) ApplyMapStream(ctx context.Context, message *isb.ReadM
 					MainCarDown: false,
 				},
 			}
-			return
+			return err
 		}
-	}()
+		return nil
+	})
 
 	i := 0
 	for datum := range datumCh {
@@ -186,7 +188,7 @@ func (u *UDSgRPCBasedUDF) ApplyMapStream(ctx context.Context, message *isb.ReadM
 		writeMessageCh <- *taggedMessage
 	}
 
-	return err
+	return errs.Wait()
 }
 
 // should we pass metadata information ?
