@@ -34,8 +34,8 @@ func NewServerInitCommand() *cobra.Command {
 		Short: "Initialize base path for Numaflow server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 
-			if !strings.HasSuffix(baseHref, "/") {
-				baseHref = baseHref + "/"
+			if strings.HasSuffix(baseHref, "/") {
+				baseHref = strings.TrimSuffix(baseHref, "/")
 			}
 
 			reactVar := fmt.Sprintf(`window.__RUNTIME_CONFIG__ = {"BASE_HREF":"%s"};`, baseHref)
