@@ -370,7 +370,10 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 	} else {
-		isdf.streamMessage(ctx, dataMessages, processorWM, readOffsets, &writeOffsets, messageToStep)
+		failure := isdf.streamMessage(ctx, dataMessages, processorWM, readOffsets, &writeOffsets, messageToStep)
+		if failure {
+			return
+		}
 	}
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
@@ -432,6 +435,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 }
 
+// streamMessage streams the data messages to the next step. Return a bool to
+// indicate if the processing failed and the caller (forwardAChunk) needs to
+// return early.
 func (isdf *InterStepDataForward) streamMessage(
 	ctx context.Context,
 	dataMessages []*isb.ReadMessage,
@@ -439,10 +445,10 @@ func (isdf *InterStepDataForward) streamMessage(
 	readOffsets []isb.Offset,
 	writeOffsets *map[string][]isb.Offset,
 	messageToStep map[string][]isb.Message,
-) {
+) bool {
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
 		isdf.opts.logger.Errorw("Stream is not supported for source data transformer")
-		return
+		return true
 	}
 
 	// send to UDF only the data messages
@@ -477,7 +483,7 @@ func (isdf *InterStepDataForward) streamMessage(
 				if err := isdf.whereToStep(&writeMessage, messageToStep, m); err != nil {
 					isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
 					isdf.fromBuffer.NoAck(ctx, readOffsets)
-					return
+					return true
 				}
 			}
 
@@ -494,7 +500,7 @@ func (isdf *InterStepDataForward) streamMessage(
 				}
 				// As there's no partial failure, non-ack all the readOffsets
 				isdf.fromBuffer.NoAck(ctx, readOffsets)
-				return
+				return true
 			}
 
 			udfProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
@@ -508,8 +514,10 @@ func (isdf *InterStepDataForward) streamMessage(
 	if err != nil {
 		isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 		isdf.fromBuffer.NoAck(ctx, readOffsets)
-		return
+		return true
 	}
+
+	return false
 }
 
 // ackFromBuffer acknowledges an array of offsets back to fromBuffer and is a blocking call or until shutdown has been initiated.
