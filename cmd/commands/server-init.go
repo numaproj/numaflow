@@ -34,15 +34,12 @@ func NewServerInitCommand() *cobra.Command {
 		Short: "Initialize base path for Numaflow server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 
-			if strings.HasSuffix(baseHref, "/") {
-				baseHref = strings.TrimSuffix(baseHref, "/")
-			}
-
-			reactVar := fmt.Sprintf(`window.__RUNTIME_CONFIG__ = {"BASE_HREF":"%s"};`, baseHref)
+			reactVar := fmt.Sprintf(`window.__RUNTIME_CONFIG__ = {"BASE_HREF":"%s"};`, strings.TrimSuffix(baseHref, "/"))
 			if err := os.WriteFile("/ui/build/runtime-env.js", []byte(reactVar), 0666); err != nil {
 				return fmt.Errorf("failed to create runtime-env.js file: %w", err)
 			}
 			return nil
+
 		},
 	}
 
