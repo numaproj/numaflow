@@ -18,7 +18,6 @@ package routes
 
 import (
 	"net/http"
-	"path"
 
 	"github.com/gin-gonic/gin"
 
@@ -30,11 +29,11 @@ type SystemInfo struct {
 	Namespaced       bool   `json:"namespaced"`
 }
 
-func Routes(r *gin.Engine, sysinfo SystemInfo, baseHref string) {
+func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
-	rGroup := r.Group(path.Join(baseHref, "api/v1"))
+	rGroup := r.Group("/api/v1")
 	v1Routes(rGroup)
 	rGroup.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, sysinfo)
