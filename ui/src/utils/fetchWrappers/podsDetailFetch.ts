@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { PodContainerSpec, PodDetail } from "../models/pods";
 import { useFetch } from "./fetch";
-import { getBaseHref, quantityToScalar } from "../index";
+import { quantityToScalar } from "../index";
 
 export const usePodsDetailFetch = (namespaceId: string, requestKey: string) => {
   const [podsDetailMap, setPodsDetailMap] = useState<

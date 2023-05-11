@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pipeline } from "../models/pipeline";
 import { useFetch } from "./fetch";
-import { getBaseHref } from "..";
 
 export const usePipelineFetch = (
   namespaceId: string | undefined,

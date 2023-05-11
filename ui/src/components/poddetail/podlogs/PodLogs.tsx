@@ -11,7 +11,6 @@ import Checkbox from "@mui/material/Checkbox";
 import Highlighter from "react-highlight-words";
 import "@stardazed/streams-polyfill";
 import "./PodLogs.css";
-import { getBaseHref } from "../../../utils";
 import { ReadableStreamDefaultReadResult } from "stream/web";
 
 export interface PodLogsProps {

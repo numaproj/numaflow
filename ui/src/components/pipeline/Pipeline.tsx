@@ -7,7 +7,6 @@ import { useEdgesInfoFetch } from "../../utils/fetchWrappers/edgeInfoFetch";
 import { VertexMetrics, EdgeWatermark } from "../../utils/models/pipeline";
 import "./Pipeline.css";
 import { notifyError } from "../../utils/error";
-import { getBaseHref } from "../../utils";
 
 export function Pipeline() {
   const [vertexPods, setVertexPods] =

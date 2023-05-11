@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useFetch } from "./fetch";
-import { getBaseHref } from "..";
 
 export const useNamespaceListFetch = () => {
   const [namespaceList, setNamespaceList] = useState<string[] | undefined>(undefined);

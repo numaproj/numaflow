@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Pod, PodContainerSpec } from "../models/pods";
 import { useFetch } from "./fetch";
-import { getBaseHref, quantityToScalar } from "../index";
+import { quantityToScalar } from "../index";
 
 export const usePodsFetch = (
   namespaceId: string,

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { EdgeInfo } from "../models/pipeline";
 import { useFetch } from "./fetch";
-import { getBaseHref } from "..";
 
 export const useEdgesInfoFetch = (
   namespaceId: string | undefined,
