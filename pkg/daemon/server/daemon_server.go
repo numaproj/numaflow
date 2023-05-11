@@ -93,7 +93,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	for _, vertex := range ds.pipeline.Spec.Vertices {
 		// assigning vertex to a new variable to avoid the closure problem, ensure each rate calculator has its own unique vertex pointer to work with.
 		v := vertex
-		rateCalculators[v.Name] = startRateCalculator(ctx, ds.pipeline, &v)
+		rateCalculators[v.Name] = server.NewRateCalculator(ctx, ds.pipeline, &v)
 	}
 
 	// Start listener
@@ -128,6 +128,12 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = tcpm.Serve() }()
 
 	log.Infof("Daemon server started successfully on %s", address)
+	// Start rate calculators for each vertex
+	for _, rc := range rateCalculators {
+		if err := rc.Start(ctx); err != nil {
+			log.Errorw("failed to start the rate calculator", zap.Error(err))
+		}
+	}
 	<-ctx.Done()
 	return nil
 }
@@ -196,16 +202,4 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	mux.Handle("/metrics", promhttp.Handler())
 
 	return &httpServer
-}
-
-func startRateCalculator(
-	ctx context.Context,
-	pl *v1alpha1.Pipeline,
-	v *v1alpha1.AbstractVertex) *server.RateCalculator {
-	log := logging.FromContext(ctx)
-	rc := server.NewRateCalculator(ctx, pl, v)
-	if err := rc.Start(ctx); err != nil {
-		log.Errorw("failed to start the rate calculator", zap.Error(err))
-	}
-	return rc
 }
