@@ -63,15 +63,15 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
 			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets); err != nil {
-				logger.Errorw("Failed on buffer and buckets deletion.", zap.Error(err))
+				logger.Errorw("Failed on buffers and buckets deletion.", zap.Error(err))
 				return err
 			}
-			logger.Info("Deleted Buffers and buckets successfully")
+			logger.Info("Deleted buffers and buckets successfully")
 			return nil
 		},
 	}
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "", "ISB Service type, e.g. jetstream")
-	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to create") // --buffers=a,b, --buffers=c
-	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to create") // --buckets=xxa,xxb --buckets=xxc	return command
+	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to delete") // --buffers=a,b, --buffers=c
+	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to delete") // --buckets=xxa,xxb --buckets=xxc	return command
 	return command
 }
