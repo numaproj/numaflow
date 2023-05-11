@@ -330,10 +330,12 @@ func NewKafkaSource(
 	} else {
 		kafkasource.saramaClient = client
 	}
-	adminClient, err := sarama.NewClusterAdmin(kafkasource.brokers, config)
+	// Does it require any special privileges to create a cluster admin client?
+	adminClient, err := sarama.NewClusterAdminFromClient(client)
 	if err != nil {
-		_ = kafkasource.saramaClient.Close()
-		// Does it require any special privileges to create a cluster admin client?
+		if !client.Closed() {
+			_ = client.Close()
+		}
 		return nil, fmt.Errorf("failed to create cluster sarama admin client, %w", err)
 	} else {
 		kafkasource.adminClient = adminClient
