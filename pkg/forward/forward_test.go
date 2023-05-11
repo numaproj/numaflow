@@ -1212,7 +1212,8 @@ func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage
 	}
 }
 
-func (f myForwardInternalErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, _ chan<- isb.WriteMessage) error {
+func (f myForwardInternalErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, writeMessagesCh chan<- isb.WriteMessage) error {
+	close(writeMessagesCh)
 	return udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -1249,7 +1250,8 @@ func (f myForwardApplyUDFErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage
 	return nil, fmt.Errorf("UDF error")
 }
 
-func (f myForwardApplyUDFErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, _ chan<- isb.WriteMessage) error {
+func (f myForwardApplyUDFErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, writeMessagesCh chan<- isb.WriteMessage) error {
+	close(writeMessagesCh)
 	return fmt.Errorf("UDF error")
 }
 
