@@ -196,6 +196,23 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 func (r *KafkaSource) NoAck(_ context.Context, _ []isb.Offset) {}
 
 func (r *KafkaSource) Start() <-chan struct{} {
+	client, err := sarama.NewClient(r.brokers, r.config)
+	if err != nil {
+		r.logger.Panicw("Failed to create sarama client", zap.Error(err))
+	} else {
+		r.saramaClient = client
+	}
+	// Does it require any special privileges to create a cluster admin client?
+	adminClient, err := sarama.NewClusterAdminFromClient(client)
+	if err != nil {
+		if !client.Closed() {
+			_ = client.Close()
+		}
+		r.logger.Panicw("Failed to create sarama cluster admin client", zap.Error(err))
+	} else {
+		r.adminClient = adminClient
+	}
+
 	go r.startConsumer()
 	// wait for the consumer to setup.
 	<-r.handler.ready
@@ -324,22 +341,6 @@ func NewKafkaSource(
 		}
 	}
 	kafkasource.config = config
-	client, err := sarama.NewClient(kafkasource.brokers, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sarama client, %w", err)
-	} else {
-		kafkasource.saramaClient = client
-	}
-	// Does it require any special privileges to create a cluster admin client?
-	adminClient, err := sarama.NewClusterAdminFromClient(client)
-	if err != nil {
-		if !client.Closed() {
-			_ = client.Close()
-		}
-		return nil, fmt.Errorf("failed to create cluster sarama admin client, %w", err)
-	} else {
-		kafkasource.adminClient = adminClient
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	kafkasource.cancelfn = cancel
