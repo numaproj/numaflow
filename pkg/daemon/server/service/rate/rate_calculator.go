@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/prometheus/common/expfmt"
+	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -50,11 +51,12 @@ type RateCalculator struct {
 	pipeline   *v1alpha1.Pipeline
 	vertex     *v1alpha1.AbstractVertex
 	httpClient metricsHttpClient
+	log        *zap.SugaredLogger
 
 	timestampedTotalCounts *sharedqueue.OverflowQueue[TimestampedCount]
 	lastSawPodCounts       map[string]float64
-	processingRates        map[string]float64
 	processingRatesLock    *sync.RWMutex
+	processingRates        map[string]float64
 	refreshInterval        time.Duration
 
 	userSpecifiedLookback int64
@@ -70,7 +72,7 @@ func WithRefreshInterval(d time.Duration) Option {
 }
 
 // NewRateCalculator creates a new rate calculator.
-func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex, opts ...Option) *RateCalculator {
+func NewRateCalculator(ctx context.Context, p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex, opts ...Option) *RateCalculator {
 	rc := RateCalculator{
 		pipeline: p,
 		vertex:   v,
@@ -80,6 +82,7 @@ func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex, opts ..
 			},
 			Timeout: time.Second * 3,
 		},
+		log: logging.FromContext(ctx).Named("RateCalculator"),
 		// maintain the total counts of the last 30 minutes since we support 1m, 5m, 15m lookback seconds.
 		timestampedTotalCounts: sharedqueue.New[TimestampedCount](1800),
 		lastSawPodCounts:       make(map[string]float64),
@@ -100,8 +103,7 @@ func NewRateCalculator(p *v1alpha1.Pipeline, v *v1alpha1.AbstractVertex, opts ..
 
 // Start starts the rate calculator that periodically fetches the total counts, calculates and updates the rates.
 func (rc *RateCalculator) Start(ctx context.Context) error {
-	log := logging.FromContext(ctx).Named("RateCalculator")
-	log.Infof("Starting rate calculator for vertex %s...", rc.vertex.Name)
+	rc.log.Infof("Starting rate calculator for vertex %s...", rc.vertex.Name)
 
 	lookbackSecondsMap := map[string]int64{"default": rc.userSpecifiedLookback}
 	for k, v := range fixedLookbackSeconds {
@@ -133,20 +135,33 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 
 // GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
 func (rc *RateCalculator) GetRates() map[string]float64 {
-	rc.processingRatesLock.RLock()
-	defer rc.processingRatesLock.RUnlock()
+	rc.processingRatesLock.Lock()
+	defer rc.processingRatesLock.Unlock()
 	return rc.processingRates
 }
 
 // findCurrentTotalCounts build a total count map with key being the pod name and value being the current total number of messages read by the pod
-// TODO - both podExists and getTotalCount are making http calls, we should parallelize them
 func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1alpha1.AbstractVertex) map[string]float64 {
 	var result = make(map[string]float64)
+	resultChan := make(chan struct {
+		podName string
+		count   float64
+	})
+	var resultChanWg sync.WaitGroup
 	index := 0
 	for {
 		podName := fmt.Sprintf("%s-%s-%d", rc.pipeline.Name, vertex.Name, index)
 		if rc.podExists(vertex.Name, podName) {
-			result[podName] = rc.getTotalCount(ctx, vertex, podName)
+			// run getTotalCount calls in parallel
+			resultChanWg.Add(1)
+			go func(podName string) {
+				defer resultChanWg.Done()
+				count := rc.getTotalCount(ctx, vertex, podName)
+				resultChan <- struct {
+					podName string
+					count   float64
+				}{podName, count}
+			}(podName)
 		} else {
 			// we assume all the pods are in order, hence if we don't find one, we can stop looking
 			// this is because when we scale down, we always scale down from the last pod
@@ -156,6 +171,20 @@ func (rc *RateCalculator) findCurrentTotalCounts(ctx context.Context, vertex *v1
 		}
 		index++
 	}
+
+	// Collect the results
+	var resultWg sync.WaitGroup
+	resultWg.Add(1)
+	go func() {
+		defer resultWg.Done()
+		for podResult := range resultChan {
+			result[podResult.podName] = podResult.count
+		}
+	}()
+
+	resultChanWg.Wait()
+	close(resultChan)
+	resultWg.Wait()
 	return result
 }
 

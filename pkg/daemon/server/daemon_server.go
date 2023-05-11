@@ -93,7 +93,6 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	for _, vertex := range ds.pipeline.Spec.Vertices {
 		// assigning vertex to a new variable to avoid the closure problem, ensure each rate calculator has its own unique vertex pointer to work with.
 		v := vertex
-		log.Infof("Starting the rate calculator for vertex %s", v.Name)
 		rateCalculators[v.Name] = startRateCalculator(ctx, ds.pipeline, &v)
 	}
 
@@ -204,7 +203,7 @@ func startRateCalculator(
 	pl *v1alpha1.Pipeline,
 	v *v1alpha1.AbstractVertex) *server.RateCalculator {
 	log := logging.FromContext(ctx)
-	rc := server.NewRateCalculator(pl, v)
+	rc := server.NewRateCalculator(ctx, pl, v)
 	if err := rc.Start(ctx); err != nil {
 		log.Errorw("failed to start the rate calculator", zap.Error(err))
 	}

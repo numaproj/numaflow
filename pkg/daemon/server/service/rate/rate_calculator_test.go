@@ -85,7 +85,9 @@ func TestMain(m *testing.M) {
 // since the refresh interval is set to 1 seconds, as we collect more and more metrics,
 // the calculated rate should eventually be close (2000+6000)/1 = 8000
 func TestRateCalculator_Start(t *testing.T) {
-	rc := NewRateCalculator(&v1alpha1.Pipeline{
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+	defer cancel()
+	rc := NewRateCalculator(ctx, &v1alpha1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "p",
 			Namespace: "default",
@@ -101,8 +103,6 @@ func TestRateCalculator_Start(t *testing.T) {
 	)
 
 	rc.httpClient = &mockHttpClient{podOneCount: 0, podTwoCount: 0}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
-	defer cancel()
 	err := rc.Start(ctx)
 	assert.NoError(t, err)
 	time.Sleep(time.Second * 20)
