@@ -55,7 +55,7 @@ var pbqWriteTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   prometheus.ExponentialBucketsRange(1, 5000, 5),
 }, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
-// ackMessagesCount is used to indicate the number of  messages acknowledged
+// ackMessagesCount is used to indicate the number of messages acknowledged
 var ackMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_reader",
 	Name:      "ack_total",

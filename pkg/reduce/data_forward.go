@@ -34,9 +34,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pnf"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -45,12 +42,15 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
 
 // DataForward is responsible for reading and forwarding the message from ISB to PBQ.
@@ -75,6 +75,7 @@ type DataForward struct {
 	log                   *zap.SugaredLogger
 }
 
+// NewDataForward creates a new DataForward
 func NewDataForward(ctx context.Context,
 	vertexInstance *dfv1.VertexInstance,
 	fromBuffer isb.BufferReader,
@@ -124,13 +125,6 @@ func (df *DataForward) Start() {
 	for {
 		select {
 		case <-df.ctx.Done():
-			df.log.Infow("Stopping reduce data forwarder...")
-
-			if err := df.fromBuffer.Close(); err != nil {
-				df.log.Errorw("Failed to close buffer reader, shutdown anyways...", zap.Error(err))
-			} else {
-				df.log.Infow("Closed buffer reader", zap.String("bufferFrom", df.fromBuffer.GetName()))
-			}
 
 			// hard shutdown after timeout
 			cctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -138,25 +132,6 @@ func (df *DataForward) Start() {
 			// allow to clean itself up.
 			df.ShutDown(cctx)
 
-			for _, v := range df.toBuffers {
-				if err := v.Close(); err != nil {
-					df.log.Errorw("Failed to close buffer writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", v.GetName()))
-				} else {
-					df.log.Infow("Closed buffer writer", zap.String("bufferTo", v.GetName()))
-				}
-			}
-
-			// stop watermark fetcher
-			if err := df.watermarkFetcher.Close(); err != nil {
-				df.log.Errorw("Failed to close watermark fetcher", zap.Error(err))
-			}
-
-			// stop watermark publisher
-			for _, publisher := range df.watermarkPublishers {
-				if err := publisher.Close(); err != nil {
-					df.log.Errorw("Failed to close watermark publisher", zap.Error(err))
-				}
-			}
 			return
 		default:
 			// pass the child context so that the reader can be closed.
@@ -167,9 +142,9 @@ func (df *DataForward) Start() {
 	}
 }
 
-// Startup starts up the read-loop, because during boot up, it has to replay the data from the persistent store of
-// PBQ before it can start reading from ISB. Startup will return only after the replay has been completed.
-func (df *DataForward) Startup(ctx context.Context) error {
+// ReplayPersistedMessages replays persisted messages, because during boot up, it has to replay the data from the persistent store of
+// PBQ before it can start reading from ISB. ReplayPersistedMessages will return only after the replay has been completed.
+func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 	// start the PBQManager which discovers and builds the state from persistent store of the PBQ.
 	partitions, err := df.pbqManager.GetExistingPartitions(ctx)
 	if err != nil {
@@ -577,7 +552,29 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 
 // ShutDown shutdowns the read-loop.
 func (df *DataForward) ShutDown(ctx context.Context) {
+
+	df.log.Infow("Stopping reduce data forwarder...")
+
+	if err := df.fromBuffer.Close(); err != nil {
+		df.log.Errorw("Failed to close buffer reader, shutdown anyways...", zap.Error(err))
+	} else {
+		df.log.Infow("Closed buffer reader", zap.String("bufferFrom", df.fromBuffer.GetName()))
+	}
+
+	// flush pending messages to persistent storage
 	df.pbqManager.ShutDown(ctx)
+
+	// stop watermark fetcher
+	if err := df.watermarkFetcher.Close(); err != nil {
+		df.log.Errorw("Failed to close watermark fetcher", zap.Error(err))
+	}
+
+	// stop watermark publisher
+	for _, publisher := range df.watermarkPublishers {
+		if err := publisher.Close(); err != nil {
+			df.log.Errorw("Failed to close watermark publisher", zap.Error(err))
+		}
+	}
 }
 
 // upsertWindowsAndKeys will create or assigns (if already present) a window to the message. It is an upsert operation

@@ -93,21 +93,21 @@ func NewOrderedProcessor(ctx context.Context,
 	return of
 }
 
-func (of *OrderedProcessor) InsertTask(t *ForwardTask) {
-	of.Lock()
-	defer of.Unlock()
-	of.taskQueue.PushBack(t)
+func (op *OrderedProcessor) InsertTask(t *ForwardTask) {
+	op.Lock()
+	defer op.Unlock()
+	op.taskQueue.PushBack(t)
 }
 
 // SchedulePnF creates and schedules the PnF routine.
-func (of *OrderedProcessor) SchedulePnF(
+func (op *OrderedProcessor) SchedulePnF(
 	ctx context.Context,
 	partitionID partition.ID) *ForwardTask {
 
-	pbq := of.pbqManager.GetPBQ(partitionID)
+	pbq := op.pbqManager.GetPBQ(partitionID)
 
-	pf := newProcessAndForward(ctx, of.vertexName, of.pipelineName, of.vertexReplica, partitionID,
-		of.udf, pbq, of.toBuffers, of.whereToDecider, of.watermarkPublishers, of.idleManager)
+	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID,
+		op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager)
 
 	doneCh := make(chan struct{})
 	t := &ForwardTask{
@@ -115,19 +115,19 @@ func (of *OrderedProcessor) SchedulePnF(
 		pf:     pf,
 	}
 	partitionsInFlight.With(map[string]string{
-		metrics.LabelVertex:             of.vertexName,
-		metrics.LabelPipeline:           of.pipelineName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(of.vertexReplica)),
+		metrics.LabelVertex:             op.vertexName,
+		metrics.LabelPipeline:           op.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
 	}).Inc()
 
 	// invoke the reduce function
-	go of.reduceOp(ctx, t)
+	go op.reduceOp(ctx, t)
 	return t
 }
 
 // reduceOp invokes the reduce function. The reducer is a long-running function since we stream in the data and it has
 // to wait for the close-of-book on the PBQ to materialize the result.
-func (of *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
+func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 	start := time.Now()
 	for {
 		// FIXME: this error handling won't work with streams. We cannot do infinite retries
@@ -137,24 +137,24 @@ func (of *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 			break
 		} else if err == ctx.Err() {
 			udfError.With(map[string]string{
-				metrics.LabelVertex:             of.vertexName,
-				metrics.LabelPipeline:           of.pipelineName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(of.vertexReplica)),
+				metrics.LabelVertex:             op.vertexName,
+				metrics.LabelPipeline:           op.pipelineName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
 			}).Inc()
-			of.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
+			op.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
 			return
 		}
-		of.log.Errorw("Process failed", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(err))
+		op.log.Errorw("Process failed", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(err))
 		time.Sleep(retryDelay)
 	}
 
 	// indicate that we are done with reduce UDF invocation.
 	close(t.doneCh)
-	of.log.Debugw("Process->Reduce call took ", zap.String("partitionID", t.pf.PartitionID.String()), zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+	op.log.Debugw("Process->Reduce call took ", zap.String("partitionID", t.pf.PartitionID.String()), zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 
 	// notify that some work has been completed
 	select {
-	case of.taskDone <- struct{}{}:
+	case op.taskDone <- struct{}{}:
 	case <-ctx.Done():
 		return
 	}
@@ -162,7 +162,7 @@ func (of *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 
 // forward monitors the ForwardTask queue, as soon as the ForwardTask at the head of the queue has been completed, the result is
 // forwarded to the next ISB. It keeps doing this for forever or until ctx.Done() happens.
-func (of *OrderedProcessor) forward(ctx context.Context) {
+func (op *OrderedProcessor) forward(ctx context.Context) {
 	var currElement *list.Element
 	var t *ForwardTask
 
@@ -170,29 +170,30 @@ func (of *OrderedProcessor) forward(ctx context.Context) {
 		start := time.Now()
 		// block till we have some work
 		select {
-		case <-of.taskDone:
+		case <-op.taskDone:
 		case <-ctx.Done():
-			of.log.Infow("forward exiting while waiting for ForwardTask completion event", zap.Error(ctx.Err()))
+			op.log.Infow("forward exiting while waiting for ForwardTask completion event", zap.Error(ctx.Err()))
+			op.Shutdown()
 			return
 		}
-		of.log.Debugw("Time waited for a completion event to happen ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
+		op.log.Debugw("Time waited for a completion event to happen ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 
 		// a signal does not mean that we have any pending work to be done because
 		// for every signal, we try to empty out the ForwardTask-queue.
-		of.RLock()
-		n := of.taskQueue.Len()
-		of.log.Debugw("Received a signal in ForwardTask queue ", zap.Int("ForwardTask count", n))
+		op.RLock()
+		n := op.taskQueue.Len()
+		op.log.Debugw("Received a signal in ForwardTask queue ", zap.Int("ForwardTask count", n))
 
-		of.RUnlock()
+		op.RUnlock()
 		// n could be 0 because we have emptied the queue
 		if n == 0 {
 			continue
 		}
 
 		// now that we know there is at least an element, let's start from the front.
-		of.RLock()
-		currElement = of.taskQueue.Front()
-		of.RUnlock()
+		op.RLock()
+		currElement = op.taskQueue.Front()
+		op.RUnlock()
 
 		// empty out the entire ForwardTask-queue everytime there has been some work done
 		startLoop := time.Now()
@@ -209,23 +210,34 @@ func (of *OrderedProcessor) forward(ctx context.Context) {
 						break
 					}
 				}
-				of.Lock()
+				op.Lock()
 				rm := currElement
 				currElement = currElement.Next()
-				of.taskQueue.Remove(rm)
+				op.taskQueue.Remove(rm)
 				partitionsInFlight.With(map[string]string{
-					metrics.LabelVertex:             of.vertexName,
-					metrics.LabelPipeline:           of.pipelineName,
-					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(of.vertexReplica)),
+					metrics.LabelVertex:             op.vertexName,
+					metrics.LabelPipeline:           op.pipelineName,
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
 				}).Dec()
 
-				of.log.Debugw("Removing ForwardTask post forward call", zap.String("partitionID", t.pf.PartitionID.String()))
-				of.Unlock()
+				op.log.Debugw("Removing ForwardTask post forward call", zap.String("partitionID", t.pf.PartitionID.String()))
+				op.Unlock()
 			case <-ctx.Done():
-				of.log.Infow("forward exiting while waiting on the head of the queue ForwardTask", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
+				op.log.Infow("Forward exiting while waiting on the head op the queue ForwardTask", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
+				op.Shutdown()
 				return
 			}
 		}
-		of.log.Debugw("One iteration of the ordered tasks queue loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()), zap.Int("elements", n))
+		op.log.Debugw("One iteration op the ordered tasks queue loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()), zap.Int("elements", n))
+	}
+}
+
+func (op *OrderedProcessor) Shutdown() {
+	for _, v := range op.toBuffers {
+		if err := v.Close(); err != nil {
+			op.log.Errorw("Failed to close buffer writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", v.GetName()))
+		} else {
+			op.log.Infow("Closed buffer writer", zap.String("bufferTo", v.GetName()))
+		}
 	}
 }

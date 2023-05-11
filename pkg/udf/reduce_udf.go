@@ -22,29 +22,27 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/numaproj/numaflow-go/pkg/function/client"
-	"github.com/numaproj/numaflow/pkg/reduce/pnf"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/metrics"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
-
-	"github.com/numaproj/numaflow/pkg/reduce/pbq"
-	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
-
+	"github.com/numaproj/numaflow-go/pkg/function/client"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
+	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
+	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 )
 
 type ReduceUDFProcessor struct {
@@ -201,7 +199,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 
 	// read the persisted messages before reading the messages from ISB
-	err = dataForwarder.Startup(ctx)
+	err = dataForwarder.ReplayPersistedMessages(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to read and process persisted messages, %w", err)
 	}
