@@ -121,12 +121,12 @@ func (rc *RateCalculator) Start(ctx context.Context) error {
 				// update count trackers
 				UpdateCountTrackers(rc.timestampedTotalCounts, rc.lastSawPodCounts, podTotalCounts)
 				// calculate rates for each lookback seconds
-				rc.processingRatesLock.Lock()
 				for n, i := range lookbackSecondsMap {
 					r := CalculateRate(rc.timestampedTotalCounts, i)
+					rc.processingRatesLock.Lock()
 					rc.processingRates[n] = r
+					rc.processingRatesLock.Unlock()
 				}
-				rc.processingRatesLock.Unlock()
 			}
 		}
 	}()
