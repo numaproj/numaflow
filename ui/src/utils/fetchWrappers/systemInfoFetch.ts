@@ -12,7 +12,7 @@ export const useSystemInfoFetch = () => {
     loading: fetchLoading,
     error,
   } = useFetch(
-    getBaseHref() + `api/v1/sysinfo`
+    `/api/v1/sysinfo`
   );
 
   useEffect(() => {

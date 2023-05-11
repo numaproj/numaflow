@@ -24,11 +24,9 @@ const theme = createTheme({
 
 });
 
-const basename = getBaseHref()
-
 root.render(
   <React.StrictMode>
-    <BrowserRouter basename={basename}>
+    <BrowserRouter basename={getBaseHref()}>
       <ThemeProvider theme={theme}>
         <App />
       </ThemeProvider>

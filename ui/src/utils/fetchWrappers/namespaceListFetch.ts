@@ -11,7 +11,7 @@ export const useNamespaceListFetch = () => {
     loading: fetchLoading,
     error,
   } = useFetch(
-    getBaseHref() + `api/v1/namespaces`
+    `/api/v1/namespaces`
   );
 
   useEffect(() => {

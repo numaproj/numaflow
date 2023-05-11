@@ -99,7 +99,7 @@ export function Pipeline() {
       Promise.allSettled(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
-            getBaseHref() + `api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/pods`
+            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/pods`
           )
             .then((response) => {
               if (response.ok) {
@@ -142,7 +142,7 @@ export function Pipeline() {
       Promise.allSettled(
         pipeline?.spec?.vertices.map((vertex) => {
           return fetch(
-            getBaseHref() + `api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/metrics`
+            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/metrics`
           )
             .then((response) => {
               if (response.ok) {
@@ -228,7 +228,7 @@ export function Pipeline() {
       } else {
         Promise.allSettled( [
               fetch(
-                getBaseHref() + `api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
+                `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
               )
                   .then((response) => {
                     if (response.ok) {
