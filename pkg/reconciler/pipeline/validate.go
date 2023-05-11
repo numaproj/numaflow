@@ -177,7 +177,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 
 	for _, v := range pl.Spec.Vertices {
-		if err := validateVertex(v); err != nil {
+		if err := validateVertex(v, pl); err != nil {
 			return err
 		}
 		// The length of "{pipeline}-{vertex}-headless" can not be longer than 63.
@@ -188,7 +188,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	return nil
 }
 
-func validateVertex(v dfv1.AbstractVertex) error {
+func validateVertex(v dfv1.AbstractVertex, pl *dfv1.Pipeline) error {
 	if errs := k8svalidation.IsDNS1035Label(v.Name); len(errs) > 0 {
 		return fmt.Errorf("invalid vertex name %q, %v", v.Name, errs)
 	}
@@ -218,13 +218,20 @@ func validateVertex(v dfv1.AbstractVertex) error {
 			return fmt.Errorf("vertex %q: sidecar container name %q is reserved for containers created by numaflow", v.Name, sc.Name)
 		}
 	}
-	if v.UDF.MapStream {
-		if v.Limits == nil || v.Limits.ReadBatchSize == nil || *v.Limits.ReadBatchSize != uint64(1) {
-			return fmt.Errorf("vertex %q: UDF map streaming is enabled, but read batch size is not 1", v.Name)
-		}
-	}
 
 	if v.UDF != nil {
+		if v.UDF.MapStream {
+			readBatchSize := dfv1.DefaultReadBatchSize
+			if pl != nil && pl.Spec.Limits != nil && pl.Spec.Limits.ReadBatchSize != nil {
+				readBatchSize = int(*pl.Spec.Limits.ReadBatchSize)
+			}
+			if v.Limits != nil && v.Limits.ReadBatchSize != nil {
+				readBatchSize = int(*v.Limits.ReadBatchSize)
+			}
+			if readBatchSize != 1 {
+				return fmt.Errorf("vertex %q: UDF map streaming is enabled, but read batch size is not 1", v.Name)
+			}
+		}
 		return validateUDF(*v.UDF)
 	}
 	return nil
