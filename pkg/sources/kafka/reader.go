@@ -196,6 +196,23 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 func (r *KafkaSource) NoAck(_ context.Context, _ []isb.Offset) {}
 
 func (r *KafkaSource) Start() <-chan struct{} {
+	client, err := sarama.NewClient(r.brokers, r.config)
+	if err != nil {
+		r.logger.Panicw("Failed to create sarama client", zap.Error(err))
+	} else {
+		r.saramaClient = client
+	}
+	// Does it require any special privileges to create a cluster admin client?
+	adminClient, err := sarama.NewClusterAdminFromClient(client)
+	if err != nil {
+		if !client.Closed() {
+			_ = client.Close()
+		}
+		r.logger.Panicw("Failed to create sarama cluster admin client", zap.Error(err))
+	} else {
+		r.adminClient = adminClient
+	}
+
 	go r.startConsumer()
 	// wait for the consumer to setup.
 	<-r.handler.ready
@@ -324,19 +341,6 @@ func NewKafkaSource(
 		}
 	}
 	kafkasource.config = config
-	// Best effort to initialize the clients for pending messages calculation
-	adminClient, err := sarama.NewClusterAdmin(kafkasource.brokers, config)
-	if err != nil {
-		kafkasource.logger.Warnw("Problem initializing sarama admin client", zap.Error(err))
-	} else {
-		kafkasource.adminClient = adminClient
-	}
-	client, err := sarama.NewClient(kafkasource.brokers, config)
-	if err != nil {
-		kafkasource.logger.Warnw("Problem initializing sarama client", zap.Error(err))
-	} else {
-		kafkasource.saramaClient = client
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	kafkasource.cancelfn = cancel
@@ -391,7 +395,8 @@ func (r *KafkaSource) startConsumer() {
 			// server-side rebalance happens, the consumer session will need to be
 			// recreated to get the new claims
 			if err := client.Consume(r.lifecyclectx, []string{r.topic}, r.handler); err != nil {
-				r.logger.Warnw("Initialization of consumer failed with error: ", zap.Error(err))
+				// Panic on errors to let it crash and restart the process
+				r.logger.Panicw("Consumer failed with error: ", zap.Error(err))
 			}
 			// check if context was cancelled, signaling that the consumer should stop
 			if r.lifecyclectx.Err() != nil {
