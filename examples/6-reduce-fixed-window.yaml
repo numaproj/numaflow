@@ -28,6 +28,7 @@ spec:
             persistentVolumeClaim:
               volumeSize: 10Gi
               accessMode: ReadWriteOnce
+      partitions: 2
     - name: sink
       scale:
         min: 1
@@ -38,6 +39,5 @@ spec:
       to: atoi
     - from: atoi
       to: compute-sum
-      parallelism: 2
     - from: compute-sum
       to: sink
