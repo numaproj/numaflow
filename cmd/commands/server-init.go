@@ -38,7 +38,7 @@ func NewServerInitCommand() *cobra.Command {
 			baseHref := strings.TrimSuffix(baseHref, "/")
 
 			reactVar := fmt.Sprintf(`window.__RUNTIME_CONFIG__ = {"BASE_HREF":"%s"};`, baseHref)
-			if err := os.WriteFile("/opt/runtime-env.js", []byte(reactVar), 0666); err != nil {
+			if err := os.WriteFile("/opt/numaflow/runtime-env.js", []byte(reactVar), 0644); err != nil {
 				return fmt.Errorf("failed to create runtime-env.js file: %w", err)
 			}
 
@@ -56,12 +56,14 @@ func NewServerInitCommand() *cobra.Command {
 }
 
 func setBaseHref(filename string, baseHref string) error {
-	if baseHref == "/" {
-		return nil
-	}
 
 	file, err := os.ReadFile(filename)
 	if err != nil {
+		return err
+	}
+
+	if baseHref == "/" {
+		err = os.WriteFile("/opt/numaflow/index.html", file, 0644)
 		return err
 	}
 
@@ -69,6 +71,6 @@ func setBaseHref(filename string, baseHref string) error {
 	newHref := fmt.Sprintf(`<base href="%s/"/>`, baseHref)
 	file = bytes.Replace(file, []byte(prevHref), []byte(newHref), -1)
 
-	err = os.WriteFile("/opt/index.html", file, 0666)
+	err = os.WriteFile("/opt/numaflow/index.html", file, 0644)
 	return err
 }

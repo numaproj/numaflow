@@ -12788,7 +12788,7 @@ spec:
         imagePullPolicy: Always
         name: server-init
         volumeMounts:
-        - mountPath: /opt
+        - mountPath: /opt/numaflow
           name: env-volume
       securityContext:
         runAsNonRoot: true
