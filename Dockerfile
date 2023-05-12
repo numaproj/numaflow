@@ -22,7 +22,6 @@ COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow
 COPY ui/build /ui/build
-RUN chmod a+rwx /ui/build/index.html
 ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################

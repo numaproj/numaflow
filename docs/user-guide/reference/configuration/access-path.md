@@ -23,7 +23,7 @@ spec:
         - --base-href=/numaflow # include new path here
         imagePullPolicy: Always
         volumeMounts:
-        - mountPath: /ui/build
+        - mountPath: /opt
           name: env-volume
       containers:
         - name: main
@@ -36,6 +36,9 @@ spec:
           - mountPath: /ui/build/runtime-env.js
             name: env-volume
             subPath: runtime-env.js
+          - mountPath: /ui/build/index.html
+            name: env-volume
+            subPath: index.html
           env:
             - name: NAMESPACE
               valueFrom:

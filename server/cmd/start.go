@@ -17,11 +17,9 @@ limitations under the License.
 package cmd
 
 import (
-	"bytes"
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/gin-contrib/static"
@@ -44,9 +42,6 @@ func Start(insecure bool, port int, namespaced bool, managedNamespace string, ba
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.RedirectTrailingSlash = true
 	router.Use(static.Serve(baseHref, static.LocalFile("./ui/build", true)))
-	if err := setBaseHRef("./ui/build/index.html", baseHref); err != nil {
-		panic(err)
-	}
 	router.NoRoute(func(c *gin.Context) {
 		c.File("./ui/build/index.html")
 	})
@@ -93,22 +88,4 @@ func UrlRewrite(r *gin.Engine) gin.HandlerFunc {
 		}
 		c.Next()
 	}
-}
-
-func setBaseHRef(filename string, baseHref string) error {
-	if baseHref == "/" {
-		return nil
-	}
-
-	file, err := os.ReadFile(filename)
-	if err != nil {
-		return err
-	}
-
-	prevHRef := `<base href="/"/>`
-	newHRef := fmt.Sprintf(`<base href="%s"/>`, baseHref)
-	file = bytes.Replace(file, []byte(prevHRef), []byte(newHRef), -1)
-
-	err = os.WriteFile(filename, file, 0666)
-	return err
 }

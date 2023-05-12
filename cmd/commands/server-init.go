@@ -17,6 +17,7 @@ limitations under the License.
 package commands
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -34,10 +35,17 @@ func NewServerInitCommand() *cobra.Command {
 		Short: "Initialize base path for Numaflow server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 
-			reactVar := fmt.Sprintf(`window.__RUNTIME_CONFIG__ = {"BASE_HREF":"%s"};`, strings.TrimSuffix(baseHref, "/"))
-			if err := os.WriteFile("/ui/build/runtime-env.js", []byte(reactVar), 0666); err != nil {
+			baseHref := strings.TrimSuffix(baseHref, "/")
+
+			reactVar := fmt.Sprintf(`window.__RUNTIME_CONFIG__ = {"BASE_HREF":"%s"};`, baseHref)
+			if err := os.WriteFile("/opt/runtime-env.js", []byte(reactVar), 0666); err != nil {
 				return fmt.Errorf("failed to create runtime-env.js file: %w", err)
 			}
+
+			if err := setBaseHref("/ui/build/index.html", baseHref); err != nil {
+				return fmt.Errorf("failed to update base-href: %w", err)
+			}
+
 			return nil
 
 		},
@@ -45,4 +53,22 @@ func NewServerInitCommand() *cobra.Command {
 
 	command.Flags().StringVar(&baseHref, "base-href", "/", "Base href for Numaflow server, defaults to '/'.")
 	return command
+}
+
+func setBaseHref(filename string, baseHref string) error {
+	if baseHref == "/" {
+		return nil
+	}
+
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	prevHref := `<base href="/"/>`
+	newHref := fmt.Sprintf(`<base href="%s/"/>`, baseHref)
+	file = bytes.Replace(file, []byte(prevHref), []byte(newHref), -1)
+
+	err = os.WriteFile("/opt/index.html", file, 0666)
+	return err
 }
