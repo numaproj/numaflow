@@ -23,7 +23,7 @@ spec:
         - --base-href=/numaflow # include new path here
         imagePullPolicy: Always
         volumeMounts:
-        - mountPath: /opt
+        - mountPath: /opt/numaflow
           name: env-volume
       containers:
         - name: main
