@@ -229,7 +229,7 @@ func Test_buildISBBatchJob(t *testing.T) {
 		j := buildISBBatchJob(testPipeline, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
 		assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
 		assert.True(t, len(j.Spec.Template.Spec.Containers[0].Args) > 0)
-		assert.Contains(t, j.Name, testPipeline.Name+"-buffer-test-")
+		assert.Contains(t, j.Name, testPipeline.Name+"-buffer-bucket-test-")
 		envNames := []string{}
 		for _, e := range j.Spec.Template.Spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
