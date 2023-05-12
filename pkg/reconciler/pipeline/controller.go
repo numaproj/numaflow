@@ -573,7 +573,7 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 			ToVertexPartitions:   pointer.Int32(int32(vTo.GetPartitions())),
 		}
 		// TODO: remove this after parallelism is removed
-		if e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 0 {
+		if vTo.IsReduceUDF() && vTo.UDF.GroupBy.Keyed && e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 0 {
 			combinedEdge.ToVertexPartitions = e.DeprecatedParallelism
 		}
 		// end of TODO
