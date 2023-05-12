@@ -208,7 +208,9 @@ func (p Pipeline) GetAllBuckets() []string {
 		if v.IsReduceUDF() {
 			for _, e := range p.GetFromEdges(v.Name) {
 				partitions := 1
-				if e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 1 {
+				if v.Partitions != nil {
+					partitions = v.GetPartitions()
+				} else if e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 1 {
 					partitions = int(*e.DeprecatedParallelism)
 				}
 				for i := 0; i < partitions; i++ {

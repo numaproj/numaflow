@@ -44,6 +44,10 @@ type Edge struct {
 	OnFull *BufferFullWritingStrategy `json:"onFull,omitempty" protobuf:"bytes,6,opt,name=onFull"`
 }
 
+// CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.
+// It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod,
+// it knows the properties of the connected vertices, for example, how many partitioned buffers I should write
+// to, what is the write buffer length, etc.
 type CombinedEdge struct {
 	Edge `json:",inline" protobuf:"bytes,1,opt,name=edge"`
 	// From vertex type.

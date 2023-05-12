@@ -633,7 +633,7 @@ func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferS
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: pl.Namespace,
-			Name:      fmt.Sprintf("%s-buffer-%s-%v", pl.Name, jobType, randomStr),
+			Name:      fmt.Sprintf("%s-buffer-bucket-%s-%v", pl.Name, jobType, randomStr),
 			Labels:    l,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind),

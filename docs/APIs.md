@@ -562,6 +562,14 @@ CombinedEdge
 <a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
 </p>
 <p>
+<p>
+CombinedEdge is a combination of Edge and some other properties such as
+vertex type, partitions, limits. It’s used to decorate the fromEdges and
+toEdges of the generated Vertex objects, so that in the vertex pod, it
+knows the properties of the connected vertices, for example, how many
+partitioned buffers I should write to, what is the write buffer length,
+etc.
+</p>
 </p>
 <table>
 <thead>
