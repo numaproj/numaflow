@@ -192,7 +192,7 @@ func TestValidatePipeline(t *testing.T) {
 
 	t.Run("parallelism on non-reduce vertex", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Edges[0].Parallelism = pointer.Int32(3)
+		testObj.Spec.Edges[0].DeprecatedParallelism = pointer.Int32(3)
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `"parallelism" is not allowed for an edge leading to a non-reduce vertex`)
@@ -403,11 +403,11 @@ func TestValidateReducePipeline(t *testing.T) {
 
 	t.Run("test source with keyed", func(t *testing.T) {
 		testObj := testReducePipeline.DeepCopy()
-		testObj.Spec.Edges[0].Parallelism = pointer.Int32(2)
+		testObj.Spec.Edges[0].DeprecatedParallelism = pointer.Int32(2)
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `"parallelism" should not > 1 for non-keyed windowing`)
-		testObj.Spec.Edges[0].Parallelism = pointer.Int32(-1)
+		testObj.Spec.Edges[0].DeprecatedParallelism = pointer.Int32(-1)
 		err = ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `"parallelism" is < 1`)

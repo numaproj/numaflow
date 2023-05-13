@@ -46,7 +46,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 			},
 		},
 	}}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex.GetToBuffers()))
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
 	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, map[string]isb.BufferWriter{"name": toKafka}, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
@@ -98,7 +98,7 @@ func TestWriteFailureToKafka(t *testing.T) {
 			},
 		},
 	}}
-	toSteps := map[string]isb.BufferWriter{vertex.GetToBuffers()[0].Name: toKafka}
+	toSteps := map[string]isb.BufferWriter{vertex.Spec.Name: toKafka}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)

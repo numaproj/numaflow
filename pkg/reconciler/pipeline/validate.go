@@ -148,14 +148,14 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		if _, existing := sinks[e.From]; existing {
 			return fmt.Errorf("sink vertex %q can not be define as 'from'", e.To)
 		}
-		if e.Parallelism != nil {
+		if e.DeprecatedParallelism != nil {
 			if _, ok := reduceUdfs[e.To]; !ok {
 				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" is not allowed for an edge leading to a non-reduce vertex`, e.From, e.To)
 			}
-			if *e.Parallelism < 1 {
+			if *e.DeprecatedParallelism < 1 {
 				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" is < 1`, e.From, e.To)
 			}
-			if *e.Parallelism > 1 && !reduceUdfs[e.To].UDF.GroupBy.Keyed {
+			if *e.DeprecatedParallelism > 1 && !reduceUdfs[e.To].UDF.GroupBy.Keyed {
 				// We only support single partition non-keyed windowing.
 				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" should not > 1 for non-keyed windowing`, e.From, e.To)
 			}

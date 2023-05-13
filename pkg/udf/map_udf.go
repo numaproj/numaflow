@@ -48,20 +48,17 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	var reader isb.BufferReader
 	var writers map[string]isb.BufferWriter
 	var err error
-	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
-	toBuffers := u.VertexInstance.Vertex.GetToBuffers()
+	fromBufferName := u.VertexInstance.Vertex.OwnedBuffers()[0]
 
 	// watermark variables
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(toBuffers))
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		reader, writers = buildRedisBufferIO(ctx, fromBufferName, u.VertexInstance)
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		// we have only 1 in buffer ATM
-		fromBuffer := u.VertexInstance.Vertex.GetFromBuffers()[0]
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, fromBuffer)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
 		if err != nil {
 			return err
 		}
@@ -76,8 +73,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	// Populate shuffle function map
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-		if edge.Parallelism != nil && *edge.Parallelism > 1 {
-			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge))
+		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 {
+			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions()))
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
@@ -92,17 +89,19 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
 			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 				} else {
-					result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+					// TODO: need to shuffle for partitioned map vertex
+					result = append(result, dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
 				}
 			} else {
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-					if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 					} else {
-						result = append(result, dfv1.GenerateEdgeBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+						// TODO: need to shuffle for partitioned map vertex
+						result = append(result, dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
 					}
 				}
 			}
@@ -131,7 +130,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}
 	}()
-	log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", toBuffers))
+	log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
 
 	opts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeMapUDF), forward.WithLogger(log)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {

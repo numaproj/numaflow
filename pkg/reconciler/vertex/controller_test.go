@@ -18,7 +18,6 @@ package vertex
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -87,8 +86,8 @@ var (
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas:     &testReplicas,
-			FromEdges:    []dfv1.Edge{{From: "input", To: testVertexSpecName}},
-			ToEdges:      []dfv1.Edge{{From: testVertexSpecName, To: "output"}},
+			FromEdges:    []dfv1.CombinedEdge{{Edge: dfv1.Edge{From: "input", To: testVertexSpecName}}},
+			ToEdges:      []dfv1.CombinedEdge{{Edge: dfv1.Edge{From: testVertexSpecName, To: "output"}}},
 			PipelineName: testPipelineName,
 			AbstractVertex: dfv1.AbstractVertex{
 				Name: testVertexSpecName,
@@ -103,7 +102,7 @@ var (
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas:     &testReplicas,
-			ToEdges:      []dfv1.Edge{{From: "input", To: "p1"}},
+			ToEdges:      []dfv1.CombinedEdge{{Edge: dfv1.Edge{From: "input", To: "p1"}}},
 			PipelineName: testPipelineName,
 			AbstractVertex: dfv1.AbstractVertex{
 				Name:   "input",
@@ -201,9 +200,10 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
-		for _, b := range testObj.GetToBuffers() {
-			assert.Contains(t, argStr, fmt.Sprintf("%s=%s", b.Name, b.Type))
-		}
+		assert.Contains(t, argStr, strings.Join(testObj.OwnedBuffers(), ","))
+		assert.Contains(t, argStr, "--buckets=")
+		assert.Contains(t, argStr, strings.Join(testObj.GetFromBuckets(), ","))
+		assert.Contains(t, argStr, strings.Join(testObj.GetToBuckets(), ","))
 	})
 
 	t.Run("test source user defined transformer", func(t *testing.T) {
@@ -243,8 +243,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Name = "test-pl-output"
 		testObj.Spec.Name = "output"
 		testObj.Spec.Sink = &dfv1.Sink{}
-		testObj.Spec.FromEdges = []dfv1.Edge{{From: "p1", To: "output"}}
-		testObj.Spec.ToEdges = []dfv1.Edge{}
+		testObj.Spec.FromEdges = []dfv1.CombinedEdge{{Edge: dfv1.Edge{From: "p1", To: "output"}}}
+		testObj.Spec.ToEdges = []dfv1.CombinedEdge{}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
@@ -261,9 +261,10 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
-		for _, b := range testObj.GetFromBuffers() {
-			assert.Contains(t, argStr, fmt.Sprintf("%s=%s", b.Name, b.Type))
-		}
+		assert.Contains(t, argStr, strings.Join(testObj.OwnedBuffers(), ","))
+		assert.Contains(t, argStr, "--buckets=")
+		assert.Contains(t, argStr, strings.Join(testObj.GetFromBuckets(), ","))
+		assert.Contains(t, argStr, strings.Join(testObj.GetToBuckets(), ","))
 	})
 
 	t.Run("test user defined sink", func(t *testing.T) {
@@ -287,8 +288,8 @@ func Test_BuildPodSpec(t *testing.T) {
 				},
 			},
 		}
-		testObj.Spec.FromEdges = []dfv1.Edge{{From: "p1", To: "output"}}
-		testObj.Spec.ToEdges = []dfv1.Edge{}
+		testObj.Spec.FromEdges = []dfv1.CombinedEdge{{Edge: dfv1.Edge{From: "p1", To: "output"}}}
+		testObj.Spec.ToEdges = []dfv1.CombinedEdge{}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
@@ -331,12 +332,10 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
-		for _, b := range testObj.GetFromBuffers() {
-			assert.Contains(t, argStr, fmt.Sprintf("%s=%s", b.Name, b.Type))
-		}
-		for _, b := range testObj.GetToBuffers() {
-			assert.Contains(t, argStr, fmt.Sprintf("%s=%s", b.Name, b.Type))
-		}
+		assert.Contains(t, argStr, strings.Join(testObj.OwnedBuffers(), ","))
+		assert.Contains(t, argStr, "--buckets=")
+		assert.Contains(t, argStr, strings.Join(testObj.GetFromBuckets(), ","))
+		assert.Contains(t, argStr, strings.Join(testObj.GetToBuckets(), ","))
 	})
 
 	t.Run("test reduce udf", func(t *testing.T) {

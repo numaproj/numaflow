@@ -52,7 +52,7 @@ func TestBlackhole_Start(t *testing.T) {
 			},
 		},
 	}}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex.GetToBuffers()))
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
 	s, err := NewBlackhole(vertex, fromStep, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
@@ -98,9 +98,9 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 			},
 		},
 	}}
-	fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex1.GetToBuffers()))
+	fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex1.Spec.Name})
 	bh1, _ := NewBlackhole(vertex1, to1, fetchWatermark1, publishWatermark1)
-	fetchWatermark2, publishWatermark2 := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex2.GetToBuffers()))
+	fetchWatermark2, publishWatermark2 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex2.Spec.Name})
 	bh2, _ := NewBlackhole(vertex2, to2, fetchWatermark2, publishWatermark2)
 	bh1Stopped := bh1.Start()
 	bh2Stopped := bh2.Start()

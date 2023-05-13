@@ -40,9 +40,19 @@ func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, 
 
 	for _, edge := range pipeline.ListAllEdges() {
 		var wmFetcherList []fetch.Fetcher
-		bufferNames := v1alpha1.GenerateEdgeBufferNames(pipeline.Namespace, pipeline.Name, edge)
-		for _, bufferName := range bufferNames {
-			fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, bufferName)
+		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
+		bkns := []string{bucketName}
+		// TODO(one bucket): remove this once we have one bucket per edge
+		toVertex := pipeline.GetVertex(edge.To)
+		if toVertex.IsReduceUDF() {
+			partitions := pipeline.NumOfPartitions(edge.To)
+			for i := 0; i < partitions; i++ {
+				bkns = append(bkns, fmt.Sprintf("%s-%d", bucketName, i))
+			}
+		}
+		// end of TODO(one bucket)
+		for _, bucketName := range bkns {
+			fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 			}

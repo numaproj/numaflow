@@ -32,22 +32,19 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-func NewISBSvcBufferCreateCommand() *cobra.Command {
+func NewISBSvcCreateCommand() *cobra.Command {
 
 	var (
 		isbSvcType string
-		buffers    map[string]string
+		buffers    []string
+		buckets    []string
 	)
 
 	command := &cobra.Command{
-		Use:   "isbsvc-buffer-create",
-		Short: "Create ISB Service buffers",
+		Use:   "isbsvc-create",
+		Short: "Create buffers and buckets",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("isbsvc-buffer-create")
-			if len(buffers) == 0 {
-				cmd.HelpFunc()(cmd, args)
-				return fmt.Errorf("buffer list should not be empty")
-			}
+			logger := logging.NewLogger().Named("isbsvc-create")
 			pipelineName, defined := os.LookupEnv(v1alpha1.EnvPipelineName)
 			if !defined {
 				return fmt.Errorf("required environment variable '%s' not defined", v1alpha1.EnvPipelineName)
@@ -63,7 +60,7 @@ func NewISBSvcBufferCreateCommand() *cobra.Command {
 					return fmt.Errorf("failed to unmarshal ISB Svc config, %w", err)
 				}
 			}
-			opts := []isbsvc.BufferCreateOption{}
+			opts := []isbsvc.CreateOption{}
 			var isbsClient isbsvc.ISBService
 			var err error
 			ctx := logging.WithLogger(context.Background(), logger)
@@ -76,25 +73,22 @@ func NewISBSvcBufferCreateCommand() *cobra.Command {
 					logger.Errorw("Failed to get a ISB Service client.", zap.Error(err))
 					return err
 				}
-				opts = append(opts, isbsvc.WithBufferConfig(isbSvcConfig.JetStream.BufferConfig))
+				opts = append(opts, isbsvc.WithConfig(isbSvcConfig.JetStream.StreamConfig))
 			default:
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
 
-			bfs := []v1alpha1.Buffer{}
-			for k, v := range buffers {
-				bfs = append(bfs, v1alpha1.Buffer{Name: k, Type: v1alpha1.BufferType(v)})
-			}
-			if err = isbsClient.CreateBuffers(ctx, bfs, opts...); err != nil {
-				logger.Errorw("Failed to create buffers.", zap.Error(err))
+			if err = isbsClient.CreateBuffersAndBuckets(ctx, buffers, buckets, opts...); err != nil {
+				logger.Errorw("Failed to create buffers and buckets.", zap.Error(err))
 				return err
 			}
-			logger.Info("Created buffers successfully")
+			logger.Info("Created buffers and buckets successfully")
 			return nil
 		},
 	}
-	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "jetstream", "ISB Service type, e.g. jetstream")
-	command.Flags().StringToStringVar(&buffers, "buffers", map[string]string{}, "Buffers to create") // --buffers=a=so,c=si,e=ed
+	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "", "ISB Service type, e.g. jetstream")
+	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to create") // --buffers=a,b, --buffers=c
+	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to create") // --buckets=xxa,xxb --buckets=xxc
 	return command
 }
