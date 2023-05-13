@@ -1,4 +1,4 @@
-# Access Path
+# UI Access Path
 
 Currently, the base configuration will host the UI at the root `/` ie. `localhost:8443`. If a user needs to access the UI under a different path for a certain cluster, this can be achieved
 with this configuration.
