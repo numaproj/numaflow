@@ -79,7 +79,7 @@ func TestGetJSIsbSvcEnvVars(t *testing.T) {
 		JetStream: &dfv1.JetStreamConfig{
 			URL:          "xxx",
 			TLSEnabled:   false,
-			BufferConfig: "",
+			StreamConfig: "",
 			Auth: &dfv1.NatsAuth{
 				Basic: &dfv1.BasicAuth{
 					User: &corev1.SecretKeySelector{

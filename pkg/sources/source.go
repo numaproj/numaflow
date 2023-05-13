@@ -63,7 +63,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(sp.VertexInstance.Vertex.GetToBuffers()))
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToBuffers())
 	var sourcePublisherStores = store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	var err error
 
@@ -73,13 +73,19 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			writeOpts := []redisclient.Option{
 				redisclient.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 			}
-			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
+			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
+				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
+			} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
+				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
+			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
+				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+			} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
+				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffers := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e)
+			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
 			for _, buffer := range buffers {
 				group := buffer + "-group"
 				redisClient := redisclient.NewInClusterRedisClient()
@@ -89,9 +95,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		// we have only 1 in buffer ATM
-		fromBuffer := sp.VertexInstance.Vertex.GetFromBuffers()[0]
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, sp.VertexInstance, fromBuffer)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, sp.VertexInstance)
 		if err != nil {
 			return err
 		}
@@ -105,15 +109,21 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 				jetstreamisb.WithUsingWriteInfoAsRate(true),
 				jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 			}
-			if x := e.Limits; x != nil && x.BufferMaxLength != nil {
+			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
+				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
+			} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
+				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x := e.Limits; x != nil && x.BufferUsageLimit != nil {
+			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
+				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+			} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
+				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffers := dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e)
+			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
 			for _, buffer := range buffers {
-				streamName := isbsvc.JetStreamName(sp.VertexInstance.Vertex.Spec.PipelineName, buffer)
+				streamName := isbsvc.JetStreamName(buffer)
 				jetStreamClient := jsclient.NewInClusterJetStreamClient()
 				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
 				if err != nil {
@@ -232,8 +242,8 @@ func (sp *SourceProcessor) getSourcer(
 func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-		if edge.Parallelism != nil && *edge.Parallelism > 1 {
-			s := shuffle.NewShuffle(sp.VertexInstance.Vertex.GetName(), dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge))
+		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 {
+			s := shuffle.NewShuffle(sp.VertexInstance.Vertex.GetName(), dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions()))
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
@@ -247,17 +257,19 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider() forward.GoWhere {
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-				if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 				} else {
-					result = append(result, dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+					// TODO: need to shuffle for partitioned map vertex
+					result = append(result, dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
 				}
 			} else {
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-					if edge.Parallelism != nil && *edge.Parallelism > 1 { // Need to shuffle
+					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 					} else {
-						result = append(result, dfv1.GenerateEdgeBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge)...)
+						// TODO: need to shuffle for partitioned map vertex
+						result = append(result, dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
 					}
 				}
 			}

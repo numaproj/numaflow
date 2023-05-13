@@ -614,6 +614,25 @@ spec:
                       type: object
                     from:
                       type: string
+                    fromVertexLimits:
+                      properties:
+                        bufferMaxLength:
+                          format: int64
+                          type: integer
+                        bufferUsageLimit:
+                          format: int32
+                          type: integer
+                        readBatchSize:
+                          format: int64
+                          type: integer
+                        readTimeout:
+                          type: string
+                      type: object
+                    fromVertexPartitions:
+                      format: int32
+                      type: integer
+                    fromVertexType:
+                      type: string
                     limits:
                       properties:
                         bufferMaxLength:
@@ -633,9 +652,30 @@ spec:
                       type: integer
                     to:
                       type: string
+                    toVertexLimits:
+                      properties:
+                        bufferMaxLength:
+                          format: int64
+                          type: integer
+                        bufferUsageLimit:
+                          format: int32
+                          type: integer
+                        readBatchSize:
+                          format: int64
+                          type: integer
+                        readTimeout:
+                          type: string
+                      type: object
+                    toVertexPartitions:
+                      format: int32
+                      type: integer
+                    toVertexType:
+                      type: string
                   required:
                   - from
+                  - fromVertexType
                   - to
+                  - toVertexType
                   type: object
                 type: array
               imagePullSecrets:
@@ -1402,6 +1442,12 @@ spec:
                 type: string
               limits:
                 properties:
+                  bufferMaxLength:
+                    format: int64
+                    type: integer
+                  bufferUsageLimit:
+                    format: int32
+                    type: integer
                   readBatchSize:
                     format: int64
                     type: integer
@@ -1425,6 +1471,9 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
+              partitions:
+                format: int32
+                type: integer
               pipelineName:
                 type: string
               priority:
@@ -3091,6 +3140,25 @@ spec:
                       type: object
                     from:
                       type: string
+                    fromVertexLimits:
+                      properties:
+                        bufferMaxLength:
+                          format: int64
+                          type: integer
+                        bufferUsageLimit:
+                          format: int32
+                          type: integer
+                        readBatchSize:
+                          format: int64
+                          type: integer
+                        readTimeout:
+                          type: string
+                      type: object
+                    fromVertexPartitions:
+                      format: int32
+                      type: integer
+                    fromVertexType:
+                      type: string
                     limits:
                       properties:
                         bufferMaxLength:
@@ -3110,9 +3178,30 @@ spec:
                       type: integer
                     to:
                       type: string
+                    toVertexLimits:
+                      properties:
+                        bufferMaxLength:
+                          format: int64
+                          type: integer
+                        bufferUsageLimit:
+                          format: int32
+                          type: integer
+                        readBatchSize:
+                          format: int64
+                          type: integer
+                        readTimeout:
+                          type: string
+                      type: object
+                    toVertexPartitions:
+                      format: int32
+                      type: integer
+                    toVertexType:
+                      type: string
                   required:
                   - from
+                  - fromVertexType
                   - to
+                  - toVertexType
                   type: object
                 type: array
               tolerations:

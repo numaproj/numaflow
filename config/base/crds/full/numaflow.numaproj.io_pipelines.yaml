@@ -2951,6 +2951,12 @@ spec:
                       type: array
                     limits:
                       properties:
+                        bufferMaxLength:
+                          format: int64
+                          type: integer
+                        bufferUsageLimit:
+                          format: int32
+                          type: integer
                         readBatchSize:
                           format: int64
                           type: integer
@@ -2974,6 +2980,9 @@ spec:
                       additionalProperties:
                         type: string
                       type: object
+                    partitions:
+                      format: int32
+                      type: integer
                     priority:
                       format: int32
                       type: integer

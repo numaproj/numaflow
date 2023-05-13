@@ -52,7 +52,7 @@ func TestToLog_Start(t *testing.T) {
 			},
 		},
 	}}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex.GetToBuffers()))
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
 	s, err := NewToLog(vertex, fromStep, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
@@ -105,9 +105,9 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 			},
 		},
 	}}
-	fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex1.GetToBuffers()))
+	fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex1.Spec.Name})
 	logger1, _ := NewToLog(vertex1, to1, fetchWatermark1, publishWatermark1)
-	fetchWatermark2, publishWatermark2 := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(vertex2.GetToBuffers()))
+	fetchWatermark2, publishWatermark2 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex2.Spec.Name})
 	logger2, _ := NewToLog(vertex2, to2, fetchWatermark2, publishWatermark2)
 	logger1Stopped := logger1.Start()
 	logger2Stopped := logger2.Start()

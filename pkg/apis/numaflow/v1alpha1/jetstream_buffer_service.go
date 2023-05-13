@@ -305,7 +305,7 @@ type JetStreamConfig struct {
 	URL  string    `json:"url,omitempty" protobuf:"bytes,1,opt,name=url"`
 	Auth *NatsAuth `json:"auth,omitempty" protobuf:"bytes,2,opt,name=auth"`
 	// +optional
-	BufferConfig string `json:"bufferConfig,omitempty" protobuf:"bytes,3,opt,name=bufferConfig"`
+	StreamConfig string `json:"streamConfig,omitempty" protobuf:"bytes,3,opt,name=streamConfig"`
 	// TLS enabled or not
 	TLSEnabled bool `json:"tlsEnabled,omitempty" protobuf:"bytes,4,opt,name=tlsEnabled"`
 }

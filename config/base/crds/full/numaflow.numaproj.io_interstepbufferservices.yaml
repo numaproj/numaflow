@@ -2378,7 +2378,7 @@ spec:
                             - key
                             type: object
                         type: object
-                      bufferConfig:
+                      streamConfig:
                         type: string
                       tlsEnabled:
                         type: boolean

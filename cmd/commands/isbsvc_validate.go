@@ -32,22 +32,19 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
-func NewISBSvcBufferValidateCommand() *cobra.Command {
+func NewISBSvcValidateCommand() *cobra.Command {
 
 	var (
 		isbSvcType string
-		buffers    map[string]string
+		buffers    []string
+		buckets    []string
 	)
 
 	command := &cobra.Command{
-		Use:   "isbsvc-buffer-validate",
-		Short: "Validate ISB Service buffers",
+		Use:   "isbsvc-validate",
+		Short: "Validate ISB Service buffers and buckets",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("isbsvc-buffer-validate")
-			if len(buffers) == 0 {
-				cmd.HelpFunc()(cmd, args)
-				return fmt.Errorf("buffer not supplied")
-			}
+			logger := logging.NewLogger().Named("isbsvc-validate")
 			pipelineName, existing := os.LookupEnv(v1alpha1.EnvPipelineName)
 			if !existing {
 				return fmt.Errorf("environment variable %q not existing", v1alpha1.EnvPipelineName)
@@ -61,33 +58,30 @@ func NewISBSvcBufferValidateCommand() *cobra.Command {
 			case v1alpha1.ISBSvcTypeJetStream:
 				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName)
 				if err != nil {
-					logger.Errorw("Failed to get a ISB Service client.", zap.Error(err))
+					logger.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 					return err
 				}
 			default:
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type")
 			}
-			bfs := []v1alpha1.Buffer{}
-			for k, v := range buffers {
-				bfs = append(bfs, v1alpha1.Buffer{Name: k, Type: v1alpha1.BufferType(v)})
-			}
 			_ = wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func() (bool, error) {
-				if err = isbsClient.ValidateBuffers(ctx, bfs); err != nil {
-					logger.Infow("Buffers might have not been created yet, will retry if the limit is not reached", zap.Error(err))
+				if err = isbsClient.ValidateBuffersAndBuckets(ctx, buffers, buckets); err != nil {
+					logger.Infow("Buffers and buckets might have not been created yet, will retry if the limit is not reached", zap.Error(err))
 					return false, nil
 				}
 				return true, nil
 			})
 			if err != nil {
-				logger.Errorw("Failed buffer validation after retrying.", zap.Error(err))
+				logger.Errorw("Failed on buffer and bucket validation after retrying.", zap.Error(err))
 				return err
 			}
-			logger.Info("Validate buffers successfully")
+			logger.Info("Validate buffers and buckets successfully")
 			return nil
 		},
 	}
-	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "jetstream", "ISB Service type, e.g. jetstream")
-	command.Flags().StringToStringVar(&buffers, "buffers", map[string]string{}, "Buffers to validate") // --buffers=a=so,c=si,e=ed
+	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "", "ISB Service type, e.g. jetstream")
+	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to validate") // --buffers=a,b, --buffers=c
+	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to validate") // --buckets=xxa,xxb --buckets=xxc
 	return command
 }

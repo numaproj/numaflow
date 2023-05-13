@@ -231,7 +231,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	totalBufferLength := int64(0)
 	targetAvailableBufferLength := int64(0)
 	if !vertex.IsASource() { // Only non-source vertex has buffer to read
-		bufferName := vertex.GetFromBuffers()[0].Name
+		bufferName := vertex.OwnedBuffers()[0]
 		if bInfo, err := dClient.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
 			return fmt.Errorf("failed to get the read buffer information of vertex %q, %w", vertex.Name, err)
 		} else {
@@ -391,7 +391,7 @@ func (s *Scaler) hasBackPressure(pl dfv1.Pipeline, vertex dfv1.Vertex) (bool, bo
 loop:
 	for _, e := range downstreamEdges {
 		vertexKey := pl.Namespace + "/" + pl.Name + "-" + e.To
-		bufferNames := dfv1.GenerateEdgeBufferNames(pl.Namespace, pl.Name, e)
+		bufferNames := dfv1.GenerateBufferNames(pl.Namespace, pl.Name, e.To, pl.NumOfPartitions(e.To))
 		for _, bufferName := range bufferNames {
 			pendingVal, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
 			if !ok { // Vertex key has not been cached, skip it.

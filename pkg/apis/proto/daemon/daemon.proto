@@ -26,17 +26,15 @@ package daemon;
 // pending messages count, if it has unprocessed data etc which helps in pipeline/buffer deletion etc
 message BufferInfo {
   required string pipeline = 1;
-  required string fromVertex = 2;
-  required string toVertex = 3;
-  required string bufferName = 4;
-  required int64 pendingCount = 5;
-  required int64 ackPendingCount = 6;
+  required string bufferName = 2;
+  required int64 pendingCount = 3;
+  required int64 ackPendingCount = 4;
   // Total messages existing in the buffer, including pending, ackPending and acked.
-  required int64 totalMessages = 7;
-  required int64 bufferLength = 8;
-  required double bufferUsageLimit = 9;
-  required double bufferUsage = 10;
-  required bool isFull = 11;
+  required int64 totalMessages = 5;
+  required int64 bufferLength = 6;
+  required double bufferUsageLimit = 7;
+  required double bufferUsage = 8;
+  required bool isFull = 9;
 }
 
 // VertexMetrics is used to provide information about the vertex including processing rate.
