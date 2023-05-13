@@ -36,12 +36,15 @@ var (
 	}
 )
 
-func Start(insecure bool, port int, namespaced bool, managedNamespace string) {
+func Start(insecure bool, port int, namespaced bool, managedNamespace string, baseHref string) {
 	logger := logging.NewLogger().Named("server")
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.RedirectTrailingSlash = true
-	router.Use(static.Serve("/", static.LocalFile("./ui/build", true)))
+	router.Use(static.Serve(baseHref, static.LocalFile("./ui/build", true)))
+	router.NoRoute(func(c *gin.Context) {
+		c.File("./ui/build/index.html")
+	})
 	routes.Routes(router, routes.SystemInfo{ManagedNamespace: managedNamespace, Namespaced: namespaced})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
