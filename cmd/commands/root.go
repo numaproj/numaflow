@@ -44,4 +44,5 @@ func init() {
 	rootCmd.AddCommand(NewBuiltinTransformerCommand())
 	rootCmd.AddCommand(NewDaemonServerCommand())
 	rootCmd.AddCommand(NewServerCommand())
+	rootCmd.AddCommand(NewServerInitCommand())
 }

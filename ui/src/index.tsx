@@ -6,6 +6,7 @@ import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { createTheme } from "@material-ui/core/styles";
 import { ThemeProvider } from "@mui/material";
+import { getBaseHref } from "./utils";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
@@ -23,10 +24,9 @@ const theme = createTheme({
 
 });
 
-
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={getBaseHref()}>
       <ThemeProvider theme={theme}>
         <App />
       </ThemeProvider>
