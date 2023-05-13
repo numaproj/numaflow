@@ -1,8 +1,12 @@
 # Access Path
 
-There is an option to change the UI access path for the Numaflow server. 
+Currently, the base configuration will host the UI at the root `/` ie. `localhost:8443`. If a user needs to access the UI under a different path for a certain cluster, this can be achieved
+with this configuration.
 
-This can be configured in the `numaflow-server` deployment spec by adding the `--base-href` argument to the main and init containers.
+This can be configured in the `numaflow-server` deployment spec by adding the `--base-href` argument to the main and init containers. This will route requests from the root to the new
+preferred destination. 
+
+For example, we could port-forward the service and host at `localhost:8443/numaflow`. Note that this new access path will work with or without a trailing slash.
 
 The following example shows how to configure the access path for the UI to `/numaflow`:
 
