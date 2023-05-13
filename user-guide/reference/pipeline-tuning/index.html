@@ -1833,7 +1833,7 @@
 <span class="w">    </span><span class="nt">bufferMaxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30000</span>
 <span class="w">    </span><span class="nt">bufferUsageLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">85</span>
 </code></pre></div>
-<p>They also can be defined in a vertex or edge level, which will override the pipeline level settings.</p>
+<p>They also can be defined in a vertex level, which will override the pipeline level settings.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -1855,15 +1855,14 @@
 <span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
 <span class="w">      </span><span class="nt">limits</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;100&quot;</span>
+<span class="w">        </span><span class="nt">bufferMaxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20000</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;30000&quot; for the buffers owned by this vertex</span>
+<span class="w">        </span><span class="nt">bufferUsageLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">70</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;85&quot; for the buffers owned by this vertex</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
 <span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
-<span class="w">      </span><span class="nt">limits</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">bufferMaxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20000</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;30000&quot;</span>
-<span class="w">        </span><span class="nt">bufferUsageLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">70</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;85&quot;</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
