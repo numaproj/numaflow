@@ -1,19 +1,17 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: numaflow-server
+# UI Access Path
+
+Currently, the base configuration will host the UI at the root `/` ie. `localhost:8443`. If a user needs to access the UI under a different path for a certain cluster, this can be achieved
+with this configuration.
+
+This can be configured in the `numaflow-server` deployment spec by adding the `--base-href` argument to the main and init containers. This will route requests from the root to the new
+preferred destination. 
+
+For example, we could port-forward the service and host at `localhost:8443/numaflow`. Note that this new access path will work with or without a trailing slash.
+
+The following example shows how to configure the access path for the UI to `/numaflow`:
+
+```yaml
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/part-of: numaflow
-      app.kubernetes.io/component: numaflow-ux
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/part-of: numaflow
-        app.kubernetes.io/component: numaflow-ux
-    spec:
       serviceAccountName: numaflow-server-sa
       securityContext:
         runAsNonRoot: true
@@ -26,6 +24,7 @@ spec:
         image: quay.io/numaproj/numaflow:latest
         args:
         - "server-init"
+        - --base-href=/numaflow # include new path here
         imagePullPolicy: Always
         volumeMounts:
         - mountPath: /opt/numaflow
@@ -35,6 +34,7 @@ spec:
           image: quay.io/numaproj/numaflow:latest
           args:
           - "server"
+          - --base-href=/numaflow # include new path here
           imagePullPolicy: Always
           volumeMounts:
           - mountPath: /ui/build/runtime-env.js
@@ -48,17 +48,4 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          resources:
-            limits:
-              cpu: 500m
-              memory: 1024Mi
-            requests:
-              cpu: 100m
-              memory: 200Mi
-          livenessProbe:
-            httpGet:
-              path: /livez
-              port: 8443
-              scheme: HTTPS
-            initialDelaySeconds: 3
-            periodSeconds: 3
+```
