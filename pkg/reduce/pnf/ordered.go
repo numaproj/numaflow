@@ -166,6 +166,7 @@ func (op *OrderedProcessor) forward(ctx context.Context) {
 	var currElement *list.Element
 	var t *ForwardTask
 
+  outerLoop
 	for {
 		start := time.Now()
 		// block till we have some work
@@ -173,8 +174,7 @@ func (op *OrderedProcessor) forward(ctx context.Context) {
 		case <-op.taskDone:
 		case <-ctx.Done():
 			op.log.Infow("forward exiting while waiting for ForwardTask completion event", zap.Error(ctx.Err()))
-			op.Shutdown()
-			return
+			break outerLoop
 		}
 		op.log.Debugw("Time waited for a completion event to happen ", zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 
@@ -224,12 +224,13 @@ func (op *OrderedProcessor) forward(ctx context.Context) {
 				op.Unlock()
 			case <-ctx.Done():
 				op.log.Infow("Forward exiting while waiting on the head op the queue ForwardTask", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
-				op.Shutdown()
-				return
+				break outerLoop
 			}
 		}
 		op.log.Debugw("One iteration op the ordered tasks queue loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()), zap.Int("elements", n))
 	}
+	op.Shutdown()
+	return
 }
 
 func (op *OrderedProcessor) Shutdown() {
