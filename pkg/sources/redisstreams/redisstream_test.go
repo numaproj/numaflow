@@ -66,7 +66,7 @@ func TestProduceMsg(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Equal(t, tt.expectedBody, string(outMsg.Payload))
 			assert.Equal(t, len(tt.expectedKeys), len(outMsg.Keys))
-			for key, _ := range tt.expectedKeys {
+			for key := range tt.expectedKeys {
 				assert.Contains(t, outMsg.Keys, key)
 			}
 			assert.Equal(t, tt.expectedTime.Local(), outMsg.EventTime)
