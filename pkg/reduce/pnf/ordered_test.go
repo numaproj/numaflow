@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package readloop
+package pnf
 
 import (
 	"context"
@@ -45,6 +45,18 @@ func (f myForwardTest) WhereTo(_ []string, _ []string) ([]string, error) {
 
 func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
+}
+
+var keyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
 }
 
 func TestOrderedProcessing(t *testing.T) {
@@ -104,25 +116,26 @@ func TestOrderedProcessing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// clean out the task queue before we start a run
-			op := newOrderedForwarder(ctx, "reduce", "test-pipeline", 0)
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.
 			pbqManager, _ := pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
 				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+
+			op := NewOrderedProcessor(ctx, keyedVertex, identityReducer, toSteps, pbqManager, myForwardTest{}, pw, idleManager)
 			cCtx, cancelFn := context.WithCancel(ctx)
 			defer cancelFn()
 			for _, _partition := range tt.partitions {
 				kw := keyed.NewKeyedWindow(_partition.Start, _partition.End)
 				kw.AddSlot(_partition.Slot)
 
-				p, _ := pbqManager.CreateNewPBQ(ctx, _partition, kw)
-				t := op.schedulePnF(cCtx, identityReducer, p, _partition, toSteps, myForwardTest{}, pw, idleManager)
-				op.insertTask(t)
+				_, _ = pbqManager.CreateNewPBQ(ctx, _partition, kw)
+				t := op.SchedulePnF(cCtx, _partition)
+				op.InsertTask(t)
 			}
 			assert.Equal(t, op.taskQueue.Len(), tt.expectedBefore)
 			count := 0
 			for e := op.taskQueue.Front(); e != nil; e = e.Next() {
-				pfTask := e.Value.(*task)
+				pfTask := e.Value.(*ForwardTask)
 				assert.Equal(t, partitionFor(count), pfTask.pf.PartitionID)
 				count = count + 1
 			}
@@ -174,11 +187,11 @@ func partitionFor(i int) partition.ID {
 	return partition.ID{Start: time.UnixMilli(int64(base * i)), End: time.UnixMilli(int64(base * (i + 1)))}
 }
 
-func taskForPartition(op *orderedForwarder, partitionId partition.ID) *task {
+func taskForPartition(op *OrderedProcessor, partitionId partition.ID) *ForwardTask {
 	op.RLock()
 	defer op.RUnlock()
 	for e := op.taskQueue.Front(); e != nil; e = e.Next() {
-		pfTask := e.Value.(*task)
+		pfTask := e.Value.(*ForwardTask)
 		partitionKey := pfTask.pf.PartitionID
 		if partitionKey == partitionId {
 			return pfTask
