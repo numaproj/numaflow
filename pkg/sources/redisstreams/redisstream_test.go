@@ -29,7 +29,7 @@ func TestProduceMsg(t *testing.T) {
 		testCase     string
 		inMsg        redis.XMessage
 		expectedBody string
-		expectedKeys []string // in order
+		expectedKeys map[string]struct{} // essentially a Set
 		expectedTime time.Time
 	}{
 		{
@@ -42,7 +42,7 @@ func TestProduceMsg(t *testing.T) {
 				},
 			},
 			`{"humidity":"50","temperature":"60"}`,
-			[]string{"humidity", "temperature"},
+			map[string]struct{}{"humidity": {}, "temperature": {}},
 			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
 		},
 		{
@@ -54,7 +54,7 @@ func TestProduceMsg(t *testing.T) {
 				},
 			},
 			`{"humidity":"50"}`,
-			[]string{"humidity"},
+			map[string]struct{}{"humidity": {}},
 			time.Date(2018, 2, 18, 10, 58, 0, 106000000, time.UTC),
 		},
 	}
@@ -65,8 +65,9 @@ func TestProduceMsg(t *testing.T) {
 			assert.NotNil(t, outMsg)
 			assert.Nil(t, err)
 			assert.Equal(t, tt.expectedBody, string(outMsg.Payload))
-			for i, key := range tt.expectedKeys {
-				assert.Equal(t, key, outMsg.Keys[i])
+			assert.Equal(t, len(tt.expectedKeys), len(outMsg.Keys))
+			for key := range tt.expectedKeys {
+				assert.Contains(t, outMsg.Keys, key)
 			}
 			assert.Equal(t, tt.expectedTime.Local(), outMsg.EventTime)
 		})
