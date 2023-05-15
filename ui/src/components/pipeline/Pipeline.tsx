@@ -227,7 +227,7 @@ export function Pipeline() {
       } else {
         Promise.allSettled( [
               fetch(
-                  `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
+                `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
               )
                   .then((response) => {
                     if (response.ok) {

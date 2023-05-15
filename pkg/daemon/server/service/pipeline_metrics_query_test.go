@@ -47,28 +47,28 @@ func (m *mockHttpClient) Get(url string) (*http.Response, error) {
 type mockIsbSvcClient struct {
 }
 
-func (ms *mockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer v1alpha1.Buffer) (*isbsvc.BufferInfo, error) {
+func (ms *mockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer string) (*isbsvc.BufferInfo, error) {
 	return &isbsvc.BufferInfo{
-		Name:            buffer.Name,
+		Name:            buffer,
 		PendingCount:    10,
 		AckPendingCount: 15,
 		TotalMessages:   20,
 	}, nil
 }
 
-func (ms *mockIsbSvcClient) CreateBuffers(ctx context.Context, buffers []v1alpha1.Buffer, opts ...isbsvc.BufferCreateOption) error {
+func (ms *mockIsbSvcClient) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...isbsvc.CreateOption) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) DeleteBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
+func (ms *mockIsbSvcClient) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) ValidateBuffers(ctx context.Context, buffers []v1alpha1.Buffer) error {
+func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error) {
+func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bucketName string) (fetch.Fetcher, error) {
 	return nil, nil
 }
 
@@ -156,14 +156,13 @@ func TestGetBuffer(t *testing.T) {
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil)
 	assert.NoError(t, err)
 
-	bufferName := "numaflow-system-simple-pipeline-in-cat"
+	bufferName := "numaflow-system-simple-pipeline-cat-0"
 
 	req := &daemon.GetBufferRequest{Pipeline: &pipelineName, Buffer: &bufferName}
 
 	resp, err := pipelineMetricsQueryService.GetBuffer(context.Background(), req)
 	assert.NoError(t, err)
 	assert.Equal(t, *resp.Buffer.BufferUsage, 0.0006666666666666666)
-
 }
 
 func TestListBuffers(t *testing.T) {
@@ -186,9 +185,9 @@ func TestListBuffers(t *testing.T) {
 		},
 		Spec: v1alpha1.PipelineSpec{
 			Vertices: []v1alpha1.AbstractVertex{
-				{Name: "in"},
-				{Name: "cat"},
-				{Name: "out"},
+				{Name: "in", Source: &v1alpha1.Source{}},
+				{Name: "cat", UDF: &v1alpha1.UDF{}},
+				{Name: "out", Sink: &v1alpha1.Sink{}},
 			},
 			Edges: edges,
 		},

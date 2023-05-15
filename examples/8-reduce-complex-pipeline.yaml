@@ -19,6 +19,7 @@ spec:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
           image: quay.io/numaio/numaflow-go/map-even-odd
     - name: keyed-fixed-sum
+      partitions: 2
       udf:
         container:
           # compute the sum
@@ -71,7 +72,6 @@ spec:
       to: atoi
     - from: atoi
       to: keyed-fixed-sum
-      parallelism: 2
     - from: keyed-fixed-sum
       to: non-keyed-fixed-sum
     - from: non-keyed-fixed-sum

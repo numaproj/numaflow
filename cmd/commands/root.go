@@ -37,11 +37,12 @@ func Execute() {
 func init() {
 	rootCmd.AddCommand(NewControllerCommand())
 	rootCmd.AddCommand(NewProcessorCommand())
-	rootCmd.AddCommand(NewISBSvcBufferCreateCommand())
-	rootCmd.AddCommand(NewISBSvcBufferDeleteCommand())
-	rootCmd.AddCommand(NewISBSvcBufferValidateCommand())
+	rootCmd.AddCommand(NewISBSvcCreateCommand())
+	rootCmd.AddCommand(NewISBSvcDeleteCommand())
+	rootCmd.AddCommand(NewISBSvcValidateCommand())
 	rootCmd.AddCommand(NewBuiltinUDFCommand())
 	rootCmd.AddCommand(NewBuiltinTransformerCommand())
 	rootCmd.AddCommand(NewDaemonServerCommand())
 	rootCmd.AddCommand(NewServerCommand())
+	rootCmd.AddCommand(NewServerInitCommand())
 }

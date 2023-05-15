@@ -20,7 +20,7 @@ spec:
     bufferUsageLimit: 85
 ```
 
-They also can be defined in a vertex or edge level, which will override the pipeline level settings.
+They also can be defined in a vertex level, which will override the pipeline level settings.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -44,15 +44,14 @@ spec:
           name: cat
       limits:
         readBatchSize: 200 # It overrides the default limit "100"
+        bufferMaxLength: 20000 # It overrides the default limit "30000" for the buffers owned by this vertex
+        bufferUsageLimit: 70 # It overrides the default limit "85" for the buffers owned by this vertex
     - name: out
       sink:
         log: {}
   edges:
     - from: in
       to: cat
-      limits:
-        bufferMaxLength: 20000 # It overrides the default limit "30000"
-        bufferUsageLimit: 70 # It overrides the default limit "85"
     - from: cat
       to: out
 ```

@@ -83,34 +83,33 @@ func (ps *pipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.Li
 	resp := new(daemon.ListBuffersResponse)
 
 	buffers := []*daemon.BufferInfo{}
-	for _, edge := range ps.pipeline.ListAllEdges() {
-		bs := v1alpha1.GenerateEdgeBufferNames(ps.pipeline.Namespace, ps.pipeline.Name, edge)
-		for _, buffer := range bs {
-			bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: buffer, Type: v1alpha1.EdgeBuffer})
-			if err != nil {
-				return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
-			}
-			log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
-			bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, edge)
-			usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
-			if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
-				usage = x
-			}
-			b := &daemon.BufferInfo{
-				Pipeline:         &ps.pipeline.Name,
-				FromVertex:       pointer.String(fmt.Sprintf("%v", edge.From)),
-				ToVertex:         pointer.String(fmt.Sprintf("%v", edge.To)),
-				BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
-				PendingCount:     &bufferInfo.PendingCount,
-				AckPendingCount:  &bufferInfo.AckPendingCount,
-				TotalMessages:    &bufferInfo.TotalMessages,
-				BufferLength:     &bufferLength,
-				BufferUsageLimit: &bufferUsageLimit,
-				BufferUsage:      &usage,
-				IsFull:           pointer.Bool(usage >= bufferUsageLimit),
-			}
-			buffers = append(buffers, b)
+	for _, buffer := range ps.pipeline.GetAllBuffers() {
+		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, buffer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
 		}
+		log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
+		v := ps.pipeline.FindVertexWithBuffer(buffer)
+		if v == nil {
+			return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", buffer)
+		}
+		bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, *v)
+		usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
+		if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
+			usage = x
+		}
+		b := &daemon.BufferInfo{
+			Pipeline:         &ps.pipeline.Name,
+			BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
+			PendingCount:     &bufferInfo.PendingCount,
+			AckPendingCount:  &bufferInfo.AckPendingCount,
+			TotalMessages:    &bufferInfo.TotalMessages,
+			BufferLength:     &bufferLength,
+			BufferUsageLimit: &bufferUsageLimit,
+			BufferUsage:      &usage,
+			IsFull:           pointer.Bool(usage >= bufferUsageLimit),
+		}
+		buffers = append(buffers, b)
 	}
 	resp.Buffers = buffers
 	return resp, nil
@@ -118,23 +117,21 @@ func (ps *pipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.Li
 
 // GetBuffer is used to obtain one buffer information of a pipeline
 func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
-	bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, v1alpha1.Buffer{Name: *req.Buffer, Type: v1alpha1.EdgeBuffer})
+	bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, *req.Buffer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of buffer %q:%v", *req.Buffer, err)
 	}
-	edge := ps.pipeline.FindEdgeWithBuffer(*req.Buffer)
-	if edge == nil {
+	v := ps.pipeline.FindVertexWithBuffer(*req.Buffer)
+	if v == nil {
 		return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", *req.Buffer)
 	}
-	bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, *edge)
+	bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, *v)
 	usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
 	if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
 		usage = x
 	}
 	b := &daemon.BufferInfo{
 		Pipeline:         &ps.pipeline.Name,
-		FromVertex:       &edge.From,
-		ToVertex:         &edge.To,
 		BufferName:       req.Buffer,
 		PendingCount:     &bufferInfo.PendingCount,
 		AckPendingCount:  &bufferInfo.AckPendingCount,
@@ -168,8 +165,8 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	// replicas will have parallelism for reduce vertex else will be nil
 	// parallelism indicates replica count ~ multiple pods for a vertex here
 	obj := ps.pipeline.GetFromEdges(req.GetVertex())
-	if len(obj) > 0 && obj[0].Parallelism != nil {
-		podNum = int64(*obj[0].Parallelism)
+	if len(obj) > 0 && obj[0].DeprecatedParallelism != nil {
+		podNum = int64(*obj[0].DeprecatedParallelism)
 	}
 
 	// Get the headless service name
@@ -284,11 +281,11 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 	return resp, nil
 }
 
-func getBufferLimits(pl *v1alpha1.Pipeline, edge v1alpha1.Edge) (bufferLength int64, bufferUsageLimit float64) {
+func getBufferLimits(pl *v1alpha1.Pipeline, v v1alpha1.AbstractVertex) (bufferLength int64, bufferUsageLimit float64) {
 	plLimits := pl.GetPipelineLimits()
 	bufferLength = int64(*plLimits.BufferMaxLength)
 	bufferUsageLimit = float64(*plLimits.BufferUsageLimit) / 100
-	if x := edge.Limits; x != nil {
+	if x := v.Limits; x != nil {
 		if x.BufferMaxLength != nil {
 			bufferLength = int64(*x.BufferMaxLength)
 		}

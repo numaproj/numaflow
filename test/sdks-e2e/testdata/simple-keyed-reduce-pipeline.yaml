@@ -15,6 +15,7 @@ spec:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/evenodd
           image: quay.io/numaio/numaflow-java/even-odd
     - name: compute-sum
+      partitions: 2
       udf:
         container:
           # compute the sum, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/sum
@@ -37,6 +38,5 @@ spec:
       to: atoi
     - from: atoi
       to: compute-sum
-      parallelism: 2
     - from: compute-sum
       to: java-udsink

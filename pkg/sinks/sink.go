@@ -53,11 +53,12 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	defer cancel()
 	var reader isb.BufferReader
 	var err error
-	fromBufferName := u.VertexInstance.Vertex.GetFromBuffers()[0].Name
+	fromBufferName := u.VertexInstance.Vertex.OwnedBuffers()[0]
 
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromEdgeList(generic.GetBufferNameList(u.VertexInstance.Vertex.GetToBuffers()))
+	// For sinks, the buffer name is the vertex name
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{u.VertexInstance.Vertex.Spec.Name})
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -70,7 +71,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readOptions...)
 	case dfv1.ISBSvcTypeJetStream:
-		streamName := isbsvc.JetStreamName(u.VertexInstance.Vertex.Spec.PipelineName, fromBufferName)
+		streamName := isbsvc.JetStreamName(fromBufferName)
 		readOptions := []jetstreamisb.ReadOption{
 			jetstreamisb.WithUsingAckInfoAsRate(true),
 		}
@@ -78,9 +79,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		// build watermark progressors
-		// we have only 1 in buffer ATM
-		fromBuffer := u.VertexInstance.Vertex.GetFromBuffers()[0]
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, fromBuffer)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
 		if err != nil {
 			return err
 		}

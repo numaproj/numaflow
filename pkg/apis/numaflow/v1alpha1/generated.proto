@@ -158,6 +158,11 @@ message AbstractVertex {
   // List of sidecar containers belonging to the pod.
   // +optional
   repeated k8s.io.api.core.v1.Container sidecars = 12;
+
+  // Number of partitions of the vertex owned buffers.
+  // It applies to udf and sink vertices only.
+  // +optional
+  optional int32 partitions = 13;
 }
 
 message Authorization {
@@ -182,16 +187,38 @@ message BasicAuth {
 message Blackhole {
 }
 
-message Buffer {
-  optional string name = 1;
-
-  optional string type = 2;
-}
-
 message BufferServiceConfig {
   optional RedisConfig redis = 1;
 
   optional JetStreamConfig jetstream = 2;
+}
+
+// CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.
+// It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod,
+// it knows the properties of the connected vertices, for example, how many partitioned buffers I should write
+// to, what is the write buffer length, etc.
+message CombinedEdge {
+  optional Edge edge = 1;
+
+  // From vertex type.
+  optional string fromVertexType = 2;
+
+  // The number of partitions of the from vertex, if not provided, the default value is set to "1".
+  // +optional
+  optional int32 fromVertexPartitions = 3;
+
+  // +optional
+  optional VertexLimits fromVertexLimits = 4;
+
+  // To vertex type.
+  optional string toVertexType = 5;
+
+  // The number of partitions of the to vertex, if not provided, the default value is set to "1".
+  // +optional
+  optional int32 toVertexPartitions = 6;
+
+  // +optional
+  optional VertexLimits toVertexLimits = 7;
 }
 
 // Container is used to define the container properties for user defined functions, sinks, etc.
@@ -260,6 +287,18 @@ message DaemonTemplate {
   optional ContainerTemplate initContainerTemplate = 4;
 }
 
+message DeprecatedEdgeLimits {
+  // BufferMaxLength is used to define the max length of a buffer.
+  // It overrides the settings from pipeline limits.
+  // +optional
+  optional uint64 bufferMaxLength = 1;
+
+  // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+  // It overrides the settings from pipeline limits.
+  // +optional
+  optional uint32 bufferUsageLimit = 2;
+}
+
 message Edge {
   optional string from = 1;
 
@@ -269,10 +308,14 @@ message Edge {
   // +optional
   optional ForwardConditions conditions = 3;
 
+  // Deprecated, use vertex.spec.limits instead.
+  //
   // Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.
   // +optional
-  optional EdgeLimits limits = 4;
+  optional DeprecatedEdgeLimits limits = 4;
 
+  // Deprecated, use vertex.spec.partitions instead.
+  //
   // Parallelism is only effective when the "to" vertex is a reduce vertex,
   // if it's not provided, the default value is set to "1".
   // Parallelism is ignored when the "to" vertex is not a reduce vertex.
@@ -285,18 +328,6 @@ message Edge {
   // +kubebuilder:validation:Enum=retryUntilSuccess;discardLatest
   // +optional
   optional string onFull = 6;
-}
-
-message EdgeLimits {
-  // BufferMaxLength is used to define the max length of a buffer.
-  // It overrides the settings from pipeline limits.
-  // +optional
-  optional uint64 bufferMaxLength = 1;
-
-  // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-  // It overrides the settings from pipeline limits.
-  // +optional
-  optional uint32 bufferUsageLimit = 2;
 }
 
 // FixedWindow describes a fixed window
@@ -604,7 +635,7 @@ message JetStreamConfig {
   optional NatsAuth auth = 2;
 
   // +optional
-  optional string bufferConfig = 3;
+  optional string streamConfig = 3;
 
   // TLS enabled or not
   optional bool tlsEnabled = 4;
@@ -1195,6 +1226,16 @@ message VertexLimits {
   // It overrides the settings from pipeline limits.
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
+
+  // BufferMaxLength is used to define the max length of a buffer.
+  // It overrides the settings from pipeline limits.
+  // +optional
+  optional uint64 bufferMaxLength = 3;
+
+  // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+  // It overrides the settings from pipeline limits.
+  // +optional
+  optional uint32 bufferUsageLimit = 4;
 }
 
 // +kubebuilder:object:root=true
@@ -1218,10 +1259,10 @@ message VertexSpec {
   optional int32 replicas = 4;
 
   // +optional
-  repeated Edge fromEdges = 5;
+  repeated CombinedEdge fromEdges = 5;
 
   // +optional
-  repeated Edge toEdges = 6;
+  repeated CombinedEdge toEdges = 6;
 
   // Watermark indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.
   // +kubebuilder:default={"disabled": false}

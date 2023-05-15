@@ -19,31 +19,30 @@ package isbsvc
 import (
 	"context"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 // ISBService is an interface used to do the operations on ISBSvc
 type ISBService interface {
-	CreateBuffers(ctx context.Context, buffers []dfv1.Buffer, opts ...BufferCreateOption) error
-	DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error
-	ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error
-	GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*BufferInfo, error)
-	CreateWatermarkFetcher(ctx context.Context, bufferName string) (fetch.Fetcher, error)
+	CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...CreateOption) error
+	DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error
+	ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error
+	GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error)
+	CreateWatermarkFetcher(ctx context.Context, bucketName string) (fetch.Fetcher, error)
 }
 
-// bufferCreateOptions describes the options for creating buffers
-type bufferCreateOptions struct {
-	// bufferConfig is configuration for the to be created buffer
-	bufferConfig string
+// createOptions describes the options for creating buffers and buckets
+type createOptions struct {
+	// config is configuration for the to be created buffers and buckets
+	config string
 }
 
-type BufferCreateOption func(*bufferCreateOptions) error
+type CreateOption func(*createOptions) error
 
-// WithBufferConfig sets buffer config option
-func WithBufferConfig(conf string) BufferCreateOption {
-	return func(o *bufferCreateOptions) error {
-		o.bufferConfig = conf
+// WithConfig sets buffer and bucket config option
+func WithConfig(conf string) CreateOption {
+	return func(o *createOptions) error {
+		o.config = conf
 		return nil
 	}
 }
