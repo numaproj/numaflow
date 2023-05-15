@@ -230,7 +230,6 @@ outerLoop:
 		op.log.Debugw("One iteration op the ordered tasks queue loop took ", zap.Int64("duration(ms)", time.Since(startLoop).Milliseconds()), zap.Int("elements", n))
 	}
 	op.Shutdown()
-	return
 }
 
 func (op *OrderedProcessor) Shutdown() {
