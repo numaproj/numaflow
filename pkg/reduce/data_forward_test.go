@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -267,9 +268,12 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	// create new fixed window of (windowTime)
 	window := fixed.NewFixed(windowTime)
 
+	idleManager := wmb.NewIdleManager(len(toBuffer))
+	op := pnf.NewOrderedProcessor(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager)
+
 	var reduceDataForwarder *DataForward
-	reduceDataForwarder, err = NewDataForward(child, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher,
-		window, WithReadBatchSize(10))
+	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher,
+		window, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	go reduceDataForwarder.Start()
@@ -351,10 +355,12 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 
 	// create a fixed window of 5s
 	window := fixed.NewFixed(5 * time.Second)
+	idleManager := wmb.NewIdleManager(len(toBuffers))
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffers, pbqManager, CounterReduceTest{}, f, publisherMap,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffers, pbqManager, CounterReduceTest{}, f, publisherMap,
+		window, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -549,10 +555,12 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create a fixed window of 60s
 	window := fixed.NewFixed(60 * time.Second)
+	idleManager := wmb.NewIdleManager(len(toBuffer))
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
+		window, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -623,10 +631,13 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	// create a fixed window of 10s
 	window := fixed.NewFixed(5 * time.Second)
 
+	idleManager := wmb.NewIdleManager(len(toBuffer))
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager)
+
 	var reduceDataForward *DataForward
 	allowedLatency := 1000
-	reduceDataForward, err = NewDataForward(ctx, CounterReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
-		window, WithReadBatchSize(int64(batchSize)),
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
+		window, idleManager, op, WithReadBatchSize(int64(batchSize)),
 		WithAllowedLateness(time.Duration(allowedLatency)*time.Millisecond),
 	)
 	assert.NoError(t, err)
@@ -697,10 +708,12 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 	// create a fixed window of 2 minutes
 	window := fixed.NewFixed(2 * time.Minute)
+	idleManager := wmb.NewIdleManager(len(toBuffer))
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+		window, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -771,10 +784,12 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
+	idleManager := wmb.NewIdleManager(len(toBuffer))
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, MaxReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+		window, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -845,10 +860,12 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
-	var reduceDataForward *DataForward
+	idleManager := wmb.NewIdleManager(len(toBuffer))
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
 
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
-		window, WithReadBatchSize(10))
+	var reduceDataForward *DataForward
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+		window, idleManager, op, WithReadBatchSize(10))
 
 	assert.NoError(t, err)
 
@@ -940,9 +957,12 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
+	idleManager := wmb.NewIdleManager(len(toBuffer))
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
+
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, SumReduceTest{}, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
-		window, WithReadBatchSize(10))
+	reduceDataForward, err = NewDataForward(ctx, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+		window, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -1021,9 +1041,12 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
+	idleManager := wmb.NewIdleManager(len(toBuffer))
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
+
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(cctx, SumReduceTest{}, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
-		window, WithReadBatchSize(1))
+	reduceDataForward, err = NewDataForward(cctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+		window, idleManager, op, WithReadBatchSize(1))
 	assert.NoError(t, err)
 
 	// start the forwarder
@@ -1284,7 +1307,7 @@ func publishMessagesAllowedLatency(ctx context.Context, startTime int, message i
 
 	// dummy messages to
 	//  - start a new window
-	//  - make sure readloop can
+	//  - make sure data forward can
 	//    read a message,
 	//    get the `6000000` watermark,
 	//    and close the first window.

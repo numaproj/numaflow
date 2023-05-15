@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package pnf processes and then forwards messages belonging to a window. It reads the data from PBQ (which is populated
-// by the `readloop`), calls the UDF reduce function, and then forwards to the next ISB. After a successful forward, it
+// by the `data forwarder`), calls the UDF reduce function, and then forwards to the next ISB. After a successful forward, it
 // invokes `GC` to clean up the PBQ. Since pnf is a reducer, it mutates the watermark. The watermark after the pnf will
 // be the end time of the window.
 package pnf
@@ -44,9 +44,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-// ProcessAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
+// processAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
-type ProcessAndForward struct {
+type processAndForward struct {
 	vertexName       string
 	pipelineName     string
 	vertexReplica    int32
@@ -61,8 +61,8 @@ type ProcessAndForward struct {
 	idleManager      *wmb.IdleManager
 }
 
-// NewProcessAndForward will return a new ProcessAndForward instance
-func NewProcessAndForward(ctx context.Context,
+// newProcessAndForward will return a new processAndForward instance
+func newProcessAndForward(ctx context.Context,
 	vertexName string,
 	pipelineName string,
 	vr int32,
@@ -72,8 +72,8 @@ func NewProcessAndForward(ctx context.Context,
 	toBuffers map[string]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
-	idleManager *wmb.IdleManager) *ProcessAndForward {
-	return &ProcessAndForward{
+	idleManager *wmb.IdleManager) *processAndForward {
+	return &processAndForward{
 		vertexName:       vertexName,
 		pipelineName:     pipelineName,
 		vertexReplica:    vr,
@@ -89,7 +89,7 @@ func NewProcessAndForward(ctx context.Context,
 }
 
 // Process method reads messages from the supplied PBQ, invokes UDF to reduce the result.
-func (p *ProcessAndForward) Process(ctx context.Context) error {
+func (p *processAndForward) Process(ctx context.Context) error {
 	var err error
 	startTime := time.Now()
 	defer reduceProcessTime.With(map[string]string{
@@ -104,7 +104,7 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 }
 
 // Forward writes messages to the ISBs, publishes watermark, and invokes GC on PBQ.
-func (p *ProcessAndForward) Forward(ctx context.Context) error {
+func (p *processAndForward) Forward(ctx context.Context) error {
 	// extract window end time from the partitionID, which will be used for watermark
 	startTime := time.Now()
 	defer reduceForwardTime.With(map[string]string{
@@ -164,7 +164,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.
-func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
+func (p *processAndForward) whereToStep() map[string][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][]isb.Message)
 
@@ -199,7 +199,7 @@ func (p *ProcessAndForward) whereToStep() map[string][]isb.Message {
 
 // writeToBuffer writes to the ISBs.
 // TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
-func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
+func (p *processAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var (
 		writeCount int
 		writeBytes float64
@@ -275,7 +275,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 }
 
 // publishWM publishes the watermark to each edge.
-func (p *ProcessAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][]isb.Offset) {
+func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][]isb.Offset) {
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.

@@ -57,11 +57,11 @@ const (
 	publisherOTKeyspace = testPipelineName + "_" + testProcessorEntity + "_%s_" + "OT"
 )
 
-type myForwardTest struct {
+type forwardTest struct {
 	buffers []string
 }
 
-func (f myForwardTest) WhereTo(keys []string, _ []string) ([]string, error) {
+func (f forwardTest) WhereTo(keys []string, _ []string) ([]string, error) {
 	if strings.Compare(keys[len(keys)-1], "test-forward-one") == 0 {
 		return []string{"buffer1"}, nil
 	} else if strings.Compare(keys[len(keys)-1], "test-forward-all") == 0 {
@@ -70,7 +70,7 @@ func (f myForwardTest) WhereTo(keys []string, _ []string) ([]string, error) {
 	return []string{}, nil
 }
 
-func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f forwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -81,7 +81,7 @@ type PayloadForTest struct {
 
 func TestProcessAndForward_Process(t *testing.T) {
 	// 1. create a pbq which has to be passed to the process method
-	// 2. pass the pbqReader interface and create a new ProcessAndForward instance
+	// 2. pass the pbqReader interface and create a new processAndForward instance
 	// 3. mock the grpc client methods
 	// 4. assert to check if the process method is returning the result
 
@@ -160,7 +160,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
 
 	// create pf using key and reducer
-	pf := NewProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string]isb.BufferWriter, 1), myForwardTest{}, publishWatermark, wmb.NewIdleManager(1))
+	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string]isb.BufferWriter, 1), forwardTest{}, publishWatermark, wmb.NewIdleManager(1))
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)
@@ -208,7 +208,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		name       string
 		id         partition.ID
 		buffers    []*simplebuffer.InMemoryBuffer
-		pf         ProcessAndForward
+		pf         processAndForward
 		otStores   map[string]wmstore.WatermarkKVStorer
 		expected   []bool
 		wmExpected map[string]wmb.WMB
@@ -352,7 +352,7 @@ func TestWriteToBuffer(t *testing.T) {
 	}
 }
 
-func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string]isb.BufferWriter) (ProcessAndForward, map[string]wmstore.WatermarkKVStorer) {
+func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string]isb.BufferWriter) (processAndForward, map[string]wmstore.WatermarkKVStorer) {
 
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
@@ -392,11 +392,11 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	for k := range toBuffers {
 		buffers = append(buffers, k)
 	}
-	whereto := &myForwardTest{
+	whereto := &forwardTest{
 		buffers: buffers,
 	}
 
-	pf := ProcessAndForward{
+	pf := processAndForward{
 		PartitionID:      testPartition,
 		UDF:              nil,
 		result:           result,
