@@ -166,7 +166,7 @@ func (op *OrderedProcessor) forward(ctx context.Context) {
 	var currElement *list.Element
 	var t *ForwardTask
 
-  outerLoop
+outerLoop:
 	for {
 		start := time.Now()
 		// block till we have some work
