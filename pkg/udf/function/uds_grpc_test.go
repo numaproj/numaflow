@@ -358,7 +358,10 @@ func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {
 		}
 
 		mockMapStreamClient.EXPECT().Recv().Return(
-			nil, errors.New("mock error for map")).AnyTimes()
+			&functionpb.DatumResponse{
+				Keys:  []string{"test_error_key"},
+				Value: []byte(`forward_message`),
+			}, errors.New("mock error for map")).AnyTimes()
 
 		mockClient.EXPECT().MapStreamFn(gomock.Any(), &rpcMsg{msg: req}).Return(mockMapStreamClient, nil)
 
