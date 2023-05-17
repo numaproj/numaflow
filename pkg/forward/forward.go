@@ -114,6 +114,10 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 		}
 	}
 
+	if isdf.opts.udfStreaming && isdf.opts.readBatchSize != 1 {
+		return nil, fmt.Errorf("batch size is not 1 with UDF streaming")
+	}
+
 	return &isdf, nil
 }
 
@@ -243,15 +247,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	udfStreaming := isdf.opts.udfStreaming
-	if udfStreaming {
-		if len(readMessages) != 1 {
-			isdf.opts.logger.Errorw("batch size is not 1 with UDF streaming")
-			isdf.fromBuffer.NoAck(ctx, readOffsets)
-			return
-		}
-	}
-
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][]isb.Message)
 	for buffer := range isdf.toBuffers {
@@ -281,7 +276,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	writeOffsets := make(map[string][]isb.Offset, len(messageToStep))
-	if !udfStreaming {
+	if !isdf.opts.udfStreaming {
 		// create a pool of UDF Processors
 		var wg sync.WaitGroup
 		for i := 0; i < isdf.opts.udfConcurrency; i++ {
@@ -505,18 +500,25 @@ func (isdf *InterStepDataForward) streamMessage(
 
 			udfProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
 				"buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))
+			// forward the message to the edge buffer (could be multiple edges)
+			err := isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
+
+			if err != nil {
+				isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
+				isdf.fromBuffer.NoAck(ctx, readOffsets)
+				return true
+			}
+		}
+	} else {
+		// Even not data messages, forward the message to the edge buffer (could be multiple edges)
+		err := isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
+
+		if err != nil {
+			isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
+			isdf.fromBuffer.NoAck(ctx, readOffsets)
+			return true
 		}
 	}
-
-	// forward the message to the edge buffer (could be multiple edges)
-	err := isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
-
-	if err != nil {
-		isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
-		isdf.fromBuffer.NoAck(ctx, readOffsets)
-		return true
-	}
-
 	return false
 }
 

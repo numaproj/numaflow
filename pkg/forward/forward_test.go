@@ -1095,7 +1095,7 @@ func TestWriteToBuffer(t *testing.T) {
 		},
 		{
 			name:          "test-discard-latest",
-			batchSize:     10,
+			batchSize:     1,
 			strategy:      dfv1.DiscardLatest,
 			streamEnabled: true,
 			// should not throw any error as we drop messages and finish writing before context is cancelled
@@ -1103,7 +1103,7 @@ func TestWriteToBuffer(t *testing.T) {
 		},
 		{
 			name:          "test-retry-until-success",
-			batchSize:     10,
+			batchSize:     1,
 			strategy:      dfv1.RetryUntilSuccess,
 			streamEnabled: true,
 			// should throw context closed error as we keep retrying writing until context is cancelled
