@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { NamespaceRowContent } from "./partials/NamespaceRowContent";
-import "./style.css";
 import {
   TableBody,
   Table,
@@ -23,6 +22,8 @@ import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch
 import { useNamespaceListFetch } from "../../../utils/fetchWrappers/namespaceListFetch";
 import { SetNamespaceList, SetStore } from "../../../localStore/SetStore";
 import { GetStore } from "../../../localStore/GetStore";
+
+import "./style.css";
 
 export function Namespaces() {
   const [nsCookie, setNsCookie] = useState<string[]>([]);
@@ -140,7 +141,7 @@ export function Namespaces() {
                     id="curr_ns"
                     options={nsCombined}
                     groupBy={(option) => option.type}
-                    sx={{ width: "20rem", margin: "0 1rem" }}
+                    sx={{ width: "20rem", mx: "1rem" }}
                     PopperComponent={CustomDropDownPopper}
                     value={value}
                     onChange={(e, v) => {

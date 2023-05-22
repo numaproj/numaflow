@@ -1,10 +1,17 @@
 import { Namespaces } from "./index";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { useNamespaceFetch } from "../../../utils/fetchWrappers/namespaceFetch";
 import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
 import { useNamespaceListFetch } from "../../../utils/fetchWrappers/namespaceListFetch";
 import { GetStore } from "../../../localStore/GetStore";
 import { BrowserRouter } from "react-router-dom";
+import { wait } from "@testing-library/user-event/dist/utils";
 
 jest.mock("../../../utils/fetchWrappers/namespaceFetch");
 const mockedUseNamespaceFetch = useNamespaceFetch as jest.MockedFunction<
@@ -85,12 +92,50 @@ describe("Namespaces screen", () => {
       error: "error occurred",
       loading: false,
     });
-    mockedGetStore.mockReturnValue("default");
     mockedGetStore.mockReturnValue(null);
     render(
       <BrowserRouter>
         <Namespaces />
       </BrowserRouter>
     );
+  });
+
+  it("Triggers Autocomplete onchange", async () => {
+    mockedUseNamespaceFetch.mockReturnValue({
+      pipelines: ["simple-pipeline"],
+      error: false,
+      loading: false,
+    });
+    mockedUseSystemInfoFetch.mockReturnValue({
+      systemInfo: { namespaced: false, managedNamespace: "abc" },
+      error: false,
+      loading: false,
+    });
+    mockedUseNamespaceListFetch.mockReturnValue({
+      namespaceList: undefined,
+      error: "error occurred",
+      loading: false,
+    });
+    mockedGetStore.mockReturnValue('["abc1"]');
+    render(
+      <BrowserRouter>
+        <Namespaces />
+      </BrowserRouter>
+    );
+    const autocomplete = screen.getByTestId("namespace-input");
+    const input = within(autocomplete).getByRole("combobox");
+    autocomplete.focus();
+    fireEvent.change(input, { target: { value: "abc1" } });
+    await wait();
+    fireEvent.keyDown(autocomplete, { key: "ArrowDown" });
+    await wait();
+    fireEvent.keyDown(autocomplete, { key: "Enter" });
+    await wait();
+    expect(input).toHaveValue("abc1");
+
+    autocomplete.focus();
+    fireEvent.keyPress(input, { key: "Enter", code: 13, charCode: 13 });
+    await wait();
+    expect(input).toHaveValue("abc1");
   });
 });

@@ -1,10 +1,10 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import Box from "@mui/material/Box";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import { useNamespaceFetch } from "../../../../../utils/fetchWrappers/namespaceFetch";
 import { notifyError } from "../../../../../utils/error";
-import { useEffect } from "react";
 import { NamespaceRowContentProps } from "../../../../../types/declarations/namespace";
 
 export function NamespaceRowContent(props: NamespaceRowContentProps) {
@@ -41,7 +41,7 @@ export function NamespaceRowContent(props: NamespaceRowContentProps) {
                       fontSize: "0.8rem",
                       color: "#0000008a",
                       width: "fit-content",
-                      marginLeft: "1rem",
+                      mx: "1rem",
                     }}
                   >
                     Pipelines
