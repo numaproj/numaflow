@@ -269,7 +269,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			// over allocating to have a predictable pattern
 			messageToStep[buffer] = make([]isb.Message, 0, len(dataMessages))
 		}
-		writeOffsets = make(map[string][]isb.Offset, len(messageToStep))
 
 		// udf concurrent processing request channel
 		udfCh := make(chan *readWriteMessagePair)
