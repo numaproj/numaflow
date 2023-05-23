@@ -25,6 +25,7 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
+	"github.com/numaproj/numaflow-go/pkg/function/client"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -98,13 +99,28 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 
 	datumList, err := u.client.MapFn(ctx, d)
 	if err != nil {
-		return nil, ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-			InternalErr: InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
+		udfErr, _ := client.FromError(err)
+		switch udfErr.ErrorKind() {
+		case client.Retryable:
+		// TODO
+		case client.NonRetryable:
+			return nil, ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+		default:
+			return nil, ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
 		}
 	}
 
@@ -180,13 +196,38 @@ readLoop:
 	wg.Wait()
 
 	if err != nil {
-		return nil, ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-			InternalErr: InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
+		// if any error happens in reduce
+		// will exit and restart the numa container
+		udfErr, _ := client.FromError(err)
+		switch udfErr.ErrorKind() {
+		case client.Retryable:
+			// TODO: currently we don't handle retryable errors for reduce
+			return nil, ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+		case client.NonRetryable:
+			return nil, ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+		default:
+			return nil, ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
 		}
 	}
 

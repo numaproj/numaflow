@@ -194,3 +194,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 )
+
+replace github.com/numaproj/numaflow-go => /Users/jyu6/work/jyu6/numaflow-go

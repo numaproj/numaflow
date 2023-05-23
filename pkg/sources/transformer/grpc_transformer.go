@@ -93,13 +93,28 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 
 	datumList, err := u.client.MapTFn(ctx, d)
 	if err != nil {
-		return nil, function.ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("gRPC client.MapTFn failed, %s", err),
-			InternalErr: function.InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
+		udfErr, _ := client.FromError(err)
+		switch udfErr.ErrorKind() {
+		case client.Retryable:
+		// TODO
+		case client.NonRetryable:
+			return nil, function.ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+				InternalErr: function.InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+		default:
+			return nil, function.ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+				InternalErr: function.InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
 		}
 	}
 
