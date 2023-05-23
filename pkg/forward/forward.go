@@ -480,6 +480,7 @@ func (isdf *InterStepDataForward) streamMessage(
 
 			// update toBuffers
 			if err := isdf.whereToStep(&writeMessage, messageToStep, dataMessages[0]); err != nil {
+				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
 				return nil, err
 			}
 
