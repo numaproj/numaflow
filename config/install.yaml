@@ -7346,8 +7346,6 @@ spec:
                           required:
                           - window
                           type: object
-                        mapStream:
-                          type: boolean
                       type: object
                     volumes:
                       items:
@@ -11613,8 +11611,6 @@ spec:
                     required:
                     - window
                     type: object
-                  mapStream:
-                    type: boolean
                 type: object
               volumes:
                 items:

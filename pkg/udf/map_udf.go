@@ -19,6 +19,7 @@ package udf
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/numaproj/numaflow-go/pkg/function/client"
@@ -132,8 +133,13 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	}()
 	log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
 
+	udfStream := u.VertexInstance.Vertex.Spec.Metadata.Annotations[dfv1.UDFMapStreamKey]
+	enableUDFStream, err := strconv.ParseBool(udfStream)
+	if err != nil {
+		return fmt.Errorf("failed to parse UDF map streaming metadata, %w", err)
+	}
 	opts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeMapUDF), forward.WithLogger(log),
-		forward.WithUDFStreaming(u.VertexInstance.Vertex.Spec.UDF.MapStream)}
+		forward.WithUDFStreaming(enableUDFStream)}
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))

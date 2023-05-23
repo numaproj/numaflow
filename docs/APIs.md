@@ -4568,18 +4568,6 @@ Description
 <em>(Optional)</em>
 </td>
 </tr>
-<tr>
-<td>
-<code>mapStream</code></br> <em> bool </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-MapStream specifies whether to enable streaming in map udf. If it is not
-provided, the default value is set to false.
-</p>
-</td>
-</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.UDSink">

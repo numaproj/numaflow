@@ -247,20 +247,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	// create space for writeMessages specific to each step as we could forward to all the steps too.
-	var messageToStep = make(map[string][]isb.Message)
-	for buffer := range isdf.toBuffers {
-		// over allocating to have a predictable pattern
-		messageToStep[buffer] = make([]isb.Message, 0, len(dataMessages))
-	}
-
-	// udf concurrent processing request channel
-	udfCh := make(chan *readWriteMessagePair)
-	// udfResults stores the results after UDF processing for all read messages. It indexes
-	// a read message to the corresponding write message
-	udfResults := make([]readWriteMessagePair, len(dataMessages))
-	// applyUDF, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
-
 	var processorWM wmb.Watermark
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
 		// for source vertex, the udf is the source data transformer.
@@ -275,8 +261,23 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
 	}
 
-	writeOffsets := make(map[string][]isb.Offset, len(messageToStep))
+	var writeOffsets map[string][]isb.Offset
 	if !isdf.opts.udfStreaming {
+		// create space for writeMessages specific to each step as we could forward to all the steps too.
+		var messageToStep = make(map[string][]isb.Message)
+		for buffer := range isdf.toBuffers {
+			// over allocating to have a predictable pattern
+			messageToStep[buffer] = make([]isb.Message, 0, len(dataMessages))
+		}
+		writeOffsets = make(map[string][]isb.Offset, len(messageToStep))
+
+		// udf concurrent processing request channel
+		udfCh := make(chan *readWriteMessagePair)
+		// udfResults stores the results after UDF processing for all read messages. It indexes
+		// a read message to the corresponding write message
+		udfResults := make([]readWriteMessagePair, len(dataMessages))
+		// applyUDF, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
+
 		// create a pool of UDF Processors
 		var wg sync.WaitGroup
 		for i := 0; i < isdf.opts.udfConcurrency; i++ {
@@ -358,15 +359,17 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// forward the message to the edge buffer (could be multiple edges)
-		err = isdf.writeToBuffers(ctx, messageToStep, &writeOffsets)
+		writeOffsets, err = isdf.writeToBuffers(ctx, messageToStep)
 		if err != nil {
 			isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 			isdf.fromBuffer.NoAck(ctx, readOffsets)
 			return
 		}
 	} else {
-		failure := isdf.streamMessage(ctx, dataMessages, processorWM, readOffsets, &writeOffsets, messageToStep)
-		if failure {
+		writeOffsets, err = isdf.streamMessage(ctx, dataMessages, processorWM)
+		if err != nil {
+			// As there's no partial failure, non-ack all the readOffsets
+			isdf.fromBuffer.NoAck(ctx, readOffsets)
 			return
 		}
 	}
@@ -437,89 +440,80 @@ func (isdf *InterStepDataForward) streamMessage(
 	ctx context.Context,
 	dataMessages []*isb.ReadMessage,
 	processorWM wmb.Watermark,
-	readOffsets []isb.Offset,
-	writeOffsets *map[string][]isb.Offset,
-	messageToStep map[string][]isb.Message,
-) bool {
+) (map[string][]isb.Offset, error) {
+	// create space for writeMessages specific to each step as we could forward to all the steps too.
+	var messageToStep = make(map[string][]isb.Message)
+	for buffer := range isdf.toBuffers {
+		// over allocating to have a predictable pattern
+		messageToStep[buffer] = make([]isb.Message, 0, len(dataMessages))
+	}
+
 	if isdf.opts.vertexType == dfv1.VertexTypeSource {
-		isdf.opts.logger.Errorw("Stream is not supported for source data transformer")
-		return true
+		errMsg := "stream is not supported for source data transformer"
+		isdf.opts.logger.Errorw(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 
-	// send to UDF only the data messages
-	if len(dataMessages) != 0 {
-		for _, m := range dataMessages {
-			// emit message size metric
-			readBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(len(m.Payload)))
-			// assign watermark to the message. assign time.UnixMilli(-1) as watermark when we are at source vertex.
-			m.Watermark = time.Time(processorWM)
+	if len(dataMessages) > 1 {
+		errMsg := "data message size is not 1 with UDF streaming"
+		isdf.opts.logger.Errorw(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	} else if len(dataMessages) == 1 {
+		// send to UDF only the data messages
 
-			// process the UDF and get the result
-			start := time.Now()
-			udfReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
+		// emit message size metric
+		readBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).
+			Add(float64(len(dataMessages[0].Payload)))
+		// assign watermark to the message. assign time.UnixMilli(-1) as watermark when we are at source vertex.
+		dataMessages[0].Watermark = time.Time(processorWM)
 
-			writeMessageCh := make(chan isb.WriteMessage)
-			errs, ctx := errgroup.WithContext(ctx)
-			errs.Go(func() error {
-				return isdf.UDF.ApplyMapStream(ctx, m, writeMessageCh)
-			})
+		// process the UDF and get the result
+		start := time.Now()
+		udfReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Inc()
 
-			// Stream the message to the next vertex. First figure out which vertex
-			// to send the result to. Then update the toBuffer(s) with writeMessage.
-			for writeMessage := range writeMessageCh {
-				// if we do not get a time from UDF, we set it to the time from (N-1)th vertex
-				if writeMessage.EventTime.IsZero() {
-					writeMessage.EventTime = m.EventTime
-				}
+		writeMessageCh := make(chan isb.WriteMessage)
+		errs, ctx := errgroup.WithContext(ctx)
+		errs.Go(func() error {
+			return isdf.UDF.ApplyMapStream(ctx, dataMessages[0], writeMessageCh)
+		})
 
-				udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(1))
+		// Stream the message to the next vertex. First figure out which vertex
+		// to send the result to. Then update the toBuffer(s) with writeMessage.
+		for writeMessage := range writeMessageCh {
+			udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(1))
 
-				// update toBuffers
-				if err := isdf.whereToStep(&writeMessage, messageToStep, m); err != nil {
-					isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
-					isdf.fromBuffer.NoAck(ctx, readOffsets)
-					return true
-				}
-			}
-
-			// look for errors in udf processing, if we see even 1 error NoAck all messages
-			// then return. Handling partial retrying is not worth ATM.
-			if err := errs.Wait(); err != nil {
-				udfError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
-					"buffer": isdf.fromBuffer.GetName()}).Inc()
-				isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
-				// We do not retry as we are streaming
-				if ok, _ := isdf.IsShuttingDown(); ok {
-					isdf.opts.logger.Errorw("UDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
-					platformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName}).Inc()
-				}
-				// As there's no partial failure, non-ack all the readOffsets
-				isdf.fromBuffer.NoAck(ctx, readOffsets)
-				return true
-			}
-
-			udfProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
-				"buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))
-			// forward the message to the edge buffer (could be multiple edges)
-			err := isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
-
-			if err != nil {
-				isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
-				isdf.fromBuffer.NoAck(ctx, readOffsets)
-				return true
+			// update toBuffers
+			if err := isdf.whereToStep(&writeMessage, messageToStep, dataMessages[0]); err != nil {
+				return nil, err
 			}
 		}
-	} else {
-		// Even not data messages, forward the message to the edge buffer (could be multiple edges)
-		err := isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
 
-		if err != nil {
-			isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
-			isdf.fromBuffer.NoAck(ctx, readOffsets)
-			return true
+		// look for errors in udf processing, if we see even 1 error NoAck all messages
+		// then return. Handling partial retrying is not worth ATM.
+		if err := errs.Wait(); err != nil {
+			udfError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
+				"buffer": isdf.fromBuffer.GetName()}).Inc()
+			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
+			// We do not retry as we are streaming
+			if ok, _ := isdf.IsShuttingDown(); ok {
+				isdf.opts.logger.Errorw("UDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
+				platformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName}).Inc()
+			}
+			return nil, err
 		}
+
+		udfProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
+			"buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 	}
-	return false
+
+	// Forward the message to the edge buffer (could be multiple edges)
+	writeOffsets, err := isdf.writeToBuffers(ctx, messageToStep)
+	if err != nil {
+		isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
+		return nil, err
+	}
+
+	return writeOffsets, nil
 }
 
 // ackFromBuffer acknowledges an array of offsets back to fromBuffer and is a blocking call or until shutdown has been initiated.
@@ -573,16 +567,19 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 
 // writeToBuffers is a blocking call until all the messages have be forwarded to all the toBuffers, or a shutdown
 // has been initiated while we are stuck looping on an InternalError.
-func (isdf *InterStepDataForward) writeToBuffers(ctx context.Context, messageToStep map[string][]isb.Message, writeOffsetsEdge *map[string][]isb.Offset) (err error) {
+func (isdf *InterStepDataForward) writeToBuffers(
+	ctx context.Context, messageToStep map[string][]isb.Message,
+) (writeOffsetsEdge map[string][]isb.Offset, err error) {
+	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
 	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
 	// So writeOffsetsEdge also contains all the to buffers, but the returned offsets might be empty.
 	for bufferName, toBuffer := range isdf.toBuffers {
-		(*writeOffsetsEdge)[bufferName], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[bufferName])
+		writeOffsetsEdge[bufferName], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[bufferName])
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return writeOffsetsEdge, nil
 }
 
 // writeToBuffer forwards an array of messages to a single buffer and is a blocking call or until shutdown has been initiated.

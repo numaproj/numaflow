@@ -447,7 +447,7 @@ func TestValidateVertex(t *testing.T) {
 		v := dfv1.AbstractVertex{
 			Name: "invalid.name",
 		}
-		err := validateVertex(v, nil)
+		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid vertex name")
 	})
@@ -463,7 +463,7 @@ func TestValidateVertex(t *testing.T) {
 				Max: pointer.Int32(1),
 			},
 		}
-		err := validateVertex(v, nil)
+		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "not be smaller than 0")
 	})
@@ -476,33 +476,33 @@ func TestValidateVertex(t *testing.T) {
 				Max: pointer.Int32(1),
 			},
 		}
-		err := validateVertex(v, nil)
+		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "or equal to")
 	})
 
 	t.Run("good init container", func(t *testing.T) {
 		v := dfv1.AbstractVertex{Name: "my-vertex", InitContainers: goodContainers}
-		err := validateVertex(v, nil)
+		err := validateVertex(v)
 		assert.NoError(t, err)
 	})
 
 	t.Run("bad init container name", func(t *testing.T) {
 		v := dfv1.AbstractVertex{Name: "my-vertex", InitContainers: badContainers}
-		err := validateVertex(v, nil)
+		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "is reserved for containers created by numaflow")
 	})
 
 	t.Run("good sidecar container", func(t *testing.T) {
 		v := dfv1.AbstractVertex{Name: "my-vertex", Sidecars: goodContainers}
-		err := validateVertex(v, nil)
+		err := validateVertex(v)
 		assert.NoError(t, err)
 	})
 
 	t.Run("bad sidecar container name", func(t *testing.T) {
 		v := dfv1.AbstractVertex{Name: "my-vertex", Sidecars: badContainers}
-		err := validateVertex(v, nil)
+		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "is reserved for containers created by numaflow")
 	})
@@ -515,58 +515,9 @@ func TestValidateVertex(t *testing.T) {
 			},
 			Sidecars: goodContainers,
 		}
-		err := validateVertex(v, nil)
+		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `"sidecars" are not supported for source vertices`)
-	})
-
-	t.Run("map udf stream without setting readBatchSize", func(t *testing.T) {
-		udf := dfv1.UDF{
-			MapStream: true,
-		}
-		v := dfv1.AbstractVertex{
-			Name: "my-vertex",
-			UDF:  &udf,
-		}
-		err := validateVertex(v, nil)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), `UDF map streaming is enabled, but read batch size is not 1`)
-	})
-	t.Run("map udf stream with setting in pipeline", func(t *testing.T) {
-		readBatchSize := uint64(5)
-		pipeline := dfv1.Pipeline{
-			Spec: dfv1.PipelineSpec{
-				Limits: &dfv1.PipelineLimits{
-					ReadBatchSize: &readBatchSize,
-				},
-			},
-		}
-		udf := dfv1.UDF{
-			MapStream: true,
-		}
-		v := dfv1.AbstractVertex{
-			Name: "my-vertex",
-			UDF:  &udf,
-		}
-		err := validateVertex(v, &pipeline)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), `UDF map streaming is enabled, but read batch size is not 1`)
-	})
-	t.Run("map udf stream with setting in vertex", func(t *testing.T) {
-		readBatchSize := uint64(5)
-		udf := dfv1.UDF{
-			MapStream: true,
-		}
-		v := dfv1.AbstractVertex{
-			Name: "my-vertex",
-			Limits: &dfv1.VertexLimits{
-				ReadBatchSize: &readBatchSize,
-			},
-			UDF: &udf,
-		}
-		err := validateVertex(v, nil)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), `UDF map streaming is enabled, but read batch size is not 1`)
 	})
 }
 
