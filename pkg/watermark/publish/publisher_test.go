@@ -110,6 +110,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	assert.True(t, otDecode.Idle)
 	assert.Equal(t, otDecode.Watermark, epoch)
 	assert.Equal(t, otDecode.Offset, int64(-1))
+	assert.Equal(t, otDecode.Partition, int32(0))
 
 	_ = p.Close()
 

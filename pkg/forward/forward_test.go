@@ -1170,12 +1170,14 @@ func buildPublisherMapAndOTStore(toBuffers map[string]isb.BufferWriter) (map[str
 	processorEntity := processor.NewProcessorEntity("publisherTestPod")
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]wmstore.WatermarkKVStorer)
+	index := int32(0)
 	for key := range toBuffers {
 		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
 		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
 		otStores[key] = otKV
 		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
+		index++
 	}
 	return publishers, otStores
 }

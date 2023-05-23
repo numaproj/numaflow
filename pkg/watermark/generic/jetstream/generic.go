@@ -53,10 +53,15 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 	fromBucket := vertexInstance.Vertex.GetFromBuckets()[0]
 
-	// TODO(one bucket): remove this after we combine the buckets to one for reduce.
-	if vertexInstance.Vertex.IsReduceUDF() {
-		fromBucket = fmt.Sprintf("%s-%d", fromBucket, vertexInstance.Replica)
+	println("from buckets: ")
+	for _, bucket := range vertexInstance.Vertex.GetFromBuckets() {
+		println(bucket)
 	}
+
+	//// TODO(one bucket): remove this after we combine the buckets to one for reduce.
+	//if vertexInstance.Vertex.IsReduceUDF() {
+	//	fromBucket = fmt.Sprintf("%s-%d", fromBucket, vertexInstance.Replica)
+	//}
 
 	var fetchWatermark fetch.Fetcher
 	hbBucketName := isbsvc.JetStreamProcessorBucket(fromBucket)
@@ -71,10 +76,15 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 		return nil, nil, fmt.Errorf("failed at new OT KVJetStreamKVWatch, OTBucket: %s, %w", otBucketName, err)
 	}
 
+	// create a store watcher that watches the heartbeat and ot store.
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
+	// create processor manager with the store watcher that keeps track of all the active processors.
+	processManager := fetch.NewProcessorManager(ctx, storeWatcher, fetch.WithVertexReplica(vertexInstance.Replica), fetch.WithIsReduce(vertexInstance.Vertex.IsReduceUDF()))
+	// create a fetcher that fetches watermark.
 	if vertexInstance.Vertex.IsASource() {
-		fetchWatermark = fetch.NewSourceFetcher(ctx, fromBucket, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+		fetchWatermark = fetch.NewSourceFetcher(ctx, fromBucket, store.BuildWatermarkStoreWatcher(hbWatch, otWatch), processManager)
 	} else {
-		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, storeWatcher, processManager)
 	}
 
 	// Publisher map creation, we need a publisher per out buffer.
@@ -100,44 +110,48 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 		for _, e := range vertexInstance.Vertex.Spec.ToEdges {
 			toBucket := v1alpha1.GenerateEdgeBucketName(vertexInstance.Vertex.Namespace, pipelineName, e.From, e.To)
 			// TODO(one bucket): remove this after we combine the buckets to one for reduce.
-			if e.ToVertexType == v1alpha1.VertexTypeReduceUDF {
-				for i := 0; i < e.GetToVertexPartitions(); i++ {
-					indexedBucket := fmt.Sprintf("%s-%d", toBucket, i)
-					toBufferName := v1alpha1.GenerateBufferName(vertexInstance.Vertex.Namespace, pipelineName, e.To, i)
-					hbPublisherBucketName := isbsvc.JetStreamProcessorBucket(indexedBucket)
-					hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherBucketName, jsclient.NewInClusterJetStreamClient())
-					if err != nil {
-						return nil, nil, fmt.Errorf("failed at new HB Publish JetStreamKVStore, HeartbeatPublisherBucket: %s, %w", hbPublisherBucketName, err)
-					}
-
-					otStoreBucketName := isbsvc.JetStreamOTBucket(indexedBucket)
-					otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucketName, jsclient.NewInClusterJetStreamClient())
-					if err != nil {
-						return nil, nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, OTBucket: %s, %w", otStoreBucketName, err)
-					}
-					publishWatermark[toBufferName] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore))
-				}
-			} else {
-				hbPublisherBucketName := isbsvc.JetStreamProcessorBucket(toBucket)
-				hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherBucketName, jsclient.NewInClusterJetStreamClient())
-				if err != nil {
-					return nil, nil, fmt.Errorf("failed at new HB Publish JetStreamKVStore, HeartbeatPublisherBucket: %s, %w", hbPublisherBucketName, err)
-				}
-
-				otStoreBucketName := isbsvc.JetStreamOTBucket(toBucket)
-				otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucketName, jsclient.NewInClusterJetStreamClient())
-				if err != nil {
-					return nil, nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, OTBucket: %s, %w", otStoreBucketName, err)
-				}
-				opts := []publish.PublishOption{}
-				if vertexInstance.Vertex.IsASink() {
-					opts = append(opts, publish.IsSink())
-				}
-				toBuffers := v1alpha1.GenerateBufferNames(vertexInstance.Vertex.Namespace, pipelineName, e.To, e.GetToVertexPartitions())
-				for _, buffer := range toBuffers {
-					publishWatermark[buffer] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), opts...)
-				}
+			//if e.ToVertexType == v1alpha1.VertexTypeReduceUDF {
+			//	for i := 0; i < e.GetToVertexPartitions(); i++ {
+			//		indexedBucket := fmt.Sprintf("%s-%d", toBucket, i)
+			//		toBufferName := v1alpha1.GenerateBufferName(vertexInstance.Vertex.Namespace, pipelineName, e.To, i)
+			//		hbPublisherBucketName := isbsvc.JetStreamProcessorBucket(indexedBucket)
+			//		hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherBucketName, jsclient.NewInClusterJetStreamClient())
+			//		if err != nil {
+			//			return nil, nil, fmt.Errorf("failed at new HB Publish JetStreamKVStore, HeartbeatPublisherBucket: %s, %w", hbPublisherBucketName, err)
+			//		}
+			//
+			//		otStoreBucketName := isbsvc.JetStreamOTBucket(indexedBucket)
+			//		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucketName, jsclient.NewInClusterJetStreamClient())
+			//		if err != nil {
+			//			return nil, nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, OTBucket: %s, %w", otStoreBucketName, err)
+			//		}
+			//		publishWatermark[toBufferName] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), int32(i))
+			//	}
+			//} else {
+			hbPublisherBucketName := isbsvc.JetStreamProcessorBucket(toBucket)
+			hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherBucketName, jsclient.NewInClusterJetStreamClient())
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed at new HB Publish JetStreamKVStore, HeartbeatPublisherBucket: %s, %w", hbPublisherBucketName, err)
 			}
+
+			otStoreBucketName := isbsvc.JetStreamOTBucket(toBucket)
+			otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucketName, jsclient.NewInClusterJetStreamClient())
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, OTBucket: %s, %w", otStoreBucketName, err)
+			}
+			opts := []publish.PublishOption{}
+			if vertexInstance.Vertex.IsASink() {
+				opts = append(opts, publish.IsSink())
+			}
+			if e.ToVertexType == v1alpha1.VertexTypeReduceUDF {
+				opts = append(opts, publish.IsReduce())
+			}
+			toBuffers := v1alpha1.GenerateBufferNames(vertexInstance.Vertex.Namespace, pipelineName, e.To, e.GetToVertexPartitions())
+			for i, buffer := range toBuffers {
+				publishOpts := append(opts, publish.WithToVertexPartition(int32(i)))
+				publishWatermark[buffer] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), publishOpts...)
+			}
+			//}
 		}
 	}
 	return fetchWatermark, publishWatermark, nil

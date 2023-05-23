@@ -25,9 +25,9 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
@@ -128,8 +128,9 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
-	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)).(*edgeFetcher)
-
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	processorManager := NewProcessorManager(ctx, storeWatcher)
+	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -155,7 +156,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}()
 
-	allProcessors := testBuffer.processorManager.GetAllProcessors()
+	allProcessors := processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -164,7 +165,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
@@ -176,7 +177,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
@@ -192,24 +193,24 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
+	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=101
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
-	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
+	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
 
@@ -228,7 +229,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 
 	// wait until p1 becomes active
 	time.Sleep(1 * time.Second)
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	allProcessors = processorManager.GetAllProcessors()
 	for !allProcessors["p1"].IsActive() {
 		select {
 		case <-ctx.Done():
@@ -237,7 +238,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
@@ -245,8 +246,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
-	p1 := testBuffer.processorManager.GetProcessor("p1")
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
+	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
 	assert.NotNil(t, p1.offsetTimeline)
@@ -267,7 +268,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
@@ -285,14 +286,14 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}()
 
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	allProcessors = processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
@@ -307,7 +308,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
@@ -326,7 +327,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
@@ -345,7 +346,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 

@@ -289,7 +289,9 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 	if err != nil {
 		return nil, err
 	}
-	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
+	pm := fetch.NewProcessorManager(ctx, storeWatcher)
+	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm)
 	return watermarkFetcher, nil
 }
 

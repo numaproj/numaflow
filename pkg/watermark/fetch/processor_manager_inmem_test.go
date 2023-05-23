@@ -24,12 +24,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
@@ -79,8 +79,9 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.NoError(t, err)
 	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
 	assert.NoError(t, err)
-	var testBuffer = NewEdgeFetcher(ctx, "testBuffer", store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)).(*edgeFetcher)
-
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	var processorManager = NewProcessorManager(ctx, storeWatcher)
+	var fetcher = NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager)
 	// start p1 heartbeat for 3 loops
 	wg.Add(1)
 	go func() {
@@ -107,7 +108,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		}
 	}()
 
-	allProcessors := testBuffer.processorManager.GetAllProcessors()
+	allProcessors := processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -116,7 +117,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
@@ -132,24 +133,24 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
+	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=101
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
-	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
+	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
 
@@ -169,7 +170,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 
 	// wait until p1 becomes active
 	time.Sleep(1 * time.Second)
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	allProcessors = processorManager.GetAllProcessors()
 	for !allProcessors["p1"].IsActive() {
 		select {
 		case <-ctx.Done():
@@ -178,15 +179,15 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = testBuffer.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
-	p1 := testBuffer.processorManager.GetProcessor("p1")
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
+	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
 	assert.NotNil(t, p1.offsetTimeline)
@@ -207,7 +208,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 
@@ -225,7 +226,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		}
 	}()
 
-	allProcessors = testBuffer.processorManager.GetAllProcessors()
+	allProcessors = processorManager.GetAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -234,7 +235,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = testBuffer.processorManager.GetAllProcessors()
+			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
 

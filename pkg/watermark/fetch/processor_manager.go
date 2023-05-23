@@ -43,9 +43,11 @@ type ProcessorManager struct {
 	heartbeat *ProcessorHeartbeat
 	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
 	// used for tracking watermark.
-	processors map[string]*ProcessorToFetch
-	lock       sync.RWMutex
-	log        *zap.SugaredLogger
+	processors     map[string]*ProcessorToFetch
+	vertexReplica  int32
+	isReduceVertex bool
+	lock           sync.RWMutex
+	log            *zap.SugaredLogger
 
 	// opts
 	opts *processorManagerOptions
@@ -56,6 +58,8 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
+		isReduce:                 false,
+		vertexReplica:            0,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
@@ -245,6 +249,10 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					continue
 				}
 				otValue, err := wmb.DecodeToWMB(value.Value())
+				// if it's a reduce vertex, consider the watermarks only for the partition that the processor is running on
+				if v.opts.isReduce && otValue.Partition != v.opts.vertexReplica {
+					continue
+				}
 				if err != nil {
 					v.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
 					continue
