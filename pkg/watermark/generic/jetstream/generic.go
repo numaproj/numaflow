@@ -58,11 +58,6 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 		println(bucket)
 	}
 
-	//// TODO(one bucket): remove this after we combine the buckets to one for reduce.
-	//if vertexInstance.Vertex.IsReduceUDF() {
-	//	fromBucket = fmt.Sprintf("%s-%d", fromBucket, vertexInstance.Replica)
-	//}
-
 	var fetchWatermark fetch.Fetcher
 	hbBucketName := isbsvc.JetStreamProcessorBucket(fromBucket)
 	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())
@@ -79,7 +74,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 	// create a store watcher that watches the heartbeat and ot store.
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
 	// create processor manager with the store watcher that keeps track of all the active processors.
-	processManager := fetch.NewProcessorManager(ctx, storeWatcher, fetch.WithVertexReplica(vertexInstance.Replica), fetch.WithIsReduce(vertexInstance.Vertex.IsReduceUDF()))
+	processManager := processor.NewProcessorManager(ctx, storeWatcher, processor.WithVertexReplica(vertexInstance.Replica), processor.WithIsReduce(vertexInstance.Vertex.IsReduceUDF()))
 	// create a fetcher that fetches watermark.
 	if vertexInstance.Vertex.IsASource() {
 		fetchWatermark = fetch.NewSourceFetcher(ctx, fromBucket, store.BuildWatermarkStoreWatcher(hbWatch, otWatch), processManager)
@@ -109,25 +104,6 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 	} else {
 		for _, e := range vertexInstance.Vertex.Spec.ToEdges {
 			toBucket := v1alpha1.GenerateEdgeBucketName(vertexInstance.Vertex.Namespace, pipelineName, e.From, e.To)
-			// TODO(one bucket): remove this after we combine the buckets to one for reduce.
-			//if e.ToVertexType == v1alpha1.VertexTypeReduceUDF {
-			//	for i := 0; i < e.GetToVertexPartitions(); i++ {
-			//		indexedBucket := fmt.Sprintf("%s-%d", toBucket, i)
-			//		toBufferName := v1alpha1.GenerateBufferName(vertexInstance.Vertex.Namespace, pipelineName, e.To, i)
-			//		hbPublisherBucketName := isbsvc.JetStreamProcessorBucket(indexedBucket)
-			//		hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherBucketName, jsclient.NewInClusterJetStreamClient())
-			//		if err != nil {
-			//			return nil, nil, fmt.Errorf("failed at new HB Publish JetStreamKVStore, HeartbeatPublisherBucket: %s, %w", hbPublisherBucketName, err)
-			//		}
-			//
-			//		otStoreBucketName := isbsvc.JetStreamOTBucket(indexedBucket)
-			//		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreBucketName, jsclient.NewInClusterJetStreamClient())
-			//		if err != nil {
-			//			return nil, nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, OTBucket: %s, %w", otStoreBucketName, err)
-			//		}
-			//		publishWatermark[toBufferName] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), int32(i))
-			//	}
-			//} else {
 			hbPublisherBucketName := isbsvc.JetStreamProcessorBucket(toBucket)
 			hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherBucketName, jsclient.NewInClusterJetStreamClient())
 			if err != nil {
@@ -151,7 +127,6 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 				publishOpts := append(opts, publish.WithToVertexPartition(int32(i)))
 				publishWatermark[buffer] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), publishOpts...)
 			}
-			//}
 		}
 	}
 	return fetchWatermark, publishWatermark, nil

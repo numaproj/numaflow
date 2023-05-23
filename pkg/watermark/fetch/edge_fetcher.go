@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// package fetch contains the logic to fetch the watermark for an offset.
+// we iterate over all the active processors and get the smallest watermark.
+// if the processor is not active, and if the current offset is greater than the last offset of the processor,
+// we delete the processor using processor manager.
+
 package fetch
 
 import (
@@ -23,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -36,12 +42,12 @@ type edgeFetcher struct {
 	ctx              context.Context
 	bufferName       string
 	storeWatcher     store.WatermarkStoreWatcher
-	processorManager *ProcessorManager
+	processorManager *processor.ProcessorManager
 	log              *zap.SugaredLogger
 }
 
 // NewEdgeFetcher returns a new edge fetcher.
-func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.WatermarkStoreWatcher, manager *ProcessorManager) Fetcher {
+func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.WatermarkStoreWatcher, manager *processor.ProcessorManager) Fetcher {
 	log := logging.FromContext(ctx).With("bufferName", bufferName)
 	log.Info("Creating a new edge watermark fetcher")
 	return &edgeFetcher{
@@ -53,7 +59,7 @@ func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.W
 	}
 }
 
-// GetWatermark gets the smallest timestamp for the given offset
+// GetWatermark gets the smallest watermark for the given offset
 func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
@@ -65,15 +71,15 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	var allProcessors = e.processorManager.GetAllProcessors()
 	for _, p := range allProcessors {
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
-		var t = p.offsetTimeline.GetEventTime(inputOffset)
+		var t = p.OffsetTimeline().GetEventTime(inputOffset)
 		if t == -1 { // watermark cannot be computed, perhaps a new processing unit was added or offset fell off the timeline
 			epoch = t
 		} else if t < epoch {
 			epoch = t
 		}
-		if p.IsDeleted() && (offset > p.offsetTimeline.GetHeadOffset()) {
+		if p.IsDeleted() && (offset > p.OffsetTimeline().GetHeadOffset()) {
 			// if the pod is not active and the current offset is ahead of all offsets in Timeline
-			e.processorManager.DeleteProcessor(p.entity.GetName())
+			e.processorManager.DeleteProcessor(p.Entity().GetName())
 		}
 	}
 	// if there are no processors
@@ -100,7 +106,7 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		var w = p.offsetTimeline.GetHeadWMB()
+		var w = p.OffsetTimeline().GetHeadWMB()
 		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, w.Offset, w.Watermark, w.Idle)
 		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, w.Offset, w.Watermark, w.Idle))
 		if w.Offset != -1 {
@@ -135,7 +141,7 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 			continue
 		}
 		// we only consider the latest wmb in the offset timeline
-		var curHeadWMB = p.offsetTimeline.GetHeadWMB()
+		var curHeadWMB = p.OffsetTimeline().GetHeadWMB()
 		if !curHeadWMB.Idle {
 			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bufferName)
 			return wmb.WMB{}

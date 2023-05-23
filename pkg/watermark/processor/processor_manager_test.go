@@ -14,23 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fetch
+package processor
 
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/stretchr/testify/assert"
-
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-
-	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/stretchr/testify/assert"
 )
 
 func otValueToBytes(offset int64, watermark int64, idle bool) ([]byte, error) {
@@ -43,7 +39,7 @@ func otValueToBytes(offset int64, watermark int64, idle bool) ([]byte, error) {
 	return otValueByte, err
 }
 
-func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
+func TestProcessorManager(t *testing.T) {
 	var (
 		err          error
 		pipelineName       = "testFetch"
@@ -81,7 +77,6 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	var processorManager = NewProcessorManager(ctx, storeWatcher)
-	var fetcher = NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager)
 	// start p1 heartbeat for 3 loops
 	wg.Add(1)
 	go func() {
@@ -142,105 +137,8 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
-	allProcessors = processorManager.GetAllProcessors()
-	assert.Equal(t, 2, len(allProcessors))
-	assert.True(t, allProcessors["p1"].IsDeleted())
-	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" should be deleted after this GetWatermark offset=101
-	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
-	allProcessors = processorManager.GetAllProcessors()
-	assert.Equal(t, 1, len(allProcessors))
-	assert.True(t, allProcessors["p2"].IsActive())
-
-	time.Sleep(time.Second)
-	// resume p1 after one second
-	// run for 5 loops
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var err error
-		for i := 0; i < 5; i++ {
-			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-			assert.NoError(t, err)
-			time.Sleep(1 * time.Second)
-		}
-	}()
-
-	// wait until p1 becomes active
-	time.Sleep(1 * time.Second)
-	allProcessors = processorManager.GetAllProcessors()
-	for !allProcessors["p1"].IsActive() {
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 to be active: %s", ctx.Err())
-			}
-		default:
-			time.Sleep(1 * time.Millisecond)
-			allProcessors = processorManager.GetAllProcessors()
-		}
-	}
-	assert.True(t, allProcessors["p1"].IsActive())
-	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" has been deleted from vertex.Processors
-	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
-	p1 := processorManager.GetProcessor("p1")
-	assert.NotNil(t, p1)
-	assert.True(t, p1.IsActive())
-	assert.NotNil(t, p1.offsetTimeline)
-	assert.Equal(t, int64(-1), p1.offsetTimeline.GetHeadOffset())
-
-	// publish a new watermark 101
-	otValueByte, err = otValueToBytes(testOffset+1, epoch, false)
-	assert.NoError(t, err)
-	err = otStore.PutKV(ctx, "p1", otValueByte)
-	assert.NoError(t, err)
-
-	// "p1" becomes inactive after 5 loops
-	for !allProcessors["p1"].IsInactive() {
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 to be inactive: %s", ctx.Err())
-			}
-		default:
-			time.Sleep(1 * time.Millisecond)
-			allProcessors = processorManager.GetAllProcessors()
-		}
-	}
-
-	time.Sleep(time.Second)
-
-	// resume after one second
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var err error
-		for i := 0; i < 3; i++ {
-			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-			assert.NoError(t, err)
-			time.Sleep(1 * time.Second)
-		}
-	}()
-
-	allProcessors = processorManager.GetAllProcessors()
-	for len(allProcessors) != 2 {
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
-			}
-		default:
-			time.Sleep(1 * time.Millisecond)
-			allProcessors = processorManager.GetAllProcessors()
-		}
-	}
-
-	// added 101 in the previous steps for p1, so the head should be 101 after resume
-	assert.Equal(t, int64(101), p1.offsetTimeline.GetHeadOffset())
-	wg.Wait()
+	processorManager.DeleteProcessor("p1")
+	processorManager.DeleteProcessor("p2")
+	assert.Equal(t, 0, len(processorManager.GetAllProcessors()))
 	cancel()
 }

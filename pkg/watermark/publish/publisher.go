@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// package publish contains the logic to publish watermark. It exposes the `Publisher` interface.
+// which has the methods to publish watermark. It also publishes the heartbeat for the processor entity.
+// The heartbeat will be used to detect the processor is alive or not. It also has the method to
+// publish Idle watermark if the processor is idle.
+
 package publish
 
 import (

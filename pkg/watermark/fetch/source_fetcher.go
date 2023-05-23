@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -36,13 +37,13 @@ type sourceFetcher struct {
 	ctx              context.Context
 	sourceBufferName string
 	storeWatcher     store.WatermarkStoreWatcher
-	processorManager *ProcessorManager
+	processorManager *processor.ProcessorManager
 	log              *zap.SugaredLogger
 }
 
 // NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
 // buckets of the source buffer.
-func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher store.WatermarkStoreWatcher, manager *ProcessorManager) Fetcher {
+func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher store.WatermarkStoreWatcher, manager *processor.ProcessorManager) Fetcher {
 	log := logging.FromContext(ctx).With("sourceBufferName", sourceBufferName)
 	log.Info("Creating a new source watermark fetcher")
 	return &sourceFetcher{
@@ -65,8 +66,8 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		if p.offsetTimeline.GetHeadWatermark() < epoch {
-			epoch = p.offsetTimeline.GetHeadWatermark()
+		if p.OffsetTimeline().GetHeadWatermark() < epoch {
+			epoch = p.OffsetTimeline().GetHeadWatermark()
 		}
 	}
 	if epoch == math.MaxInt64 {
@@ -83,8 +84,8 @@ func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		if p.offsetTimeline.GetHeadWatermark() > epoch {
-			epoch = p.offsetTimeline.GetHeadWatermark()
+		if p.OffsetTimeline().GetHeadWatermark() > epoch {
+			epoch = p.OffsetTimeline().GetHeadWatermark()
 		}
 	}
 	if epoch == math.MinInt64 {

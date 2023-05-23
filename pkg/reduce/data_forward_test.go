@@ -1123,7 +1123,7 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_PROCESSORS", hbWatcherCh)
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 	storeWatcher := wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	pm := fetch.NewProcessorManager(ctx, storeWatcher, fetch.WithVertexReplica(0), fetch.WithIsReduce(true))
+	pm := processor.NewProcessorManager(ctx, storeWatcher, processor.WithVertexReplica(0), processor.WithIsReduce(true))
 	f := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm)
 	return f, sourcePublisher
 }

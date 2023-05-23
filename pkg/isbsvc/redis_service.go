@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/multierr"
@@ -143,7 +144,7 @@ func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName st
 	hbWatcher := noop.NewKVOpWatch()
 	otWatcher := noop.NewKVOpWatch()
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	pm := fetch.NewProcessorManager(ctx, storeWatcher)
+	pm := processor.NewProcessorManager(ctx, storeWatcher)
 	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm)
 	return watermarkFetcher, nil
 }
