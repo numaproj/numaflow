@@ -432,9 +432,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 }
 
-// streamMessage streams the data messages to the next step. Return a bool to
-// indicate if the processing failed and the caller (forwardAChunk) needs to
-// return early.
+// streamMessage streams the data messages to the next step.
 func (isdf *InterStepDataForward) streamMessage(
 	ctx context.Context,
 	dataMessages []*isb.ReadMessage,
@@ -569,9 +567,9 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 func (isdf *InterStepDataForward) writeToBuffers(
 	ctx context.Context, messageToStep map[string][]isb.Message,
 ) (writeOffsetsEdge map[string][]isb.Offset, err error) {
-	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
 	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
 	// So writeOffsetsEdge also contains all the to buffers, but the returned offsets might be empty.
+	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
 	for bufferName, toBuffer := range isdf.toBuffers {
 		writeOffsetsEdge[bufferName], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[bufferName])
 		if err != nil {
