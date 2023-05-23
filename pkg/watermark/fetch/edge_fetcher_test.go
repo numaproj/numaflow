@@ -494,6 +494,7 @@ func otValueToBytes(offset int64, watermark int64, idle bool) ([]byte, error) {
 	return otValueByte, err
 }
 
+// end to end test for fetcher using inmem store
 func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	var (
 		err          error
@@ -587,8 +588,6 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
-
-	allProcessors = processorManager.GetAllProcessors()
 
 	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
 	allProcessors = processorManager.GetAllProcessors()
@@ -693,6 +692,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	cancel()
 }
 
+// end to end test for fetcher with same ot bucket
 func TestFetcherWithSameOTBucket(t *testing.T) {
 	var (
 		keyspace         = "fetcherTest"
