@@ -24,6 +24,7 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/function/client"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -96,7 +97,39 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 		udfErr, _ := client.FromError(err)
 		switch udfErr.ErrorKind() {
 		case client.Retryable:
-		// TODO
+			var success bool
+			_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
+				// retry every "duration * factor + [0, jitter]" interval for 5 times
+				Duration: 1 * time.Second,
+				Factor:   1,
+				Jitter:   0.1,
+				Steps:    5,
+			}, func() (done bool, err error) {
+				datumList, err = u.client.MapFn(ctx, d)
+				if err != nil {
+					udfErr, _ = client.FromError(err)
+					switch udfErr.ErrorKind() {
+					case client.Retryable:
+						return false, nil
+					case client.NonRetryable:
+						return true, nil
+					default:
+						return true, nil
+					}
+				}
+				success = true
+				return true, nil
+			})
+			if !success {
+				return nil, function.ApplyUDFErr{
+					UserUDFErr: false,
+					Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+					InternalErr: function.InternalErr{
+						Flag:        true,
+						MainCarDown: false,
+					},
+				}
+			}
 		case client.NonRetryable:
 			return nil, function.ApplyUDFErr{
 				UserUDFErr: false,
