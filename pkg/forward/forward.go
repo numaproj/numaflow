@@ -112,6 +112,9 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 		if isdf.opts.srcWatermarkPublisher == nil {
 			return nil, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder")
 		}
+		if isdf.opts.udfStreaming {
+			return nil, fmt.Errorf("stream is not supported for source data transformer")
+		}
 	}
 
 	if isdf.opts.udfStreaming && isdf.opts.readBatchSize != 1 {
@@ -358,7 +361,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// forward the message to the edge buffer (could be multiple edges)
-		writeOffsets, err = isdf.writeToBuffers(ctx, messageToStep)
+		writeOffsets = make(map[string][]isb.Offset, len(messageToStep))
+		err = isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
 		if err != nil {
 			isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 			isdf.fromBuffer.NoAck(ctx, readOffsets)
@@ -445,12 +449,7 @@ func (isdf *InterStepDataForward) streamMessage(
 		messageToStep[buffer] = make([]isb.Message, 0, len(dataMessages))
 	}
 
-	if isdf.opts.vertexType == dfv1.VertexTypeSource {
-		errMsg := "stream is not supported for source data transformer"
-		isdf.opts.logger.Errorw(errMsg)
-		return nil, fmt.Errorf(errMsg)
-	}
-
+	writeOffsets := make(map[string][]isb.Offset, len(messageToStep))
 	if len(dataMessages) > 1 {
 		errMsg := "data message size is not 1 with UDF streaming"
 		isdf.opts.logger.Errorw(errMsg)
@@ -483,6 +482,13 @@ func (isdf *InterStepDataForward) streamMessage(
 			if err := isdf.whereToStep(&writeMessage, messageToStep, dataMessages[0]); err != nil {
 				return nil, err
 			}
+
+			// Forward the message to the edge buffer (could be multiple edges)
+			err := isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
+			if err != nil {
+				isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
+				return nil, err
+			}
 		}
 
 		// look for errors in udf processing, if we see even 1 error NoAck all messages
@@ -501,13 +507,13 @@ func (isdf *InterStepDataForward) streamMessage(
 
 		udfProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
 			"buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))
-	}
-
-	// Forward the message to the edge buffer (could be multiple edges)
-	writeOffsets, err := isdf.writeToBuffers(ctx, messageToStep)
-	if err != nil {
-		isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
-		return nil, err
+	} else {
+		// Even not data messages, forward the message to the edge buffer (could be multiple edges)
+		err := isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
+		if err != nil {
+			isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
+			return nil, err
+		}
 	}
 
 	return writeOffsets, nil
@@ -566,17 +572,17 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 // has been initiated while we are stuck looping on an InternalError.
 func (isdf *InterStepDataForward) writeToBuffers(
 	ctx context.Context, messageToStep map[string][]isb.Message,
-) (writeOffsetsEdge map[string][]isb.Offset, err error) {
+	writeOffsetsEdge map[string][]isb.Offset,
+) (err error) {
 	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
 	// So writeOffsetsEdge also contains all the to buffers, but the returned offsets might be empty.
-	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
 	for bufferName, toBuffer := range isdf.toBuffers {
 		writeOffsetsEdge[bufferName], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[bufferName])
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return writeOffsetsEdge, nil
+	return nil
 }
 
 // writeToBuffer forwards an array of messages to a single buffer and is a blocking call or until shutdown has been initiated.
