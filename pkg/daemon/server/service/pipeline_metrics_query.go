@@ -29,6 +29,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
+	server "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
@@ -49,6 +51,10 @@ type pipelineMetadataQuery struct {
 	pipeline          *v1alpha1.Pipeline
 	httpClient        metricsHttpClient
 	watermarkFetchers map[string][]fetch.Fetcher
+	rater             *server.Rater
+
+	// temporary flag to help with testing new rate calculation approach
+	useNewRateCalculation bool
 }
 
 const (
@@ -58,18 +64,25 @@ const (
 )
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
-func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline, wmFetchers map[string][]fetch.Fetcher) (*pipelineMetadataQuery, error) {
+func NewPipelineMetadataQuery(
+	isbSvcClient isbsvc.ISBService,
+	pipeline *v1alpha1.Pipeline,
+	wmFetchers map[string][]fetch.Fetcher,
+	rater *server.Rater,
+	useNewRateCalculation bool) (*pipelineMetadataQuery, error) {
 	var err error
 	ps := pipelineMetadataQuery{
-		isbSvcClient:      isbSvcClient,
-		pipeline:          pipeline,
-		watermarkFetchers: wmFetchers,
+		isbSvcClient: isbSvcClient,
+		pipeline:     pipeline,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
 			Timeout: time.Second * 3,
 		},
+		watermarkFetchers:     wmFetchers,
+		rater:                 rater,
+		useNewRateCalculation: useNewRateCalculation,
 	}
 	if err != nil {
 		return nil, err
@@ -169,6 +182,11 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		podNum = int64(*obj[0].DeprecatedParallelism)
 	}
 
+	var vertexLevelRates map[string]float64
+	if ps.useNewRateCalculation {
+		vertexLevelRates = ps.rater.GetRates(req.GetVertex())
+	}
+
 	// Get the headless service name
 	headlessServiceName := vertex.GetHeadlessServiceName()
 
@@ -179,7 +197,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		pendings := make(map[string]int64, 0)
 
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
-		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.svc.cluster.local:2469/metrics
+		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
 		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 		if res, err := ps.httpClient.Get(url); err != nil {
 			log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())
@@ -196,15 +214,17 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 				return nil, err
 			}
 
-			// Check if the resultant metrics list contains the processingRate, if it does look for the period label
-			if value, ok := result[metrics.VertexProcessingRate]; ok {
-				metricsList := value.GetMetric()
-				for _, metric := range metricsList {
-					labels := metric.GetLabel()
-					for _, label := range labels {
-						if label.GetName() == metrics.LabelPeriod {
-							lookback := label.GetValue()
-							processingRates[lookback] = metric.Gauge.GetValue()
+			if !ps.useNewRateCalculation {
+				// Check if the resultant metrics list contains the processingRate, if it does look for the period label
+				if value, ok := result[metrics.VertexProcessingRate]; ok {
+					metricsList := value.GetMetric()
+					for _, metric := range metricsList {
+						labels := metric.GetLabel()
+						for _, label := range labels {
+							if label.GetName() == metrics.LabelPeriod {
+								lookback := label.GetValue()
+								processingRates[lookback] = metric.Gauge.GetValue()
+							}
 						}
 					}
 				}
@@ -223,11 +243,20 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 				}
 			}
 
-			metricsArr[i] = &daemon.VertexMetrics{
-				Pipeline:        &ps.pipeline.Name,
-				Vertex:          req.Vertex,
-				ProcessingRates: processingRates,
-				Pendings:        pendings,
+			if !ps.useNewRateCalculation {
+				metricsArr[i] = &daemon.VertexMetrics{
+					Pipeline:        &ps.pipeline.Name,
+					Vertex:          req.Vertex,
+					ProcessingRates: processingRates,
+					Pendings:        pendings,
+				}
+			} else {
+				metricsArr[i] = &daemon.VertexMetrics{
+					Pipeline:        &ps.pipeline.Name,
+					Vertex:          req.Vertex,
+					ProcessingRates: vertexLevelRates,
+					Pendings:        pendings,
+				}
 			}
 		}
 	}
@@ -259,16 +288,26 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 
 		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
 		for _, vertexMetrics := range vertexResp.VertexMetrics {
-			if pending, ok := vertexMetrics.GetPendings()["default"]; ok {
-				if processingRate, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
-					if pending > 0 && processingRate == 0 {
-						resp.Status = &daemon.PipelineStatus{
-							Status:  pointer.String(PipelineStatusError),
-							Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
-						}
-						return resp, nil
-					}
+			var pending int64
+			var processingRate float64
+			if p, ok := vertexMetrics.GetPendings()["default"]; ok {
+				pending = p
+			} else {
+				continue
+			}
+
+			if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
+				processingRate = p
+			} else {
+				continue
+			}
+
+			if pending > 0 && processingRate == 0 {
+				resp.Status = &daemon.PipelineStatus{
+					Status:  pointer.String(PipelineStatusError),
+					Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
 				}
+				return resp, nil
 			}
 		}
 	}

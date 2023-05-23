@@ -131,6 +131,7 @@ const (
 	DefaultCooldownSeconds          = 90  // Default cooldown seconds after a scaling operation
 	DefaultZeroReplicaSleepSeconds  = 180 // Default sleep time in seconds after scaling down to 0, before peeking
 	DefaultMaxReplicas              = 50  // Default max replicas
+	MaxReplicasLimit                = 100 // The highest number of replicas allowed
 	DefaultTargetProcessingSeconds  = 20  // Default targeted time in seconds to finish processing all the pending messages for a source
 	DefaultTargetBufferAvailability = 50  // Default targeted percentage of buffer availability
 	DefaultReplicasPerScale         = 2   // Default maximum replicas to be scaled up or down at once
