@@ -25,11 +25,12 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
+
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -74,13 +75,13 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.OffsetTimeline().Put(watermark)
+		testPod0.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.OffsetTimeline().Put(watermark)
+		testPod1.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.OffsetTimeline().Put(watermark)
+		testPod2.GetOffsetTimeline().Put(watermark)
 	}
 	processorManager.AddProcessor("testPod0", testPod0)
 	processorManager.AddProcessor("testPod1", testPod1)
@@ -230,13 +231,13 @@ func getHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorM
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.OffsetTimeline().Put(watermark)
+		testPod0.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.OffsetTimeline().Put(watermark)
+		testPod1.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.OffsetTimeline().Put(watermark)
+		testPod2.GetOffsetTimeline().Put(watermark)
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -272,13 +273,13 @@ func getHeadWMTest2(ctx context.Context, processorManager1 *processor.ProcessorM
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.OffsetTimeline().Put(watermark)
+		testPod0.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.OffsetTimeline().Put(watermark)
+		testPod1.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.OffsetTimeline().Put(watermark)
+		testPod2.GetOffsetTimeline().Put(watermark)
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -376,13 +377,13 @@ func getHeadWMBTest1(ctx context.Context, processorManager1 *processor.Processor
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.OffsetTimeline().Put(watermark)
+		testPod0.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.OffsetTimeline().Put(watermark)
+		testPod1.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.OffsetTimeline().Put(watermark)
+		testPod2.GetOffsetTimeline().Put(watermark)
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -418,13 +419,13 @@ func getHeadWMBTest2(ctx context.Context, processorManager1 *processor.Processor
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.OffsetTimeline().Put(watermark)
+		testPod0.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.OffsetTimeline().Put(watermark)
+		testPod1.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.OffsetTimeline().Put(watermark)
+		testPod2.GetOffsetTimeline().Put(watermark)
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -460,13 +461,13 @@ func getHeadWMBTest3(ctx context.Context, processorManager1 *processor.Processor
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.OffsetTimeline().Put(watermark)
+		testPod0.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.OffsetTimeline().Put(watermark)
+		testPod1.GetOffsetTimeline().Put(watermark)
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.OffsetTimeline().Put(watermark)
+		testPod2.GetOffsetTimeline().Put(watermark)
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -637,8 +638,8 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
-	assert.NotNil(t, p1.OffsetTimeline())
-	assert.Equal(t, int64(-1), p1.OffsetTimeline().GetHeadOffset())
+	assert.NotNil(t, p1.GetOffsetTimeline())
+	assert.Equal(t, int64(-1), p1.GetOffsetTimeline().GetHeadOffset())
 
 	// publish a new watermark 101
 	otValueByte, err = otValueToBytes(testOffset+1, epoch, false)
@@ -687,7 +688,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	}
 
 	// added 101 in the previous steps for p1, so the head should be 101 after resume
-	assert.Equal(t, int64(101), p1.OffsetTimeline().GetHeadOffset())
+	assert.Equal(t, int64(101), p1.GetOffsetTimeline().GetHeadOffset())
 	wg.Wait()
 	cancel()
 }
@@ -829,11 +830,11 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}
 
-	for allProcessors["p1"].OffsetTimeline().Dump() != "[1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for allProcessors["p1"].GetOffsetTimeline().Dump() != "[1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the offset timeline [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].OffsetTimeline().Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimeline().Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -910,8 +911,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
-	assert.NotNil(t, p1.OffsetTimeline())
-	assert.Equal(t, int64(-1), p1.OffsetTimeline().GetHeadOffset())
+	assert.NotNil(t, p1.GetOffsetTimeline())
+	assert.Equal(t, int64(-1), p1.GetOffsetTimeline().GetHeadOffset())
 
 	// publish a new watermark 103
 	otValueByte, err = otValueToBytes(testOffset+3, epoch+500, false)
@@ -958,13 +959,13 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	}
 
 	// added 103 in the previous steps for p1, so the head should be 103 after resume
-	assert.Equal(t, int64(103), p1.OffsetTimeline().GetHeadOffset())
+	assert.Equal(t, int64(103), p1.GetOffsetTimeline().GetHeadOffset())
 
-	for allProcessors["p1"].OffsetTimeline().Dump() != "[1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for allProcessors["p1"].GetOffsetTimeline().Dump() != "[1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the offset timeline [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].OffsetTimeline().Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimeline().Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -979,11 +980,11 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 
 	// p1 should get the head offset watermark from p2
-	for allProcessors["p1"].OffsetTimeline().Dump() != "[IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for allProcessors["p1"].GetOffsetTimeline().Dump() != "[IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the offset timeline [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].OffsetTimeline().Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimeline().Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -998,11 +999,11 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 
 	// p1 should get the head offset watermark from p2
-	for allProcessors["p1"].OffsetTimeline().Dump() != "[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for allProcessors["p1"].GetOffsetTimeline().Dump() != "[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> ..., got %s: %s", allProcessors["p1"].OffsetTimeline().Dump(), ctx.Err())
+				t.Fatalf("[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> ..., got %s: %s", allProcessors["p1"].GetOffsetTimeline().Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)

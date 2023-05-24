@@ -28,8 +28,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -71,15 +72,15 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	var allProcessors = e.processorManager.GetAllProcessors()
 	for _, p := range allProcessors {
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
-		var t = p.OffsetTimeline().GetEventTime(inputOffset)
+		var t = p.GetOffsetTimeline().GetEventTime(inputOffset)
 		if t == -1 { // watermark cannot be computed, perhaps a new processing unit was added or offset fell off the timeline
 			epoch = t
 		} else if t < epoch {
 			epoch = t
 		}
-		if p.IsDeleted() && (offset > p.OffsetTimeline().GetHeadOffset()) {
+		if p.IsDeleted() && (offset > p.GetOffsetTimeline().GetHeadOffset()) {
 			// if the pod is not active and the current offset is ahead of all offsets in Timeline
-			e.processorManager.DeleteProcessor(p.Entity().GetName())
+			e.processorManager.DeleteProcessor(p.GetEntity().GetName())
 		}
 	}
 	// if there are no processors
@@ -106,7 +107,7 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		var w = p.OffsetTimeline().GetHeadWMB()
+		var w = p.GetOffsetTimeline().GetHeadWMB()
 		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, w.Offset, w.Watermark, w.Idle)
 		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, w.Offset, w.Watermark, w.Idle))
 		if w.Offset != -1 {
@@ -141,7 +142,7 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 			continue
 		}
 		// we only consider the latest wmb in the offset timeline
-		var curHeadWMB = p.OffsetTimeline().GetHeadWMB()
+		var curHeadWMB = p.GetOffsetTimeline().GetHeadWMB()
 		if !curHeadWMB.Idle {
 			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bufferName)
 			return wmb.WMB{}

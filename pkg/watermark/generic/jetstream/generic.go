@@ -110,10 +110,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, OTBucket: %s, %w", otStoreBucketName, err)
 			}
-			opts := []publish.PublishOption{}
-			if vertexInstance.Vertex.IsASink() {
-				opts = append(opts, publish.IsSink())
-			}
+			var opts []publish.PublishOption
 			if e.ToVertexType == v1alpha1.VertexTypeReduceUDF {
 				opts = append(opts, publish.IsReduce())
 			}

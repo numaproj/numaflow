@@ -23,10 +23,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"github.com/stretchr/testify/assert"
 )
 
 func otValueToBytes(offset int64, watermark int64, idle bool, partition int32) ([]byte, error) {
@@ -212,7 +213,7 @@ func TestProcessorManagerWatchForMap(t *testing.T) {
 		err = otStore.PutKV(ctx, "p1", otValueByte)
 		assert.NoError(t, err)
 	}
-	for processorManager.GetProcessor("p1").OffsetTimeline().GetHeadOffset() == -1 || processorManager.GetProcessor("p2").OffsetTimeline().GetHeadOffset() == -1 {
+	for processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadOffset() == -1 || processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadOffset() == -1 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -227,13 +228,13 @@ func TestProcessorManagerWatchForMap(t *testing.T) {
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 0,
-	}, processorManager.GetProcessor("p1").OffsetTimeline().GetHeadWMB())
+	}, processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadWMB())
 	assert.Equal(t, wmb.WMB{
 		Idle:      false,
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 0,
-	}, processorManager.GetProcessor("p2").OffsetTimeline().GetHeadWMB())
+	}, processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadWMB())
 	processorManager.DeleteProcessor("p1")
 	processorManager.DeleteProcessor("p2")
 	cancel()
@@ -332,7 +333,7 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		err = otStore.PutKV(ctx, "p1", otValueByte)
 		assert.NoError(t, err)
 	}
-	for processorManager.GetProcessor("p1").OffsetTimeline().GetHeadOffset() == -1 || processorManager.GetProcessor("p2").OffsetTimeline().GetHeadOffset() == -1 {
+	for processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadOffset() == -1 || processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadOffset() == -1 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -348,13 +349,13 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 2,
-	}, processorManager.GetProcessor("p1").OffsetTimeline().GetHeadWMB())
+	}, processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadWMB())
 	assert.Equal(t, wmb.WMB{
 		Idle:      false,
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 2,
-	}, processorManager.GetProcessor("p2").OffsetTimeline().GetHeadWMB())
+	}, processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadWMB())
 	processorManager.DeleteProcessor("p1")
 	processorManager.DeleteProcessor("p2")
 	cancel()
