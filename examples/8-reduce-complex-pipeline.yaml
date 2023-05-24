@@ -72,7 +72,6 @@ spec:
       to: atoi
     - from: atoi
       to: keyed-fixed-sum
-      parallelism: 2
     - from: keyed-fixed-sum
       to: non-keyed-fixed-sum
     - from: non-keyed-fixed-sum

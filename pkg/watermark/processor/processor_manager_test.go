@@ -208,6 +208,7 @@ func TestProcessorManagerWatchForMap(t *testing.T) {
 		testOffset += 5
 		otValueByte, _ := otValueToBytes(testOffset, epoch, false, 0)
 		err = otStore.PutKV(ctx, "p2", otValueByte)
+		assert.NoError(t, err)
 		err = otStore.PutKV(ctx, "p1", otValueByte)
 		assert.NoError(t, err)
 	}

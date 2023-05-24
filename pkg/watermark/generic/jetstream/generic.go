@@ -53,11 +53,6 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 	fromBucket := vertexInstance.Vertex.GetFromBuckets()[0]
 
-	println("from buckets: ")
-	for _, bucket := range vertexInstance.Vertex.GetFromBuckets() {
-		println(bucket)
-	}
-
 	var fetchWatermark fetch.Fetcher
 	hbBucketName := isbsvc.JetStreamProcessorBucket(fromBucket)
 	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, jsclient.NewInClusterJetStreamClient())

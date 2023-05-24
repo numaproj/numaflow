@@ -39,6 +39,5 @@ spec:
       to: atoi
     - from: atoi
       to: compute-sum
-#      parallelism: 2
     - from: compute-sum
       to: sink
