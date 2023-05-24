@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // package processor contains the logic for managing the processors and their offset timelines.
-// it also takes care of managing the lifecycle of the processors by listening to the heartbeat of the processors.
-// it also maintains the processor to offset timeline mapping. ProcessorManager will be used by the fetcher to
+// It also takes care of managing the lifecycle of the processors by listening to the heartbeat of the processors, and
+// also maintains the processor to offset timeline mapping. ProcessorManager will be used by the `fetcher` to
 // fetch the active processors list at any given time. ProcessorManager is also responsible for watching the offset
 // timeline changes and updating the offset timeline for each processor.
 
@@ -252,7 +252,9 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					continue
 				}
 				otValue, err := wmb.DecodeToWMB(value.Value())
-				// if it's a reduce vertex, consider the watermarks only for the partition that the processor is running on
+				// if it's a reduce vertex, consider the watermarks only for the partition that the processor is running on. this is because
+				// reduce processors has 1:1 relation with partitions.
+				// also, ignore all events not belonging to this partition.
 				if v.opts.isReduce && otValue.Partition != v.opts.vertexReplica {
 					continue
 				}
