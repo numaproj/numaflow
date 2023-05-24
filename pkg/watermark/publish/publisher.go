@@ -73,7 +73,6 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 		podHeartbeatRate:     5,
 		isSource:             false,
 		delay:                0,
-		isToVertexReduce:     false,
 		toVertexPartition:    0,
 	}
 	for _, opt := range inputOpts {
@@ -137,10 +136,9 @@ func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset) {
 	var otValue = wmb.WMB{
 		Offset:    seq,
 		Watermark: validWM.UnixMilli(),
+		Partition: p.opts.toVertexPartition,
 	}
-	if p.opts.isToVertexReduce {
-		otValue.Partition = p.opts.toVertexPartition
-	}
+
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
 		p.log.Errorw("Unable to publish watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
@@ -200,11 +198,9 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset) {
 		Offset:    seq,
 		Watermark: validWM.UnixMilli(),
 		Idle:      true,
+		Partition: p.opts.toVertexPartition,
 	}
-	// for reduce, set the partition
-	if p.opts.isToVertexReduce {
-		otValue.Partition = p.opts.toVertexPartition
-	}
+
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
 		p.log.Errorw("Unable to publish idle watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))

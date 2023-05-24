@@ -110,14 +110,9 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, OTBucket: %s, %w", otStoreBucketName, err)
 			}
-			var opts []publish.PublishOption
-			if e.ToVertexType == v1alpha1.VertexTypeReduceUDF {
-				opts = append(opts, publish.IsReduce())
-			}
 			toBuffers := v1alpha1.GenerateBufferNames(vertexInstance.Vertex.Namespace, pipelineName, e.To, e.GetToVertexPartitions())
 			for i, buffer := range toBuffers {
-				publishOpts := append(opts, publish.WithToVertexPartition(int32(i)))
-				publishWatermark[buffer] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), publishOpts...)
+				publishWatermark[buffer] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), publish.WithToVertexPartition(int32(i)))
 			}
 		}
 	}
