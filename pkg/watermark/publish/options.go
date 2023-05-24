@@ -34,8 +34,9 @@ type publishOptions struct {
 	// Whether it is sink publisher or not
 	// isSource and isSink should not be both true
 	isSink bool
-	// isReduce to indicate it is reduce publisher
-	isReduce bool
+	// isToVertexReduce to indicate whether the to-vertex is Reduce
+	// FIXME: add for Map too, meaning delete it.
+	isToVertexReduce bool
 	// toVertexPartition to indicate the partition of toVertex buffer
 	toVertexPartition int32
 }
@@ -78,7 +79,7 @@ func IsSink() PublishOption {
 // IsReduce indicates it's a reduce publisher
 func IsReduce() PublishOption {
 	return func(opts *publishOptions) {
-		opts.isReduce = true
+		opts.isToVertexReduce = true
 	}
 }
 
