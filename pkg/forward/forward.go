@@ -361,8 +361,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// forward the message to the edge buffer (could be multiple edges)
-		writeOffsets = make(map[string][]isb.Offset, len(messageToStep))
-		err = isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
+		writeOffsets, err = isdf.writeToBuffers(ctx, messageToStep)
 		if err != nil {
 			isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 			isdf.fromBuffer.NoAck(ctx, readOffsets)
@@ -485,10 +484,14 @@ func (isdf *InterStepDataForward) streamMessage(
 			}
 
 			// Forward the message to the edge buffer (could be multiple edges)
-			err := isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
+			curWriteOffsets, err := isdf.writeToBuffers(ctx, messageToStep)
 			if err != nil {
 				isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 				return nil, err
+			}
+			// Merge curWriteOffsets into writeOffsets
+			for k, v := range curWriteOffsets {
+				writeOffsets[k] = v
 			}
 		}
 
@@ -510,7 +513,8 @@ func (isdf *InterStepDataForward) streamMessage(
 			"buffer": isdf.fromBuffer.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 	} else {
 		// Even not data messages, forward the message to the edge buffer (could be multiple edges)
-		err := isdf.writeToBuffers(ctx, messageToStep, writeOffsets)
+		var err error
+		writeOffsets, err = isdf.writeToBuffers(ctx, messageToStep)
 		if err != nil {
 			isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 			return nil, err
@@ -573,17 +577,17 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 // has been initiated while we are stuck looping on an InternalError.
 func (isdf *InterStepDataForward) writeToBuffers(
 	ctx context.Context, messageToStep map[string][]isb.Message,
-	writeOffsetsEdge map[string][]isb.Offset,
-) (err error) {
+) (writeOffsetsEdge map[string][]isb.Offset, err error) {
 	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
 	// So writeOffsetsEdge also contains all the to buffers, but the returned offsets might be empty.
+	writeOffsetsEdge = make(map[string][]isb.Offset, len(messageToStep))
 	for bufferName, toBuffer := range isdf.toBuffers {
 		writeOffsetsEdge[bufferName], err = isdf.writeToBuffer(ctx, toBuffer, messageToStep[bufferName])
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return writeOffsetsEdge, nil
 }
 
 // writeToBuffer forwards an array of messages to a single buffer and is a blocking call or until shutdown has been initiated.

@@ -10,7 +10,7 @@ spec:
     - name: go-split
       metadata:
         annotations:
-          map-stream: "true"
+          numaflow.numaproj.io/map-stream: "true"
       limits:
         readBatchSize: 1
       scale:

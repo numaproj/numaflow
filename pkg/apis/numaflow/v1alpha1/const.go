@@ -155,7 +155,7 @@ const (
 	DefaultGRPCMaxMessageSize = 20 * 1024 * 1024
 
 	// UDF map streaming
-	UDFMapStreamKey = "map-stream"
+	UDFMapStreamKey = "numaflow.numaproj.io/map-stream"
 )
 
 var (

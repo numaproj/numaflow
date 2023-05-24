@@ -1151,8 +1151,7 @@ func TestWriteToBuffer(t *testing.T) {
 			messageToStep["to1"] = make([]isb.Message, 0)
 			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
 			messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:value.batchSize+1]...)
-			writeOffsets := make(map[string][]isb.Offset, len(messageToStep))
-			err = f.writeToBuffers(ctx, messageToStep, writeOffsets)
+			_, err = f.writeToBuffers(ctx, messageToStep)
 
 			assert.Equal(t, value.throwError, err != nil)
 			if value.throwError {
