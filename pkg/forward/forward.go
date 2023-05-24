@@ -370,6 +370,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	} else {
 		writeOffsets, err = isdf.streamMessage(ctx, dataMessages, processorWM)
 		if err != nil {
+			isdf.opts.logger.Errorw("failed to streamMessage", zap.Error(err))
 			// As there's no partial failure, non-ack all the readOffsets
 			isdf.fromBuffer.NoAck(ctx, readOffsets)
 			return
@@ -479,15 +480,13 @@ func (isdf *InterStepDataForward) streamMessage(
 
 			// update toBuffers
 			if err := isdf.whereToStep(&writeMessage, messageToStep, dataMessages[0]); err != nil {
-				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
-				return nil, err
+				return nil, fmt.Errorf("failed at whereToStep, error: %w", err)
 			}
 
 			// Forward the message to the edge buffer (could be multiple edges)
 			curWriteOffsets, err := isdf.writeToBuffers(ctx, messageToStep)
 			if err != nil {
-				isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
-				return nil, err
+				return nil, fmt.Errorf("failed to write to toBuffers, error: %w", err)
 			}
 			// Merge curWriteOffsets into writeOffsets
 			for k, v := range curWriteOffsets {
@@ -500,13 +499,12 @@ func (isdf *InterStepDataForward) streamMessage(
 		if err := errs.Wait(); err != nil {
 			udfError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
 				"buffer": isdf.fromBuffer.GetName()}).Inc()
-			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
 			// We do not retry as we are streaming
 			if ok, _ := isdf.IsShuttingDown(); ok {
 				isdf.opts.logger.Errorw("UDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
 				platformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName}).Inc()
 			}
-			return nil, err
+			return nil, fmt.Errorf("failed to applyUDF, error: %w", err)
 		}
 
 		udfProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
@@ -516,8 +514,7 @@ func (isdf *InterStepDataForward) streamMessage(
 		var err error
 		writeOffsets, err = isdf.writeToBuffers(ctx, messageToStep)
 		if err != nil {
-			isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
-			return nil, err
+			return nil, fmt.Errorf("failed to write to toBuffers, error: %w", err)
 		}
 	}
 
