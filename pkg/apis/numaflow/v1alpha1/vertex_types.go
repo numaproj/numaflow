@@ -358,7 +358,7 @@ func (v Vertex) GetReplicas() int {
 
 func (v Vertex) MapUdfStreamEnabled() (bool, error) {
 	if v.Spec.Metadata != nil && v.Spec.Metadata.Annotations != nil {
-		if mapUdfStream := v.Spec.Metadata.Annotations[MapUdfStreamKey]; mapUdfStream != "" {
+		if mapUdfStream, existing := v.Spec.Metadata.Annotations[MapUdfStreamKey]; existing {
 			return strconv.ParseBool(mapUdfStream)
 		}
 	}

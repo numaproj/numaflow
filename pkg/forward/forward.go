@@ -491,7 +491,7 @@ func (isdf *InterStepDataForward) streamMessage(
 			}
 			// Merge curWriteOffsets into writeOffsets
 			for k, v := range curWriteOffsets {
-				writeOffsets[k] = v
+				writeOffsets[k] = append(writeOffsets[k], v...)
 			}
 		}
 
