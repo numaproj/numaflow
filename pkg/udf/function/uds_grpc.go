@@ -25,7 +25,7 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	"github.com/numaproj/numaflow-go/pkg/function/client"
+	"github.com/numaproj/numaflow-go/pkg/function/udferr"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -100,9 +100,9 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 
 	datumList, err := u.client.MapFn(ctx, d)
 	if err != nil {
-		udfErr, _ := client.FromError(err)
+		udfErr, _ := udferr.FromError(err)
 		switch udfErr.ErrorKind() {
-		case client.Retryable:
+		case udferr.Retryable:
 			var success bool
 			_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
 				// retry every "duration * factor + [0, jitter]" interval for 5 times
@@ -113,11 +113,11 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 			}, func() (done bool, err error) {
 				datumList, err = u.client.MapFn(ctx, d)
 				if err != nil {
-					udfErr, _ = client.FromError(err)
+					udfErr, _ = udferr.FromError(err)
 					switch udfErr.ErrorKind() {
-					case client.Retryable:
+					case udferr.Retryable:
 						return false, nil
-					case client.NonRetryable:
+					case udferr.NonRetryable:
 						return true, nil
 					default:
 						return true, nil
@@ -136,7 +136,7 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 					},
 				}
 			}
-		case client.NonRetryable:
+		case udferr.NonRetryable:
 			return nil, ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
@@ -231,9 +231,9 @@ readLoop:
 	if err != nil {
 		// if any error happens in reduce
 		// will exit and restart the numa container
-		udfErr, _ := client.FromError(err)
+		udfErr, _ := udferr.FromError(err)
 		switch udfErr.ErrorKind() {
-		case client.Retryable:
+		case udferr.Retryable:
 			// TODO: currently we don't handle retryable errors for reduce
 			return nil, ApplyUDFErr{
 				UserUDFErr: false,
@@ -243,7 +243,7 @@ readLoop:
 					MainCarDown: false,
 				},
 			}
-		case client.NonRetryable:
+		case udferr.NonRetryable:
 			return nil, ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
