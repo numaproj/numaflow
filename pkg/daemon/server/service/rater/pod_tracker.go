@@ -81,19 +81,13 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 				return
 			case <-ticker.C:
 				for _, v := range pt.pipeline.Spec.Vertices {
-					var limit int
-					if max := v.Scale.Max; max != nil {
-						limit = int(*max)
-					} else {
-						limit = v1alpha1.MaxReplicasLimit
-					}
 					var vType string
 					if v.IsReduceUDF() {
 						vType = "reduce"
 					} else {
 						vType = "non_reduce"
 					}
-					for i := 0; i < limit; i++ {
+					for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
 						podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
 						// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
 						// "*" is used as a separator such that the worker can split the key to get the pipeline name, vertex name, pod index and vertex type.

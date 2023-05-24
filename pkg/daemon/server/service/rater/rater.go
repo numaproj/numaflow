@@ -85,11 +85,11 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 // Function monitor() defines each of the worker's job.
 // It waits for keys in the channel, and starts a monitoring job
 func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
-	r.log.Debugf("Started monitoring worker %v", id)
+	r.log.Infof("Started monitoring worker %v", id)
 	for {
 		select {
 		case <-ctx.Done():
-			r.log.Debugf("Stopped monitoring worker %v", id)
+			r.log.Infof("Stopped monitoring worker %v", id)
 			return
 		case key := <-keyCh:
 			if err := r.monitorOnePod(ctx, key, id); err != nil {
