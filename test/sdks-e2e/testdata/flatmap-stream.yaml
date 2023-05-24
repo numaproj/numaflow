@@ -17,9 +17,17 @@ spec:
         min: 1
       udf:
         container:
-          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/flatmap
+          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/flatmap_stream
           image: quay.io/numaio/numaflow-go/map-flatmap-stream:latest
     - name: go-udsink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/log
+            image: quay.io/numaio/numaflow-go/sink-log:latest
+    - name: go-udsink-2
       scale:
         min: 1
       sink:
@@ -32,3 +40,5 @@ spec:
       to: go-split
     - from: go-split
       to: go-udsink
+    - from: go-split
+      to: go-udsink-2

@@ -112,12 +112,12 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 		if isdf.opts.srcWatermarkPublisher == nil {
 			return nil, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder")
 		}
-		if isdf.opts.udfStreaming {
+		if isdf.opts.enableMapUdfStream {
 			return nil, fmt.Errorf("stream is not supported for source data transformer")
 		}
 	}
 
-	if isdf.opts.udfStreaming && isdf.opts.readBatchSize != 1 {
+	if isdf.opts.enableMapUdfStream && isdf.opts.readBatchSize != 1 {
 		return nil, fmt.Errorf("batch size is not 1 with UDF streaming")
 	}
 
@@ -265,7 +265,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	var writeOffsets map[string][]isb.Offset
-	if !isdf.opts.udfStreaming {
+	if !isdf.opts.enableMapUdfStream {
 		// create space for writeMessages specific to each step as we could forward to all the steps too.
 		var messageToStep = make(map[string][]isb.Message)
 		for buffer := range isdf.toBuffers {

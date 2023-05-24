@@ -40,19 +40,19 @@ type options struct {
 	srcWatermarkPublisher isb.SourceWatermarkPublisher
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
-	// udfStreaming indicates whether the message streaming is enabled or not for UDF processing
-	udfStreaming bool
+	// enableMapUdfStream indicates whether the message streaming is enabled or not for UDF processing
+	enableMapUdfStream bool
 }
 
 type Option func(*options) error
 
 func DefaultOptions() *options {
 	return &options{
-		readBatchSize:  dfv1.DefaultReadBatchSize,
-		udfConcurrency: dfv1.DefaultReadBatchSize,
-		retryInterval:  time.Millisecond,
-		logger:         logging.NewLogger(),
-		udfStreaming:   false,
+		readBatchSize:      dfv1.DefaultReadBatchSize,
+		udfConcurrency:     dfv1.DefaultReadBatchSize,
+		retryInterval:      time.Millisecond,
+		logger:             logging.NewLogger(),
+		enableMapUdfStream: false,
 	}
 }
 
@@ -107,7 +107,7 @@ func WithSourceWatermarkPublisher(p isb.SourceWatermarkPublisher) Option {
 // WithUDFStreaming sets streaming for UDF processing
 func WithUDFStreaming(f bool) Option {
 	return func(o *options) error {
-		o.udfStreaming = f
+		o.enableMapUdfStream = f
 		return nil
 	}
 }
