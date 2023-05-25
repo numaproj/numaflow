@@ -281,7 +281,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					// for reduce we will always have only one partition
-					if v.opts.isReduce || v.opts.isSource {
+					if v.opts.isReduce {
 						p.offsetTimelines[0].Put(otValue)
 					} else {
 						p.offsetTimelines[otValue.Partition].Put(otValue)
