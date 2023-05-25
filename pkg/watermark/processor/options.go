@@ -14,13 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fetch
+package processor
 
 type processorManagerOptions struct {
 	// podHeartbeatRate uses second as time unit
 	podHeartbeatRate int64
 	// refreshingProcessorsRate uses second as time unit
 	refreshingProcessorsRate int64
+	// isReduce is true if the processor manager is for reduce. we have this because Reduce has a 1:1 mapping between
+	// partitions and processors.
+	isReduce bool
+	// vertexReplica is the replica of the vertex
+	vertexReplica int32
 }
 
 // ProcessorManagerOption set options for FromVertex.
@@ -37,5 +42,19 @@ func WithPodHeartbeatRate(rate int64) ProcessorManagerOption {
 func WithRefreshingProcessorsRate(rate int64) ProcessorManagerOption {
 	return func(opts *processorManagerOptions) {
 		opts.refreshingProcessorsRate = rate
+	}
+}
+
+// WithIsReduce sets the processor manager is for reduce.
+func WithIsReduce(isReduce bool) ProcessorManagerOption {
+	return func(opts *processorManagerOptions) {
+		opts.isReduce = isReduce
+	}
+}
+
+// WithVertexReplica sets the vertex replica.
+func WithVertexReplica(replica int32) ProcessorManagerOption {
+	return func(opts *processorManagerOptions) {
+		opts.vertexReplica = replica
 	}
 }

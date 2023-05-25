@@ -25,6 +25,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -36,20 +38,20 @@ type sourceFetcher struct {
 	ctx              context.Context
 	sourceBufferName string
 	storeWatcher     store.WatermarkStoreWatcher
-	processorManager *ProcessorManager
+	processorManager *processor.ProcessorManager
 	log              *zap.SugaredLogger
 }
 
 // NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
 // buckets of the source buffer.
-func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher store.WatermarkStoreWatcher) Fetcher {
+func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher store.WatermarkStoreWatcher, manager *processor.ProcessorManager) Fetcher {
 	log := logging.FromContext(ctx).With("sourceBufferName", sourceBufferName)
 	log.Info("Creating a new source watermark fetcher")
 	return &sourceFetcher{
 		ctx:              ctx,
 		sourceBufferName: sourceBufferName,
 		storeWatcher:     storeWatcher,
-		processorManager: NewProcessorManager(ctx, storeWatcher),
+		processorManager: manager,
 		log:              log,
 	}
 }
@@ -65,8 +67,8 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		if p.offsetTimeline.GetHeadWatermark() < epoch {
-			epoch = p.offsetTimeline.GetHeadWatermark()
+		if p.GetOffsetTimeline().GetHeadWatermark() < epoch {
+			epoch = p.GetOffsetTimeline().GetHeadWatermark()
 		}
 	}
 	if epoch == math.MaxInt64 {
@@ -83,8 +85,8 @@ func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		if p.offsetTimeline.GetHeadWatermark() > epoch {
-			epoch = p.offsetTimeline.GetHeadWatermark()
+		if p.GetOffsetTimeline().GetHeadWatermark() > epoch {
+			epoch = p.GetOffsetTimeline().GetHeadWatermark()
 		}
 	}
 	if epoch == math.MinInt64 {

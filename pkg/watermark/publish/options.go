@@ -34,6 +34,8 @@ type publishOptions struct {
 	// Whether it is sink publisher or not
 	// isSource and isSink should not be both true
 	isSink bool
+	// toVertexPartition to indicate the partition of toVertex buffer
+	toVertexPartition int32
 }
 
 type PublishOption func(*publishOptions)
@@ -68,5 +70,12 @@ func IsSource() PublishOption {
 func IsSink() PublishOption {
 	return func(opts *publishOptions) {
 		opts.isSink = true
+	}
+}
+
+// WithToVertexPartition sets the partition of toVertex buffer
+func WithToVertexPartition(partition int32) PublishOption {
+	return func(opts *publishOptions) {
+		opts.toVertexPartition = partition
 	}
 }

@@ -1122,8 +1122,9 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 
 	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_PROCESSORS", hbWatcherCh)
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
-
-	var f = fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher))
+	storeWatcher := wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	pm := processor.NewProcessorManager(ctx, storeWatcher, processor.WithVertexReplica(0), processor.WithIsReduce(true))
+	f := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm)
 	return f, sourcePublisher
 }
 
@@ -1132,12 +1133,13 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string]isb.B
 	otStores := make(map[string]wmstore.WatermarkKVStorer)
 
 	// create publisher for to Buffers
+	index := int32(0)
 	for key := range toBuffers {
 		publishEntity := processor.NewProcessorEntity(key)
 		hb, hbKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
 		ot, otKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
 		otStores[key] = ot
-		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithToVertexPartition(index), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 
 		go func() {
@@ -1152,6 +1154,7 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string]isb.B
 				}
 			}
 		}()
+		index++
 	}
 	return publishers, otStores
 }

@@ -14,26 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fetch
+package processor
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestOptions(t *testing.T) {
-	testOpts := []ProcessorManagerOption{
-		WithPodHeartbeatRate(10),
-		WithRefreshingProcessorsRate(15),
-	}
-	opts := &processorManagerOptions{
-		podHeartbeatRate:         5,
-		refreshingProcessorsRate: 5,
-	}
-	for _, opt := range testOpts {
-		opt(opts)
-	}
-	assert.Equal(t, int64(10), opts.podHeartbeatRate)
-	assert.Equal(t, int64(15), opts.refreshingProcessorsRate)
+func TestFromProcessor_setStatus(t *testing.T) {
+	var ctx = context.Background()
+	p := NewProcessorToFetch(ctx, NewProcessorEntity("test-pod"), 5)
+	p.setStatus(_inactive)
+	assert.Equal(t, _inactive, p.status)
 }
