@@ -28,9 +28,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
-// TODO - return (map[string]fetch.Fetcher, error) instead of (map[string][]fetch.Fetcher, error)
 // GetEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
+// TODO - return (map[string]fetch.Fetcher, error) instead of (map[string][]fetch.Fetcher, error
 func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[string][]fetch.Fetcher, error) {
 	var wmFetchers = make(map[string][]fetch.Fetcher)
 	if pipeline.Spec.Watermark.Disabled {
@@ -40,7 +40,7 @@ func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, 
 	for _, edge := range pipeline.ListAllEdges() {
 		var wmFetcherList []fetch.Fetcher
 		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
-		fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName)
+		fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName, int32(pipeline.GetVertex(edge.To).GetPartitions()))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 		}

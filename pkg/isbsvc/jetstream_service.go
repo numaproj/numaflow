@@ -279,7 +279,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string) (fetch.Fetcher, error) {
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, bufferPartitionCount int32) (fetch.Fetcher, error) {
 	hbBucketName := JetStreamProcessorBucket(bucketName)
 	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
 	if err != nil {
@@ -291,7 +291,7 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 		return nil, err
 	}
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
-	pm := processor.NewProcessorManager(ctx, storeWatcher)
+	pm := processor.NewProcessorManager(ctx, storeWatcher, bufferPartitionCount)
 	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm)
 	return watermarkFetcher, nil
 }

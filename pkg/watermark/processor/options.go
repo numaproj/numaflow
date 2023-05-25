@@ -26,6 +26,8 @@ type processorManagerOptions struct {
 	isReduce bool
 	// vertexReplica is the replica of the vertex
 	vertexReplica int32
+	// isSource is true if the vertex is source
+	isSource bool
 }
 
 // ProcessorManagerOption set options for FromVertex.
@@ -56,5 +58,12 @@ func WithIsReduce(isReduce bool) ProcessorManagerOption {
 func WithVertexReplica(replica int32) ProcessorManagerOption {
 	return func(opts *processorManagerOptions) {
 		opts.vertexReplica = replica
+	}
+}
+
+// WithIsSource sets the vertex is source.
+func WithIsSource(isSource bool) ProcessorManagerOption {
+	return func(opts *processorManagerOptions) {
+		opts.isSource = isSource
 	}
 }

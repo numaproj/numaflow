@@ -71,15 +71,22 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	var epoch int64 = math.MaxInt64
 	var allProcessors = e.processorManager.GetAllProcessors()
 	for _, p := range allProcessors {
+		headOffset := int64(-1)
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
-		var t = p.GetOffsetTimeline().GetEventTime(inputOffset)
-		if t == -1 { // watermark cannot be computed, perhaps a new processing unit was added or offset fell off the timeline
-			epoch = t
-		} else if t < epoch {
-			epoch = t
+		for _, tl := range p.GetOffsetTimelines() {
+			var t = tl.GetEventTime(inputOffset)
+			if t == -1 { // watermark cannot be computed, perhaps a new processing unit was added or offset fell off the timeline
+				epoch = t
+			} else if t < epoch {
+				epoch = t
+			}
+			if tl.GetHeadOffset() > headOffset {
+				headOffset = tl.GetHeadOffset()
+			}
 		}
-		if p.IsDeleted() && (offset > p.GetOffsetTimeline().GetHeadOffset()) {
-			// if the pod is not active and the current offset is ahead of all offsets in Timeline
+
+		if p.IsDeleted() && (offset > headOffset) {
+			// if the pod is not active and the current offset is ahead of all offsets in processor timelines
 			e.processorManager.DeleteProcessor(p.GetEntity().GetName())
 		}
 	}
@@ -107,13 +114,18 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		var w = p.GetOffsetTimeline().GetHeadWMB()
-		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, w.Offset, w.Watermark, w.Idle)
-		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, w.Offset, w.Watermark, w.Idle))
-		if w.Offset != -1 {
+		headWMB := wmb.WMB{Offset: -1}
+		for _, tl := range p.GetOffsetTimelines() {
+			if tl.GetHeadOffset() > headWMB.Offset {
+				headWMB = tl.GetHeadWMB()
+			}
+		}
+		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, headWMB.Offset, headWMB.Watermark, headWMB.Idle)
+		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, headWMB.Offset, headWMB.Watermark, headWMB.Idle))
+		if headWMB.Offset != -1 {
 			// find the smallest watermark
-			if w.Watermark < headWatermark {
-				headWatermark = w.Watermark
+			if headWMB.Watermark < headWatermark {
+				headWatermark = headWMB.Watermark
 			}
 		}
 	}
@@ -141,18 +153,20 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 		if !p.IsActive() {
 			continue
 		}
-		// we only consider the latest wmb in the offset timeline
-		var curHeadWMB = p.GetOffsetTimeline().GetHeadWMB()
-		if !curHeadWMB.Idle {
-			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bufferName)
-			return wmb.WMB{}
-		}
-		if curHeadWMB.Watermark != -1 {
-			// find the smallest head offset of the smallest watermark
-			if curHeadWMB.Watermark < headWMB.Watermark {
-				headWMB = curHeadWMB
-			} else if curHeadWMB.Watermark == headWMB.Watermark && curHeadWMB.Offset < headWMB.Offset {
-				headWMB = curHeadWMB
+		for _, tl := range p.GetOffsetTimelines() {
+			// we only consider the latest wmb in the offset timeline
+			var curHeadWMB = tl.GetHeadWMB()
+			if !curHeadWMB.Idle {
+				e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bufferName)
+				return wmb.WMB{}
+			}
+			if curHeadWMB.Watermark != -1 {
+				// find the smallest head offset of the smallest watermark
+				if curHeadWMB.Watermark < headWMB.Watermark {
+					headWMB = curHeadWMB
+				} else if curHeadWMB.Watermark == headWMB.Watermark && curHeadWMB.Offset < headWMB.Offset {
+					headWMB = curHeadWMB
+				}
 			}
 		}
 	}

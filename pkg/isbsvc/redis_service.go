@@ -139,12 +139,12 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 	return bufferInfo, nil
 }
 
-func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string) (fetch.Fetcher, error) {
+func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int32) (fetch.Fetcher, error) {
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	hbWatcher := noop.NewKVOpWatch()
 	otWatcher := noop.NewKVOpWatch()
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	pm := processor.NewProcessorManager(ctx, storeWatcher)
+	pm := processor.NewProcessorManager(ctx, storeWatcher, fromBufferPartitionCount)
 	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm)
 	return watermarkFetcher, nil
 }

@@ -48,11 +48,11 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	hbWatcher := noop.NewKVOpWatch()
 	otWatcher := noop.NewKVOpWatch()
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 1)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, 1)
 		pod0Timeline = []wmb.WMB{
 			{Watermark: 11, Offset: 9},
 			{Watermark: 12, Offset: 20},
@@ -75,13 +75,19 @@ func TestBuffer_GetWatermark(t *testing.T) {
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod0.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod1.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod2.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	processorManager.AddProcessor("testPod0", testPod0)
 	processorManager.AddProcessor("testPod1", testPod1)
@@ -165,8 +171,8 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 		hbWatcher         = noop.NewKVOpWatch()
 		otWatcher         = noop.NewKVOpWatch()
 		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher)
-		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher)
+		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, 1)
+		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, 1)
 	)
 
 	getHeadWMTest1(ctx, processorManager1)
@@ -204,9 +210,9 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 
 func getHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 1)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, 1)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      true,
@@ -231,13 +237,19 @@ func getHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorM
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod0.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod1.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod2.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -246,9 +258,9 @@ func getHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorM
 
 func getHeadWMTest2(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 1)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, 1)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      false,
@@ -273,13 +285,19 @@ func getHeadWMTest2(ctx context.Context, processorManager1 *processor.ProcessorM
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod0.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod1.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod2.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -293,10 +311,10 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 		hbWatcher         = noop.NewKVOpWatch()
 		otWatcher         = noop.NewKVOpWatch()
 		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher)
-		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher)
-		processorManager3 = processor.NewProcessorManager(ctx, storeWatcher)
-		processorManager4 = processor.NewProcessorManager(ctx, storeWatcher)
+		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, 1)
+		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, 1)
+		processorManager3 = processor.NewProcessorManager(ctx, storeWatcher, 1)
+		processorManager4 = processor.NewProcessorManager(ctx, storeWatcher, 1)
 	)
 
 	getHeadWMBTest1(ctx, processorManager1)
@@ -350,9 +368,9 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 
 func getHeadWMBTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 1)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, 1)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      true,
@@ -377,13 +395,19 @@ func getHeadWMBTest1(ctx context.Context, processorManager1 *processor.Processor
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod0.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod1.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod2.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -392,9 +416,9 @@ func getHeadWMBTest1(ctx context.Context, processorManager1 *processor.Processor
 
 func getHeadWMBTest2(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 1)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, 1)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      false,
@@ -419,13 +443,19 @@ func getHeadWMBTest2(ctx context.Context, processorManager1 *processor.Processor
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod0.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod1.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod2.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -434,9 +464,9 @@ func getHeadWMBTest2(ctx context.Context, processorManager1 *processor.Processor
 
 func getHeadWMBTest3(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 1)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, 1)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      false,
@@ -461,13 +491,19 @@ func getHeadWMBTest3(ctx context.Context, processorManager1 *processor.Processor
 	)
 
 	for _, watermark := range pod0Timeline {
-		testPod0.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod0.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod1Timeline {
-		testPod1.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod1.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	for _, watermark := range pod2Timeline {
-		testPod2.GetOffsetTimeline().Put(watermark)
+		for _, tl := range testPod2.GetOffsetTimelines() {
+			tl.Put(watermark)
+		}
 	}
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -476,9 +512,9 @@ func getHeadWMBTest3(ctx context.Context, processorManager1 *processor.Processor
 
 func getHeadWMBTest4(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
-		testPod0 = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5)
-		testPod1 = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5)
-		testPod2 = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5)
+		testPod0 = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
+		testPod1 = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 1)
+		testPod2 = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, 1)
 	)
 	processorManager1.AddProcessor("testPod0", testPod0)
 	processorManager1.AddProcessor("testPod1", testPod1)
@@ -533,7 +569,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	var processorManager = processor.NewProcessorManager(ctx, storeWatcher)
+	var processorManager = processor.NewProcessorManager(ctx, storeWatcher, 1)
 	var fetcher = NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager)
 	// start p1 heartbeat for 3 loops
 	wg.Add(1)
@@ -638,8 +674,8 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
-	assert.NotNil(t, p1.GetOffsetTimeline())
-	assert.Equal(t, int64(-1), p1.GetOffsetTimeline().GetHeadOffset())
+	assert.NotNil(t, p1.GetOffsetTimelines())
+	assert.Equal(t, int64(-1), p1.GetOffsetTimelines()[0].GetHeadOffset())
 
 	// publish a new watermark 101
 	otValueByte, err = otValueToBytes(testOffset+1, epoch, false)
@@ -688,7 +724,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	}
 
 	// added 101 in the previous steps for p1, so the head should be 101 after resume
-	assert.Equal(t, int64(101), p1.GetOffsetTimeline().GetHeadOffset())
+	assert.Equal(t, int64(101), p1.GetOffsetTimelines()[0].GetHeadOffset())
 	wg.Wait()
 	cancel()
 }
@@ -790,7 +826,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
 	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager)
 	wg.Add(1)
 	go func() {
@@ -830,11 +866,11 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 		}
 	}
 
-	for allProcessors["p1"].GetOffsetTimeline().Dump() != "[1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the offset timeline [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimeline().Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [1651161600300:102] -> [1651161600200:101] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimelines()[0].Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -911,8 +947,8 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
-	assert.NotNil(t, p1.GetOffsetTimeline())
-	assert.Equal(t, int64(-1), p1.GetOffsetTimeline().GetHeadOffset())
+	assert.NotNil(t, p1.GetOffsetTimelines())
+	assert.Equal(t, int64(-1), p1.GetOffsetTimelines()[0].GetHeadOffset())
 
 	// publish a new watermark 103
 	otValueByte, err = otValueToBytes(testOffset+3, epoch+500, false)
@@ -959,13 +995,13 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	}
 
 	// added 103 in the previous steps for p1, so the head should be 103 after resume
-	assert.Equal(t, int64(103), p1.GetOffsetTimeline().GetHeadOffset())
+	assert.Equal(t, int64(103), p1.GetOffsetTimelines()[0].GetHeadOffset())
 
-	for allProcessors["p1"].GetOffsetTimeline().Dump() != "[1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the offset timeline [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimeline().Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimelines()[0].Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -980,11 +1016,11 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 
 	// p1 should get the head offset watermark from p2
-	for allProcessors["p1"].GetOffsetTimeline().Dump() != "[IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 has the offset timeline [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimeline().Dump(), ctx.Err())
+				t.Fatalf("expected p1 has the offset timeline [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimelines()[0].Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -999,11 +1035,11 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 
 	// p1 should get the head offset watermark from p2
-	for allProcessors["p1"].GetOffsetTimeline().Dump() != "[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> ..., got %s: %s", allProcessors["p1"].GetOffsetTimeline().Dump(), ctx.Err())
+				t.Fatalf("[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> ..., got %s: %s", allProcessors["p1"].GetOffsetTimelines()[0].Dump(), ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)

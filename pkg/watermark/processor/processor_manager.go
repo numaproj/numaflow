@@ -49,32 +49,36 @@ type ProcessorManager struct {
 	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
 	// used for tracking watermark.
 	processors map[string]*ProcessorToFetch
-	lock       sync.RWMutex
-	log        *zap.SugaredLogger
+	// fromBufferPartitionCount is the number of partitions in the fromBuffer
+	fromBufferPartitionCount int32
+	lock                     sync.RWMutex
+	log                      *zap.SugaredLogger
 
 	// opts
 	opts *processorManagerOptions
 }
 
 // NewProcessorManager returns a new ProcessorManager instance
-func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.WatermarkStoreWatcher, inputOpts ...ProcessorManagerOption) *ProcessorManager {
+func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.WatermarkStoreWatcher, fromBufferPartitionCount int32, inputOpts ...ProcessorManagerOption) *ProcessorManager {
 	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
 		isReduce:                 false,
+		isSource:                 false,
 		vertexReplica:            0,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
 	}
 	v := &ProcessorManager{
-		ctx:        ctx,
-		hbWatcher:  watermarkStoreWatcher.HeartbeatWatcher(),
-		otWatcher:  watermarkStoreWatcher.OffsetTimelineWatcher(),
-		heartbeat:  NewProcessorHeartbeat(),
-		processors: make(map[string]*ProcessorToFetch),
-		log:        logging.FromContext(ctx),
-		opts:       opts,
+		ctx:                      ctx,
+		hbWatcher:                watermarkStoreWatcher.HeartbeatWatcher(),
+		otWatcher:                watermarkStoreWatcher.OffsetTimelineWatcher(),
+		heartbeat:                NewProcessorHeartbeat(),
+		processors:               make(map[string]*ProcessorToFetch),
+		fromBufferPartitionCount: fromBufferPartitionCount,
+		log:                      logging.FromContext(ctx),
+		opts:                     opts,
 	}
 	go v.startRefreshingProcessors()
 	go v.startHeatBeatWatcher()
@@ -186,7 +190,12 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
 					var entity = NewProcessorEntity(value.Key())
-					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10)
+					var fromProcessor *ProcessorToFetch
+					if v.opts.isReduce || v.opts.isSource {
+						fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, 1)
+					} else {
+						fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.fromBufferPartitionCount)
+					}
 					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active
@@ -263,11 +272,20 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					continue
 				}
 				if otValue.Idle {
-					p.offsetTimeline.PutIdle(otValue)
+					if v.opts.isReduce {
+						p.offsetTimelines[0].PutIdle(otValue)
+					} else {
+						p.offsetTimelines[otValue.Partition].PutIdle(otValue)
+					}
 					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("idleWatermark", otValue.Watermark), zap.Int64("idleOffset", otValue.Offset))
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
-					p.offsetTimeline.Put(otValue)
+					// for reduce we will always have only one partition
+					if v.opts.isReduce {
+						p.offsetTimelines[0].Put(otValue)
+					} else {
+						p.offsetTimelines[otValue.Partition].Put(otValue)
+					}
 					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 				}
 			case store.KVDelete:

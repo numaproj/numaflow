@@ -67,8 +67,10 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		if p.GetOffsetTimeline().GetHeadWatermark() < epoch {
-			epoch = p.GetOffsetTimeline().GetHeadWatermark()
+		for _, timeline := range p.GetOffsetTimelines() {
+			if timeline.GetHeadWatermark() < epoch {
+				epoch = timeline.GetHeadWatermark()
+			}
 		}
 	}
 	if epoch == math.MaxInt64 {
@@ -85,8 +87,10 @@ func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		if p.GetOffsetTimeline().GetHeadWatermark() > epoch {
-			epoch = p.GetOffsetTimeline().GetHeadWatermark()
+		for _, timeline := range p.GetOffsetTimelines() {
+			if timeline.GetHeadWatermark() > epoch {
+				epoch = timeline.GetHeadWatermark()
+			}
 		}
 	}
 	if epoch == math.MinInt64 {
