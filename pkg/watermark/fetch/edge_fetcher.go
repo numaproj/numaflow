@@ -72,6 +72,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	var allProcessors = e.processorManager.GetAllProcessors()
 	for _, p := range allProcessors {
 		headOffset := int64(-1)
+		// iterate over all the timelines of the processor and get the smallest watermark
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
 		for _, tl := range p.GetOffsetTimelines() {
 			var t = tl.GetEventTime(inputOffset)
@@ -85,8 +86,8 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 			}
 		}
 
+		// if the pod is not active and the head offset of all the timelines is less than the current offset, delete the processor
 		if p.IsDeleted() && (offset > headOffset) {
-			// if the pod is not active and the current offset is ahead of all offsets in processor timelines
 			e.processorManager.DeleteProcessor(p.GetEntity().GetName())
 		}
 	}

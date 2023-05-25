@@ -191,6 +191,8 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					// TODO: make capacity configurable
 					var entity = NewProcessorEntity(value.Key())
 					var fromProcessor *ProcessorToFetch
+					// if the processor is a reduce or source processor, then we only need one fromProcessor
+					// because the reduce or source will read from only one partition.
 					if v.opts.isReduce || v.opts.isSource {
 						fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, 1)
 					} else {

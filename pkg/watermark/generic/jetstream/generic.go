@@ -68,7 +68,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 
 	// create a store watcher that watches the heartbeat and ot store.
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
-	// create processor manager with the store watcher that keeps track of all the active processors.
+	// create processor manager with the store watcher which will keep track of all the active processors and updates the offset timelines accordingly.
 	processManager := processor.NewProcessorManager(ctx, storeWatcher, int32(len(vertexInstance.Vertex.OwnedBuffers())),
 		processor.WithVertexReplica(vertexInstance.Replica), processor.WithIsReduce(vertexInstance.Vertex.IsReduceUDF()), processor.WithIsSource(vertexInstance.Vertex.IsASource()))
 
