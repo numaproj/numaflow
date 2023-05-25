@@ -55,7 +55,7 @@ func (p *MessageInfo) UnmarshalBinary(data []byte) (err error) {
 }
 
 type headerPreamble struct {
-	MLen    int16
+	MLen    int32
 	MsgKind MessageKind
 	IDLen   int16
 	KeyLen  int16
@@ -69,7 +69,7 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 		return nil, err
 	}
 	var preamble = headerPreamble{
-		MLen:    int16(len(msgInfo)),
+		MLen:    int32(len(msgInfo)),
 		MsgKind: h.Kind,
 		IDLen:   int16(len(h.ID)),
 		KeyLen:  int16(len(h.Keys)),
@@ -145,14 +145,14 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 }
 
 type bodyPreamble struct {
-	PLen int64
+	PLen int32
 }
 
 // MarshalBinary encodes Body to a binary format
 func (b Body) MarshalBinary() (data []byte, err error) {
 	var buf = new(bytes.Buffer)
 	var preamble = bodyPreamble{
-		PLen: int64(len(b.Payload)),
+		PLen: int32(len(b.Payload)),
 	}
 	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
 		return nil, err
@@ -181,8 +181,8 @@ func (b *Body) UnmarshalBinary(data []byte) (err error) {
 }
 
 type messagePreamble struct {
-	HLen int16
-	BLen int16
+	HLen int32
+	BLen int32
 }
 
 // MarshalBinary encodes Message to the binary format
@@ -197,8 +197,8 @@ func (m Message) MarshalBinary() (data []byte, err error) {
 		return nil, err
 	}
 	var preamble = messagePreamble{
-		HLen: int16(len(header)),
-		BLen: int16(len(body)),
+		HLen: int32(len(header)),
+		BLen: int32(len(body)),
 	}
 	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ func (m *Message) UnmarshalBinary(data []byte) (err error) {
 }
 
 type readMessagePreamble struct {
-	MLen int16
+	MLen int32
 	// TODO: currently only support simple int offset
 	SimpleIntOffset int64
 	WMEpoch         int64
@@ -279,7 +279,7 @@ func (rm ReadMessage) MarshalBinary() (data []byte, err error) {
 	}
 
 	var preamble = readMessagePreamble{
-		MLen:            int16(len(message)),
+		MLen:            int32(len(message)),
 		SimpleIntOffset: offset,
 		WMEpoch:         rm.Watermark.UnixMilli(),
 		NumDelivered:    rm.Metadata.NumDelivered,
