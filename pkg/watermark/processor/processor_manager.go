@@ -193,11 +193,13 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					var fromProcessor *ProcessorToFetch
 					// if the processor is a reduce or source processor, then we only need one fromProcessor
 					// because the reduce or source will read from only one partition.
+					partitionCnt := 0
 					if v.opts.isReduce || v.opts.isSource {
-						fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, 1)
+						partitionCnt = 1
 					} else {
-						fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.fromBufferPartitionCount)
+						partitionCnt = v.fromBufferPartitionCount
 					}
+					fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, partitionCnt)
 					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active

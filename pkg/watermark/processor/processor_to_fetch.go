@@ -49,7 +49,7 @@ func (s status) String() string {
 	return "unknown"
 }
 
-// ProcessorToFetch is the smallest unit of entity (from which we fetch data) that does inorder processing or contains inorder data.
+// ProcessorToFetch is the smallest unit of entity (from which we fetch data) that does inorder processing or contains inorder data. It tracks OT for all the partitions of the incoming buffer.
 type ProcessorToFetch struct {
 	ctx             context.Context
 	entity          ProcessorEntitier

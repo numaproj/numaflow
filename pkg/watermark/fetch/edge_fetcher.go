@@ -71,6 +71,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	var epoch int64 = math.MaxInt64
 	var allProcessors = e.processorManager.GetAllProcessors()
 	for _, p := range allProcessors {
+		// headOffset is used to check whether this pod can be deleted.
 		headOffset := int64(-1)
 		// iterate over all the timelines of the processor and get the smallest watermark
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
@@ -81,12 +82,15 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 			} else if t < epoch {
 				epoch = t
 			}
+			// get the highest head offset among all the partitions of the processor so we can check later on whether the processor
+			// in question is stale (its head is far behind)
 			if tl.GetHeadOffset() > headOffset {
 				headOffset = tl.GetHeadOffset()
 			}
 		}
 
-		// if the pod is not active and the head offset of all the timelines is less than the current offset, delete the processor
+		// if the pod is not active and the head offset of all the timelines is less than the input offset, delete the processor
+		// (this means we are processing data later than what the stale processor has processed)
 		if p.IsDeleted() && (offset > headOffset) {
 			e.processorManager.DeleteProcessor(p.GetEntity().GetName())
 		}
@@ -154,6 +158,8 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 		if !p.IsActive() {
 			continue
 		}
+		
+		// find the smallest head offset among the head WMBs
 		for _, tl := range p.GetOffsetTimelines() {
 			// we only consider the latest wmb in the offset timeline
 			var curHeadWMB = tl.GetHeadWMB()
@@ -162,7 +168,7 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 				return wmb.WMB{}
 			}
 			if curHeadWMB.Watermark != -1 {
-				// find the smallest head offset of the smallest watermark
+				// find the smallest head offset of the smallest WMB.watermark (though latest)
 				if curHeadWMB.Watermark < headWMB.Watermark {
 					headWMB = curHeadWMB
 				} else if curHeadWMB.Watermark == headWMB.Watermark && curHeadWMB.Offset < headWMB.Offset {
