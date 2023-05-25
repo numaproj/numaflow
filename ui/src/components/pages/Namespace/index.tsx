@@ -25,6 +25,9 @@ import { GetStore } from "../../../localStore/GetStore";
 
 import "./style.css";
 
+const NS_Curr_Store = "curr_namespace";
+const NS_List_Store = "namespace_list";
+
 export function Namespaces() {
   const [nsCookie, setNsCookie] = useState<string[]>([]);
   const [nsCluster, setNsCluster] = useState<string[]>([]);
@@ -69,14 +72,14 @@ export function Namespaces() {
       setDisableSearch(false);
 
       // set namespace value for search box
-      const curr_ns = GetStore("curr_namespace");
+      const curr_ns = GetStore(NS_Curr_Store);
       if (curr_ns) {
         setValue(curr_ns);
         setNamespace(curr_ns);
       }
 
       // sets namespace list available from cookies
-      const ns_list = JSON.parse(GetStore("namespace_list"));
+      const ns_list = JSON.parse(GetStore(NS_List_Store));
       if (ns_list) setNsCookie(ns_list);
     }
   }, [systemInfo]);
@@ -107,10 +110,10 @@ export function Namespaces() {
   }, [nsCookie, nsCluster]);
 
   const handle = (namespaceVal: string) => {
-    SetStore("curr_namespace", namespaceVal);
+    SetStore(NS_Curr_Store, namespaceVal);
     setNamespace(namespaceVal);
     if (namespaceVal) {
-      const arr = SetNamespaceList(nsCookie, namespaceVal);
+      const arr = SetNamespaceList(nsCookie, NS_List_Store, namespaceVal);
       setNsCookie(arr);
     }
   };

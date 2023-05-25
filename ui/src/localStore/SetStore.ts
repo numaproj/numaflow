@@ -2,7 +2,11 @@ export function SetStore(id: string, data: any) {
   localStorage.setItem(id, data);
 }
 
-export function SetNamespaceList(nsCookie: string[], namespaceVal: string) {
+export function SetNamespaceList(
+  nsCookie: string[],
+  NS_List_Store: string,
+  namespaceVal: string
+) {
   let idx = -1;
   for (let i = 0; i < nsCookie.length; i++) {
     if (namespaceVal === nsCookie[i]) {
@@ -21,6 +25,6 @@ export function SetNamespaceList(nsCookie: string[], namespaceVal: string) {
     arr.unshift(namespaceVal);
     if (arr.length > 10) arr.pop();
   }
-  localStorage.setItem("namespace_list", JSON.stringify(arr));
+  localStorage.setItem(NS_List_Store, JSON.stringify(arr));
   return arr.slice();
 }
