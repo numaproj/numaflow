@@ -204,21 +204,6 @@ func (p Pipeline) GetAllBuckets() []string {
 		} else if v.Sink != nil {
 			r = append(r, GenerateSinkBucketName(p.Namespace, p.Name, v.Name))
 		}
-		// TODO(one bucket): remove it.
-		if v.IsReduceUDF() {
-			for _, e := range p.GetFromEdges(v.Name) {
-				partitions := 1
-				if v.Partitions != nil {
-					partitions = v.GetPartitions()
-				} else if e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 1 {
-					partitions = int(*e.DeprecatedParallelism)
-				}
-				for i := 0; i < partitions; i++ {
-					r = append(r, fmt.Sprintf("%s-%d", GenerateEdgeBucketName(p.Namespace, p.Name, e.From, e.To), i))
-				}
-			}
-		}
-		// end of TODO(one bucket).
 	}
 	return r
 }
