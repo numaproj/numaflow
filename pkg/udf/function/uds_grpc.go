@@ -19,6 +19,7 @@ package function
 import (
 	"context"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"strconv"
 	"sync"
 	"time"
@@ -176,6 +177,67 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 		writeMessages = append(writeMessages, taggedMessage)
 	}
 	return writeMessages, nil
+}
+
+func (u *UDSgRPCBasedUDF) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	defer close(writeMessageCh)
+
+	keys := message.Keys
+	payload := message.Body.Payload
+	offset := message.ReadOffset
+	parentMessageInfo := message.MessageInfo
+	id := message.Message.ID
+	numDelivered := message.Metadata.NumDelivered
+	var d = &functionpb.DatumRequest{
+		Keys:      keys,
+		Value:     payload,
+		EventTime: &functionpb.EventTime{EventTime: timestamppb.New(parentMessageInfo.EventTime)},
+		Watermark: &functionpb.Watermark{Watermark: timestamppb.New(message.Watermark)},
+		Metadata: &functionpb.Metadata{
+			Id:           id,
+			NumDelivered: numDelivered,
+		},
+	}
+
+	datumCh := make(chan *functionpb.DatumResponse)
+	errs, ctx := errgroup.WithContext(ctx)
+	errs.Go(func() error {
+		err := u.client.MapStreamFn(ctx, d, datumCh)
+		if err != nil {
+			err = ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapStreamFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+			return err
+		}
+		return nil
+	})
+
+	i := 0
+	for datum := range datumCh {
+		i++
+		keys := datum.Keys
+		taggedMessage := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: parentMessageInfo,
+					ID:          fmt.Sprintf("%s-%d", offset.String(), i),
+					Keys:        keys,
+				},
+				Body: isb.Body{
+					Payload: datum.Value,
+				},
+			},
+			Tags: datum.Tags,
+		}
+		writeMessageCh <- *taggedMessage
+	}
+
+	return errs.Wait()
 }
 
 // should we pass metadata information ?

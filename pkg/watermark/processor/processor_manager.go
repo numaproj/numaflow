@@ -14,7 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fetch
+// package processor contains the logic for managing the processors and their offset timelines.
+// It also takes care of managing the lifecycle of the processors by listening to the heartbeat of the processors, and
+// also maintains the processor to offset timeline mapping. ProcessorManager will be used by the `fetcher` to
+// fetch the active processors list at any given time. ProcessorManager is also responsible for watching the offset
+// timeline changes and updating the offset timeline for each processor.
+
+package processor
 
 import (
 	"context"
@@ -28,7 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
@@ -56,6 +61,8 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
+		isReduce:                 false,
+		vertexReplica:            0,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
@@ -75,8 +82,8 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 	return v
 }
 
-// addProcessor adds a new processor. If the given processor already exists, the value will be updated.
-func (v *ProcessorManager) addProcessor(processor string, p *ProcessorToFetch) {
+// AddProcessor adds a new processor. If the given processor already exists, the value will be updated.
+func (v *ProcessorManager) AddProcessor(processor string, p *ProcessorToFetch) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 	v.processors[processor] = p
@@ -178,9 +185,9 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					// A fromProcessor needs to be added to v.processors
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
-					var entity = processor.NewProcessorEntity(value.Key())
+					var entity = NewProcessorEntity(value.Key())
 					var fromProcessor = NewProcessorToFetch(v.ctx, entity, 10)
-					v.addProcessor(value.Key(), fromProcessor)
+					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active
 					p.setStatus(_active)
@@ -245,6 +252,12 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					continue
 				}
 				otValue, err := wmb.DecodeToWMB(value.Value())
+				// if it's a reduce vertex, consider the watermarks only for the partition that the processor is running on. this is because
+				// reduce processors has 1:1 relation with partitions.
+				// also, ignore all events not belonging to this partition.
+				if v.opts.isReduce && otValue.Partition != v.opts.vertexReplica {
+					continue
+				}
 				if err != nil {
 					v.log.Errorw("Unable to decode the value", zap.String("processorEntity", p.entity.GetName()), zap.Error(err))
 					continue
