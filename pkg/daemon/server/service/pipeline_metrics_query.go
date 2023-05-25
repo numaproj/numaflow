@@ -54,6 +54,7 @@ type pipelineMetadataQuery struct {
 	rater             *server.Rater
 
 	// temporary flag to help with testing new rate calculation approach
+	// TODO - remove this flag once we fully migrate to new rate calculation
 	useNewRateCalculation bool
 }
 
@@ -183,6 +184,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	}
 
 	var vertexLevelRates map[string]float64
+
 	if ps.useNewRateCalculation {
 		vertexLevelRates = ps.rater.GetRates(req.GetVertex())
 	}

@@ -43,7 +43,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	if n <= 1 {
 		return 0
 	}
-	now := time.Now().Truncate(time.Second * 10).Unix()
+	now := time.Now().Truncate(CountWindow).Unix()
 	counts := q.Items()
 	var startIndex int
 	startCountInfo := counts[n-2]

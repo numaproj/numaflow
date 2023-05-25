@@ -32,6 +32,10 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
+// CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
+// e.g. if the current time is 12:00:07, the retrieved count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
+const CountWindow = time.Second * 10
+
 // metricsHttpClient interface for the GET/HEAD call to metrics endpoint.
 // Had to add this an interface for testing
 type metricsHttpClient interface {
@@ -102,13 +106,13 @@ func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
 func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error {
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
-	podInfo := strings.Split(key, "*")
+	podInfo := strings.Split(key, PodInfoSeparator)
 	if len(podInfo) != 4 {
 		return fmt.Errorf("invalid key %q", key)
 	}
 	vertexName := podInfo[1]
 	vertexType := podInfo[3]
-	podName := podInfo[0] + "-" + podInfo[1] + "-" + podInfo[2]
+	podName := strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-")
 	var count float64
 	activePods := r.podTracker.GetActivePods()
 	if activePods.Contains(key) {
@@ -121,9 +125,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 		log.Debugf("Pod %s does not exist, updating it with CountNotAvailable...", podName)
 		count = CountNotAvailable
 	}
-	// track the total counts using a 10-second time window
-	// e.g. if the current time is 12:00:07, the count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
-	now := time.Now().Add(time.Second * 10).Truncate(time.Second * 10).Unix()
+	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	UpdateCount(r.timestampedPodCounts[vertexName], now, podName, count)
 	return nil
 }

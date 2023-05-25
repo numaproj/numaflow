@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -28,6 +29,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
+
+// PodInfoSeparator is used as a separator such that the worker can split the pod key
+// to get the pipeline name, vertex name, pod index and vertex type.
+// "*" is chosen because it is not allowed in all the above fields.
+const PodInfoSeparator = "*"
 
 // PodTracker maintains a set of active pods for a pipeline
 // It periodically sends http requests to pods to check if they are still active
@@ -90,8 +96,7 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 					for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
 						podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
 						// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
-						// "*" is used as a separator such that the worker can split the key to get the pipeline name, vertex name, pod index and vertex type.
-						podKey := fmt.Sprintf("%s*%s*%d*%s", pt.pipeline.Name, v.Name, i, vType)
+						podKey := strings.Join([]string{pt.pipeline.Name, v.Name, fmt.Sprintf("%d", i), vType}, PodInfoSeparator)
 						if pt.isActive(v.Name, podName) {
 							pt.activePods.PushBack(podKey)
 						} else {
