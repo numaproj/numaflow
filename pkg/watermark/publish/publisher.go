@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// package publish contains the logic to publish watermark. It exposes the `Publisher` interface.
+// which has the methods to publish watermark. It also publishes the heartbeat for the processor entity.
+// The heartbeat will be used to detect the processor is alive or not. It also has the method to
+// publish Idle watermark if the processor is idle.
+
 package publish
 
 import (
@@ -68,6 +73,7 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 		podHeartbeatRate:     5,
 		isSource:             false,
 		delay:                0,
+		toVertexPartition:    0,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
@@ -130,7 +136,9 @@ func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset) {
 	var otValue = wmb.WMB{
 		Offset:    seq,
 		Watermark: validWM.UnixMilli(),
+		Partition: p.opts.toVertexPartition,
 	}
+
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
 		p.log.Errorw("Unable to publish watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
@@ -190,7 +198,9 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset) {
 		Offset:    seq,
 		Watermark: validWM.UnixMilli(),
 		Idle:      true,
+		Partition: p.opts.toVertexPartition,
 	}
+
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
 		p.log.Errorw("Unable to publish idle watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))

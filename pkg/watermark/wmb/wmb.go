@@ -36,6 +36,8 @@ type WMB struct {
 	// When it is idling (Idle==true), for a given offset, the watermark can monotonically increase without offset
 	// increasing.
 	Watermark int64
+	// Partition to identify the partition to which the watermark belongs.
+	Partition int32
 }
 
 // EncodeToBytes encodes a WMB object into byte array.

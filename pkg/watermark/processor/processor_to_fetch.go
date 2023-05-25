@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fetch
+package processor
 
 import (
 	"context"
@@ -23,8 +23,9 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/watermark/timeline"
+
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 )
 
 type status int
@@ -50,11 +51,21 @@ func (s status) String() string {
 // ProcessorToFetch is the smallest unit of entity (from which we fetch data) that does inorder processing or contains inorder data.
 type ProcessorToFetch struct {
 	ctx            context.Context
-	entity         processor.ProcessorEntitier
+	entity         ProcessorEntitier
 	status         status
-	offsetTimeline *OffsetTimeline
+	offsetTimeline *timeline.OffsetTimeline
 	lock           sync.RWMutex
 	log            *zap.SugaredLogger
+}
+
+// GetEntity returns the processor entity.
+func (p *ProcessorToFetch) GetEntity() ProcessorEntitier {
+	return p.entity
+}
+
+// GetOffsetTimeline returns the processor's OT.
+func (p *ProcessorToFetch) GetOffsetTimeline() *timeline.OffsetTimeline {
+	return p.offsetTimeline
 }
 
 func (p *ProcessorToFetch) String() string {
@@ -62,12 +73,12 @@ func (p *ProcessorToFetch) String() string {
 }
 
 // NewProcessorToFetch creates ProcessorToFetch.
-func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntitier, capacity int) *ProcessorToFetch {
+func NewProcessorToFetch(ctx context.Context, processor ProcessorEntitier, capacity int) *ProcessorToFetch {
 	p := &ProcessorToFetch{
 		ctx:            ctx,
 		entity:         processor,
 		status:         _active,
-		offsetTimeline: NewOffsetTimeline(ctx, capacity),
+		offsetTimeline: timeline.NewOffsetTimeline(ctx, capacity),
 		log:            logging.FromContext(ctx),
 	}
 	return p

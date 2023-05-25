@@ -91,17 +91,19 @@ func TestDecodeToWMB(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "decode_success_using_3_field_struct",
+			name: "decode_success_using_4_field_struct",
 			args: args{
 				b: func() []byte {
 					v := struct {
 						Test0 bool
 						Test1 int64
 						Test2 int64
+						Test3 int32
 					}{
 						Test0: true,
 						Test1: 0,
 						Test2: 0,
+						Test3: 0,
 					}
 					buf := new(bytes.Buffer)
 					_ = binary.Write(buf, binary.LittleEndian, v)
@@ -112,23 +114,26 @@ func TestDecodeToWMB(t *testing.T) {
 				Offset:    0,
 				Watermark: 0,
 				Idle:      true,
+				Partition: 0,
 			},
 			wantErr: false,
 		},
 		{
-			name: "decode_success_using_4_field_struct",
+			name: "decode_success_using_5_field_struct",
 			args: args{
 				b: func() []byte {
 					v := struct {
 						Test0 bool
 						Test1 int64
 						Test2 int64
-						Test3 int64 // should be ignored
+						Test3 int32
+						Test4 int32 // should be ignored
 					}{
 						Test0: false,
 						Test1: 100,
 						Test2: 1667495100000,
-						Test3: 20,
+						Test3: 3,
+						Test4: 20,
 					}
 					buf := new(bytes.Buffer)
 					_ = binary.Write(buf, binary.LittleEndian, v)
@@ -139,6 +144,7 @@ func TestDecodeToWMB(t *testing.T) {
 				Offset:    100,
 				Watermark: 1667495100000,
 				Idle:      false,
+				Partition: 3,
 			},
 			wantErr: false,
 		},
@@ -163,6 +169,7 @@ func TestWMB_EncodeToBytes(t *testing.T) {
 		Offset    int64
 		Watermark int64
 		Idle      bool
+		Partition int32
 	}
 	tests := []struct {
 		name    string
@@ -176,8 +183,9 @@ func TestWMB_EncodeToBytes(t *testing.T) {
 				Idle:      false,
 				Offset:    100,
 				Watermark: 1667495100000,
+				Partition: 3,
 			},
-			want:    []byte{0, 100, 0, 0, 0, 0, 0, 0, 0, 96, 254, 115, 62, 132, 1, 0, 0},
+			want:    []byte{0, 100, 0, 0, 0, 0, 0, 0, 0, 96, 254, 115, 62, 132, 1, 0, 0, 3, 0, 0, 0},
 			wantErr: false,
 		},
 	}
@@ -186,6 +194,7 @@ func TestWMB_EncodeToBytes(t *testing.T) {
 			v := WMB{
 				Offset:    tt.fields.Offset,
 				Watermark: tt.fields.Watermark,
+				Partition: tt.fields.Partition,
 			}
 			got, err := v.EncodeToBytes()
 			if (err != nil) != tt.wantErr {

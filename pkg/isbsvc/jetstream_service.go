@@ -26,6 +26,7 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"github.com/spf13/viper"
@@ -289,7 +290,9 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 	if err != nil {
 		return nil, err
 	}
-	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, store.BuildWatermarkStoreWatcher(hbWatch, otWatch))
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
+	pm := processor.NewProcessorManager(ctx, storeWatcher)
+	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm)
 	return watermarkFetcher, nil
 }
 
