@@ -204,24 +204,6 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		for _, b := range v.GetToBuckets() {
 			oldBuckets[b] = b
 		}
-		// TODO(one bucket): remove this after one bucket is fully supported
-		for _, e := range v.Spec.FromEdges {
-			if e.FromVertexType == dfv1.VertexTypeReduceUDF {
-				for i := 0; i < e.GetFromVertexPartitions(); i++ {
-					indexedBucket := fmt.Sprintf("%s-%d", dfv1.GenerateEdgeBucketName(pl.Namespace, pl.Name, e.From, e.To), i)
-					oldBuckets[indexedBucket] = indexedBucket
-				}
-			}
-		}
-		for _, e := range v.Spec.ToEdges {
-			if e.ToVertexType == dfv1.VertexTypeReduceUDF {
-				for i := 0; i < e.GetFromVertexPartitions(); i++ {
-					indexedBucket := fmt.Sprintf("%s-%d", dfv1.GenerateEdgeBucketName(pl.Namespace, pl.Name, e.From, e.To), i)
-					oldBuckets[indexedBucket] = indexedBucket
-				}
-			}
-		}
-		// end of TODO(one bucket)
 	}
 	for _, b := range pl.GetAllBuffers() {
 		if _, existing := oldBuffers[b]; existing {

@@ -28,8 +28,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
-// TODO - Write Unit Tests for this file
-
+// TODO - return (map[string]fetch.Fetcher, error) instead of (map[string][]fetch.Fetcher, error)
 // GetEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
 func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[string][]fetch.Fetcher, error) {
@@ -41,23 +40,11 @@ func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, 
 	for _, edge := range pipeline.ListAllEdges() {
 		var wmFetcherList []fetch.Fetcher
 		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
-		bkns := []string{bucketName}
-		// TODO(one bucket): remove this once we have one bucket per edge
-		toVertex := pipeline.GetVertex(edge.To)
-		if toVertex.IsReduceUDF() {
-			partitions := pipeline.NumOfPartitions(edge.To)
-			for i := 0; i < partitions; i++ {
-				bkns = append(bkns, fmt.Sprintf("%s-%d", bucketName, i))
-			}
+		fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 		}
-		// end of TODO(one bucket)
-		for _, bucketName := range bkns {
-			fetchWatermark, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
-			}
-			wmFetcherList = append(wmFetcherList, fetchWatermark)
-		}
+		wmFetcherList = append(wmFetcherList, fetchWatermark)
 		wmFetchers[edge.From+"-"+edge.To] = wmFetcherList
 	}
 	return wmFetchers, nil
