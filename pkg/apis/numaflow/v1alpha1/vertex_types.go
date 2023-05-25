@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -353,6 +354,15 @@ func (v Vertex) GetReplicas() int {
 		return 1
 	}
 	return int(*v.Spec.Replicas)
+}
+
+func (v Vertex) MapUdfStreamEnabled() (bool, error) {
+	if v.Spec.Metadata != nil && v.Spec.Metadata.Annotations != nil {
+		if mapUdfStream, existing := v.Spec.Metadata.Annotations[MapUdfStreamKey]; existing {
+			return strconv.ParseBool(mapUdfStream)
+		}
+	}
+	return false, nil
 }
 
 type VertexSpec struct {

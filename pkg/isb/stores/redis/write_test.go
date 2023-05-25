@@ -350,6 +350,10 @@ func (f myForwardRedisTest) ApplyMap(ctx context.Context, message *isb.ReadMessa
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
+func (f myForwardRedisTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
+}
+
 // TestNewInterStepDataForwardRedis is used to read data from one step to another using redis as the Inter-Step Buffer
 // For the purposes of testing we need to write some data to the from step
 func TestNewInterStepDataForwardRedis(t *testing.T) {

@@ -96,55 +96,474 @@ func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) (
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
+func (f myForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
+}
+
 func TestNewInterStepDataForward(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-	}
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
+	tests := []struct {
+		name          string
+		batchSize     int64
+		streamEnabled bool
+	}{
+		{
+			name:          "stream_forward",
+			batchSize:     1,
+			streamEnabled: true,
 		},
-	}}
+		{
+			name:          "batch_forward",
+			batchSize:     5,
+			streamEnabled: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+"_basic", func(t *testing.T) {
+			metricsReset()
+			batchSize := tt.batchSize
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": to1,
+			}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
 
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
 
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-	stopped := f.Start()
-	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
-	count := int64(5)
-	// read some data
-	readMessages, err := to1.Read(ctx, count)
-	assert.NoError(t, err, "expected no error")
-	assert.Len(t, readMessages, 5)
-	assert.Equal(t, []interface{}{writeMessages[0].Header, writeMessages[1].Header}, []interface{}{readMessages[0].Header, readMessages[1].Header})
-	assert.Equal(t, []interface{}{writeMessages[0].Body, writeMessages[1].Body}, []interface{}{readMessages[0].Body, readMessages[1].Body})
+			assert.NoError(t, err)
+			assert.False(t, to1.IsFull())
+			assert.True(t, to1.IsEmpty())
 
-	validateMetrics(t)
-	// write some data
-	_, errs = fromStep.Write(ctx, writeMessages[5:20])
-	assert.Equal(t, make([]error, 15), errs)
+			stopped := f.Start()
+			// write some data
+			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+			assert.Equal(t, make([]error, batchSize), errs)
 
-	f.Stop()
-	time.Sleep(1 * time.Millisecond)
-	// only for shutdown will work as from buffer is not empty
-	f.ForceStop()
+			// read some data
+			readMessages, err := to1.Read(ctx, batchSize)
+			assert.NoError(t, err, "expected no error")
+			assert.Len(t, readMessages, int(batchSize))
+			for i := 0; i < int(batchSize); i++ {
+				assert.Equal(t, []interface{}{writeMessages[i].Header}, []interface{}{readMessages[i].Header})
+				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
+			}
+			validateMetrics(t, batchSize)
+			// write some data
+			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
+			assert.Equal(t, make([]error, 3*batchSize), errs)
 
-	<-stopped
+			f.Stop()
+			time.Sleep(1 * time.Millisecond)
+			// only for shutdown will work as from buffer is not empty
+			f.ForceStop()
+
+			<-stopped
+
+		})
+		// Explicitly tests the case where we forward to all buffers
+		t.Run(tt.name+"_toAll", func(t *testing.T) {
+			batchSize := tt.batchSize
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": to1,
+				"to2": to2,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+			fetchWatermark := &testForwardFetcher{}
+			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, myForwardToAllTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF),
+				WithUDFStreaming(tt.streamEnabled))
+
+			assert.NoError(t, err)
+			assert.False(t, to1.IsFull())
+			assert.True(t, to1.IsEmpty())
+
+			stopped := f.Start()
+			// write some data
+			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+			assert.Equal(t, make([]error, batchSize), errs)
+
+			// read some data
+			readMessages, err := to1.Read(ctx, batchSize)
+			assert.NoError(t, err, "expected no error")
+			assert.Len(t, readMessages, int(batchSize))
+			for i := 0; i < int(batchSize); i++ {
+				assert.Equal(t, []interface{}{writeMessages[i].Header}, []interface{}{readMessages[i].Header})
+				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
+			}
+			// write some data
+			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
+			assert.Equal(t, make([]error, 3*batchSize), errs)
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+				for otKeys1 == nil {
+					otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+					time.Sleep(time.Millisecond * 100)
+				}
+			}()
+			wg.Wait()
+			// NOTE: in this test we only have one processor to publish
+			// so len(otKeys) should always be 1
+			otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+			otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+			otDecode1, _ := wmb.DecodeToWMB(otValue1)
+			assert.False(t, otDecode1.Idle)
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
+				for otKeys2 == nil {
+					otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+					time.Sleep(time.Millisecond * 100)
+				}
+			}()
+			wg.Wait()
+			// NOTE: in this test we only have one processor to publish
+			// so len(otKeys) should always be 1
+			otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
+			otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
+			otDecode2, _ := wmb.DecodeToWMB(otValue2)
+			assert.False(t, otDecode2.Idle)
+
+			f.Stop()
+
+			<-stopped
+		})
+		// Explicitly tests the case where we drop all events
+		t.Run(tt.name+"_dropAll", func(t *testing.T) {
+			batchSize := tt.batchSize
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": to1,
+				"to2": to2,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+
+			fetchWatermark := &testForwardFetcher{}
+			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF),
+				WithUDFStreaming(tt.streamEnabled))
+
+			assert.NoError(t, err)
+			assert.False(t, to1.IsFull())
+			assert.True(t, to1.IsEmpty())
+
+			stopped := f.Start()
+
+			// write some data
+			_, errs := fromStep.Write(ctx, writeMessages)
+			assert.Equal(t, make([]error, 4*batchSize), errs)
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+				for otKeys1 == nil {
+					otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+					time.Sleep(time.Millisecond * 100)
+				}
+			}()
+			wg.Wait()
+			// NOTE: in this test we only have one processor to publish
+			// so len(otKeys) should always be 1
+			otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+			otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+			otDecode1, _ := wmb.DecodeToWMB(otValue1)
+			assert.True(t, otDecode1.Idle)
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
+				for otKeys2 == nil {
+					otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+					time.Sleep(time.Millisecond * 100)
+				}
+			}()
+			wg.Wait()
+			// NOTE: in this test we only have one processor to publish
+			// so len(otKeys) should always be 1
+			otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
+			otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
+			otDecode2, _ := wmb.DecodeToWMB(otValue2)
+			assert.True(t, otDecode2.Idle)
+
+			msgs := to1.GetMessages(1)
+			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+				select {
+				case <-ctx.Done():
+					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
+				default:
+					msgs = to1.GetMessages(1)
+					time.Sleep(1 * time.Millisecond)
+				}
+			}
+
+			msgs = to2.GetMessages(1)
+			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+				select {
+				case <-ctx.Done():
+					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
+				default:
+					msgs = to2.GetMessages(1)
+					time.Sleep(1 * time.Millisecond)
+				}
+			}
+
+			// since this is a dropping WhereTo, the buffer can never be full
+			f.Stop()
+
+			<-stopped
+		})
+		// Explicitly tests the case where we forward to only one buffer
+		t.Run(tt.name+"_toOneStep", func(t *testing.T) {
+			batchSize := tt.batchSize
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": to1,
+				"to2": to2,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+
+			fetchWatermark := &testForwardFetcher{}
+			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF),
+				WithUDFStreaming(tt.streamEnabled))
+
+			assert.NoError(t, err)
+			assert.False(t, to1.IsFull())
+			assert.True(t, to1.IsEmpty())
+
+			stopped := f.Start()
+			// write some data
+			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+			assert.Equal(t, make([]error, batchSize), errs)
+
+			// read some data
+			readMessages, err := to1.Read(ctx, batchSize)
+			assert.NoError(t, err, "expected no error")
+			assert.Len(t, readMessages, int(batchSize))
+			for i := 0; i < int(batchSize); i++ {
+				assert.Equal(t, []interface{}{writeMessages[i].Header}, []interface{}{readMessages[i].Header})
+				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
+			}
+			// write some data
+			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
+			assert.Equal(t, make([]error, 3*batchSize), errs)
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+				for otKeys1 == nil {
+					otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+					time.Sleep(time.Millisecond * 100)
+				}
+			}()
+			wg.Wait()
+			// NOTE: in this test we only have one processor to publish
+			// so len(otKeys) should always be 1
+			otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+			otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+			otDecode1, _ := wmb.DecodeToWMB(otValue1)
+			assert.False(t, otDecode1.Idle)
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
+				for otKeys2 == nil {
+					otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+					time.Sleep(time.Millisecond * 100)
+				}
+			}()
+			wg.Wait()
+			// NOTE: in this test we only have one processor to publish
+			// so len(otKeys) should always be 1
+			otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
+			otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
+			otDecode2, _ := wmb.DecodeToWMB(otValue2)
+			assert.True(t, otDecode2.Idle)
+
+			// stop will cancel the contexts and therefore the forwarder stops without waiting
+			f.Stop()
+
+			<-stopped
+		})
+		// Test the scenario with UDF error
+		t.Run(tt.name+"_UDFError", func(t *testing.T) {
+			batchSize := tt.batchSize
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": to1,
+			}
+
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+
+			assert.NoError(t, err)
+			assert.False(t, to1.IsFull())
+			assert.True(t, to1.IsEmpty())
+
+			stopped := f.Start()
+			// write some data
+			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+			assert.Equal(t, make([]error, batchSize), errs)
+			assert.True(t, to1.IsEmpty())
+
+			f.Stop()
+			time.Sleep(1 * time.Millisecond)
+
+			<-stopped
+		})
+		// Test the scenario with error
+		t.Run(tt.name+"_whereToError", func(t *testing.T) {
+			batchSize := tt.batchSize
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": to1,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+
+			assert.NoError(t, err)
+			assert.True(t, to1.IsEmpty())
+
+			stopped := f.Start()
+			// write some data
+			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+			assert.Equal(t, make([]error, batchSize), errs)
+
+			f.Stop()
+			time.Sleep(1 * time.Millisecond)
+
+			assert.True(t, to1.IsEmpty())
+			<-stopped
+		})
+		t.Run(tt.name+"_withInternalError", func(t *testing.T) {
+			batchSize := tt.batchSize
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			toSteps := map[string]isb.BufferWriter{
+				"to1": to1,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+
+			assert.NoError(t, err)
+			assert.False(t, to1.IsFull())
+			assert.True(t, to1.IsEmpty())
+
+			stopped := f.Start()
+			// write some data
+			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+			assert.Equal(t, make([]error, batchSize), errs)
+
+			f.Stop()
+			time.Sleep(1 * time.Millisecond)
+			<-stopped
+		})
+	}
 }
 
 type testWMBFetcher struct {
@@ -552,6 +971,39 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 	}(ctx, message)
 }
 
+func (f mySourceForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return func(ctx context.Context, readMessage *isb.ReadMessage, writeMessages chan<- isb.WriteMessage) error {
+		defer close(writeMessages)
+
+		_ = ctx
+		offset := readMessage.ReadOffset
+		payload := readMessage.Body.Payload
+		parentPaneInfo := readMessage.MessageInfo
+
+		// apply source data transformer
+		_ = payload
+		// copy the payload
+		result := payload
+		// assign new event time
+		parentPaneInfo.EventTime = testSourceNewEventTime
+		var key []string
+
+		writeMessage := isb.Message{
+			Header: isb.Header{
+				MessageInfo: parentPaneInfo,
+				ID:          offset.String(),
+				Keys:        key,
+			},
+			Body: isb.Body{
+				Payload: result,
+			},
+		}
+
+		writeMessages <- isb.WriteMessage{Message: writeMessage}
+		return nil
+	}(ctx, message, writeMessageCh)
+}
+
 // TestSourceWatermarkPublisher is a dummy implementation of isb.SourceWatermarkPublisher interface
 type TestSourceWatermarkPublisher struct {
 }
@@ -619,28 +1071,51 @@ func TestSourceInterStepDataForward(t *testing.T) {
 // TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
 func TestWriteToBuffer(t *testing.T) {
 	tests := []struct {
-		name       string
-		buffer     *simplebuffer.InMemoryBuffer
-		throwError bool
+		name          string
+		batchSize     int64
+		strategy      dfv1.BufferFullWritingStrategy
+		streamEnabled bool
+		throwError    bool
 	}{
 		{
-			name:   "test-discard-latest",
-			buffer: simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithBufferFullWritingStrategy(dfv1.DiscardLatest)),
+			name:          "test-discard-latest",
+			batchSize:     10,
+			strategy:      dfv1.DiscardLatest,
+			streamEnabled: false,
 			// should not throw any error as we drop messages and finish writing before context is cancelled
 			throwError: false,
 		},
 		{
-			name:   "test-retry-until-success",
-			buffer: simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithBufferFullWritingStrategy(dfv1.RetryUntilSuccess)),
+			name:          "test-retry-until-success",
+			batchSize:     10,
+			strategy:      dfv1.RetryUntilSuccess,
+			streamEnabled: false,
+			// should throw context closed error as we keep retrying writing until context is cancelled
+			throwError: true,
+		},
+		{
+			name:          "test-discard-latest",
+			batchSize:     1,
+			strategy:      dfv1.DiscardLatest,
+			streamEnabled: true,
+			// should not throw any error as we drop messages and finish writing before context is cancelled
+			throwError: false,
+		},
+		{
+			name:          "test-retry-until-success",
+			batchSize:     1,
+			strategy:      dfv1.RetryUntilSuccess,
+			streamEnabled: true,
 			// should throw context closed error as we keep retrying writing until context is cancelled
 			throwError: true,
 		},
 	}
 	for _, value := range tests {
 		t.Run(value.name, func(t *testing.T) {
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*value.batchSize)
+			buffer := simplebuffer.NewInMemoryBuffer("to1", value.batchSize, simplebuffer.WithBufferFullWritingStrategy(value.strategy))
 			toSteps := map[string]isb.BufferWriter{
-				"to1": value.buffer,
+				"to1": buffer,
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
@@ -651,14 +1126,15 @@ func TestWriteToBuffer(t *testing.T) {
 				},
 			}}
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(10))
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{},
+				fetchWatermark, publishWatermark, WithReadBatchSize(value.batchSize), WithUDFStreaming(value.streamEnabled))
 			assert.NoError(t, err)
-			assert.False(t, value.buffer.IsFull())
-			assert.True(t, value.buffer.IsEmpty())
+			assert.False(t, buffer.IsFull())
+			assert.True(t, buffer.IsEmpty())
 
 			stopped := f.Start()
 			go func() {
-				for !value.buffer.IsFull() {
+				for !buffer.IsFull() {
 					select {
 					case <-ctx.Done():
 						logging.FromContext(ctx).Fatalf("not full, %s", ctx.Err())
@@ -673,8 +1149,8 @@ func TestWriteToBuffer(t *testing.T) {
 			// try to write to buffer after it is full.
 			var messageToStep = make(map[string][]isb.Message)
 			messageToStep["to1"] = make([]isb.Message, 0)
-			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-			messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:11]...)
+			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
+			messageToStep["to1"] = append(messageToStep["to1"], writeMessages[0:value.batchSize+1]...)
 			_, err = f.writeToBuffers(ctx, messageToStep)
 
 			assert.Equal(t, value.throwError, err != nil)
@@ -685,91 +1161,6 @@ func TestWriteToBuffer(t *testing.T) {
 			<-stopped
 		})
 	}
-}
-
-// TestNewInterStepDataForwardToOneStep explicitly tests the case where we forward to only one buffer
-func TestNewInterStepDataForwardToOneStep(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	to2 := simplebuffer.NewInMemoryBuffer("to2", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-		"to2": to2,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-		},
-	}}
-
-	fetchWatermark := &testForwardFetcher{}
-	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
-
-	// read some data
-	readMessages, err := to1.Read(ctx, 2)
-	assert.NoError(t, err, "expected no error")
-	assert.Len(t, readMessages, 2)
-	assert.Equal(t, []interface{}{writeMessages[0].Header, writeMessages[1].Header}, []interface{}{readMessages[0].Header, readMessages[1].Header})
-	assert.Equal(t, []interface{}{writeMessages[0].Body, writeMessages[1].Body}, []interface{}{readMessages[0].Body, readMessages[1].Body})
-
-	// write some data
-	_, errs = fromStep.Write(ctx, writeMessages[5:20])
-	assert.Equal(t, make([]error, 15), errs)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-		for otKeys1 == nil {
-			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
-		}
-	}()
-	wg.Wait()
-	// NOTE: in this test we only have one processor to publish
-	// so len(otKeys) should always be 1
-	otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-	otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
-	otDecode1, _ := wmb.DecodeToWMB(otValue1)
-	assert.False(t, otDecode1.Idle)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-		for otKeys2 == nil {
-			otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
-		}
-	}()
-	wg.Wait()
-	// NOTE: in this test we only have one processor to publish
-	// so len(otKeys) should always be 1
-	otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-	otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
-	otDecode2, _ := wmb.DecodeToWMB(otValue2)
-	assert.True(t, otDecode2.Idle)
-
-	// stop will cancel the contexts and therefore the forwarder stops without waiting
-	f.Stop()
-
-	<-stopped
 }
 
 type myForwardDropTest struct {
@@ -783,101 +1174,8 @@ func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessag
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
-// TestNewInterStepDataForwardToOneStep explicitly tests the case where we drop all events
-func TestNewInterStepDataForward_dropAll(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	to2 := simplebuffer.NewInMemoryBuffer("to2", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-		"to2": to2,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-		},
-	}}
-
-	fetchWatermark := &testForwardFetcher{}
-	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-
-	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages)
-	assert.Equal(t, make([]error, 20), errs)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-		for otKeys1 == nil {
-			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
-		}
-	}()
-	wg.Wait()
-	// NOTE: in this test we only have one processor to publish
-	// so len(otKeys) should always be 1
-	otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-	otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
-	otDecode1, _ := wmb.DecodeToWMB(otValue1)
-	assert.True(t, otDecode1.Idle)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-		for otKeys2 == nil {
-			otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
-		}
-	}()
-	wg.Wait()
-	// NOTE: in this test we only have one processor to publish
-	// so len(otKeys) should always be 1
-	otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-	otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
-	otDecode2, _ := wmb.DecodeToWMB(otValue2)
-	assert.True(t, otDecode2.Idle)
-
-	msgs := to1.GetMessages(1)
-	for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
-		select {
-		case <-ctx.Done():
-			logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
-		default:
-			msgs = to1.GetMessages(1)
-			time.Sleep(1 * time.Millisecond)
-		}
-	}
-
-	msgs = to2.GetMessages(1)
-	for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
-		select {
-		case <-ctx.Done():
-			logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
-		default:
-			msgs = to2.GetMessages(1)
-			time.Sleep(1 * time.Millisecond)
-		}
-	}
-
-	// since this is a dropping WhereTo, the buffer can never be full
-	f.Stop()
-
-	<-stopped
+func (f myForwardDropTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
 }
 
 type myForwardToAllTest struct {
@@ -891,87 +1189,8 @@ func (f myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessa
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
-// TestNewInterStepDataForwardToOneStep explicitly tests the case where we forward to all buffers
-func TestNewInterStepData_forwardToAll(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	to2 := simplebuffer.NewInMemoryBuffer("to2", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-		"to2": to2,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-		},
-	}}
-	fetchWatermark := &testForwardFetcher{}
-	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
-
-	// read some data
-	readMessages, err := to1.Read(ctx, 2)
-	assert.NoError(t, err, "expected no error")
-	assert.Len(t, readMessages, 2)
-	assert.Equal(t, []interface{}{writeMessages[0].Header, writeMessages[1].Header}, []interface{}{readMessages[0].Header, readMessages[1].Header})
-	assert.Equal(t, []interface{}{writeMessages[0].Body, writeMessages[1].Body}, []interface{}{readMessages[0].Body, readMessages[1].Body})
-
-	// write some data
-	_, errs = fromStep.Write(ctx, writeMessages[5:20])
-	assert.Equal(t, make([]error, 15), errs)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-		for otKeys1 == nil {
-			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
-		}
-	}()
-	wg.Wait()
-	// NOTE: in this test we only have one processor to publish
-	// so len(otKeys) should always be 1
-	otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-	otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
-	otDecode1, _ := wmb.DecodeToWMB(otValue1)
-	assert.False(t, otDecode1.Idle)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-		for otKeys2 == nil {
-			otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
-		}
-	}()
-	wg.Wait()
-	// NOTE: in this test we only have one processor to publish
-	// so len(otKeys) should always be 1
-	otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-	otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
-	otDecode2, _ := wmb.DecodeToWMB(otValue2)
-	assert.False(t, otDecode2.Idle)
-
-	f.Stop()
-
-	<-stopped
+func (f myForwardToAllTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
 }
 
 type myForwardInternalErrTest struct {
@@ -981,7 +1200,7 @@ func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]string, err
 	return []string{"to1"}, nil
 }
 
-func (f myForwardInternalErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -992,38 +1211,16 @@ func (f myForwardInternalErrTest) ApplyMap(ctx context.Context, message *isb.Rea
 	}
 }
 
-func TestNewInterStepDataForward_WithInternalError(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
+func (f myForwardInternalErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, writeMessagesCh chan<- isb.WriteMessage) error {
+	close(writeMessagesCh)
+	return udfapplier.ApplyUDFErr{
+		UserUDFErr: false,
+		InternalErr: struct {
+			Flag        bool
+			MainCarDown bool
+		}{Flag: true, MainCarDown: false},
+		Message: "InternalErr test",
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-		},
-	}}
-
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
-
-	f.Stop()
-	time.Sleep(1 * time.Millisecond)
-	<-stopped
 }
 
 type myForwardApplyWhereToErrTest struct {
@@ -1037,40 +1234,8 @@ func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
-// TestNewInterStepDataForward_WhereToError is used to test the scenario with error
-func TestNewInterStepDataForward_WhereToError(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-		},
-	}}
-
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
-	assert.NoError(t, err)
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
-
-	f.Stop()
-	time.Sleep(1 * time.Millisecond)
-
-	assert.True(t, to1.IsEmpty())
-	<-stopped
+func (f myForwardApplyWhereToErrTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
 }
 
 type myForwardApplyUDFErrTest struct {
@@ -1080,55 +1245,22 @@ func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string) ([]string, err
 	return []string{"to1"}, nil
 }
 
-func (f myForwardApplyUDFErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardApplyUDFErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, fmt.Errorf("UDF error")
 }
 
-// TestNewInterStepDataForward_UDFError is used to test the scenario with UDF error
-func TestNewInterStepDataForward_UDFError(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-	}
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-		},
-	}}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2))
-	assert.NoError(t, err)
-	assert.False(t, to1.IsFull())
-	assert.True(t, to1.IsEmpty())
-
-	stopped := f.Start()
-	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
-	assert.Equal(t, make([]error, 5), errs)
-	assert.True(t, to1.IsEmpty())
-
-	f.Stop()
-	time.Sleep(1 * time.Millisecond)
-
-	<-stopped
+func (f myForwardApplyUDFErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, writeMessagesCh chan<- isb.WriteMessage) error {
+	close(writeMessagesCh)
+	return fmt.Errorf("UDF error")
 }
 
-func validateMetrics(t *testing.T) {
+func validateMetrics(t *testing.T, batchSize int64) {
 	metadata := `
 		# HELP forwarder_read_total Total number of Messages Read
 		# TYPE forwarder_read_total counter
 		`
 	expected := `
-		forwarder_read_total{buffer="from",pipeline="testPipeline",vertex="testVertex"} 5
+		forwarder_read_total{buffer="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
 	err := testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
@@ -1141,7 +1273,7 @@ func validateMetrics(t *testing.T) {
 		# TYPE forwarder_write_total counter
 		`
 	writeExpected := `
-		forwarder_write_total{buffer="to1",pipeline="testPipeline",vertex="testVertex"} 5
+		forwarder_write_total{buffer="to1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
 	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
@@ -1154,14 +1286,19 @@ func validateMetrics(t *testing.T) {
 		# TYPE forwarder_ack_total counter
 		`
 	ackExpected := `
-		forwarder_ack_total{buffer="from",pipeline="testPipeline",vertex="testVertex"} 5
+		forwarder_ack_total{buffer="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
 	`
 
 	err = testutil.CollectAndCompare(ackMessagesCount, strings.NewReader(ackMetadata+ackExpected), "forwarder_ack_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
+}
 
+func metricsReset() {
+	readMessagesCount.Reset()
+	writeMessagesCount.Reset()
+	ackMessagesCount.Reset()
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer
