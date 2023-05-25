@@ -193,10 +193,9 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
 					var entity = NewProcessorEntity(value.Key())
-					var fromProcessor *ProcessorToFetch
 					// if the processor is a reduce or source processor, then we only need one fromProcessor
 					// because the reduce or source will read from only one partition.
-					fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.fromBufferPartitionCount)
+					fromProcessor := NewProcessorToFetch(v.ctx, entity, 10, v.fromBufferPartitionCount)
 					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active

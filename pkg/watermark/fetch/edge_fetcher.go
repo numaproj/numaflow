@@ -158,7 +158,6 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 		if !p.IsActive() {
 			continue
 		}
-		
 		// find the smallest head offset among the head WMBs
 		for _, tl := range p.GetOffsetTimelines() {
 			// we only consider the latest wmb in the offset timeline
