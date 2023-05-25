@@ -28,7 +28,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
-// TODO - return (map[string]fetch.Fetcher, error))
+// TODO - return (map[string]fetch.Fetcher, error) instead of (map[string][]fetch.Fetcher, error)
 // GetEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
 func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[string][]fetch.Fetcher, error) {
