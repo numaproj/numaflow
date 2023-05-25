@@ -80,6 +80,9 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 		log:                      logging.FromContext(ctx),
 		opts:                     opts,
 	}
+	if v.opts.isReduce || v.opts.isSource {
+		v.fromBufferPartitionCount = 1
+	}
 	go v.startRefreshingProcessors()
 	go v.startHeatBeatWatcher()
 	go v.startTimeLineWatcher()
@@ -193,13 +196,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					var fromProcessor *ProcessorToFetch
 					// if the processor is a reduce or source processor, then we only need one fromProcessor
 					// because the reduce or source will read from only one partition.
-					partitionCnt := 0
-					if v.opts.isReduce || v.opts.isSource {
-						partitionCnt = 1
-					} else {
-						partitionCnt = v.fromBufferPartitionCount
-					}
-					fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, partitionCnt)
+					fromProcessor = NewProcessorToFetch(v.ctx, entity, 10, v.fromBufferPartitionCount)
 					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active
@@ -285,7 +282,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					// for reduce we will always have only one partition
-					if v.opts.isReduce {
+					if v.opts.isReduce || v.opts.isSource {
 						p.offsetTimelines[0].Put(otValue)
 					} else {
 						p.offsetTimelines[otValue.Partition].Put(otValue)
