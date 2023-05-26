@@ -26,11 +26,16 @@ type options struct {
 type Option func(*options)
 
 func defaultOptions() *options {
+	// A simple example of how these numbers work together:
+	// Assuming we have 200 tasks, we have 20 workers, each worker will be responsible for approximately 10 tasks during one iteration.
+	// The task interval is 10 seconds, which means each task need to be picked up by a worker every 10 seconds.
+	// Hence a worker needs to finish processing 1 task in 1 second.
+	// Translating to numaflow language, for a 200-pod pipeline, a worker needs to finish scraping 1 pod in 1 second, which is a reasonable number.
+	// TODO - need to adjust the numbers once we have a better idea of the performance
 	return &options{
-		// TODO - need to adjust the number once we have a better idea of the performance
 		workers: 20,
-		// 5 seconds
-		taskInterval: 5000,
+		// 10 seconds
+		taskInterval: 10000,
 	}
 }
 
