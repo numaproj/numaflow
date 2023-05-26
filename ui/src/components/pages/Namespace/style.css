@@ -1,0 +1,17 @@
+.Namespaces {
+}
+
+.Namespace-table-head {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.Namespace-btn {
+    cursor: pointer;
+    color: #0077C5;
+}
+
+.Namespace-table-body {
+    margin: 0 1rem;
+}
