@@ -106,7 +106,7 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 				Jitter:   0.1,
 				Steps:    5,
 			}, func() (done bool, err error) {
-				datumList, err = u.client.MapFn(ctx, d)
+				datumList, err = u.client.MapTFn(ctx, d)
 				if err != nil {
 					udfErr, _ = udferr.FromError(err)
 					switch udfErr.ErrorKind() {
