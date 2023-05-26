@@ -136,7 +136,13 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 		log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.Strings("from", fromBufferNames), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
 
-		opts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeMapUDF), forward.WithLogger(log)}
+		enableMapUdfStream, err := u.VertexInstance.Vertex.MapUdfStreamEnabled()
+		if err != nil {
+			return fmt.Errorf("failed to parse UDF map streaming metadata, %w", err)
+		}
+
+		opts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeMapUDF), forward.WithLogger(log),
+			forward.WithUDFStreaming(enableMapUdfStream)}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 			if x.ReadBatchSize != nil {
 				opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
