@@ -299,6 +299,10 @@ func (f forwardReadWritePerformance) ApplyMap(ctx context.Context, message *isb.
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
+func (f forwardReadWritePerformance) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
+}
+
 func (suite *ReadWritePerformance) SetupSuite() {
 	client := redisclient.NewRedisClient(redisOptions)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)

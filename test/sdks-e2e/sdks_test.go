@@ -57,6 +57,28 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
 }
 
+func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
+	w := s.Given().Pipeline("@testdata/flatmap-stream.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "flatmap-stream"
+
+	w.Expect().
+		VertexPodsRunning().
+		VertexPodLogContains("in", LogSourceVertexStarted).
+		VertexPodLogContains("go-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello,hello"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
+
+	w.Expect().
+		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
+	w.Expect().
+		VertexPodLogContains("go-udsink-2", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
+}
+
 func (s *SDKsSuite) TestReduceSDK() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
