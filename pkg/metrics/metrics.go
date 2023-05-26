@@ -74,9 +74,9 @@ type timestampedPending struct {
 // 1. Expose metrics;
 // 2. Serve an endpoint to execute health checks
 type metricsServer struct {
-	vertex    *dfv1.Vertex
-	rater     isb.Ratable
-	lagReader isb.LagReader
+	vertex     *dfv1.Vertex
+	raters     []isb.Ratable
+	lagReaders []isb.LagReader
 	// lookbackSeconds is the look back seconds for pending and rate calculation used for autoscaling
 	lookbackSeconds     int64
 	lagCheckingInterval time.Duration
@@ -89,17 +89,17 @@ type metricsServer struct {
 
 type Option func(*metricsServer)
 
-// WithRater sets the rater
-func WithRater(r isb.Ratable) Option {
+// WithRaters sets the raters
+func WithRaters(r []isb.Ratable) Option {
 	return func(m *metricsServer) {
-		m.rater = r
+		m.raters = r
 	}
 }
 
-// WithLagReader sets the lag reader
-func WithLagReader(r isb.LagReader) Option {
+// WithLagReaders sets the lag reader
+func WithLagReaders(r []isb.LagReader) Option {
 	return func(m *metricsServer) {
-		m.lagReader = r
+		m.lagReaders = r
 	}
 }
 
@@ -125,7 +125,7 @@ func WithHealthCheckExecutor(f func() error) Option {
 }
 
 // NewMetricsOptions returns a metrics option list.
-func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler HealthChecker, reader isb.BufferReader, writer isb.BufferWriter) []Option {
+func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler HealthChecker, readers []isb.BufferReader, writers []isb.BufferWriter) []Option {
 	metricsOpts := []Option{
 		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
 	}
@@ -138,16 +138,33 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler H
 			}))
 		}
 	}
-	if x, ok := reader.(isb.LagReader); ok {
-		metricsOpts = append(metricsOpts, WithLagReader(x))
+	var lagReaders []isb.LagReader
+	for _, reader := range readers {
+		if x, ok := reader.(isb.LagReader); ok {
+			lagReaders = append(lagReaders, x)
+		}
 	}
+	if len(lagReaders) > 0 {
+		metricsOpts = append(metricsOpts, WithLagReaders(lagReaders))
+	}
+	var raters []isb.Ratable
 	if vertex.IsASource() {
-		if x, ok := writer.(isb.Ratable); ok {
-			metricsOpts = append(metricsOpts, WithRater(x))
+		for _, writer := range writers {
+			if x, ok := writer.(isb.Ratable); ok {
+				raters = append(raters, x)
+			}
+		}
+		if len(raters) > 0 {
+			metricsOpts = append(metricsOpts, WithRaters(raters))
 		}
 	} else {
-		if x, ok := reader.(isb.Ratable); ok {
-			metricsOpts = append(metricsOpts, WithRater(x))
+		for _, reader := range readers {
+			if x, ok := reader.(isb.Ratable); ok {
+				raters = append(raters, x)
+			}
+		}
+		if len(raters) > 0 {
+			metricsOpts = append(metricsOpts, WithRaters(raters))
 		}
 	}
 	return metricsOpts
@@ -165,7 +182,7 @@ func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 			opt(m)
 		}
 	}
-	if m.lagReader != nil {
+	if m.lagReaders != nil {
 		m.pendingInfo = sharedqueue.New[timestampedPending](1800)
 	}
 	return m
@@ -173,7 +190,7 @@ func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 
 // Enqueue pending pending information
 func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
-	if ms.lagReader == nil {
+	if ms.lagReaders == nil {
 		return
 	}
 	log := logging.FromContext(ctx)
@@ -184,13 +201,18 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if pending, err := ms.lagReader.Pending(ctx); err != nil {
-				log.Errorw("Failed to get pending messages", zap.Error(err))
-			} else {
-				if pending != isb.PendingNotAvailable {
-					ts := timestampedPending{pending: pending, timestamp: time.Now().Unix()}
-					ms.pendingInfo.Append(ts)
+			totalPending := int64(0)
+			for _, pending := range ms.lagReaders {
+				if p, err := pending.Pending(ctx); err != nil {
+					log.Errorw("Failed to get pending messages", zap.Error(err))
+				} else {
+					totalPending += p
 				}
+			}
+
+			if totalPending != isb.PendingNotAvailable {
+				ts := timestampedPending{pending: totalPending, timestamp: time.Now().Unix()}
+				ms.pendingInfo.Append(ts)
 			}
 		}
 	}
@@ -198,7 +220,7 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 
 // Expose pending and rate metrics
 func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
-	if ms.lagReader == nil && ms.rater == nil {
+	if ms.lagReaders == nil && ms.raters == nil {
 		return
 	}
 	log := logging.FromContext(ctx)
@@ -211,18 +233,23 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if ms.rater != nil {
+			if ms.raters != nil {
 				for n, i := range lookbackSecondsMap {
-					if r, err := ms.rater.Rate(ctx, i); err != nil {
-						log.Errorw("Failed to get processing rate in the past seconds", zap.Int64("seconds", i), zap.Error(err))
-					} else {
-						if r != isb.RateNotAvailable {
-							processingRate.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(r)
+					totalRate := float64(0)
+					for _, rater := range ms.raters {
+						if r, err := rater.Rate(ctx, i); err != nil {
+							log.Errorw("Failed to get processing rate in the past seconds", zap.Int64("seconds", i), zap.Error(err))
+						} else {
+							totalRate += r
 						}
+					}
+					totalRate = totalRate / float64(len(ms.raters))
+					if totalRate != isb.RateNotAvailable {
+						processingRate.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(totalRate)
 					}
 				}
 			}
-			if ms.lagReader != nil {
+			if ms.lagReaders != nil {
 				for n, i := range lookbackSecondsMap {
 					if p := ms.calculatePending(i); p != isb.PendingNotAvailable {
 						pending.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(float64(p))

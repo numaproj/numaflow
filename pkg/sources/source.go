@@ -173,7 +173,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, sourcer, writers[0])
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, []isb.BufferReader{sourcer}, writers)
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
