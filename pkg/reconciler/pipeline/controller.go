@@ -529,18 +529,8 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 }
 
 func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
-	plLimits := pl.GetPipelineLimits()
 	result := []dfv1.CombinedEdge{}
 	for _, e := range edges {
-		if e.DeprecatedLimits == nil {
-			e.DeprecatedLimits = &dfv1.DeprecatedEdgeLimits{}
-		}
-		if e.DeprecatedLimits.BufferMaxLength == nil {
-			e.DeprecatedLimits.BufferMaxLength = plLimits.BufferMaxLength
-		}
-		if e.DeprecatedLimits.BufferUsageLimit == nil {
-			e.DeprecatedLimits.BufferUsageLimit = plLimits.BufferUsageLimit
-		}
 		vFrom := pl.GetVertex(e.From)
 		vTo := pl.GetVertex(e.To)
 		fromVertexLimits := mergeLimits(pl.GetPipelineLimits(), vFrom.Limits)
