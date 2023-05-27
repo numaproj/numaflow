@@ -87,7 +87,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	if epoch == math.MaxInt64 {
 		epoch = -1
 	}
-	e.log.Infof("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bufferName, offset, epoch)
+	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bufferName, offset, epoch)
 
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
