@@ -74,8 +74,11 @@ func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bucketNa
 
 func TestGetVertexMetrics(t *testing.T) {
 	pipelineName := "simple-pipeline"
+	vertexName := "cat"
+	vertexPartition := int32(1)
 	pipeline := &v1alpha1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
+		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName)
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil, nil, false)
