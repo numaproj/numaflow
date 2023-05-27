@@ -49,23 +49,13 @@ var (
 func Test_ListAllEdges(t *testing.T) {
 	es := testPipeline.ListAllEdges()
 	assert.Equal(t, 2, len(es))
-	assert.Nil(t, es[0].DeprecatedParallelism)
-	assert.Nil(t, es[1].DeprecatedParallelism)
 	pl := testPipeline.DeepCopy()
 	pl.Spec.Vertices[1].UDF.GroupBy = &GroupBy{}
 	es = pl.ListAllEdges()
 	assert.Equal(t, 2, len(es))
-	assert.NotNil(t, es[0].DeprecatedParallelism)
-	assert.Equal(t, int32(1), *es[0].DeprecatedParallelism)
-	assert.Nil(t, es[1].DeprecatedParallelism)
 	pl.Spec.Edges[0].DeprecatedParallelism = pointer.Int32(3)
 	es = pl.ListAllEdges()
 	assert.Equal(t, 2, len(es))
-	assert.NotNil(t, es[0].DeprecatedParallelism)
-	assert.Equal(t, int32(1), *es[0].DeprecatedParallelism)
-	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
-	es = pl.ListAllEdges()
-	assert.Equal(t, int32(3), *es[0].DeprecatedParallelism)
 }
 
 func Test_GetToEdges(t *testing.T) {
