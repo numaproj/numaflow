@@ -86,10 +86,17 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
-			for _, buffer := range buffers {
-				group := buffer + "-group"
+			if e.ToVertexType == dfv1.VertexTypeReduceUDF {
+				for _, buffer := range buffers {
+					group := buffer + "-group"
+					redisClient := redisclient.NewInClusterRedisClient()
+					writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
+					writers = append(writers, writer)
+				}
+			} else {
+				group := buffers[0] + "-group"
 				redisClient := redisclient.NewInClusterRedisClient()
-				writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
+				writer := redisisb.NewBufferWrite(ctx, redisClient, buffers[0], group, writeOpts...)
 				writers = append(writers, writer)
 			}
 		}
@@ -121,14 +128,26 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffer := dfv1.GenerateBufferName(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, 0)
-			streamName := isbsvc.JetStreamName(buffer)
-			jetStreamClient := jsclient.NewInClusterJetStreamClient()
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
-			if err != nil {
-				return err
+			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
+			if e.ToVertexType == dfv1.VertexTypeReduceUDF {
+				for _, buffer := range buffers {
+					streamName := isbsvc.JetStreamName(buffer)
+					jetStreamClient := jsclient.NewInClusterJetStreamClient()
+					writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
+					if err != nil {
+						return err
+					}
+					writers = append(writers, writer)
+				}
+			} else {
+				streamName := isbsvc.JetStreamName(buffers[0])
+				jetStreamClient := jsclient.NewInClusterJetStreamClient()
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffers[0], streamName, streamName, writeOpts...)
+				if err != nil {
+					return err
+				}
+				writers = append(writers, writer)
 			}
-			writers = append(writers, writer)
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
