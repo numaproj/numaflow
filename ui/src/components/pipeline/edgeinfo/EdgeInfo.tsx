@@ -30,7 +30,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
     setValue(newValue);
   };
 
-  const label = `${edge?.id} Buffer`;
+  const label = `${edge?.id} Edge`;
 
   return (
     <Box>
@@ -45,16 +45,6 @@ export default function EdgeInfo(props: EdgeInfoProps) {
           onChange={handleChange}
           aria-label={`${label}-details`}
         >
-          {edge?.data && (
-            <Tab
-              style={{
-                fontWeight: "bold",
-              }}
-              data-testid="info"
-              label="Info"
-              {...a11yProps(0)}
-            />
-          )}
           {edge?.data?.edgeWatermark && (
             <Tab
               style={{
@@ -62,7 +52,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
               }}
               data-testid="watermarks"
               label="Watermarks"
-              {...a11yProps(1)}
+              {...a11yProps(0)}
             />
           )}
           {edge?.data?.conditions && (
@@ -72,82 +62,14 @@ export default function EdgeInfo(props: EdgeInfoProps) {
               }}
               data-testid="conditions"
               label="Conditions"
-              {...a11yProps(2)}
+              {...a11yProps(1)}
             />
           )}
         </Tabs>
       </Box>
-      {edge?.data && (
-        <TabPanel value={value} index={0}>
-          <TableContainer
-            component={Paper}
-            sx={{ borderBottom: 1, borderColor: "divider" }}
-          >
-            <Table aria-label="edge-info">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Edge</TableCell>
-                  <TableCell>isFull</TableCell>
-                  <TableCell>AckPending</TableCell>
-                  <TableCell>Pending</TableCell>
-                  <TableCell>Buffer Length</TableCell>
-                  <TableCell>Buffer Usage</TableCell>
-                  <TableCell>Total Messages</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {edges.map((singleEdge, idx) => {
-                  if (
-                    singleEdge?.source == edge.data?.fromVertex &&
-                    singleEdge?.target == edge.data?.toVertex
-                  ) {
-                    let isFull;
-                    if (singleEdge?.data?.isFull) {
-                      isFull = "yes";
-                    } else {
-                      isFull = "no";
-                    }
-                    let bufferUsage = "";
-                    if (typeof singleEdge?.data?.bufferUsage !== "undefined") {
-                      bufferUsage = (
-                        singleEdge?.data?.bufferUsage * 100
-                      ).toFixed(2);
-                    }
-                    return (
-                      <TableRow key={`edge-info-${idx}`}>
-                        <TableCell>
-                          {singleEdge?.data?.bufferName.slice(
-                            singleEdge.data.bufferName.indexOf("-") + 1
-                          )}
-                        </TableCell>
-                        <TableCell data-testid="isFull">{isFull}</TableCell>
-                        <TableCell data-testid="ackPending">
-                          {singleEdge?.data?.ackPending}
-                        </TableCell>
-                        <TableCell data-testid="pending">
-                          {singleEdge?.data?.pending}
-                        </TableCell>
-                        <TableCell data-testid="bufferLength">
-                          {singleEdge?.data?.bufferLength}
-                        </TableCell>
-                        <TableCell data-testid="usage">
-                          {bufferUsage}%
-                        </TableCell>
-                        <TableCell data-testid="totalMessages">
-                          {singleEdge?.data?.totalMessages}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  }
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </TabPanel>
-      )}
 
       {edge?.data?.edgeWatermark && (
-        <TabPanel value={value} index={1}>
+        <TabPanel value={value} index={0}>
           <TableContainer
             component={Paper}
             sx={{ borderBottom: 1, borderColor: "divider", width: 400 }}
@@ -176,7 +98,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
       )}
 
       {edge?.data?.conditions && (
-        <TabPanel value={value} index={2}>
+        <TabPanel value={value} index={1}>
           {edges.map((singleEdge, idx) => {
             if (
               singleEdge?.data?.conditions &&

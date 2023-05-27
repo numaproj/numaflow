@@ -13,9 +13,8 @@ export interface EdgeWatermark {
   isWaterMarkEnabled: boolean;
 }
 
-export interface EdgeInfo {
-  fromVertex: string;
-  toVertex: string;
+export interface BufferInfo {
+  bufferName: string;
   ackPendingCount: number;
   pendingCount: number;
   totalMessages: number;

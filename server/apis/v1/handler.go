@@ -220,8 +220,8 @@ func (h *handler) PodLogs(c *gin.Context) {
 	}
 }
 
-// ListPipelineEdges is used to provide information about all the pipeline edges
-func (h *handler) ListPipelineEdges(c *gin.Context) {
+// ListPipelineBuffers is used to provide buffer information about all the pipeline vertices
+func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
@@ -240,8 +240,8 @@ func (h *handler) ListPipelineEdges(c *gin.Context) {
 	c.JSON(http.StatusOK, l)
 }
 
-// GetPipelineEdge is used to provide information about a single pipeline edge
-func (h *handler) GetPipelineEdge(c *gin.Context) {
+// GetVertexBuffers is used to provide buffer information about a single pipeline vertex
+func (h *handler) GetVertexBuffers(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
@@ -253,7 +253,7 @@ func (h *handler) GetPipelineEdge(c *gin.Context) {
 		_ = client.Close()
 	}()
 	// Assume edge is the buffer name
-	i, err := client.GetPipelineBuffer(context.Background(), pipeline, c.Param("edge"))
+	i, err := client.GetPipelineBuffer(context.Background(), pipeline, c.Param("vertex"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return

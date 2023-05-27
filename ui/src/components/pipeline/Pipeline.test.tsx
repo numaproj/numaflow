@@ -1,7 +1,7 @@
 import {Pipeline} from "./Pipeline"
 import {render, screen, waitFor} from "@testing-library/react"
 import {usePipelineFetch} from "../../utils/fetchWrappers/pipelineFetch";
-import {useEdgesInfoFetch} from "../../utils/fetchWrappers/edgeInfoFetch";
+import {useBuffersInfoFetch} from "../../utils/fetchWrappers/bufferInfoFetch";
 
 global.ResizeObserver = require('resize-observer-polyfill')
 
@@ -16,8 +16,8 @@ jest.mock("react-router-dom", () => ({
 jest.mock("../../utils/fetchWrappers/pipelineFetch");
 const mockedUsePipelineFetch = usePipelineFetch as jest.MockedFunction<typeof usePipelineFetch>;
 
-jest.mock("../../utils/fetchWrappers/edgeInfoFetch");
-const mockedUseEdgesInfoFetch = useEdgesInfoFetch as jest.MockedFunction<typeof useEdgesInfoFetch>;
+jest.mock("../../utils/fetchWrappers/bufferInfoFetch");
+const mockedUseBuffersInfoFetch = useBuffersInfoFetch as jest.MockedFunction<typeof useBuffersInfoFetch>;
 
 describe("Pipeline", () => {
     it("Load Graph screen", async () => {
@@ -107,8 +107,8 @@ describe("Pipeline", () => {
                 }
             }, error: false, loading: false
         });
-        mockedUseEdgesInfoFetch.mockReturnValue({
-            edgesInfo: [{
+        mockedUseBuffersInfoFetch.mockReturnValue({
+            buffersInfo: [{
                 "fromVertex": "input",
                 "toVertex": "preproc",
                 "pendingCount": 8133,
@@ -262,8 +262,8 @@ describe("Pipeline", () => {
                 }
             }, error: "error", loading: false
         });
-        mockedUseEdgesInfoFetch.mockReturnValue({
-            edgesInfo: [{
+        mockedUseBuffersInfoFetch.mockReturnValue({
+            buffersInfo: [{
                 "fromVertex": "input",
                 "toVertex": "preproc",
                 "pendingCount": 8133,
