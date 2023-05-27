@@ -213,7 +213,7 @@ func TestProcessorManagerWatchForMap(t *testing.T) {
 		err = otStore.PutKV(ctx, "p1", otValueByte)
 		assert.NoError(t, err)
 	}
-	for processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadOffset() == -1 || processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadOffset() == -1 {
+	for processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadOffset() != 115 || processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadOffset() != 115 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -333,7 +333,7 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		err = otStore.PutKV(ctx, "p1", otValueByte)
 		assert.NoError(t, err)
 	}
-	for processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadOffset() == -1 || processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadOffset() == -1 {
+	for processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadOffset() != 115 || processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadOffset() != 115 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
