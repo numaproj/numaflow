@@ -102,7 +102,8 @@ var (
 					},
 				},
 				{
-					Name: "p2",
+					Name:       "p2",
+					Partitions: pointer.Int32(2),
 					UDF: &dfv1.UDF{
 						Container: &dfv1.Container{
 							Image: "my-image",
@@ -115,6 +116,7 @@ var (
 									},
 								},
 							},
+							Keyed: true,
 							Storage: &dfv1.PBQStorage{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},

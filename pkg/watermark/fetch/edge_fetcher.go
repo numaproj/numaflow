@@ -41,19 +41,19 @@ import (
 // edgeFetcher is a fetcher between two vertices.
 type edgeFetcher struct {
 	ctx              context.Context
-	bufferName       string
+	bucketName       string
 	storeWatcher     store.WatermarkStoreWatcher
 	processorManager *processor.ProcessorManager
 	log              *zap.SugaredLogger
 }
 
 // NewEdgeFetcher returns a new edge fetcher.
-func NewEdgeFetcher(ctx context.Context, bufferName string, storeWatcher store.WatermarkStoreWatcher, manager *processor.ProcessorManager) Fetcher {
-	log := logging.FromContext(ctx).With("bufferName", bufferName)
+func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.WatermarkStoreWatcher, manager *processor.ProcessorManager) Fetcher {
+	log := logging.FromContext(ctx).With("bucketName", bucketName)
 	log.Info("Creating a new edge watermark fetcher")
 	return &edgeFetcher{
 		ctx:              ctx,
-		bufferName:       bufferName,
+		bucketName:       bucketName,
 		storeWatcher:     storeWatcher,
 		processorManager: manager,
 		log:              log,
@@ -87,7 +87,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	if epoch == math.MaxInt64 {
 		epoch = -1
 	}
-	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bufferName, offset, epoch)
+	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
 
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
@@ -144,7 +144,7 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 		// we only consider the latest wmb in the offset timeline
 		var curHeadWMB = p.GetOffsetTimeline().GetHeadWMB()
 		if !curHeadWMB.Idle {
-			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bufferName)
+			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bucketName)
 			return wmb.WMB{}
 		}
 		if curHeadWMB.Watermark != -1 {
@@ -160,7 +160,7 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 		// there is no valid watermark yet
 		return wmb.WMB{}
 	}
-	e.log.Debugf("GetHeadWMB: %s[%s] get idle head wmb for offset", debugString.String(), e.bufferName)
+	e.log.Debugf("GetHeadWMB: %s[%s] get idle head wmb for offset", debugString.String(), e.bucketName)
 	return headWMB
 }
 
