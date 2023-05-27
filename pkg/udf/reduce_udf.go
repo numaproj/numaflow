@@ -123,16 +123,16 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 				} else {
-					// TODO: need to shuffle for partitioned map vertex
-					result = append(result, dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
+					// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
+					result = append(result, dfv1.GenerateBufferName(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, 0))
 				}
 			} else {
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
 					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
 					} else {
-						// TODO: need to shuffle for partitioned map vertex
-						result = append(result, dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
+						// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
+						result = append(result, dfv1.GenerateBufferName(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, 0))
 					}
 				}
 			}

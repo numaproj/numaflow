@@ -56,11 +56,10 @@ func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstan
 			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
-		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
-		for _, buffer := range buffers {
-			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
-			writers[buffer] = writer
-		}
+		// TODO: support multiple partitions
+		buffer := dfv1.GenerateBufferName(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, 0)
+		writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
+		writers[buffer] = writer
 	}
 
 	return reader, writers
@@ -96,15 +95,14 @@ func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexIn
 			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
-		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
-		for _, buffer := range buffers {
-			streamName := isbsvc.JetStreamName(buffer)
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
-			if err != nil {
-				return nil, nil, err
-			}
-			writers[buffer] = writer
+		// TODO: support multiple partitions
+		buffer := dfv1.GenerateBufferName(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, 0)
+		streamName := isbsvc.JetStreamName(buffer)
+		writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
+		if err != nil {
+			return nil, nil, err
 		}
+		writers[buffer] = writer
 	}
 	return reader, writers, nil
 }

@@ -7,9 +7,23 @@ spec:
     - name: in
       source:
         http: {}
-    - name: atoi
+    - name: cat
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
       scale:
-        min: 3
+        min: 2
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
+    - name: atoi
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+      scale:
+        min: 2
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
@@ -36,6 +50,8 @@ spec:
         log: {}
   edges:
     - from: in
+      to: cat
+    - from: cat
       to: atoi
     - from: atoi
       to: compute-sum
