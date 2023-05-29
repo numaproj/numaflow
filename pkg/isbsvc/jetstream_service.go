@@ -279,21 +279,26 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string) (fetch.Fetcher, error) {
-	hbBucketName := JetStreamProcessorBucket(bucketName)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
-	if err != nil {
-		return nil, err
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int) ([]fetch.Fetcher, error) {
+	var watermarkFetchers []fetch.Fetcher
+	for i := 0; i < partitions; i++ {
+		hbBucketName := JetStreamProcessorBucket(bucketName)
+		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
+		// should we return error if one is successful?
+		if err != nil {
+			return nil, err
+		}
+		otBucketName := JetStreamOTBucket(bucketName)
+		otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jss.jsClient)
+		if err != nil {
+			return nil, err
+		}
+		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
+		pm := processor.NewProcessorManager(ctx, storeWatcher, processor.WithVertexReplica(int32(i)))
+		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm)
+		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}
-	otBucketName := JetStreamOTBucket(bucketName)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jss.jsClient)
-	if err != nil {
-		return nil, err
-	}
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
-	pm := processor.NewProcessorManager(ctx, storeWatcher)
-	watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm)
-	return watermarkFetcher, nil
+	return watermarkFetchers, nil
 }
 
 func JetStreamName(bufferName string) string {
