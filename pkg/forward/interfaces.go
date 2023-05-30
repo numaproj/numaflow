@@ -16,28 +16,24 @@ limitations under the License.
 
 package forward
 
-import (
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-)
-
-var (
-	All  = GoWhere(func([]string, []string) ([]string, error) { return []string{dfv1.MessageTagAll}, nil })
-	Drop = GoWhere(func([]string, []string) ([]string, error) { return []string{dfv1.MessageTagDrop}, nil })
-)
+type Step struct {
+	ToVertexName      string
+	ToVertexPartition int32
+}
 
 // ToWhichStepDecider decides which step to forward after applying the WhereTo function.
 type ToWhichStepDecider interface {
 	// WhereTo decides where to forward the result to based on the name of the step it returns.
 	// It supports 2 addition keywords which need not be a step name. They are "ALL" and "DROP"
 	// where former means, forward to all the neighbouring steps and latter means do not forward anywhere.
-	WhereTo([]string, []string) ([]string, error)
+	WhereTo([]string, []string) ([]Step, error)
 }
 
 // GoWhere is the step decider on where it needs to go
-type GoWhere func([]string, []string) ([]string, error)
+type GoWhere func([]string, []string) ([]Step, error)
 
 // WhereTo decides where the data goes to.
-func (gw GoWhere) WhereTo(ks []string, ts []string) ([]string, error) {
+func (gw GoWhere) WhereTo(ks []string, ts []string) ([]Step, error) {
 	return gw(ks, ts)
 }
 

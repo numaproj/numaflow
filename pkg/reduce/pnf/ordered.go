@@ -57,22 +57,30 @@ type OrderedProcessor struct {
 	taskQueue           *list.List
 	pbqManager          *pbq.Manager
 	udf                 applier.ReduceApplier
-	toBuffers           map[string]isb.BufferWriter
+	toBuffers           map[string][]isb.BufferWriter
 	whereToDecider      forward.ToWhichStepDecider
 	watermarkPublishers map[string]publish.Publisher
 	idleManager         *wmb.IdleManager
 	log                 *zap.SugaredLogger
+	opts                options
 }
 
 // NewOrderedProcessor returns an OrderedProcessor.
 func NewOrderedProcessor(ctx context.Context,
 	vertexInstance *dfv1.VertexInstance,
 	udf applier.ReduceApplier,
-	toBuffers map[string]isb.BufferWriter,
+	toBuffers map[string][]isb.BufferWriter,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,
-	idleManager *wmb.IdleManager) *OrderedProcessor {
+	idleManager *wmb.IdleManager,
+	opts ...Option) *OrderedProcessor {
+
+	options := DefaultOptions()
+	for _, o := range opts {
+		_ = o(options)
+	}
+
 	of := &OrderedProcessor{
 		vertexName:          vertexInstance.Vertex.Spec.Name,
 		pipelineName:        vertexInstance.Vertex.Spec.PipelineName,
@@ -86,6 +94,7 @@ func NewOrderedProcessor(ctx context.Context,
 		watermarkPublishers: watermarkPublishers,
 		idleManager:         idleManager,
 		log:                 logging.FromContext(ctx),
+		opts:                *options,
 	}
 
 	go of.forward(ctx)
@@ -234,10 +243,12 @@ outerLoop:
 
 func (op *OrderedProcessor) Shutdown() {
 	for _, v := range op.toBuffers {
-		if err := v.Close(); err != nil {
-			op.log.Errorw("Failed to close buffer writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", v.GetName()))
-		} else {
-			op.log.Infow("Closed buffer writer", zap.String("bufferTo", v.GetName()))
+		for _, buffer := range v {
+			if err := buffer.Close(); err != nil {
+				op.log.Errorw("Failed to close buffer writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", buffer.GetName()))
+			} else {
+				op.log.Infow("Closed buffer writer", zap.String("bufferTo", buffer.GetName()))
+			}
 		}
 	}
 }

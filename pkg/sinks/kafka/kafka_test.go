@@ -33,6 +33,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type myForwardToAllTest struct {
+}
+
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.Step, error) {
+	return []forward.Step{{
+		ToVertexName:      "testVertex",
+		ToVertexPartition: 0,
+	}}, nil
+}
+
 func TestWriteSuccessToKafka(t *testing.T) {
 	var err error
 	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25)
@@ -47,7 +57,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, map[string]isb.BufferWriter{"name": toKafka}, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
+	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
 	toKafka.name = "Test"
@@ -98,9 +108,9 @@ func TestWriteFailureToKafka(t *testing.T) {
 			},
 		},
 	}}
-	toSteps := map[string]isb.BufferWriter{vertex.Spec.Name: toKafka}
+	toSteps := map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
+	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"

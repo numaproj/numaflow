@@ -29,7 +29,7 @@ import (
 
 // PublishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
 // we see a new WMB; later we only update the WMB without a ctrl message.
-func PublishIdleWatermark(ctx context.Context, toBuffer isb.BufferWriter, publisher publish.Publisher, idleManager *wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
+func PublishIdleWatermark(ctx context.Context, toBuffer isb.BufferWriter, publisher publish.Publisher, idleManager *wmb.IdleManager, toVertexPartition int32, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
 	var bufferName = toBuffer.GetName()
 
 	if !idleManager.Exists(bufferName) {
@@ -58,9 +58,9 @@ func PublishIdleWatermark(ctx context.Context, toBuffer isb.BufferWriter, publis
 	// publish WMB (this will naturally incr or set the timestamp of rl.wmbOffset)
 	if vertexType == dfv1.VertexTypeSource || vertexType == dfv1.VertexTypeMapUDF ||
 		vertexType == dfv1.VertexTypeReduceUDF {
-		publisher.PublishIdleWatermark(wm, idleManager.Get(bufferName))
+		publisher.PublishIdleWatermark(wm, idleManager.Get(bufferName), toVertexPartition)
 	} else {
 		// for Sink vertex, and it does not care about the offset during watermark publishing
-		publisher.PublishIdleWatermark(wm, nil)
+		publisher.PublishIdleWatermark(wm, nil, toVertexPartition)
 	}
 }

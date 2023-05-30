@@ -71,13 +71,25 @@ func NewBlackhole(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWaterma
 		}
 	}
 
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.Spec.Name: bh}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {bh}}, bh.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
 	bh.isdf = isdf
 
 	return bh, nil
+}
+
+func (b *Blackhole) getSinkGoWhereDecider() forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
+		var result []forward.Step
+		result = append(result, forward.Step{
+			ToVertexName:      b.name,
+			ToVertexPartition: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }
 
 // GetName returns the name.

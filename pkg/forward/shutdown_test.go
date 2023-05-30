@@ -33,8 +33,8 @@ import (
 type myShutdownTest struct {
 }
 
-func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]string, error) {
-	return []string{dfv1.MessageTagAll}, nil
+func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]Step, error) {
+	return []Step{}, nil
 }
 
 func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -67,8 +67,8 @@ func TestInterStepDataForward(t *testing.T) {
 			batchSize := tt.batchSize
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
 			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
-			toSteps := map[string]isb.BufferWriter{
-				"to1": to1,
+			toSteps := map[string][]isb.BufferWriter{
+				"to1": {to1},
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -101,8 +101,8 @@ func TestInterStepDataForward(t *testing.T) {
 			batchSize := tt.batchSize
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
 			to1 := simplebuffer.NewInMemoryBuffer("to", 2*batchSize)
-			toSteps := map[string]isb.BufferWriter{
-				"to1": to1,
+			toSteps := map[string][]isb.BufferWriter{
+				"to1": {to1},
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

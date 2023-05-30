@@ -72,7 +72,7 @@ func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark f
 		}
 	}
 
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.Spec.Name: toLog}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toLog}}, toLog.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +100,18 @@ func (t *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, 
 		log.Println(prefix, " Payload - ", string(message.Payload), " Keys - ", message.Keys, " EventTime - ", message.EventTime.UnixMilli())
 	}
 	return nil, make([]error, len(messages))
+}
+
+func (t *ToLog) getSinkGoWhereDecider() forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
+		var result []forward.Step
+		result = append(result, forward.Step{
+			ToVertexName:      t.name,
+			ToVertexPartition: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }
 
 func (t *ToLog) Close() error {

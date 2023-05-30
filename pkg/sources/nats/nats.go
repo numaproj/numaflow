@@ -59,7 +59,7 @@ type natsSource struct {
 
 func New(
 	vertexInstance *dfv1.VertexInstance,
-	writers []isb.BufferWriter,
+	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
@@ -84,17 +84,13 @@ func New(
 	}
 	n.messages = make(chan *isb.ReadMessage, n.bufferSize)
 
-	destinations := make(map[string]isb.BufferWriter, len(writers))
-	for _, w := range writers {
-		destinations[w.GetName()] = w
-	}
 	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(n.logger), forward.WithSourceWatermarkPublisher(n)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, n, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -244,7 +240,7 @@ func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
+		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }
 

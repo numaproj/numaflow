@@ -34,6 +34,16 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type myForwardToAllTest struct {
+}
+
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.Step, error) {
+	return []forward.Step{{
+		ToVertexName:      "writer",
+		ToVertexPartition: 0,
+	}}, nil
+}
+
 func TestRead(t *testing.T) {
 	dest := simplebuffer.NewInMemoryBuffer("writer", 100, simplebuffer.WithReadTimeOut(10*time.Second))
 	ctx := context.Background()
@@ -58,11 +68,11 @@ func TestRead(t *testing.T) {
 	}
 
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	toSteps := map[string]isb.BufferWriter{
-		"writer": dest,
+	toBuffers := map[string][]isb.BufferWriter{
+		"writer": {dest},
 	}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -113,11 +123,11 @@ func TestStop(t *testing.T) {
 		Replica:  0,
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	toSteps := map[string]isb.BufferWriter{
-		"writer": dest,
+	toBuffers := map[string][]isb.BufferWriter{
+		"writer": {dest},
 	}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
@@ -208,8 +218,11 @@ func TestWatermark(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
+	toBuffers := map[string][]isb.BufferWriter{
+		"writer": {dest},
+	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, nil, nil, publishWMStore)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, nil, nil, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

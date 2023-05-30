@@ -36,6 +36,21 @@ var (
 	testStartTime = time.Unix(1636470000, 0).UTC()
 )
 
+type myForwardToAllTest struct {
+}
+
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.Step, error) {
+	return []forward.Step{{
+		ToVertexName:      "to1",
+		ToVertexPartition: 0,
+	},
+		{
+			ToVertexName:      "to2",
+			ToVertexPartition: 0,
+		},
+	}, nil
+}
+
 func TestToLog_Start(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -131,9 +146,9 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 			logger1Stopped := logger1.Start()
 			logger2Stopped := logger2.Start()
 
-			toSteps := map[string]isb.BufferWriter{
-				"to1": to1,
-				"to2": to2,
+			toSteps := map[string][]isb.BufferWriter{
+				"to1": {to1},
+				"to2": {to2},
 			}
 
 			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
@@ -144,7 +159,7 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 				},
 			}}
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal,
+			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal,
 				fetchWatermark, publishWatermark, forward.WithReadBatchSize(batchSize), forward.WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 

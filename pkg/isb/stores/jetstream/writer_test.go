@@ -35,8 +35,11 @@ import (
 type myForwardJetStreamTest struct {
 }
 
-func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]string, error) {
-	return []string{"to1"}, nil
+func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]forward.Step, error) {
+	return []forward.Step{{
+		ToVertexName:      "to1",
+		ToVertexPartition: 0,
+	}}, nil
 }
 
 func (f myForwardJetStreamTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -134,8 +137,8 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			assert.NoError(t, err)
 			to1 := bufferWriter.(*jetStreamWriter)
 			defer to1.Close()
-			toSteps := map[string]isb.BufferWriter{
-				"to1": to1,
+			toSteps := map[string][]isb.BufferWriter{
+				"to1": {to1},
 			}
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{},

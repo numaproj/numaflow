@@ -84,7 +84,7 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark
 		}
 	}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.Spec.Name: toKafka}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, toKafka.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +195,18 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 		}
 	}
 	return nil, errs
+}
+
+func (tk *ToKafka) getSinkGoWhereDecider() forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
+		var result []forward.Step
+		result = append(result, forward.Step{
+			ToVertexName:      tk.name,
+			ToVertexPartition: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }
 
 func (tk *ToKafka) Close() error {

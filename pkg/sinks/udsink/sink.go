@@ -78,7 +78,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchW
 		return nil, fmt.Errorf("failed to create gRPC client, %w", err)
 	}
 	s.udsink = udsink
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.Spec.Name: s}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {s}}, s.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +108,18 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 		}
 	}
 	return nil, s.udsink.Apply(ctx, msgs)
+}
+
+func (s *UserDefinedSink) getSinkGoWhereDecider() forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
+		var result []forward.Step
+		result = append(result, forward.Step{
+			ToVertexName:      s.name,
+			ToVertexPartition: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }
 
 func (s *UserDefinedSink) Close() error {

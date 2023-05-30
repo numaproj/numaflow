@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/stretchr/testify/assert"
 
@@ -73,13 +74,13 @@ type EventTypeWMProgressor struct {
 	m          sync.Mutex
 }
 
-func (e *EventTypeWMProgressor) PublishWatermark(watermark wmb.Watermark, offset isb.Offset) {
+func (e *EventTypeWMProgressor) PublishWatermark(watermark wmb.Watermark, offset isb.Offset, i int32) {
 	e.m.Lock()
 	defer e.m.Unlock()
 	e.watermarks[offset.String()] = watermark
 }
 
-func (e *EventTypeWMProgressor) PublishIdleWatermark(wmb.Watermark, isb.Offset) {
+func (e *EventTypeWMProgressor) PublishIdleWatermark(wmb.Watermark, isb.Offset, int32) {
 	// TODO
 }
 
@@ -141,8 +142,11 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 	}, nil
 }
 
-func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]string, error) {
-	return []string{"reduce-to-buffer"}, nil
+func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forward.Step, error) {
+	return []forward.Step{{
+		ToVertexName:      "reduce-to-buffer",
+		ToVertexPartition: 0,
+	}}, nil
 }
 
 type SumReduceTest struct {
@@ -249,8 +253,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	// keep on writing <count> messages every 1 second for the supplied key
 	go writeMessages(child, 10, "no-op-test", fromBuffer, wmpublisher, time.Second*1)
 
-	toBuffer := map[string]isb.BufferWriter{
-		toBufferName: to,
+	toBuffer := map[string][]isb.BufferWriter{
+		toBufferName: {to},
 	}
 
 	var err error
@@ -333,8 +337,8 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 
 	// create to buffers
 	toBuffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
-	toBuffers := map[string]isb.BufferWriter{
-		toBufferName: toBuffer,
+	toBuffers := map[string][]isb.BufferWriter{
+		toBufferName: {toBuffer},
 	}
 
 	// create pbq manager
@@ -349,7 +353,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	ctrlMessage := []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
 	offsets, errs := fromBuffer.Write(ctx, ctrlMessage)
 	assert.Equal(t, make([]error, 1), errs)
-	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), offsets[0])
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), offsets[0], 0)
 
 	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffers, pipelineName)
 
@@ -436,7 +440,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	// publish a new idle wm to that is smaller than the windowToClose.End()
 	offsets, errs = fromBuffer.Write(ctx, ctrlMessage)
 	assert.Equal(t, make([]error, 1), errs)
-	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+2000))), offsets[0])
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+2000))), offsets[0], 0)
 
 	otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
 	otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
@@ -477,7 +481,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	// the len(read) == 0 now, so the window should be closed
 	// the active watermark would be int64(startTime+1000), which is older then int64(startTime+2000-1)
 	// so the PublishWatermark will be skipped, but the dataMessage should be published
-	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+6000))), offsets[0])
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+6000))), offsets[0], 0)
 
 	msgs = toBuffer.GetMessages(10)
 	// we didn't read/ack from the toBuffer, so the ctrl should still exist
@@ -539,8 +543,8 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
-	toBuffer := map[string]isb.BufferWriter{
-		toBufferName: buffer,
+	toBuffer := map[string][]isb.BufferWriter{
+		toBufferName: {buffer},
 	}
 
 	// create pbq manager
@@ -614,8 +618,8 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 
 	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
-	toBuffer := map[string]isb.BufferWriter{
-		toBufferName: buffer,
+	toBuffer := map[string][]isb.BufferWriter{
+		toBufferName: {buffer},
 	}
 
 	// create pbq manager
@@ -693,8 +697,8 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
-	toBuffer := map[string]isb.BufferWriter{
-		toBufferName: buffer,
+	toBuffer := map[string][]isb.BufferWriter{
+		toBufferName: {buffer},
 	}
 
 	// create pbq manager
@@ -768,8 +772,8 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
-	toBuffer := map[string]isb.BufferWriter{
-		toBufferName: buffer,
+	toBuffer := map[string][]isb.BufferWriter{
+		toBufferName: {buffer},
 	}
 
 	// create pbq manager
@@ -844,8 +848,8 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
-	toBuffer := map[string]isb.BufferWriter{
-		toBufferName: buffer,
+	toBuffer := map[string][]isb.BufferWriter{
+		toBufferName: {buffer},
 	}
 
 	// create pbq manager
@@ -940,8 +944,8 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
-	toBuffer := map[string]isb.BufferWriter{
-		toBufferName: buffer,
+	toBuffer := map[string][]isb.BufferWriter{
+		toBufferName: {buffer},
 	}
 
 	// create pbq manager
@@ -1021,8 +1025,8 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	// create to buffers
 	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
-	toBuffer := map[string]isb.BufferWriter{
-		toBufferName: buffer,
+	toBuffer := map[string][]isb.BufferWriter{
+		toBufferName: {buffer},
 	}
 
 	// create a store provider
@@ -1128,7 +1132,7 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	return f, sourcePublisher
 }
 
-func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
+func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]wmstore.WatermarkKVStorer)
 
@@ -1139,7 +1143,7 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string]isb.B
 		hb, hbKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
 		ot, otKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
 		otStores[key] = ot
-		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithToVertexPartition(index), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 
 		go func() {
@@ -1197,7 +1201,7 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 		// write the messages to fromBuffer, so that it will be available for consuming
 		offsets, _ := fromBuffer.Write(ctx, messages)
 		for _, offset := range offsets {
-			publish.PublishWatermark(wmb.Watermark(publishTime), offset)
+			publish.PublishWatermark(wmb.Watermark(publishTime), offset, 0)
 		}
 	}
 }
@@ -1232,7 +1236,7 @@ func publishMessages(ctx context.Context, startTime int, messages []int, testDur
 				if count >= batchSize {
 					offsets, _ := fromBuffer.Write(ctx, inputMsgs)
 					if len(offsets) > 0 {
-						publish.PublishWatermark(wmb.Watermark(time.UnixMilli(int64(et))), offsets[len(offsets)-1])
+						publish.PublishWatermark(wmb.Watermark(time.UnixMilli(int64(et))), offsets[len(offsets)-1], 0)
 					}
 					count = 0
 				}
@@ -1302,7 +1306,7 @@ func publishMessagesAllowedLatency(ctx context.Context, startTime int, message i
 		if counter >= batchSize {
 			offsets, _ := fromBuffer.Write(ctx, inputMsgs)
 			if len(offsets) > 0 {
-				publish.PublishWatermark(wm, offsets[len(offsets)-1])
+				publish.PublishWatermark(wm, offsets[len(offsets)-1], 0)
 			}
 			counter = 0
 		}
@@ -1324,7 +1328,7 @@ func publishMessagesAllowedLatency(ctx context.Context, startTime int, message i
 		inputMsgs = []isb.Message{buildIsbMessage(message, time.UnixMilli(int64(et)))}
 		offsets, _ := fromBuffer.Write(ctx, inputMsgs)
 		if len(offsets) > 0 {
-			publish.PublishWatermark(wm, offsets[len(offsets)-1])
+			publish.PublishWatermark(wm, offsets[len(offsets)-1], 0)
 		}
 	}
 }
