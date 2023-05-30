@@ -26,10 +26,9 @@ import (
 
 // Shuffle shuffles messages among ISB
 type Shuffle struct {
-	vertexName        string
-	bufferIdentifiers []string
-	buffersCount      int
-	hash              hash.Hash64
+	vertexName   string
+	buffersCount int
+	hash         hash.Hash64
 }
 
 // NewShuffle accepts list of buffer identifiers(unique identifier of isb)
