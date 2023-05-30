@@ -120,7 +120,7 @@ func TestRater_Start(t *testing.T) {
 	}()
 	go func() {
 		for {
-			if r.GetRates("v")["1m"] <= 0 {
+			if r.GetRates("v")["1m"] <= 0 || r.GetPodRates("v", 0)["1m"] <= 0 || r.GetPodRates("v", 1)["1m"] <= 0 {
 				time.Sleep(time.Second)
 			} else {
 				succeedChan <- struct{}{}
