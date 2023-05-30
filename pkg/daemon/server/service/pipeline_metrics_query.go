@@ -51,11 +51,7 @@ type pipelineMetadataQuery struct {
 	pipeline          *v1alpha1.Pipeline
 	httpClient        metricsHttpClient
 	watermarkFetchers map[string][]fetch.Fetcher
-	rater             *server.Rater
-
-	// temporary flag to help with testing new rate calculation approach
-	// TODO - remove this flag once we fully migrate to new rate calculation
-	useNewRateCalculation bool
+	rater             server.Ratable
 }
 
 const (
@@ -69,8 +65,7 @@ func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
 	wmFetchers map[string][]fetch.Fetcher,
-	rater *server.Rater,
-	useNewRateCalculation bool) (*pipelineMetadataQuery, error) {
+	rater server.Ratable) (*pipelineMetadataQuery, error) {
 	var err error
 	ps := pipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
@@ -81,9 +76,8 @@ func NewPipelineMetadataQuery(
 			},
 			Timeout: time.Second * 3,
 		},
-		watermarkFetchers:     wmFetchers,
-		rater:                 rater,
-		useNewRateCalculation: useNewRateCalculation,
+		watermarkFetchers: wmFetchers,
+		rater:             rater,
 	}
 	if err != nil {
 		return nil, err
@@ -166,32 +160,21 @@ func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daemon.GetVertexMetricsRequest) (*daemon.GetVertexMetricsResponse, error) {
 	log := logging.FromContext(ctx)
 	resp := new(daemon.GetVertexMetricsResponse)
-
 	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
+
+	// Get the headless service name
 	vertex := &v1alpha1.Vertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: vertexName,
 		},
 	}
-	// partitions indicates replica count ~ multiple pods for a vertex here
-	obj := ps.pipeline.NumOfPartitions(req.GetVertex())
-	podNum := int64(obj)
-
-	var vertexLevelRates map[string]float64
-
-	if ps.useNewRateCalculation {
-		vertexLevelRates = ps.rater.GetRates(req.GetVertex())
-	}
-
-	// Get the headless service name
 	headlessServiceName := vertex.GetHeadlessServiceName()
 
-	metricsArr := make([]*daemon.VertexMetrics, podNum)
-	for i := int64(0); i < podNum; i++ {
+	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
+	vertexLevelRates := ps.rater.GetRates(req.GetVertex())
 
-		processingRates := make(map[string]float64, 0)
-		pendings := make(map[string]int64, 0)
-
+	metricsArr := make([]*daemon.VertexMetrics, abstractVertex.GetPartitions())
+	for i := int64(0); i < int64(abstractVertex.GetPartitions()); i++ {
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
 		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
 		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
@@ -210,22 +193,8 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 				return nil, err
 			}
 
-			if !ps.useNewRateCalculation {
-				// Check if the resultant metrics list contains the processingRate, if it does look for the period label
-				if value, ok := result[metrics.VertexProcessingRate]; ok {
-					metricsList := value.GetMetric()
-					for _, metric := range metricsList {
-						labels := metric.GetLabel()
-						for _, label := range labels {
-							if label.GetName() == metrics.LabelPeriod {
-								lookback := label.GetValue()
-								processingRates[lookback] = metric.Gauge.GetValue()
-							}
-						}
-					}
-				}
-			}
-
+			// Get the pending messages for this partition
+			pendings := make(map[string]int64, 0)
 			if value, ok := result[metrics.VertexPendingMessages]; ok {
 				metricsList := value.GetMetric()
 				for _, metric := range metricsList {
@@ -238,31 +207,23 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 					}
 				}
 			}
-
-			if !ps.useNewRateCalculation {
-				metricsArr[i] = &daemon.VertexMetrics{
-					Pipeline:        &ps.pipeline.Name,
-					Vertex:          req.Vertex,
-					ProcessingRates: processingRates,
-					Pendings:        pendings,
-				}
-			} else {
-				vm := &daemon.VertexMetrics{
-					Pipeline: &ps.pipeline.Name,
-					Vertex:   req.Vertex,
-					Pendings: pendings,
-				}
-				if podNum == 1 {
-					// the vertex is either non-reduce, or single-partition reducer.
-					// in this case the processing rate of this pod is exactly same as the vertex level rate.
-					vm.ProcessingRates = vertexLevelRates
-				} else {
-					// the vertex is a multi-partition reducer.
-					// the processing rate of this pod is the rate of the corresponding partition.
-					vm.ProcessingRates = ps.rater.GetPodRates(req.GetVertex(), int(i))
-				}
-				metricsArr[i] = vm
+			vm := &daemon.VertexMetrics{
+				Pipeline: &ps.pipeline.Name,
+				Vertex:   req.Vertex,
+				Pendings: pendings,
 			}
+
+			// Get the processing rate for this partition
+			if abstractVertex.IsReduceUDF() {
+				// the processing rate of this ith partition is the rate of the corresponding ith pod.
+				vm.ProcessingRates = ps.rater.GetPodRates(req.GetVertex(), int(i))
+			} else {
+				// if the vertex is not a reduce udf, then the processing rate is the sum of all pods in this vertex.
+				// TODO - change this to display the processing rate of each partition when we finish multi-partition support for non-reduce vertices.
+				vm.ProcessingRates = vertexLevelRates
+			}
+
+			metricsArr[i] = vm
 		}
 	}
 

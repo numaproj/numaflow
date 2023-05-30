@@ -33,6 +33,12 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
+type Ratable interface {
+	Start(ctx context.Context) error
+	GetRates(vertexName string) map[string]float64
+	GetPodRates(vertexName string, podIndex int) map[string]float64
+}
+
 // CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
 // e.g. if the current time is 12:00:07, the retrieved count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
 const CountWindow = time.Second * 10
