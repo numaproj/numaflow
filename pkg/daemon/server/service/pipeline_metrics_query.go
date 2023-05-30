@@ -247,12 +247,21 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 					Pendings:        pendings,
 				}
 			} else {
-				metricsArr[i] = &daemon.VertexMetrics{
-					Pipeline:        &ps.pipeline.Name,
-					Vertex:          req.Vertex,
-					ProcessingRates: vertexLevelRates,
-					Pendings:        pendings,
+				vm := &daemon.VertexMetrics{
+					Pipeline: &ps.pipeline.Name,
+					Vertex:   req.Vertex,
+					Pendings: pendings,
 				}
+				if podNum == 1 {
+					// non-reduce vertex, or reduce vertex with single partition
+					// the processing rate of this pod is exactly same as the vertex level rate
+					vm.ProcessingRates = vertexLevelRates
+				} else {
+					// reduce vertex with multiple partitions
+					// the processing rate of this pod is the rate of this partition
+					vm.ProcessingRates = ps.rater.GetPodRates(req.GetVertex(), int(i))
+				}
+				metricsArr[i] = vm
 			}
 		}
 	}

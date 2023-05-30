@@ -43,20 +43,12 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	if n <= 1 {
 		return 0
 	}
-	now := time.Now().Truncate(CountWindow).Unix()
 	counts := q.Items()
-	var startIndex int
-	startCountInfo := counts[n-2]
-	if now-startCountInfo.timestamp > lookbackSeconds {
+	startIndex := findStartIndex(lookbackSeconds, counts)
+	if startIndex == -1 {
 		return 0
 	}
-	for i := n - 2; i >= 0; i-- {
-		if now-counts[i].timestamp <= lookbackSeconds {
-			startIndex = i
-		} else {
-			break
-		}
-	}
+
 	delta := float64(0)
 	// time diff in seconds.
 	timeDiff := counts[n-1].timestamp - counts[startIndex].timestamp
@@ -85,4 +77,62 @@ func calculateDelta(c1, c2 *TimestampedCounts) float64 {
 		}
 	}
 	return delta
+}
+
+// CalculatePodRate calculates the rate of a pod in the last lookback seconds
+func CalculatePodRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, podName string) float64 {
+	n := q.Length()
+	if n <= 1 {
+		return 0
+	}
+	counts := q.Items()
+	startIndex := findStartIndex(lookbackSeconds, counts)
+	if startIndex == -1 {
+		return 0
+	}
+
+	delta := float64(0)
+	// time diff in seconds.
+	timeDiff := counts[n-1].timestamp - counts[startIndex].timestamp
+	for i := startIndex; i < n-1; i++ {
+		delta = delta + calculatePodDelta(counts[i], counts[i+1], podName)
+	}
+	return delta / float64(timeDiff)
+}
+
+func calculatePodDelta(c1, c2 *TimestampedCounts, podName string) float64 {
+	tc1 := c1.Snapshot()
+	tc2 := c2.Snapshot()
+	count1, exist1 := tc1[podName]
+	count2, exist2 := tc2[podName]
+	if !exist2 {
+		return 0
+	} else if !exist1 {
+		return count2
+	} else if count2 < count1 {
+		return count2
+	} else {
+		return count2 - count1
+	}
+}
+
+// findStartIndex finds the index of the first element in the queue that is within the lookback seconds
+// size of counts is at least 2
+func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
+	n := len(counts)
+	now := time.Now().Truncate(time.Second * 10).Unix()
+	if now-counts[n-2].timestamp > lookbackSeconds {
+		// if the second last element is already outside the lookback window, we return an out of bound index
+		return -1
+	}
+
+	startIndex := n - 2
+	for i := n - 2; i >= 0; i-- {
+		if now-counts[i].timestamp <= lookbackSeconds {
+			startIndex = i
+		} else {
+			break
+		}
+	}
+	return startIndex
 }
