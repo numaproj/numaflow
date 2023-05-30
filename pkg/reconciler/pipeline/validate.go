@@ -168,13 +168,13 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 
 	// Do not support N FROM -> 1 TO for now.
-	toInEdges := make(map[string]bool)
+	/*toInEdges := make(map[string]bool)
 	for _, e := range pl.Spec.Edges {
 		if _, existing := toInEdges[e.To]; existing {
 			return fmt.Errorf("vertex %q has multiple 'from', which is not supported yet", e.To)
 		}
 		toInEdges[e.To] = true
-	}
+	}*/
 
 	for _, v := range pl.Spec.Vertices {
 		if err := validateVertex(v); err != nil {
