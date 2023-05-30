@@ -124,23 +124,23 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 
 	// store write offsets to publish watermark
 	writeOffsets := make(map[string][][]isb.Offset)
+	for vn, vp := range p.toVertexPartitionMap {
+		writeOffsets[vn] = make([][]isb.Offset, vp)
+	}
 
 	// parallel writes to each isb
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	success := true
 	for key, value := range messagesToStep {
-		if _, ok := writeOffsets[key]; !ok {
-			writeOffsets[key] = make([][]isb.Offset, len(value))
-		}
 		for index, messages := range value {
 			if len(messages) == 0 {
 				continue
 			}
 			wg.Add(1)
-			go func(edgeName string, partition int32, resultMessages []isb.Message) {
+			go func(toVertexName string, partition int32, resultMessages []isb.Message) {
 				defer wg.Done()
-				offsets, ctxClosedErr := p.writeToBuffer(ctx, edgeName, partition, resultMessages)
+				offsets, ctxClosedErr := p.writeToBuffer(ctx, toVertexName, partition, resultMessages)
 				if ctxClosedErr != nil {
 					success = false
 					p.log.Errorw("Context closed while waiting to write the message to ISB", zap.Error(ctxClosedErr), zap.Any("partitionID", p.PartitionID))
@@ -148,7 +148,7 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 				}
 				mu.Lock()
 				// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-				writeOffsets[edgeName][partition] = offsets
+				writeOffsets[toVertexName][partition] = offsets
 				mu.Unlock()
 			}(key, int32(index), messages)
 		}
@@ -303,10 +303,10 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 	if len(activeWatermarkBuffers) < len(p.publishWatermark) {
 		// if there's any buffers that haven't received any watermark during this
 		// batch processing cycle, send an idle watermark
-		for edgeName := range p.publishWatermark {
-			if !activeWatermarkBuffers[edgeName] {
-				if publisher, ok := p.publishWatermark[edgeName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[edgeName][0], publisher, p.idleManager, 0, p.log, dfv1.VertexTypeReduceUDF, wm)
+		for toVertexName := range p.publishWatermark {
+			if !activeWatermarkBuffers[toVertexName] {
+				if publisher, ok := p.publishWatermark[toVertexName]; ok {
+					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][0], publisher, p.idleManager, 0, p.log, dfv1.VertexTypeReduceUDF, wm)
 				}
 			}
 		}

@@ -237,9 +237,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 		//TODO handle for multiple partitions
-		for edgeName, buffers := range isdf.toBuffers {
-			if p, ok := isdf.publishWatermark[edgeName]; ok {
-				idlehandler.PublishIdleWatermark(ctx, buffers[0], p, isdf.idleManager, 0, isdf.opts.logger, isdf.opts.vertexType, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+		for toVertexName, toVertexBuffers := range isdf.toBuffers {
+			if p, ok := isdf.publishWatermark[toVertexName]; ok {
+				idlehandler.PublishIdleWatermark(ctx, toVertexBuffers[0], p, isdf.idleManager, 0, isdf.opts.logger, isdf.opts.vertexType, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 			}
 		}
 		return
@@ -389,23 +389,23 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	var activeWatermarkBuffers = make(map[string]bool)
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
-	for edgeName, edgeOffsets := range writeOffsets {
-		if publisher, ok := isdf.publishWatermark[edgeName]; ok {
-			for index, offsets := range edgeOffsets {
+	for toVertexName, toVertexOffsets := range writeOffsets {
+		if publisher, ok := isdf.publishWatermark[toVertexName]; ok {
+			for index, offsets := range toVertexOffsets {
 				if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
 					isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
 					if len(offsets) > 0 {
 						publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
-						activeWatermarkBuffers[edgeName] = true
+						activeWatermarkBuffers[toVertexName] = true
 						// reset because the toBuffer is no longer idling
-						isdf.idleManager.Reset(edgeName)
+						isdf.idleManager.Reset(toVertexName)
 					}
 					// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 				} else { // For Sink vertex, and it does not care about the offset during watermark publishing
 					publisher.PublishWatermark(processorWM, nil, int32(index))
-					activeWatermarkBuffers[edgeName] = true
+					activeWatermarkBuffers[toVertexName] = true
 					// reset because the toBuffer is no longer idling
-					isdf.idleManager.Reset(edgeName)
+					isdf.idleManager.Reset(toVertexName)
 				}
 			}
 		}
@@ -587,22 +587,22 @@ func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []i
 // has been initiated while we are stuck looping on an InternalError.
 func (isdf *InterStepDataForward) writeToBuffers(
 	ctx context.Context, messageToStep map[string][][]isb.Message,
-) (writeOffsetsEdge map[string][][]isb.Offset, err error) {
+) (writeOffsets map[string][][]isb.Offset, err error) {
 	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
-	// So writeOffsetsEdge also contains all the to buffers, but the returned offsets might be empty.
-	writeOffsetsEdge = make(map[string][][]isb.Offset)
-	for edge, messages := range messageToStep {
-		writeOffsetsEdge[edge] = make([][]isb.Offset, len(messages))
+	// So writeOffsets also contains all the to buffers, but the returned offsets might be empty.
+	writeOffsets = make(map[string][][]isb.Offset)
+	for toVertexName, toVertexMessages := range messageToStep {
+		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexMessages))
 	}
-	for edge, buffers := range isdf.toBuffers {
-		for index, buffer := range buffers {
-			writeOffsetsEdge[edge][index], err = isdf.writeToBuffer(ctx, buffer, messageToStep[edge][index])
+	for toVertexName, toVertexBuffers := range isdf.toBuffers {
+		for index, buffer := range toVertexBuffers {
+			writeOffsets[toVertexName][index], err = isdf.writeToBuffer(ctx, buffer, messageToStep[toVertexName][index])
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-	return writeOffsetsEdge, nil
+	return writeOffsets, nil
 }
 
 // writeToBuffer forwards an array of messages to a single buffer and is a blocking call or until shutdown has been initiated.
