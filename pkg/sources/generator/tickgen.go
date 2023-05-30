@@ -157,6 +157,7 @@ func NewMemGen(
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
 	publishWMStores store.WatermarkStorer, // watermarks
+	toVertexPartitionMap map[string]int,
 	opts ...Option) (*memgen, error) {
 
 	// minimal CRDs don't have defaults
@@ -221,7 +222,7 @@ func NewMemGen(
 	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, publishWM, toVertexPartitionMap, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

@@ -53,16 +53,16 @@ type OrderedProcessor struct {
 	pipelineName  string
 	vertexReplica int32
 	sync.RWMutex
-	taskDone            chan struct{}
-	taskQueue           *list.List
-	pbqManager          *pbq.Manager
-	udf                 applier.ReduceApplier
-	toBuffers           map[string][]isb.BufferWriter
-	whereToDecider      forward.ToWhichStepDecider
-	watermarkPublishers map[string]publish.Publisher
-	idleManager         *wmb.IdleManager
-	log                 *zap.SugaredLogger
-	opts                options
+	taskDone             chan struct{}
+	taskQueue            *list.List
+	pbqManager           *pbq.Manager
+	udf                  applier.ReduceApplier
+	toBuffers            map[string][]isb.BufferWriter
+	whereToDecider       forward.ToWhichStepDecider
+	watermarkPublishers  map[string]publish.Publisher
+	idleManager          *wmb.IdleManager
+	toVertexPartitionMap map[string]int
+	log                  *zap.SugaredLogger
 }
 
 // NewOrderedProcessor returns an OrderedProcessor.
@@ -74,27 +74,22 @@ func NewOrderedProcessor(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,
 	idleManager *wmb.IdleManager,
-	opts ...Option) *OrderedProcessor {
-
-	options := DefaultOptions()
-	for _, o := range opts {
-		_ = o(options)
-	}
+	toVertexPartitionMap map[string]int) *OrderedProcessor {
 
 	of := &OrderedProcessor{
-		vertexName:          vertexInstance.Vertex.Spec.Name,
-		pipelineName:        vertexInstance.Vertex.Spec.PipelineName,
-		vertexReplica:       vertexInstance.Replica,
-		taskDone:            make(chan struct{}),
-		taskQueue:           list.New(),
-		pbqManager:          pbqManager,
-		udf:                 udf,
-		toBuffers:           toBuffers,
-		whereToDecider:      whereToDecider,
-		watermarkPublishers: watermarkPublishers,
-		idleManager:         idleManager,
-		log:                 logging.FromContext(ctx),
-		opts:                *options,
+		vertexName:           vertexInstance.Vertex.Spec.Name,
+		pipelineName:         vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica:        vertexInstance.Replica,
+		taskDone:             make(chan struct{}),
+		taskQueue:            list.New(),
+		pbqManager:           pbqManager,
+		udf:                  udf,
+		toBuffers:            toBuffers,
+		whereToDecider:       whereToDecider,
+		watermarkPublishers:  watermarkPublishers,
+		idleManager:          idleManager,
+		toVertexPartitionMap: toVertexPartitionMap,
+		log:                  logging.FromContext(ctx),
 	}
 
 	go of.forward(ctx)
@@ -116,7 +111,7 @@ func (op *OrderedProcessor) SchedulePnF(
 	pbq := op.pbqManager.GetPBQ(partitionID)
 
 	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID,
-		op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager)
+		op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.toVertexPartitionMap)
 
 	doneCh := make(chan struct{})
 	t := &ForwardTask{

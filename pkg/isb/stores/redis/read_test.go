@@ -130,8 +130,11 @@ func TestRedisCheckBacklog(t *testing.T) {
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {rqw},
 	}
+	toVertexPartitionMap := map[string]int{
+		"to1": 1,
+	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(10))
+	f, err := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, toVertexPartitionMap, forward.WithReadBatchSize(10))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -318,8 +321,11 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	rqw, _ := NewBufferWrite(ctx, client, toStream, toGroup, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute), redisclient.WithMaxLength(20000)).(*BufferWrite)
 	rqr, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer).(*BufferRead)
 
-	toSteps := map[string]isb.BufferWriter{
-		"to1": rqw,
+	toSteps := map[string][]isb.BufferWriter{
+		"to1": {rqw},
+	}
+	toVertexPartitionMap := map[string]int{
+		"to1": 1,
 	}
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
@@ -330,7 +336,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
+	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, toVertexPartitionMap)
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -417,8 +423,11 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {suite.rqw},
 	}
+	toVertexPartitionMap := map[string]int{
+		"to1": 1,
+	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
+	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, toVertexPartitionMap)
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)

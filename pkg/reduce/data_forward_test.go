@@ -144,7 +144,7 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 
 func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forward.Step, error) {
 	return []forward.Step{{
-		ToVertexName:      "reduce-to-buffer",
+		ToVertexName:      "reduce-to-vertex",
 		ToVertexPartition: 0,
 	}}, nil
 }
@@ -240,11 +240,11 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		fromBufferSize  = int64(1000)
 		toBufferSize    = int64(10)
 		fromBufferName  = "source-from-buffer"
-		toBufferName    = "reduce-to-buffer"
+		toVertexName    = "reduce-to-vertex"
 	)
 	defer cancelFn()
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
-	to := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	to := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
 
 	wmpublisher := &EventTypeWMProgressor{
 		watermarks: make(map[string]wmb.Watermark),
@@ -254,7 +254,10 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	go writeMessages(child, 10, "no-op-test", fromBuffer, wmpublisher, time.Second*1)
 
 	toBuffer := map[string][]isb.BufferWriter{
-		toBufferName: {to},
+		toVertexName: {to},
+	}
+	toVertexPartitions := map[string]int{
+		toVertexName: 1,
 	}
 
 	var err error
@@ -266,14 +269,14 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	assert.NoError(t, err)
 
 	publisher := map[string]publish.Publisher{
-		toBufferName: wmpublisher,
+		toVertexName: wmpublisher,
 	}
 
 	// create new fixed window of (windowTime)
 	window := fixed.NewFixed(windowTime)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager)
+	op := pnf.NewOrderedProcessor(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, toVertexPartitions)
 
 	var reduceDataForwarder *DataForward
 	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher,
@@ -326,7 +329,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		messageValue   = []int{7}
 		startTime      = 1679961600000 // time in millis
 		fromBufferName = "source-reduce-buffer"
-		toBufferName   = "reduce-to-buffer"
+		toVertexName   = "reduce-to-vertex"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
@@ -336,9 +339,12 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
 	// create to buffers
-	toBuffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	toBuffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
 	toBuffers := map[string][]isb.BufferWriter{
-		toBufferName: {toBuffer},
+		toVertexName: {toBuffer},
+	}
+	toVertexPartitions := map[string]int{
+		toVertexName: 1,
 	}
 
 	// create pbq manager
@@ -360,7 +366,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	// create a fixed window of 5s
 	window := fixed.NewFixed(5 * time.Second)
 	idleManager := wmb.NewIdleManager(len(toBuffers))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, toVertexPartitions)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffers, pbqManager, CounterReduceTest{}, f, publisherMap,
@@ -385,7 +391,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		}
 	}
 
-	otKeys, _ := otStores[toBufferName].GetAllKeys(ctx)
+	otKeys, _ := otStores[toVertexName].GetAllKeys(ctx)
 	for len(otKeys) == 0 {
 		select {
 		case <-ctx.Done():
@@ -394,10 +400,10 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
+			otKeys, _ = otStores[toVertexName].GetAllKeys(ctx)
 		}
 	}
-	otValue, _ := otStores[toBufferName].GetValue(ctx, otKeys[0])
+	otValue, _ := otStores[toVertexName].GetValue(ctx, otKeys[0])
 	otDecode, _ := wmb.DecodeToWMB(otValue)
 	for otDecode.Watermark != int64(startTime) { // the first ctrl message written to isb, will use the headWMB to populate wm
 		select {
@@ -407,7 +413,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+			otValue, _ = otStores[toVertexName].GetValue(ctx, otKeys[0])
 			otDecode, _ = wmb.DecodeToWMB(otValue)
 		}
 	}
@@ -426,7 +432,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+			otValue, _ = otStores[toVertexName].GetValue(ctx, otKeys[0])
 			otDecode, _ = wmb.DecodeToWMB(otValue)
 		}
 	}
@@ -442,8 +448,8 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	assert.Equal(t, make([]error, 1), errs)
 	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime+2000))), offsets[0], 0)
 
-	otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
-	otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+	otKeys, _ = otStores[toVertexName].GetAllKeys(ctx)
+	otValue, _ = otStores[toVertexName].GetValue(ctx, otKeys[0])
 	otDecode, _ = wmb.DecodeToWMB(otValue)
 	// wm should be updated using the same offset because it's still idling
 	// -1 ms because in this use case we publish watermark-1
@@ -455,8 +461,8 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			otKeys, _ = otStores[toBufferName].GetAllKeys(ctx)
-			otValue, _ = otStores[toBufferName].GetValue(ctx, otKeys[0])
+			otKeys, _ = otStores[toVertexName].GetAllKeys(ctx)
+			otValue, _ = otStores[toVertexName].GetValue(ctx, otKeys[0])
 			otDecode, _ = wmb.DecodeToWMB(otValue)
 		}
 	}
@@ -531,7 +537,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 		messageValue   = []int{7}
 		startTime      = 60000 // time in millis
 		fromBufferName = "source-reduce-buffer"
-		toBufferName   = "reduce-to-buffer"
+		toVertexName   = "reduce-to-vertex"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
@@ -542,9 +548,12 @@ func TestReduceDataForward_Count(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
 	toBuffer := map[string][]isb.BufferWriter{
-		toBufferName: {buffer},
+		toVertexName: {buffer},
+	}
+	toVertexPartitions := map[string]int{
+		toVertexName: 1,
 	}
 
 	// create pbq manager
@@ -560,7 +569,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	// create a fixed window of 60s
 	window := fixed.NewFixed(60 * time.Second)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, toVertexPartitions)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
@@ -606,7 +615,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 		messageValue   = 7
 		startTime      = 60000 // time in millis
 		fromBufferName = "source-reduce-buffer"
-		toBufferName   = "reduce-to-buffer"
+		toVertexName   = "reduce-to-vertex"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
@@ -617,9 +626,12 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
 	toBuffer := map[string][]isb.BufferWriter{
-		toBufferName: {buffer},
+		toVertexName: {buffer},
+	}
+	toVertexPartitions := map[string]int{
+		toVertexName: 1,
 	}
 
 	// create pbq manager
@@ -636,7 +648,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Second)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, toVertexPartitions)
 
 	var reduceDataForward *DataForward
 	allowedLatency := 1000
@@ -685,7 +697,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 		messageValue   = []int{10}
 		startTime      = 0 // time in millis
 		fromBufferName = "source-reduce-buffer"
-		toBufferName   = "reduce-to-buffer"
+		toVertexName   = "reduce-to-vertex"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
@@ -696,9 +708,12 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
 	toBuffer := map[string][]isb.BufferWriter{
-		toBufferName: {buffer},
+		toVertexName: {buffer},
+	}
+	toVertexPartitions := map[string]int{
+		toVertexName: 1,
 	}
 
 	// create pbq manager
@@ -713,7 +728,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	// create a fixed window of 2 minutes
 	window := fixed.NewFixed(2 * time.Minute)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, toVertexPartitions)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
@@ -760,7 +775,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 		messageValue   = []int{100}
 		startTime      = 0 // time in millis
 		fromBufferName = "source-reduce-buffer"
-		toBufferName   = "reduce-to-buffer"
+		toVertexName   = "reduce-to-vertex"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
@@ -771,9 +786,12 @@ func TestReduceDataForward_Max(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
 	toBuffer := map[string][]isb.BufferWriter{
-		toBufferName: {buffer},
+		toVertexName: {buffer},
+	}
+	toVertexPartitions := map[string]int{
+		toVertexName: 1,
 	}
 
 	// create pbq manager
@@ -789,7 +807,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, toVertexPartitions)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
@@ -836,7 +854,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 		messages       = []int{100, 99}
 		startTime      = 0 // time in millis
 		fromBufferName = "source-reduce-buffer"
-		toBufferName   = "reduce-to-buffer"
+		toVertexName   = "reduce-to-vertex"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
@@ -847,9 +865,12 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
 	toBuffer := map[string][]isb.BufferWriter{
-		toBufferName: {buffer},
+		toVertexName: {buffer},
+	}
+	toVertexPartitions := map[string]int{
+		toVertexName: 1,
 	}
 
 	// create pbq manager
@@ -865,7 +886,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, toVertexPartitions)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
@@ -932,7 +953,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 		messages       = []int{100, 99}
 		startTime      = 0 // time in millis
 		fromBufferName = "source-reduce-buffer"
-		toBufferName   = "reduce-to-buffer"
+		toVertexName   = "reduce-to-vertex"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
@@ -943,11 +964,13 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
 	toBuffer := map[string][]isb.BufferWriter{
-		toBufferName: {buffer},
+		toVertexName: {buffer},
 	}
-
+	toVertexPartitions := map[string]int{
+		toVertexName: 1,
+	}
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
@@ -962,7 +985,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, toVertexPartitions)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
@@ -1010,7 +1033,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		messages       = []int{100, 99}
 		startTime      = 0 // time in millis
 		fromBufferName = "source-reduce-buffer"
-		toBufferName   = "reduce-to-buffer"
+		toVertexName   = "reduce-to-vertex"
 		pipelineName   = "test-reduce-pipeline"
 		err            error
 	)
@@ -1024,9 +1047,12 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toBufferName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
 	toBuffer := map[string][]isb.BufferWriter{
-		toBufferName: {buffer},
+		toVertexName: {buffer},
+	}
+	toVertexPartitions := map[string]int{
+		toVertexName: 1,
 	}
 
 	// create a store provider
@@ -1046,7 +1072,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	window := fixed.NewFixed(5 * time.Minute)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, toVertexPartitions)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(cctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,

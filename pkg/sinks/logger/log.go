@@ -72,7 +72,8 @@ func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark f
 		}
 	}
 
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toLog}}, toLog.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	toVertexPartitionMap := map[string]int{vertex.Spec.Name: 1}
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toLog}}, toLog.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, toVertexPartitionMap, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

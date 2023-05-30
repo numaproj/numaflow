@@ -170,7 +170,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.BufferWriter))
 
 	// create pf using key and reducer
-	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.BufferWriter, 1), forwardTest{}, publishWatermark, wmb.NewIdleManager(1))
+	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.BufferWriter, 1), forwardTest{}, publishWatermark, wmb.NewIdleManager(1), make(map[string]int, 1))
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)
@@ -192,7 +192,12 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		"buffer2": {test1Buffer2},
 	}
 
-	pf1, otStores1 := createProcessAndForwardAndOTStore(ctx, "test-forward-one", pbqManager, toBuffers1)
+	toVertexPartitionMap1 := map[string]int{
+		"buffer1": 1,
+		"buffer2": 1,
+	}
+
+	pf1, otStores1 := createProcessAndForwardAndOTStore(ctx, "test-forward-one", pbqManager, toBuffers1, toVertexPartitionMap1)
 
 	test2Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
 	test2Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
@@ -201,8 +206,11 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		"buffer1": {test2Buffer1},
 		"buffer2": {test2Buffer2},
 	}
-
-	pf2, otStores2 := createProcessAndForwardAndOTStore(ctx, "test-forward-all", pbqManager, toBuffers2)
+	toVertexPartitionMap2 := map[string]int{
+		"buffer1": 1,
+		"buffer2": 1,
+	}
+	pf2, otStores2 := createProcessAndForwardAndOTStore(ctx, "test-forward-all", pbqManager, toBuffers2, toVertexPartitionMap2)
 
 	test3Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
 	test3Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
@@ -211,8 +219,12 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		"buffer1": {test3Buffer1},
 		"buffer2": {test3Buffer2},
 	}
+	toVertexPartitionMap3 := map[string]int{
+		"buffer1": 1,
+		"buffer2": 1,
+	}
 
-	pf3, otStores3 := createProcessAndForwardAndOTStore(ctx, "test-drop-all", pbqManager, toBuffers3)
+	pf3, otStores3 := createProcessAndForwardAndOTStore(ctx, "test-drop-all", pbqManager, toBuffers3, toVertexPartitionMap3)
 
 	tests := []struct {
 		name       string
@@ -353,7 +365,10 @@ func TestWriteToBuffer(t *testing.T) {
 			toBuffer := map[string][]isb.BufferWriter{
 				"buffer": {value.buffer},
 			}
-			pf, _ := createProcessAndForwardAndOTStore(ctx, value.name, pbqManager, toBuffer)
+			toVertexPartitionMap := map[string]int{
+				"buffer": 1,
+			}
+			pf, _ := createProcessAndForwardAndOTStore(ctx, value.name, pbqManager, toBuffer, toVertexPartitionMap)
 			var err error
 			writeMessages := testutils.BuildTestWriteMessages(int64(15), testStartTime)
 			_, err = pf.writeToBuffer(ctx, "buffer", 0, writeMessages)
@@ -362,7 +377,7 @@ func TestWriteToBuffer(t *testing.T) {
 	}
 }
 
-func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter) (processAndForward, map[string]wmstore.WatermarkKVStorer) {
+func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter, toVertexPartitionMap map[string]int) (processAndForward, map[string]wmstore.WatermarkKVStorer) {
 
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
@@ -407,16 +422,16 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	}
 
 	pf := processAndForward{
-		PartitionID:      testPartition,
-		UDF:              nil,
-		result:           result,
-		pbqReader:        simplePbq,
-		log:              logging.FromContext(ctx),
-		toBuffers:        toBuffers,
-		whereToDecider:   whereto,
-		publishWatermark: pw,
-		idleManager:      wmb.NewIdleManager(len(toBuffers)),
-		opts:             *DefaultOptions(),
+		PartitionID:          testPartition,
+		UDF:                  nil,
+		result:               result,
+		pbqReader:            simplePbq,
+		log:                  logging.FromContext(ctx),
+		toBuffers:            toBuffers,
+		whereToDecider:       whereto,
+		publishWatermark:     pw,
+		idleManager:          wmb.NewIdleManager(len(toBuffers)),
+		toVertexPartitionMap: toVertexPartitionMap,
 	}
 
 	return pf, otStore

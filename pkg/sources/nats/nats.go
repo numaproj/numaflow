@@ -65,6 +65,7 @@ func New(
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
 	publishWMStores store.WatermarkStorer,
+	toVertexPartitionMap map[string]int,
 	opts ...Option) (*natsSource, error) {
 
 	n := &natsSource{
@@ -90,7 +91,7 @@ func New(
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, publishWM, toVertexPartitionMap, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

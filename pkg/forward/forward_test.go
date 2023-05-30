@@ -129,7 +129,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
-
+			toVertexPartitionMap := map[string]int{
+				"to1": 1,
+			}
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
 				AbstractVertex: dfv1.AbstractVertex{
@@ -144,7 +146,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+				fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -199,8 +201,12 @@ func TestNewInterStepDataForward(t *testing.T) {
 			}}
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			toVertexPartitionMap := map[string]int{
+				"to1": 1,
+				"to2": 1,
+			}
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, myForwardToAllTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF),
+				fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF),
 				WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -284,11 +290,14 @@ func TestNewInterStepDataForward(t *testing.T) {
 					Name: "testVertex",
 				},
 			}}
-
+			toVertexPartitionMap := map[string]int{
+				"to1": 1,
+				"to2": 1,
+			}
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF),
+				fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF),
 				WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -384,11 +393,14 @@ func TestNewInterStepDataForward(t *testing.T) {
 					Name: "testVertex",
 				},
 			}}
-
+			toVertexPartitionMap := map[string]int{
+				"to1": 1,
+				"to2": 1,
+			}
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF),
+				fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF),
 				WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -472,10 +484,12 @@ func TestNewInterStepDataForward(t *testing.T) {
 			defer cancel()
 
 			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
-
+			toVertexPartitionMap := map[string]int{
+				"to1": 1,
+			}
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+				fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -512,9 +526,12 @@ func TestNewInterStepDataForward(t *testing.T) {
 				},
 			}}
 
+			toVertexPartitionMap := map[string]int{
+				"to1": 1,
+			}
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+				fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.True(t, to1.IsEmpty())
@@ -549,9 +566,13 @@ func TestNewInterStepDataForward(t *testing.T) {
 				},
 			}}
 
+			toVertexPartitionMap := map[string]int{
+				"to1": 1,
+			}
+
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+				fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -663,13 +684,15 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 			Name: "testVertex",
 		},
 	}}
-
+	toVertexPartitionMap := map[string]int{
+		"to1": 1,
+	}
 	ctrlMessage := []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -817,11 +840,14 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 		},
 	}}
 
+	toVertexPartitionMap := map[string]int{
+		"to1": 1,
+	}
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1037,14 +1063,18 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	fetchWatermark := &testForwardFetcher{}
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
+	toVertexPartitionMap := map[string]int{
+		"to1": 1,
+	}
+
 	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
-	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
+	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
 	assert.True(t, failedForwarder == nil)
 	assert.Error(t, err)
 	assert.Equal(t, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder"), err)
 
 	// create a valid source forwarder
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1131,9 +1161,13 @@ func TestWriteToBuffer(t *testing.T) {
 					Name: "testVertex",
 				},
 			}}
+			toVertexPartitionMap := map[string]int{
+				"to1": 1,
+			}
+
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(value.batchSize), WithUDFStreaming(value.streamEnabled))
+				fetchWatermark, publishWatermark, toVertexPartitionMap, WithReadBatchSize(value.batchSize), WithUDFStreaming(value.streamEnabled))
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
 			assert.True(t, buffer.IsEmpty())

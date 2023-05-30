@@ -47,6 +47,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	defer cancel()
 	var reader isb.BufferReader
 	var writers map[string][]isb.BufferWriter
+	var toVertexPartitionMap = make(map[string]int)
 	var err error
 	fromBufferName := u.VertexInstance.Vertex.OwnedBuffers()[0]
 
@@ -77,6 +78,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitions())
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
+		toVertexPartitionMap[edge.To] = edge.GetToVertexPartitions()
 	}
 
 	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
@@ -159,8 +161,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			opts = append(opts, forward.WithUDFConcurrency(int(*x.ReadBatchSize)))
 		}
 	}
-
-	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, opts...)
+	forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, toVertexPartitionMap, opts...)
 	if err != nil {
 		return err
 	}

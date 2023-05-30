@@ -55,6 +55,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var windower window.Windower
+	var toVertexPartitionMap = make(map[string]int)
+
 	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
 
@@ -109,6 +111,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitions())
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
+		toVertexPartitionMap[edge.To] = edge.GetToVertexPartitions()
 	}
 
 	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
@@ -207,7 +210,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 	idleManager := wmb.NewIdleManager(len(writers))
 
-	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, udfHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, udfHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, toVertexPartitionMap)
 
 	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
 	if err != nil {

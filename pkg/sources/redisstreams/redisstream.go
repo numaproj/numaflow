@@ -81,6 +81,7 @@ func New(
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
 	publishWMStores store.WatermarkStorer,
+	toVertexPartitionMap map[string]int,
 	opts ...Option) (*redisStreamsSource, error) {
 
 	// create RedisClient to connect to Redis
@@ -143,7 +144,7 @@ func New(
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, redisStreamsSource, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, redisStreamsSource, writers, fsd, mapApplier, fetchWM, publishWM, toVertexPartitionMap, forwardOpts...)
 	if err != nil {
 		redisStreamsSource.Log.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

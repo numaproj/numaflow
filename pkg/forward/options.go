@@ -42,8 +42,6 @@ type options struct {
 	logger *zap.SugaredLogger
 	// enableMapUdfStream indicates whether the message streaming is enabled or not for UDF processing
 	enableMapUdfStream bool
-	// toVertexPartitions is the number of partitions for the to vertex
-	toVertexPartitions int32
 }
 
 type Option func(*options) error
@@ -55,7 +53,6 @@ func DefaultOptions() *options {
 		retryInterval:      time.Millisecond,
 		logger:             logging.NewLogger(),
 		enableMapUdfStream: false,
-		toVertexPartitions: 1,
 	}
 }
 
@@ -111,14 +108,6 @@ func WithSourceWatermarkPublisher(p isb.SourceWatermarkPublisher) Option {
 func WithUDFStreaming(f bool) Option {
 	return func(o *options) error {
 		o.enableMapUdfStream = f
-		return nil
-	}
-}
-
-// WithToVertexPartitions sets the number of partitions for the to vertex
-func WithToVertexPartitions(f int32) Option {
-	return func(o *options) error {
-		o.toVertexPartitions = f
 		return nil
 	}
 }

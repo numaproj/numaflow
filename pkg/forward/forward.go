@@ -62,7 +62,8 @@ type InterStepDataForward struct {
 	// idleManager manages the idle watermark status.
 	idleManager *wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid.
-	wmbChecker wmb.WMBChecker
+	wmbChecker           wmb.WMBChecker
+	toVertexPartitionMap map[string]int
 	Shutdown
 }
 
@@ -74,6 +75,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	applyUDF applier.MapApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
+	toVertexPartitionMap map[string]int,
 	opts ...Option) (*InterStepDataForward, error) {
 
 	options := DefaultOptions()
@@ -95,10 +97,11 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 		fetchWatermark:   fetchWatermark,
 		publishWatermark: publishWatermark,
 		// should we do a check here for the values not being null?
-		vertexName:   vertex.Spec.Name,
-		pipelineName: vertex.Spec.PipelineName,
-		idleManager:  wmb.NewIdleManager(len(toSteps)),
-		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable
+		vertexName:           vertex.Spec.Name,
+		pipelineName:         vertex.Spec.PipelineName,
+		idleManager:          wmb.NewIdleManager(len(toSteps)),
+		wmbChecker:           wmb.NewWMBChecker(2), // TODO: make configurable\
+		toVertexPartitionMap: toVertexPartitionMap,
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
@@ -271,9 +274,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	if !isdf.opts.enableMapUdfStream {
 		// create space for writeMessages specific to each step as we could forward to all the steps too.
 		var messageToStep = make(map[string][][]isb.Message)
-		for buffer := range isdf.toBuffers {
+		for toVertex := range isdf.toBuffers {
 			// over allocating to have a predictable pattern
-			messageToStep[buffer] = make([][]isb.Message, isdf.opts.toVertexPartitions)
+			messageToStep[toVertex] = make([][]isb.Message, isdf.toVertexPartitionMap[toVertex])
 		}
 
 		// udf concurrent processing request channel
@@ -452,10 +455,10 @@ func (isdf *InterStepDataForward) streamMessage(
 	var messageToStep = make(map[string][][]isb.Message)
 	var writeOffsets = make(map[string][][]isb.Offset)
 
-	for buffer := range isdf.toBuffers {
+	for toVertex := range isdf.toBuffers {
 		// over allocating to have a predictable pattern
-		messageToStep[buffer] = make([][]isb.Message, isdf.opts.toVertexPartitions)
-		writeOffsets[buffer] = make([][]isb.Offset, isdf.opts.toVertexPartitions)
+		messageToStep[toVertex] = make([][]isb.Message, isdf.toVertexPartitionMap[toVertex])
+		writeOffsets[toVertex] = make([][]isb.Offset, isdf.toVertexPartitionMap[toVertex])
 	}
 
 	if len(dataMessages) > 1 {

@@ -76,9 +76,12 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 	toBuffers := map[string][]isb.BufferWriter{
 		"test": {dest},
 	}
+	toVertexPartitionMap := map[string]int{
+		"test": 1,
+	}
 	publishWMStores := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
-	return New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores, WithReadTimeout(1*time.Second))
+	return New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores, toVertexPartitionMap, WithReadTimeout(1*time.Second))
 }
 
 func Test_Single(t *testing.T) {
