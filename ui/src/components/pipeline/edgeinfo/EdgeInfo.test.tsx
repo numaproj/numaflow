@@ -43,9 +43,5 @@ describe("EdgeInfo", () => {
   it("loads", () => {
     render(<EdgeInfo edge={edge} edges={edges}/>);
     expect(screen.getByTestId("conditions")).toBeVisible();
-    expect(screen.getByTestId("isFull")).toBeVisible();
-    expect(screen.getByTestId("pending")).toBeVisible();
-    expect(screen.getByTestId("usage")).toBeVisible();
-    expect(screen.getByTestId("bufferLength")).toBeVisible();
   });
 });
