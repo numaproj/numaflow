@@ -279,6 +279,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
+// TODO: revisit this when working on multi partitions
 func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error) {
 	var watermarkFetchers []fetch.Fetcher
 	for i := 0; i < partitions; i++ {

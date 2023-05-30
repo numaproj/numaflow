@@ -178,7 +178,7 @@ export default function NodeInfo(props: NodeInfoProps) {
                   <TableCell>Pending</TableCell>
                   <TableCell>Buffer Length</TableCell>
                   <TableCell>Buffer Usage</TableCell>
-                  <TableCell>Total Messages</TableCell>
+                  <TableCell>Total Pending Messages</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -198,9 +198,7 @@ export default function NodeInfo(props: NodeInfoProps) {
                   return (
                     <TableRow key={`edge-info-${idx}`}>
                       <TableCell>
-                        {buffer?.bufferName.slice(
-                          buffer.bufferName.indexOf("-") + 1
-                        )}
+                        {buffer?.bufferName}
                       </TableCell>
                       <TableCell data-testid="isFull">{isFull}</TableCell>
                       <TableCell data-testid="ackPending">

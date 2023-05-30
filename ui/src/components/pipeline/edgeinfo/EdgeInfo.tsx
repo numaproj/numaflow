@@ -72,7 +72,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
         <TabPanel value={value} index={0}>
           <TableContainer
             component={Paper}
-            sx={{ borderBottom: 1, borderColor: "divider", width: 400 }}
+            sx={{ borderBottom: 1, borderColor: "divider", width: 600 }}
           >
             <Table aria-label="buffer-watermark">
               <TableHead>
