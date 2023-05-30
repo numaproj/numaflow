@@ -107,8 +107,17 @@ func TestUpdateCount(t *testing.T) {
 func TestCalculateRate(t *testing.T) {
 	t.Run("givenCollectedTimeLessThanTwo_whenCalculateRate_thenReturnZero", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
-		rate := CalculateRate(q, 10)
-		assert.Equal(t, 0.0, rate)
+		// no data
+		assert.Equal(t, 0.0, CalculateRate(q, 10))
+		assert.Equal(t, 0.0, CalculatePodRate(q, 10, "pod1"))
+
+		// only one data
+		now := time.Now()
+		tc1 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 20)
+		tc1.Update("pod1", 5.0)
+		q.Append(tc1)
+		assert.Equal(t, 0.0, CalculateRate(q, 10))
+		assert.Equal(t, 0.0, CalculatePodRate(q, 10, "pod1"))
 	})
 
 	t.Run("singlePod_givenCountIncreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -129,6 +138,11 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 1.0, CalculateRate(q, 15))
 		assert.Equal(t, 0.75, CalculateRate(q, 25))
 		assert.Equal(t, 0.75, CalculateRate(q, 100))
+
+		assert.Equal(t, 0.0, CalculatePodRate(q, 5, "pod1"))
+		assert.Equal(t, 1.0, CalculatePodRate(q, 15, "pod1"))
+		assert.Equal(t, 0.75, CalculatePodRate(q, 25, "pod1"))
+		assert.Equal(t, 0.75, CalculatePodRate(q, 100, "pod1"))
 	})
 
 	t.Run("singlePod_givenCountDecreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -153,6 +167,12 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 4.0, CalculateRate(q, 25))
 		assert.Equal(t, 6.0, CalculateRate(q, 35))
 		assert.Equal(t, 6.0, CalculateRate(q, 100))
+
+		assert.Equal(t, 0.0, CalculatePodRate(q, 5, "pod1"))
+		assert.Equal(t, 3.0, CalculatePodRate(q, 15, "pod1"))
+		assert.Equal(t, 4.0, CalculatePodRate(q, 25, "pod1"))
+		assert.Equal(t, 6.0, CalculatePodRate(q, 35, "pod1"))
+		assert.Equal(t, 6.0, CalculatePodRate(q, 100, "pod1"))
 	})
 
 	t.Run("multiplePods_givenCountIncreasesAndDecreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -176,11 +196,26 @@ func TestCalculateRate(t *testing.T) {
 		tc4.Update("pod2", 400.0)
 		q.Append(tc4)
 
+		// vertex rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5))
 		assert.Equal(t, 13.0, CalculateRate(q, 15))
 		assert.Equal(t, 14.0, CalculateRate(q, 25))
 		assert.Equal(t, 16.0, CalculateRate(q, 35))
 		assert.Equal(t, 16.0, CalculateRate(q, 100))
+
+		// pod1 rate
+		assert.Equal(t, 0.0, CalculatePodRate(q, 5, "pod1"))
+		assert.Equal(t, 3.0, CalculatePodRate(q, 15, "pod1"))
+		assert.Equal(t, 4.0, CalculatePodRate(q, 25, "pod1"))
+		assert.Equal(t, 6.0, CalculatePodRate(q, 35, "pod1"))
+		assert.Equal(t, 6.0, CalculatePodRate(q, 100, "pod1"))
+
+		// pod2 rate
+		assert.Equal(t, 0.0, CalculatePodRate(q, 5, "pod2"))
+		assert.Equal(t, 10.0, CalculatePodRate(q, 15, "pod2"))
+		assert.Equal(t, 10.0, CalculatePodRate(q, 25, "pod2"))
+		assert.Equal(t, 10.0, CalculatePodRate(q, 35, "pod2"))
+		assert.Equal(t, 10.0, CalculatePodRate(q, 100, "pod2"))
 	})
 
 	t.Run("multiplePods_givenPodsComeAndGo_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -207,14 +242,50 @@ func TestCalculateRate(t *testing.T) {
 		tc4.Update("pod100", 200.0)
 		q.Append(tc4)
 
+		// vertex rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5))
 		assert.Equal(t, 50.0, CalculateRate(q, 15))
 		assert.Equal(t, 37.5, CalculateRate(q, 25))
 		assert.Equal(t, 32.0, CalculateRate(q, 35))
 		assert.Equal(t, 32.0, CalculateRate(q, 100))
+
+		// pod1 rate
+		assert.Equal(t, 0.0, CalculatePodRate(q, 5, "pod1"))
+		assert.Equal(t, 0.0, CalculatePodRate(q, 15, "pod1"))
+		assert.Equal(t, 2.5, CalculatePodRate(q, 25, "pod1"))
+		assert.Equal(t, 5.0, CalculatePodRate(q, 35, "pod1"))
+		assert.Equal(t, 5.0, CalculatePodRate(q, 100, "pod1"))
+
+		// pod2 rate
+		assert.Equal(t, 0.0, CalculatePodRate(q, 5, "pod2"))
+		assert.Equal(t, 10.0, CalculatePodRate(q, 15, "pod2"))
+		assert.Equal(t, 10.0, CalculatePodRate(q, 25, "pod2"))
+		assert.InDelta(t, 10.333, CalculatePodRate(q, 35, "pod2"), 0.001)
+		assert.InDelta(t, 10.333, CalculatePodRate(q, 100, "pod2"), 0.001)
+
+		// pod3 rate
+		assert.Equal(t, 0.0, CalculatePodRate(q, 5, "pod3"))
+		assert.Equal(t, 20.0, CalculatePodRate(q, 15, "pod3"))
+		assert.Equal(t, 10.0, CalculatePodRate(q, 25, "pod3"))
+		assert.InDelta(t, 6.666, CalculatePodRate(q, 100, "pod3"), 0.001)
+		assert.InDelta(t, 6.666, CalculatePodRate(q, 100, "pod3"), 0.001)
+
+		// pod4 rate
+		assert.Equal(t, 0.0, CalculatePodRate(q, 5, "pod4"))
+		assert.Equal(t, 0.0, CalculatePodRate(q, 15, "pod4"))
+		assert.Equal(t, 5.0, CalculatePodRate(q, 25, "pod4"))
+		assert.InDelta(t, 3.333, CalculatePodRate(q, 35, "pod4"), 0.001)
+		assert.InDelta(t, 3.333, CalculatePodRate(q, 100, "pod4"), 0.001)
+
+		// pod100 rate
+		assert.Equal(t, 0.0, CalculatePodRate(q, 5, "pod100"))
+		assert.Equal(t, 20.0, CalculatePodRate(q, 15, "pod100"))
+		assert.Equal(t, 10.0, CalculatePodRate(q, 25, "pod100"))
+		assert.InDelta(t, 6.666, CalculatePodRate(q, 35, "pod100"), 0.001)
+		assert.InDelta(t, 6.666, CalculatePodRate(q, 100, "pod100"), 0.001)
 	})
 
-	t.Run("queueOverflowed_SinglePod_givenCountIncreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
+	t.Run("queueOverflowed_givenPodsComeAndGo_whenCalculateRate_thenReturnRate", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](3)
 		now := time.Now()
 
