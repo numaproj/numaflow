@@ -144,7 +144,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &edgeFetcher{
 				ctx:              ctx,
-				bufferName:       "testBuffer",
+				bucketName:       "testBucket",
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
@@ -161,7 +161,7 @@ func TestBuffer_GetWatermark(t *testing.T) {
 func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 	var (
 		ctx               = context.Background()
-		bufferName        = "testBuffer"
+		bucketName        = "testBucket"
 		hbWatcher         = noop.NewKVOpWatch()
 		otWatcher         = noop.NewKVOpWatch()
 		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
@@ -192,7 +192,7 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &edgeFetcher{
 				ctx:              ctx,
-				bufferName:       bufferName,
+				bucketName:       bucketName,
 				storeWatcher:     storeWatcher,
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
@@ -289,7 +289,7 @@ func getHeadWMTest2(ctx context.Context, processorManager1 *processor.ProcessorM
 func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 	var (
 		ctx               = context.Background()
-		bufferName        = "testBuffer"
+		bucketName        = "testBucket"
 		hbWatcher         = noop.NewKVOpWatch()
 		otWatcher         = noop.NewKVOpWatch()
 		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
@@ -338,7 +338,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &edgeFetcher{
 				ctx:              ctx,
-				bufferName:       bufferName,
+				bucketName:       bucketName,
 				storeWatcher:     storeWatcher,
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
@@ -534,7 +534,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	var processorManager = processor.NewProcessorManager(ctx, storeWatcher)
-	var fetcher = NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager)
+	var fetcher = NewEdgeFetcher(ctx, "testBucket", storeWatcher, processorManager)
 	// start p1 heartbeat for 3 loops
 	wg.Add(1)
 	go func() {
@@ -791,7 +791,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher)
-	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager)
+	fetcher := NewEdgeFetcher(ctx, "testBucket", storeWatcher, processorManager)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

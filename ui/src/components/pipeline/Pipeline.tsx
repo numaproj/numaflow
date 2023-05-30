@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { Edge, Node } from "reactflow";
 import Graph from "./graph/Graph";
 import { usePipelineFetch } from "../../utils/fetchWrappers/pipelineFetch";
-import { useEdgesInfoFetch } from "../../utils/fetchWrappers/edgeInfoFetch";
+import { useBuffersInfoFetch } from "../../utils/fetchWrappers/bufferInfoFetch";
 import { VertexMetrics, EdgeWatermark } from "../../utils/models/pipeline";
 import "./Pipeline.css";
 import { notifyError } from "../../utils/error";
@@ -47,8 +47,8 @@ export function Pipeline() {
   useEffect(() => {
     if (pipelineError){
       notifyError([{
-        error: "Failed to fetch the pipeline vertices",
-        options: {toastId: "pl-vertex", autoClose: false}
+        error: "Failed to fetch the pipeline details",
+        options: {toastId: "pl-details", autoClose: false}
       }]);
     }
   }, [pipelineError]);
@@ -63,7 +63,7 @@ export function Pipeline() {
     };
   }, []);
 
-  const { edgesInfo, error: edgesInfoError } = useEdgesInfoFetch(
+  const { buffersInfo, error: buffersInfoError } = useBuffersInfoFetch(
     namespaceId,
     pipelineId,
     edgesInfoRequestKey
@@ -71,13 +71,13 @@ export function Pipeline() {
 
   // This useEffect notifies about the errors while querying for the edges of the pipeline
   useEffect(() => {
-    if (edgesInfoError) {
+    if (buffersInfoError) {
       notifyError([{
-        error: "Failed to fetch the pipeline edges",
-        options: {toastId: "pl-edge", autoClose: false}
+        error: "Failed to fetch the pipeline buffers",
+        options: {toastId: "pl-buffer", autoClose: false}
       }]);
     }
-  }, [edgesInfoError]);
+  }, [buffersInfoError]);
 
   useEffect(() => {
     // Refresh edgesInfo every x ms
@@ -283,7 +283,8 @@ export function Pipeline() {
     if (
       pipeline?.spec?.vertices &&
       vertexPods &&
-      vertexMetrics
+      vertexMetrics &&
+      buffersInfo
     ) {
       pipeline.spec.vertices.map((vertex) => {
         const newNode = {} as Node;
@@ -307,71 +308,71 @@ export function Pipeline() {
         newNode.data.vertexMetrics = vertexMetrics.has(vertex.name)
           ? vertexMetrics.get(vertex.name)
           : null;
+        newNode.data.buffers = [];
+        buffersInfo?.forEach((buffer) => {
+          const sidx = `${pipeline?.metadata?.namespace}-${pipeline?.metadata?.name}-`.length;
+          const eidx = buffer?.bufferName?.lastIndexOf("-");
+          const bufferName = buffer?.bufferName?.substring(sidx, eidx);
+          if (vertex.name === bufferName) {
+            newNode?.data?.buffers.push(buffer);
+          }
+        });
+        if (newNode.data.buffers.length === 0) newNode.data.buffers = null;
         newVertices.push(newNode);
       });
     }
     return newVertices;
-  }, [pipeline, vertexPods, vertexMetrics]);
+  }, [pipeline, vertexPods, vertexMetrics, buffersInfo]);
 
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];
     if (
         pipeline?.spec?.edges &&
-        edgesInfo &&
+        buffersInfo &&
         edgeWatermark
     ) {
       // for an edge it is the sum of backpressure between vertices - the value we see on the edge
       // map from edge-id( from-Vertex - to-Vertex ) to sum of backpressure
       const edgeBackpressureLabel = new Map();
 
-      edgesInfo.forEach((edge) => {
-        const id = edge.fromVertex + "-" + edge.toVertex;
-        if (edgeBackpressureLabel.get(id) === undefined) edgeBackpressureLabel.set(id, Number(edge.totalMessages));
-        else edgeBackpressureLabel.set(id, edgeBackpressureLabel.get(id) + Number(edge.totalMessages));
+      buffersInfo.forEach((buffer) => {
+        const sidx = `${pipeline.metadata.namespace}-${pipeline.metadata.name}-`.length;
+        const eidx = buffer.bufferName.lastIndexOf("-");
+        const id = buffer.bufferName.substring(sidx, eidx);
+        if (edgeBackpressureLabel.get(id) === undefined) edgeBackpressureLabel.set(id, Number(buffer.totalMessages));
+        else edgeBackpressureLabel.set(id, edgeBackpressureLabel.get(id) + Number(buffer.totalMessages));
       });
 
       pipeline.spec.edges.map((edge) => {
-        edgesInfo.map((edgeInfo) => {
-          if (
-            edgeInfo.fromVertex === edge.from &&
-            edgeInfo.toVertex === edge.to
-          ) {
-            const id = edge.from + "-" + edge.to;
-            const pipelineEdge = {
-              id,
-              source: edge.from,
-              target: edge.to,
-              data: {
-                ...edgeInfo,
-                conditions: edge.conditions,
-                pending: edgeInfo.pendingCount,
-                ackPending: edgeInfo.ackPendingCount,
-                bufferLength: edgeInfo.bufferLength,
-                isFull: edgeInfo.isFull,
-                backpressureLabel: edgeBackpressureLabel.get(id),
-              },
-            } as Edge;
-            pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
-                ? edgeWatermark.get(pipelineEdge.id)
-                : null;
-            pipelineEdge.animated = true;
-            pipelineEdge.type = 'custom';
-            newEdges.push(pipelineEdge);
-          }
-        });
+        const id = edge.from + "-" + edge.to;
+        const pipelineEdge = {
+          id,
+          source: edge.from,
+          target: edge.to,
+          data: {
+            conditions: edge.conditions,
+            backpressureLabel: edgeBackpressureLabel.get(edge.to),
+          },
+        } as Edge;
+        pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
+            ? edgeWatermark.get(pipelineEdge.id)
+            : null;
+        pipelineEdge.animated = true;
+        pipelineEdge.type = 'custom';
+        newEdges.push(pipelineEdge);
       });
     }
     return newEdges;
-  }, [pipeline, edgesInfo, edgeWatermark]);
+  }, [pipeline, buffersInfo, edgeWatermark]);
 
-  if (pipelineError || edgesInfoError) {
+  if (pipelineError || buffersInfoError) {
     return <div>Error</div>;
   }
 
   return (
     <div data-testid={"pipeline"} style={{ overflow: "scroll !important" }}>
       {pipeline?.spec &&
-        edgesInfo.length > 0 &&
+        buffersInfo.length > 0 &&
         edges.length > 0 &&
         vertices.length > 0 && (
           <Graph

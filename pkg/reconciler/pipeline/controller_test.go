@@ -194,34 +194,58 @@ func Test_copyVertexLimits(t *testing.T) {
 }
 
 func Test_copyEdges(t *testing.T) {
-	pl := testPipeline.DeepCopy()
-	edges := []dfv1.Edge{{From: "input", To: "p1"}}
-	result := copyEdges(pl, edges)
-	for _, e := range result {
-		assert.NotNil(t, e.ToVertexLimits)
-		assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*e.ToVertexLimits.BufferMaxLength))
-	}
-	onethouand := uint64(1000)
-	eighty := uint32(80)
-	pl.Spec.Limits = &dfv1.PipelineLimits{BufferMaxLength: &onethouand, BufferUsageLimit: &eighty}
-	result = copyEdges(pl, edges)
-	for _, e := range result {
-		assert.NotNil(t, e.ToVertexLimits)
-		assert.NotNil(t, e.ToVertexLimits.BufferMaxLength)
-		assert.NotNil(t, e.ToVertexLimits.BufferUsageLimit)
-	}
+	t.Run("test copy map", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		edges := []dfv1.Edge{{From: "input", To: "p1"}}
+		result := copyEdges(pl, edges)
+		for _, e := range result {
+			assert.NotNil(t, e.ToVertexLimits)
+			assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*e.ToVertexLimits.BufferMaxLength))
+		}
+		onethouand := uint64(1000)
+		eighty := uint32(80)
+		pl.Spec.Limits = &dfv1.PipelineLimits{BufferMaxLength: &onethouand, BufferUsageLimit: &eighty}
+		result = copyEdges(pl, edges)
+		for _, e := range result {
+			assert.NotNil(t, e.ToVertexLimits)
+			assert.NotNil(t, e.ToVertexLimits.BufferMaxLength)
+			assert.NotNil(t, e.ToVertexLimits.BufferUsageLimit)
+		}
 
-	twothouand := uint64(2000)
-	pl.Spec.Vertices[2].Limits = &dfv1.VertexLimits{BufferMaxLength: &twothouand}
-	edges = []dfv1.Edge{{From: "p1", To: "output"}}
-	result = copyEdges(pl, edges)
-	for _, e := range result {
-		assert.NotNil(t, e.ToVertexLimits)
-		assert.NotNil(t, e.ToVertexLimits.BufferMaxLength)
-		assert.Equal(t, twothouand, *e.ToVertexLimits.BufferMaxLength)
-		assert.NotNil(t, e.ToVertexLimits.BufferUsageLimit)
-		assert.Equal(t, eighty, *e.ToVertexLimits.BufferUsageLimit)
-	}
+		twothouand := uint64(2000)
+		pl.Spec.Vertices[2].Limits = &dfv1.VertexLimits{BufferMaxLength: &twothouand}
+		edges = []dfv1.Edge{{From: "p1", To: "output"}}
+		result = copyEdges(pl, edges)
+		for _, e := range result {
+			assert.NotNil(t, e.ToVertexLimits)
+			assert.NotNil(t, e.ToVertexLimits.BufferMaxLength)
+			assert.Equal(t, twothouand, *e.ToVertexLimits.BufferMaxLength)
+			assert.NotNil(t, e.ToVertexLimits.BufferUsageLimit)
+			assert.Equal(t, eighty, *e.ToVertexLimits.BufferUsageLimit)
+		}
+	})
+
+	t.Run("test copy reduce", func(t *testing.T) {
+		pl := testReducePipeline.DeepCopy()
+		edges := []dfv1.Edge{{From: "p1", To: "p2"}}
+		result := copyEdges(pl, edges)
+		assert.Equal(t, 1, len(result))
+		assert.Equal(t, "p1", result[0].From)
+		assert.Equal(t, "p2", result[0].To)
+		assert.NotNil(t, result[0].ToVertexLimits)
+		assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*result[0].ToVertexLimits.BufferMaxLength))
+		assert.Equal(t, int32(2), *result[0].ToVertexPartitions)
+		assert.Equal(t, int32(1), *result[0].FromVertexPartitions)
+
+		edges = []dfv1.Edge{{From: "p2", To: "p3"}}
+		result = copyEdges(pl, edges)
+		assert.Equal(t, 1, len(result))
+		assert.Equal(t, "p2", result[0].From)
+		assert.Equal(t, "p3", result[0].To)
+		assert.Equal(t, int32(1), *result[0].ToVertexPartitions)
+		assert.Equal(t, int32(2), *result[0].FromVertexPartitions)
+	})
+
 }
 
 func Test_buildISBBatchJob(t *testing.T) {

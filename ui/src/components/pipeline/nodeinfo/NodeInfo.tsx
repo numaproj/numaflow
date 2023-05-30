@@ -75,6 +75,14 @@ export default function NodeInfo(props: NodeInfoProps) {
               {...a11yProps(2)}
             />
           )}
+          {node?.data?.buffers && (
+            <Tab
+              data-testid="buffers"
+              style={{ fontWeight: "bold" }}
+              label="Buffers"
+              {...a11yProps(3)}
+            />
+          )}
         </Tabs>
       </Box>
       {node?.id && (
@@ -153,6 +161,67 @@ export default function NodeInfo(props: NodeInfoProps) {
           {!node?.data?.vertexMetrics?.podMetrics && (
             <Box>{`No pods found`}</Box>
           )}
+        </TabPanel>
+      )}
+      {node?.data?.buffers && (
+        <TabPanel value={value} index={3}>
+          <TableContainer
+            component={Paper}
+            sx={{ borderBottom: 1, borderColor: "divider" }}
+          >
+            <Table aria-label="edge-info">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Partition</TableCell>
+                  <TableCell>isFull</TableCell>
+                  <TableCell>AckPending</TableCell>
+                  <TableCell>Pending</TableCell>
+                  <TableCell>Buffer Length</TableCell>
+                  <TableCell>Buffer Usage</TableCell>
+                  <TableCell>Total Pending Messages</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {node.data.buffers.map((buffer, idx) => {
+                  let isFull;
+                  if (buffer?.isFull) {
+                    isFull = "yes";
+                  } else {
+                    isFull = "no";
+                  }
+                  let bufferUsage = "";
+                  if (typeof buffer?.bufferUsage !== "undefined") {
+                    bufferUsage = (
+                      buffer?.bufferUsage * 100
+                    ).toFixed(2);
+                  }
+                  return (
+                    <TableRow key={`edge-info-${idx}`}>
+                      <TableCell>
+                        {buffer?.bufferName}
+                      </TableCell>
+                      <TableCell data-testid="isFull">{isFull}</TableCell>
+                      <TableCell data-testid="ackPending">
+                        {buffer?.ackPendingCount}
+                      </TableCell>
+                      <TableCell data-testid="pending">
+                        {buffer?.pendingCount}
+                      </TableCell>
+                      <TableCell data-testid="bufferLength">
+                        {buffer?.bufferLength}
+                      </TableCell>
+                      <TableCell data-testid="usage">
+                        {bufferUsage}%
+                      </TableCell>
+                      <TableCell data-testid="totalMessages">
+                        {buffer?.totalMessages}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </TabPanel>
       )}
     </Box>
