@@ -40,7 +40,8 @@ func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, 
 	for _, edge := range pipeline.ListAllEdges() {
 		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
 		partitions := pipeline.NumOfPartitions(edge.To)
-		wmFetcherList, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName, partitions)
+		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
+		wmFetcherList, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName, partitions, isReduce)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 		}

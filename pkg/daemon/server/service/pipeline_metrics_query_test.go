@@ -68,7 +68,7 @@ func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffe
 	return nil
 }
 
-func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int) ([]fetch.Fetcher, error) {
+func (ms *mockIsbSvcClient) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error) {
 	return nil, nil
 }
 

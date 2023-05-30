@@ -56,10 +56,16 @@ func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstan
 			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
+		// TODO: support multiple partitions
 		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
-		for _, buffer := range buffers {
-			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
-			writers[buffer] = writer
+		if e.ToVertexType == dfv1.VertexTypeReduceUDF {
+			for _, buffer := range buffers {
+				writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
+				writers[buffer] = writer
+			}
+		} else {
+			writer := redisisb.NewBufferWrite(ctx, redisClient, buffers[0], buffers[0]+"-group", writeOpts...)
+			writers[buffers[0]] = writer
 		}
 	}
 
@@ -96,14 +102,24 @@ func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexIn
 			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
+		// TODO: support multiple partitions
 		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
-		for _, buffer := range buffers {
-			streamName := isbsvc.JetStreamName(buffer)
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
+		if e.ToVertexType == dfv1.VertexTypeReduceUDF {
+			for _, buffer := range buffers {
+				streamName := isbsvc.JetStreamName(buffer)
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
+				if err != nil {
+					return nil, nil, err
+				}
+				writers[buffer] = writer
+			}
+		} else {
+			streamName := isbsvc.JetStreamName(buffers[0])
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffers[0], streamName, streamName, writeOpts...)
 			if err != nil {
 				return nil, nil, err
 			}
-			writers[buffer] = writer
+			writers[buffers[0]] = writer
 		}
 	}
 	return reader, writers, nil

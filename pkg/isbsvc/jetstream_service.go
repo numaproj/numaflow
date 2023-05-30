@@ -279,7 +279,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int) ([]fetch.Fetcher, error) {
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error) {
 	var watermarkFetchers []fetch.Fetcher
 	for i := 0; i < partitions; i++ {
 		hbBucketName := JetStreamProcessorBucket(bucketName)
@@ -294,7 +294,7 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 			return nil, err
 		}
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
-		pm := processor.NewProcessorManager(ctx, storeWatcher, processor.WithVertexReplica(int32(i)))
+		pm := processor.NewProcessorManager(ctx, storeWatcher, processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
 		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}
