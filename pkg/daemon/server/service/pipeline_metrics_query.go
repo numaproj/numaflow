@@ -219,7 +219,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 				vm.ProcessingRates = ps.rater.GetPodRates(req.GetVertex(), int(i))
 			} else {
 				// if the vertex is not a reduce udf, then the processing rate is the sum of all pods in this vertex.
-				// TODO - change this to display the processing rate of each partition when we finish multi-partition support for non-reduce vertices.
+				// TODO (multi-partition) - change this to display the processing rate of each partition when we finish multi-partition support for non-reduce vertices.
 				vm.ProcessingRates = vertexLevelRates
 			}
 
