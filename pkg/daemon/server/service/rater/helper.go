@@ -22,6 +22,8 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
+const IndexNotFound = -1
+
 // UpdateCount updates the count of processed messages for a pod at a given time
 func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podName string, count float64) {
 	// find the element matching the input timestamp and update it
@@ -45,13 +47,18 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	}
 	counts := q.Items()
 	startIndex := findStartIndex(lookbackSeconds, counts)
-	if startIndex == -1 {
+	if startIndex == IndexNotFound {
 		return 0
 	}
 
 	delta := float64(0)
 	// time diff in seconds.
 	timeDiff := counts[n-1].timestamp - counts[startIndex].timestamp
+	if timeDiff == 0 {
+		// if the time difference is 0, we return 0 to avoid division by 0
+		// this should not happen in practice because we are using a 10s interval
+		return 0
+	}
 	for i := startIndex; i < n-1; i++ {
 		delta = delta + calculateDelta(counts[i], counts[i+1])
 	}
@@ -87,13 +94,18 @@ func CalculatePodRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 	}
 	counts := q.Items()
 	startIndex := findStartIndex(lookbackSeconds, counts)
-	if startIndex == -1 {
+	if startIndex == IndexNotFound {
 		return 0
 	}
 
 	delta := float64(0)
 	// time diff in seconds.
 	timeDiff := counts[n-1].timestamp - counts[startIndex].timestamp
+	if timeDiff == 0 {
+		// if the time difference is 0, we return 0 to avoid division by 0
+		// this should not happen in practice because we are using a 10s interval
+		return 0
+	}
 	for i := startIndex; i < n-1; i++ {
 		delta = delta + calculatePodDelta(counts[i], counts[i+1], podName)
 	}
@@ -122,8 +134,8 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
 	now := time.Now().Truncate(time.Second * 10).Unix()
 	if now-counts[n-2].timestamp > lookbackSeconds {
-		// if the second last element is already outside the lookback window, we return an out of bound index
-		return -1
+		// if the second last element is already outside the lookback window, we return IndexNotFound
+		return IndexNotFound
 	}
 
 	startIndex := n - 2
