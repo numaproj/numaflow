@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/forward"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -139,13 +140,25 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	if x := sink.Log; x != nil {
-		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, logsink.WithLogger(logger))
+		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {
-		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, fetchWM, publishWM, kafkasink.WithLogger(logger))
+		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), kafkasink.WithLogger(logger))
 	} else if x := sink.Blackhole; x != nil {
-		return blackhole.NewBlackhole(u.VertexInstance.Vertex, reader, fetchWM, publishWM, blackhole.WithLogger(logger))
+		return blackhole.NewBlackhole(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), blackhole.WithLogger(logger))
 	} else if x := sink.UDSink; x != nil {
-		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, udsink.WithLogger(logger))
+		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), udsink.WithLogger(logger))
 	}
 	return nil, fmt.Errorf("invalid sink spec")
+}
+
+func (u *SinkProcessor) getSinkGoWhereDecider() forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
+		result = append(result, forward.VertexBuffer{
+			ToVertexName:      u.VertexInstance.Vertex.Spec.Name,
+			ToVertexPartition: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }

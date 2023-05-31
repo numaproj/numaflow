@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
+
+type Ratable interface {
+	Start(ctx context.Context) error
+	GetRates(vertexName string) map[string]float64
+	GetPodRates(vertexName string, podIndex int) map[string]float64
+}
 
 // CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
 // e.g. if the current time is 12:00:07, the retrieved count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
@@ -225,6 +232,27 @@ func (r *Rater) getTotalCount(vertexName, vertexType, podName string) float64 {
 // GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
 func (r *Rater) GetRates(vertexName string) map[string]float64 {
 	var result = make(map[string]float64)
+	// calculate rates for each lookback seconds
+	for n, i := range r.buildLookbackSecondsMap(vertexName) {
+		r := CalculateRate(r.timestampedPodCounts[vertexName], i)
+		result[n] = r
+	}
+	return result
+}
+
+// GetPodRates returns the processing rates of the pod in the format of lookback second to rate mappings
+func (r *Rater) GetPodRates(vertexName string, podIndex int) map[string]float64 {
+	podName := r.pipeline.Name + "-" + vertexName + "-" + strconv.Itoa(podIndex)
+	var result = make(map[string]float64)
+	// calculate rates for each lookback seconds
+	for n, i := range r.buildLookbackSecondsMap(vertexName) {
+		r := CalculatePodRate(r.timestampedPodCounts[vertexName], i, podName)
+		result[n] = r
+	}
+	return result
+}
+
+func (r *Rater) buildLookbackSecondsMap(vertexName string) map[string]int64 {
 	// get the user-specified lookback seconds from the pipeline spec
 	var userSpecifiedLookBackSeconds int64
 	// TODO - we can keep a local copy of vertex to lookback seconds mapping to avoid iterating the pipeline spec all the time.
@@ -237,11 +265,5 @@ func (r *Rater) GetRates(vertexName string) map[string]float64 {
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}
-
-	// calculate rates for each lookback seconds
-	for n, i := range lookbackSecondsMap {
-		r := CalculateRate(r.timestampedPodCounts[vertexName], i)
-		result[n] = r
-	}
-	return result
+	return lookbackSecondsMap
 }

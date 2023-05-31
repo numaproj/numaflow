@@ -149,14 +149,13 @@ func WithReadTimeout(timeout time.Duration) Option {
 }
 
 // NewMemGen function creates an instance of generator.
-func NewMemGen(
-	vertexInstance *dfv1.VertexInstance,
-	writers []isb.BufferWriter,
+func NewMemGen(vertexInstance *dfv1.VertexInstance,
+	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
-	publishWMStores store.WatermarkStorer, // watermarks
+	publishWMStores store.WatermarkStorer,
 	opts ...Option) (*memgen, error) {
 
 	// minimal CRDs don't have defaults
@@ -210,11 +209,6 @@ func NewMemGen(
 	gensrc.lifecycleCtx = cctx
 	gensrc.cancel = cancel
 
-	destinations := make(map[string]isb.BufferWriter, len(writers))
-	for _, w := range writers {
-		destinations[w.GetName()] = w
-	}
-
 	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(gensrc.logger), forward.WithSourceWatermarkPublisher(gensrc)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
@@ -226,7 +220,7 @@ func NewMemGen(
 	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +269,7 @@ func (mg *memgen) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		return
 	}
 	// use the first event time of the message as watermark to make it conservative
-	mg.sourcePublishWM.PublishWatermark(wmb.Watermark(msgs[0].EventTime), nil) // Source publisher does not care about the offset
+	mg.sourcePublishWM.PublishWatermark(wmb.Watermark(msgs[0].EventTime), nil, 0) // Source publisher does not care about the offset
 }
 
 // Ack acknowledges an array of offset.

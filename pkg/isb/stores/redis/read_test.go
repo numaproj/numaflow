@@ -127,9 +127,10 @@ func TestRedisCheckBacklog(t *testing.T) {
 
 	defer func() { _ = client.DeleteStreamGroup(ctx, rqw.GetStreamName(), "toGroup") }()
 	defer func() { _ = client.DeleteKeys(ctx, rqw.GetStreamName()) }()
-	toSteps := map[string]isb.BufferWriter{
-		"to1": rqw,
+	toSteps := map[string][]isb.BufferWriter{
+		"to1": {rqw},
 	}
+
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 	f, err := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(10))
 
@@ -291,8 +292,11 @@ type ReadWritePerformance struct {
 type forwardReadWritePerformance struct {
 }
 
-func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string) ([]string, error) {
-	return []string{"to1"}, nil
+func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
+		ToVertexName:      "to1",
+		ToVertexPartition: 0,
+	}}, nil
 }
 
 func (f forwardReadWritePerformance) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -315,8 +319,8 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	rqw, _ := NewBufferWrite(ctx, client, toStream, toGroup, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute), redisclient.WithMaxLength(20000)).(*BufferWrite)
 	rqr, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer).(*BufferRead)
 
-	toSteps := map[string]isb.BufferWriter{
-		"to1": rqw,
+	toSteps := map[string][]isb.BufferWriter{
+		"to1": {rqw},
 	}
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
@@ -411,9 +415,10 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 			Name: "testVertex",
 		},
 	}}
-	toSteps := map[string]isb.BufferWriter{
-		"to1": suite.rqw,
+	toSteps := map[string][]isb.BufferWriter{
+		"to1": {suite.rqw},
 	}
+
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 

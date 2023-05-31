@@ -29,8 +29,8 @@ import (
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
 
-func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstance *dfv1.VertexInstance) (isb.BufferReader, map[string]isb.BufferWriter) {
-	writers := make(map[string]isb.BufferWriter)
+func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstance *dfv1.VertexInstance) (isb.BufferReader, map[string][]isb.BufferWriter) {
+	writers := make(map[string][]isb.BufferWriter)
 	redisClient := redisclient.NewInClusterRedisClient()
 	fromGroup := fromBufferName + "-group"
 	readerOpts := []redisclient.Option{}
@@ -57,23 +57,25 @@ func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstan
 			writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
 		// TODO: support multiple partitions
+		var edgeBuffers []isb.BufferWriter
 		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
 		if e.ToVertexType == dfv1.VertexTypeReduceUDF {
 			for _, buffer := range buffers {
 				writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
-				writers[buffer] = writer
+				edgeBuffers = append(edgeBuffers, writer)
 			}
 		} else {
 			writer := redisisb.NewBufferWrite(ctx, redisClient, buffers[0], buffers[0]+"-group", writeOpts...)
-			writers[buffers[0]] = writer
+			edgeBuffers = append(edgeBuffers, writer)
 		}
+		writers[e.To] = edgeBuffers
 	}
 
 	return reader, writers
 }
 
-func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexInstance *dfv1.VertexInstance) (isb.BufferReader, map[string]isb.BufferWriter, error) {
-	writers := make(map[string]isb.BufferWriter)
+func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexInstance *dfv1.VertexInstance) (isb.BufferReader, map[string][]isb.BufferWriter, error) {
+	writers := make(map[string][]isb.BufferWriter)
 	fromStreamName := isbsvc.JetStreamName(fromBufferName)
 	readOptions := []jetstreamisb.ReadOption{
 		jetstreamisb.WithUsingAckInfoAsRate(true),
@@ -104,6 +106,7 @@ func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexIn
 		}
 		// TODO: support multiple partitions
 		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
+		var edgeBuffers []isb.BufferWriter
 		if e.ToVertexType == dfv1.VertexTypeReduceUDF {
 			for _, buffer := range buffers {
 				streamName := isbsvc.JetStreamName(buffer)
@@ -111,7 +114,7 @@ func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexIn
 				if err != nil {
 					return nil, nil, err
 				}
-				writers[buffer] = writer
+				edgeBuffers = append(edgeBuffers, writer)
 			}
 		} else {
 			streamName := isbsvc.JetStreamName(buffers[0])
@@ -119,8 +122,9 @@ func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexIn
 			if err != nil {
 				return nil, nil, err
 			}
-			writers[buffers[0]] = writer
+			edgeBuffers = append(edgeBuffers, writer)
 		}
+		writers[e.To] = edgeBuffers
 	}
 	return reader, writers, nil
 }

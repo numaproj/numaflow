@@ -36,6 +36,16 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
 
+type myForwardToAllTest struct {
+}
+
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
+		ToVertexName:      "test",
+		ToVertexPartition: 0,
+	}}, nil
+}
+
 func testVertex(t *testing.T, url, subject, queue string, hostname string, replicaIndex int32) *dfv1.VertexInstance {
 	t.Helper()
 	v := &dfv1.Vertex{
@@ -62,10 +72,14 @@ func testVertex(t *testing.T, url, subject, queue string, hostname string, repli
 
 func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 	t.Helper()
-	dest := []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("test", 100)}
+	dest := simplebuffer.NewInMemoryBuffer("test", 100)
+	toBuffers := map[string][]isb.BufferWriter{
+		"test": {dest},
+	}
+
 	publishWMStores := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
-	return New(vi, dest, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores, WithReadTimeout(1*time.Second))
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
+	return New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores, WithReadTimeout(1*time.Second))
 }
 
 func Test_Single(t *testing.T) {

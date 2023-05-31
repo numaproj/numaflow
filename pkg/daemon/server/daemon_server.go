@@ -135,7 +135,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 func (ds *daemonServer) newGRPCServer(
 	isbSvcClient isbsvc.ISBService,
 	wmFetchers map[string][]fetch.Fetcher,
-	rater *server.Rater) (*grpc.Server, error) {
+	rater server.Ratable) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -149,7 +149,7 @@ func (ds *daemonServer) newGRPCServer(
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rater, true)
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rater)
 	if err != nil {
 		return nil, err
 	}

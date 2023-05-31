@@ -53,7 +53,13 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewUserDefinedSink returns genericSink type.
-func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*UserDefinedSink, error) {
+func NewUserDefinedSink(vertex *dfv1.Vertex,
+	fromBuffer isb.BufferReader,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark map[string]publish.Publisher,
+	whereToDecider forward.GoWhere,
+	opts ...Option) (*UserDefinedSink, error) {
+
 	s := new(UserDefinedSink)
 	name := vertex.Spec.Name
 	s.name = name
@@ -78,7 +84,8 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchW
 		return nil, fmt.Errorf("failed to create gRPC client, %w", err)
 	}
 	s.udsink = udsink
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.Spec.Name: s}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {s}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

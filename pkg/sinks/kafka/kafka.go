@@ -57,7 +57,13 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewToKafka returns ToKafka type.
-func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*ToKafka, error) {
+func NewToKafka(vertex *dfv1.Vertex,
+	fromBuffer isb.BufferReader,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark map[string]publish.Publisher,
+	whereToDecider forward.GoWhere,
+	opts ...Option) (*ToKafka, error) {
+
 	kafkaSink := vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
 	// apply options for kafka sink
@@ -84,7 +90,7 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark
 		}
 	}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.Spec.Name: toKafka}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

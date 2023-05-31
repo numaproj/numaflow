@@ -42,11 +42,11 @@ func (n NoOpWMProgressor) GetWatermark(_ isb.Offset) wmb.Watermark {
 }
 
 // PublishWatermark does a no-op watermark publish.
-func (n NoOpWMProgressor) PublishWatermark(_ wmb.Watermark, _ isb.Offset) {
+func (n NoOpWMProgressor) PublishWatermark(_ wmb.Watermark, _ isb.Offset, _ int32) {
 }
 
 // PublishIdleWatermark does a no-op idle watermark publish.
-func (n NoOpWMProgressor) PublishIdleWatermark(wmb.Watermark, isb.Offset) {
+func (n NoOpWMProgressor) PublishIdleWatermark(wmb.Watermark, isb.Offset, int32) {
 }
 
 // GetLatestWatermark returns the default watermark as the latest watermark.
@@ -78,7 +78,7 @@ func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.Fetc
 	return fetchWatermark, publishWatermark
 }
 
-func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
+func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string][]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
 	for buffName := range bufferMap {

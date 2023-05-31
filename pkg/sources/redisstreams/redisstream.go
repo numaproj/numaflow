@@ -75,7 +75,7 @@ func WithReadTimeOut(t time.Duration) Option {
 
 func New(
 	vertexInstance *dfv1.VertexInstance,
-	writers []isb.BufferWriter,
+	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
@@ -137,17 +137,13 @@ func New(
 	}
 
 	// Create InterStepDataForward
-	destinations := make(map[string]isb.BufferWriter, len(writers))
-	for _, w := range writers {
-		destinations[w.GetName()] = w
-	}
 	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(redisStreamsSource.Log), forward.WithSourceWatermarkPublisher(redisStreamsSource)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, redisStreamsSource, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, redisStreamsSource, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		redisStreamsSource.Log.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -297,7 +293,7 @@ func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMess
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		rsSource.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
+		rsSource.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }
 
