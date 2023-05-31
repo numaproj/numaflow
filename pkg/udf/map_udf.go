@@ -45,8 +45,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	fromBufferNames := u.VertexInstance.Vertex.OwnedBuffers()
-	var readers []isb.BufferReader
+	fromBuffer := u.VertexInstance.Vertex.OwnedBuffers()
 	finalWg := sync.WaitGroup{}
 
 	log = log.With("protocol", "uds-grpc-map-udf")
@@ -70,42 +69,46 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	for _, fromBuffer := range fromBufferNames {
-		var reader isb.BufferReader
-		var writers map[string]isb.BufferWriter
-		var err error
-		// watermark variables
-		fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
+	// create readers and writers
+	var readers []isb.BufferReader
+	var writers map[string][]isb.BufferWriter
+	// watermark variables
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
 
-		switch u.ISBSvcType {
-		case dfv1.ISBSvcTypeRedis:
-			//reader, writers = buildRedisBufferIO(ctx, fromBufferName, u.VertexInstance)
-		case dfv1.ISBSvcTypeJetStream:
-			// build watermark progressors
-			fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
-			if err != nil {
-				return err
-			}
-			reader, writers, err = buildJetStreamBufferIO(ctx, fromBuffer, u.VertexInstance)
-			readers = append(readers, reader)
-			if err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
+	switch u.ISBSvcType {
+	case dfv1.ISBSvcTypeRedis:
+		readers, writers, err = buildRedisBufferIO(ctx, u.VertexInstance)
+		if err != nil {
+			return err
 		}
+	case dfv1.ISBSvcTypeJetStream:
+		// build watermark progressors
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
+		if err != nil {
+			return err
+		}
+		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
+	}
 
+	// multiple go routines can share the same set of writers since nats conn is thread safe
+	// https://github.com/nats-io/nats.go/issues/241
+	for index, bufferPartition := range fromBuffer {
 		// Populate shuffle function map
 		shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
 			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 {
-				s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions()))
+				s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitions())
 				shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 			}
 		}
-		getPartitionedBuffer := GetPartitionedBufferName(u.VertexInstance)
-		conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]string, error) {
-			result := []string{}
+		getVertexPartition := GetPartitionedBufferName()
+		conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+			var result []forward.VertexBuffer
 
 			if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 				return result, nil
@@ -115,18 +118,30 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
 				if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
 					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
-						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
+						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
+						result = append(result, forward.VertexBuffer{
+							ToVertexName:      edge.To,
+							ToVertexPartition: toVertexPartition,
+						})
 					} else {
-						// TODO: need to shuffle for partitioned map vertex
-						result = append(result, getPartitionedBuffer(edge.To))
+						result = append(result, forward.VertexBuffer{
+							ToVertexName:      edge.To,
+							ToVertexPartition: getVertexPartition(edge.To, edge.GetToVertexPartitions()),
+						})
 					}
 				} else {
 					if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
 						if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
-							result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
+							toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
+							result = append(result, forward.VertexBuffer{
+								ToVertexName:      edge.To,
+								ToVertexPartition: toVertexPartition,
+							})
 						} else {
-							// TODO: need to shuffle for partitioned map vertex
-							result = append(result, getPartitionedBuffer(edge.To))
+							result = append(result, forward.VertexBuffer{
+								ToVertexName:      edge.To,
+								ToVertexPartition: getVertexPartition(edge.To, edge.GetToVertexPartitions()),
+							})
 						}
 					}
 				}
@@ -134,7 +149,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			return result, nil
 		})
 
-		log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.Strings("from", fromBufferNames), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
+		log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", bufferPartition), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
 
 		enableMapUdfStream, err := u.VertexInstance.Vertex.MapUdfStreamEnabled()
 		if err != nil {
@@ -149,7 +164,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				opts = append(opts, forward.WithUDFConcurrency(int(*x.ReadBatchSize)))
 			}
 		}
-		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, reader, writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, opts...)
+		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, readers[index], writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, opts...)
 		if err != nil {
 			return err
 		}
@@ -174,7 +189,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			wg.Wait()
 			log.Info("Exited...")
 			return
-		}(fromBuffer)
+		}(bufferPartition)
 	}
 	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, readers, nil)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
@@ -188,18 +203,11 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	return nil
 }
 
-func GetPartitionedBufferName(vertex *dfv1.VertexInstance) func(toVertex string) string {
-	var lock sync.Mutex
-	partitionBufferMap := make(map[string]int)
+func GetPartitionedBufferName() func(toVertex string, toVertexPartitionCount int) int32 {
 	messagePerPartitionMap := make(map[string]int)
-	for _, edge := range vertex.Vertex.Spec.ToEdges {
-		partitionBufferMap[edge.To] = edge.GetToVertexPartitions()
-		messagePerPartitionMap[edge.To] = 0
-	}
-	return func(toVertex string) string {
-		lock.Lock()
-		defer lock.Unlock()
-		messagePerPartitionMap[toVertex] = (messagePerPartitionMap[toVertex] + 1) % partitionBufferMap[toVertex]
-		return dfv1.GenerateBufferName(vertex.Vertex.Namespace, vertex.Vertex.Spec.PipelineName, toVertex, messagePerPartitionMap[toVertex])
+	return func(toVertex string, toVertexPartitionCount int) int32 {
+		vertexPartition := (messagePerPartitionMap[toVertex] + 1) % toVertexPartitionCount
+		messagePerPartitionMap[toVertex] = vertexPartition
+		return int32(vertexPartition)
 	}
 }

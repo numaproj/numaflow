@@ -75,8 +75,10 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 	// create a fetcher that fetches watermark.
 	if vertexInstance.Vertex.IsASource() {
 		fetchWatermark = fetch.NewSourceFetcher(ctx, fromBucket, store.BuildWatermarkStoreWatcher(hbWatch, otWatch), processManager)
+	} else if vertexInstance.Vertex.IsReduceUDF() {
+		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, storeWatcher, processManager, 1)
 	} else {
-		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, storeWatcher, processManager)
+		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, storeWatcher, processManager, vertexInstance.Vertex.Spec.GetPartitions())
 	}
 
 	// Publisher map creation, we need a publisher per out buffer.

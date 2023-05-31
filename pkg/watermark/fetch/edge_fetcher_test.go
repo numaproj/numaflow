@@ -154,7 +154,7 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
-			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 17 because the timeline has been populated ahead of time
@@ -297,7 +297,7 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
-			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) })); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
@@ -539,7 +539,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
-			assert.Equalf(t, tt.want, e.GetHeadWMB(), "GetHeadWMB()")
+			assert.Equalf(t, tt.want, e.GetHeadWMB(0), "GetHeadWMB()")
 		})
 	}
 }
@@ -851,7 +851,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	var processorManager = processor.NewProcessorManager(ctx, storeWatcher, 1)
-	var fetcher = NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager)
+	var fetcher = NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 1)
 	// start p1 heartbeat for 3 loops
 	wg.Add(1)
 	go func() {
@@ -907,14 +907,14 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		}
 	}
 
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=101
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -951,7 +951,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
@@ -1108,7 +1108,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
-	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager)
+	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 1)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -1180,14 +1180,14 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }))
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=101
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }))
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -1224,7 +1224,7 @@ func TestFetcherWithSameOTBucket(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }))
+	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())

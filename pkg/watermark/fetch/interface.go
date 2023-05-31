@@ -27,9 +27,9 @@ import (
 type Fetcher interface {
 	io.Closer
 	// GetWatermark returns the inorder monotonically increasing watermark of the edge connected to Vn-1.
-	GetWatermark(offset isb.Offset) wmb.Watermark
+	GetWatermark(offset isb.Offset, partition int32) wmb.Watermark
 	// GetHeadWatermark returns the latest watermark among all processors
 	GetHeadWatermark() wmb.Watermark
 	// GetHeadWMB returns the latest idle WMB among all processors
-	GetHeadWMB() wmb.WMB
+	GetHeadWMB(partition int32) wmb.WMB
 }

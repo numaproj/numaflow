@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -44,24 +45,34 @@ type edgeFetcher struct {
 	bucketName       string
 	storeWatcher     store.WatermarkStoreWatcher
 	processorManager *processor.ProcessorManager
+	lastProcessedWm  []int64
 	log              *zap.SugaredLogger
+	sync.Mutex
 }
 
 // NewEdgeFetcher returns a new edge fetcher.
-func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.WatermarkStoreWatcher, manager *processor.ProcessorManager) Fetcher {
+func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.WatermarkStoreWatcher, manager *processor.ProcessorManager, fromBufferPartitionCount int) Fetcher {
 	log := logging.FromContext(ctx).With("bucketName", bucketName)
 	log.Info("Creating a new edge watermark fetcher")
+	var lastProcessedWm []int64
+	for i := 0; i < fromBufferPartitionCount; i++ {
+		lastProcessedWm = append(lastProcessedWm, -1)
+	}
+
 	return &edgeFetcher{
 		ctx:              ctx,
 		bucketName:       bucketName,
 		storeWatcher:     storeWatcher,
 		processorManager: manager,
+		lastProcessedWm:  lastProcessedWm,
 		log:              log,
 	}
 }
 
 // GetWatermark gets the smallest watermark for the given offset
-func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
+func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, partition int32) wmb.Watermark {
+	e.Lock()
+	defer e.Unlock()
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("Unable to get offset from isb.Offset.Sequence()", zap.Error(err))
@@ -75,12 +86,14 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 		headOffset := int64(-1)
 		// iterate over all the timelines of the processor and get the smallest watermark
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
-		for _, tl := range p.GetOffsetTimelines() {
-			var t = tl.GetEventTime(inputOffset)
-			if t == -1 { // watermark cannot be computed, perhaps a new processing unit was added or offset fell off the timeline
-				epoch = t
-			} else if t < epoch {
-				epoch = t
+		for index, tl := range p.GetOffsetTimelines() {
+			if index == int(partition) {
+				var t = tl.GetEventTime(inputOffset)
+				if t == -1 { // watermark cannot be computed, perhaps a new processing unit was added or offset fell off the timeline
+					epoch = t
+				} else if t < epoch {
+					epoch = t
+				}
 			}
 			// get the highest head offset among all the partitions of the processor so we can check later on whether the processor
 			// in question is stale (its head is far behind)
@@ -99,9 +112,11 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	if epoch == math.MaxInt64 {
 		epoch = -1
 	}
+	e.lastProcessedWm[partition] = epoch
+	minEpoch := e.getMinFromLastProcessed(epoch)
 	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
 
-	return wmb.Watermark(time.UnixMilli(epoch))
+	return wmb.Watermark(time.UnixMilli(minEpoch))
 }
 
 // GetHeadWatermark returns the latest watermark among all processors. This can be used in showing the watermark
@@ -143,7 +158,9 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 }
 
 // GetHeadWMB returns the latest idle WMB with the smallest watermark among all processors
-func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
+func (e *edgeFetcher) GetHeadWMB(partition int32) wmb.WMB {
+	e.Lock()
+	defer e.Unlock()
 	var debugString strings.Builder
 
 	var headWMB = wmb.WMB{
@@ -159,20 +176,18 @@ func (e *edgeFetcher) GetHeadWMB() wmb.WMB {
 			continue
 		}
 		// find the smallest head offset among the head WMBs
-		for _, tl := range p.GetOffsetTimelines() {
-			// we only consider the latest wmb in the offset timeline
-			var curHeadWMB = tl.GetHeadWMB()
-			if !curHeadWMB.Idle {
-				e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bufferName)
-				return wmb.WMB{}
-			}
-			if curHeadWMB.Watermark != -1 {
-				// find the smallest head offset of the smallest WMB.watermark (though latest)
-				if curHeadWMB.Watermark < headWMB.Watermark {
-					headWMB = curHeadWMB
-				} else if curHeadWMB.Watermark == headWMB.Watermark && curHeadWMB.Offset < headWMB.Offset {
-					headWMB = curHeadWMB
-				}
+		// we only consider the latest wmb in the offset timeline
+		var curHeadWMB = p.GetOffsetTimelines()[partition].GetHeadWMB()
+		if !curHeadWMB.Idle {
+			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bucketName)
+			return wmb.WMB{}
+		}
+		if curHeadWMB.Watermark != -1 {
+			// find the smallest head offset of the smallest WMB.watermark (though latest)
+			if curHeadWMB.Watermark < headWMB.Watermark {
+				headWMB = curHeadWMB
+			} else if curHeadWMB.Watermark == headWMB.Watermark && curHeadWMB.Offset < headWMB.Offset {
+				headWMB = curHeadWMB
 			}
 		}
 	}
@@ -192,4 +207,14 @@ func (e *edgeFetcher) Close() error {
 		e.storeWatcher.OffsetTimelineWatcher().Close()
 	}
 	return nil
+}
+
+func (e *edgeFetcher) getMinFromLastProcessed(watermark int64) int64 {
+	minWm := watermark
+	for _, wm := range e.lastProcessedWm {
+		if minWm > wm {
+			minWm = wm
+		}
+	}
+	return minWm
 }

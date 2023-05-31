@@ -93,7 +93,7 @@ func (e *EventTypeWMProgressor) Close() error {
 	return nil
 }
 
-func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset) wmb.Watermark {
+func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
 	e.m.Lock()
 	defer e.m.Unlock()
 	return e.watermarks[offset.String()]
@@ -103,7 +103,7 @@ func (e *EventTypeWMProgressor) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark{}
 }
 
-func (e *EventTypeWMProgressor) GetHeadWMB() wmb.WMB {
+func (e *EventTypeWMProgressor) GetHeadWMB(int32) wmb.WMB {
 	return wmb.WMB{}
 }
 
@@ -1129,7 +1129,7 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 	storeWatcher := wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	pm := processor.NewProcessorManager(ctx, storeWatcher, 1, processor.WithIsReduce(true))
-	f := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm)
+	f := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm, 1)
 	return f, sourcePublisher
 }
 
