@@ -50,7 +50,13 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewToLog returns ToLog type.
-func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*ToLog, error) {
+func NewToLog(vertex *dfv1.Vertex,
+	fromBuffer isb.BufferReader,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark map[string]publish.Publisher,
+	whereToDecider forward.GoWhere,
+	opts ...Option) (*ToLog, error) {
+
 	toLog := new(ToLog)
 	name := vertex.Spec.Name
 	toLog.name = name
@@ -72,7 +78,7 @@ func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark f
 		}
 	}
 
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toLog}}, toLog.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toLog}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -100,18 +106,6 @@ func (t *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, 
 		log.Println(prefix, " Payload - ", string(message.Payload), " Keys - ", message.Keys, " EventTime - ", message.EventTime.UnixMilli())
 	}
 	return nil, make([]error, len(messages))
-}
-
-func (t *ToLog) getSinkGoWhereDecider() forward.GoWhere {
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
-		var result []forward.VertexBuffer
-		result = append(result, forward.VertexBuffer{
-			ToVertexName:      t.name,
-			ToVertexPartition: 0,
-		})
-		return result, nil
-	})
-	return fsd
 }
 
 func (t *ToLog) Close() error {

@@ -33,16 +33,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type myForwardToAllTest struct {
-}
-
-func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
-	return []forward.VertexBuffer{{
-		ToVertexName:      "testVertex",
-		ToVertexPartition: 0,
-	}}, nil
-}
-
 func TestWriteSuccessToKafka(t *testing.T) {
 	var err error
 	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25)
@@ -58,7 +48,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
 	toSteps := map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}
-	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark)
+	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, getSinkGoWhereDecider(vertex.Spec.Name), applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
 	toKafka.name = "Test"
@@ -111,7 +101,7 @@ func TestWriteFailureToKafka(t *testing.T) {
 	}}
 	toSteps := map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark)
+	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, getSinkGoWhereDecider(vertex.Spec.Name), applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"
@@ -149,4 +139,16 @@ func TestWriteFailureToKafka(t *testing.T) {
 	assert.Equal(t, "test1", errs[1].Error())
 	toKafka.Stop()
 
+}
+
+func getSinkGoWhereDecider(vertexName string) forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
+		result = append(result, forward.VertexBuffer{
+			ToVertexName:      vertexName,
+			ToVertexPartition: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }

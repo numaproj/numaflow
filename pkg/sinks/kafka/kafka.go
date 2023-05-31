@@ -57,7 +57,13 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewToKafka returns ToKafka type.
-func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*ToKafka, error) {
+func NewToKafka(vertex *dfv1.Vertex,
+	fromBuffer isb.BufferReader,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark map[string]publish.Publisher,
+	whereToDecider forward.GoWhere,
+	opts ...Option) (*ToKafka, error) {
+
 	kafkaSink := vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
 	// apply options for kafka sink
@@ -84,7 +90,7 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark
 		}
 	}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, toKafka.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -195,18 +201,6 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 		}
 	}
 	return nil, errs
-}
-
-func (tk *ToKafka) getSinkGoWhereDecider() forward.GoWhere {
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
-		var result []forward.VertexBuffer
-		result = append(result, forward.VertexBuffer{
-			ToVertexName:      tk.name,
-			ToVertexPartition: 0,
-		})
-		return result, nil
-	})
-	return fsd
 }
 
 func (tk *ToKafka) Close() error {

@@ -49,7 +49,13 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewBlackhole returns Blackhole type.
-func NewBlackhole(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, opts ...Option) (*Blackhole, error) {
+func NewBlackhole(vertex *dfv1.Vertex,
+	fromBuffer isb.BufferReader,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark map[string]publish.Publisher,
+	whereToDecider forward.GoWhere,
+	opts ...Option) (*Blackhole, error) {
+
 	bh := new(Blackhole)
 	name := vertex.Spec.Name
 	bh.name = name
@@ -71,25 +77,13 @@ func NewBlackhole(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWaterma
 		}
 	}
 
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {bh}}, bh.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {bh}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
 	bh.isdf = isdf
 
 	return bh, nil
-}
-
-func (b *Blackhole) getSinkGoWhereDecider() forward.GoWhere {
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
-		var result []forward.VertexBuffer
-		result = append(result, forward.VertexBuffer{
-			ToVertexName:      b.name,
-			ToVertexPartition: 0,
-		})
-		return result, nil
-	})
-	return fsd
 }
 
 // GetName returns the name.
