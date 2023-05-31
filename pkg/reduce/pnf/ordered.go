@@ -23,9 +23,10 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -53,16 +54,15 @@ type OrderedProcessor struct {
 	pipelineName  string
 	vertexReplica int32
 	sync.RWMutex
-	taskDone             chan struct{}
-	taskQueue            *list.List
-	pbqManager           *pbq.Manager
-	udf                  applier.ReduceApplier
-	toBuffers            map[string][]isb.BufferWriter
-	whereToDecider       forward.ToWhichStepDecider
-	watermarkPublishers  map[string]publish.Publisher
-	idleManager          *wmb.IdleManager
-	toVertexPartitionMap map[string]int
-	log                  *zap.SugaredLogger
+	taskDone            chan struct{}
+	taskQueue           *list.List
+	pbqManager          *pbq.Manager
+	udf                 applier.ReduceApplier
+	toBuffers           map[string][]isb.BufferWriter
+	whereToDecider      forward.ToWhichStepDecider
+	watermarkPublishers map[string]publish.Publisher
+	idleManager         *wmb.IdleManager
+	log                 *zap.SugaredLogger
 }
 
 // NewOrderedProcessor returns an OrderedProcessor.
@@ -77,19 +77,18 @@ func NewOrderedProcessor(ctx context.Context,
 	toVertexPartitionMap map[string]int) *OrderedProcessor {
 
 	of := &OrderedProcessor{
-		vertexName:           vertexInstance.Vertex.Spec.Name,
-		pipelineName:         vertexInstance.Vertex.Spec.PipelineName,
-		vertexReplica:        vertexInstance.Replica,
-		taskDone:             make(chan struct{}),
-		taskQueue:            list.New(),
-		pbqManager:           pbqManager,
-		udf:                  udf,
-		toBuffers:            toBuffers,
-		whereToDecider:       whereToDecider,
-		watermarkPublishers:  watermarkPublishers,
-		idleManager:          idleManager,
-		toVertexPartitionMap: toVertexPartitionMap,
-		log:                  logging.FromContext(ctx),
+		vertexName:          vertexInstance.Vertex.Spec.Name,
+		pipelineName:        vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica:       vertexInstance.Replica,
+		taskDone:            make(chan struct{}),
+		taskQueue:           list.New(),
+		pbqManager:          pbqManager,
+		udf:                 udf,
+		toBuffers:           toBuffers,
+		whereToDecider:      whereToDecider,
+		watermarkPublishers: watermarkPublishers,
+		idleManager:         idleManager,
+		log:                 logging.FromContext(ctx),
 	}
 
 	go of.forward(ctx)
@@ -110,8 +109,7 @@ func (op *OrderedProcessor) SchedulePnF(
 
 	pbq := op.pbqManager.GetPBQ(partitionID)
 
-	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID,
-		op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.toVertexPartitionMap)
+	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager)
 
 	doneCh := make(chan struct{})
 	t := &ForwardTask{
@@ -236,13 +234,14 @@ outerLoop:
 	op.Shutdown()
 }
 
+// Shutdown closes all the partitions of the buffer.
 func (op *OrderedProcessor) Shutdown() {
-	for _, v := range op.toBuffers {
-		for _, buffer := range v {
-			if err := buffer.Close(); err != nil {
-				op.log.Errorw("Failed to close buffer writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", buffer.GetName()))
+	for _, buffer := range op.toBuffers {
+		for _, partition := range buffer {
+			if err := partition.Close(); err != nil {
+				op.log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", partition.GetName()))
 			} else {
-				op.log.Infow("Closed buffer writer", zap.String("bufferTo", buffer.GetName()))
+				op.log.Infow("Closed partition writer", zap.String("bufferTo", partition.GetName()))
 			}
 		}
 	}

@@ -35,8 +35,8 @@ import (
 type myForwardJetStreamTest struct {
 }
 
-func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]forward.Step, error) {
-	return []forward.Step{{
+func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
 		ToVertexName:      "to1",
 		ToVertexPartition: 0,
 	}}, nil

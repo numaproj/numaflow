@@ -273,19 +273,19 @@ func (sp *SourceProcessor) getSourcer(
 }
 
 func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forward.GoWhere {
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
-		var result []forward.Step
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
 
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 				toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-				result = append(result, forward.Step{
+				result = append(result, forward.VertexBuffer{
 					ToVertexName:      edge.To,
 					ToVertexPartition: toVertexPartition,
 				})
 			} else {
 				// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
-				result = append(result, forward.Step{
+				result = append(result, forward.VertexBuffer{
 					ToVertexName:      edge.To,
 					ToVertexPartition: 0,
 				})
@@ -298,8 +298,8 @@ func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*sh
 
 func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forward.GoWhere {
 
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
-		var result []forward.Step
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
 
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil
@@ -310,13 +310,13 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
 				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-					result = append(result, forward.Step{
+					result = append(result, forward.VertexBuffer{
 						ToVertexName:      edge.To,
 						ToVertexPartition: toVertexPartition,
 					})
 				} else {
 					// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
-					result = append(result, forward.Step{
+					result = append(result, forward.VertexBuffer{
 						ToVertexName:      edge.To,
 						ToVertexPartition: 0,
 					})
@@ -325,13 +325,13 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
 					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-						result = append(result, forward.Step{
+						result = append(result, forward.VertexBuffer{
 							ToVertexName:      edge.To,
 							ToVertexPartition: toVertexPartition,
 						})
 					} else {
 						// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
-						result = append(result, forward.Step{
+						result = append(result, forward.VertexBuffer{
 							ToVertexName:      edge.To,
 							ToVertexPartition: 0,
 						})

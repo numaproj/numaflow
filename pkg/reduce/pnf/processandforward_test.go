@@ -62,22 +62,22 @@ type forwardTest struct {
 	buffers []string
 }
 
-func (f forwardTest) WhereTo(keys []string, _ []string) ([]forward.Step, error) {
+func (f forwardTest) WhereTo(keys []string, _ []string) ([]forward.VertexBuffer, error) {
 	if strings.Compare(keys[len(keys)-1], "test-forward-one") == 0 {
-		return []forward.Step{{
+		return []forward.VertexBuffer{{
 			ToVertexName:      "buffer1",
 			ToVertexPartition: 0,
 		}}, nil
 	} else if strings.Compare(keys[len(keys)-1], "test-forward-all") == 0 {
-		var steps []forward.Step
+		var steps []forward.VertexBuffer
 		for _, buffer := range f.buffers {
-			steps = append(steps, forward.Step{
+			steps = append(steps, forward.VertexBuffer{
 				ToVertexName: buffer,
 			})
 		}
 		return steps, nil
 	}
-	return []forward.Step{}, nil
+	return []forward.VertexBuffer{}, nil
 }
 
 func (f forwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -170,7 +170,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.BufferWriter))
 
 	// create pf using key and reducer
-	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.BufferWriter, 1), forwardTest{}, publishWatermark, wmb.NewIdleManager(1), make(map[string]int, 1))
+	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.BufferWriter, 1), forwardTest{}, publishWatermark, wmb.NewIdleManager(1))
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)

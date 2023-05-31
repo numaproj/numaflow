@@ -208,10 +208,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// if all the windows are closed already, and the len(readBatch) == 0
 			// then it means there's an idle situation
 			// in this case, send idle watermark to all the toBuffers
-			// TODO: support multi partitioned edges
-			for toVertexName, toVertexBuffers := range df.toBuffers {
+			// TODO(multi-partition): support multi partitioned buffer
+			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.watermarkPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, toVertexBuffers[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					idlehandler.PublishIdleWatermark(ctx, toVertexBuffer[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 				}
 			}
 		} else {
@@ -227,10 +227,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				// if toBeClosed window exists, but the watermark we fetch is still within the endTime of the window
 				// then we can't close the window because there could still be data after the idling situation ends
 				// so in this case, we publish an idle watermark
-				//TODO: support multi partitioned edges
-				for toVertexName, toVertexBuffers := range df.toBuffers {
+				// TODO(multi-partition): support multi partitioned edges
+				for toVertexName, toVertexBuffer := range df.toBuffers {
 					if publisher, ok := df.watermarkPublishers[toVertexName]; ok {
-						idlehandler.PublishIdleWatermark(ctx, toVertexBuffers[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+						idlehandler.PublishIdleWatermark(ctx, toVertexBuffer[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 					}
 				}
 			}
@@ -356,10 +356,10 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			// start processing data whose watermark is smaller than the endTime of the toBeClosed window
 
 			// this is to minimize watermark latency
-			//TODO: support multi partitioned edges
-			for toVertex, toVertexBuffers := range df.toBuffers {
+			//TODO(multi-partition): support multi partitioned edges
+			for toVertex, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.watermarkPublishers[toVertex]; ok {
-					idlehandler.PublishIdleWatermark(ctx, toVertexBuffers[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+					idlehandler.PublishIdleWatermark(ctx, toVertexBuffer[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 				}
 			}
 		}

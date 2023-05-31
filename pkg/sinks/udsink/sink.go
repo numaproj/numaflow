@@ -113,9 +113,9 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 }
 
 func (s *UserDefinedSink) getSinkGoWhereDecider() forward.GoWhere {
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
-		var result []forward.Step
-		result = append(result, forward.Step{
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
+		result = append(result, forward.VertexBuffer{
 			ToVertexName:      s.name,
 			ToVertexPartition: 0,
 		})

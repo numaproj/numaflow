@@ -33,8 +33,8 @@ import (
 type myShutdownTest struct {
 }
 
-func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]Step, error) {
-	return []Step{}, nil
+func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	return []VertexBuffer{}, nil
 }
 
 func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {

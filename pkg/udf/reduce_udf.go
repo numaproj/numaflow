@@ -25,6 +25,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow-go/pkg/function/client"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -114,8 +115,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		toVertexPartitionMap[edge.To] = edge.GetToVertexPartitions()
 	}
 
-	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
-		var result []forward.Step
+	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil
 		}
@@ -125,13 +126,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
 				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-					result = append(result, forward.Step{
+					result = append(result, forward.VertexBuffer{
 						ToVertexName:      edge.To,
 						ToVertexPartition: toVertexPartition,
 					})
 				} else {
 					// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
-					result = append(result, forward.Step{
+					result = append(result, forward.VertexBuffer{
 						ToVertexName:      edge.To,
 						ToVertexPartition: 0,
 					})
@@ -140,13 +141,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
 					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
 						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-						result = append(result, forward.Step{
+						result = append(result, forward.VertexBuffer{
 							ToVertexName:      edge.To,
 							ToVertexPartition: toVertexPartition,
 						})
 					} else {
 						// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
-						result = append(result, forward.Step{
+						result = append(result, forward.VertexBuffer{
 							ToVertexName:      edge.To,
 							ToVertexPartition: 0,
 						})

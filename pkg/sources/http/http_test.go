@@ -35,8 +35,8 @@ import (
 type myForwardToAllTest struct {
 }
 
-func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.Step, error) {
-	return []forward.Step{{
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
 		ToVertexName:      "test",
 		ToVertexPartition: 0,
 	}}, nil

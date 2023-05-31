@@ -342,8 +342,8 @@ func Test_GetRefreshFullError(t *testing.T) {
 type myForwardRedisTest struct {
 }
 
-func (f myForwardRedisTest) WhereTo(_ []string, _ []string) ([]forward.Step, error) {
-	return []forward.Step{{
+func (f myForwardRedisTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
 		ToVertexName:      "to1",
 		ToVertexPartition: 0,
 	}}, nil

@@ -200,9 +200,9 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 }
 
 func (tk *ToKafka) getSinkGoWhereDecider() forward.GoWhere {
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
-		var result []forward.Step
-		result = append(result, forward.Step{
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
+		result = append(result, forward.VertexBuffer{
 			ToVertexName:      tk.name,
 			ToVertexPartition: 0,
 		})

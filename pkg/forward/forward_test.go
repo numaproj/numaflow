@@ -88,8 +88,8 @@ func (t *testForwardFetcher) GetHeadWMB() wmb.WMB {
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WhereTo(_ []string, _ []string) ([]Step, error) {
-	return []Step{{
+func (f myForwardTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	return []VertexBuffer{{
 		ToVertexName:      "to1",
 		ToVertexPartition: 0,
 	}}, nil
@@ -963,8 +963,8 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 type mySourceForwardTest struct {
 }
 
-func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]Step, error) {
-	return []Step{{
+func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	return []VertexBuffer{{
 		ToVertexName:      "to1",
 		ToVertexPartition: 0,
 	}}, nil
@@ -1206,8 +1206,8 @@ func TestWriteToBuffer(t *testing.T) {
 type myForwardDropTest struct {
 }
 
-func (f myForwardDropTest) WhereTo(_ []string, _ []string) ([]Step, error) {
-	return []Step{}, nil
+func (f myForwardDropTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	return []VertexBuffer{}, nil
 }
 
 func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -1221,8 +1221,8 @@ func (f myForwardDropTest) ApplyMapStream(ctx context.Context, message *isb.Read
 type myForwardToAllTest struct {
 }
 
-func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]Step, error) {
-	return []Step{{
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	return []VertexBuffer{{
 		ToVertexName:      "to1",
 		ToVertexPartition: 0,
 	},
@@ -1244,8 +1244,8 @@ func (f myForwardToAllTest) ApplyMapStream(ctx context.Context, message *isb.Rea
 type myForwardInternalErrTest struct {
 }
 
-func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]Step, error) {
-	return []Step{{
+func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	return []VertexBuffer{{
 		ToVertexName:      "to1",
 		ToVertexPartition: 0,
 	}}, nil
@@ -1277,8 +1277,8 @@ func (f myForwardInternalErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadM
 type myForwardApplyWhereToErrTest struct {
 }
 
-func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]Step, error) {
-	return []Step{{
+func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	return []VertexBuffer{{
 		ToVertexName:      "to1",
 		ToVertexPartition: 0,
 	}}, fmt.Errorf("whereToStep failed")
@@ -1295,8 +1295,8 @@ func (f myForwardApplyWhereToErrTest) ApplyMapStream(ctx context.Context, messag
 type myForwardApplyUDFErrTest struct {
 }
 
-func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string) ([]Step, error) {
-	return []Step{{
+func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	return []VertexBuffer{{
 		ToVertexName:      "to1",
 		ToVertexPartition: 0,
 	}}, nil
