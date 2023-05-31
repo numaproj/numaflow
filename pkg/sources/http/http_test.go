@@ -32,6 +32,16 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
 
+type myForwardToAllTest struct {
+}
+
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
+		ToVertexName:      "test",
+		ToVertexPartition: 0,
+	}}, nil
+}
+
 func TestWithBufferSize(t *testing.T) {
 	h := &httpSource{
 		bufferSize: 10,
@@ -66,10 +76,13 @@ func Test_NewHTTP(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	dest := []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("test", 100)}
+	dest := simplebuffer.NewInMemoryBuffer("test", 100)
+	toBuffers := map[string][]isb.BufferWriter{
+		"test": {dest},
+	}
 	publishWMStores := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string]isb.BufferWriter{})
-	h, err := New(vi, dest, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
+	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores)
 	assert.NoError(t, err)
 	assert.False(t, h.ready)
 	assert.Equal(t, v.Spec.Name, h.GetName())

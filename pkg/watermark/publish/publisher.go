@@ -41,9 +41,9 @@ import (
 type Publisher interface {
 	io.Closer
 	// PublishWatermark publishes the watermark.
-	PublishWatermark(wmb.Watermark, isb.Offset)
+	PublishWatermark(w wmb.Watermark, o isb.Offset, toVertexPartitionIdx int32)
 	// PublishIdleWatermark publishes the idle watermark.
-	PublishIdleWatermark(wm wmb.Watermark, o isb.Offset)
+	PublishIdleWatermark(wm wmb.Watermark, o isb.Offset, toVertexPartitionIdx int32)
 	// GetLatestWatermark returns the latest published watermark.
 	GetLatestWatermark() wmb.Watermark
 }
@@ -73,7 +73,6 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 		podHeartbeatRate:     5,
 		isSource:             false,
 		delay:                0,
-		toVertexPartition:    0,
 	}
 	for _, opt := range inputOpts {
 		opt(opts)
@@ -117,7 +116,7 @@ func (p *publish) initialSetup() {
 
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
 // is less than the current head watermark.
-func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset) {
+func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset, toVertexPartitionIdx int32) {
 	validWM, skipWM := p.validateWatermark(wm)
 	if skipWM {
 		return
@@ -136,7 +135,7 @@ func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset) {
 	var otValue = wmb.WMB{
 		Offset:    seq,
 		Watermark: validWM.UnixMilli(),
-		Partition: p.opts.toVertexPartition,
+		Partition: toVertexPartitionIdx,
 	}
 
 	value, err := otValue.EncodeToBytes()
@@ -180,7 +179,7 @@ func (p *publish) validateWatermark(wm wmb.Watermark) (wmb.Watermark, bool) {
 
 // PublishIdleWatermark publishes the idle watermark and will retry until it can succeed.
 // TODO: merge with PublishWatermark
-func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset) {
+func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset, toVertexPartitionIdx int32) {
 	var key = p.entity.GetName()
 	validWM, skipWM := p.validateWatermark(wm)
 	if skipWM {
@@ -198,7 +197,7 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset) {
 		Offset:    seq,
 		Watermark: validWM.UnixMilli(),
 		Idle:      true,
-		Partition: p.opts.toVertexPartition,
+		Partition: toVertexPartitionIdx,
 	}
 
 	value, err := otValue.EncodeToBytes()

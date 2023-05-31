@@ -152,7 +152,7 @@ func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 	for p, t := range oldestTimestamps {
 		publisher := r.loadSourceWatermarkPublisher(p)
-		publisher.PublishWatermark(wmb.Watermark(t), nil) // Source publisher does not care about the offset
+		publisher.PublishWatermark(wmb.Watermark(t), nil, 0) // Source publisher does not care about the offset
 	}
 }
 
@@ -290,7 +290,7 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 // NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
 func NewKafkaSource(
 	vertexInstance *dfv1.VertexInstance,
-	writers []isb.BufferWriter,
+	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
@@ -351,18 +351,13 @@ func NewKafkaSource(
 	handler := newConsumerHandler(kafkasource.handlerbuffer)
 	kafkasource.handler = handler
 
-	destinations := make(map[string]isb.BufferWriter, len(writers))
-	for _, w := range writers {
-		destinations[w.GetName()] = w
-	}
-
 	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(kafkasource.logger), forward.WithSourceWatermarkPublisher(kafkasource)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

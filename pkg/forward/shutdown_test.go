@@ -33,8 +33,8 @@ import (
 type myShutdownTest struct {
 }
 
-func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]string, error) {
-	return []string{dfv1.MessageTagAll}, nil
+func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	return []VertexBuffer{}, nil
 }
 
 func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -67,8 +67,8 @@ func TestInterStepDataForward(t *testing.T) {
 			batchSize := tt.batchSize
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
 			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
-			toSteps := map[string]isb.BufferWriter{
-				"to1": to1,
+			toSteps := map[string][]isb.BufferWriter{
+				"to1": {to1},
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -84,8 +84,7 @@ func TestInterStepDataForward(t *testing.T) {
 			}}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data but buffer is not full even though we are not reading
@@ -101,8 +100,8 @@ func TestInterStepDataForward(t *testing.T) {
 			batchSize := tt.batchSize
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
 			to1 := simplebuffer.NewInMemoryBuffer("to", 2*batchSize)
-			toSteps := map[string]isb.BufferWriter{
-				"to1": to1,
+			toSteps := map[string][]isb.BufferWriter{
+				"to1": {to1},
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -118,8 +117,7 @@ func TestInterStepDataForward(t *testing.T) {
 			}}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{},
-				fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data such that the fromBuffer can be empty, that is toBuffer gets full

@@ -53,12 +53,12 @@ func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 	var epoch int64 = 1651161600000
 	var location, _ = time.LoadLocation("UTC")
 	for i := 0; i < 3; i++ {
-		p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
+		p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }), 0)
 		epoch += 60000
 		time.Sleep(time.Millisecond)
 	}
 	// publish a stale watermark (offset doesn't matter)
-	p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
+	p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }), 0)
 
 	keys, err := p.otStore.GetAllKeys(p.ctx)
 	assert.NoError(t, err)

@@ -36,6 +36,21 @@ var (
 	testStartTime = time.Unix(1636470000, 0).UTC()
 )
 
+type myForwardToAllTest struct {
+}
+
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
+		ToVertexName:      "to1",
+		ToVertexPartition: 0,
+	},
+		{
+			ToVertexName:      "to2",
+			ToVertexPartition: 0,
+		},
+	}, nil
+}
+
 func TestToLog_Start(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -53,7 +68,7 @@ func TestToLog_Start(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	s, err := NewToLog(vertex, fromStep, fetchWatermark, publishWatermark)
+	s, err := NewToLog(vertex, fromStep, fetchWatermark, publishWatermark, getSinkGoWhereDecider(vertex.Spec.Name))
 	assert.NoError(t, err)
 
 	stopped := s.Start()
@@ -68,13 +83,6 @@ func TestToLog_Start(t *testing.T) {
 	s.Stop()
 
 	<-stopped
-}
-
-type ForwardToAllVertex struct {
-}
-
-func (f ForwardToAllVertex) WhereTo(_ []byte) (string, error) {
-	return dfv1.MessageTagAll, nil
 }
 
 // TestToLog_ForwardToTwoVertex writes to 2 vertices and have a logger sinks attached to each vertex.
@@ -125,15 +133,15 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 				},
 			}}
 			fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex1.Spec.Name})
-			logger1, _ := NewToLog(vertex1, to1, fetchWatermark1, publishWatermark1)
+			logger1, _ := NewToLog(vertex1, to1, fetchWatermark1, publishWatermark1, getSinkGoWhereDecider(vertex1.Spec.Name))
 			fetchWatermark2, publishWatermark2 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex2.Spec.Name})
-			logger2, _ := NewToLog(vertex2, to2, fetchWatermark2, publishWatermark2)
+			logger2, _ := NewToLog(vertex2, to2, fetchWatermark2, publishWatermark2, getSinkGoWhereDecider(vertex2.Spec.Name))
 			logger1Stopped := logger1.Start()
 			logger2Stopped := logger2.Start()
 
-			toSteps := map[string]isb.BufferWriter{
-				"to1": to1,
-				"to2": to2,
+			toSteps := map[string][]isb.BufferWriter{
+				"to1": {to1},
+				"to2": {to2},
 			}
 
 			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
@@ -144,8 +152,7 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 				},
 			}}
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal,
-				fetchWatermark, publishWatermark, forward.WithReadBatchSize(batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, forward.WithReadBatchSize(batchSize), forward.WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 
 			stopped := f.Start()
@@ -162,4 +169,16 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 			<-logger2Stopped
 		})
 	}
+}
+
+func getSinkGoWhereDecider(vertexName string) forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
+		result = append(result, forward.VertexBuffer{
+			ToVertexName:      vertexName,
+			ToVertexPartition: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }

@@ -29,31 +29,31 @@ import (
 
 func TestShuffle_ShuffleMessages(t *testing.T) {
 	tests := []struct {
-		name               string
-		buffersIdentifiers []string
-		messages           []*isb.Message
+		name         string
+		buffersCount int
+		messages     []*isb.Message
 	}{
 		{
-			name:               "MessageCountGreaterThanBufferCount",
-			buffersIdentifiers: buildBufferIdList(10),
-			messages:           buildTestMessagesWithDistinctKeys(100),
+			name:         "MessageCountGreaterThanBufferCount",
+			buffersCount: 10,
+			messages:     buildTestMessagesWithDistinctKeys(100),
 		},
 		{
-			name:               "BufferCountGreaterThanMessageCount",
-			buffersIdentifiers: buildBufferIdList(100),
-			messages:           buildTestMessagesWithDistinctKeys(10),
+			name:         "BufferCountGreaterThanMessageCount",
+			buffersCount: 10,
+			messages:     buildTestMessagesWithDistinctKeys(10),
 		},
 		{
-			name:               "BufferCountEqualToMessageCount",
-			buffersIdentifiers: buildBufferIdList(100),
-			messages:           buildTestMessagesWithDistinctKeys(100),
+			name:         "BufferCountEqualToMessageCount",
+			buffersCount: 10,
+			messages:     buildTestMessagesWithDistinctKeys(100),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// create shuffle with buffer id list
-			shuffler := NewShuffle(test.name, test.buffersIdentifiers)
+			shuffler := NewShuffle(test.name, test.buffersCount)
 
 			bufferIdMessageMap := shuffler.ShuffleMessages(test.messages)
 			sum := 0
@@ -69,7 +69,7 @@ func TestShuffle_ShuffleMessages(t *testing.T) {
 func TestShuffler_UseVertexNameAsSeed(t *testing.T) {
 	tests := []struct {
 		name                   string
-		buffersIdentifiers     []string
+		buffersCount           int
 		messages               []*isb.Message
 		vertexName1            string
 		vertexName2            string
@@ -77,7 +77,7 @@ func TestShuffler_UseVertexNameAsSeed(t *testing.T) {
 	}{
 		{
 			name:                   "MessagesDistributionRemainUnchangedWhenVertexNamesAreTheSame",
-			buffersIdentifiers:     buildBufferIdList(10),
+			buffersCount:           10,
 			messages:               buildTestMessagesWithDistinctKeys(100),
 			vertexName1:            "v1",
 			vertexName2:            "v1",
@@ -85,7 +85,7 @@ func TestShuffler_UseVertexNameAsSeed(t *testing.T) {
 		},
 		{
 			name:                   "MessagesDistributionChangesWhenVertexNameChanges",
-			buffersIdentifiers:     buildBufferIdList(10),
+			buffersCount:           10,
 			messages:               buildTestMessagesWithDistinctKeys(100),
 			vertexName1:            "v1",
 			vertexName2:            "v2",
@@ -95,8 +95,8 @@ func TestShuffler_UseVertexNameAsSeed(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			shuffler1 := NewShuffle(test.vertexName1, test.buffersIdentifiers)
-			shuffler2 := NewShuffle(test.vertexName2, test.buffersIdentifiers)
+			shuffler1 := NewShuffle(test.vertexName1, test.buffersCount)
+			shuffler2 := NewShuffle(test.vertexName2, test.buffersCount)
 			bufferIdMessageMap1 := shuffler1.ShuffleMessages(test.messages)
 			bufferIdMessageMap2 := shuffler2.ShuffleMessages(test.messages)
 			assert.Equal(t, test.expectSameDistribution, isSameShuffleDistribution(bufferIdMessageMap1, bufferIdMessageMap2))
@@ -106,7 +106,7 @@ func TestShuffler_UseVertexNameAsSeed(t *testing.T) {
 
 // isSameShuffleDistribution performs a simple count check to ensure that the two input maps have the same distribution of elements.
 // For a more strict verification, one could compare the contents of the two distributions, which would require sorting the elements.
-func isSameShuffleDistribution(a, b map[string][]*isb.Message) bool {
+func isSameShuffleDistribution(a, b map[int32][]*isb.Message) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -116,14 +116,6 @@ func isSameShuffleDistribution(a, b map[string][]*isb.Message) bool {
 		}
 	}
 	return true
-}
-
-func buildBufferIdList(size int) []string {
-	var bufferIdList []string
-	for i := 0; i < size; i++ {
-		bufferIdList = append(bufferIdList, fmt.Sprintf("buffer-%d", i+1))
-	}
-	return bufferIdList
 }
 
 func buildTestMessagesWithDistinctKeys(size int64) []*isb.Message {

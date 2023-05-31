@@ -23,9 +23,10 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -57,7 +58,7 @@ type OrderedProcessor struct {
 	taskQueue           *list.List
 	pbqManager          *pbq.Manager
 	udf                 applier.ReduceApplier
-	toBuffers           map[string]isb.BufferWriter
+	toBuffers           map[string][]isb.BufferWriter
 	whereToDecider      forward.ToWhichStepDecider
 	watermarkPublishers map[string]publish.Publisher
 	idleManager         *wmb.IdleManager
@@ -68,11 +69,12 @@ type OrderedProcessor struct {
 func NewOrderedProcessor(ctx context.Context,
 	vertexInstance *dfv1.VertexInstance,
 	udf applier.ReduceApplier,
-	toBuffers map[string]isb.BufferWriter,
+	toBuffers map[string][]isb.BufferWriter,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,
 	idleManager *wmb.IdleManager) *OrderedProcessor {
+
 	of := &OrderedProcessor{
 		vertexName:          vertexInstance.Vertex.Spec.Name,
 		pipelineName:        vertexInstance.Vertex.Spec.PipelineName,
@@ -106,8 +108,7 @@ func (op *OrderedProcessor) SchedulePnF(
 
 	pbq := op.pbqManager.GetPBQ(partitionID)
 
-	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID,
-		op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager)
+	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager)
 
 	doneCh := make(chan struct{})
 	t := &ForwardTask{
@@ -232,12 +233,15 @@ outerLoop:
 	op.Shutdown()
 }
 
+// Shutdown closes all the partitions of the buffer.
 func (op *OrderedProcessor) Shutdown() {
-	for _, v := range op.toBuffers {
-		if err := v.Close(); err != nil {
-			op.log.Errorw("Failed to close buffer writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", v.GetName()))
-		} else {
-			op.log.Infow("Closed buffer writer", zap.String("bufferTo", v.GetName()))
+	for _, buffer := range op.toBuffers {
+		for _, partition := range buffer {
+			if err := partition.Close(); err != nil {
+				op.log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", partition.GetName()))
+			} else {
+				op.log.Infow("Closed partition writer", zap.String("bufferTo", partition.GetName()))
+			}
 		}
 	}
 }
