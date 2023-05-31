@@ -41,9 +41,9 @@ import (
 type Publisher interface {
 	io.Closer
 	// PublishWatermark publishes the watermark.
-	PublishWatermark(wmb.Watermark, isb.Offset, int32)
+	PublishWatermark(w wmb.Watermark, o isb.Offset, toVertexPartitionIdx int32)
 	// PublishIdleWatermark publishes the idle watermark.
-	PublishIdleWatermark(wm wmb.Watermark, o isb.Offset, toVertexPartition int32)
+	PublishIdleWatermark(wm wmb.Watermark, o isb.Offset, toVertexPartitionIdx int32)
 	// GetLatestWatermark returns the latest published watermark.
 	GetLatestWatermark() wmb.Watermark
 }
@@ -116,7 +116,7 @@ func (p *publish) initialSetup() {
 
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
 // is less than the current head watermark.
-func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset, toVertexPartition int32) {
+func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset, toVertexPartitionIdx int32) {
 	validWM, skipWM := p.validateWatermark(wm)
 	if skipWM {
 		return
@@ -135,7 +135,7 @@ func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset, toVertex
 	var otValue = wmb.WMB{
 		Offset:    seq,
 		Watermark: validWM.UnixMilli(),
-		Partition: toVertexPartition,
+		Partition: toVertexPartitionIdx,
 	}
 
 	value, err := otValue.EncodeToBytes()
@@ -179,7 +179,7 @@ func (p *publish) validateWatermark(wm wmb.Watermark) (wmb.Watermark, bool) {
 
 // PublishIdleWatermark publishes the idle watermark and will retry until it can succeed.
 // TODO: merge with PublishWatermark
-func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset, toVertexPartition int32) {
+func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset, toVertexPartitionIdx int32) {
 	var key = p.entity.GetName()
 	validWM, skipWM := p.validateWatermark(wm)
 	if skipWM {
@@ -197,7 +197,7 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset, toVe
 		Offset:    seq,
 		Watermark: validWM.UnixMilli(),
 		Idle:      true,
-		Partition: toVertexPartition,
+		Partition: toVertexPartitionIdx,
 	}
 
 	value, err := otValue.EncodeToBytes()

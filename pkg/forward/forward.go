@@ -62,8 +62,7 @@ type InterStepDataForward struct {
 	// idleManager manages the idle watermark status.
 	idleManager *wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid.
-	wmbChecker           wmb.WMBChecker
-	toVertexPartitionMap map[string]int
+	wmbChecker wmb.WMBChecker
 	Shutdown
 }
 
@@ -75,6 +74,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	applyUDF applier.MapApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
+	// FIXME: remove this
 	toVertexPartitionMap map[string]int,
 	opts ...Option) (*InterStepDataForward, error) {
 
@@ -97,11 +97,10 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 		fetchWatermark:   fetchWatermark,
 		publishWatermark: publishWatermark,
 		// should we do a check here for the values not being null?
-		vertexName:           vertex.Spec.Name,
-		pipelineName:         vertex.Spec.PipelineName,
-		idleManager:          wmb.NewIdleManager(len(toSteps)),
-		wmbChecker:           wmb.NewWMBChecker(2), // TODO: make configurable\
-		toVertexPartitionMap: toVertexPartitionMap,
+		vertexName:   vertex.Spec.Name,
+		pipelineName: vertex.Spec.PipelineName,
+		idleManager:  wmb.NewIdleManager(len(toSteps)),
+		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable\
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
@@ -166,12 +165,12 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 		} else {
 			log.Infow("Closed buffer reader", zap.String("bufferFrom", isdf.fromBuffer.GetName()))
 		}
-		for _, buffers := range isdf.toBuffers {
-			for _, buffer := range buffers {
-				if err := buffer.Close(); err != nil {
-					log.Errorw("Failed to close buffer writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", buffer.GetName()))
+		for _, buffer := range isdf.toBuffers {
+			for _, partition := range buffer {
+				if err := partition.Close(); err != nil {
+					log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", partition.GetName()))
 				} else {
-					log.Infow("Closed buffer writer", zap.String("bufferTo", buffer.GetName()))
+					log.Infow("Closed partition writer", zap.String("bufferTo", partition.GetName()))
 				}
 			}
 		}
@@ -236,10 +235,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				zap.Bool("Idle", processorWMB.Idle))
 			return
 		}
-		//TODO handle for multiple partitions
-		for toVertexName, toVertexBuffers := range isdf.toBuffers {
+
+		// TODO(multi-partition) handle for multiple partitions
+		for toVertexName, toVertexBuffer := range isdf.toBuffers {
 			if p, ok := isdf.publishWatermark[toVertexName]; ok {
-				idlehandler.PublishIdleWatermark(ctx, toVertexBuffers[0], p, isdf.idleManager, 0, isdf.opts.logger, isdf.opts.vertexType, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+				idlehandler.PublishIdleWatermark(ctx, toVertexBuffer[0], p, isdf.idleManager, 0, isdf.opts.logger, isdf.opts.vertexType, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 			}
 		}
 		return
@@ -276,7 +276,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		var messageToStep = make(map[string][][]isb.Message)
 		for toVertex := range isdf.toBuffers {
 			// over allocating to have a predictable pattern
-			messageToStep[toVertex] = make([][]isb.Message, isdf.toVertexPartitionMap[toVertex])
+			messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
 		}
 
 		// udf concurrent processing request channel
@@ -389,9 +389,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	var activeWatermarkBuffers = make(map[string]bool)
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
-	for toVertexName, toVertexOffsets := range writeOffsets {
+	for toVertexName, toVertexBufferOffsets := range writeOffsets {
 		if publisher, ok := isdf.publishWatermark[toVertexName]; ok {
-			for index, offsets := range toVertexOffsets {
+			for index, offsets := range toVertexBufferOffsets {
 				if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
 					isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
 					if len(offsets) > 0 {
@@ -410,7 +410,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			}
 		}
 	}
-	// TODO: handle idle watermark publishing for multi buffers
+	// TODO(multi-partition): handle idle watermark publishing for multi partitioned buffer
 	if len(dataMessages) > 0 && len(activeWatermarkBuffers) < len(isdf.publishWatermark) {
 		// - condition1 "len(dataMessages) > 0" :
 		//   Meaning, we do have some data messages, but not all out buffers get written.
@@ -452,13 +452,14 @@ func (isdf *InterStepDataForward) streamMessage(
 	processorWM wmb.Watermark,
 ) (map[string][][]isb.Offset, error) {
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
+	// these messages are for per partition (due to round-robin writes) for load balancing
 	var messageToStep = make(map[string][][]isb.Message)
 	var writeOffsets = make(map[string][][]isb.Offset)
 
 	for toVertex := range isdf.toBuffers {
 		// over allocating to have a predictable pattern
-		messageToStep[toVertex] = make([][]isb.Message, isdf.toVertexPartitionMap[toVertex])
-		writeOffsets[toVertex] = make([][]isb.Offset, isdf.toVertexPartitionMap[toVertex])
+		messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
+		writeOffsets[toVertex] = make([][]isb.Offset, len(isdf.toBuffers[toVertex]))
 	}
 
 	if len(dataMessages) > 1 {
@@ -500,9 +501,9 @@ func (isdf *InterStepDataForward) streamMessage(
 				return nil, fmt.Errorf("failed to write to toBuffers, error: %w", err)
 			}
 			// Merge curWriteOffsets into writeOffsets
-			for k, v := range curWriteOffsets {
-				for index, offsets := range v {
-					writeOffsets[k][index] = append(writeOffsets[k][index], offsets...)
+			for vertexName, toVertexBufferOffsets := range curWriteOffsets {
+				for index, offsets := range toVertexBufferOffsets {
+					writeOffsets[vertexName][index] = append(writeOffsets[vertexName][index], offsets...)
 				}
 			}
 		}
@@ -594,9 +595,9 @@ func (isdf *InterStepDataForward) writeToBuffers(
 	for toVertexName, toVertexMessages := range messageToStep {
 		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexMessages))
 	}
-	for toVertexName, toVertexBuffers := range isdf.toBuffers {
-		for index, buffer := range toVertexBuffers {
-			writeOffsets[toVertexName][index], err = isdf.writeToBuffer(ctx, buffer, messageToStep[toVertexName][index])
+	for toVertexName, toVertexBuffer := range isdf.toBuffers {
+		for index, partition := range toVertexBuffer {
+			writeOffsets[toVertexName][index], err = isdf.writeToBuffer(ctx, partition, messageToStep[toVertexName][index])
 			if err != nil {
 				return nil, err
 			}

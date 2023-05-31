@@ -47,19 +47,18 @@ import (
 // processAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
 type processAndForward struct {
-	vertexName           string
-	pipelineName         string
-	vertexReplica        int32
-	PartitionID          partition.ID
-	UDF                  applier.ReduceApplier
-	result               []*isb.WriteMessage
-	pbqReader            pbq.Reader
-	log                  *zap.SugaredLogger
-	toBuffers            map[string][]isb.BufferWriter
-	whereToDecider       forward.ToWhichStepDecider
-	publishWatermark     map[string]publish.Publisher
-	idleManager          *wmb.IdleManager
-	toVertexPartitionMap map[string]int
+	vertexName       string
+	pipelineName     string
+	vertexReplica    int32
+	PartitionID      partition.ID
+	UDF              applier.ReduceApplier
+	result           []*isb.WriteMessage
+	pbqReader        pbq.Reader
+	log              *zap.SugaredLogger
+	toBuffers        map[string][]isb.BufferWriter
+	whereToDecider   forward.ToWhichStepDecider
+	publishWatermark map[string]publish.Publisher
+	idleManager      *wmb.IdleManager
 }
 
 // newProcessAndForward will return a new processAndForward instance
@@ -73,22 +72,20 @@ func newProcessAndForward(ctx context.Context,
 	toBuffers map[string][]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
-	idleManager *wmb.IdleManager,
-	toVertexPartitionMap map[string]int) *processAndForward {
+	idleManager *wmb.IdleManager) *processAndForward {
 
 	return &processAndForward{
-		vertexName:           vertexName,
-		pipelineName:         pipelineName,
-		vertexReplica:        vr,
-		PartitionID:          partitionID,
-		UDF:                  udf,
-		pbqReader:            pbqReader,
-		log:                  logging.FromContext(ctx),
-		toBuffers:            toBuffers,
-		whereToDecider:       whereToDecider,
-		publishWatermark:     pw,
-		idleManager:          idleManager,
-		toVertexPartitionMap: toVertexPartitionMap,
+		vertexName:       vertexName,
+		pipelineName:     pipelineName,
+		vertexReplica:    vr,
+		PartitionID:      partitionID,
+		UDF:              udf,
+		pbqReader:        pbqReader,
+		log:              logging.FromContext(ctx),
+		toBuffers:        toBuffers,
+		whereToDecider:   whereToDecider,
+		publishWatermark: pw,
+		idleManager:      idleManager,
 	}
 }
 
@@ -124,8 +121,8 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 
 	// store write offsets to publish watermark
 	writeOffsets := make(map[string][][]isb.Offset)
-	for vn, vp := range p.toVertexPartitionMap {
-		writeOffsets[vn] = make([][]isb.Offset, vp)
+	for toVertexName, toVertexBuffer := range p.toBuffers {
+		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 
 	// parallel writes to each isb
@@ -175,7 +172,7 @@ func (p *processAndForward) whereToStep() map[string][][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][][]isb.Message)
 
-	var to []forward.Step
+	var to []forward.VertexBuffer
 	var err error
 	for _, msg := range p.result {
 		to, err = p.whereToDecider.WhereTo(msg.Keys, msg.Tags)
@@ -195,7 +192,7 @@ func (p *processAndForward) whereToStep() map[string][][]isb.Message {
 
 		for _, step := range to {
 			if _, ok := messagesToStep[step.ToVertexName]; !ok {
-				messagesToStep[step.ToVertexName] = make([][]isb.Message, p.toVertexPartitionMap[step.ToVertexName])
+				messagesToStep[step.ToVertexName] = make([][]isb.Message, len(p.toBuffers[step.ToVertexName]))
 			}
 			messagesToStep[step.ToVertexName][step.ToVertexPartition] = append(messagesToStep[step.ToVertexName][step.ToVertexPartition], msg.Message)
 		}

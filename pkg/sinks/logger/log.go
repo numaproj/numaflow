@@ -104,9 +104,9 @@ func (t *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, 
 }
 
 func (t *ToLog) getSinkGoWhereDecider() forward.GoWhere {
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.Step, error) {
-		var result []forward.Step
-		result = append(result, forward.Step{
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
+		result = append(result, forward.VertexBuffer{
 			ToVertexName:      t.name,
 			ToVertexPartition: 0,
 		})
