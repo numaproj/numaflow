@@ -36,6 +36,20 @@ var (
 	testStartTime = time.Unix(1636470000, 0).UTC()
 )
 
+type myForwardToAllTest struct {
+}
+
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
+		ToVertexName:      "to1",
+		ToVertexPartition: 0,
+	},
+		{
+			ToVertexName:      "to2",
+			ToVertexPartition: 0,
+		}}, nil
+}
+
 func TestBlackhole_Start(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -53,7 +67,7 @@ func TestBlackhole_Start(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	s, err := NewBlackhole(vertex, fromStep, fetchWatermark, publishWatermark)
+	s, err := NewBlackhole(vertex, fromStep, fetchWatermark, publishWatermark, getSinkGoWhereDecider(vertex.Spec.Name))
 	assert.NoError(t, err)
 
 	stopped := s.Start()
@@ -99,15 +113,15 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 		},
 	}}
 	fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex1.Spec.Name})
-	bh1, _ := NewBlackhole(vertex1, to1, fetchWatermark1, publishWatermark1)
+	bh1, _ := NewBlackhole(vertex1, to1, fetchWatermark1, publishWatermark1, getSinkGoWhereDecider(vertex1.Spec.Name))
 	fetchWatermark2, publishWatermark2 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex2.Spec.Name})
-	bh2, _ := NewBlackhole(vertex2, to2, fetchWatermark2, publishWatermark2)
+	bh2, _ := NewBlackhole(vertex2, to2, fetchWatermark2, publishWatermark2, getSinkGoWhereDecider(vertex2.Spec.Name))
 	bh1Stopped := bh1.Start()
 	bh2Stopped := bh2.Start()
 
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
-		"to2": to2,
+	toSteps := map[string][]isb.BufferWriter{
+		"to1": {to1},
+		"to2": {to2},
 	}
 
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
@@ -118,7 +132,7 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, forward.All, applier.Terminal, fetchWatermark, publishWatermark)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := f.Start()
@@ -133,4 +147,16 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 
 	<-bh1Stopped
 	<-bh2Stopped
+}
+
+func getSinkGoWhereDecider(vertexName string) forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
+		result = append(result, forward.VertexBuffer{
+			ToVertexName:      vertexName,
+			ToVertexPartition: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }

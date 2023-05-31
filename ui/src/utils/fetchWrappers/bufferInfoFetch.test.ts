@@ -1,12 +1,12 @@
 import {useFetch} from "./fetch";
 import {renderHook} from "@testing-library/react";
-import {useEdgesInfoFetch} from "./edgeInfoFetch";
+import {useBuffersInfoFetch} from "./bufferInfoFetch";
 
 jest.mock("../fetchWrappers/fetch");
 const mockedUseFetch = useFetch as jest.MockedFunction<typeof useFetch>;
 
 
-describe("edgeInfoFetch test", () => {
+describe("bufferInfoFetch test", () => {
     const data = {
         "pipeline": "simple-pipeline",
         "fromVertex": "input",
@@ -22,8 +22,8 @@ describe("edgeInfoFetch test", () => {
     }
     it("edgesInfo return", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: false})
-        const {result} = renderHook(() => useEdgesInfoFetch("numaflow-system", "simple-pipeline", ""))
-        expect(result.current.edgesInfo).toEqual({
+        const {result} = renderHook(() => useBuffersInfoFetch("numaflow-system", "simple-pipeline", ""))
+        expect(result.current.buffersInfo).toEqual({
             "ackPendingCount": 0,
             "bufferLength": 10000,
             "bufferName": "numaflow-system-simple-pipeline-postproc-publisher",
@@ -40,13 +40,13 @@ describe("edgeInfoFetch test", () => {
 
     it("edgesInfo loading", () => {
         mockedUseFetch.mockReturnValue({data: data, error: false, loading: true});
-        const {result} = renderHook(() => useEdgesInfoFetch("numaflow-system", "simple-pipeline", ""))
+        const {result} = renderHook(() => useBuffersInfoFetch("numaflow-system", "simple-pipeline", ""))
         expect(result.current.loading).toBeTruthy()
     })
 
     it("edgesInfo error", () => {
         mockedUseFetch.mockReturnValue({data: data, error: true, loading: false})
-        const {result} = renderHook(() => useEdgesInfoFetch("numaflow-system", "simple-pipeline", ""))
+        const {result} = renderHook(() => useBuffersInfoFetch("numaflow-system", "simple-pipeline", ""))
         expect(result.current.error).toBeTruthy()
     })
 })

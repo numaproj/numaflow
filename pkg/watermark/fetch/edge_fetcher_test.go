@@ -150,7 +150,7 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &edgeFetcher{
 				ctx:              ctx,
-				bufferName:       "testBuffer",
+				bucketName:       "testBucket",
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
@@ -311,7 +311,7 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 	var (
 		partitionCount    = int32(2)
 		ctx               = context.Background()
-		bufferName        = "testBuffer"
+		bucketName        = "testBucket"
 		hbWatcher         = noop.NewKVOpWatch()
 		otWatcher         = noop.NewKVOpWatch()
 		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
@@ -342,7 +342,7 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &edgeFetcher{
 				ctx:              ctx,
-				bufferName:       bufferName,
+				bucketName:       bucketName,
 				storeWatcher:     storeWatcher,
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
@@ -484,7 +484,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 	var (
 		partitionCount    = int32(3)
 		ctx               = context.Background()
-		bufferName        = "testBuffer"
+		bucketName        = "testBucket"
 		hbWatcher         = noop.NewKVOpWatch()
 		otWatcher         = noop.NewKVOpWatch()
 		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
@@ -534,7 +534,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &edgeFetcher{
 				ctx:              ctx,
-				bufferName:       bufferName,
+				bucketName:       bucketName,
 				storeWatcher:     storeWatcher,
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
@@ -61,13 +62,22 @@ type forwardTest struct {
 	buffers []string
 }
 
-func (f forwardTest) WhereTo(keys []string, _ []string) ([]string, error) {
+func (f forwardTest) WhereTo(keys []string, _ []string) ([]forward.VertexBuffer, error) {
 	if strings.Compare(keys[len(keys)-1], "test-forward-one") == 0 {
-		return []string{"buffer1"}, nil
+		return []forward.VertexBuffer{{
+			ToVertexName:      "buffer1",
+			ToVertexPartition: 0,
+		}}, nil
 	} else if strings.Compare(keys[len(keys)-1], "test-forward-all") == 0 {
-		return f.buffers, nil
+		var steps []forward.VertexBuffer
+		for _, buffer := range f.buffers {
+			steps = append(steps, forward.VertexBuffer{
+				ToVertexName: buffer,
+			})
+		}
+		return steps, nil
 	}
-	return []string{}, nil
+	return []forward.VertexBuffer{}, nil
 }
 
 func (f forwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -157,10 +167,10 @@ func TestProcessAndForward_Process(t *testing.T) {
 	client := udfcall.NewUDSgRPCBasedUDFWithClient(c)
 
 	assert.NoError(t, err)
-	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
+	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.BufferWriter))
 
 	// create pf using key and reducer
-	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string]isb.BufferWriter, 1), forwardTest{}, publishWatermark, wmb.NewIdleManager(1))
+	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.BufferWriter, 1), forwardTest{}, publishWatermark, wmb.NewIdleManager(1))
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)
@@ -177,9 +187,9 @@ func TestProcessAndForward_Forward(t *testing.T) {
 	test1Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
 	test1Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
 
-	toBuffers1 := map[string]isb.BufferWriter{
-		"buffer1": test1Buffer1,
-		"buffer2": test1Buffer2,
+	toBuffers1 := map[string][]isb.BufferWriter{
+		"buffer1": {test1Buffer1},
+		"buffer2": {test1Buffer2},
 	}
 
 	pf1, otStores1 := createProcessAndForwardAndOTStore(ctx, "test-forward-one", pbqManager, toBuffers1)
@@ -187,9 +197,9 @@ func TestProcessAndForward_Forward(t *testing.T) {
 	test2Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
 	test2Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
 
-	toBuffers2 := map[string]isb.BufferWriter{
-		"buffer1": test2Buffer1,
-		"buffer2": test2Buffer2,
+	toBuffers2 := map[string][]isb.BufferWriter{
+		"buffer1": {test2Buffer1},
+		"buffer2": {test2Buffer2},
 	}
 
 	pf2, otStores2 := createProcessAndForwardAndOTStore(ctx, "test-forward-all", pbqManager, toBuffers2)
@@ -197,9 +207,9 @@ func TestProcessAndForward_Forward(t *testing.T) {
 	test3Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
 	test3Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
 
-	toBuffers3 := map[string]isb.BufferWriter{
-		"buffer1": test3Buffer1,
-		"buffer2": test3Buffer2,
+	toBuffers3 := map[string][]isb.BufferWriter{
+		"buffer1": {test3Buffer1},
+		"buffer2": {test3Buffer2},
 	}
 
 	pf3, otStores3 := createProcessAndForwardAndOTStore(ctx, "test-drop-all", pbqManager, toBuffers3)
@@ -340,19 +350,19 @@ func TestWriteToBuffer(t *testing.T) {
 			defer cancel()
 			var pbqManager *pbq.Manager
 			pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores())
-			toBuffer := map[string]isb.BufferWriter{
-				"buffer": value.buffer,
+			toBuffer := map[string][]isb.BufferWriter{
+				"buffer": {value.buffer},
 			}
 			pf, _ := createProcessAndForwardAndOTStore(ctx, value.name, pbqManager, toBuffer)
 			var err error
 			writeMessages := testutils.BuildTestWriteMessages(int64(15), testStartTime)
-			_, err = pf.writeToBuffer(ctx, "buffer", writeMessages)
+			_, err = pf.writeToBuffer(ctx, "buffer", 0, writeMessages)
 			assert.Equal(t, value.throwError, err != nil)
 		})
 	}
 }
 
-func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string]isb.BufferWriter) (processAndForward, map[string]wmstore.WatermarkKVStorer) {
+func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter) (processAndForward, map[string]wmstore.WatermarkKVStorer) {
 
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
@@ -412,7 +422,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer
-func buildPublisherMapAndOTStore(toBuffers map[string]isb.BufferWriter) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
+func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
 	var ctx = context.Background()
 	processorEntity := processor.NewProcessorEntity("publisherTestPod")
 	publishers := make(map[string]publish.Publisher)
@@ -421,7 +431,7 @@ func buildPublisherMapAndOTStore(toBuffers map[string]isb.BufferWriter) (map[str
 		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
 		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
 		otStores[key] = otKV
-		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), publish.WithToVertexPartition(0), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 	}
 	return publishers, otStores

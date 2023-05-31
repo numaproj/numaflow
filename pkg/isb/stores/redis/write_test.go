@@ -342,8 +342,11 @@ func Test_GetRefreshFullError(t *testing.T) {
 type myForwardRedisTest struct {
 }
 
-func (f myForwardRedisTest) WhereTo(_ []string, _ []string) ([]string, error) {
-	return []string{"to1"}, nil
+func (f myForwardRedisTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
+		ToVertexName:      "to1",
+		ToVertexPartition: 0,
+	}}, nil
 }
 
 func (f myForwardRedisTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -384,8 +387,8 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	defer func() { _ = client.DeleteKeys(ctx, to1.GetStreamName()) }()
 	defer func() { _ = client.DeleteStreamGroup(ctx, to1.GetStreamName(), toGroup) }()
 
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
+	toSteps := map[string][]isb.BufferWriter{
+		"to1": {to1},
 	}
 
 	writeMessages, internalKeys := buildTestWriteMessages(fromStepWrite, int64(20), testStartTime)
@@ -433,9 +436,10 @@ func TestReadTimeout(t *testing.T) {
 	defer func() { _ = client.DeleteKeys(ctx, to1.GetStreamName()) }()
 	defer func() { _ = client.DeleteStreamGroup(ctx, to1.GetStreamName(), toGroup) }()
 
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
+	toSteps := map[string][]isb.BufferWriter{
+		"to1": {to1},
 	}
+
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{

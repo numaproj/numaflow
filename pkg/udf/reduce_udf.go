@@ -25,6 +25,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow-go/pkg/function/client"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -55,6 +56,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var windower window.Windower
+
 	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
 
@@ -68,7 +70,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("invalid window spec")
 	}
 	var reader isb.BufferReader
-	var writers map[string]isb.BufferWriter
+	var writers map[string][]isb.BufferWriter
 	var err error
 	var fromBuffer string
 	fromBuffers := u.VertexInstance.Vertex.OwnedBuffers()
@@ -106,13 +108,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
 		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 {
-			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions()))
+			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitions())
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
 
-	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]string, error) {
-		result := []string{}
+	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil
 		}
@@ -121,18 +123,32 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
 				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
-					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
+					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
+					result = append(result, forward.VertexBuffer{
+						ToVertexName:      edge.To,
+						ToVertexPartition: toVertexPartition,
+					})
 				} else {
-					// TODO: need to shuffle for partitioned map vertex
-					result = append(result, dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
+					// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
+					result = append(result, forward.VertexBuffer{
+						ToVertexName:      edge.To,
+						ToVertexPartition: 0,
+					})
 				}
 			} else {
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
 					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
-						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
+						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
+						result = append(result, forward.VertexBuffer{
+							ToVertexName:      edge.To,
+							ToVertexPartition: toVertexPartition,
+						})
 					} else {
-						// TODO: need to shuffle for partitioned map vertex
-						result = append(result, dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
+						// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
+						result = append(result, forward.VertexBuffer{
+							ToVertexName:      edge.To,
+							ToVertexPartition: 0,
+						})
 					}
 				}
 			}
