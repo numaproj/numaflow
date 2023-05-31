@@ -229,8 +229,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				// so in this case, we publish an idle watermark
 				// TODO(multi-partition): support multi partitioned edges
 				for toVertexName, toVertexBuffer := range df.toBuffers {
-					if publisher, ok := df.watermarkPublishers[toVertexName]; ok {
-						idlehandler.PublishIdleWatermark(ctx, toVertexBuffer[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+					for index, bufferPartition := range toVertexBuffer {
+						if publisher, ok := df.watermarkPublishers[toVertexName]; ok {
+							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+						}
 					}
 				}
 			}

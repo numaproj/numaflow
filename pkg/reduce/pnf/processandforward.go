@@ -284,26 +284,27 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
-	var activeWatermarkBuffers = make(map[string]bool)
-	for edgeName, edgeOffsets := range writeOffsets {
-		for index, offsets := range edgeOffsets {
-			if publisher, ok := p.publishWatermark[edgeName]; ok {
+	var activeWatermarkBuffers = make(map[string][]bool)
+	for toVertexName, bufferOffsets := range writeOffsets {
+		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
+		for index, offsets := range bufferOffsets {
+			if publisher, ok := p.publishWatermark[toVertexName]; ok {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
-					activeWatermarkBuffers[edgeName] = true
+					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer is not idling
-					p.idleManager.Reset(edgeName)
+					p.idleManager.Reset(toVertexName)
 				}
 			}
 		}
 	}
-	if len(activeWatermarkBuffers) < len(p.publishWatermark) {
-		// if there's any buffers that haven't received any watermark during this
-		// batch processing cycle, send an idle watermark
-		for toVertexName := range p.publishWatermark {
-			if !activeWatermarkBuffers[toVertexName] {
+	// if there's any buffers that haven't received any watermark during this
+	// batch processing cycle, send an idle watermark
+	for toVertexName := range p.publishWatermark {
+		for index, active := range activeWatermarkBuffers[toVertexName] {
+			if !active {
 				if publisher, ok := p.publishWatermark[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][0], publisher, p.idleManager, 0, p.log, dfv1.VertexTypeReduceUDF, wm)
+					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, int32(index), p.log, dfv1.VertexTypeReduceUDF, wm)
 				}
 			}
 		}
