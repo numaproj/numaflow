@@ -74,9 +74,6 @@ func TestOrderedProcessing(t *testing.T) {
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {to1},
 	}
-	toVertexPartitionMap := map[string]int{
-		"to1": 1,
-	}
 
 	idleManager := wmb.NewIdleManager(len(toSteps))
 	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.BufferWriter))
@@ -127,7 +124,7 @@ func TestOrderedProcessing(t *testing.T) {
 			pbqManager, _ := pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
 				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 
-			op := NewOrderedProcessor(ctx, keyedVertex, identityReducer, toSteps, pbqManager, myForwardTest{}, pw, idleManager, toVertexPartitionMap)
+			op := NewOrderedProcessor(ctx, keyedVertex, identityReducer, toSteps, pbqManager, myForwardTest{}, pw, idleManager)
 			cCtx, cancelFn := context.WithCancel(ctx)
 			defer cancelFn()
 			for _, _partition := range tt.partitions {

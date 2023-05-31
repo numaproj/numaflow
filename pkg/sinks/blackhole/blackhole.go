@@ -71,10 +71,7 @@ func NewBlackhole(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, fetchWaterma
 		}
 	}
 
-	// for sink we only have one edge(vertex name) and one partition
-	toVertexPartitionMap := map[string]int{vertex.Spec.Name: 1}
-
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {bh}}, bh.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, toVertexPartitionMap, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {bh}}, bh.getSinkGoWhereDecider(), applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

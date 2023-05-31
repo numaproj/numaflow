@@ -140,12 +140,9 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
-			toVertexPartitionMap := map[string]int{
-				"to1": 1,
-			}
+
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{},
-				fetchWatermark, publishWatermark, toVertexPartitionMap, forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 
 			stopped := f.Start()

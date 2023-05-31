@@ -71,11 +71,9 @@ func TestRead(t *testing.T) {
 	toBuffers := map[string][]isb.BufferWriter{
 		"writer": {dest},
 	}
-	toVertexPartitionMap := map[string]int{
-		"writer": 1,
-	}
+
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore, toVertexPartitionMap)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -129,11 +127,9 @@ func TestStop(t *testing.T) {
 	toBuffers := map[string][]isb.BufferWriter{
 		"writer": {dest},
 	}
-	toVertexPartitionMap := map[string]int{
-		"writer": 1,
-	}
+
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore, toVertexPartitionMap)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
@@ -227,11 +223,9 @@ func TestWatermark(t *testing.T) {
 	toBuffers := map[string][]isb.BufferWriter{
 		"writer": {dest},
 	}
-	toVertexPartitionMap := map[string]int{
-		"writer": 1,
-	}
+
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, nil, nil, publishWMStore, toVertexPartitionMap)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, nil, nil, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

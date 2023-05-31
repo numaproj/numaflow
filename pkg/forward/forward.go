@@ -74,8 +74,6 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	applyUDF applier.MapApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
-	// FIXME: remove this
-	toVertexPartitionMap map[string]int,
 	opts ...Option) (*InterStepDataForward, error) {
 
 	options := DefaultOptions()

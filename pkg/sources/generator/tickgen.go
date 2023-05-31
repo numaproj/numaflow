@@ -149,15 +149,13 @@ func WithReadTimeout(timeout time.Duration) Option {
 }
 
 // NewMemGen function creates an instance of generator.
-func NewMemGen(
-	vertexInstance *dfv1.VertexInstance,
+func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
-	publishWMStores store.WatermarkStorer, // watermarks
-	toVertexPartitionMap map[string]int,
+	publishWMStores store.WatermarkStorer,
 	opts ...Option) (*memgen, error) {
 
 	// minimal CRDs don't have defaults
@@ -222,7 +220,7 @@ func NewMemGen(
 	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, publishWM, toVertexPartitionMap, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

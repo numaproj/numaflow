@@ -150,10 +150,6 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 				"to1": {to1},
 				"to2": {to2},
 			}
-			toVertexPartitionMap := map[string]int{
-				"to1": 1,
-				"to2": 1,
-			}
 
 			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
@@ -163,8 +159,7 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 				},
 			}}
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal,
-				fetchWatermark, publishWatermark, toVertexPartitionMap, forward.WithReadBatchSize(batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, forward.WithReadBatchSize(batchSize), forward.WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 
 			stopped := f.Start()

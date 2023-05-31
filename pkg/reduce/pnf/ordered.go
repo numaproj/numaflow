@@ -73,8 +73,7 @@ func NewOrderedProcessor(ctx context.Context,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,
-	idleManager *wmb.IdleManager,
-	toVertexPartitionMap map[string]int) *OrderedProcessor {
+	idleManager *wmb.IdleManager) *OrderedProcessor {
 
 	of := &OrderedProcessor{
 		vertexName:          vertexInstance.Vertex.Spec.Name,

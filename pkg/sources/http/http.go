@@ -92,7 +92,6 @@ func New(
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
 	publishWMStores store.WatermarkStorer,
-	toVertexPartitionMap map[string]int,
 	opts ...Option) (*httpSource, error) {
 
 	h := &httpSource{
@@ -198,7 +197,7 @@ func New(
 		}
 	}
 
-	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, writers, fsd, mapApplier, fetchWM, publishWM, toVertexPartitionMap, forwardOpts...)
+	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
