@@ -98,7 +98,7 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
 		idleManager:  wmb.NewIdleManager(len(toSteps)),
-		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable\
+		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
