@@ -77,9 +77,7 @@ func buildRedisBufferIO(ctx context.Context, fromBufferName string, vertexInstan
 func buildJetStreamBufferIO(ctx context.Context, fromBufferName string, vertexInstance *dfv1.VertexInstance) (isb.BufferReader, map[string][]isb.BufferWriter, error) {
 	writers := make(map[string][]isb.BufferWriter)
 	fromStreamName := isbsvc.JetStreamName(fromBufferName)
-	readOptions := []jetstreamisb.ReadOption{
-		jetstreamisb.WithUsingAckInfoAsRate(true),
-	}
+	var readOptions []jetstreamisb.ReadOption
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 		readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 	}
