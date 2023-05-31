@@ -44,16 +44,10 @@ const (
 	LabelPeriod             = "period"
 	LabelVertexReplicaIndex = "replica"
 
-	VertexProcessingRate  = "vertex_processing_rate"
 	VertexPendingMessages = "vertex_pending_messages"
 )
 
 var (
-	processingRate = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: VertexProcessingRate,
-		Help: "Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.",
-	}, []string{LabelPipeline, LabelVertex, LabelPeriod})
-
 	pending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: VertexPendingMessages,
 		Help: "Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.",
@@ -75,9 +69,8 @@ type timestampedPending struct {
 // 2. Serve an endpoint to execute health checks
 type metricsServer struct {
 	vertex    *dfv1.Vertex
-	rater     isb.Ratable
 	lagReader isb.LagReader
-	// lookbackSeconds is the look back seconds for pending and rate calculation used for autoscaling
+	// lookbackSeconds is the look back seconds for pending calculation used for autoscaling
 	lookbackSeconds     int64
 	lagCheckingInterval time.Duration
 	refreshInterval     time.Duration
@@ -89,13 +82,6 @@ type metricsServer struct {
 
 type Option func(*metricsServer)
 
-// WithRater sets the rater
-func WithRater(r isb.Ratable) Option {
-	return func(m *metricsServer) {
-		m.rater = r
-	}
-}
-
 // WithLagReader sets the lag reader
 func WithLagReader(r isb.LagReader) Option {
 	return func(m *metricsServer) {
@@ -103,14 +89,14 @@ func WithLagReader(r isb.LagReader) Option {
 	}
 }
 
-// WithRefreshInterval sets how often to refresh the rate and pending
+// WithRefreshInterval sets how often to refresh the pending information
 func WithRefreshInterval(d time.Duration) Option {
 	return func(m *metricsServer) {
 		m.refreshInterval = d
 	}
 }
 
-// WithLookbackSeconds sets lookback seconds for avg rate and pending calculation
+// WithLookbackSeconds sets lookback seconds for pending calculation
 func WithLookbackSeconds(seconds int64) Option {
 	return func(m *metricsServer) {
 		m.lookbackSeconds = seconds
@@ -125,7 +111,7 @@ func WithHealthCheckExecutor(f func() error) Option {
 }
 
 // NewMetricsOptions returns a metrics option list.
-func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler HealthChecker, reader isb.BufferReader, writer isb.BufferWriter) []Option {
+func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler HealthChecker, reader isb.BufferReader) []Option {
 	metricsOpts := []Option{
 		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
 	}
@@ -140,15 +126,6 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler H
 	}
 	if x, ok := reader.(isb.LagReader); ok {
 		metricsOpts = append(metricsOpts, WithLagReader(x))
-	}
-	if vertex.IsASource() {
-		if x, ok := writer.(isb.Ratable); ok {
-			metricsOpts = append(metricsOpts, WithRater(x))
-		}
-	} else {
-		if x, ok := reader.(isb.Ratable); ok {
-			metricsOpts = append(metricsOpts, WithRater(x))
-		}
 	}
 	return metricsOpts
 }
@@ -171,7 +148,7 @@ func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 	return m
 }
 
-// Enqueue pending pending information
+// Enqueue pending information
 func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 	if ms.lagReader == nil {
 		return
@@ -196,12 +173,11 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 	}
 }
 
-// Expose pending and rate metrics
-func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
-	if ms.lagReader == nil && ms.rater == nil {
+// Expose pending metrics
+func (ms *metricsServer) exposePendingMetrics(ctx context.Context) {
+	if ms.lagReader == nil {
 		return
 	}
-	log := logging.FromContext(ctx)
 	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds} // Metrics for autoscaling use key "default"
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
@@ -211,17 +187,6 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if ms.rater != nil {
-				for n, i := range lookbackSecondsMap {
-					if r, err := ms.rater.Rate(ctx, i); err != nil {
-						log.Errorw("Failed to get processing rate in the past seconds", zap.Int64("seconds", i), zap.Error(err))
-					} else {
-						if r != isb.RateNotAvailable {
-							processingRate.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(r)
-						}
-					}
-				}
-			}
 			if ms.lagReader != nil {
 				for n, i := range lookbackSecondsMap {
 					if p := ms.calculatePending(i); p != isb.PendingNotAvailable {
@@ -303,8 +268,8 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	}
 	// Buildup pending information
 	go ms.buildupPendingInfo(ctx)
-	// Expose pending and rate metrics
-	go ms.exposePendingAndRate(ctx)
+	// Expose pending metrics
+	go ms.exposePendingMetrics(ctx)
 	go func() {
 		log.Info("Starting metrics HTTPS server")
 		if err := httpServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
