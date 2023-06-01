@@ -25,8 +25,9 @@ import (
 	"time"
 
 	"github.com/gavv/httpexpect/v2"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 func Test_StartMetricsServer(t *testing.T) {

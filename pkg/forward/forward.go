@@ -49,8 +49,9 @@ type InterStepDataForward struct {
 	ctx context.Context
 	// cancelFn cancels our new context, our cancellation is little more complex and needs to be well orchestrated, hence
 	// we need something more than a cancel().
-	cancelFn         context.CancelFunc
-	fromBuffer       isb.BufferReader
+	cancelFn   context.CancelFunc
+	fromBuffer isb.BufferReader
+	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
 	toBuffers        map[string][]isb.BufferWriter
 	FSD              ToWhichStepDecider
 	UDF              applier.MapApplier

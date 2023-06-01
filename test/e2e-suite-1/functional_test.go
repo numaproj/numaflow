@@ -108,6 +108,36 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+
+	// verify that the rate is calculated
+	timer := time.NewTimer(120 * time.Second)
+	// we use 10-second windows for rate calculation
+	// wait for 10 seconds for a new timestamped count entry to be added to the rate calculation windows
+	waitInterval := 10 * time.Second
+	succeedChan := make(chan struct{})
+	go func() {
+		for {
+			m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
+			assert.NoError(s.T(), err)
+			assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+			oneMinRate := m[0].ProcessingRates["1m"]
+			// the rate should be around 5
+			if oneMinRate < 4 || oneMinRate > 6 {
+				time.Sleep(waitInterval)
+			} else {
+				succeedChan <- struct{}{}
+				break
+			}
+		}
+	}()
+	select {
+	case <-succeedChan:
+		time.Sleep(waitInterval)
+		break
+	case <-timer.C:
+		assert.Fail(s.T(), "timed out waiting for rate to be calculated")
+	}
+	timer.Stop()
 }
 
 func (s *FunctionalSuite) TestUDFFiltering() {

@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/forward"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/forward"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -66,16 +67,14 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		redisClient := redisclient.NewInClusterRedisClient()
 		fromGroup := fromBufferName + "-group"
 		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
-		readOptions := []redisclient.Option{}
+		var readOptions []redisclient.Option
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readOptions...)
 	case dfv1.ISBSvcTypeJetStream:
 		streamName := isbsvc.JetStreamName(fromBufferName)
-		readOptions := []jetstreamisb.ReadOption{
-			jetstreamisb.WithUsingAckInfoAsRate(true),
-		}
+		var readOptions []jetstreamisb.ReadOption
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
@@ -114,12 +113,12 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	var metricsOpts []metrics.Option
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
 		if serverHandler, ok := sinker.(*udsink.UserDefinedSink); ok {
-			metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, serverHandler, reader, nil)
+			metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, serverHandler, reader)
 		} else {
 			return fmt.Errorf("unable to get the metrics options for the udsink")
 		}
 	} else {
-		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, reader, nil)
+		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, reader)
 	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
