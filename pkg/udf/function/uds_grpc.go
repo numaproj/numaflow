@@ -25,6 +25,7 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
+	clientsdk "github.com/numaproj/numaflow/pkg/func-client/client"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -38,19 +39,19 @@ import (
 
 // UDSgRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
 type UDSgRPCBasedUDF struct {
-	client functionsdk.Client
+	client clientsdk.Client
 }
 
 var _ map_applier.MapApplier = (*UDSgRPCBasedUDF)(nil)
 var _ reduce_applier.ReduceApplier = (*UDSgRPCBasedUDF)(nil)
 
 // NewUDSgRPCBasedUDF returns a new UDSgRPCBasedUDF object.
-func NewUDSgRPCBasedUDF(c functionsdk.Client) (*UDSgRPCBasedUDF, error) {
+func NewUDSgRPCBasedUDF(c clientsdk.Client) (*UDSgRPCBasedUDF, error) {
 	return &UDSgRPCBasedUDF{c}, nil
 }
 
 // NewUDSgRPCBasedUDFWithClient need this for testing
-func NewUDSgRPCBasedUDFWithClient(client functionsdk.Client) *UDSgRPCBasedUDF {
+func NewUDSgRPCBasedUDFWithClient(client clientsdk.Client) *UDSgRPCBasedUDF {
 	return &UDSgRPCBasedUDF{client: client}
 }
 
