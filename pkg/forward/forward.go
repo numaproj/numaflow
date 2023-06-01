@@ -419,13 +419,15 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	//   wrongly publish an idle watermark without the ctrl message and the ctrl message tracking map.
 	// - condition 2 "len(activeWatermarkBuffers) < len(isdf.publishWatermark)" :
 	//   send idle watermark only if we have idle out buffers
-	for bufferName := range isdf.publishWatermark {
-		for index, partition := range activeWatermarkBuffers[bufferName] {
-			if !partition {
-				// use the watermark of the current read batch for the idle watermark
-				// same as read len==0 because there's no event published to the buffer
-				if p, ok := isdf.publishWatermark[bufferName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName][index], p, isdf.idleManager, int32(index), isdf.opts.logger, isdf.opts.vertexType, processorWM)
+	if len(dataMessages) > 0 {
+		for bufferName := range isdf.publishWatermark {
+			for index, partition := range activeWatermarkBuffers[bufferName] {
+				if !partition {
+					// use the watermark of the current read batch for the idle watermark
+					// same as read len==0 because there's no event published to the buffer
+					if p, ok := isdf.publishWatermark[bufferName]; ok {
+						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName][index], p, isdf.idleManager, int32(index), isdf.opts.logger, isdf.opts.vertexType, processorWM)
+					}
 				}
 			}
 		}

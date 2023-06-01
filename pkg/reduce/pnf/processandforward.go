@@ -300,11 +300,13 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 	}
 	// if there's any buffers that haven't received any watermark during this
 	// batch processing cycle, send an idle watermark
-	for toVertexName := range p.publishWatermark {
-		for index, active := range activeWatermarkBuffers[toVertexName] {
-			if !active {
-				if publisher, ok := p.publishWatermark[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, int32(index), p.log, dfv1.VertexTypeReduceUDF, wm)
+	if len(p.result) > 0 {
+		for toVertexName := range p.publishWatermark {
+			for index, active := range activeWatermarkBuffers[toVertexName] {
+				if !active {
+					if publisher, ok := p.publishWatermark[toVertexName]; ok {
+						idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, int32(index), p.log, dfv1.VertexTypeReduceUDF, wm)
+					}
 				}
 			}
 		}

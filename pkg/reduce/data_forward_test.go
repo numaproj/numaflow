@@ -1110,7 +1110,7 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	ot, otWatcherCh, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
 
 	// publisher for source
-	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, wmstore.BuildWatermarkStore(hb, ot), 1, publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 
 	// publish heartbeat for the processors
 	go func() {
@@ -1144,7 +1144,7 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb
 		hb, hbKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
 		ot, otKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
 		otStores[key] = ot
-		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), 1, publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 
 		go func() {

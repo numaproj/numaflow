@@ -155,7 +155,7 @@ func New(
 	redisStreamsSource.cancelfn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	// create the ConsumerGroup here if not already created
 	err = redisStreamsSource.createConsumerGroup(ctx, redisSpec)
