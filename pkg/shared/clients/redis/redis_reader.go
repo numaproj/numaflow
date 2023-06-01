@@ -28,10 +28,11 @@ import (
 
 // RedisStreamsRead is the read queue implementation powered by RedisClient.
 type RedisStreamsRead struct {
-	Name     string
-	Stream   string
-	Group    string
-	Consumer string
+	Name      string
+	Stream    string
+	Group     string
+	Consumer  string
+	Partition int32
 
 	*RedisClient
 	Options
@@ -52,8 +53,14 @@ type Metrics struct {
 type metricsIncrementFunc func()
 type metricsAddFunc func(int)
 
+// GetName returns the name of the partitioned buffer.
 func (br *RedisStreamsRead) GetName() string {
 	return br.Name
+}
+
+// GetPartition returns the partition number.
+func (br *RedisStreamsRead) GetPartition() int32 {
+	return br.Partition
 }
 
 // GetStreamName returns the stream name.

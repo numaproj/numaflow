@@ -48,7 +48,7 @@ type BufferReadInfo struct {
 var _ isb.BufferReader = (*BufferRead)(nil)
 
 // NewBufferRead returns a new redis buffer reader.
-func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, opts ...redisclient.Option) isb.BufferReader {
+func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, partition int32, opts ...redisclient.Option) isb.BufferReader {
 	options := &redisclient.Options{
 		InfoRefreshInterval: time.Second,
 		ReadTimeOut:         time.Second,
@@ -65,6 +65,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 			Stream:      redisclient.GetRedisStreamName(name),
 			Group:       group,
 			Consumer:    consumer,
+			Partition:   partition,
 			RedisClient: client,
 			Options:     *options,
 			Metrics: redisclient.Metrics{

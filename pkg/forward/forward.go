@@ -59,7 +59,6 @@ type InterStepDataForward struct {
 	opts             options
 	vertexName       string
 	pipelineName     string
-	partition        int32
 	// idleManager manages the idle watermark status.
 	idleManager *wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid.
@@ -224,7 +223,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// We also publish a control message if this is the first time we get this idle situation.
 
 		// we use the HeadWMB as the watermark for the idle
-		var processorWMB = isdf.fetchWatermark.GetHeadWMB()
+		var processorWMB = isdf.fetchWatermark.GetHeadWMB(isdf.fromBuffer.GetPartition())
 		if !isdf.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
 			isdf.opts.logger.Debugw("skip publishing idle watermark",
@@ -266,7 +265,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// TODO: make it async (concurrent and wait later)
 		// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
 		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
-		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset, 0)
+		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset, isdf.fromBuffer.GetPartition())
 	}
 
 	var writeOffsets map[string][][]isb.Offset
@@ -334,7 +333,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
 			// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
 			// but ideally we should use the latest to determine the IsLate attribute.
-			processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset, 0)
+			processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset, isdf.fromBuffer.GetPartition())
 			// assign isLate
 			for _, m := range writeMessages {
 				if processorWM.After(m.EventTime) { // Set late data at source level

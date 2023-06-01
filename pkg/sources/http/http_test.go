@@ -76,7 +76,7 @@ func Test_NewHTTP(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	dest := simplebuffer.NewInMemoryBuffer("test", 100)
+	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
 	toBuffers := map[string][]isb.BufferWriter{
 		"test": {dest},
 	}

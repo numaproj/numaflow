@@ -128,7 +128,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			}}
 
 			// Forwarder logic tested here with a jetstream read and write
-			bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName)
+			bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 			assert.NoError(t, err)
 			fromStep, _ := bufferReader.(*jetStreamReader)
 			defer fromStep.Close()
@@ -321,7 +321,7 @@ func TestWriteGetName(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferWriter, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName)
+	bufferWriter, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 	assert.NoError(t, err)
 
 	bw := bufferWriter.(*jetStreamReader)

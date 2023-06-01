@@ -124,8 +124,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 		t.Run(tt.name+"_basic", func(t *testing.T) {
 			metricsReset()
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
@@ -178,9 +178,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we forward to all buffers
 		t.Run(tt.name+"_toAll", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
-			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 				"to2": {to2},
@@ -264,9 +264,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we drop all events
 		t.Run(tt.name+"_dropAll", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
-			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 				"to2": {to2},
@@ -362,9 +362,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we forward to only one buffer
 		t.Run(tt.name+"_toOneStep", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
-			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 				"to2": {to2},
@@ -449,8 +449,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Test the scenario with UDF error
 		t.Run(tt.name+"_UDFError", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
@@ -488,8 +488,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Test the scenario with error
 		t.Run(tt.name+"_whereToError", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
@@ -524,8 +524,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 		})
 		t.Run(tt.name+"_withInternalError", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
@@ -640,8 +640,8 @@ func (t *testWMBFetcher) GetHeadWMB(int32) wmb.WMB {
 }
 
 func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0)
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {to1},
 	}
@@ -793,8 +793,8 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 }
 
 func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0)
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {to1},
 	}
@@ -1010,8 +1010,8 @@ func (p TestSourceWatermarkPublisher) PublishSourceWatermarks([]*isb.ReadMessage
 }
 
 func TestSourceInterStepDataForward(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithReadTimeOut(time.Second*10))
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {to1},
 	}
@@ -1109,8 +1109,8 @@ func TestWriteToBuffer(t *testing.T) {
 	}
 	for _, value := range tests {
 		t.Run(value.name, func(t *testing.T) {
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*value.batchSize)
-			buffer := simplebuffer.NewInMemoryBuffer("to1", value.batchSize, simplebuffer.WithBufferFullWritingStrategy(value.strategy))
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*value.batchSize, 0)
+			buffer := simplebuffer.NewInMemoryBuffer("to1", value.batchSize, 0, simplebuffer.WithBufferFullWritingStrategy(value.strategy))
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {buffer},
 			}

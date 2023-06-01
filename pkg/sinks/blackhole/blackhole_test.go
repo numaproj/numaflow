@@ -51,7 +51,7 @@ func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuf
 }
 
 func TestBlackhole_Start(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -89,9 +89,9 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 25)
-	to2 := simplebuffer.NewInMemoryBuffer("to2", 25)
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 25, 0)
+	to2 := simplebuffer.NewInMemoryBuffer("to2", 25, 0)
 
 	// start the last vertex first
 	// add 2 sinks per vertex

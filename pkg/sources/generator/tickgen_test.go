@@ -45,7 +45,7 @@ func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuf
 }
 
 func TestRead(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("writer", 100, simplebuffer.WithReadTimeOut(10*time.Second))
+	dest := simplebuffer.NewInMemoryBuffer("writer", 100, 0, simplebuffer.WithReadTimeOut(10*time.Second))
 	ctx := context.Background()
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
@@ -103,7 +103,7 @@ func TestStop(t *testing.T) {
 	ctx := context.Background()
 
 	// default rpu is 5. set the test to run for 2 ticks.
-	dest := simplebuffer.NewInMemoryBuffer("writer", 10)
+	dest := simplebuffer.NewInMemoryBuffer("writer", 10, 0)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "memgen",
@@ -200,7 +200,7 @@ func TestWatermark(t *testing.T) {
 	// for use by the buffer reader on the other side of the stream
 	ctx := context.Background()
 
-	dest := simplebuffer.NewInMemoryBuffer("writer", 1000)
+	dest := simplebuffer.NewInMemoryBuffer("writer", 1000, 0)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "memgen",

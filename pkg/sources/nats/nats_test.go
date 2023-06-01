@@ -72,7 +72,7 @@ func testVertex(t *testing.T, url, subject, queue string, hostname string, repli
 
 func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 	t.Helper()
-	dest := simplebuffer.NewInMemoryBuffer("test", 100)
+	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
 	toBuffers := map[string][]isb.BufferWriter{
 		"test": {dest},
 	}

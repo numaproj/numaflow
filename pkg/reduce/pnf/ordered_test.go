@@ -70,7 +70,7 @@ func TestOrderedProcessing(t *testing.T) {
 		}
 		return messages, nil
 	})
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 100)
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 100, 0)
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {to1},
 	}

@@ -35,7 +35,7 @@ import (
 
 func TestWriteSuccessToKafka(t *testing.T) {
 	var err error
-	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25)
+	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25, 0)
 	toKafka := new(ToKafka)
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -88,7 +88,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 
 func TestWriteFailureToKafka(t *testing.T) {
 	var err error
-	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25)
+	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25, 0)
 	toKafka := new(ToKafka)
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",

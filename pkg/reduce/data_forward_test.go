@@ -244,8 +244,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		toVertexName    = "reduce-to-vertex"
 	)
 	defer cancelFn()
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
-	to := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	to := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 
 	wmpublisher := &EventTypeWMProgressor{
 		watermarks: make(map[string]wmb.Watermark),
@@ -334,10 +334,10 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	toBuffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	toBuffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffers := map[string][]isb.BufferWriter{
 		toVertexName: {toBuffer},
 	}
@@ -540,10 +540,10 @@ func TestReduceDataForward_Count(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -615,10 +615,10 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -694,10 +694,10 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -769,10 +769,10 @@ func TestReduceDataForward_Max(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -845,10 +845,10 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -941,10 +941,10 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -1022,10 +1022,10 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	defer childCancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}

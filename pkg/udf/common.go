@@ -52,13 +52,13 @@ func buildRedisBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInstance
 
 		fromGroup := fromBufferPartition + "-group"
 		consumer := fmt.Sprintf("%s-%v", vertexInstance.Vertex.Name, vertexInstance.Replica)
-		reader := redisisb.NewBufferRead(ctx, redisClient, fromBufferPartition, fromGroup, consumer, readerOpts...)
+		reader := redisisb.NewBufferRead(ctx, redisClient, fromBufferPartition, fromGroup, consumer, 0, readerOpts...)
 		readers = append(readers, reader)
 	} else {
 		for _, bufferPartition := range vertexInstance.Vertex.OwnedBuffers() {
 			fromGroup := bufferPartition + "-group"
 			consumer := fmt.Sprintf("%s-%v", vertexInstance.Vertex.Name, vertexInstance.Replica)
-			reader := redisisb.NewBufferRead(ctx, redisClient, bufferPartition, fromGroup, consumer, readerOpts...)
+			reader := redisisb.NewBufferRead(ctx, redisClient, bufferPartition, fromGroup, consumer, 0, readerOpts...)
 			readers = append(readers, reader)
 		}
 	}
@@ -124,18 +124,19 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 		if len(fromBufferPartition) == 0 {
 			return nil, nil, fmt.Errorf("can not find from buffer")
 		}
-		
+
 		fromStreamName := isbsvc.JetStreamName(fromBufferPartition)
-		reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), fromBufferPartition, fromStreamName, fromStreamName, readOptions...)
+		// reduce processor only has one buffer partition
+		reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), fromBufferPartition, fromStreamName, fromStreamName, 0, readOptions...)
 		if err != nil {
 			return nil, nil, err
 		}
 		readers = append(readers, reader)
 	} else {
-		for _, bufferPartition := range vertexInstance.Vertex.OwnedBuffers() {
+		for index, bufferPartition := range vertexInstance.Vertex.OwnedBuffers() {
 			fromStreamName := isbsvc.JetStreamName(bufferPartition)
 
-			reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), bufferPartition, fromStreamName, fromStreamName, readOptions...)
+			reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), bufferPartition, fromStreamName, fromStreamName, int32(index), readOptions...)
 			if err != nil {
 				return nil, nil, err
 			}

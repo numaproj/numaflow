@@ -34,7 +34,7 @@ import (
 )
 
 func TestNewKafkasource(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("test", 100)
+	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
 	toBuffers := map[string][]isb.BufferWriter{
 		"test": {dest},
 	}
@@ -74,7 +74,7 @@ func TestNewKafkasource(t *testing.T) {
 }
 
 func TestGroupNameOverride(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("test", 100)
+	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
 	toBuffers := map[string][]isb.BufferWriter{
 		"test": {dest},
 	}
@@ -104,7 +104,7 @@ func TestGroupNameOverride(t *testing.T) {
 }
 
 func TestDefaultBufferSize(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("test", 100)
+	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
 	toBuffers := map[string][]isb.BufferWriter{
 		"test": {dest},
 	}
@@ -134,7 +134,7 @@ func TestDefaultBufferSize(t *testing.T) {
 }
 
 func TestBufferSizeOverrides(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("test", 100)
+	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
 	toBuffers := map[string][]isb.BufferWriter{
 		"test": {dest},
 	}

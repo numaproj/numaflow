@@ -70,7 +70,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
-		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readOptions...)
+		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, 0, readOptions...)
 	case dfv1.ISBSvcTypeJetStream:
 		streamName := isbsvc.JetStreamName(fromBufferName)
 		readOptions := []jetstreamisb.ReadOption{
@@ -86,7 +86,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		jetStreamClient := jsclient.NewInClusterJetStreamClient()
-		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)
+		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, 0, readOptions...)
 		if err != nil {
 			return err
 		}

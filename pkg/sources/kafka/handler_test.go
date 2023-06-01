@@ -54,7 +54,7 @@ func TestMessageHandling(t *testing.T) {
 	value := "testvalue"
 	keys := []string{"testkey"}
 
-	dest := simplebuffer.NewInMemoryBuffer("test", 100)
+	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
 	toBuffers := map[string][]isb.BufferWriter{
 		"test": {dest},
 	}
