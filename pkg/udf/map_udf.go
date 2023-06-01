@@ -169,7 +169,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			return err
 		}
 		finalWg.Add(1)
-		go func(bufferName string) {
+		go func(bufferName string, isdf *forward.InterStepDataForward) {
 			defer finalWg.Done()
 			stopped := forwarder.Start()
 			wg := &sync.WaitGroup{}
@@ -189,7 +189,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			wg.Wait()
 			log.Info("Exited...")
 			return
-		}(bufferPartition)
+		}(bufferPartition, forwarder)
 	}
 	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, readers, nil)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)

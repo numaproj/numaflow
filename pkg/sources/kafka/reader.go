@@ -122,6 +122,12 @@ func (r *KafkaSource) GetName() string {
 	return r.name
 }
 
+// GetPartition returns the partition number for the source vertex buffer
+// Source is like a buffer with only one partition. So, we always return 0
+func (r *KafkaSource) GetPartition() int32 {
+	return 0
+}
+
 func (r *KafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := make([]*isb.ReadMessage, 0, count)
 	timeout := time.After(r.readTimeout)

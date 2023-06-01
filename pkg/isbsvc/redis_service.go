@@ -147,7 +147,7 @@ func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName st
 		hbWatcher := noop.NewKVOpWatch()
 		otWatcher := noop.NewKVOpWatch()
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-		pm := processor.NewProcessorManager(ctx, storeWatcher, processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+		pm := processor.NewProcessorManager(ctx, storeWatcher, int32(partitions), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
 		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, 1)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}

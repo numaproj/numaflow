@@ -148,11 +148,16 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 	location, _ := time.LoadLocation("UTC")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var lastProcessed []int64
+			for i := 0; i < 1; i++ {
+				lastProcessed = append(lastProcessed, -1)
+			}
 			b := &edgeFetcher{
 				ctx:              ctx,
 				bucketName:       "testBucket",
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
+				lastProcessedWm:  lastProcessed,
 			}
 			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
@@ -221,9 +226,6 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 	processorManager.AddProcessor("testPod1", testPod1)
 	processorManager.AddProcessor("testPod2", testPod2)
 
-	println(processorManager.GetProcessor("testPod0").String())
-	println(processorManager.GetProcessor("testPod1").String())
-	println(processorManager.GetProcessor("testPod2").String())
 	type args struct {
 		offset int64
 	}
@@ -255,50 +257,55 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 			name:             "offset_22",
 			processorManager: processorManager,
 			args:             args{22},
-			want:             8,
+			want:             -1,
 		},
 		{
 			name:             "offset_23",
 			processorManager: processorManager,
 			args:             args{23},
-			want:             8,
+			want:             -1,
 		},
 		{
 			name:             "offset_28",
 			processorManager: processorManager,
 			args:             args{28},
-			want:             9,
+			want:             -1,
 		},
 		{
 			name:             "offset_29",
 			processorManager: processorManager,
 			args:             args{29},
-			want:             9,
+			want:             -1,
 		},
 		{
 			name:             "offset_31",
 			processorManager: processorManager,
 			args:             args{31},
-			want:             10,
+			want:             -1,
 		},
 		{
 			name:             "offset_35",
 			processorManager: processorManager,
 			args:             args{40},
-			want:             25,
+			want:             -1,
 		},
 	}
 	location, _ := time.LoadLocation("UTC")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var lastProcessed []int64
+			for i := 0; i < 3; i++ {
+				lastProcessed = append(lastProcessed, -1)
+			}
 			b := &edgeFetcher{
 				ctx:              ctx,
-				bufferName:       "testBuffer",
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
+				lastProcessedWm:  lastProcessed,
 			}
 			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+				println(got.UnixMilli())
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
@@ -509,9 +516,9 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 			processorManager: processorManager1,
 			want: wmb.WMB{
 				Idle:      true,
-				Offset:    20,
-				Watermark: 15,
-				Partition: 2,
+				Offset:    22,
+				Watermark: 17,
+				Partition: 0,
 			},
 		},
 		{

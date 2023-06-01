@@ -205,7 +205,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, sourcer, nil)
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, []isb.BufferReader{sourcer}, nil)
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -271,6 +271,8 @@ func (sp *SourceProcessor) getSourcer(writers map[string][]isb.BufferWriter,
 }
 
 func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forward.GoWhere {
+	getToBufferPartition := GetPartitionedBufferName()
+
 	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 
@@ -285,7 +287,7 @@ func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*sh
 				// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
 				result = append(result, forward.VertexBuffer{
 					ToVertexName:      edge.To,
-					ToVertexPartition: 0,
+					ToVertexPartition: getToBufferPartition(edge.To, edge.GetToVertexPartitions()),
 				})
 			}
 		}
@@ -295,7 +297,7 @@ func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*sh
 }
 
 func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forward.GoWhere {
-
+	getToBufferPartition := GetPartitionedBufferName()
 	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 
@@ -316,7 +318,7 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 					// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
 					result = append(result, forward.VertexBuffer{
 						ToVertexName:      edge.To,
-						ToVertexPartition: 0,
+						ToVertexPartition: getToBufferPartition(edge.To, edge.GetToVertexPartitions()),
 					})
 				}
 			} else {
@@ -331,7 +333,7 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 						// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
 						result = append(result, forward.VertexBuffer{
 							ToVertexName:      edge.To,
-							ToVertexPartition: 0,
+							ToVertexPartition: getToBufferPartition(edge.To, edge.GetToVertexPartitions()),
 						})
 					}
 				}
@@ -340,4 +342,13 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 		return result, nil
 	})
 	return fsd
+}
+
+func GetPartitionedBufferName() func(toVertex string, toVertexPartitionCount int) int32 {
+	messagePerPartitionMap := make(map[string]int)
+	return func(toVertex string, toVertexPartitionCount int) int32 {
+		vertexPartition := (messagePerPartitionMap[toVertex] + 1) % toVertexPartitionCount
+		messagePerPartitionMap[toVertex] = vertexPartition
+		return int32(vertexPartition)
+	}
 }

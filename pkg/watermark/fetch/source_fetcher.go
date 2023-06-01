@@ -67,10 +67,8 @@ func (e *sourceFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Wat
 		if !p.IsActive() {
 			continue
 		}
-		for _, timeline := range p.GetOffsetTimelines() {
-			if timeline.GetHeadWatermark() < epoch {
-				epoch = timeline.GetHeadWatermark()
-			}
+		if p.GetOffsetTimelines()[partition].GetHeadWatermark() < epoch {
+			epoch = p.GetOffsetTimelines()[partition].GetHeadWatermark()
 		}
 	}
 	if epoch == math.MaxInt64 {

@@ -214,6 +214,12 @@ func (ns *natsSource) GetName() string {
 	return ns.name
 }
 
+// GetPartition returns the partition number for the source vertex buffer
+// Source is like a buffer with only one partition. So, we always return 0
+func (ns *natsSource) GetPartition() int32 {
+	return 0
+}
+
 func (ns *natsSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var msgs []*isb.ReadMessage
 	timeout := time.After(ns.readTimeout)

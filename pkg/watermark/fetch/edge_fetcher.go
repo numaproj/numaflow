@@ -55,6 +55,7 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 	log := logging.FromContext(ctx).With("bucketName", bucketName)
 	log.Info("Creating a new edge watermark fetcher")
 	var lastProcessedWm []int64
+
 	for i := 0; i < fromBufferPartitionCount; i++ {
 		lastProcessedWm = append(lastProcessedWm, -1)
 	}

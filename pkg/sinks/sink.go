@@ -52,7 +52,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var reader isb.BufferReader
+	var readers []isb.BufferReader
 	var err error
 	fromBufferName := u.VertexInstance.Vertex.OwnedBuffers()[0]
 
@@ -64,15 +64,17 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		redisClient := redisclient.NewInClusterRedisClient()
-		fromGroup := fromBufferName + "-group"
-		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 		readOptions := []redisclient.Option{}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
-		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, 0, readOptions...)
+		for _, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
+			fromGroup := bufferPartition + "-group"
+			consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
+			reader := redisisb.NewBufferRead(ctx, redisClient, bufferPartition, fromGroup, consumer, 0, readOptions...)
+			readers = append(readers, reader)
+		}
 	case dfv1.ISBSvcTypeJetStream:
-		streamName := isbsvc.JetStreamName(fromBufferName)
 		readOptions := []jetstreamisb.ReadOption{
 			jetstreamisb.WithUsingAckInfoAsRate(true),
 		}
@@ -85,41 +87,61 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		jetStreamClient := jsclient.NewInClusterJetStreamClient()
-		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, 0, readOptions...)
-		if err != nil {
-			return err
+		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
+			fromStreamName := isbsvc.JetStreamName(bufferPartition)
+
+			reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), bufferPartition, fromStreamName, fromStreamName, int32(index), readOptions...)
+			if err != nil {
+				return err
+			}
+			readers = append(readers, reader)
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", u.ISBSvcType)
 	}
+	var finalWg sync.WaitGroup
+	var sinkerForMetrics Sinker
+	for index := range u.VertexInstance.Vertex.OwnedBuffers() {
+		finalWg.Add(1)
+		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWatermark)
+		if err != nil {
+			return fmt.Errorf("failed to find a sink, errpr: %w", err)
+		}
+		if sinkerForMetrics == nil {
+			sinkerForMetrics = sinker
+		}
 
-	sinker, err := u.getSinker(reader, log, fetchWatermark, publishWatermark)
-	if err != nil {
-		return fmt.Errorf("failed to find a sink, errpr: %w", err)
+		go func(sinker Sinker) {
+			defer finalWg.Done()
+			log.Infow("Start processing sink messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName))
+			stopped := sinker.Start()
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for {
+					<-stopped
+					log.Info("Sinker stopped, exiting sink processor...")
+					return
+				}
+			}()
+			<-ctx.Done()
+			log.Info("SIGTERM, exiting...")
+			sinker.Stop()
+			wg.Wait()
+			log.Info("Exited...")
+		}(sinker)
 	}
 
-	log.Infow("Start processing sink messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName))
-	stopped := sinker.Start()
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			<-stopped
-			log.Info("Sinker stopped, exiting sink processor...")
-			return
-		}
-	}()
 	var metricsOpts []metrics.Option
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
-		if serverHandler, ok := sinker.(*udsink.UserDefinedSink); ok {
-			metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, serverHandler, []isb.BufferReader{reader}, nil)
+		if serverHandler, ok := sinkerForMetrics.(*udsink.UserDefinedSink); ok {
+			metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, serverHandler, readers, nil)
 		} else {
 			return fmt.Errorf("unable to get the metrics options for the udsink")
 		}
 	} else {
-		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, []isb.BufferReader{reader}, nil)
+		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, readers, nil)
 	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
@@ -128,11 +150,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
-	<-ctx.Done()
-	log.Info("SIGTERM, exiting...")
-	sinker.Stop()
-	wg.Wait()
-	log.Info("Exited...")
+	finalWg.Wait()
+	log.Info("All udsink processors exited...")
 	return nil
 }
 
