@@ -22,10 +22,8 @@ import (
 	"time"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
-	"github.com/numaproj/numaflow/pkg/func-client/client"
-	clientsdk "github.com/numaproj/numaflow/pkg/func-client/client"
-
 	"github.com/numaproj/numaflow/pkg/forward/applier"
+	"github.com/numaproj/numaflow/pkg/func-client/client"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 
@@ -35,7 +33,7 @@ import (
 
 // gRPCBasedTransformer applies user defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
 type gRPCBasedTransformer struct {
-	client clientsdk.Client
+	client client.Client
 }
 
 var _ applier.MapApplier = (*gRPCBasedTransformer)(nil)
@@ -50,7 +48,7 @@ func NewGRPCBasedTransformer() (*gRPCBasedTransformer, error) {
 }
 
 // NewGRPCBasedTransformerWithClient need this for testing
-func NewGRPCBasedTransformerWithClient(client clientsdk.Client) *gRPCBasedTransformer {
+func NewGRPCBasedTransformerWithClient(client client.Client) *gRPCBasedTransformer {
 	return &gRPCBasedTransformer{client: client}
 }
 

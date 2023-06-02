@@ -22,14 +22,13 @@ import (
 	"time"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
-	sinksdk "github.com/numaproj/numaflow-go/pkg/sink"
-	"github.com/numaproj/numaflow-go/pkg/sink/client"
+	"github.com/numaproj/numaflow/pkg/sink-client/client"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // UDSgRPCBasedUDSink applies user defined sink over gRPC (over Unix Domain Socket) client/server where server is the UDSink.
 type UDSgRPCBasedUDSink struct {
-	client sinksdk.Client
+	client client.Client
 }
 
 // NewUDSgRPCBasedUDSink returns UDSgRPCBasedUDSink
