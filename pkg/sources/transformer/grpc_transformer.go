@@ -26,6 +26,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/func-client/client"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/udf/function"
+	"github.com/numaproj/numaflow/pkg/udferr"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -91,13 +93,60 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 
 	datumList, err := u.client.MapTFn(ctx, d)
 	if err != nil {
-		return nil, function.ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("gRPC client.MapTFn failed, %s", err),
-			InternalErr: function.InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
+		udfErr, _ := udferr.FromError(err)
+		switch udfErr.ErrorKind() {
+		case udferr.Retryable:
+			var success bool
+			_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
+				// retry every "duration * factor + [0, jitter]" interval for 5 times
+				Duration: 1 * time.Second,
+				Factor:   1,
+				Jitter:   0.1,
+				Steps:    5,
+			}, func() (done bool, err error) {
+				datumList, err = u.client.MapTFn(ctx, d)
+				if err != nil {
+					udfErr, _ = udferr.FromError(err)
+					switch udfErr.ErrorKind() {
+					case udferr.Retryable:
+						return false, nil
+					case udferr.NonRetryable:
+						return true, nil
+					default:
+						return true, nil
+					}
+				}
+				success = true
+				return true, nil
+			})
+			if !success {
+				return nil, function.ApplyUDFErr{
+					UserUDFErr: false,
+					Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+					InternalErr: function.InternalErr{
+						Flag:        true,
+						MainCarDown: false,
+					},
+				}
+			}
+		case udferr.NonRetryable:
+			return nil, function.ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+				InternalErr: function.InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+		default:
+			return nil, function.ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+				InternalErr: function.InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
 		}
 	}
 

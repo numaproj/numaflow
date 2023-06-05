@@ -11,6 +11,7 @@ spec:
         http: {}
         transformer:
           container:
+            # Filter messages based on event time, see https://github.com/numaproj/numaflow-python/tree/main/examples/function/event_time_filter
             image: quay.io/numaio/numaflow-python/mapt-event-time-filter:latest
     - name: sink-within-2022
       scale:

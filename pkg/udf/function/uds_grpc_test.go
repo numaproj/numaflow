@@ -28,6 +28,8 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
 	"github.com/numaproj/numaflow/pkg/func-client/clienttest"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
@@ -142,7 +144,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		assert.Equal(t, req.Value, got[0].Payload)
 	})
 
-	t.Run("test error", func(t *testing.T) {
+	t.Run("test retryable error: failed after 5 retries", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -156,9 +158,178 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 				Id: "test_id",
 			},
 		}
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		go func() {
+			<-ctx.Done()
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
+
+		u := NewMockUDSGRPCBasedUDF(mockClient)
+		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: time.Unix(1661169660, 0),
+					},
+					ID:   "test_id",
+					Keys: []string{"test_error_key"},
+				},
+				Body: isb.Body{
+					Payload: []byte(`forward_message`),
+				},
+			},
+			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
+		},
+		)
+		assert.ErrorIs(t, err, ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("%s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		})
+	})
+
+	t.Run("test retryable error: failed after 1 retry", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
+		req := &functionpb.DatumRequest{
+			Keys:      []string{"test_error_key"},
+			Value:     []byte(`forward_message`),
+			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
+			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+			Metadata: &functionpb.Metadata{
+				Id: "test_id",
+			},
+		}
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.InvalidArgument, "mock test err: non retryable").Err())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		go func() {
+			<-ctx.Done()
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
+
+		u := NewMockUDSGRPCBasedUDF(mockClient)
+		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: time.Unix(1661169660, 0),
+					},
+					ID:   "test_id",
+					Keys: []string{"test_error_key"},
+				},
+				Body: isb.Body{
+					Payload: []byte(`forward_message`),
+				},
+			},
+			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
+		},
+		)
+		assert.ErrorIs(t, err, ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("%s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		})
+	})
+
+	t.Run("test retryable error: succeed after 1 retry", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
+		req := &functionpb.DatumRequest{
+			Keys:      []string{"test_success_key"},
+			Value:     []byte(`forward_message`),
+			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169720, 0))},
+			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+			Metadata: &functionpb.Metadata{
+				Id:           "test_id",
+				NumDelivered: 1,
+			},
+		}
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&functionpb.DatumResponseList{
+			Elements: []*functionpb.DatumResponse{
+				{
+					Keys:  []string{"test_success_key"},
+					Value: []byte(`forward_message`),
+				},
+			},
+		}, nil)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		go func() {
+			<-ctx.Done()
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
+
+		u := NewMockUDSGRPCBasedUDF(mockClient)
+		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: time.Unix(1661169720, 0),
+					},
+					ID:   "test_id",
+					Keys: []string{"test_success_key"},
+				},
+				Body: isb.Body{
+					Payload: []byte(`forward_message`),
+				},
+			},
+			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
+			Metadata: isb.MessageMetadata{
+				NumDelivered: 1,
+			},
+		},
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, req.Keys, got[0].Keys)
+		assert.Equal(t, req.Value, got[0].Payload)
+	})
+
+	t.Run("test non retryable error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockClient := funcmock.NewMockUserDefinedFunctionClient(ctrl)
+		req := &functionpb.DatumRequest{
+			Keys:      []string{"test_error_key"},
+			Value:     []byte(`forward_message`),
+			EventTime: &functionpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
+			Watermark: &functionpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+			Metadata: &functionpb.Metadata{
+				Id: "test_id",
+			},
+		}
+		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.InvalidArgument, "mock test err: non retryable").Err())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		go func() {
 			<-ctx.Done()
