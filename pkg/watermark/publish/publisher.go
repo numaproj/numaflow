@@ -48,8 +48,6 @@ type Publisher interface {
 	GetLatestWatermark() wmb.Watermark
 }
 
-var initialWatermark = wmb.Watermark(time.UnixMilli(-1))
-
 // publish publishes the watermark for a processor entity.
 type publish struct {
 	ctx    context.Context
@@ -117,7 +115,7 @@ func (p *publish) SetHeadWM(wm wmb.Watermark, toVertexPartitionIdx int32) {
 func (p *publish) initialSetup() {
 	var headWms []wmb.Watermark
 	for i := 0; i < int(p.toVertexPartitionCount); i++ {
-		headWms = append(headWms, initialWatermark)
+		headWms = append(headWms, wmb.InitialWatermark)
 	}
 	p.headWatermarks = headWms
 }
@@ -230,7 +228,7 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset, toVe
 // TODO: how to repopulate if the processing unit is down for a really long time?
 func (p *publish) loadLatestFromStore() wmb.Watermark {
 	var (
-		timeWatermark = initialWatermark
+		timeWatermark = wmb.InitialWatermark
 		key           = p.entity.GetName()
 	)
 	byteValue, err := p.otStore.GetValue(p.ctx, key)
@@ -250,7 +248,7 @@ func (p *publish) loadLatestFromStore() wmb.Watermark {
 
 // GetLatestWatermark returns the latest watermark for that processor.
 func (p *publish) GetLatestWatermark() wmb.Watermark {
-	var latestWatermark = initialWatermark
+	var latestWatermark = wmb.InitialWatermark
 	for _, wm := range p.headWatermarks {
 		if wm.After(time.Time(latestWatermark)) {
 			latestWatermark = wm
