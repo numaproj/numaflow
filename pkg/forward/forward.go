@@ -422,6 +422,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	//   wrongly publish an idle watermark without the ctrl message and the ctrl message tracking map.
 	// - condition 2 "len(activeWatermarkBuffers) < len(isdf.wmPublishers)" :
 	//   send idle watermark only if we have idle out buffers
+	// Note: When the len(dataMessages) is 0, meaning all the readMessages are control messages, we choose not to do extra steps
+	// This is because, if the idle continues, we will eventually handle the idle watermark when we read the next batch where the len(readMessages) will be zero
 	if len(dataMessages) > 0 {
 		for bufferName := range isdf.wmPublishers {
 			for index, activePartition := range activeWatermarkBuffers[bufferName] {
