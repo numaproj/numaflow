@@ -415,7 +415,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// TODO(multi-partition): handle idle watermark publishing for multi partitioned buffer
 	// - condition1 "len(dataMessages) > 0" :
 	//   Meaning, we do have some data messages, but not all out buffers get written.
-	//   Tt could be all data messages are dropped, or conditional forwarding to part of the out buffers.
+	//   It could be all data messages are dropped, or conditional forwarding to part of the out buffers.
 	//   If we don't have this condition check, when dataMessages is zero but ctrlMessages > 0, we will
 	//   wrongly publish an idle watermark without the ctrl message and the ctrl message tracking map.
 	// - condition 2 "len(activeWatermarkBuffers) < len(isdf.publishWatermark)" :
