@@ -22,7 +22,7 @@ spec:
       partitions: 1
       udf:
         container:
-          # compute the sum
+          # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/sum
           image: quay.io/numaio/numaflow-go/reduce-sum
         groupBy:
           window:
@@ -34,7 +34,7 @@ spec:
     - name: non-keyed-fixed-sum
       udf:
         container:
-          # compute the sum
+          # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/sum
           image: quay.io/numaio/numaflow-go/reduce-sum
         groupBy:
           window:
@@ -49,6 +49,7 @@ spec:
       sink:
         udsink:
           container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
             image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
