@@ -52,14 +52,15 @@ type InterStepDataForward struct {
 	cancelFn   context.CancelFunc
 	fromBuffer isb.BufferReader
 	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
-	toBuffers        map[string][]isb.BufferWriter
-	FSD              ToWhichStepDecider
-	UDF              applier.MapApplier
-	fetchWatermark   fetch.Fetcher
-	publishWatermark map[string]publish.Publisher
-	opts             options
-	vertexName       string
-	pipelineName     string
+	toBuffers map[string][]isb.BufferWriter
+	FSD       ToWhichStepDecider
+	UDF       applier.MapApplier
+	wmFetcher fetch.Fetcher
+	// wmPublishers stores the vertex to publisher mapping
+	wmPublishers map[string]publish.Publisher
+	opts         options
+	vertexName   string
+	pipelineName string
 	// idleManager manages the idle watermark status.
 	idleManager *wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid.
@@ -87,14 +88,14 @@ func NewInterStepDataForward(vertex *dfv1.Vertex,
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var isdf = InterStepDataForward{
-		ctx:              ctx,
-		cancelFn:         cancel,
-		fromBuffer:       fromStep,
-		toBuffers:        toSteps,
-		FSD:              fsd,
-		UDF:              applyUDF,
-		fetchWatermark:   fetchWatermark,
-		publishWatermark: publishWatermark,
+		ctx:          ctx,
+		cancelFn:     cancel,
+		fromBuffer:   fromStep,
+		toBuffers:    toSteps,
+		FSD:          fsd,
+		UDF:          applyUDF,
+		wmFetcher:    fetchWatermark,
+		wmPublishers: publishWatermark,
 		// should we do a check here for the values not being null?
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
@@ -175,12 +176,12 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 		}
 
 		// stop watermark fetcher
-		if err := isdf.fetchWatermark.Close(); err != nil {
+		if err := isdf.wmFetcher.Close(); err != nil {
 			log.Errorw("Failed to close watermark fetcher", zap.Error(err))
 		}
 
 		// stop watermark publisher
-		for _, publisher := range isdf.publishWatermark {
+		for _, publisher := range isdf.wmPublishers {
 			if err := publisher.Close(); err != nil {
 				log.Errorw("Failed to close watermark publisher", zap.Error(err))
 			}
@@ -224,7 +225,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// We also publish a control message if this is the first time we get this idle situation.
 
 		// we use the HeadWMB as the watermark for the idle
-		var processorWMB = isdf.fetchWatermark.GetHeadWMB()
+		var processorWMB = isdf.wmFetcher.GetHeadWMB()
 		if !isdf.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
 			isdf.opts.logger.Debugw("skip publishing idle watermark",
@@ -238,7 +239,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// TODO(multi-partition) handle for multiple partitions
 		for toVertexName, toVertexBuffer := range isdf.toBuffers {
 			for index, partition := range toVertexBuffer {
-				if p, ok := isdf.publishWatermark[toVertexName]; ok {
+				if p, ok := isdf.wmPublishers[toVertexName]; ok {
 					idlehandler.PublishIdleWatermark(ctx, partition, p, isdf.idleManager, int32(index), isdf.opts.logger, isdf.opts.vertexType, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 				}
 			}
@@ -268,7 +269,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// TODO: make it async (concurrent and wait later)
 		// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
 		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
-		processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
+		processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset)
 	}
 
 	var writeOffsets map[string][][]isb.Offset
@@ -336,7 +337,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
 			// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
 			// but ideally we should use the latest to determine the IsLate attribute.
-			processorWM = isdf.fetchWatermark.GetWatermark(readMessages[0].ReadOffset)
+			processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset)
 			// assign isLate
 			for _, m := range writeMessages {
 				if processorWM.After(m.EventTime) { // Set late data at source level
@@ -387,12 +388,13 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
+	// It is created as a slice because it tracks per partition activity info.
 	var activeWatermarkBuffers = make(map[string][]bool)
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
 	for toVertexName, toVertexBufferOffsets := range writeOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
-		if publisher, ok := isdf.publishWatermark[toVertexName]; ok {
+		if publisher, ok := isdf.wmPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
 				if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
 					isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
@@ -414,19 +416,19 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	// TODO(multi-partition): handle idle watermark publishing for multi partitioned buffer
 	// - condition1 "len(dataMessages) > 0" :
-	//   Meaning, we do have some data messages, but not all out buffers get written.
+	//   Meaning, we do have some data messages, but we may not have written to all out buffers or its partitions.
 	//   It could be all data messages are dropped, or conditional forwarding to part of the out buffers.
 	//   If we don't have this condition check, when dataMessages is zero but ctrlMessages > 0, we will
 	//   wrongly publish an idle watermark without the ctrl message and the ctrl message tracking map.
-	// - condition 2 "len(activeWatermarkBuffers) < len(isdf.publishWatermark)" :
+	// - condition 2 "len(activeWatermarkBuffers) < len(isdf.wmPublishers)" :
 	//   send idle watermark only if we have idle out buffers
 	if len(dataMessages) > 0 {
-		for bufferName := range isdf.publishWatermark {
-			for index, partition := range activeWatermarkBuffers[bufferName] {
-				if !partition {
+		for bufferName := range isdf.wmPublishers {
+			for index, activePartition := range activeWatermarkBuffers[bufferName] {
+				if !activePartition {
 					// use the watermark of the current read batch for the idle watermark
 					// same as read len==0 because there's no event published to the buffer
-					if p, ok := isdf.publishWatermark[bufferName]; ok {
+					if p, ok := isdf.wmPublishers[bufferName]; ok {
 						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName][index], p, isdf.idleManager, int32(index), isdf.opts.logger, isdf.opts.vertexType, processorWM)
 					}
 				}
