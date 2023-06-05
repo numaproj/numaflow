@@ -114,6 +114,8 @@ func (p *publish) SetHeadWM(wm wmb.Watermark, toVertexPartitionIdx int32) {
 }
 
 // initialSetup inserts the default values as the ProcessorEntitier starts emitting watermarks.
+// We will be initializing all to -1
+// TODO: we could ideally resume from where we left off, but this will introduce a new key.
 func (p *publish) initialSetup() {
 	var headWms []wmb.Watermark
 	for i := 0; i < int(p.toVertexPartitionCount); i++ {
