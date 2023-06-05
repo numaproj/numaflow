@@ -5,6 +5,8 @@ metadata:
 spec:
   vertices:
     - name: in
+      scale:
+        min: 1
       source:
         # An http endpoint
         http:
@@ -17,16 +19,31 @@ spec:
 #           token:
 #             name: my-secret
 #             key: my-key
-    - name: cat
+    - name: cat-one
+      scale:
+        min: 1
+      partitions : 3
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
+    - name: cat-two
+      scale:
+        min: 1
+      partitions: 1
       udf:
         builtin:
           name: cat # A built-in UDF which simply cats the message
     - name: out
+      scale:
+        min: 1
+      partitions: 2
       sink:
         # A simple log printing sink
         log: {}
   edges:
     - from: in
-      to: cat
-    - from: cat
+      to: cat-one
+    - from: cat-one
+      to: cat-two
+    - from: cat-two
       to: out

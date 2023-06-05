@@ -490,7 +490,11 @@ func (isdf *InterStepDataForward) streamMessage(
 
 		// Stream the message to the next vertex. First figure out which vertex
 		// to send the result to. Then update the toBuffer(s) with writeMessage.
+		msgIndex := 0
 		for writeMessage := range writeMessageCh {
+			// add partition to the ID, this is to make sure that the ID is unique across partitions
+			writeMessage.ID = fmt.Sprintf("%s-%d-%d", dataMessages[0].ReadOffset.String(), isdf.fromBuffer.GetPartition(), msgIndex)
+			msgIndex += 1
 			udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(1))
 
 			// update toBuffers
@@ -709,7 +713,9 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 			continue
 		} else {
 			// if we do not get a time from UDF, we set it to the time from (N-1)th vertex
-			for _, m := range writeMessages {
+			for index, m := range writeMessages {
+				// add partition to the ID, this is to make sure that the ID is unique across partitions
+				m.ID = fmt.Sprintf("%s-%d-%d", readMessage.ReadOffset.String(), isdf.fromBuffer.GetPartition(), index)
 				if m.EventTime.IsZero() {
 					m.EventTime = readMessage.EventTime
 				}

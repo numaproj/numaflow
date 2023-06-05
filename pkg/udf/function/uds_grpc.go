@@ -82,7 +82,6 @@ func (u *UDSgRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
-	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
 	id := readMessage.Message.ID
 	numDelivered := readMessage.Metadata.NumDelivered
@@ -110,13 +109,12 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 	}
 
 	writeMessages := make([]*isb.WriteMessage, 0)
-	for i, datum := range datumList {
+	for _, datum := range datumList {
 		keys := datum.Keys
 		taggedMessage := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: parentMessageInfo,
-					ID:          fmt.Sprintf("%s-%d", offset.String(), i),
 					Keys:        keys,
 				},
 				Body: isb.Body{

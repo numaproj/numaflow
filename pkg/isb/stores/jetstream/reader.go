@@ -226,6 +226,8 @@ func (jr *jetStreamReader) Rate(_ context.Context, seconds int64) (float64, erro
 }
 
 func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
+	var startTime = time.Now().UnixNano()
+	defer jr.log.Info("js read time: ", time.Now().UnixNano()-startTime)
 	var err error
 	result := []*isb.ReadMessage{}
 	msgs, err := jr.sub.Fetch(int(count), nats.MaxWait(jr.opts.readTimeOut))

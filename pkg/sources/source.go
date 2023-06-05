@@ -87,17 +87,10 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
 			var bufferWriters []isb.BufferWriter
-			if e.ToVertexType == dfv1.VertexTypeReduceUDF {
-				for _, buffer := range buffers {
-					group := buffer + "-group"
-					redisClient := redisclient.NewInClusterRedisClient()
-					writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
-					bufferWriters = append(bufferWriters, writer)
-				}
-			} else {
-				group := buffers[0] + "-group"
+			for _, partition := range buffers {
+				group := partition + "-group"
 				redisClient := redisclient.NewInClusterRedisClient()
-				writer := redisisb.NewBufferWrite(ctx, redisClient, buffers[0], group, writeOpts...)
+				writer := redisisb.NewBufferWrite(ctx, redisClient, partition, group, writeOpts...)
 				bufferWriters = append(bufferWriters, writer)
 			}
 			writersMap[e.To] = bufferWriters
@@ -132,25 +125,16 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			var bufferWriters []isb.BufferWriter
 			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
-			if e.ToVertexType == dfv1.VertexTypeReduceUDF {
-				for _, buffer := range buffers {
-					streamName := isbsvc.JetStreamName(buffer)
-					jetStreamClient := jsclient.NewInClusterJetStreamClient()
-					writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
-					if err != nil {
-						return err
-					}
-					bufferWriters = append(bufferWriters, writer)
-				}
-			} else {
-				streamName := isbsvc.JetStreamName(buffers[0])
+			for _, buffer := range buffers {
+				streamName := isbsvc.JetStreamName(buffer)
 				jetStreamClient := jsclient.NewInClusterJetStreamClient()
-				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffers[0], streamName, streamName, writeOpts...)
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
 				if err != nil {
 					return err
 				}
 				bufferWriters = append(bufferWriters, writer)
 			}
+
 			writersMap[e.To] = bufferWriters
 		}
 	default:

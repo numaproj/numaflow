@@ -251,6 +251,9 @@ func (mg *memgen) IsEmpty() bool {
 	return len(mg.srcchan) == 0
 }
 
+var globalTicker = time.NewTicker(1 * time.Second)
+var globalCounter = 0
+
 func (mg *memgen) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := make([]*isb.ReadMessage, 0, count)
 	// timeout should not be re-triggered for every run of the for loop. it is for the entire Read() call.
@@ -261,11 +264,15 @@ loop:
 		// we implement Read With Wait semantics
 		select {
 		case r := <-mg.srcchan:
+			globalCounter++
 			tickgenSourceReadCount.With(map[string]string{metrics.LabelVertex: mg.name, metrics.LabelPipeline: mg.pipelineName}).Inc()
 			msgs = append(msgs, mg.newReadMessage(r.key, r.data, r.offset))
 		case <-timeout:
 			mg.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
 			break loop
+		case <-globalTicker.C:
+			mg.logger.Info("Number of messages written to src channel in one second - ", globalCounter)
+			globalCounter = 0
 		}
 	}
 	return msgs, nil
@@ -331,6 +338,7 @@ func (mg *memgen) NewWorker(ctx context.Context, rate int) func(chan time.Time, 
 				// even if there are multiple pods, all the pods will generate same keys in the same order.
 				// TODO: alternatively, we could also think about generating a subset of keys per pod.
 				t := ts.UnixNano()
+				count := 0
 				for i := 0; i < rate; i++ {
 					for k := int32(0); k < mg.keyCount; k++ {
 						key := fmt.Sprintf("key-%d", k)
@@ -341,9 +349,11 @@ func (mg *memgen) NewWorker(ctx context.Context, rate int) func(chan time.Time, 
 							log.Info("Context.Done is called. returning from the inner function")
 							return
 						case mg.srcchan <- r:
+							count++
 						}
 					}
 				}
+				mg.logger.Info("generated - ", count, " records")
 			}
 		}
 	}
