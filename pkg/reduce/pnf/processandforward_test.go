@@ -93,7 +93,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	// 1. create a pbq which has to be passed to the process method
 	// 2. pass the pbqReader interface and create a new processAndForward instance
 	// 3. mock the grpc client methods
-	// 4. assert to check if the process method is returning the result
+	// 4. assert to check if the process method is returning the writeMessages
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
@@ -174,7 +174,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)
-	assert.Len(t, pf.result, 1)
+	assert.Len(t, pf.writeMessages, 1)
 }
 
 func TestProcessAndForward_Forward(t *testing.T) {
@@ -309,7 +309,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			assert.Equal(t, value.expected[1], msgs1[0].Header.Kind == isb.WMB)
 			// pbq entry from the manager will be removed after forwarding
 			assert.Equal(t, nil, pbqManager.GetPBQ(value.id))
-			for bufferName := range value.pf.publishWatermark {
+			for bufferName := range value.pf.wmPublishers {
 				// NOTE: in this test we only have one processor to publish
 				// so len(otKeys) should always be 1
 				otKeys, _ := value.otStores[bufferName].GetAllKeys(ctx)
@@ -407,15 +407,15 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	}
 
 	pf := processAndForward{
-		PartitionID:      testPartition,
-		UDF:              nil,
-		result:           result,
-		pbqReader:        simplePbq,
-		log:              logging.FromContext(ctx),
-		toBuffers:        toBuffers,
-		whereToDecider:   whereto,
-		publishWatermark: pw,
-		idleManager:      wmb.NewIdleManager(len(toBuffers)),
+		PartitionID:    testPartition,
+		UDF:            nil,
+		writeMessages:  result,
+		pbqReader:      simplePbq,
+		log:            logging.FromContext(ctx),
+		toBuffers:      toBuffers,
+		whereToDecider: whereto,
+		wmPublishers:   pw,
+		idleManager:    wmb.NewIdleManager(len(toBuffers)),
 	}
 
 	return pf, otStore
@@ -431,7 +431,7 @@ func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[s
 		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
 		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
 		otStores[key] = otKV
-		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), 1, publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 	}
 	return publishers, otStores

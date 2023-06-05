@@ -72,7 +72,7 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 		}
 	}
 	if epoch == math.MaxInt64 {
-		epoch = -1
+		epoch = wmb.InitialWatermark.UnixMilli()
 	}
 	e.log.Debugf("%s get watermark for offset : %+v", debugString.String(), epoch)
 	return wmb.Watermark(time.UnixMilli(epoch))
@@ -91,7 +91,7 @@ func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
 	}
 	if epoch == math.MinInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return wmb.Watermark(time.UnixMilli(-1))
+		return wmb.InitialWatermark
 	}
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
