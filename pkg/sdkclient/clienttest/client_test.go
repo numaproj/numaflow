@@ -197,7 +197,7 @@ func TestMapStreamFnErr(t *testing.T) {
 	for msg := range datumCh {
 		datumResponses = append(datumResponses, msg)
 	}
-
+	assert.True(t, reflect.DeepEqual(datumResponses, []*functionpb.DatumResponse{expectedDatum}))
 	err = errs.Wait()
 	assert.Error(t, err)
 }
