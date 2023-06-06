@@ -300,3 +300,10 @@ func TestReduceFn(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(got, expectedDatumList.Elements))
 	assert.NoError(t, err)
 }
+
+// Check if there is a better way to resolve
+func LintCleanCall() {
+	var m = rpcMsg{}
+	fmt.Println(m.Matches(m))
+	fmt.Println(m)
+}
