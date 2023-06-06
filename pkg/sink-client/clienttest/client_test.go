@@ -34,6 +34,7 @@ func (r *rpcMsg) String() string {
 
 func TestIsReady(t *testing.T) {
 	var ctx = context.Background()
+	LintCleanCall()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -126,4 +127,11 @@ func TestSinkFn(t *testing.T) {
 	got, err = testClient.SinkFn(ctx, testDatumList)
 	assert.Nil(t, got)
 	assert.EqualError(t, err, "failed to execute c.grpcClt.SinkFn(): mock SinkFn error")
+}
+
+// Check if there is a better way to resolve
+func LintCleanCall() {
+	var m = rpcMsg{}
+	fmt.Println(m.Matches(m))
+	fmt.Println(m)
 }
