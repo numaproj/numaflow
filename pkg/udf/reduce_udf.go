@@ -24,7 +24,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/func-client/client"
+	"github.com/numaproj/numaflow/pkg/sdkclient/client"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"

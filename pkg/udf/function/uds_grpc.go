@@ -25,7 +25,7 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	clientsdk "github.com/numaproj/numaflow/pkg/func-client/client"
+	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/client"
 	"github.com/numaproj/numaflow/pkg/udferr"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/metadata"

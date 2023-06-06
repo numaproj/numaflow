@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/func-client/client"
+	"github.com/numaproj/numaflow/pkg/sdkclient/client"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
