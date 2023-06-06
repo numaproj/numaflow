@@ -19,21 +19,21 @@ package udsink
 import (
 	"context"
 	"fmt"
+	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sink/client"
 	"time"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
-	"github.com/numaproj/numaflow/pkg/sink-client/client"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // UDSgRPCBasedUDSink applies user defined sink over gRPC (over Unix Domain Socket) client/server where server is the UDSink.
 type UDSgRPCBasedUDSink struct {
-	client client.Client
+	client sinkclient.Client
 }
 
 // NewUDSgRPCBasedUDSink returns UDSgRPCBasedUDSink
 func NewUDSgRPCBasedUDSink() (*UDSgRPCBasedUDSink, error) {
-	c, err := client.New()
+	c, err := sinkclient.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}

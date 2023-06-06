@@ -19,12 +19,12 @@ package transformer
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 	"time"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/sdkclient/client"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/udferr"
 	"k8s.io/apimachinery/pkg/util/wait"
