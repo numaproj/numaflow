@@ -65,7 +65,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset) wmb.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("Unable to get offset from isb.Offset.Sequence()", zap.Error(err))
-		return wmb.Watermark(time.Unix(-1, 0))
+		return wmb.InitialWatermark
 	}
 	var debugString strings.Builder
 	var epoch int64 = math.MaxInt64
@@ -120,7 +120,7 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
 	if headWatermark == math.MaxInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return wmb.Watermark(time.UnixMilli(-1))
+		return wmb.InitialWatermark
 	}
 	return wmb.Watermark(time.UnixMilli(headWatermark))
 }

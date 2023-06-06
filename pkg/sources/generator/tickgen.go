@@ -233,7 +233,8 @@ func (mg *memgen) buildSourceWatermarkPublisher(publishWMStores store.WatermarkS
 	// for tickgen, it can be the name of the replica
 	entityName := fmt.Sprintf("%s-%d", mg.vertexInstance.Vertex.Name, mg.vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	return publish.NewPublish(mg.lifecycleCtx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(mg.vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	// source publisher toVertexPartitionCount will be 1, because we publish watermarks within source itself.
+	return publish.NewPublish(mg.lifecycleCtx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(mg.vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 }
 
 func (mg *memgen) GetName() string {
@@ -269,6 +270,7 @@ func (mg *memgen) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		return
 	}
 	// use the first event time of the message as watermark to make it conservative
+	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
 	mg.sourcePublishWM.PublishWatermark(wmb.Watermark(msgs[0].EventTime), nil, 0) // Source publisher does not care about the offset
 }
 

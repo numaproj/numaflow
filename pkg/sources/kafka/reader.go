@@ -152,6 +152,7 @@ func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 	for p, t := range oldestTimestamps {
 		publisher := r.loadSourceWatermarkPublisher(p)
+		// toVertexPartitionIdx is 0 because we publish watermarks within source itself.
 		publisher.PublishWatermark(wmb.Watermark(t), nil, 0) // Source publisher does not care about the offset
 	}
 }
@@ -165,7 +166,8 @@ func (r *KafkaSource) loadSourceWatermarkPublisher(partitionID int32) publish.Pu
 	}
 	entityName := fmt.Sprintf("%s-%s-%d", r.pipelineName, r.name, partitionID)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, publish.IsSource(), publish.WithDelay(r.watermarkMaxDelay))
+	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
+	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, 1, publish.IsSource(), publish.WithDelay(r.watermarkMaxDelay))
 	r.sourcePublishWMs[partitionID] = sourcePublishWM
 	return sourcePublishWM
 }

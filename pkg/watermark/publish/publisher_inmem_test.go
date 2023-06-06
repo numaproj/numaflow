@@ -48,7 +48,7 @@ func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
 
-	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
+	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), 1, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
 
 	var epoch int64 = 1651161600000
 	var location, _ = time.LoadLocation("UTC")

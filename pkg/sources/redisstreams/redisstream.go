@@ -155,7 +155,8 @@ func New(
 	redisStreamsSource.cancelfn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
+	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	// create the ConsumerGroup here if not already created
 	err = redisStreamsSource.createConsumerGroup(ctx, redisSpec)
@@ -293,6 +294,7 @@ func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMess
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
+		// toVertexPartitionIdx is 0 because we publish watermarks within source itself.
 		rsSource.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }

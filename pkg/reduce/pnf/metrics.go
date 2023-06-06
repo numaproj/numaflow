@@ -73,7 +73,7 @@ var reduceProcessTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   prometheus.ExponentialBucketsRange(1, 1200000, 5),
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
 
-// reduceForwardTime is used to indicate the time it took to forward the result
+// reduceForwardTime is used to indicate the time it took to forward the writeMessages
 var reduceForwardTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "reduce_pnf",
 	Name:      "forward_time",
