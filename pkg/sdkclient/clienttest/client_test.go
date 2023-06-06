@@ -38,6 +38,7 @@ func (r *rpcMsg) String() string {
 }
 
 func TestIsReady(t *testing.T) {
+	LintCleanCall()
 	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
@@ -306,4 +307,5 @@ func LintCleanCall() {
 	var m = rpcMsg{}
 	fmt.Println(m.Matches(m))
 	fmt.Println(m)
+
 }
