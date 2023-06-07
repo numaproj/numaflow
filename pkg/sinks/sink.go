@@ -113,7 +113,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		// start sinker using a goroutine for each partition.
 		go func(sinker Sinker, fromBufferPartitionName string) {
 			defer finalWg.Done()
-			log.Infow("Started processing sink messages ", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("fromPartition ", fromBufferPartitionName))
+			log.Infow("Start processing sink messages ", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("fromPartition ", fromBufferPartitionName))
 			stopped := sinker.Start()
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
