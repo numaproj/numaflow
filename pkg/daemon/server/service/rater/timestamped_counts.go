@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -45,7 +46,7 @@ func (tc *TimestampedCounts) Update(podName string, count float64) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	if count == CountNotAvailable {
-		delete(tc.podCounts, podName)
+		// delete(tc.podCounts, podName)
 		return
 	}
 	tc.podCounts[podName] = count
@@ -61,4 +62,13 @@ func (tc *TimestampedCounts) Snapshot() map[string]float64 {
 		counts[k] = v
 	}
 	return counts
+}
+
+// ToString returns a string representation of the TimestampedCounts
+// it's used for debugging purpose
+func (tc *TimestampedCounts) ToString() string {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	res := fmt.Sprintf("{timestamp: %d, podCount: %v}", tc.timestamp, tc.podCounts)
+	return res
 }

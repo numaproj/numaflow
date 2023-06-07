@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"fmt"
 	"time"
 
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
@@ -41,6 +42,7 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 
 // CalculateRate calculates the rate of the vertex in the last lookback seconds
 func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) float64 {
+	str := fmt.Sprint("I am calculating the rate of the vertex in the last ", lookbackSeconds, " seconds. Initial delta is 0.\n")
 	n := q.Length()
 	if n <= 1 {
 		return 0
@@ -59,9 +61,17 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		// this should not happen in practice because we are using a 10s interval
 		return 0
 	}
+	str += fmt.Sprint("StartTime is ", counts[startIndex].timestamp, "\n")
+	str += fmt.Sprint("EndTime is ", counts[n-1].timestamp, "\n")
 	for i := startIndex; i < n-1; i++ {
+		str += fmt.Sprint("I am calculating delta between ", counts[i].ToString(), " and ", counts[i+1].ToString(), "\n")
 		delta = delta + calculateDelta(counts[i], counts[i+1])
+		str += fmt.Sprint("The new delta is ", delta, "\n")
 	}
+	str += fmt.Sprint("The final delta is ", delta, "\n")
+	str += fmt.Sprint("The time difference is ", timeDiff, "\n")
+	str += fmt.Sprint("The rate is ", delta/float64(timeDiff), "\n")
+	fmt.Println(str)
 	return delta / float64(timeDiff)
 }
 

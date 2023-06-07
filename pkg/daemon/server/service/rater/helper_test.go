@@ -53,7 +53,7 @@ func TestUpdateCount(t *testing.T) {
 		assert.Equal(t, 10.0, q.Items()[0].podCounts["pod2"])
 	})
 
-	t.Run("givenTimeExistsPodExistsCountNotAvailable_whenUpdate_thenRemovePod", func(t *testing.T) {
+	t.Run("givenTimeExistsPodExistsCountNotAvailable_whenUpdate_thenNotUpdatePod", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
 		tc.Update("pod1", 10.0)
@@ -62,7 +62,8 @@ func TestUpdateCount(t *testing.T) {
 		UpdateCount(q, TestTime, "pod1", CountNotAvailable)
 
 		assert.Equal(t, 1, q.Length())
-		assert.Equal(t, 0, len(q.Items()[0].podCounts))
+		assert.Equal(t, 1, len(q.Items()[0].podCounts))
+		assert.Equal(t, 10.0, q.Items()[0].podCounts["pod1"])
 	})
 
 	t.Run("givenTimeExistsPodNotExistsCountNotAvailable_whenUpdate_thenNoUpdate", func(t *testing.T) {

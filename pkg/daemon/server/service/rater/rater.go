@@ -81,8 +81,8 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 
 	rater.podTracker = NewPodTracker(ctx, p)
 	for _, v := range p.Spec.Vertices {
-		// maintain the total counts of the last 30 minutes since we support 1m, 5m, 15m lookback seconds.
-		rater.timestampedPodCounts[v.Name] = sharedqueue.New[*TimestampedCounts](1800)
+		// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
+		rater.timestampedPodCounts[v.Name] = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
 	}
 
 	for _, opt := range opts {
@@ -125,8 +125,8 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	if activePods.Contains(key) {
 		count = r.getTotalCount(vertexName, vertexType, podName)
 		if count == CountNotAvailable {
-			log.Debugf("Pod %s does not exist, removing it from the active pod list...", podName)
-			activePods.Remove(key)
+			log.Infof("Failed retrieving total count for pod %s", podName)
+			// activePods.Remove(key)
 		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with CountNotAvailable...", podName)
@@ -224,6 +224,7 @@ func (r *Rater) getTotalCount(vertexName, vertexType, podName string) float64 {
 			metricsList := value.GetMetric()
 			return metricsList[0].Counter.GetValue()
 		} else {
+			r.log.Errorf("failed getting the read total metric, the metric is not available")
 			return CountNotAvailable
 		}
 	}
@@ -231,6 +232,12 @@ func (r *Rater) getTotalCount(vertexName, vertexType, podName string) float64 {
 
 // GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
 func (r *Rater) GetRates(vertexName string) map[string]float64 {
+	str := ""
+	str += fmt.Sprintf("Getting rates for vertex %s\n", vertexName)
+	for _, tc := range r.timestampedPodCounts[vertexName].Items() {
+		str += fmt.Sprintf("Timestamped pod counts: %s", tc.ToString())
+	}
+	r.log.Info(str)
 	var result = make(map[string]float64)
 	// calculate rates for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap(vertexName) {
