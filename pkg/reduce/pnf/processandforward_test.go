@@ -309,7 +309,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 			assert.Equal(t, value.expected[1], msgs1[0].Header.Kind == isb.WMB)
 			// pbq entry from the manager will be removed after forwarding
 			assert.Equal(t, nil, pbqManager.GetPBQ(value.id))
-			for bufferName := range value.pf.publishWatermark {
+			for bufferName := range value.pf.wmPublishers {
 				// NOTE: in this test we only have one processor to publish
 				// so len(otKeys) should always be 1
 				otKeys, _ := value.otStores[bufferName].GetAllKeys(ctx)
@@ -407,15 +407,15 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	}
 
 	pf := processAndForward{
-		PartitionID:      testPartition,
-		UDF:              nil,
-		result:           result,
-		pbqReader:        simplePbq,
-		log:              logging.FromContext(ctx),
-		toBuffers:        toBuffers,
-		whereToDecider:   whereto,
-		publishWatermark: pw,
-		idleManager:      wmb.NewIdleManager(len(toBuffers)),
+		PartitionID:    testPartition,
+		UDF:            nil,
+		result:         result,
+		pbqReader:      simplePbq,
+		log:            logging.FromContext(ctx),
+		toBuffers:      toBuffers,
+		whereToDecider: whereto,
+		wmPublishers:   pw,
+		idleManager:    wmb.NewIdleManager(len(toBuffers)),
 	}
 
 	return pf, otStore

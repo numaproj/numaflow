@@ -47,18 +47,18 @@ import (
 // processAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
 type processAndForward struct {
-	vertexName       string
-	pipelineName     string
-	vertexReplica    int32
-	PartitionID      partition.ID
-	UDF              applier.ReduceApplier
-	result           []*isb.WriteMessage
-	pbqReader        pbq.Reader
-	log              *zap.SugaredLogger
-	toBuffers        map[string][]isb.BufferWriter
-	whereToDecider   forward.ToWhichStepDecider
-	publishWatermark map[string]publish.Publisher
-	idleManager      *wmb.IdleManager
+	vertexName     string
+	pipelineName   string
+	vertexReplica  int32
+	PartitionID    partition.ID
+	UDF            applier.ReduceApplier
+	result         []*isb.WriteMessage
+	pbqReader      pbq.Reader
+	log            *zap.SugaredLogger
+	toBuffers      map[string][]isb.BufferWriter
+	whereToDecider forward.ToWhichStepDecider
+	wmPublishers   map[string]publish.Publisher
+	idleManager    *wmb.IdleManager
 }
 
 // newProcessAndForward will return a new processAndForward instance
@@ -75,17 +75,17 @@ func newProcessAndForward(ctx context.Context,
 	idleManager *wmb.IdleManager) *processAndForward {
 
 	return &processAndForward{
-		vertexName:       vertexName,
-		pipelineName:     pipelineName,
-		vertexReplica:    vr,
-		PartitionID:      partitionID,
-		UDF:              udf,
-		pbqReader:        pbqReader,
-		log:              logging.FromContext(ctx),
-		toBuffers:        toBuffers,
-		whereToDecider:   whereToDecider,
-		publishWatermark: pw,
-		idleManager:      idleManager,
+		vertexName:     vertexName,
+		pipelineName:   pipelineName,
+		vertexReplica:  vr,
+		PartitionID:    partitionID,
+		UDF:            udf,
+		pbqReader:      pbqReader,
+		log:            logging.FromContext(ctx),
+		toBuffers:      toBuffers,
+		whereToDecider: whereToDecider,
+		wmPublishers:   pw,
+		idleManager:    idleManager,
 	}
 }
 
@@ -287,7 +287,7 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 	var activeWatermarkBuffers = make(map[string][]bool)
 	for toVertexName, bufferOffsets := range writeOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
-		if publisher, ok := p.publishWatermark[toVertexName]; ok {
+		if publisher, ok := p.wmPublishers[toVertexName]; ok {
 			for index, offsets := range bufferOffsets {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
@@ -301,10 +301,10 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 	}
 	// if there's any buffers that haven't received any watermark during this
 	// batch processing cycle, send an idle watermark
-	for toVertexName := range p.publishWatermark {
+	for toVertexName := range p.wmPublishers {
 		for index, active := range activeWatermarkBuffers[toVertexName] {
 			if !active {
-				if publisher, ok := p.publishWatermark[toVertexName]; ok {
+				if publisher, ok := p.wmPublishers[toVertexName]; ok {
 					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, int32(index), p.log, dfv1.VertexTypeReduceUDF, wm)
 				}
 			}

@@ -764,7 +764,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	// 5th & 6th batch: again idling but got diff head WMB
 	// so the head is still the same active watermark
 	// and no new ctrl message to the next vertex
-	f.fetchWatermark.(*testWMBFetcher).RevertBoolValue()
+	f.wmFetcher.(*testWMBFetcher).RevertBoolValue()
 	time.Sleep(2 * time.Second) // default read timeout is 1s
 	otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
 	otValue1, _ = otStores["to1"].GetValue(ctx, otKeys1[0])
