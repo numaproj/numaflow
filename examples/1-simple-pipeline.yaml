@@ -3,86 +3,23 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
-#  watermark:
-#    disabled: true
-#  limits:
-#    readBatchSize: 1000
   vertices:
     - name: in
-      containerTemplate:
-        resources:
-          requests:
-            cpu: 1
-      scale:
-        min: 4
       source:
         # A self data generating source
         generator:
-          keyCount: 100
-          msgSize: 1000
-          rpu: 50
+          rpu: 5
           duration: 1s
-    - name: first-cat
-      partitions: 3
-      scale:
-        min: 10
-        max: 20
+    - name: cat
       udf:
         builtin:
           name: cat # A built-in UDF which simply cats the message
-    - name: second-cat
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: "false" # DO NOT forget the double quotes!!!
-      partitions: 3
-      scale:
-        min: 10
-        max: 20
-      udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
-#    - name: third-cat
-#      partitions: 5
-#      scale:
-#        min: 10
-#        max: 20
-#      udf:
-#        builtin:
-#          name: cat # A built-in UDF which simply cats the message
-    - name: counter
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: "false" # DO NOT forget the double quotes!!!
-      partitions: 5
-      udf:
-        container:
-          # compute the sum
-          image: quay.io/yhl25/counter:v1
-        groupBy:
-          window:
-            fixed:
-              length: 60s
-          keyed: true
-          storage:
-            persistentVolumeClaim:
-              volumeSize: 10Gi
-              accessMode: ReadWriteOnce
     - name: out
-      scale:
-        min: 10
-        max: 20
-      partitions: 3
       sink:
         # A simple log printing sink
         log: {}
   edges:
     - from: in
-      to: first-cat
-    - from: first-cat
-      to: second-cat
-    - from: second-cat
-      to: counter
-    - from: counter
+      to: cat
+    - from: cat
       to: out

@@ -5,8 +5,6 @@ metadata:
 spec:
   vertices:
     - name: in
-      scale:
-        min: 1
       source:
         # An http endpoint
         http:
@@ -14,36 +12,21 @@ spec:
           service: true
           # Optional bearer token auth
           # xxx examples should be self-contained and runnable by the user
-#         auth:
-#           # A secret selector pointing to the secret contains token
-#           token:
-#             name: my-secret
-#             key: my-key
-    - name: cat-one
-      scale:
-        min: 1
-      partitions : 3
-      udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
-    - name: cat-two
-      scale:
-        min: 1
-      partitions: 1
+    #         auth:
+    #           # A secret selector pointing to the secret contains token
+    #           token:
+    #             name: my-secret
+    #             key: my-key
+    - name: cat
       udf:
         builtin:
           name: cat # A built-in UDF which simply cats the message
     - name: out
-      scale:
-        min: 1
-      partitions: 2
       sink:
         # A simple log printing sink
         log: {}
   edges:
     - from: in
-      to: cat-one
-    - from: cat-one
-      to: cat-two
-    - from: cat-two
+      to: cat
+    - from: cat
       to: out
