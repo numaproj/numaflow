@@ -287,26 +287,25 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 	var activeWatermarkBuffers = make(map[string][]bool)
 	for toVertexName, bufferOffsets := range writeOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
-		for index, offsets := range bufferOffsets {
-			if publisher, ok := p.publishWatermark[toVertexName]; ok {
+		if publisher, ok := p.publishWatermark[toVertexName]; ok {
+			for index, offsets := range bufferOffsets {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
-					// reset because the toBuffer is not idling
-					p.idleManager.Reset(toVertexName)
+					// reset because the toBuffer partition is not idling
+					p.idleManager.Reset(p.toBuffers[toVertexName][index].GetName())
 				}
 			}
 		}
+
 	}
 	// if there's any buffers that haven't received any watermark during this
 	// batch processing cycle, send an idle watermark
-	if len(p.result) > 0 {
-		for toVertexName := range p.publishWatermark {
-			for index, active := range activeWatermarkBuffers[toVertexName] {
-				if !active {
-					if publisher, ok := p.publishWatermark[toVertexName]; ok {
-						idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, int32(index), p.log, dfv1.VertexTypeReduceUDF, wm)
-					}
+	for toVertexName := range p.publishWatermark {
+		for index, active := range activeWatermarkBuffers[toVertexName] {
+			if !active {
+				if publisher, ok := p.publishWatermark[toVertexName]; ok {
+					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, int32(index), p.log, dfv1.VertexTypeReduceUDF, wm)
 				}
 			}
 		}

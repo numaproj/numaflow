@@ -159,7 +159,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, int(batchSize))
 			for i := 0; i < int(batchSize); i++ {
-				assert.Equal(t, []interface{}{writeMessages[i].Header}, []interface{}{readMessages[i].Header})
+				assert.Equal(t, []interface{}{writeMessages[i].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+				assert.Equal(t, []interface{}{writeMessages[i].Kind}, []interface{}{readMessages[i].Kind})
+				assert.Equal(t, []interface{}{writeMessages[i].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
 			}
 			validateMetrics(t, batchSize)
@@ -215,7 +217,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, int(batchSize))
 			for i := 0; i < int(batchSize); i++ {
-				assert.Equal(t, []interface{}{writeMessages[i].Header}, []interface{}{readMessages[i].Header})
+				assert.Equal(t, []interface{}{writeMessages[i].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+				assert.Equal(t, []interface{}{writeMessages[i].Kind}, []interface{}{readMessages[i].Kind})
+				assert.Equal(t, []interface{}{writeMessages[i].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
 			}
 			// write some data
@@ -399,7 +403,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, int(batchSize))
 			for i := 0; i < int(batchSize); i++ {
-				assert.Equal(t, []interface{}{writeMessages[i].Header}, []interface{}{readMessages[i].Header})
+				assert.Equal(t, []interface{}{writeMessages[i].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+				assert.Equal(t, []interface{}{writeMessages[i].Kind}, []interface{}{readMessages[i].Kind})
+				assert.Equal(t, []interface{}{writeMessages[i].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
 			}
 			// write some data
@@ -1051,7 +1057,7 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, int(count))
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{writeMessages[0].Header.ID, writeMessages[1].Header.ID}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.ID + "-0-0", writeMessages[1].Header.ID + "-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
 		assert.Equal(t, testSourceNewEventTime, m.EventTime)

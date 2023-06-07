@@ -14,13 +14,13 @@ spec:
           requests:
             cpu: 1
       scale:
-        min: 2
+        min: 4
       source:
         # A self data generating source
         generator:
           keyCount: 100
           msgSize: 1000
-          rpu: 100
+          rpu: 50
           duration: 1s
     - name: first-cat
       partitions: 3
@@ -55,7 +55,7 @@ spec:
         env:
           - name: NUMAFLOW_DEBUG
             value: "false" # DO NOT forget the double quotes!!!
-      partitions: 3
+      partitions: 5
       udf:
         container:
           # compute the sum

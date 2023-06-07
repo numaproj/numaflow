@@ -517,7 +517,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 			want: wmb.WMB{
 				Idle:      true,
 				Offset:    22,
-				Watermark: 17,
+				Watermark: -1,
 				Partition: 0,
 			},
 		},
@@ -539,11 +539,16 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var lastProcessedWm = make([]int64, partitionCount)
+			for i := 0; i < int(partitionCount); i++ {
+				lastProcessedWm[i] = -1
+			}
 			e := &edgeFetcher{
 				ctx:              ctx,
 				bucketName:       bucketName,
 				storeWatcher:     storeWatcher,
 				processorManager: tt.processorManager,
+				lastProcessedWm:  lastProcessedWm,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
 			assert.Equalf(t, tt.want, e.GetHeadWMB(0), "GetHeadWMB()")

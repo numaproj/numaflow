@@ -196,6 +196,10 @@ func (e *edgeFetcher) GetHeadWMB(partition int32) wmb.WMB {
 		// there is no valid watermark yet
 		return wmb.WMB{}
 	}
+	e.lastProcessedWm[partition] = headWMB.Watermark
+	if headWMB.Watermark > e.getMinFromLastProcessed(headWMB.Watermark) {
+		return wmb.WMB{}
+	}
 	e.log.Debugf("GetHeadWMB: %s[%s] get idle head wmb for offset", debugString.String(), e.bucketName)
 	return headWMB
 }
