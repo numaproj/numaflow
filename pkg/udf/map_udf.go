@@ -194,7 +194,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			forwarder.Stop()
 			wg.Wait()
 			log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
-			return
 		}(bufferPartition, forwarder)
 	}
 	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, readers)
