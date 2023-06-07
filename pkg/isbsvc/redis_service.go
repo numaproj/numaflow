@@ -139,7 +139,6 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 	return bufferInfo, nil
 }
 
-// TODO: revisit this when working on multi partitions
 func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error) {
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	var watermarkFetchers []fetch.Fetcher
