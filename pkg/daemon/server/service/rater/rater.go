@@ -125,8 +125,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	if activePods.Contains(key) {
 		count = r.getTotalCount(vertexName, vertexType, podName)
 		if count == CountNotAvailable {
-			log.Infof("Failed retrieving total count for pod %s", podName)
-			// activePods.Remove(key)
+			log.Debugf("Failed retrieving total count for pod %s", podName)
 		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with CountNotAvailable...", podName)
@@ -224,7 +223,7 @@ func (r *Rater) getTotalCount(vertexName, vertexType, podName string) float64 {
 			metricsList := value.GetMetric()
 			return metricsList[0].Counter.GetValue()
 		} else {
-			r.log.Errorf("failed getting the read total metric, the metric is not available")
+			r.log.Errorf("failed getting the read total metric, the metric is not available.")
 			return CountNotAvailable
 		}
 	}
@@ -232,12 +231,6 @@ func (r *Rater) getTotalCount(vertexName, vertexType, podName string) float64 {
 
 // GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
 func (r *Rater) GetRates(vertexName string) map[string]float64 {
-	str := ""
-	str += fmt.Sprintf("Getting rates for vertex %s\n", vertexName)
-	for _, tc := range r.timestampedPodCounts[vertexName].Items() {
-		str += fmt.Sprintf("Timestamped pod counts: %s", tc.ToString())
-	}
-	r.log.Info(str)
 	var result = make(map[string]float64)
 	// calculate rates for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap(vertexName) {

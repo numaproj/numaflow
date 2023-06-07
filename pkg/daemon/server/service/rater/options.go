@@ -29,13 +29,13 @@ func defaultOptions() *options {
 	// A simple example of how these numbers work together:
 	// Assuming we have 200 tasks, we have 20 workers, each worker will be responsible for approximately 10 tasks during one iteration.
 	// The task interval is 5 seconds, which means each task need to be picked up by a worker every 5 seconds.
-	// Hence a worker needs to finish processing 1 task in 0.5 second.
+	// Hence, a worker needs to finish processing 1 task in 0.5 second.
 	// Translating to numaflow language, for a 200-pod pipeline, a worker needs to finish scraping 1 pod in 0.5 second, which is a reasonable number.
-	// TODO - need to adjust the numbers once we have a better idea of the performance
 	return &options{
 		workers: 20,
-		// ensure that each task is picked up at least once within a CountWindow
-		// Keran's notes: this is the real reason why we are seeing high rates.
+		// ensure that each task is picked up at least once within a CountWindow by defining taskInterval as half of CountWindow.
+		// if a CountWindow misses one pod, when calculating the delta with the next window, for that specific pod,
+		// we will count the total processed count as delta, which is wrong and eventually leads to incorrect high processing rate.
 		taskInterval: int(CountWindow.Milliseconds() / 2),
 	}
 }

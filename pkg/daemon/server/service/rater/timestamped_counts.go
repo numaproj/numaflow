@@ -46,7 +46,12 @@ func (tc *TimestampedCounts) Update(podName string, count float64) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	if count == CountNotAvailable {
-		// delete(tc.podCounts, podName)
+		// we choose to skip updating when count is not available for the pod, instead of deleting it.
+		// imagine if the getTotalCount call fails to scrape the count metric, it returns CountNotAvailable.
+		// in such case, if we delete the pod from the map and then the next scrape successfully get the count, we can reach a state that in the timestamped counts,
+		// for this single pod, at t1, count is 123456, at t2, the map doesn't contain this pod and t3, count is 123457.
+		// when calculating the rate, as we sum up deltas among timestamps, we will get 123457 total delta instead of the real delta 1.
+		// one occurrence of such case can lead to extremely high rate and mess up the autoscaling.
 		return
 	}
 	tc.podCounts[podName] = count
