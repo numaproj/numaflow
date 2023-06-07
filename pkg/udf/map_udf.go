@@ -84,6 +84,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
+		// multiple go routines can share the same set of writers since nats conn is thread safe
+		// https://github.com/nats-io/nats.go/issues/241
 		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
 		if err != nil {
 			return err
@@ -96,8 +98,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
-	// multiple go routines can share the same set of writers since nats conn is thread safe
-	// https://github.com/nats-io/nats.go/issues/241
 	for index, bufferPartition := range fromBuffer {
 		// Populate shuffle function map
 		shuffleFuncMap := make(map[string]*shuffle.Shuffle)
@@ -107,6 +107,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 			}
 		}
+
+		// create a conditional forwarder for each partition
 		getVertexPartition := GetPartitionedBufferName()
 		conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 			var result []forward.VertexBuffer
@@ -150,8 +152,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			return result, nil
 		})
 
-		log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", bufferPartition), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
-
 		enableMapUdfStream, err := u.VertexInstance.Vertex.MapUdfStreamEnabled()
 		if err != nil {
 			return fmt.Errorf("failed to parse UDF map streaming metadata, %w", err)
@@ -165,13 +165,18 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				opts = append(opts, forward.WithUDFConcurrency(int(*x.ReadBatchSize)))
 			}
 		}
+		// create a forwarder for each partition
 		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, readers[index], writers, conditionalForwarder, udfHandler, fetchWatermark, publishWatermark, opts...)
 		if err != nil {
 			return err
 		}
 		finalWg.Add(1)
-		go func(bufferName string, isdf *forward.InterStepDataForward) {
+
+		// start the forwarder for each partition using a go routine
+		go func(fromBufferPartitionName string, isdf *forward.InterStepDataForward) {
 			defer finalWg.Done()
+			log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferPartitionName), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
+
 			stopped := forwarder.Start()
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
@@ -179,16 +184,16 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				defer wg.Done()
 				for {
 					<-stopped
-					log.Info("Forwarder stopped, exiting udf data processor for partition " + bufferName + "...")
+					log.Info("Forwarder stopped, exiting udf data processor for partition " + fromBufferPartitionName + "...")
 					return
 				}
 			}()
 
 			<-ctx.Done()
-			log.Info("SIGTERM, exiting...")
+			log.Info("SIGTERM, exiting inside partition...", zap.String("partition", fromBufferPartitionName))
 			forwarder.Stop()
 			wg.Wait()
-			log.Info("Exited...")
+			log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
 			return
 		}(bufferPartition, forwarder)
 	}
@@ -199,11 +204,14 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	} else {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
+	// wait for all the forwarders to exit
 	finalWg.Wait()
 	log.Info("All udf data processors exited...")
 	return nil
 }
 
+// GetPartitionedBufferName returns a function that returns a partitioned buffer name based on the toVertex name and the partition count
+// it distributes the messages evenly to the partitions of the toVertex based on the message count(round robin)
 func GetPartitionedBufferName() func(toVertex string, toVertexPartitionCount int) int32 {
 	messagePerPartitionMap := make(map[string]int)
 	return func(toVertex string, toVertexPartitionCount int) int32 {

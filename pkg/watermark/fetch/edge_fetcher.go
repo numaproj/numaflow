@@ -56,6 +56,7 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 	log.Info("Creating a new edge watermark fetcher")
 	var lastProcessedWm []int64
 
+	// to track the last processed watermark for each partition.
 	for i := 0; i < fromBufferPartitionCount; i++ {
 		lastProcessedWm = append(lastProcessedWm, -1)
 	}
@@ -70,8 +71,9 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 	}
 }
 
-// GetWatermark gets the smallest watermark for the given offset
-func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, partition int32) wmb.Watermark {
+// GetWatermark gets the smallest watermark for the given offset and partition from all the active processors.
+// deletes the processor if it's not active.
+func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	e.Lock()
 	defer e.Unlock()
 	var offset, err = inputOffset.Sequence()
@@ -88,7 +90,8 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, partition int32) wmb.
 		// iterate over all the timelines of the processor and get the smallest watermark
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
 		for index, tl := range p.GetOffsetTimelines() {
-			if index == int(partition) {
+			// we only need to check the timelines of the partition we are reading from
+			if index == int(fromPartitionIdx) {
 				var t = tl.GetEventTime(inputOffset)
 				if t == -1 { // watermark cannot be computed, perhaps a new processing unit was added or offset fell off the timeline
 					epoch = t
@@ -113,7 +116,10 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, partition int32) wmb.
 	if epoch == math.MaxInt64 {
 		epoch = -1
 	}
-	e.lastProcessedWm[partition] = epoch
+	// update the last processed watermark for the partition
+	e.lastProcessedWm[fromPartitionIdx] = epoch
+	// get the smallest watermark among all the partitions
+	// since we cannot compare the offset of different partitions, we get the smallest among the last processed watermarks of all the partitions
 	minEpoch := e.getMinFromLastProcessed(epoch)
 	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
 
@@ -158,8 +164,8 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(headWatermark))
 }
 
-// GetHeadWMB returns the latest idle WMB with the smallest watermark among all processors
-func (e *edgeFetcher) GetHeadWMB(partition int32) wmb.WMB {
+// GetHeadWMB returns the latest idle WMB with the smallest watermark among all processors for the given partition.
+func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 	e.Lock()
 	defer e.Unlock()
 	var debugString strings.Builder
@@ -177,8 +183,8 @@ func (e *edgeFetcher) GetHeadWMB(partition int32) wmb.WMB {
 			continue
 		}
 		// find the smallest head offset among the head WMBs
-		// we only consider the latest wmb in the offset timeline
-		var curHeadWMB = p.GetOffsetTimelines()[partition].GetHeadWMB()
+		// we only consider the latest wmb in the offset timeline for the given partition
+		var curHeadWMB = p.GetOffsetTimelines()[fromPartitionIdx].GetHeadWMB()
 		if !curHeadWMB.Idle {
 			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bucketName)
 			return wmb.WMB{}
@@ -196,7 +202,9 @@ func (e *edgeFetcher) GetHeadWMB(partition int32) wmb.WMB {
 		// there is no valid watermark yet
 		return wmb.WMB{}
 	}
-	e.lastProcessedWm[partition] = headWMB.Watermark
+	// update the last processed watermark for the partition
+	e.lastProcessedWm[fromPartitionIdx] = headWMB.Watermark
+	// we only consider idle watermark if it is smaller than or equal to min of all the last processed watermarks.
 	if headWMB.Watermark > e.getMinFromLastProcessed(headWMB.Watermark) {
 		return wmb.WMB{}
 	}
@@ -214,6 +222,7 @@ func (e *edgeFetcher) Close() error {
 	return nil
 }
 
+// getMinFromLastProcessed returns the smallest watermark among all the last processed watermarks.
 func (e *edgeFetcher) getMinFromLastProcessed(watermark int64) int64 {
 	minWm := watermark
 	for _, wm := range e.lastProcessedWm {

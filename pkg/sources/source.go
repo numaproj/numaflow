@@ -87,6 +87,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
 			var bufferWriters []isb.BufferWriter
+			// create a writer for each partition.
 			for _, partition := range buffers {
 				group := partition + "-group"
 				redisClient := redisclient.NewInClusterRedisClient()
@@ -124,6 +125,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			var bufferWriters []isb.BufferWriter
 			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
+			// create a writer for each partition.
 			for _, buffer := range buffers {
 				streamName := isbsvc.JetStreamName(buffer)
 				jetStreamClient := jsclient.NewInClusterJetStreamClient()
@@ -267,7 +269,6 @@ func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*sh
 					ToVertexPartition: toVertexPartition,
 				})
 			} else {
-				// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
 				result = append(result, forward.VertexBuffer{
 					ToVertexName:      edge.To,
 					ToVertexPartition: getToBufferPartition(edge.To, edge.GetToVertexPartitions()),
@@ -298,7 +299,6 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 						ToVertexPartition: toVertexPartition,
 					})
 				} else {
-					// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
 					result = append(result, forward.VertexBuffer{
 						ToVertexName:      edge.To,
 						ToVertexPartition: getToBufferPartition(edge.To, edge.GetToVertexPartitions()),
@@ -313,7 +313,6 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 							ToVertexPartition: toVertexPartition,
 						})
 					} else {
-						// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
 						result = append(result, forward.VertexBuffer{
 							ToVertexName:      edge.To,
 							ToVertexPartition: getToBufferPartition(edge.To, edge.GetToVertexPartitions()),
@@ -327,6 +326,8 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 	return fsd
 }
 
+// GetPartitionedBufferName returns a function that returns a partitioned buffer name based on the toVertex name and the partition count
+// it distributes the messages evenly to the partitions of the toVertex based on the message count(round robin)
 func GetPartitionedBufferName() func(toVertex string, toVertexPartitionCount int) int32 {
 	messagePerPartitionMap := make(map[string]int)
 	return func(toVertex string, toVertexPartitionCount int) int32 {

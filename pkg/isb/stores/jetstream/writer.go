@@ -245,7 +245,7 @@ func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message,
 
 func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, errs []error, metricsLabels map[string]string) ([]isb.Offset, []error) {
 	var startTime = time.Now().UnixNano()
-	defer jw.log.Info("sync write time: ", time.Now().UnixNano()-startTime)
+	defer jw.log.Debug("js write time: ", time.Now().UnixNano()-startTime)
 	var writeOffsets = make([]isb.Offset, len(messages))
 	wg := new(sync.WaitGroup)
 	for index, msg := range messages {

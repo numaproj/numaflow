@@ -354,7 +354,7 @@ func (mg *memgen) NewWorker(ctx context.Context, rate int) func(chan time.Time, 
 						}
 					}
 				}
-				mg.logger.Info("generated - ", count, " records")
+				mg.logger.Info("generated messages per second - ", count, " records")
 			}
 		}
 	}

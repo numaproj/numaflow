@@ -285,7 +285,6 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-// TODO: revisit this when working on multi partitions
 func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error) {
 	var watermarkFetchers []fetch.Fetcher
 	for i := 0; i < partitions; i++ {
@@ -302,7 +301,7 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 		}
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
 		pm := processor.NewProcessorManager(ctx, storeWatcher, int32(partitions), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
-		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, 1)
+		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, partitions)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}
 	return watermarkFetchers, nil

@@ -98,17 +98,17 @@ func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier
 }
 
 // GetHeadWM gets the headWatermark for the given partition.
-func (p *publish) GetHeadWM(partition int32) wmb.Watermark {
+func (p *publish) GetHeadWM(toVertexPartitionIdx int32) wmb.Watermark {
 	p.headWMLock.RLock()
 	defer p.headWMLock.RUnlock()
-	return p.headWatermarks[partition]
+	return p.headWatermarks[toVertexPartitionIdx]
 }
 
 // SetHeadWM sets the headWatermark using the given wm for the given partition.
-func (p *publish) SetHeadWM(wm wmb.Watermark, partition int32) {
+func (p *publish) SetHeadWM(wm wmb.Watermark, toVertexPartitionIdx int32) {
 	p.headWMLock.Lock()
 	defer p.headWMLock.Unlock()
-	p.headWatermarks[partition] = wm
+	p.headWatermarks[toVertexPartitionIdx] = wm
 }
 
 // initialSetup inserts the default values as the ProcessorEntitier starts emitting watermarks.
@@ -117,7 +117,7 @@ func (p *publish) SetHeadWM(wm wmb.Watermark, partition int32) {
 func (p *publish) initialSetup() {
 	var headWms []wmb.Watermark
 	for i := 0; i < int(p.toVertexPartitionCount); i++ {
-		headWms = append(headWms, wmb.Watermark(time.UnixMilli(-1)))
+		headWms = append(headWms, wmb.InitialWatermark)
 	}
 	p.headWatermarks = headWms
 }

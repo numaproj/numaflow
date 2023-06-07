@@ -38,8 +38,10 @@ func buildRedisBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInstance
 		readerOpts = append(readerOpts, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 	}
 	// create readers for owned buffer partitions.
+	// For reduce vertex, we only need to read from one buffer partition.
 	if vertexInstance.Vertex.GetVertexType() == dfv1.VertexTypeReduceUDF {
 		var fromBufferPartition string
+		// find the buffer partition owned by this replica.
 		for _, b := range vertexInstance.Vertex.OwnedBuffers() {
 			if strings.HasSuffix(b, fmt.Sprintf("-%d", vertexInstance.Replica)) {
 				fromBufferPartition = b
@@ -52,9 +54,11 @@ func buildRedisBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInstance
 
 		fromGroup := fromBufferPartition + "-group"
 		consumer := fmt.Sprintf("%s-%v", vertexInstance.Vertex.Name, vertexInstance.Replica)
+		// since we read from one buffer partition, fromPartitionIdx is 0.
 		reader := redisisb.NewBufferRead(ctx, redisClient, fromBufferPartition, fromGroup, consumer, 0, readerOpts...)
 		readers = append(readers, reader)
 	} else {
+		// for map vertex, we need to read from all buffer partitions. So create readers for all buffer partitions.
 		for _, bufferPartition := range vertexInstance.Vertex.OwnedBuffers() {
 			fromGroup := bufferPartition + "-group"
 			consumer := fmt.Sprintf("%s-%v", vertexInstance.Vertex.Name, vertexInstance.Replica)
@@ -64,6 +68,7 @@ func buildRedisBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInstance
 	}
 
 	// create writers for toVertex's buffer partitions.
+	// we create a map of toVertex -> []BufferWriter(writer for each partition)
 	writers := make(map[string][]isb.BufferWriter)
 	for _, e := range vertexInstance.Vertex.Spec.ToEdges {
 
@@ -182,10 +187,13 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 		readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 	}
 
+	// create readers for owned buffer partitions.
+	// For reduce vertex, we only need to read from one buffer partition.
 	if vertexInstance.Vertex.GetVertexType() == dfv1.VertexTypeReduceUDF {
 		// choose the buffer that corresponds to this reduce processor because
 		// reducer's incoming buffer can have more than one partition for parallelism
 		var fromBufferPartition string
+		// find the buffer partition owned by this replica.
 		for _, b := range vertexInstance.Vertex.OwnedBuffers() {
 			if strings.HasSuffix(b, fmt.Sprintf("-%d", vertexInstance.Replica)) {
 				fromBufferPartition = b
@@ -198,12 +206,14 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 
 		fromStreamName := isbsvc.JetStreamName(fromBufferPartition)
 		// reduce processor only has one buffer partition
+		// since we read from one buffer partition, fromPartitionIdx is 0.
 		reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), fromBufferPartition, fromStreamName, fromStreamName, 0, readOptions...)
 		if err != nil {
 			return nil, nil, err
 		}
 		readers = append(readers, reader)
 	} else {
+		// for map vertex, we need to read from all buffer partitions. So create readers for all buffer partitions.
 		for index, bufferPartition := range vertexInstance.Vertex.OwnedBuffers() {
 			fromStreamName := isbsvc.JetStreamName(bufferPartition)
 
@@ -215,7 +225,8 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 		}
 	}
 
-	// create writers for toVertex's buffer partitions
+	// create writers for toVertex's buffer partitions.
+	// we create a map of toVertex -> []BufferWriter(writer for each partition)
 	writers := make(map[string][]isb.BufferWriter)
 	for _, e := range vertexInstance.Vertex.Spec.ToEdges {
 		writeOpts := []jetstreamisb.WriteOption{

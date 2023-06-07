@@ -49,12 +49,14 @@ type InterStepDataForward struct {
 	ctx context.Context
 	// cancelFn cancels our new context, our cancellation is little more complex and needs to be well orchestrated, hence
 	// we need something more than a cancel().
-	cancelFn     context.CancelFunc
-	fromBuffer   isb.BufferReader
-	toBuffers    map[string][]isb.BufferWriter
-	FSD          ToWhichStepDecider
-	UDF          applier.MapApplier
-	wmFetcher    fetch.Fetcher
+	cancelFn   context.CancelFunc
+	fromBuffer isb.BufferReader
+	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
+	toBuffers map[string][]isb.BufferWriter
+	FSD       ToWhichStepDecider
+	UDF       applier.MapApplier
+	wmFetcher fetch.Fetcher
+	// wmPublishers stores the vertex to publisher mapping
 	wmPublishers map[string]publish.Publisher
 	opts         options
 	vertexName   string
@@ -221,8 +223,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// situation as idling.
 		// In order to continue propagating watermark, we will set watermark idle=true and publish it.
 		// We also publish a control message if this is the first time we get this idle situation.
-
-		// we use the HeadWMB as the watermark for the idle
+		// we use the HeadWMB as the watermark for the idle\
+		// we get the HeadWMB for the partition from which we read the messages
 		var processorWMB = isdf.wmFetcher.GetHeadWMB(isdf.fromBuffer.GetPartition())
 		if !isdf.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
@@ -234,7 +236,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 
-		// TODO(multi-partition) handle for multiple partitions
+		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
 		for toVertexName, toVertexBuffer := range isdf.toBuffers {
 			for index, partition := range toVertexBuffer {
 				if p, ok := isdf.wmPublishers[toVertexName]; ok {
@@ -267,6 +269,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// TODO: make it async (concurrent and wait later)
 		// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
 		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
+		// we fetch the watermark for the partition from which we read the message.
 		processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.fromBuffer.GetPartition())
 	}
 

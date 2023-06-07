@@ -165,7 +165,7 @@ func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
 
 func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var startTime = time.Now().UnixNano()
-	defer jr.log.Info("js read time: ", time.Now().UnixNano()-startTime)
+	defer jr.log.Debug("js read time: ", time.Now().UnixNano()-startTime)
 	var err error
 	var result []*isb.ReadMessage
 	msgs, err := jr.sub.Fetch(int(count), nats.MaxWait(jr.opts.readTimeOut))

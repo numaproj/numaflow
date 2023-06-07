@@ -58,7 +58,7 @@ func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher
 
 // GetWatermark returns the lowest of the latest Watermark of all the processors,
 // it ignores the input Offset.
-func (e *sourceFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (e *sourceFetcher) GetWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	var epoch int64 = math.MaxInt64
 	var debugString strings.Builder
 
@@ -67,8 +67,8 @@ func (e *sourceFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Wat
 		if !p.IsActive() {
 			continue
 		}
-		if p.GetOffsetTimelines()[partition].GetHeadWatermark() < epoch {
-			epoch = p.GetOffsetTimelines()[partition].GetHeadWatermark()
+		if p.GetOffsetTimelines()[fromPartitionIdx].GetHeadWatermark() < epoch {
+			epoch = p.GetOffsetTimelines()[fromPartitionIdx].GetHeadWatermark()
 		}
 	}
 	if epoch == math.MaxInt64 {

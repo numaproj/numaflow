@@ -284,6 +284,7 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
+	// Created as a slice since it tracks per partition of the buffer.
 	var activeWatermarkBuffers = make(map[string][]bool)
 	for toVertexName, bufferOffsets := range writeOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))

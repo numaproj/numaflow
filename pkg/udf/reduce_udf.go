@@ -75,7 +75,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	var fromBuffer string
 	fromBuffers := u.VertexInstance.Vertex.OwnedBuffers()
 	// choose the buffer that corresponds to this reduce processor because
-	// reducer's incoming edge can have more than one buffer for parallelism
+	// reducer's incoming edge can have more than one partitions
 	for _, b := range fromBuffers {
 		if strings.HasSuffix(b, fmt.Sprintf("-%d", u.VertexInstance.Replica)) {
 			fromBuffer = b
@@ -212,6 +212,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, udfHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager)
 
+	// for reduce, we read only from one partition
 	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)

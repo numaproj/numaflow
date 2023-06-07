@@ -55,8 +55,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	defer cancel()
 	var readers []isb.BufferReader
 	var err error
-	fromBufferName := u.VertexInstance.Vertex.OwnedBuffers()[0]
-
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	// For sinks, the buffer name is the vertex name
@@ -69,10 +67,12 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
-		for _, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
+		// create reader for each partition. Each partition is a group in redis
+		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
 			fromGroup := bufferPartition + "-group"
 			consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
-			reader := redisisb.NewBufferRead(ctx, redisClient, bufferPartition, fromGroup, consumer, 0, readOptions...)
+
+			reader := redisisb.NewBufferRead(ctx, redisClient, bufferPartition, fromGroup, consumer, int32(index), readOptions...)
 			readers = append(readers, reader)
 		}
 	case dfv1.ISBSvcTypeJetStream:
@@ -86,6 +86,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
+		// create reader for each partition. Each partition is a stream in jetstream
 		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
 			fromStreamName := isbsvc.JetStreamName(bufferPartition)
 
@@ -109,10 +110,10 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if sinkerForMetrics == nil {
 			sinkerForMetrics = sinker
 		}
-
-		go func(sinker Sinker) {
+		// start sinker using a goroutine for each partition.
+		go func(sinker Sinker, fromBufferPartitionName string) {
 			defer finalWg.Done()
-			log.Infow("Start processing sink messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName))
+			log.Infow("Started processing sink messages ", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("fromPartition ", fromBufferPartitionName))
 			stopped := sinker.Start()
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
@@ -125,11 +126,11 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 				}
 			}()
 			<-ctx.Done()
-			log.Info("SIGTERM, exiting...")
+			log.Info("SIGTERM exiting inside partition...", zap.String("fromPartition", fromBufferPartitionName))
 			sinker.Stop()
 			wg.Wait()
-			log.Info("Exited...")
-		}(sinker)
+			log.Info("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
+		}(sinker, readers[index].GetName())
 	}
 
 	var metricsOpts []metrics.Option
@@ -149,6 +150,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
+	// wait for all the sinkers to exit
 	finalWg.Wait()
 	log.Info("All udsink processors exited...")
 	return nil
@@ -169,6 +171,9 @@ func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLo
 	return nil, fmt.Errorf("invalid sink spec")
 }
 
+// getSinkGoWhereDecider returns a function that decides where to send the message
+// based on the keys and tags
+// for sink processor, we send the message to the same vertex and partition will be set to 0
 func (u *SinkProcessor) getSinkGoWhereDecider() forward.GoWhere {
 	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
