@@ -305,7 +305,6 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 			}
 			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
-				println(got.UnixMilli())
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
@@ -517,7 +516,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 			want: wmb.WMB{
 				Idle:      true,
 				Offset:    22,
-				Watermark: -1,
+				Watermark: 17,
 				Partition: 0,
 			},
 		},
@@ -541,7 +540,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var lastProcessedWm = make([]int64, partitionCount)
 			for i := 0; i < int(partitionCount); i++ {
-				lastProcessedWm[i] = -1
+				lastProcessedWm[i] = 100
 			}
 			e := &edgeFetcher{
 				ctx:              ctx,

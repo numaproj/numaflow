@@ -68,8 +68,8 @@ type timestampedPending struct {
 // 1. Expose metrics;
 // 2. Serve an endpoint to execute health checks
 type metricsServer struct {
-	vertex    *dfv1.Vertex
-	lagReader isb.LagReader
+	vertex     *dfv1.Vertex
+	lagReaders []isb.LagReader
 	// lookbackSeconds is the look back seconds for pending calculation used for autoscaling
 	lookbackSeconds     int64
 	lagCheckingInterval time.Duration
@@ -82,8 +82,8 @@ type metricsServer struct {
 
 type Option func(*metricsServer)
 
-// WithLagReader sets the lag reader
-func WithLagReader(r isb.LagReader) Option {
+// WithLagReaders sets the lag readers
+func WithLagReaders(r []isb.LagReader) Option {
 	return func(m *metricsServer) {
 		m.lagReaders = r
 	}
@@ -111,7 +111,7 @@ func WithHealthCheckExecutor(f func() error) Option {
 }
 
 // NewMetricsOptions returns a metrics option list.
-func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler HealthChecker, reader isb.BufferReader) []Option {
+func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler HealthChecker, readers []isb.BufferReader) []Option {
 	metricsOpts := []Option{
 		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
 	}
@@ -129,6 +129,9 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler H
 		if x, ok := reader.(isb.LagReader); ok {
 			lagReaders = append(lagReaders, x)
 		}
+	}
+	if len(lagReaders) > 0 {
+		metricsOpts = append(metricsOpts, WithLagReaders(lagReaders))
 	}
 	return metricsOpts
 }
@@ -183,7 +186,7 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 
 // Expose pending metrics
 func (ms *metricsServer) exposePendingMetrics(ctx context.Context) {
-	if ms.lagReader == nil {
+	if ms.lagReaders == nil {
 		return
 	}
 	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds} // Metrics for autoscaling use key "default"
@@ -195,7 +198,7 @@ func (ms *metricsServer) exposePendingMetrics(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if ms.lagReader != nil {
+			if ms.lagReaders != nil {
 				for n, i := range lookbackSecondsMap {
 					if p := ms.calculatePending(i); p != isb.PendingNotAvailable {
 						pending.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(float64(p))

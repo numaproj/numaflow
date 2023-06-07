@@ -76,9 +76,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			readers = append(readers, reader)
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		readOptions := []jetstreamisb.ReadOption{
-			jetstreamisb.WithUsingAckInfoAsRate(true),
-		}
+		var readOptions []jetstreamisb.ReadOption
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
@@ -137,12 +135,12 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	var metricsOpts []metrics.Option
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
 		if serverHandler, ok := sinkerForMetrics.(*udsink.UserDefinedSink); ok {
-			metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, serverHandler, readers, nil)
+			metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, serverHandler, readers)
 		} else {
 			return fmt.Errorf("unable to get the metrics options for the udsink")
 		}
 	} else {
-		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, readers, nil)
+		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, readers)
 	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {

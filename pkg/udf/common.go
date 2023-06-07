@@ -133,9 +133,7 @@ func buildJetStreamBufferWriters(ctx context.Context, vertexInstance *dfv1.Verte
 func buildJetStreamBufferReaders(ctx context.Context, vertexInstance *dfv1.VertexInstance) ([]isb.BufferReader, error) {
 	// create readers for owned buffer partitions.
 	var readers []isb.BufferReader
-	readOptions := []jetstreamisb.ReadOption{
-		jetstreamisb.WithUsingAckInfoAsRate(true),
-	}
+	readOptions := []jetstreamisb.ReadOption{}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 		readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 	}
@@ -179,9 +177,7 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 
 	// create readers for owned buffer partitions.
 	var readers []isb.BufferReader
-	readOptions := []jetstreamisb.ReadOption{
-		jetstreamisb.WithUsingAckInfoAsRate(true),
-	}
+	var readOptions []jetstreamisb.ReadOption
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 		readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 	}

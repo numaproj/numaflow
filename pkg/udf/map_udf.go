@@ -19,8 +19,9 @@ package udf
 import (
 	"context"
 	"fmt"
-	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 	"sync"
+
+	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 
 	"go.uber.org/zap"
 
@@ -191,7 +192,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			return
 		}(bufferPartition, forwarder)
 	}
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, readers, nil)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, readers)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)

@@ -19,9 +19,10 @@ package udf
 import (
 	"context"
 	"fmt"
-	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 	"strings"
 	"sync"
+
+	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 
 	"go.uber.org/zap"
 
@@ -182,7 +183,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer))
 
 	// start metrics server
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, readers, nil)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, readers)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
