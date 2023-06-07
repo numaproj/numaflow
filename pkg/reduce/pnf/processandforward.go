@@ -52,7 +52,7 @@ type processAndForward struct {
 	vertexReplica  int32
 	PartitionID    partition.ID
 	UDF            applier.ReduceApplier
-	result         []*isb.WriteMessage
+	writeMessages  []*isb.WriteMessage
 	pbqReader      pbq.Reader
 	log            *zap.SugaredLogger
 	toBuffers      map[string][]isb.BufferWriter
@@ -89,7 +89,7 @@ func newProcessAndForward(ctx context.Context,
 	}
 }
 
-// Process method reads messages from the supplied PBQ, invokes UDF to reduce the result.
+// Process method reads messages from the supplied PBQ, invokes UDF to reduce the writeMessages.
 func (p *processAndForward) Process(ctx context.Context) error {
 	var err error
 	startTime := time.Now()
@@ -99,8 +99,8 @@ func (p *processAndForward) Process(ctx context.Context) error {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 	}).Observe(float64(time.Since(startTime).Milliseconds()))
 
-	// blocking call, only returns the result after it has read all the messages from pbq
-	p.result, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
+	// blocking call, only returns the writeMessages after it has read all the messages from pbq
+	p.writeMessages, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 	return err
 }
 
@@ -174,7 +174,7 @@ func (p *processAndForward) whereToStep() map[string][][]isb.Message {
 
 	var to []forward.VertexBuffer
 	var err error
-	for _, msg := range p.result {
+	for _, msg := range p.writeMessages {
 		to, err = p.whereToDecider.WhereTo(msg.Keys, msg.Tags)
 		if err != nil {
 			platformError.With(map[string]string{
@@ -299,11 +299,12 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 		}
 
 	}
+
 	// if there's any buffers that haven't received any watermark during this
 	// batch processing cycle, send an idle watermark
 	for toVertexName := range p.wmPublishers {
-		for index, active := range activeWatermarkBuffers[toVertexName] {
-			if !active {
+		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
+			if !activePartition {
 				if publisher, ok := p.wmPublishers[toVertexName]; ok {
 					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, int32(index), p.log, dfv1.VertexTypeReduceUDF, wm)
 				}

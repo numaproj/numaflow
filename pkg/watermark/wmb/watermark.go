@@ -23,6 +23,8 @@ import "time"
 // NOTE: today we support only second progression of watermark, we need to support millisecond too.
 type Watermark time.Time
 
+var InitialWatermark = Watermark(time.UnixMilli(-1))
+
 func (w Watermark) String() string {
 	var location, _ = time.LoadLocation("UTC")
 	var t = time.Time(w).In(location)

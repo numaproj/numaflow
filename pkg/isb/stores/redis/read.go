@@ -267,8 +267,3 @@ func (br *BufferRead) Pending(_ context.Context) (int64, error) {
 	// TODO: not implemented
 	return isb.PendingNotAvailable, nil
 }
-
-func (br *BufferRead) Rate(_ context.Context) (float64, error) {
-	// TODO: not implemented
-	return isb.RateNotAvailable, nil
-}

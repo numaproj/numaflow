@@ -29,16 +29,7 @@ import (
 	"strconv"
 )
 
-const (
-	PendingNotAvailable = int64(math.MinInt64)
-	RateNotAvailable    = float64(math.MinInt)
-)
-
-// Ratable is the interface that wraps the Rate method.
-type Ratable interface {
-	// Rate returns the rough rate (messages/second) in the past seconds, this can be used for autoscaling calculation
-	Rate(ctx context.Context, seconds int64) (float64, error)
-}
+const PendingNotAvailable = int64(math.MinInt64)
 
 // LagReader is the interface that wraps the Pending method.
 type LagReader interface {

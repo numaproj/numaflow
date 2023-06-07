@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/forward"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/forward"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"

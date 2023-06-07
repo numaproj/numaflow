@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
 	"io"
 	"strings"
 	"testing"
@@ -43,7 +44,6 @@ import (
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
-	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
@@ -93,7 +93,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	// 1. create a pbq which has to be passed to the process method
 	// 2. pass the pbqReader interface and create a new processAndForward instance
 	// 3. mock the grpc client methods
-	// 4. assert to check if the process method is returning the result
+	// 4. assert to check if the process method is returning the writeMessages
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
@@ -174,7 +174,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)
-	assert.Len(t, pf.result, 1)
+	assert.Len(t, pf.writeMessages, 1)
 }
 
 func TestProcessAndForward_Forward(t *testing.T) {
@@ -409,7 +409,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	pf := processAndForward{
 		PartitionID:    testPartition,
 		UDF:            nil,
-		result:         result,
+		writeMessages:  result,
 		pbqReader:      simplePbq,
 		log:            logging.FromContext(ctx),
 		toBuffers:      toBuffers,

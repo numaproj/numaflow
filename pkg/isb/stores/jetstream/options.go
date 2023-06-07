@@ -30,8 +30,6 @@ type writeOptions struct {
 	bufferUsageLimit float64
 	// refreshInterval is used to provide the default refresh interval
 	refreshInterval time.Duration
-	// useWriteInfoAsRate indicates whether to check the write sequence for rate calculation
-	useWriteInfoAsRate bool
 	// bufferFullWritingStrategy is the writing strategy when buffer is full
 	bufferFullWritingStrategy dfv1.BufferFullWritingStrategy
 }
@@ -41,7 +39,6 @@ func defaultWriteOptions() *writeOptions {
 		maxLength:                 dfv1.DefaultBufferLength,
 		bufferUsageLimit:          dfv1.DefaultBufferUsageLimit,
 		refreshInterval:           1 * time.Second,
-		useWriteInfoAsRate:        false,
 		bufferFullWritingStrategy: dfv1.RetryUntilSuccess,
 	}
 }
@@ -72,14 +69,6 @@ func WithRefreshInterval(refreshInterval time.Duration) WriteOption {
 	}
 }
 
-// WithUsingWriteInfoAsRate sets whether to check sequence for rate calculation
-func WithUsingWriteInfoAsRate(yes bool) WriteOption {
-	return func(o *writeOptions) error {
-		o.useWriteInfoAsRate = yes
-		return nil
-	}
-}
-
 // WithBufferFullWritingStrategy sets the writing strategy when buffer is full
 func WithBufferFullWritingStrategy(s dfv1.BufferFullWritingStrategy) WriteOption {
 	return func(o *writeOptions) error {
@@ -92,10 +81,6 @@ func WithBufferFullWritingStrategy(s dfv1.BufferFullWritingStrategy) WriteOption
 type readOptions struct {
 	// readTimeOut is the timeout needed for read timeout
 	readTimeOut time.Duration
-	// Whether to run ack information check
-	useAckInfoAsRate bool
-	// ackCheckInterval is the interval for stream information check such as pending messages
-	ackInfoCheckInterval time.Duration
 }
 
 type ReadOption func(*readOptions) error
@@ -108,26 +93,8 @@ func WithReadTimeOut(timeout time.Duration) ReadOption {
 	}
 }
 
-// WithUsingAckInfoAsRate is used to set whether to run ack information check in the reader, which is for ack rate calculation
-func WithUsingAckInfoAsRate(yes bool) ReadOption {
-	return func(o *readOptions) error {
-		o.useAckInfoAsRate = yes
-		return nil
-	}
-}
-
-// WithAckInfoCheckInterval is used to set the periodical ack information check interval
-func WithAckInfoCheckInterval(t time.Duration) ReadOption {
-	return func(o *readOptions) error {
-		o.ackInfoCheckInterval = t
-		return nil
-	}
-}
-
 func defaultReadOptions() *readOptions {
 	return &readOptions{
-		readTimeOut:          time.Second,
-		useAckInfoAsRate:     false,
-		ackInfoCheckInterval: 3 * time.Second,
+		readTimeOut: time.Second,
 	}
 }

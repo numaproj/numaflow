@@ -386,6 +386,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
+	// It is created as a slice because it tracks per partition activity info.
 	var activeWatermarkBuffers = make(map[string][]bool)
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
@@ -413,16 +414,18 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	// TODO(multi-partition): handle idle watermark publishing for multi partitioned buffer
 	// - condition1 "len(dataMessages) > 0" :
-	//   Meaning, we do have some data messages, but not all out buffers get written.
-	//   Tt could be all data messages are dropped, or conditional forwarding to part of the out buffers.
+	//   Meaning, we do have some data messages, but we may not have written to all out buffers or its partitions.
+	//   It could be all data messages are dropped, or conditional forwarding to part of the out buffers.
 	//   If we don't have this condition check, when dataMessages is zero but ctrlMessages > 0, we will
 	//   wrongly publish an idle watermark without the ctrl message and the ctrl message tracking map.
 	// - condition 2 "len(activeWatermarkBuffers) < len(isdf.wmPublishers)" :
 	//   send idle watermark only if we have idle out buffers
+	// Note: When the len(dataMessages) is 0, meaning all the readMessages are control messages, we choose not to do extra steps
+	// This is because, if the idle continues, we will eventually handle the idle watermark when we read the next batch where the len(readMessages) will be zero
 	if len(dataMessages) > 0 {
 		for bufferName := range isdf.wmPublishers {
-			for index, partition := range activeWatermarkBuffers[bufferName] {
-				if !partition {
+			for index, activePartition := range activeWatermarkBuffers[bufferName] {
+				if !activePartition {
 					// use the watermark of the current read batch for the idle watermark
 					// same as read len==0 because there's no event published to the buffer
 					if p, ok := isdf.wmPublishers[bufferName]; ok {

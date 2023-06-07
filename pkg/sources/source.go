@@ -108,7 +108,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{
-				jetstreamisb.WithUsingWriteInfoAsRate(true),
 				jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 			}
 			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {

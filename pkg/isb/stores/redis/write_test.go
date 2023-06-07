@@ -407,9 +407,8 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 
-	// forwardDataAndVerify is used to verify if data is fowarded from the from and received in the to buffer.
+	// forwardDataAndVerify is used to verify if data is forwarded from the from and received in the to buffer.
 	forwardDataAndVerify(ctx, t, fromStepWrite, to1Read, to1, fromStep, f, writeMessages, count)
-
 }
 
 // TestReadTimeout tests that even though we have a blocking read, our Stop function exits cleanly

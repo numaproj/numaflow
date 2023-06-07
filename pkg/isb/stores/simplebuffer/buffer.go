@@ -107,11 +107,6 @@ func (b *InMemoryBuffer) Pending(_ context.Context) (int64, error) {
 	return isb.PendingNotAvailable, nil
 }
 
-func (b *InMemoryBuffer) Rate(_ context.Context) (float64, error) {
-	// TODO: not implemented
-	return isb.RateNotAvailable, nil
-}
-
 // Close does nothing.
 func (b *InMemoryBuffer) Close() error {
 	return nil

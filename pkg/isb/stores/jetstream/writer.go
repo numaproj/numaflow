@@ -30,7 +30,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -41,11 +40,8 @@ type jetStreamWriter struct {
 	conn    *jsclient.NatsConn
 	js      *jsclient.JetStreamContext
 	opts    *writeOptions
+	isFull  *atomic.Bool
 	log     *zap.SugaredLogger
-
-	isFull *atomic.Bool
-	// writtenInfo stores a list of written seq/timestamp(seconds) information
-	writtenInfo *sharedqueue.OverflowQueue[timestampedSequence]
 }
 
 // NewJetStreamBufferWriter is used to provide a new instance of JetStreamBufferWriter
@@ -80,10 +76,6 @@ func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClie
 		log:     logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject),
 	}
 
-	if o.useWriteInfoAsRate {
-		result.writtenInfo = sharedqueue.New[timestampedSequence](3600)
-	}
-
 	go result.runStatusChecker(ctx)
 	return result, nil
 }
@@ -102,11 +94,6 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 			isbFullErrors.With(labels).Inc()
 			jw.log.Errorw("Failed to get stream info in the writer", zap.Error(err))
 			return
-		}
-		if jw.opts.useWriteInfoAsRate {
-			ts := timestampedSequence{seq: int64(s.State.LastSeq), timestamp: time.Now().Unix()}
-			jw.writtenInfo.Append(ts)
-			jw.log.Debugw("Written information", zap.Int64("lastSeq", ts.seq), zap.Int64("timestamp", ts.timestamp))
 		}
 		c, err := js.ConsumerInfo(jw.stream, jw.stream)
 		if err != nil {
@@ -162,31 +149,6 @@ func (jw *jetStreamWriter) Close() error {
 		jw.conn.Close()
 	}
 	return nil
-}
-
-// Rate returns the writing rate (tps) in the past seconds
-func (jw *jetStreamWriter) Rate(_ context.Context, seconds int64) (float64, error) {
-	if !jw.opts.useWriteInfoAsRate {
-		return isb.RateNotAvailable, nil
-	}
-	timestampedSeqs := jw.writtenInfo.Items()
-	if len(timestampedSeqs) < 2 {
-		return isb.RateNotAvailable, nil
-	}
-	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
-	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-2]
-	now := time.Now().Unix()
-	if now-startSeqInfo.timestamp > seconds {
-		return isb.RateNotAvailable, nil
-	}
-	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
-		if now-timestampedSeqs[i].timestamp <= seconds {
-			startSeqInfo = timestampedSeqs[i]
-		} else {
-			break
-		}
-	}
-	return float64(endSeqInfo.seq-startSeqInfo.seq) / float64(endSeqInfo.timestamp-startSeqInfo.timestamp), nil
 }
 
 func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {

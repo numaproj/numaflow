@@ -207,6 +207,7 @@ func New(
 	h.cancelFunc = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
+	// source publisher toVertexPartitionCount will be 1, because we publish watermarks within source itself.
 	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 	return h, nil
 }
@@ -248,6 +249,7 @@ func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
 		h.logger.Debugf("Publishing watermark %v to source", oldest)
+		// toVertexPartitionIdx is 0, because we publish watermarks within source itself.
 		h.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }
