@@ -110,12 +110,12 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	// Populate shuffle function map
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 {
-			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitions())
+		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
+			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitionCount())
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
-	getVertexPartition := GetPartitionedBufferName()
+	getVertexPartition := GetPartitionedBufferIdx()
 	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
@@ -125,30 +125,30 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
 			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
+				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
 					result = append(result, forward.VertexBuffer{
-						ToVertexName:      edge.To,
-						ToVertexPartition: toVertexPartition,
+						ToVertexName:         edge.To,
+						ToVertexPartitionIdx: toVertexPartition,
 					})
 				} else {
 					result = append(result, forward.VertexBuffer{
-						ToVertexName:      edge.To,
-						ToVertexPartition: getVertexPartition(edge.To, edge.GetToVertexPartitions()),
+						ToVertexName:         edge.To,
+						ToVertexPartitionIdx: getVertexPartition(edge.To, edge.GetToVertexPartitionCount()),
 					})
 				}
 			} else {
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
+					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
 						result = append(result, forward.VertexBuffer{
-							ToVertexName:      edge.To,
-							ToVertexPartition: toVertexPartition,
+							ToVertexName:         edge.To,
+							ToVertexPartitionIdx: toVertexPartition,
 						})
 					} else {
 						result = append(result, forward.VertexBuffer{
-							ToVertexName:      edge.To,
-							ToVertexPartition: getVertexPartition(edge.To, edge.GetToVertexPartitions()),
+							ToVertexName:         edge.To,
+							ToVertexPartitionIdx: getVertexPartition(edge.To, edge.GetToVertexPartitionCount()),
 						})
 					}
 				}

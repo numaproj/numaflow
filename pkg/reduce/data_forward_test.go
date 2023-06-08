@@ -145,8 +145,8 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 
 func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
-		ToVertexName:      "reduce-to-vertex",
-		ToVertexPartition: 0,
+		ToVertexName:         "reduce-to-vertex",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 

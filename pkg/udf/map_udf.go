@@ -102,14 +102,14 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		// Populate shuffle function map
 		shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 {
-				s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitions())
+			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
+				s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitionCount())
 				shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 			}
 		}
 
 		// create a conditional forwarder for each partition
-		getVertexPartition := GetPartitionedBufferName()
+		getVertexPartitionIdx := GetPartitionedBufferIdx()
 		conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 			var result []forward.VertexBuffer
 
@@ -120,30 +120,30 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
 				// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
 				if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
+					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
 						result = append(result, forward.VertexBuffer{
-							ToVertexName:      edge.To,
-							ToVertexPartition: toVertexPartition,
+							ToVertexName:         edge.To,
+							ToVertexPartitionIdx: toVertexPartition,
 						})
 					} else {
 						result = append(result, forward.VertexBuffer{
-							ToVertexName:      edge.To,
-							ToVertexPartition: getVertexPartition(edge.To, edge.GetToVertexPartitions()),
+							ToVertexName:         edge.To,
+							ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, edge.GetToVertexPartitionCount()),
 						})
 					}
 				} else {
 					if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-						if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
+						if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 							toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
 							result = append(result, forward.VertexBuffer{
-								ToVertexName:      edge.To,
-								ToVertexPartition: toVertexPartition,
+								ToVertexName:         edge.To,
+								ToVertexPartitionIdx: toVertexPartition,
 							})
 						} else {
 							result = append(result, forward.VertexBuffer{
-								ToVertexName:      edge.To,
-								ToVertexPartition: getVertexPartition(edge.To, edge.GetToVertexPartitions()),
+								ToVertexName:         edge.To,
+								ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, edge.GetToVertexPartitionCount()),
 							})
 						}
 					}
@@ -209,13 +209,13 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	return nil
 }
 
-// GetPartitionedBufferName returns a function that returns a partitioned buffer name based on the toVertex name and the partition count
-// it distributes the messages evenly to the partitions of the toVertex based on the message count(round robin)
-func GetPartitionedBufferName() func(toVertex string, toVertexPartitionCount int) int32 {
+// GetPartitionedBufferIdx returns a function that returns a partitioned buffer index based on the toVertex name and the partition count
+// it distributes the messages evenly to the partitions of the toVertex based on the message count(round-robin)
+func GetPartitionedBufferIdx() func(toVertex string, toVertexPartitionCount int) int32 {
 	messagePerPartitionMap := make(map[string]int)
 	return func(toVertex string, toVertexPartitionCount int) int32 {
-		vertexPartition := (messagePerPartitionMap[toVertex] + 1) % toVertexPartitionCount
-		messagePerPartitionMap[toVertex] = vertexPartition
-		return int32(vertexPartition)
+		toVertexPartition := (messagePerPartitionMap[toVertex] + 1) % toVertexPartitionCount
+		messagePerPartitionMap[toVertex] = toVertexPartition
+		return int32(toVertexPartition)
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -120,7 +121,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			log.Infow("Succeeded to create a consumer for a stream", zap.String("stream", streamName), zap.String("consumer", streamName))
 		}
 		//TODO: remove sleep and use a better way to wait for the stream to be ready
-		//time.Sleep(5 * time.Second)
+		time.Sleep(3 * time.Second)
 	}
 
 	for _, bucket := range buckets {
@@ -162,8 +163,6 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				return fmt.Errorf("failed to create processor bucket %q, %w", otBucket, err)
 			}
 		}
-		//TODO: remove sleep and use a better way to wait for the stream to be ready
-		//time.Sleep(5 * time.Second)
 	}
 	return nil
 }
@@ -284,9 +283,9 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error) {
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.Fetcher, error) {
 	var watermarkFetchers []fetch.Fetcher
-	for i := 0; i < partitions; i++ {
+	for i := 0; i < fromBufferPartitionCount; i++ {
 		hbBucketName := JetStreamProcessorBucket(bucketName)
 		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
 		// should we return error if one is successful?
@@ -299,8 +298,8 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 			return nil, err
 		}
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
-		pm := processor.NewProcessorManager(ctx, storeWatcher, int32(partitions), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
-		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, partitions)
+		pm := processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, fromBufferPartitionCount)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}
 	return watermarkFetchers, nil

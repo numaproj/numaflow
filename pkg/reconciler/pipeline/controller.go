@@ -536,17 +536,17 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 		fromVertexLimits := mergeLimits(pl.GetPipelineLimits(), vFrom.Limits)
 		toVertexLimits := mergeLimits(pl.GetPipelineLimits(), vTo.Limits)
 		combinedEdge := dfv1.CombinedEdge{
-			Edge:                 e,
-			FromVertexType:       vFrom.GetVertexType(),
-			FromVertexPartitions: pointer.Int32(int32(vFrom.GetPartitions())),
-			FromVertexLimits:     &fromVertexLimits,
-			ToVertexLimits:       &toVertexLimits,
-			ToVertexType:         vTo.GetVertexType(),
-			ToVertexPartitions:   pointer.Int32(int32(vTo.GetPartitions())),
+			Edge:                     e,
+			FromVertexType:           vFrom.GetVertexType(),
+			FromVertexPartitionCount: pointer.Int32(int32(vFrom.GetPartitionCount())),
+			FromVertexLimits:         &fromVertexLimits,
+			ToVertexLimits:           &toVertexLimits,
+			ToVertexType:             vTo.GetVertexType(),
+			ToVertexPartitionCount:   pointer.Int32(int32(vTo.GetPartitionCount())),
 		}
 		// TODO: remove this after parallelism is removed
 		if vTo.IsReduceUDF() && vTo.UDF.GroupBy.Keyed && e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 0 {
-			combinedEdge.ToVertexPartitions = e.DeprecatedParallelism
+			combinedEdge.ToVertexPartitionCount = e.DeprecatedParallelism
 		}
 		// end of TODO
 		result = append(result, combinedEdge)

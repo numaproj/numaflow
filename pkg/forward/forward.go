@@ -225,7 +225,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// We also publish a control message if this is the first time we get this idle situation.
 		// we use the HeadWMB as the watermark for the idle\
 		// we get the HeadWMB for the partition from which we read the messages
-		var processorWMB = isdf.wmFetcher.GetHeadWMB(isdf.fromBuffer.GetPartition())
+		var processorWMB = isdf.wmFetcher.GetHeadWMB(isdf.fromBuffer.GetPartitionIdx())
 		if !isdf.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
 			isdf.opts.logger.Debugw("skip publishing idle watermark",
@@ -270,7 +270,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
 		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
 		// we fetch the watermark for the partition from which we read the message.
-		processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.fromBuffer.GetPartition())
+		processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.fromBuffer.GetPartitionIdx())
 	}
 
 	var writeOffsets map[string][][]isb.Offset
@@ -338,7 +338,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
 			// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
 			// but ideally we should use the latest to determine the IsLate attribute.
-			processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.fromBuffer.GetPartition())
+			processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.fromBuffer.GetPartitionIdx())
 			// assign isLate
 			for _, m := range writeMessages {
 				if processorWM.After(m.EventTime) { // Set late data at source level
@@ -498,7 +498,7 @@ func (isdf *InterStepDataForward) streamMessage(
 		msgIndex := 0
 		for writeMessage := range writeMessageCh {
 			// add partition to the ID, this is to make sure that the ID is unique across partitions
-			writeMessage.ID = fmt.Sprintf("%s-%d-%d", dataMessages[0].ReadOffset.String(), isdf.fromBuffer.GetPartition(), msgIndex)
+			writeMessage.ID = fmt.Sprintf("%s-%d-%d", dataMessages[0].ReadOffset.String(), isdf.fromBuffer.GetPartitionIdx(), msgIndex)
 			msgIndex += 1
 			udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, "buffer": isdf.fromBuffer.GetName()}).Add(float64(1))
 
@@ -720,7 +720,7 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 			// if we do not get a time from UDF, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
 				// add partition to the ID, this is to make sure that the ID is unique across partitions
-				m.ID = fmt.Sprintf("%s-%d-%d", readMessage.ReadOffset.String(), isdf.fromBuffer.GetPartition(), index)
+				m.ID = fmt.Sprintf("%s-%d-%d", readMessage.ReadOffset.String(), isdf.fromBuffer.GetPartitionIdx(), index)
 				if m.EventTime.IsZero() {
 					m.EventTime = readMessage.EventTime
 				}
@@ -749,7 +749,7 @@ func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.WriteMessage, me
 		if _, ok := messageToStep[t.ToVertexName]; !ok {
 			isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.fromBuffer.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("no such destination (%s)", t.ToVertexName)}))
 		}
-		messageToStep[t.ToVertexName][t.ToVertexPartition] = append(messageToStep[t.ToVertexName][t.ToVertexPartition], writeMessage.Message)
+		messageToStep[t.ToVertexName][t.ToVertexPartitionIdx] = append(messageToStep[t.ToVertexName][t.ToVertexPartitionIdx], writeMessage.Message)
 	}
 	return nil
 }

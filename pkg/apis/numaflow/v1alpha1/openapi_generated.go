@@ -606,7 +606,7 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 							Format:      "",
 						},
 					},
-					"fromVertexPartitions": {
+					"fromVertexPartitionCount": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The number of partitions of the from vertex, if not provided, the default value is set to \"1\".",
 							Type:        []string{"integer"},
@@ -626,7 +626,7 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 							Format:      "",
 						},
 					},
-					"toVertexPartitions": {
+					"toVertexPartitionCount": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The number of partitions of the to vertex, if not provided, the default value is set to \"1\".",
 							Type:        []string{"integer"},

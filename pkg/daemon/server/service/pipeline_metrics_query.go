@@ -173,8 +173,8 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
 	vertexLevelRates := ps.rater.GetRates(req.GetVertex())
 
-	metricsArr := make([]*daemon.VertexMetrics, abstractVertex.GetPartitions())
-	for i := int64(0); i < int64(abstractVertex.GetPartitions()); i++ {
+	metricsArr := make([]*daemon.VertexMetrics, abstractVertex.GetPartitionCount())
+	for i := int64(0); i < int64(abstractVertex.GetPartitionCount()); i++ {
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
 		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
 		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)

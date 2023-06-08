@@ -90,8 +90,8 @@ type myForwardTest struct {
 
 func (f myForwardTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
@@ -936,8 +936,8 @@ type mySourceForwardTest struct {
 
 func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
@@ -1186,12 +1186,12 @@ type myForwardToAllTest struct {
 
 func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	},
 		{
-			ToVertexName:      "to2",
-			ToVertexPartition: 0,
+			ToVertexName:         "to2",
+			ToVertexPartitionIdx: 0,
 		},
 	}, nil
 }
@@ -1209,8 +1209,8 @@ type myForwardInternalErrTest struct {
 
 func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
@@ -1242,8 +1242,8 @@ type myForwardApplyWhereToErrTest struct {
 
 func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, fmt.Errorf("whereToStep failed")
 }
 
@@ -1260,8 +1260,8 @@ type myForwardApplyUDFErrTest struct {
 
 func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 

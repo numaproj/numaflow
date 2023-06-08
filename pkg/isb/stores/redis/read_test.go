@@ -294,8 +294,8 @@ type forwardReadWritePerformance struct {
 
 func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 

@@ -96,7 +96,7 @@ func (b *InMemoryBuffer) GetName() string {
 }
 
 // GetPartition returns the partition number of the buffer.
-func (b *InMemoryBuffer) GetPartition() int32 {
+func (b *InMemoryBuffer) GetPartitionIdx() int32 {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
 	return b.partition

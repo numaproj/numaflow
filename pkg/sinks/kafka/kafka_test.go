@@ -145,8 +145,8 @@ func getSinkGoWhereDecider(vertexName string) forward.GoWhere {
 	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 		result = append(result, forward.VertexBuffer{
-			ToVertexName:      vertexName,
-			ToVertexPartition: 0,
+			ToVertexName:         vertexName,
+			ToVertexPartitionIdx: 0,
 		})
 		return result, nil
 	})

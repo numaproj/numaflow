@@ -78,7 +78,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 	} else if vertexInstance.Vertex.IsReduceUDF() {
 		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, storeWatcher, processManager, 1)
 	} else {
-		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, storeWatcher, processManager, vertexInstance.Vertex.Spec.GetPartitions())
+		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, storeWatcher, processManager, vertexInstance.Vertex.Spec.GetPartitionCount())
 	}
 
 	// Publisher map creation, we need a publisher per out buffer.
@@ -114,7 +114,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, OTBucket: %s, %w", otStoreBucketName, err)
 			}
-			publishWatermark[e.To] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), int32(e.GetToVertexPartitions()))
+			publishWatermark[e.To] = publish.NewPublish(ctx, publishEntity, store.BuildWatermarkStore(hbStore, otStore), int32(e.GetToVertexPartitionCount()))
 		}
 	}
 	return fetchWatermark, publishWatermark, nil

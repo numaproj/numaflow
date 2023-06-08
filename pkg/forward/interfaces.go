@@ -18,8 +18,8 @@ package forward
 
 // VertexBuffer points to the partition of a buffer owned by the vertex.
 type VertexBuffer struct {
-	ToVertexName      string
-	ToVertexPartition int32
+	ToVertexName         string
+	ToVertexPartitionIdx int32
 }
 
 // ToWhichStepDecider decides which step to forward after applying the WhereTo function.

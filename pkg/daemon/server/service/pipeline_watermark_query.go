@@ -39,16 +39,16 @@ func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, 
 
 	for _, edge := range pipeline.ListAllEdges() {
 		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
-		var partitions int
+		var partitionCount int
 		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
-		// If the vertex is a reduce vertex, then the number of partitions is 1, because the reduce pod will
+		// If the vertex is a reduce vertex, then the number of partitionCount is 1, because the reduce pod will
 		// always read from one partition.
 		if isReduce {
-			partitions = 1
+			partitionCount = 1
 		} else {
-			partitions = pipeline.GetVertex(edge.To).GetPartitions()
+			partitionCount = pipeline.GetVertex(edge.To).GetPartitionCount()
 		}
-		wmFetcherList, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName, partitions, isReduce)
+		wmFetcherList, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName, partitionCount, isReduce)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 		}

@@ -65,8 +65,8 @@ type forwardTest struct {
 func (f forwardTest) WhereTo(keys []string, _ []string) ([]forward.VertexBuffer, error) {
 	if strings.Compare(keys[len(keys)-1], "test-forward-one") == 0 {
 		return []forward.VertexBuffer{{
-			ToVertexName:      "buffer1",
-			ToVertexPartition: 0,
+			ToVertexName:         "buffer1",
+			ToVertexPartitionIdx: 0,
 		}}, nil
 	} else if strings.Compare(keys[len(keys)-1], "test-forward-all") == 0 {
 		var steps []forward.VertexBuffer

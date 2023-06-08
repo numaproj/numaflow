@@ -42,16 +42,12 @@ type jetStreamReader struct {
 	sub                    *nats.Subscription
 	opts                   *readOptions
 	inProgressTickDuration time.Duration
-	partition              int32
+	partitionIdx           int32
 	log                    *zap.SugaredLogger
 }
 
-func (jr *jetStreamReader) GetPartition() int32 {
-	return jr.partition
-}
-
 // NewJetStreamBufferReader is used to provide a new JetStream buffer reader connection
-func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, partition int32, opts ...ReadOption) (isb.BufferReader, error) {
+func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, partitionIdx int32, opts ...ReadOption) (isb.BufferReader, error) {
 	log := logging.FromContext(ctx).With("bufferReader", name).With("stream", stream).With("subject", subject)
 	o := defaultReadOptions()
 	for _, opt := range opts {
@@ -62,12 +58,12 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 		}
 	}
 	result := &jetStreamReader{
-		name:      name,
-		stream:    stream,
-		subject:   subject,
-		partition: partition,
-		opts:      o,
-		log:       log,
+		name:         name,
+		stream:       stream,
+		subject:      subject,
+		partitionIdx: partitionIdx,
+		opts:         o,
+		log:          log,
 	}
 
 	connectAndSubscribe := func() (*jsclient.NatsConn, *jsclient.JetStreamContext, *nats.Subscription, error) {
@@ -141,6 +137,10 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 
 func (jr *jetStreamReader) GetName() string {
 	return jr.name
+}
+
+func (jr *jetStreamReader) GetPartitionIdx() int32 {
+	return jr.partitionIdx
 }
 
 func (jr *jetStreamReader) Close() error {

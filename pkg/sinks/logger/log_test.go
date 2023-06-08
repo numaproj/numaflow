@@ -41,12 +41,12 @@ type myForwardToAllTest struct {
 
 func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	},
 		{
-			ToVertexName:      "to2",
-			ToVertexPartition: 0,
+			ToVertexName:         "to2",
+			ToVertexPartitionIdx: 0,
 		},
 	}, nil
 }
@@ -175,8 +175,8 @@ func getSinkGoWhereDecider(vertexName string) forward.GoWhere {
 	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 		result = append(result, forward.VertexBuffer{
-			ToVertexName:      vertexName,
-			ToVertexPartition: 0,
+			ToVertexName:         vertexName,
+			ToVertexPartitionIdx: 0,
 		})
 		return result, nil
 	})

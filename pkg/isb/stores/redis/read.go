@@ -61,13 +61,13 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 
 	rqr := &BufferRead{
 		RedisStreamsRead: &redisclient.RedisStreamsRead{
-			Name:        name,
-			Stream:      redisclient.GetRedisStreamName(name),
-			Group:       group,
-			Consumer:    consumer,
-			Partition:   fromPartitionIdx,
-			RedisClient: client,
-			Options:     *options,
+			Name:         name,
+			Stream:       redisclient.GetRedisStreamName(name),
+			Group:        group,
+			Consumer:     consumer,
+			PartitionIdx: fromPartitionIdx,
+			RedisClient:  client,
+			Options:      *options,
 			Metrics: redisclient.Metrics{
 				ReadErrorsInc: func() {
 					labels := map[string]string{"buffer": name}

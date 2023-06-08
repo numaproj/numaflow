@@ -193,7 +193,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	if len(readMessages) == 0 {
 		// we use the HeadWMB as the watermark for the idle
 		// we get the HeadWMB for the partition from which we read the messages
-		var processorWMB = df.wmFetcher.GetHeadWMB(df.fromBuffer.GetPartition())
+		var processorWMB = df.wmFetcher.GetHeadWMB(df.fromBuffer.GetPartitionIdx())
 		if !df.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
 			df.log.Debugw("skip publishing idle watermark",
@@ -249,7 +249,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	// get the watermark for the partition from which we read the messages
-	processorWM := df.wmFetcher.GetWatermark(readMessages[0].ReadOffset, df.fromBuffer.GetPartition())
+	processorWM := df.wmFetcher.GetWatermark(readMessages[0].ReadOffset, df.fromBuffer.GetPartitionIdx())
 	for _, m := range readMessages {
 		if !df.keyed {
 			m.Keys = []string{dfv1.DefaultKeyForNonKeyedData}
