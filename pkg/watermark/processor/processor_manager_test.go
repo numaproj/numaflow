@@ -80,7 +80,7 @@ func TestProcessorManager(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	// start p2 heartbeat for 20 loops (20 seconds)
+	// start p2 heartbeat.
 	go func() {
 		for {
 			select {
@@ -383,7 +383,7 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 		}
 	}(ctx)
 
-	// start p2 heartbeat for 20 loops (20 seconds)
+	// start p2 heartbeat.
 	go func(ctx context.Context) {
 		var err error
 		for {

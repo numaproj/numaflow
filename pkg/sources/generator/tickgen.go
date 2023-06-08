@@ -241,7 +241,7 @@ func (mg *memgen) GetName() string {
 	return mg.name
 }
 
-// GetPartition returns the partition number for the source vertex buffer
+// GetPartitionIdx returns the partition number for the source vertex buffer
 // Source is like a buffer with only one partition. So, we always return 0
 func (mg *memgen) GetPartitionIdx() int32 {
 	return 0

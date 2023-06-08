@@ -34,14 +34,14 @@ import (
 
 // InMemoryBuffer implements ISB interface.
 type InMemoryBuffer struct {
-	name      string
-	size      int64
-	buffer    []elem
-	writeIdx  int64
-	readIdx   int64
-	partition int32
-	options   *options
-	rwlock    *sync.RWMutex
+	name         string
+	size         int64
+	buffer       []elem
+	writeIdx     int64
+	readIdx      int64
+	partitionIdx int32
+	options      *options
+	rwlock       *sync.RWMutex
 }
 
 var _ isb.BufferReader = (*InMemoryBuffer)(nil)
@@ -69,14 +69,14 @@ func NewInMemoryBuffer(name string, size int64, partition int32, opts ...Option)
 	}
 
 	sb := &InMemoryBuffer{
-		name:      name,
-		size:      size,
-		buffer:    make([]elem, size),
-		writeIdx:  int64(0),
-		readIdx:   int64(0),
-		partition: partition,
-		rwlock:    new(sync.RWMutex),
-		options:   bufferOptions,
+		name:         name,
+		size:         size,
+		buffer:       make([]elem, size),
+		writeIdx:     int64(0),
+		readIdx:      int64(0),
+		partitionIdx: partition,
+		rwlock:       new(sync.RWMutex),
+		options:      bufferOptions,
 	}
 	return sb
 }
@@ -95,11 +95,11 @@ func (b *InMemoryBuffer) GetName() string {
 	return b.name
 }
 
-// GetPartition returns the partition number of the buffer.
+// GetPartitionIdx returns the partitionIdx.
 func (b *InMemoryBuffer) GetPartitionIdx() int32 {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
-	return b.partition
+	return b.partitionIdx
 }
 
 func (b *InMemoryBuffer) Pending(_ context.Context) (int64, error) {

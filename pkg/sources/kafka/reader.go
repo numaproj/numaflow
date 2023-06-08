@@ -122,7 +122,7 @@ func (r *KafkaSource) GetName() string {
 	return r.name
 }
 
-// GetPartition returns the partition number for the source vertex buffer
+// GetPartitionIdx returns the partition number for the source vertex buffer
 // Source is like a buffer with only one partition. So, we always return 0
 func (r *KafkaSource) GetPartitionIdx() int32 {
 	return 0
