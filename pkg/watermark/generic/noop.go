@@ -37,12 +37,12 @@ func NewNoOpWMProgressor() *NoOpWMProgressor {
 }
 
 // GetWatermark returns the default watermark.
-func (n NoOpWMProgressor) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (n NoOpWMProgressor) GetWatermark(isb.Offset, int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 
 // PublishWatermark does a no-op watermark publish.
-func (n NoOpWMProgressor) PublishWatermark(_ wmb.Watermark, _ isb.Offset, _ int32) {
+func (n NoOpWMProgressor) PublishWatermark(wmb.Watermark, isb.Offset, int32) {
 }
 
 // PublishIdleWatermark does a no-op idle watermark publish.

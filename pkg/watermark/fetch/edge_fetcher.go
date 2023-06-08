@@ -74,8 +74,6 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 // GetWatermark gets the smallest watermark for the given offset and partition from all the active processors.
 // deletes the processor if it's not active.
 func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
-	e.Lock()
-	defer e.Unlock()
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("Unable to get offset from isb.Offset.Sequence()", zap.Error(err))
@@ -117,12 +115,14 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int3
 		epoch = -1
 	}
 	// update the last processed watermark for the partition
+	e.Lock()
+	defer e.Unlock()
 	e.lastProcessedWm[fromPartitionIdx] = epoch
 	// get the smallest watermark among all the partitions
 	// since we cannot compare the offset of different partitions, we get the smallest among the last processed watermarks of all the partitions
 	minEpoch := e.getMinFromLastProcessed(epoch)
-	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
 
+	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
 	return wmb.Watermark(time.UnixMilli(minEpoch))
 }
 
@@ -166,8 +166,6 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 
 // GetHeadWMB returns the latest idle WMB with the smallest watermark among all processors for the given partition.
 func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
-	e.Lock()
-	defer e.Unlock()
 	var debugString strings.Builder
 
 	var headWMB = wmb.WMB{
@@ -202,6 +200,9 @@ func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 		// there is no valid watermark yet
 		return wmb.WMB{}
 	}
+
+	e.Lock()
+	defer e.Unlock()
 	// update the last processed watermark for the partition
 	e.lastProcessedWm[fromPartitionIdx] = headWMB.Watermark
 	// we only consider idle watermark if it is smaller than or equal to min of all the last processed watermarks.
