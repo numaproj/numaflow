@@ -61,8 +61,8 @@ type DataForward struct {
 	vertexReplica         int32
 	fromBuffer            isb.BufferReader
 	toBuffers             map[string][]isb.BufferWriter
-	watermarkFetcher      fetch.Fetcher
-	watermarkPublishers   map[string]publish.Publisher
+	wmFetcher             fetch.Fetcher
+	wmPublishers          map[string]publish.Publisher
 	windower              window.Windower
 	keyed                 bool
 	idleManager           *wmb.IdleManager
@@ -104,8 +104,8 @@ func NewDataForward(ctx context.Context,
 		vertexReplica:         vertexInstance.Replica,
 		fromBuffer:            fromBuffer,
 		toBuffers:             toBuffers,
-		watermarkFetcher:      fw,
-		watermarkPublishers:   watermarkPublishers,
+		wmFetcher:             fw,
+		wmPublishers:          watermarkPublishers,
 		windower:              windowingStrategy,
 		keyed:                 vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed,
 		idleManager:           idleManager,
@@ -192,7 +192,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	if len(readMessages) == 0 {
 		// we use the HeadWMB as the watermark for the idle
-		var processorWMB = df.watermarkFetcher.GetHeadWMB()
+		var processorWMB = df.wmFetcher.GetHeadWMB()
 		if !df.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
 			df.log.Debugw("skip publishing idle watermark",
@@ -210,8 +210,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// in this case, send idle watermark to all the toBuffers
 			// TODO(multi-partition): support multi partitioned buffer
 			for toVertexName, toVertexBuffer := range df.toBuffers {
-				if publisher, ok := df.watermarkPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, toVertexBuffer[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+				for index, bufferPartition := range toVertexBuffer {
+					if publisher, ok := df.wmPublishers[toVertexName]; ok {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					}
 				}
 			}
 		} else {
@@ -229,8 +231,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				// so in this case, we publish an idle watermark
 				// TODO(multi-partition): support multi partitioned edges
 				for toVertexName, toVertexBuffer := range df.toBuffers {
-					if publisher, ok := df.watermarkPublishers[toVertexName]; ok {
-						idlehandler.PublishIdleWatermark(ctx, toVertexBuffer[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+					for index, bufferPartition := range toVertexBuffer {
+						if publisher, ok := df.wmPublishers[toVertexName]; ok {
+							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+						}
 					}
 				}
 			}
@@ -245,7 +249,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}).Add(float64(len(readMessages)))
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
-	processorWM := df.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
+	processorWM := df.wmFetcher.GetWatermark(readMessages[0].ReadOffset)
 	for _, m := range readMessages {
 		if !df.keyed {
 			m.Keys = []string{dfv1.DefaultKeyForNonKeyedData}
@@ -358,8 +362,10 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			// this is to minimize watermark latency
 			//TODO(multi-partition): support multi partitioned edges
 			for toVertex, toVertexBuffer := range df.toBuffers {
-				if publisher, ok := df.watermarkPublishers[toVertex]; ok {
-					idlehandler.PublishIdleWatermark(ctx, toVertexBuffer[0], publisher, df.idleManager, 0, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+				for index, bufferPartition := range toVertexBuffer {
+					if publisher, ok := df.wmPublishers[toVertex]; ok {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+					}
 				}
 			}
 		}
@@ -568,12 +574,12 @@ func (df *DataForward) ShutDown(ctx context.Context) {
 	df.pbqManager.ShutDown(ctx)
 
 	// stop watermark fetcher
-	if err := df.watermarkFetcher.Close(); err != nil {
+	if err := df.wmFetcher.Close(); err != nil {
 		df.log.Errorw("Failed to close watermark fetcher", zap.Error(err))
 	}
 
 	// stop watermark publisher
-	for _, publisher := range df.watermarkPublishers {
+	for _, publisher := range df.wmPublishers {
 		if err := publisher.Close(); err != nil {
 			df.log.Errorw("Failed to close watermark publisher", zap.Error(err))
 		}

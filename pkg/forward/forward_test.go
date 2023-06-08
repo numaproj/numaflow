@@ -758,7 +758,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	// 5th & 6th batch: again idling but got diff head WMB
 	// so the head is still the same active watermark
 	// and no new ctrl message to the next vertex
-	f.fetchWatermark.(*testWMBFetcher).RevertBoolValue()
+	f.wmFetcher.(*testWMBFetcher).RevertBoolValue()
 	time.Sleep(2 * time.Second) // default read timeout is 1s
 	otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
 	otValue1, _ = otStores["to1"].GetValue(ctx, otKeys1[0])
@@ -1325,7 +1325,7 @@ func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[s
 		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
 		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
 		otStores[key] = otKV
-		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), 1, publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 	}
 	return publishers, otStores
