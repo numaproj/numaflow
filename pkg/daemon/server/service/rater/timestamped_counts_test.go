@@ -38,7 +38,9 @@ func TestTimestampedCounts_Update(t *testing.T) {
 	assert.Equal(t, 30.0, tc.podCounts["pod2"])
 	assert.Equal(t, 2, len(tc.podCounts))
 	tc.Update("pod1", CountNotAvailable)
-	assert.Equal(t, 1, len(tc.podCounts))
+	assert.Equal(t, 2, len(tc.podCounts))
+	assert.Equal(t, 20, int(tc.podCounts["pod1"]))
+	assert.Equal(t, 30, int(tc.podCounts["pod2"]))
 }
 
 func TestTimestampedCounts_Snapshot(t *testing.T) {
