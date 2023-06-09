@@ -55,7 +55,7 @@ func (b *Builtin) executor() (functionsdk.MapTFunc, error) {
 		return filter.New(b.KWArgs)
 	case "eventTimeExtractor":
 		return eventtime.New(b.KWArgs)
-	case "time":
+	case "timeExtractionFilter":
 		return timeextractionfilter.New(b.KWArgs)
 	default:
 		return nil, fmt.Errorf("unrecognized transformer %q", b.Name)
