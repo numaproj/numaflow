@@ -1153,7 +1153,7 @@ message Templates {
 }
 
 message Transformer {
-  // +kubebuilder:validation:Enum=eventTimeExtractor;filter
+  // +kubebuilder:validation:Enum=eventTimeExtractor;filter;timeExtractionFilter
   optional string name = 1;
 
   // +optional

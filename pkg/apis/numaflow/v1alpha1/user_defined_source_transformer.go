@@ -24,7 +24,7 @@ type UDTransformer struct {
 }
 
 type Transformer struct {
-	// +kubebuilder:validation:Enum=eventTimeExtractor;filter
+	// +kubebuilder:validation:Enum=eventTimeExtractor;filter;timeExtractionFilter
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
 	// +optional
 	Args []string `json:"args,omitempty" protobuf:"bytes,2,rep,name=args"`

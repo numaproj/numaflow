@@ -6861,6 +6861,7 @@ spec:
                                   enum:
                                   - eventTimeExtractor
                                   - filter
+                                  - timeExtractionFilter
                                   type: string
                               required:
                               - name
@@ -11037,6 +11038,7 @@ spec:
                             enum:
                             - eventTimeExtractor
                             - filter
+                            - timeExtractionFilter
                             type: string
                         required:
                         - name
