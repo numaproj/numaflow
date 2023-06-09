@@ -198,6 +198,35 @@ func (s *FunctionalSuite) TestSourceFiltering() {
 	w.Expect().SinkNotContains("out", expect2)
 }
 
+func (s *FunctionalSuite) TestTimeExtractionFilter() {
+	w := s.Given().Pipeline("@testdata/time-extraction-filter.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "time-extraction-filter"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
+		TerminateAllPodPortForwards()
+
+	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	assert.NoError(s.T(), err)
+	defer func() {
+		_ = client.Close()
+	}()
+
+	testMsgOne := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-01-18T21:54:42.123Z"}]}`
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)))
+	w.Expect().SinkContains("out", testMsgOne)
+	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1))
+
+	testMsgTwo := `{"test": 21, "item": [{"id": 101, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 102, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)))
+	w.Expect().SinkNotContains("out", testMsgTwo)
+}
+
 func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
 	w := s.Given().Pipeline("@testdata/extract-event-time-from-payload.yaml").
 		When().

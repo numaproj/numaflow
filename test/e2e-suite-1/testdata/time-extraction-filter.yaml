@@ -1,0 +1,23 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: time-extraction-filter
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+        transformer:
+          builtin:
+            name: timeExtractionFilter
+            kwargs:
+              filterExpr: int(json(payload).id) < 100
+              eventTimeExpr: json(payload).item[1].time
+    - name: out
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out
