@@ -41,17 +41,17 @@ type myForwardToAllTest struct {
 
 func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	},
 		{
-			ToVertexName:      "to2",
-			ToVertexPartition: 0,
+			ToVertexName:         "to2",
+			ToVertexPartitionIdx: 0,
 		}}, nil
 }
 
 func TestBlackhole_Start(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -89,9 +89,9 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 25)
-	to2 := simplebuffer.NewInMemoryBuffer("to2", 25)
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 25, 0)
+	to2 := simplebuffer.NewInMemoryBuffer("to2", 25, 0)
 
 	// start the last vertex first
 	// add 2 sinks per vertex
@@ -153,8 +153,8 @@ func getSinkGoWhereDecider(vertexName string) forward.GoWhere {
 	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 		result = append(result, forward.VertexBuffer{
-			ToVertexName:      vertexName,
-			ToVertexPartition: 0,
+			ToVertexName:         vertexName,
+			ToVertexPartitionIdx: 0,
 		})
 		return result, nil
 	})

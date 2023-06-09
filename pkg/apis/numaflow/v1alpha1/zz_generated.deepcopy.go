@@ -264,8 +264,8 @@ func (in *BufferServiceConfig) DeepCopy() *BufferServiceConfig {
 func (in *CombinedEdge) DeepCopyInto(out *CombinedEdge) {
 	*out = *in
 	in.Edge.DeepCopyInto(&out.Edge)
-	if in.FromVertexPartitions != nil {
-		in, out := &in.FromVertexPartitions, &out.FromVertexPartitions
+	if in.FromVertexPartitionCount != nil {
+		in, out := &in.FromVertexPartitionCount, &out.FromVertexPartitionCount
 		*out = new(int32)
 		**out = **in
 	}
@@ -274,8 +274,8 @@ func (in *CombinedEdge) DeepCopyInto(out *CombinedEdge) {
 		*out = new(VertexLimits)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.ToVertexPartitions != nil {
-		in, out := &in.ToVertexPartitions, &out.ToVertexPartitions
+	if in.ToVertexPartitionCount != nil {
+		in, out := &in.ToVertexPartitionCount, &out.ToVertexPartitionCount
 		*out = new(int32)
 		**out = **in
 	}

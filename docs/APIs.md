@@ -608,7 +608,7 @@ From vertex type.
 </tr>
 <tr>
 <td>
-<code>fromVertexPartitions</code></br> <em> int32 </em>
+<code>fromVertexPartitionCount</code></br> <em> int32 </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -642,7 +642,7 @@ To vertex type.
 </tr>
 <tr>
 <td>
-<code>toVertexPartitions</code></br> <em> int32 </em>
+<code>toVertexPartitionCount</code></br> <em> int32 </em>
 </td>
 <td>
 <em>(Optional)</em>

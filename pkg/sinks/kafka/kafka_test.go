@@ -35,7 +35,7 @@ import (
 
 func TestWriteSuccessToKafka(t *testing.T) {
 	var err error
-	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25)
+	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25, 0)
 	toKafka := new(ToKafka)
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -88,7 +88,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 
 func TestWriteFailureToKafka(t *testing.T) {
 	var err error
-	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25)
+	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25, 0)
 	toKafka := new(ToKafka)
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -145,8 +145,8 @@ func getSinkGoWhereDecider(vertexName string) forward.GoWhere {
 	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 		result = append(result, forward.VertexBuffer{
-			ToVertexName:      vertexName,
-			ToVertexPartition: 0,
+			ToVertexName:         vertexName,
+			ToVertexPartitionIdx: 0,
 		})
 		return result, nil
 	})

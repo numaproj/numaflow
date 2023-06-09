@@ -71,7 +71,7 @@ func TestMain(m *testing.M) {
 
 // GetWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testForwardFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
+func (t *testForwardFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
 }
 
@@ -80,7 +80,7 @@ func (t *testForwardFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark{}
 }
 
-func (t *testForwardFetcher) GetHeadWMB() wmb.WMB {
+func (t *testForwardFetcher) GetHeadWMB(int32) wmb.WMB {
 	// won't be used
 	return wmb.WMB{}
 }
@@ -90,8 +90,8 @@ type myForwardTest struct {
 
 func (f myForwardTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
@@ -124,8 +124,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 		t.Run(tt.name+"_basic", func(t *testing.T) {
 			metricsReset()
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
@@ -159,7 +159,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, int(batchSize))
 			for i := 0; i < int(batchSize); i++ {
-				assert.Equal(t, []interface{}{writeMessages[i].Header}, []interface{}{readMessages[i].Header})
+				assert.Equal(t, []interface{}{writeMessages[i].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+				assert.Equal(t, []interface{}{writeMessages[i].Kind}, []interface{}{readMessages[i].Kind})
+				assert.Equal(t, []interface{}{writeMessages[i].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
 			}
 			validateMetrics(t, batchSize)
@@ -178,9 +180,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we forward to all buffers
 		t.Run(tt.name+"_toAll", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
-			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 				"to2": {to2},
@@ -215,7 +217,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, int(batchSize))
 			for i := 0; i < int(batchSize); i++ {
-				assert.Equal(t, []interface{}{writeMessages[i].Header}, []interface{}{readMessages[i].Header})
+				assert.Equal(t, []interface{}{writeMessages[i].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+				assert.Equal(t, []interface{}{writeMessages[i].Kind}, []interface{}{readMessages[i].Kind})
+				assert.Equal(t, []interface{}{writeMessages[i].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
 			}
 			// write some data
@@ -264,9 +268,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we drop all events
 		t.Run(tt.name+"_dropAll", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
-			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 				"to2": {to2},
@@ -362,9 +366,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we forward to only one buffer
 		t.Run(tt.name+"_toOneStep", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
-			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 				"to2": {to2},
@@ -399,7 +403,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, int(batchSize))
 			for i := 0; i < int(batchSize); i++ {
-				assert.Equal(t, []interface{}{writeMessages[i].Header}, []interface{}{readMessages[i].Header})
+				assert.Equal(t, []interface{}{writeMessages[i].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+				assert.Equal(t, []interface{}{writeMessages[i].Kind}, []interface{}{readMessages[i].Kind})
+				assert.Equal(t, []interface{}{writeMessages[i].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
 			}
 			// write some data
@@ -449,8 +455,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Test the scenario with UDF error
 		t.Run(tt.name+"_UDFError", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
@@ -488,8 +494,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Test the scenario with error
 		t.Run(tt.name+"_whereToError", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
@@ -524,8 +530,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 		})
 		t.Run(tt.name+"_withInternalError", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
@@ -587,7 +593,7 @@ func (t *testWMBFetcher) Close() error {
 
 // GetWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testWMBFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
+func (t *testWMBFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
 	return wmb.Watermark(testWMBWatermark)
 }
 
@@ -596,7 +602,7 @@ func (t *testWMBFetcher) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark{}
 }
 
-func (t *testWMBFetcher) GetHeadWMB() wmb.WMB {
+func (t *testWMBFetcher) GetHeadWMB(int32) wmb.WMB {
 	t.sameLock.RLock()
 	defer t.sameLock.RUnlock()
 	t.diffLock.RLock()
@@ -640,8 +646,8 @@ func (t *testWMBFetcher) GetHeadWMB() wmb.WMB {
 }
 
 func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0)
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {to1},
 	}
@@ -793,8 +799,8 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 }
 
 func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10)
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0)
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {to1},
 	}
@@ -930,8 +936,8 @@ type mySourceForwardTest struct {
 
 func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
@@ -1010,8 +1016,8 @@ func (p TestSourceWatermarkPublisher) PublishSourceWatermarks([]*isb.ReadMessage
 }
 
 func TestSourceInterStepDataForward(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, simplebuffer.WithReadTimeOut(time.Second*10))
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {to1},
 	}
@@ -1051,7 +1057,7 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, int(count))
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{writeMessages[0].Header.ID, writeMessages[1].Header.ID}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.ID + "-0-0", writeMessages[1].Header.ID + "-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
 		assert.Equal(t, testSourceNewEventTime, m.EventTime)
@@ -1109,8 +1115,8 @@ func TestWriteToBuffer(t *testing.T) {
 	}
 	for _, value := range tests {
 		t.Run(value.name, func(t *testing.T) {
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*value.batchSize)
-			buffer := simplebuffer.NewInMemoryBuffer("to1", value.batchSize, simplebuffer.WithBufferFullWritingStrategy(value.strategy))
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*value.batchSize, 0)
+			buffer := simplebuffer.NewInMemoryBuffer("to1", value.batchSize, 0, simplebuffer.WithBufferFullWritingStrategy(value.strategy))
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {buffer},
 			}
@@ -1180,12 +1186,12 @@ type myForwardToAllTest struct {
 
 func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	},
 		{
-			ToVertexName:      "to2",
-			ToVertexPartition: 0,
+			ToVertexName:         "to2",
+			ToVertexPartitionIdx: 0,
 		},
 	}, nil
 }
@@ -1203,8 +1209,8 @@ type myForwardInternalErrTest struct {
 
 func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
@@ -1236,8 +1242,8 @@ type myForwardApplyWhereToErrTest struct {
 
 func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, fmt.Errorf("whereToStep failed")
 }
 
@@ -1254,8 +1260,8 @@ type myForwardApplyUDFErrTest struct {
 
 func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	return []VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 

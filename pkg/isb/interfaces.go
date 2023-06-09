@@ -63,6 +63,7 @@ type BufferReader interface {
 // BufferReaderInformation has information regarding the buffer we are reading from.
 type BufferReaderInformation interface {
 	GetName() string
+	GetPartitionIdx() int32
 }
 
 // BufferWriterInformation has information regarding the buffer we are writing to.

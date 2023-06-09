@@ -28,9 +28,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
-// TODO - return (map[string]fetch.Fetcher, error) instead of (map[string][]fetch.Fetcher, error)
 // GetEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
+// TODO - return (map[string]fetch.Fetcher, error) instead of (map[string][]fetch.Fetcher, error
 func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[string][]fetch.Fetcher, error) {
 	var wmFetchers = make(map[string][]fetch.Fetcher)
 	if pipeline.Spec.Watermark.Disabled {
@@ -39,9 +39,16 @@ func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, 
 
 	for _, edge := range pipeline.ListAllEdges() {
 		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
-		partitions := pipeline.NumOfPartitions(edge.To)
+		var partitionCount int
 		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
-		wmFetcherList, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName, partitions, isReduce)
+		// If the vertex is a reduce vertex, then the number of partitionCount is 1, because the reduce pod will
+		// always read from one partition.
+		if isReduce {
+			partitionCount = 1
+		} else {
+			partitionCount = pipeline.GetVertex(edge.To).GetPartitionCount()
+		}
+		wmFetcherList, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName, partitionCount, isReduce)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 		}

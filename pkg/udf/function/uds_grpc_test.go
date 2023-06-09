@@ -21,13 +21,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
 	"io"
 	"testing"
 	"time"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
-	"github.com/numaproj/numaflow-go/pkg/function/clienttest"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 

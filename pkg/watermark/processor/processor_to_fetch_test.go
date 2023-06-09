@@ -25,7 +25,7 @@ import (
 
 func TestFromProcessor_setStatus(t *testing.T) {
 	var ctx = context.Background()
-	p := NewProcessorToFetch(ctx, NewProcessorEntity("test-pod"), 5)
+	p := NewProcessorToFetch(ctx, NewProcessorEntity("test-pod"), 5, 1)
 	p.setStatus(_inactive)
 	assert.Equal(t, _inactive, p.status)
 }

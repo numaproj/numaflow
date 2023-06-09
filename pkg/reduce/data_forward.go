@@ -192,7 +192,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	if len(readMessages) == 0 {
 		// we use the HeadWMB as the watermark for the idle
-		var processorWMB = df.wmFetcher.GetHeadWMB()
+		// we get the HeadWMB for the partition from which we read the messages
+		var processorWMB = df.wmFetcher.GetHeadWMB(df.fromBuffer.GetPartitionIdx())
 		if !df.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
 			df.log.Debugw("skip publishing idle watermark",
@@ -207,11 +208,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		if nextWin == nil {
 			// if all the windows are closed already, and the len(readBatch) == 0
 			// then it means there's an idle situation
-			// in this case, send idle watermark to all the toBuffers
-			// TODO(multi-partition): support multi partitioned buffer
+			// in this case, send idle watermark to all the toBuffer partitions
 			for toVertexName, toVertexBuffer := range df.toBuffers {
-				for index, bufferPartition := range toVertexBuffer {
-					if publisher, ok := df.wmPublishers[toVertexName]; ok {
+				if publisher, ok := df.wmPublishers[toVertexName]; ok {
+					for index, bufferPartition := range toVertexBuffer {
 						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 					}
 				}
@@ -229,10 +229,9 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				// if toBeClosed window exists, but the watermark we fetch is still within the endTime of the window
 				// then we can't close the window because there could still be data after the idling situation ends
 				// so in this case, we publish an idle watermark
-				// TODO(multi-partition): support multi partitioned edges
 				for toVertexName, toVertexBuffer := range df.toBuffers {
-					for index, bufferPartition := range toVertexBuffer {
-						if publisher, ok := df.wmPublishers[toVertexName]; ok {
+					if publisher, ok := df.wmPublishers[toVertexName]; ok {
+						for index, bufferPartition := range toVertexBuffer {
 							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 						}
 					}
@@ -249,7 +248,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}).Add(float64(len(readMessages)))
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
-	processorWM := df.wmFetcher.GetWatermark(readMessages[0].ReadOffset)
+	// get the watermark for the partition from which we read the messages
+	processorWM := df.wmFetcher.GetWatermark(readMessages[0].ReadOffset, df.fromBuffer.GetPartitionIdx())
 	for _, m := range readMessages {
 		if !df.keyed {
 			m.Keys = []string{dfv1.DefaultKeyForNonKeyedData}
@@ -360,10 +360,9 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			// start processing data whose watermark is smaller than the endTime of the toBeClosed window
 
 			// this is to minimize watermark latency
-			//TODO(multi-partition): support multi partitioned edges
-			for toVertex, toVertexBuffer := range df.toBuffers {
-				for index, bufferPartition := range toVertexBuffer {
-					if publisher, ok := df.wmPublishers[toVertex]; ok {
+			for toVertexName, toVertexBuffer := range df.toBuffers {
+				if publisher, ok := df.wmPublishers[toVertexName]; ok {
+					for index, bufferPartition := range toVertexBuffer {
 						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 					}
 				}

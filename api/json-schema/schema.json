@@ -17499,7 +17499,7 @@
         "fromVertexLimits": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
         },
-        "fromVertexPartitions": {
+        "fromVertexPartitionCount": {
           "description": "The number of partitions of the from vertex, if not provided, the default value is set to \"1\".",
           "format": "int32",
           "type": "integer"
@@ -17527,7 +17527,7 @@
         "toVertexLimits": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
         },
-        "toVertexPartitions": {
+        "toVertexPartitionCount": {
           "description": "The number of partitions of the to vertex, if not provided, the default value is set to \"1\".",
           "format": "int32",
           "type": "integer"
