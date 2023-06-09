@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -119,44 +120,47 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}
 			log.Infow("Succeeded to create a consumer for a stream", zap.String("stream", streamName), zap.String("consumer", streamName))
 		}
-		for _, bucket := range buckets {
-			// Create offset-timeline bucket
-			otBucket := JetStreamOTBucket(bucket)
-			if _, err := js.KeyValue(otBucket); err != nil {
-				if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-					return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otBucket, err)
-				}
-				if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
-					Bucket:       otBucket,
-					MaxValueSize: v.GetInt32("otBucket.maxValueSize"),
-					History:      uint8(v.GetUint("otBucket.history")),
-					TTL:          v.GetDuration("otBucket.ttl"),
-					MaxBytes:     v.GetInt64("otBucket.maxBytes"),
-					Storage:      nats.StorageType(v.GetInt("otBucket.storage")),
-					Replicas:     v.GetInt("otBucket.replicas"),
-					Placement:    nil,
-				}); err != nil {
-					return fmt.Errorf("failed to create offset timeline bucket %q, %w", otBucket, err)
-				}
+		//TODO: remove sleep and use a better way to wait for the stream to be ready
+		time.Sleep(3 * time.Second)
+	}
+
+	for _, bucket := range buckets {
+		// Create offset-timeline bucket
+		otBucket := JetStreamOTBucket(bucket)
+		if _, err := js.KeyValue(otBucket); err != nil {
+			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otBucket, err)
 			}
-			// Create processor bucket
-			procBucket := JetStreamProcessorBucket(bucket)
-			if _, err := js.KeyValue(procBucket); err != nil {
-				if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-					return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procBucket, err)
-				}
-				if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
-					Bucket:       procBucket,
-					MaxValueSize: v.GetInt32("procBucket.maxValueSize"),
-					History:      uint8(v.GetUint("procBucket.history")),
-					TTL:          v.GetDuration("procBucket.ttl"),
-					MaxBytes:     v.GetInt64("procBucket.maxBytes"),
-					Storage:      nats.StorageType(v.GetInt("procBucket.storage")),
-					Replicas:     v.GetInt("procBucket.replicas"),
-					Placement:    nil,
-				}); err != nil {
-					return fmt.Errorf("failed to create processor bucket %q, %w", otBucket, err)
-				}
+			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
+				Bucket:       otBucket,
+				MaxValueSize: v.GetInt32("otBucket.maxValueSize"),
+				History:      uint8(v.GetUint("otBucket.history")),
+				TTL:          v.GetDuration("otBucket.ttl"),
+				MaxBytes:     v.GetInt64("otBucket.maxBytes"),
+				Storage:      nats.StorageType(v.GetInt("otBucket.storage")),
+				Replicas:     v.GetInt("otBucket.replicas"),
+				Placement:    nil,
+			}); err != nil {
+				return fmt.Errorf("failed to create offset timeline bucket %q, %w", otBucket, err)
+			}
+		}
+		// Create processor bucket
+		procBucket := JetStreamProcessorBucket(bucket)
+		if _, err := js.KeyValue(procBucket); err != nil {
+			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procBucket, err)
+			}
+			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
+				Bucket:       procBucket,
+				MaxValueSize: v.GetInt32("procBucket.maxValueSize"),
+				History:      uint8(v.GetUint("procBucket.history")),
+				TTL:          v.GetDuration("procBucket.ttl"),
+				MaxBytes:     v.GetInt64("procBucket.maxBytes"),
+				Storage:      nats.StorageType(v.GetInt("procBucket.storage")),
+				Replicas:     v.GetInt("procBucket.replicas"),
+				Placement:    nil,
+			}); err != nil {
+				return fmt.Errorf("failed to create processor bucket %q, %w", otBucket, err)
 			}
 		}
 	}
@@ -279,10 +283,9 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-// TODO: revisit this when working on multi partitions
-func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error) {
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.Fetcher, error) {
 	var watermarkFetchers []fetch.Fetcher
-	for i := 0; i < partitions; i++ {
+	for i := 0; i < fromBufferPartitionCount; i++ {
 		hbBucketName := JetStreamProcessorBucket(bucketName)
 		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
 		// should we return error if one is successful?
@@ -295,8 +298,8 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 			return nil, err
 		}
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
-		pm := processor.NewProcessorManager(ctx, storeWatcher, processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
-		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm)
+		pm := processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, fromBufferPartitionCount)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}
 	return watermarkFetchers, nil

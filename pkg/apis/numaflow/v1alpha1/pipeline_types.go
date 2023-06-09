@@ -100,7 +100,7 @@ func (p Pipeline) NumOfPartitions(vertex string) int {
 	}
 	partitions := 1
 	if v.Partitions != nil {
-		partitions = v.GetPartitions()
+		partitions = v.GetPartitionCount()
 	}
 	// TODO: remove this after we deprecate edge.parallelism.
 	if v.IsReduceUDF() {

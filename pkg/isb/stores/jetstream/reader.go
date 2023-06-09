@@ -31,7 +31,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
 type jetStreamReader struct {
@@ -43,13 +42,12 @@ type jetStreamReader struct {
 	sub                    *nats.Subscription
 	opts                   *readOptions
 	inProgressTickDuration time.Duration
+	partitionIdx           int32
 	log                    *zap.SugaredLogger
-	// ackedInfo stores a list of ack seq/timestamp(seconds) information
-	ackedInfo *sharedqueue.OverflowQueue[timestampedSequence]
 }
 
 // NewJetStreamBufferReader is used to provide a new JetStream buffer reader connection
-func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, opts ...ReadOption) (isb.BufferReader, error) {
+func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, partitionIdx int32, opts ...ReadOption) (isb.BufferReader, error) {
 	log := logging.FromContext(ctx).With("bufferReader", name).With("stream", stream).With("subject", subject)
 	o := defaultReadOptions()
 	for _, opt := range opts {
@@ -60,11 +58,12 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 		}
 	}
 	result := &jetStreamReader{
-		name:    name,
-		stream:  stream,
-		subject: subject,
-		opts:    o,
-		log:     log,
+		name:         name,
+		stream:       stream,
+		subject:      subject,
+		partitionIdx: partitionIdx,
+		opts:         o,
+		log:          log,
 	}
 
 	connectAndSubscribe := func() (*jsclient.NatsConn, *jsclient.JetStreamContext, *nats.Subscription, error) {
@@ -133,15 +132,15 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 	result.js = js
 	result.sub = sub
 	result.inProgressTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
-	if o.useAckInfoAsRate {
-		result.ackedInfo = sharedqueue.New[timestampedSequence](1800)
-		go result.runAckInformationChecker(ctx)
-	}
 	return result, nil
 }
 
 func (jr *jetStreamReader) GetName() string {
 	return jr.name
+}
+
+func (jr *jetStreamReader) GetPartitionIdx() int32 {
+	return jr.partitionIdx
 }
 
 func (jr *jetStreamReader) Close() error {
@@ -156,36 +155,6 @@ func (jr *jetStreamReader) Close() error {
 	return nil
 }
 
-func (jr *jetStreamReader) runAckInformationChecker(ctx context.Context) {
-	js, err := jr.conn.JetStream()
-	if err != nil {
-		// Let it exit if it fails to start the information checker
-		jr.log.Fatal("Failed to get Jet Stream context, %w", err)
-	}
-	checkAckInfo := func() {
-		c, err := js.ConsumerInfo(jr.stream, jr.stream)
-		if err != nil {
-			jr.log.Errorw("Failed to get consumer info in the reader", zap.Error(err))
-			return
-		}
-		ts := timestampedSequence{seq: int64(c.AckFloor.Stream), timestamp: time.Now().Unix()}
-		jr.ackedInfo.Append(ts)
-		jr.log.Debugw("Acknowledge information", zap.Int64("ackSeq", ts.seq), zap.Int64("timestamp", ts.timestamp))
-	}
-	checkAckInfo()
-
-	ticker := time.NewTicker(jr.opts.ackInfoCheckInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			checkAckInfo()
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
 func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
 	c, err := jr.js.ConsumerInfo(jr.stream, jr.stream)
 	if err != nil {
@@ -194,34 +163,9 @@ func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
 	return int64(c.NumPending) + int64(c.NumAckPending), nil
 }
 
-// Rate returns the ack rate (tps) in the past seconds
-func (jr *jetStreamReader) Rate(_ context.Context, seconds int64) (float64, error) {
-	if !jr.opts.useAckInfoAsRate {
-		return isb.RateNotAvailable, nil
-	}
-	timestampedSeqs := jr.ackedInfo.Items()
-	if len(timestampedSeqs) < 2 {
-		return isb.RateNotAvailable, nil
-	}
-	endSeqInfo := timestampedSeqs[len(timestampedSeqs)-1]
-	startSeqInfo := timestampedSeqs[len(timestampedSeqs)-2]
-	now := time.Now().Unix()
-	if now-startSeqInfo.timestamp > seconds {
-		return isb.RateNotAvailable, nil
-	}
-	for i := len(timestampedSeqs) - 3; i >= 0; i-- {
-		if now-timestampedSeqs[i].timestamp <= seconds {
-			startSeqInfo = timestampedSeqs[i]
-		} else {
-			break
-		}
-	}
-	return float64(endSeqInfo.seq-startSeqInfo.seq) / float64(endSeqInfo.timestamp-startSeqInfo.timestamp), nil
-}
-
 func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var err error
-	result := []*isb.ReadMessage{}
+	var result []*isb.ReadMessage
 	msgs, err := jr.sub.Fetch(int(count), nats.MaxWait(jr.opts.readTimeOut))
 	if err != nil && !errors.Is(err, nats.ErrTimeout) {
 		isbReadErrors.With(map[string]string{"buffer": jr.GetName()}).Inc()
@@ -309,13 +253,13 @@ func newOffset(msg *nats.Msg, tickDuration time.Duration, log *zap.SugaredLogger
 	// If tickDuration is 1s, which means ackWait is 1s or 2s, it does not make much sense to do it, instead, increasing ackWait is recommended.
 	if tickDuration.Seconds() > 1 {
 		ctx, cancel := context.WithCancel(context.Background())
-		go o.workInProgess(ctx, msg, tickDuration, log)
+		go o.workInProgress(ctx, msg, tickDuration, log)
 		o.cancelFunc = cancel
 	}
 	return o
 }
 
-func (o *offset) workInProgess(ctx context.Context, msg *nats.Msg, tickDuration time.Duration, log *zap.SugaredLogger) {
+func (o *offset) workInProgress(ctx context.Context, msg *nats.Msg, tickDuration time.Duration, log *zap.SugaredLogger) {
 	ticker := time.NewTicker(tickDuration)
 	defer ticker.Stop()
 	for {

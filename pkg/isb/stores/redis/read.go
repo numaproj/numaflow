@@ -48,7 +48,7 @@ type BufferReadInfo struct {
 var _ isb.BufferReader = (*BufferRead)(nil)
 
 // NewBufferRead returns a new redis buffer reader.
-func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, opts ...redisclient.Option) isb.BufferReader {
+func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, fromPartitionIdx int32, opts ...redisclient.Option) isb.BufferReader {
 	options := &redisclient.Options{
 		InfoRefreshInterval: time.Second,
 		ReadTimeOut:         time.Second,
@@ -61,12 +61,13 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 
 	rqr := &BufferRead{
 		RedisStreamsRead: &redisclient.RedisStreamsRead{
-			Name:        name,
-			Stream:      redisclient.GetRedisStreamName(name),
-			Group:       group,
-			Consumer:    consumer,
-			RedisClient: client,
-			Options:     *options,
+			Name:         name,
+			Stream:       redisclient.GetRedisStreamName(name),
+			Group:        group,
+			Consumer:     consumer,
+			PartitionIdx: fromPartitionIdx,
+			RedisClient:  client,
+			Options:      *options,
 			Metrics: redisclient.Metrics{
 				ReadErrorsInc: func() {
 					labels := map[string]string{"buffer": name}
@@ -265,9 +266,4 @@ func (br *BufferRead) setError(errMsg string, err error) {
 func (br *BufferRead) Pending(_ context.Context) (int64, error) {
 	// TODO: not implemented
 	return isb.PendingNotAvailable, nil
-}
-
-func (br *BufferRead) Rate(_ context.Context) (float64, error) {
-	// TODO: not implemented
-	return isb.RateNotAvailable, nil
 }

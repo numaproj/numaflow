@@ -86,7 +86,7 @@ func WithBufferSize(s int) Option {
 
 func New(
 	vertexInstance *dfv1.VertexInstance,
-	writers []isb.BufferWriter,
+	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
@@ -190,11 +190,6 @@ func New(
 	}()
 	h.shutdown = server.Shutdown
 
-	destinations := make(map[string]isb.BufferWriter, len(writers))
-	for _, w := range writers {
-		destinations[w.GetName()] = w
-	}
-
 	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(h.logger), forward.WithSourceWatermarkPublisher(h)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
@@ -202,7 +197,7 @@ func New(
 		}
 	}
 
-	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	h.forwarder, err = forward.NewInterStepDataForward(vertexInstance.Vertex, h, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -212,12 +207,19 @@ func New(
 	h.cancelFunc = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	// source publisher toVertexPartitionCount will be 1, because we publish watermarks within source itself.
+	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 	return h, nil
 }
 
 func (h *httpSource) GetName() string {
 	return h.name
+}
+
+// GetPartitionIdx returns the partition number for the source vertex buffer
+// Source is like a buffer with only one partition. So, we always return 0
+func (h *httpSource) GetPartitionIdx() int32 {
+	return 0
 }
 
 func (h *httpSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
@@ -247,7 +249,8 @@ func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
 		h.logger.Debugf("Publishing watermark %v to source", oldest)
-		h.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
+		// toVertexPartitionIdx is 0, because we publish watermarks within source itself.
+		h.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }
 

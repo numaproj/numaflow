@@ -60,9 +60,9 @@ type DataForward struct {
 	pipelineName          string
 	vertexReplica         int32
 	fromBuffer            isb.BufferReader
-	toBuffers             map[string]isb.BufferWriter
-	watermarkFetcher      fetch.Fetcher
-	watermarkPublishers   map[string]publish.Publisher
+	toBuffers             map[string][]isb.BufferWriter
+	wmFetcher             fetch.Fetcher
+	wmPublishers          map[string]publish.Publisher
 	windower              window.Windower
 	keyed                 bool
 	idleManager           *wmb.IdleManager
@@ -79,7 +79,7 @@ type DataForward struct {
 func NewDataForward(ctx context.Context,
 	vertexInstance *dfv1.VertexInstance,
 	fromBuffer isb.BufferReader,
-	toBuffers map[string]isb.BufferWriter,
+	toBuffers map[string][]isb.BufferWriter,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	fw fetch.Fetcher,
@@ -104,8 +104,8 @@ func NewDataForward(ctx context.Context,
 		vertexReplica:         vertexInstance.Replica,
 		fromBuffer:            fromBuffer,
 		toBuffers:             toBuffers,
-		watermarkFetcher:      fw,
-		watermarkPublishers:   watermarkPublishers,
+		wmFetcher:             fw,
+		wmPublishers:          watermarkPublishers,
 		windower:              windowingStrategy,
 		keyed:                 vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed,
 		idleManager:           idleManager,
@@ -192,7 +192,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	if len(readMessages) == 0 {
 		// we use the HeadWMB as the watermark for the idle
-		var processorWMB = df.watermarkFetcher.GetHeadWMB()
+		// we get the HeadWMB for the partition from which we read the messages
+		var processorWMB = df.wmFetcher.GetHeadWMB(df.fromBuffer.GetPartitionIdx())
 		if !df.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
 			df.log.Debugw("skip publishing idle watermark",
@@ -207,10 +208,12 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		if nextWin == nil {
 			// if all the windows are closed already, and the len(readBatch) == 0
 			// then it means there's an idle situation
-			// in this case, send idle watermark to all the toBuffers
-			for _, toBuffer := range df.toBuffers {
-				if publisher, ok := df.watermarkPublishers[toBuffer.GetName()]; ok {
-					idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+			// in this case, send idle watermark to all the toBuffer partitions
+			for toVertexName, toVertexBuffer := range df.toBuffers {
+				if publisher, ok := df.wmPublishers[toVertexName]; ok {
+					for index, bufferPartition := range toVertexBuffer {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					}
 				}
 			}
 		} else {
@@ -226,9 +229,11 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				// if toBeClosed window exists, but the watermark we fetch is still within the endTime of the window
 				// then we can't close the window because there could still be data after the idling situation ends
 				// so in this case, we publish an idle watermark
-				for _, toBuffer := range df.toBuffers {
-					if publisher, ok := df.watermarkPublishers[toBuffer.GetName()]; ok {
-						idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+				for toVertexName, toVertexBuffer := range df.toBuffers {
+					if publisher, ok := df.wmPublishers[toVertexName]; ok {
+						for index, bufferPartition := range toVertexBuffer {
+							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+						}
 					}
 				}
 			}
@@ -243,7 +248,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}).Add(float64(len(readMessages)))
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
-	processorWM := df.watermarkFetcher.GetWatermark(readMessages[0].ReadOffset)
+	// get the watermark for the partition from which we read the messages
+	processorWM := df.wmFetcher.GetWatermark(readMessages[0].ReadOffset, df.fromBuffer.GetPartitionIdx())
 	for _, m := range readMessages {
 		if !df.keyed {
 			m.Keys = []string{dfv1.DefaultKeyForNonKeyedData}
@@ -354,9 +360,11 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			// start processing data whose watermark is smaller than the endTime of the toBeClosed window
 
 			// this is to minimize watermark latency
-			for _, toBuffer := range df.toBuffers {
-				if publisher, ok := df.watermarkPublishers[toBuffer.GetName()]; ok {
-					idlehandler.PublishIdleWatermark(ctx, toBuffer, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+			for toVertexName, toVertexBuffer := range df.toBuffers {
+				if publisher, ok := df.wmPublishers[toVertexName]; ok {
+					for index, bufferPartition := range toVertexBuffer {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+					}
 				}
 			}
 		}
@@ -565,12 +573,12 @@ func (df *DataForward) ShutDown(ctx context.Context) {
 	df.pbqManager.ShutDown(ctx)
 
 	// stop watermark fetcher
-	if err := df.watermarkFetcher.Close(); err != nil {
+	if err := df.wmFetcher.Close(); err != nil {
 		df.log.Errorw("Failed to close watermark fetcher", zap.Error(err))
 	}
 
 	// stop watermark publisher
-	for _, publisher := range df.watermarkPublishers {
+	for _, publisher := range df.wmPublishers {
 		if err := publisher.Close(); err != nil {
 			df.log.Errorw("Failed to close watermark publisher", zap.Error(err))
 		}

@@ -37,16 +37,16 @@ func NewNoOpWMProgressor() *NoOpWMProgressor {
 }
 
 // GetWatermark returns the default watermark.
-func (n NoOpWMProgressor) GetWatermark(_ isb.Offset) wmb.Watermark {
+func (n NoOpWMProgressor) GetWatermark(isb.Offset, int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 
 // PublishWatermark does a no-op watermark publish.
-func (n NoOpWMProgressor) PublishWatermark(_ wmb.Watermark, _ isb.Offset) {
+func (n NoOpWMProgressor) PublishWatermark(wmb.Watermark, isb.Offset, int32) {
 }
 
 // PublishIdleWatermark does a no-op idle watermark publish.
-func (n NoOpWMProgressor) PublishIdleWatermark(wmb.Watermark, isb.Offset) {
+func (n NoOpWMProgressor) PublishIdleWatermark(wmb.Watermark, isb.Offset, int32) {
 }
 
 // GetLatestWatermark returns the default watermark as the latest watermark.
@@ -60,7 +60,7 @@ func (n NoOpWMProgressor) GetHeadWatermark() wmb.Watermark {
 }
 
 // GetHeadWMB returns the default WMB.
-func (n NoOpWMProgressor) GetHeadWMB() wmb.WMB {
+func (n NoOpWMProgressor) GetHeadWMB(int32) wmb.WMB {
 	return wmb.WMB{}
 }
 
@@ -78,7 +78,7 @@ func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.Fetc
 	return fetchWatermark, publishWatermark
 }
 
-func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
+func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string][]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
 	for buffName := range bufferMap {

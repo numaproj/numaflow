@@ -42,9 +42,11 @@ func Start(insecure bool, port int, namespaced bool, managedNamespace string, ba
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.RedirectTrailingSlash = true
 	router.Use(static.Serve(baseHref, static.LocalFile("./ui/build", true)))
-	router.NoRoute(func(c *gin.Context) {
-		c.File("./ui/build/index.html")
-	})
+	if baseHref != "/" {
+		router.NoRoute(func(c *gin.Context) {
+			c.File("./ui/build/index.html")
+		})
+	}
 	routes.Routes(router, routes.SystemInfo{ManagedNamespace: managedNamespace, Namespaced: namespaced})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
