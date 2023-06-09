@@ -93,7 +93,7 @@ func (e *EventTypeWMProgressor) Close() error {
 	return nil
 }
 
-func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset) wmb.Watermark {
+func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
 	e.m.Lock()
 	defer e.m.Unlock()
 	return e.watermarks[offset.String()]
@@ -103,7 +103,7 @@ func (e *EventTypeWMProgressor) GetHeadWatermark() wmb.Watermark {
 	return wmb.Watermark{}
 }
 
-func (e *EventTypeWMProgressor) GetHeadWMB() wmb.WMB {
+func (e *EventTypeWMProgressor) GetHeadWMB(int32) wmb.WMB {
 	return wmb.WMB{}
 }
 
@@ -145,8 +145,8 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 
 func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
-		ToVertexName:      "reduce-to-vertex",
-		ToVertexPartition: 0,
+		ToVertexName:         "reduce-to-vertex",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
@@ -244,8 +244,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		toVertexName    = "reduce-to-vertex"
 	)
 	defer cancelFn()
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
-	to := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	to := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 
 	wmpublisher := &EventTypeWMProgressor{
 		watermarks: make(map[string]wmb.Watermark),
@@ -334,10 +334,10 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	toBuffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	toBuffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffers := map[string][]isb.BufferWriter{
 		toVertexName: {toBuffer},
 	}
@@ -540,10 +540,10 @@ func TestReduceDataForward_Count(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -615,10 +615,10 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -694,10 +694,10 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -769,10 +769,10 @@ func TestReduceDataForward_Max(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -845,10 +845,10 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -941,10 +941,10 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -1022,10 +1022,10 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	defer childCancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize)
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize)
+	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
 	toBuffer := map[string][]isb.BufferWriter{
 		toVertexName: {buffer},
 	}
@@ -1128,8 +1128,8 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_PROCESSORS", hbWatcherCh)
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 	storeWatcher := wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	pm := processor.NewProcessorManager(ctx, storeWatcher, processor.WithVertexReplica(0), processor.WithIsReduce(true))
-	f := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm)
+	pm := processor.NewProcessorManager(ctx, storeWatcher, 1, processor.WithIsReduce(true))
+	f := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm, 1)
 	return f, sourcePublisher
 }
 

@@ -135,9 +135,9 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 				continue
 			}
 			wg.Add(1)
-			go func(toVertexName string, partition int32, resultMessages []isb.Message) {
+			go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
 				defer wg.Done()
-				offsets, ctxClosedErr := p.writeToBuffer(ctx, toVertexName, partition, resultMessages)
+				offsets, ctxClosedErr := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
 				if ctxClosedErr != nil {
 					success = false
 					p.log.Errorw("Context closed while waiting to write the message to ISB", zap.Error(ctxClosedErr), zap.Any("partitionID", p.PartitionID))
@@ -145,7 +145,7 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 				}
 				mu.Lock()
 				// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-				writeOffsets[toVertexName][partition] = offsets
+				writeOffsets[toVertexName][toVertexPartitionIdx] = offsets
 				mu.Unlock()
 			}(key, int32(index), messages)
 		}
@@ -194,7 +194,7 @@ func (p *processAndForward) whereToStep() map[string][][]isb.Message {
 			if _, ok := messagesToStep[step.ToVertexName]; !ok {
 				messagesToStep[step.ToVertexName] = make([][]isb.Message, len(p.toBuffers[step.ToVertexName]))
 			}
-			messagesToStep[step.ToVertexName][step.ToVertexPartition] = append(messagesToStep[step.ToVertexName][step.ToVertexPartition], msg.Message)
+			messagesToStep[step.ToVertexName][step.ToVertexPartitionIdx] = append(messagesToStep[step.ToVertexName][step.ToVertexPartitionIdx], msg.Message)
 		}
 
 	}
@@ -288,16 +288,17 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 	var activeWatermarkBuffers = make(map[string][]bool)
 	for toVertexName, bufferOffsets := range writeOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
-		for index, offsets := range bufferOffsets {
-			if publisher, ok := p.wmPublishers[toVertexName]; ok {
+		if publisher, ok := p.wmPublishers[toVertexName]; ok {
+			for index, offsets := range bufferOffsets {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
-					// reset because the toBuffer is not idling
-					p.idleManager.Reset(toVertexName)
+					// reset because the toBuffer partition is not idling
+					p.idleManager.Reset(p.toBuffers[toVertexName][index].GetName())
 				}
 			}
 		}
+
 	}
 
 	// if there's any buffers that haven't received any watermark during this

@@ -97,7 +97,7 @@ func TestRedisQWrite_WithPipeline(t *testing.T) {
 	group := "withPipeline-group"
 	consumer := "withPipeline-0"
 
-	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer).(*BufferRead)
+	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer, 0).(*BufferRead)
 	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 	defer func() { _ = client.DeleteStreamGroup(ctx, rqr.GetStreamName(), group) }()
@@ -124,7 +124,7 @@ func TestRedisQWrite_WithoutPipeline(t *testing.T) {
 	group := "withoutPipeline-group"
 	consumer := "withoutPipeline-0"
 
-	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer).(*BufferRead)
+	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer, 0).(*BufferRead)
 	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
@@ -344,8 +344,8 @@ type myForwardRedisTest struct {
 
 func (f myForwardRedisTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
-		ToVertexName:      "to1",
-		ToVertexPartition: 0,
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
@@ -372,7 +372,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	toStream := "toStep"
 
 	// fromStep, we also have to create a fromStepWrite here to write data to the from stream
-	fromStep, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer, redisclient.WithInfoRefreshInterval(2*time.Millisecond)).(*BufferRead)
+	fromStep, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer, 0, redisclient.WithInfoRefreshInterval(2*time.Millisecond)).(*BufferRead)
 	_ = client.CreateStreamGroup(ctx, fromStep.GetStreamName(), fromGroup, redisclient.ReadFromEarliest)
 	fromStepWrite, _ := NewBufferWrite(ctx, client, fromStream, fromGroup, redisclient.WithInfoRefreshInterval(2*time.Second), redisclient.WithLagDuration(1*time.Millisecond)).(*BufferWrite)
 	defer func() { _ = client.DeleteKeys(ctx, fromStepWrite.GetStreamName()) }()
@@ -380,7 +380,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	defer func() { _ = client.DeleteStreamGroup(ctx, fromStep.GetStreamName(), fromGroup) }()
 
 	// toStep, we also have to create a toStepRead here to read from the toStep
-	to1Read, _ := NewBufferRead(ctx, client, toStream, toGroup, consumer).(*BufferRead)
+	to1Read, _ := NewBufferRead(ctx, client, toStream, toGroup, consumer, 0).(*BufferRead)
 	_ = client.CreateStreamGroup(ctx, to1Read.GetStreamName(), toGroup, redisclient.ReadFromEarliest)
 	to1, _ := NewBufferWrite(ctx, client, toStream, toGroup, redisclient.WithLagDuration(1*time.Millisecond), redisclient.WithInfoRefreshInterval(2*time.Second), redisclient.WithMaxLength(17)).(*BufferWrite)
 	defer func() { _ = client.DeleteKeys(ctx, to1.GetStreamName()) }()
@@ -424,7 +424,7 @@ func TestReadTimeout(t *testing.T) {
 	toStream := "to-st"
 
 	// fromStep, we also have to create a fromStepWrite here to write data to the from stream
-	fromStep, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer, redisclient.WithInfoRefreshInterval(2*time.Millisecond)).(*BufferRead)
+	fromStep, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer, 0, redisclient.WithInfoRefreshInterval(2*time.Millisecond)).(*BufferRead)
 	_ = client.CreateStreamGroup(ctx, fromStep.GetStreamName(), fromGroup, redisclient.ReadFromEarliest)
 	defer func() { _ = client.DeleteKeys(ctx, fromStep.GetStreamName()) }()
 	defer func() { _ = client.DeleteStreamGroup(ctx, fromStep.GetStreamName(), fromGroup) }()
@@ -502,7 +502,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 	}
 
 	// Read all the messages.
-	rqr, _ := NewBufferRead(ctx, client, buffer, group, "consumer").(*BufferRead)
+	rqr, _ := NewBufferRead(ctx, client, buffer, group, "consumer", 0).(*BufferRead)
 
 	defer func() { _ = client.DeleteKeys(ctx, rqr.GetStreamName()) }()
 
@@ -551,7 +551,7 @@ func TestSetWriteInfo(t *testing.T) {
 	}
 
 	// Read all the messages.
-	rqr, _ := NewBufferRead(ctx, client, buffer, group, "consumer").(*BufferRead)
+	rqr, _ := NewBufferRead(ctx, client, buffer, group, "consumer", 0).(*BufferRead)
 
 	defer func() { _ = client.DeleteKeys(ctx, rqr.GetStreamName()) }()
 

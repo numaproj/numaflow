@@ -112,8 +112,8 @@ func (v Vertex) Scalable() bool {
 	return false
 }
 
-func (v Vertex) GetPartitions() int {
-	return v.Spec.GetPartitions()
+func (v Vertex) GetPartitionCount() int {
+	return v.Spec.GetPartitionCount()
 }
 
 func (v Vertex) GetHeadlessServiceName() string {
@@ -338,7 +338,7 @@ func (v Vertex) GetToBuffers() []string {
 		return r
 	}
 	for _, vt := range v.Spec.ToEdges {
-		for i := 0; i < vt.GetToVertexPartitions(); i++ {
+		for i := 0; i < vt.GetToVertexPartitionCount(); i++ {
 			r = append(r, GenerateBufferName(v.Namespace, v.Spec.PipelineName, vt.To, i))
 		}
 	}
@@ -348,7 +348,7 @@ func (v Vertex) GetToBuffers() []string {
 func (v Vertex) GetReplicas() int {
 	if v.IsReduceUDF() {
 		// Replica of a reduce vertex is determined by the partitions.
-		return v.GetPartitions()
+		return v.GetPartitionCount()
 	}
 	if v.Spec.Replicas == nil {
 		return 1
@@ -434,7 +434,7 @@ func (av AbstractVertex) GetVertexType() VertexType {
 	return ""
 }
 
-func (av AbstractVertex) GetPartitions() int {
+func (av AbstractVertex) GetPartitionCount() int {
 	if av.Partitions == nil || *av.Partitions < 1 {
 		return 1
 	}
@@ -473,7 +473,7 @@ func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {
 	if av.IsASource() {
 		return r
 	}
-	for i := 0; i < av.GetPartitions(); i++ {
+	for i := 0; i < av.GetPartitionCount(); i++ {
 		r = append(r, GenerateBufferName(namespace, pipeline, av.Name, i))
 	}
 	return r
