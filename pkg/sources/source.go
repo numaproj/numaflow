@@ -85,19 +85,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
+			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
 			var bufferWriters []isb.BufferWriter
-			if e.ToVertexType == dfv1.VertexTypeReduceUDF {
-				for _, buffer := range buffers {
-					group := buffer + "-group"
-					redisClient := redisclient.NewInClusterRedisClient()
-					writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, group, writeOpts...)
-					bufferWriters = append(bufferWriters, writer)
-				}
-			} else {
-				group := buffers[0] + "-group"
+			// create a writer for each partition.
+			for _, partition := range buffers {
+				group := partition + "-group"
 				redisClient := redisclient.NewInClusterRedisClient()
-				writer := redisisb.NewBufferWrite(ctx, redisClient, buffers[0], group, writeOpts...)
+				writer := redisisb.NewBufferWrite(ctx, redisClient, partition, group, writeOpts...)
 				bufferWriters = append(bufferWriters, writer)
 			}
 			writersMap[e.To] = bufferWriters
@@ -130,26 +124,18 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 			var bufferWriters []isb.BufferWriter
-			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitions())
-			if e.ToVertexType == dfv1.VertexTypeReduceUDF {
-				for _, buffer := range buffers {
-					streamName := isbsvc.JetStreamName(buffer)
-					jetStreamClient := jsclient.NewInClusterJetStreamClient()
-					writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
-					if err != nil {
-						return err
-					}
-					bufferWriters = append(bufferWriters, writer)
-				}
-			} else {
-				streamName := isbsvc.JetStreamName(buffers[0])
+			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
+			// create a writer for each partition.
+			for _, buffer := range buffers {
+				streamName := isbsvc.JetStreamName(buffer)
 				jetStreamClient := jsclient.NewInClusterJetStreamClient()
-				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffers[0], streamName, streamName, writeOpts...)
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
 				if err != nil {
 					return err
 				}
 				bufferWriters = append(bufferWriters, writer)
 			}
+
 			writersMap[e.To] = bufferWriters
 		}
 	default:
@@ -162,11 +148,11 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var toVertexPartitionMap = make(map[string]int)
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 {
-			s := shuffle.NewShuffle(sp.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitions())
+		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
+			s := shuffle.NewShuffle(sp.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitionCount())
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
-		toVertexPartitionMap[edge.To] = edge.GetToVertexPartitions()
+		toVertexPartitionMap[edge.To] = edge.GetToVertexPartitionCount()
 	}
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		t, err := transformer.NewGRPCBasedTransformer()
@@ -204,7 +190,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, sourcer)
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, []isb.BufferReader{sourcer})
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -270,21 +256,22 @@ func (sp *SourceProcessor) getSourcer(writers map[string][]isb.BufferWriter,
 }
 
 func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forward.GoWhere {
+	getToBufferPartition := GetPartitionedBufferIdx()
+
 	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
+			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 				toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
 				result = append(result, forward.VertexBuffer{
-					ToVertexName:      edge.To,
-					ToVertexPartition: toVertexPartition,
+					ToVertexName:         edge.To,
+					ToVertexPartitionIdx: toVertexPartition,
 				})
 			} else {
-				// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
 				result = append(result, forward.VertexBuffer{
-					ToVertexName:      edge.To,
-					ToVertexPartition: 0,
+					ToVertexName:         edge.To,
+					ToVertexPartitionIdx: getToBufferPartition(edge.To, edge.GetToVertexPartitionCount()),
 				})
 			}
 		}
@@ -294,7 +281,7 @@ func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*sh
 }
 
 func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forward.GoWhere {
-
+	getToBufferPartition := GetPartitionedBufferIdx()
 	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 
@@ -305,32 +292,30 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
+				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
 					result = append(result, forward.VertexBuffer{
-						ToVertexName:      edge.To,
-						ToVertexPartition: toVertexPartition,
+						ToVertexName:         edge.To,
+						ToVertexPartitionIdx: toVertexPartition,
 					})
 				} else {
-					// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
 					result = append(result, forward.VertexBuffer{
-						ToVertexName:      edge.To,
-						ToVertexPartition: 0,
+						ToVertexName:         edge.To,
+						ToVertexPartitionIdx: getToBufferPartition(edge.To, edge.GetToVertexPartitionCount()),
 					})
 				}
 			} else {
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
+					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
 						result = append(result, forward.VertexBuffer{
-							ToVertexName:      edge.To,
-							ToVertexPartition: toVertexPartition,
+							ToVertexName:         edge.To,
+							ToVertexPartitionIdx: toVertexPartition,
 						})
 					} else {
-						// TODO: need to shuffle for partitioned map vertex, for now write only to the first partition
 						result = append(result, forward.VertexBuffer{
-							ToVertexName:      edge.To,
-							ToVertexPartition: 0,
+							ToVertexName:         edge.To,
+							ToVertexPartitionIdx: getToBufferPartition(edge.To, edge.GetToVertexPartitionCount()),
 						})
 					}
 				}
@@ -339,4 +324,15 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 		return result, nil
 	})
 	return fsd
+}
+
+// GetPartitionedBufferIdx returns a function that returns a partitioned buffer index based on the toVertex name and the partition count
+// it distributes the messages evenly to the partitions of the toVertex based on the message count(round robin)
+func GetPartitionedBufferIdx() func(toVertex string, toVertexPartitionCount int) int32 {
+	messagePerPartitionMap := make(map[string]int)
+	return func(toVertex string, toVertexPartitionCount int) int32 {
+		vertexPartition := (messagePerPartitionMap[toVertex] + 1) % toVertexPartitionCount
+		messagePerPartitionMap[toVertex] = vertexPartition
+		return int32(vertexPartition)
+	}
 }

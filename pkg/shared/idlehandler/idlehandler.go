@@ -29,28 +29,28 @@ import (
 
 // PublishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
 // we see a new WMB; later we only update the WMB without a ctrl message.
-func PublishIdleWatermark(ctx context.Context, toBuffer isb.BufferWriter, publisher publish.Publisher, idleManager *wmb.IdleManager, toVertexPartition int32, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
-	var bufferName = toBuffer.GetName()
+func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager *wmb.IdleManager, toVertexPartition int32, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
+	var toPartitionName = toBufferPartition.GetName()
 
-	if !idleManager.Exists(bufferName) {
+	if !idleManager.Exists(toPartitionName) {
 		if vertexType == dfv1.VertexTypeSink {
 			// for Sink vertex, we don't need to write any ctrl message
 			// and because when we publish the watermark, offset is not important for sink
 			// so, we do nothing here
-		} else { // if the buffer doesn't exist, then we get a new idle situation
+		} else { // if the toBuffer partition doesn't exist, then we get a new idle situation
 			// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
 			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
-			writeOffsets, errs := toBuffer.Write(ctx, ctrlMessage)
+			writeOffsets, errs := toBufferPartition.Write(ctx, ctrlMessage)
 			// we only write one ctrl message, so there's one and only one error in the array, use index=0 to get the error
 			if errs[0] != nil {
-				logger.Errorw("Failed to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
+				logger.Errorw("Failed to write ctrl message to buffer", zap.String("toPartitionName", toPartitionName), zap.Error(errs[0]))
 				return
 			}
-			logger.Debug("Succeeded to write ctrl message to buffer", zap.String("bufferName", bufferName), zap.Error(errs[0]))
+			logger.Debug("Succeeded to write ctrl message to buffer", zap.String("toPartitionName", toPartitionName), zap.Error(errs[0]))
 
 			if len(writeOffsets) == 1 {
 				// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
-				idleManager.Update(bufferName, writeOffsets[0])
+				idleManager.Update(toPartitionName, writeOffsets[0])
 			}
 		}
 	}
@@ -58,9 +58,9 @@ func PublishIdleWatermark(ctx context.Context, toBuffer isb.BufferWriter, publis
 	// publish WMB (this will naturally incr or set the timestamp of rl.wmbOffset)
 	if vertexType == dfv1.VertexTypeSource || vertexType == dfv1.VertexTypeMapUDF ||
 		vertexType == dfv1.VertexTypeReduceUDF {
-		publisher.PublishIdleWatermark(wm, idleManager.Get(bufferName), toVertexPartition)
+		wmPublisher.PublishIdleWatermark(wm, idleManager.Get(toPartitionName), toVertexPartition)
 	} else {
 		// for Sink vertex, and it does not care about the offset during watermark publishing
-		publisher.PublishIdleWatermark(wm, nil, toVertexPartition)
+		wmPublisher.PublishIdleWatermark(wm, nil, toVertexPartition)
 	}
 }

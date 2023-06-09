@@ -8752,7 +8752,7 @@ spec:
                         readTimeout:
                           type: string
                       type: object
-                    fromVertexPartitions:
+                    fromVertexPartitionCount:
                       format: int32
                       type: integer
                     fromVertexType:
@@ -8790,7 +8790,7 @@ spec:
                         readTimeout:
                           type: string
                       type: object
-                    toVertexPartitions:
+                    toVertexPartitionCount:
                       format: int32
                       type: integer
                     toVertexType:
@@ -11278,7 +11278,7 @@ spec:
                         readTimeout:
                           type: string
                       type: object
-                    fromVertexPartitions:
+                    fromVertexPartitionCount:
                       format: int32
                       type: integer
                     fromVertexType:
@@ -11316,7 +11316,7 @@ spec:
                         readTimeout:
                           type: string
                       type: object
-                    toVertexPartitions:
+                    toVertexPartitionCount:
                       format: int32
                       type: integer
                     toVertexType:

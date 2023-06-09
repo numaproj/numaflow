@@ -234,16 +234,16 @@ func Test_copyEdges(t *testing.T) {
 		assert.Equal(t, "p2", result[0].To)
 		assert.NotNil(t, result[0].ToVertexLimits)
 		assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*result[0].ToVertexLimits.BufferMaxLength))
-		assert.Equal(t, int32(2), *result[0].ToVertexPartitions)
-		assert.Equal(t, int32(1), *result[0].FromVertexPartitions)
+		assert.Equal(t, int32(2), *result[0].ToVertexPartitionCount)
+		assert.Equal(t, int32(1), *result[0].FromVertexPartitionCount)
 
 		edges = []dfv1.Edge{{From: "p2", To: "p3"}}
 		result = copyEdges(pl, edges)
 		assert.Equal(t, 1, len(result))
 		assert.Equal(t, "p2", result[0].From)
 		assert.Equal(t, "p3", result[0].To)
-		assert.Equal(t, int32(1), *result[0].ToVertexPartitions)
-		assert.Equal(t, int32(2), *result[0].FromVertexPartitions)
+		assert.Equal(t, int32(1), *result[0].ToVertexPartitionCount)
+		assert.Equal(t, int32(2), *result[0].FromVertexPartitionCount)
 	})
 
 }

@@ -65,8 +65,8 @@ type forwardTest struct {
 func (f forwardTest) WhereTo(keys []string, _ []string) ([]forward.VertexBuffer, error) {
 	if strings.Compare(keys[len(keys)-1], "test-forward-one") == 0 {
 		return []forward.VertexBuffer{{
-			ToVertexName:      "buffer1",
-			ToVertexPartition: 0,
+			ToVertexName:         "buffer1",
+			ToVertexPartitionIdx: 0,
 		}}, nil
 	} else if strings.Compare(keys[len(keys)-1], "test-forward-all") == 0 {
 		var steps []forward.VertexBuffer
@@ -184,8 +184,8 @@ func TestProcessAndForward_Forward(t *testing.T) {
 
 	pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores())
 
-	test1Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
-	test1Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
+	test1Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10, 0)
+	test1Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10, 0)
 
 	toBuffers1 := map[string][]isb.BufferWriter{
 		"buffer1": {test1Buffer1},
@@ -194,8 +194,8 @@ func TestProcessAndForward_Forward(t *testing.T) {
 
 	pf1, otStores1 := createProcessAndForwardAndOTStore(ctx, "test-forward-one", pbqManager, toBuffers1)
 
-	test2Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
-	test2Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
+	test2Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10, 0)
+	test2Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10, 0)
 
 	toBuffers2 := map[string][]isb.BufferWriter{
 		"buffer1": {test2Buffer1},
@@ -204,8 +204,8 @@ func TestProcessAndForward_Forward(t *testing.T) {
 
 	pf2, otStores2 := createProcessAndForwardAndOTStore(ctx, "test-forward-all", pbqManager, toBuffers2)
 
-	test3Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10)
-	test3Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10)
+	test3Buffer1 := simplebuffer.NewInMemoryBuffer("buffer1", 10, 0)
+	test3Buffer2 := simplebuffer.NewInMemoryBuffer("buffer2", 10, 0)
 
 	toBuffers3 := map[string][]isb.BufferWriter{
 		"buffer1": {test3Buffer1},
@@ -332,13 +332,13 @@ func TestWriteToBuffer(t *testing.T) {
 	}{
 		{
 			name:   "test-discard-latest",
-			buffer: simplebuffer.NewInMemoryBuffer("buffer1", 10, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.DiscardLatest)),
+			buffer: simplebuffer.NewInMemoryBuffer("buffer1", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.DiscardLatest)),
 			// should not throw any error as we drop messages and finish writing before context is cancelled
 			throwError: false,
 		},
 		{
 			name:   "test-retry-until-success",
-			buffer: simplebuffer.NewInMemoryBuffer("buffer2", 10, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess)),
+			buffer: simplebuffer.NewInMemoryBuffer("buffer2", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess)),
 			// should throw context closed error as we keep retrying writing until context is cancelled
 			throwError: true,
 		},
