@@ -941,6 +941,19 @@ func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, er
 	}}, nil
 }
 
+type mySourceForwardTestRoundRobin struct {
+	count int
+}
+
+func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	var output = []VertexBuffer{{
+		ToVertexName:         "to1",
+		ToVertexPartitionIdx: int32(f.count % 2),
+	}}
+	f.count++
+	return output, nil
+}
+
 // for source forward test, in transformer, we assign to the message a new event time that is before test source watermark,
 // such that we can verify message IsLate attribute gets set to true.
 var testSourceNewEventTime = testSourceWatermark.Add(time.Duration(-1) * time.Minute)
@@ -1015,7 +1028,7 @@ func (p TestSourceWatermarkPublisher) PublishSourceWatermarks([]*isb.ReadMessage
 	// PublishSourceWatermarks is not tested in forwarder_test.go
 }
 
-func TestSourceInterStepDataForward(t *testing.T) {
+func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
 	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
 	toSteps := map[string][]isb.BufferWriter{
@@ -1058,6 +1071,81 @@ func TestSourceInterStepDataForward(t *testing.T) {
 	assert.Len(t, readMessages, int(count))
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
 	assert.Equal(t, []interface{}{writeMessages[0].Header.ID + "-0-0", writeMessages[1].Header.ID + "-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	for _, m := range readMessages {
+		// verify new event time gets assigned to messages.
+		assert.Equal(t, testSourceNewEventTime, m.EventTime)
+		// verify messages are marked as late because of event time update.
+		assert.Equal(t, true, m.IsLate)
+	}
+	f.Stop()
+	time.Sleep(1 * time.Millisecond)
+	// only for shutdown will work as from buffer is not empty
+	f.ForceStop()
+	<-stopped
+}
+
+func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
+	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
+	to11 := simplebuffer.NewInMemoryBuffer("to1-0", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
+	to12 := simplebuffer.NewInMemoryBuffer("to1-1", 10, 1, simplebuffer.WithReadTimeOut(time.Second*10))
+	toSteps := map[string][]isb.BufferWriter{
+		"to1": {to11, to12},
+	}
+	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+		},
+	}}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+	fetchWatermark := &testForwardFetcher{}
+	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+
+	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
+	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
+	assert.True(t, failedForwarder == nil)
+	assert.Error(t, err)
+	assert.Equal(t, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder"), err)
+
+	// create a valid source forwarder
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
+	assert.NoError(t, err)
+	assert.False(t, to11.IsFull())
+	assert.False(t, to12.IsFull())
+	assert.True(t, to11.IsEmpty())
+	assert.True(t, to12.IsEmpty())
+
+	stopped := f.Start()
+	count := int64(4)
+	// write some data
+	_, errs := fromStep.Write(ctx, writeMessages[0:count])
+	assert.Equal(t, make([]error, count), errs)
+
+	time.Sleep(time.Second)
+	// read some data
+	// since we have produced two messages, both the partitions should have one message each.(we write in round-robin fashion)
+	readMessages, err := to11.Read(ctx, 2)
+	assert.NoError(t, err, "expected no error")
+	assert.Len(t, readMessages, 2)
+	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[2].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.ID + "-0-0", writeMessages[2].Header.ID + "-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	for _, m := range readMessages {
+		// verify new event time gets assigned to messages.
+		assert.Equal(t, testSourceNewEventTime, m.EventTime)
+		// verify messages are marked as late because of event time update.
+		assert.Equal(t, true, m.IsLate)
+	}
+
+	time.Sleep(time.Second)
+
+	readMessages, err = to12.Read(ctx, 2)
+	assert.NoError(t, err, "expected no error")
+	assert.Len(t, readMessages, 2)
+	assert.Equal(t, []interface{}{writeMessages[1].Header.Keys, writeMessages[3].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
+	assert.Equal(t, []interface{}{writeMessages[1].Header.ID + "-0-0", writeMessages[3].Header.ID + "-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
 		assert.Equal(t, testSourceNewEventTime, m.EventTime)
@@ -1327,11 +1415,11 @@ func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[s
 	processorEntity := processor.NewProcessorEntity("publisherTestPod")
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]wmstore.WatermarkKVStorer)
-	for key := range toBuffers {
+	for key, partitionedBuffers := range toBuffers {
 		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
 		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
 		otStores[key] = otKV
-		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), 1, publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 	}
 	return publishers, otStores
