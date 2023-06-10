@@ -206,7 +206,7 @@ func (s *FunctionalSuite) TestTimeExtractionFilter() {
 	pipelineName := "time-extraction-filter"
 
 	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
+	w.Expect().VertexPodsRunning().DaemonPodsRunning()
 
 	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
 		TerminateAllPodPortForwards()
