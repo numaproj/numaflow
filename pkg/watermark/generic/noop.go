@@ -55,7 +55,7 @@ func (n NoOpWMProgressor) GetLatestWatermark() wmb.Watermark {
 }
 
 // GetHeadWatermark returns the default head watermark.
-func (n NoOpWMProgressor) GetHeadWatermark() wmb.Watermark {
+func (n NoOpWMProgressor) GetHeadWatermark(int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 

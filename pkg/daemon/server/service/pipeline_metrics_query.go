@@ -50,7 +50,7 @@ type pipelineMetadataQuery struct {
 	isbSvcClient      isbsvc.ISBService
 	pipeline          *v1alpha1.Pipeline
 	httpClient        metricsHttpClient
-	watermarkFetchers map[string][]fetch.Fetcher
+	watermarkFetchers map[v1alpha1.Edge][]fetch.Fetcher
 	rater             server.Ratable
 }
 
@@ -64,7 +64,7 @@ const (
 func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
-	wmFetchers map[string][]fetch.Fetcher,
+	wmFetchers map[v1alpha1.Edge][]fetch.Fetcher,
 	rater server.Ratable) (*pipelineMetadataQuery, error) {
 	var err error
 	ps := pipelineMetadataQuery{

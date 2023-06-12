@@ -285,10 +285,10 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 
 func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.Fetcher, error) {
 	var watermarkFetchers []fetch.Fetcher
-	for i := 0; i < fromBufferPartitionCount; i++ {
+	// if it's not a reduce vertex, we don't need multiple watermark fetchers. We use common fetcher among all partitions.
+	if !isReduce {
 		hbBucketName := JetStreamProcessorBucket(bucketName)
 		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
-		// should we return error if one is successful?
 		if err != nil {
 			return nil, err
 		}
@@ -298,9 +298,26 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 			return nil, err
 		}
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
-		pm := processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+		pm := processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
 		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, fromBufferPartitionCount)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
+	} else {
+		for i := 0; i < fromBufferPartitionCount; i++ {
+			hbBucketName := JetStreamProcessorBucket(bucketName)
+			hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
+			if err != nil {
+				return nil, err
+			}
+			otBucketName := JetStreamOTBucket(bucketName)
+			otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jss.jsClient)
+			if err != nil {
+				return nil, err
+			}
+			storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
+			pm := processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+			watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, fromBufferPartitionCount)
+			watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
+		}
 	}
 	return watermarkFetchers, nil
 }

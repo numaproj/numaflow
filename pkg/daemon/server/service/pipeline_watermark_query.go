@@ -30,9 +30,8 @@ import (
 
 // GetEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
-// TODO - return (map[string]fetch.Fetcher, error) instead of (map[string][]fetch.Fetcher, error
-func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[string][]fetch.Fetcher, error) {
-	var wmFetchers = make(map[string][]fetch.Fetcher)
+func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]fetch.Fetcher, error) {
+	var wmFetchers = make(map[v1alpha1.Edge][]fetch.Fetcher)
 	if pipeline.Spec.Watermark.Disabled {
 		return wmFetchers, nil
 	}
@@ -52,7 +51,7 @@ func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 		}
-		wmFetchers[edge.From+"-"+edge.To] = wmFetcherList
+		wmFetchers[edge] = wmFetcherList
 	}
 	return wmFetchers, nil
 }
@@ -68,7 +67,7 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		watermarkArr := make([]*daemon.EdgeWatermark, len(ps.watermarkFetchers))
 		i := 0
 		for k := range ps.watermarkFetchers {
-			edgeName := k
+			edgeName := k.From + "-" + k.To
 			watermarks := make([]int64, len(ps.watermarkFetchers[k]))
 			for idx := range watermarks {
 				watermarks[idx] = timeZero
@@ -90,11 +89,19 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 	i := 0
 	for k, edgeFetchers := range ps.watermarkFetchers {
 		var latestWatermarks []int64
-		for _, fetcher := range edgeFetchers {
-			watermark := fetcher.GetHeadWatermark().UnixMilli()
-			latestWatermarks = append(latestWatermarks, watermark)
+		if ps.pipeline.GetVertex(k.To).IsReduceUDF() {
+			for _, fetcher := range edgeFetchers {
+				watermark := fetcher.GetHeadWatermark(0).UnixMilli()
+				latestWatermarks = append(latestWatermarks, watermark)
+			}
+
+		} else {
+			for index := 0; index < ps.pipeline.GetVertex(k.To).GetPartitionCount(); index++ {
+				watermark := edgeFetchers[0].GetHeadWatermark(int32(index)).UnixMilli()
+				latestWatermarks = append(latestWatermarks, watermark)
+			}
 		}
-		edgeName := k
+		edgeName := k.From + "-" + k.To
 		watermarkArr[i] = &daemon.EdgeWatermark{
 			Pipeline:           &ps.pipeline.Name,
 			Edge:               &edgeName,

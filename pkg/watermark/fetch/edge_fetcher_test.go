@@ -164,7 +164,7 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 			}
 			// this will always be 17 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
-			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.UnixMilli(17).In(location))
+			assert.Equal(t, time.Time(b.GetHeadWatermark(0)).In(location), time.UnixMilli(17).In(location))
 		})
 	}
 }
@@ -308,7 +308,7 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
-			assert.Equal(t, time.Time(b.GetHeadWatermark()).In(location), time.UnixMilli(27).In(location))
+			assert.Equal(t, time.Time(b.GetHeadWatermark(0)).In(location), time.UnixMilli(27).In(location))
 		})
 	}
 }
@@ -353,7 +353,7 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
-			assert.Equalf(t, tt.want, e.GetHeadWatermark().UnixMilli(), "GetHeadWatermark()")
+			assert.Equalf(t, tt.want, e.GetHeadWatermark(0).UnixMilli(), "GetHeadWatermark()")
 		})
 	}
 }
