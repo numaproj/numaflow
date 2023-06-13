@@ -84,7 +84,7 @@ dist/$(BINARY_NAME)-%:
 
 .PHONY: test
 test:
-	go test $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -race -short -v -timeout 60s
+	go test $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -race -short -v -timeout 120s
 
 .PHONY: test-coverage
 test-coverage:

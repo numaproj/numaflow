@@ -116,7 +116,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 		},
 		{
 			name:          "batch_forward",
-			batchSize:     5,
+			batchSize:     10,
 			streamEnabled: false,
 		},
 	}
@@ -125,9 +125,10 @@ func TestNewInterStepDataForward(t *testing.T) {
 			metricsReset()
 			batchSize := tt.batchSize
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
+			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
 			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to1},
+				"to1": {to11, to12},
 			}
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
@@ -143,26 +144,51 @@ func TestNewInterStepDataForward(t *testing.T) {
 			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
-			assert.False(t, to1.IsFull())
-			assert.True(t, to1.IsEmpty())
+			assert.False(t, to11.IsFull())
+			assert.False(t, to12.IsFull())
+
+			assert.True(t, to11.IsEmpty())
+			assert.True(t, to12.IsEmpty())
 
 			stopped := f.Start()
 			// write some data
 			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
 			assert.Equal(t, make([]error, batchSize), errs)
 
+			var updatedBatchSize int
+			if tt.batchSize > 1 {
+				updatedBatchSize = int(batchSize / 2)
+			} else {
+				updatedBatchSize = int(batchSize)
+			}
 			// read some data
-			readMessages, err := to1.Read(ctx, batchSize)
+			readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
 			assert.NoError(t, err, "expected no error")
-			assert.Len(t, readMessages, int(batchSize))
-			for i := 0; i < int(batchSize); i++ {
-				assert.Equal(t, []interface{}{writeMessages[i].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
-				assert.Equal(t, []interface{}{writeMessages[i].Kind}, []interface{}{readMessages[i].Kind})
-				assert.Equal(t, []interface{}{writeMessages[i].Keys}, []interface{}{readMessages[i].Keys})
-				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
+			assert.Len(t, readMessages, updatedBatchSize)
+			j := 0
+			for i := 0; i < updatedBatchSize; i++ {
+				assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+				assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
+				assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
+				assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
+				j += 2
+			}
+
+			if tt.batchSize > 1 {
+				readMessages, err = to12.Read(ctx, int64(updatedBatchSize))
+				assert.NoError(t, err, "expected no error")
+				assert.Len(t, readMessages, updatedBatchSize)
+				j = 1
+				for i := 0; i < updatedBatchSize; i++ {
+					assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+					assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
+					assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
+					assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
+					j += 2
+				}
 			}
 			validateMetrics(t, batchSize)
 			// write some data
@@ -180,12 +206,16 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we forward to all buffers
 		t.Run(tt.name+"_toAll", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize, 0)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 10*batchSize, 0)
+			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
+			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
+
+			to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
+			to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
+
 			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to1},
-				"to2": {to2},
+				"to1": {to11, to12},
+				"to2": {to21, to22},
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
@@ -201,26 +231,52 @@ func TestNewInterStepDataForward(t *testing.T) {
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 
-			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
-			assert.False(t, to1.IsFull())
-			assert.True(t, to1.IsEmpty())
+			assert.False(t, to11.IsFull())
+			assert.False(t, to12.IsFull())
+
+			assert.True(t, to11.IsEmpty())
+			assert.True(t, to12.IsEmpty())
 
 			stopped := f.Start()
 			// write some data
 			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
 			assert.Equal(t, make([]error, batchSize), errs)
 
+			var updatedBatchSize int
+			if tt.batchSize > 1 {
+				updatedBatchSize = int(batchSize / 2)
+			} else {
+				updatedBatchSize = int(batchSize)
+			}
 			// read some data
-			readMessages, err := to1.Read(ctx, batchSize)
+			readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
 			assert.NoError(t, err, "expected no error")
-			assert.Len(t, readMessages, int(batchSize))
-			for i := 0; i < int(batchSize); i++ {
-				assert.Equal(t, []interface{}{writeMessages[i].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
-				assert.Equal(t, []interface{}{writeMessages[i].Kind}, []interface{}{readMessages[i].Kind})
-				assert.Equal(t, []interface{}{writeMessages[i].Keys}, []interface{}{readMessages[i].Keys})
-				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
+			assert.Len(t, readMessages, updatedBatchSize)
+			j := 0
+			for i := 0; i < updatedBatchSize; i++ {
+				assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+				assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
+				assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
+				assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
+				j += 2
+			}
+
+			if tt.batchSize > 1 {
+				// read some data
+				readMessages, err = to12.Read(ctx, int64(updatedBatchSize))
+				assert.NoError(t, err, "expected no error")
+				assert.Len(t, readMessages, updatedBatchSize)
+				j = 1
+				for i := 0; i < updatedBatchSize; i++ {
+					assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+					assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
+					assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
+					assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
+					j += 2
+				}
 			}
 			// write some data
 			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
@@ -242,7 +298,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
 			otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
 			otDecode1, _ := wmb.DecodeToWMB(otValue1)
-			assert.False(t, otDecode1.Idle)
+			if tt.batchSize > 1 {
+				assert.False(t, otDecode1.Idle)
+			} else {
+				assert.True(t, otDecode1.Idle)
+			}
 
 			wg.Add(1)
 			go func() {
@@ -259,7 +319,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
 			otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
 			otDecode2, _ := wmb.DecodeToWMB(otValue2)
-			assert.False(t, otDecode2.Idle)
+			if tt.batchSize > 1 {
+				assert.False(t, otDecode2.Idle)
+			} else {
+				assert.True(t, otDecode2.Idle)
+			}
 
 			f.Stop()
 
@@ -269,11 +333,14 @@ func TestNewInterStepDataForward(t *testing.T) {
 		t.Run(tt.name+"_dropAll", func(t *testing.T) {
 			batchSize := tt.batchSize
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize, 0)
+			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
+			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
+
+			to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
+			to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
 			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to1},
-				"to2": {to2},
+				"to1": {to11, to12},
+				"to2": {to21, to22},
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
@@ -292,8 +359,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
-			assert.False(t, to1.IsFull())
-			assert.True(t, to1.IsEmpty())
+			assert.False(t, to11.IsFull())
+			assert.False(t, to12.IsFull())
+
+			assert.True(t, to11.IsEmpty())
+			assert.True(t, to12.IsEmpty())
 
 			stopped := f.Start()
 
@@ -336,24 +406,46 @@ func TestNewInterStepDataForward(t *testing.T) {
 			otDecode2, _ := wmb.DecodeToWMB(otValue2)
 			assert.True(t, otDecode2.Idle)
 
-			msgs := to1.GetMessages(1)
+			msgs := to11.GetMessages(1)
 			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
 				select {
 				case <-ctx.Done():
 					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
 				default:
-					msgs = to1.GetMessages(1)
+					msgs = to11.GetMessages(1)
 					time.Sleep(1 * time.Millisecond)
 				}
 			}
 
-			msgs = to2.GetMessages(1)
+			msgs = to12.GetMessages(1)
+			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+				select {
+				case <-ctx.Done():
+					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
+				default:
+					msgs = to12.GetMessages(1)
+					time.Sleep(1 * time.Millisecond)
+				}
+			}
+
+			msgs = to21.GetMessages(1)
 			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
 				select {
 				case <-ctx.Done():
 					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
 				default:
-					msgs = to2.GetMessages(1)
+					msgs = to21.GetMessages(1)
+					time.Sleep(1 * time.Millisecond)
+				}
+			}
+
+			msgs = to22.GetMessages(1)
+			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+				select {
+				case <-ctx.Done():
+					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
+				default:
+					msgs = to22.GetMessages(1)
 					time.Sleep(1 * time.Millisecond)
 				}
 			}
@@ -367,11 +459,13 @@ func TestNewInterStepDataForward(t *testing.T) {
 		t.Run(tt.name+"_toOneStep", func(t *testing.T) {
 			batchSize := tt.batchSize
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			to2 := simplebuffer.NewInMemoryBuffer("to2", 2*batchSize, 0)
+			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
+			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
+			to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
+			to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
 			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to1},
-				"to2": {to2},
+				"to1": {to11, to12},
+				"to2": {to21, to22},
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
@@ -387,26 +481,37 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
-			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
-			assert.False(t, to1.IsFull())
-			assert.True(t, to1.IsEmpty())
+			assert.False(t, to11.IsFull())
+			assert.False(t, to12.IsFull())
+
+			assert.True(t, to11.IsEmpty())
+			assert.True(t, to12.IsEmpty())
 
 			stopped := f.Start()
 			// write some data
 			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
 			assert.Equal(t, make([]error, batchSize), errs)
-
+			var updatedBatchSize int
+			if tt.batchSize > 1 {
+				updatedBatchSize = int(batchSize / 2)
+			} else {
+				updatedBatchSize = int(batchSize)
+			}
 			// read some data
-			readMessages, err := to1.Read(ctx, batchSize)
+			readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
 			assert.NoError(t, err, "expected no error")
-			assert.Len(t, readMessages, int(batchSize))
-			for i := 0; i < int(batchSize); i++ {
-				assert.Equal(t, []interface{}{writeMessages[i].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
-				assert.Equal(t, []interface{}{writeMessages[i].Kind}, []interface{}{readMessages[i].Kind})
-				assert.Equal(t, []interface{}{writeMessages[i].Keys}, []interface{}{readMessages[i].Keys})
-				assert.Equal(t, []interface{}{writeMessages[i].Body}, []interface{}{readMessages[i].Body})
+
+			assert.Len(t, readMessages, updatedBatchSize)
+			j := 0
+			for i := 0; i < updatedBatchSize; i++ {
+				assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+				assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
+				assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
+				assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
+				j += 2
 			}
 			// write some data
 			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
@@ -428,7 +533,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
 			otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
 			otDecode1, _ := wmb.DecodeToWMB(otValue1)
-			assert.False(t, otDecode1.Idle)
+			if tt.batchSize > 1 {
+				assert.False(t, otDecode1.Idle)
+			} else {
+				assert.True(t, otDecode1.Idle)
+			}
 
 			wg.Add(1)
 			go func() {
@@ -1270,21 +1379,23 @@ func (f myForwardDropTest) ApplyMapStream(ctx context.Context, message *isb.Read
 }
 
 type myForwardToAllTest struct {
+	count int
 }
 
-func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
-	return []VertexBuffer{{
+func (f *myForwardToAllTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
+	var output = []VertexBuffer{{
 		ToVertexName:         "to1",
-		ToVertexPartitionIdx: 0,
+		ToVertexPartitionIdx: int32(f.count % 2),
 	},
 		{
 			ToVertexName:         "to2",
-			ToVertexPartitionIdx: 0,
-		},
-	}, nil
+			ToVertexPartitionIdx: int32(f.count % 2),
+		}}
+	f.count++
+	return output, nil
 }
 
-func (f myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f *myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -1380,9 +1491,18 @@ func validateMetrics(t *testing.T, batchSize int64) {
 		# HELP forwarder_write_total Total number of Messages Written
 		# TYPE forwarder_write_total counter
 		`
-	writeExpected := `
-		forwarder_write_total{buffer="to1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+	var writeExpected string
+	if batchSize > 1 {
+		writeExpected = `
+		forwarder_write_total{buffer="to1-1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
+		forwarder_write_total{buffer="to1-2",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
 	`
+	} else {
+		writeExpected = `
+		forwarder_write_total{buffer="to1-1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		forwarder_write_total{buffer="to1-2",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(0)) + `
+	`
+	}
 
 	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
 	if err != nil {

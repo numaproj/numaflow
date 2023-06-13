@@ -1367,7 +1367,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 // end to end test for fetcher with same ot bucket
 func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	var (
-		keyspace         = "fetcherTest"
+		keyspace         = "fetcherTestMultiPartition"
 		epoch      int64 = 1651161600000
 		testOffset int64 = 100
 		wg         sync.WaitGroup
@@ -1461,9 +1461,9 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 
 	epoch += 60000
 
-	otValueByteOne, err = otValueToBytes(testOffset, epoch+500, false, 0)
-	otValueByteTwo, err = otValueToBytes(testOffset+1, epoch+500, false, 1)
-	otValueByteThree, err = otValueToBytes(testOffset+2, epoch+500, false, 2)
+	otValueByteOne, err = otValueToBytes(testOffset+5, epoch+500, false, 0)
+	otValueByteTwo, err = otValueToBytes(testOffset+5, epoch+500, false, 1)
+	otValueByteThree, err = otValueToBytes(testOffset+5, epoch+500, false, 2)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p2", otValueByteOne)
 	err = otStore.PutKV(ctx, "p2", otValueByteTwo)
@@ -1613,8 +1613,8 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	otValueByteThree, err = otValueToBytes(testOffset+3, epoch+500, false, 2)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteOne)
-	err = otStore.PutKV(ctx, "p2", otValueByteTwo)
-	err = otStore.PutKV(ctx, "p3", otValueByteThree)
+	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
+	err = otStore.PutKV(ctx, "p1", otValueByteThree)
 	assert.NoError(t, err)
 
 	// "p1" becomes inactive after 5 loops
@@ -1679,8 +1679,8 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	otValueByteThree, err = otValueToBytes(106, epoch+600, true, 2)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteOne)
-	err = otStore.PutKV(ctx, "p2", otValueByteTwo)
-	err = otStore.PutKV(ctx, "p3", otValueByteThree)
+	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
+	err = otStore.PutKV(ctx, "p1", otValueByteThree)
 	assert.NoError(t, err)
 
 	// p1 should get the head offset watermark from p2
@@ -1707,8 +1707,8 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteOne)
-	err = otStore.PutKV(ctx, "p2", otValueByteTwo)
-	err = otStore.PutKV(ctx, "p3", otValueByteThree)
+	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
+	err = otStore.PutKV(ctx, "p1", otValueByteThree)
 
 	assert.NoError(t, err)
 
