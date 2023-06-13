@@ -4416,6 +4416,7 @@ spec:
                                   enum:
                                   - eventTimeExtractor
                                   - filter
+                                  - timeExtractionFilter
                                   type: string
                               required:
                               - name

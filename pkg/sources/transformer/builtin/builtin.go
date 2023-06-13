@@ -27,6 +27,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	eventtime "github.com/numaproj/numaflow/pkg/sources/transformer/builtin/event_time"
 	"github.com/numaproj/numaflow/pkg/sources/transformer/builtin/filter"
+	timeextractionfilter "github.com/numaproj/numaflow/pkg/sources/transformer/builtin/time_extraction_filter"
 )
 
 type Builtin struct {
@@ -54,6 +55,8 @@ func (b *Builtin) executor() (functionsdk.MapTFunc, error) {
 		return filter.New(b.KWArgs)
 	case "eventTimeExtractor":
 		return eventtime.New(b.KWArgs)
+	case "timeExtractionFilter":
+		return timeextractionfilter.New(b.KWArgs)
 	default:
 		return nil, fmt.Errorf("unrecognized transformer %q", b.Name)
 	}
