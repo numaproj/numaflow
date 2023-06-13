@@ -142,11 +142,20 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.Fetcher, error) {
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	var watermarkFetchers []fetch.Fetcher
-	for i := 0; i < fromBufferPartitionCount; i++ {
+	fetchers := 1
+	if isReduce {
+		fetchers = fromBufferPartitionCount
+	}
+	for i := 0; i < fetchers; i++ {
 		hbWatcher := noop.NewKVOpWatch()
 		otWatcher := noop.NewKVOpWatch()
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-		pm := processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+		var pm *processor.ProcessorManager
+		if isReduce {
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+		} else {
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
+		}
 		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, fromBufferPartitionCount)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}
