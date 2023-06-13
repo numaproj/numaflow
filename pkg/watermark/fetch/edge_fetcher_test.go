@@ -313,9 +313,9 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 	location, _ := time.LoadLocation("UTC")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var lastProcessed []int64
+			lastProcessed := make([]int64, 3)
 			for i := 0; i < 3; i++ {
-				lastProcessed = append(lastProcessed, -1)
+				lastProcessed[i] = wmb.InitialWatermark.UnixMilli()
 			}
 			b := &edgeFetcher{
 				ctx:              ctx,
@@ -1433,40 +1433,58 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	// put values into otStore
 
 	otValueByteOne, err := otValueToBytes(testOffset, epoch+100, false, 0)
+	assert.NoError(t, err)
 	otValueByteTwo, err := otValueToBytes(testOffset, epoch+100, false, 1)
+	assert.NoError(t, err)
 	otValueByteThree, err := otValueToBytes(testOffset, epoch+100, false, 2)
 	assert.NoError(t, err)
+
 	err = otStore.PutKV(ctx, "p1", otValueByteOne)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteThree)
 	assert.NoError(t, err)
 
 	otValueByteOne, err = otValueToBytes(testOffset+1, epoch+200, false, 0)
+	assert.NoError(t, err)
 	otValueByteTwo, err = otValueToBytes(testOffset+1, epoch+200, false, 1)
+	assert.NoError(t, err)
 	otValueByteThree, err = otValueToBytes(testOffset+1, epoch+200, false, 2)
 	assert.NoError(t, err)
+
 	err = otStore.PutKV(ctx, "p1", otValueByteOne)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteThree)
 	assert.NoError(t, err)
 
 	otValueByteOne, err = otValueToBytes(testOffset+2, epoch+300, false, 0)
+	assert.NoError(t, err)
 	otValueByteTwo, err = otValueToBytes(testOffset+2, epoch+300, false, 1)
+	assert.NoError(t, err)
 	otValueByteThree, err = otValueToBytes(testOffset+2, epoch+300, false, 2)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteOne)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteThree)
 	assert.NoError(t, err)
 
 	epoch += 60000
 
 	otValueByteOne, err = otValueToBytes(testOffset+5, epoch+500, false, 0)
+	assert.NoError(t, err)
 	otValueByteTwo, err = otValueToBytes(testOffset+5, epoch+500, false, 1)
+	assert.NoError(t, err)
 	otValueByteThree, err = otValueToBytes(testOffset+5, epoch+500, false, 2)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p2", otValueByteOne)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p2", otValueByteTwo)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p2", otValueByteThree)
 	assert.NoError(t, err)
 
@@ -1609,11 +1627,15 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 
 	// publish a new watermark 103
 	otValueByteOne, err = otValueToBytes(testOffset+3, epoch+500, false, 0)
+	assert.NoError(t, err)
 	otValueByteTwo, err = otValueToBytes(testOffset+3, epoch+500, false, 1)
+	assert.NoError(t, err)
 	otValueByteThree, err = otValueToBytes(testOffset+3, epoch+500, false, 2)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteOne)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteThree)
 	assert.NoError(t, err)
 
@@ -1675,11 +1697,15 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 
 	// publish an idle watermark: simulate reduce
 	otValueByteOne, err = otValueToBytes(106, epoch+600, true, 0)
+	assert.NoError(t, err)
 	otValueByteTwo, err = otValueToBytes(106, epoch+600, true, 1)
+	assert.NoError(t, err)
 	otValueByteThree, err = otValueToBytes(106, epoch+600, true, 2)
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteOne)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
+	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p1", otValueByteThree)
 	assert.NoError(t, err)
 
@@ -1702,20 +1728,23 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 
 	// publish an idle watermark: simulate map
 	otValueByteOne, err = otValueToBytes(107, epoch+700, true, 0)
-	otValueByteTwo, err = otValueToBytes(107, epoch+700, true, 1)
-	otValueByteThree, err = otValueToBytes(107, epoch+700, true, 2)
-
 	assert.NoError(t, err)
-	err = otStore.PutKV(ctx, "p1", otValueByteOne)
-	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
-	err = otStore.PutKV(ctx, "p1", otValueByteThree)
+	otValueByteTwo, err = otValueToBytes(107, epoch+700, true, 1)
+	assert.NoError(t, err)
+	otValueByteThree, err = otValueToBytes(107, epoch+700, true, 2)
+	assert.NoError(t, err)
 
+	err = otStore.PutKV(ctx, "p1", otValueByteOne)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByteTwo)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByteThree)
 	assert.NoError(t, err)
 
 	// p1 should get the head offset watermark from p2
 	for allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" &&
-		allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" &&
-		allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+		allProcessors["p1"].GetOffsetTimelines()[1].Dump() != "[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" &&
+		allProcessors["p1"].GetOffsetTimelines()[2].Dump() != "[IDLE 1651161660700:107] -> [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
