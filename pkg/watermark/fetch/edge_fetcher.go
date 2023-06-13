@@ -144,17 +144,13 @@ func (e *edgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		headWMB := wmb.WMB{Offset: -1}
-		tl := p.GetOffsetTimelines()[fromPartitionIdx]
-		if tl.GetHeadOffset() > headWMB.Offset {
-			headWMB = tl.GetHeadWMB()
-		}
-		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, headWMB.Offset, headWMB.Watermark, headWMB.Idle)
-		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, headWMB.Offset, headWMB.Watermark, headWMB.Idle))
-		if headWMB.Offset != -1 {
+		var w = p.GetOffsetTimelines()[fromPartitionIdx].GetHeadWMB()
+		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, w.Offset, w.Watermark, w.Idle)
+		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, w.Offset, w.Watermark, w.Idle))
+		if w.Offset != -1 {
 			// find the smallest watermark
-			if headWMB.Watermark < headWatermark {
-				headWatermark = headWMB.Watermark
+			if w.Watermark < headWatermark {
+				headWatermark = w.Watermark
 			}
 		}
 	}

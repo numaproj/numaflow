@@ -308,7 +308,7 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
-			assert.Equal(t, time.Time(b.GetHeadWatermark(0)).In(location), time.UnixMilli(27).In(location))
+			assert.Equal(t, time.Time(b.GetHeadWatermark(0)).In(location), time.UnixMilli(26).In(location))
 		})
 	}
 }
@@ -341,7 +341,7 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 		{
 			name:             "some pods idle and skip an idle WMB",
 			processorManager: processorManager2,
-			want:             16,
+			want:             17,
 		},
 	}
 	for _, tt := range tests {
