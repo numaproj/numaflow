@@ -168,18 +168,17 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 			return
 		case <-ticker.C:
 			totalPending := int64(0)
-			for _, pending := range ms.lagReaders {
-				if p, err := pending.Pending(ctx); err != nil {
+			for _, pendingLag := range ms.lagReaders {
+				if p, err := pendingLag.Pending(ctx); err != nil {
 					log.Errorw("Failed to get pending messages", zap.Error(err))
 				} else {
-					totalPending += p
+					if p != isb.PendingNotAvailable {
+						totalPending += p
+					}
 				}
 			}
-
-			if totalPending != isb.PendingNotAvailable {
-				ts := timestampedPending{pending: totalPending, timestamp: time.Now().Unix()}
-				ms.pendingInfo.Append(ts)
-			}
+			ts := timestampedPending{pending: totalPending, timestamp: time.Now().Unix()}
+			ms.pendingInfo.Append(ts)
 		}
 	}
 }

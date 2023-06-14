@@ -1864,14 +1864,14 @@
           "type": "prometheus",
           "uid": "eF7wTnc4k"
         },
-        "definition": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\", vertex=~\"$vertex\"}, buffer)",
+        "definition": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\", vertex=~\"$vertex\"}, partition_idx)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "buffer",
         "options": [],
         "query": {
-          "query": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\", vertex=~\"$vertex\"}, buffer)",
+          "query": "label_values({namespace=~\"$namespace\", pipeline=~\"$pipeline\", vertex=~\"$vertex\"}, partition_idx)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,

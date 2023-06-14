@@ -418,7 +418,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		Watermark: 1679961600000,
 	}, otDecode)
 
-	// check the fromBuffer to see if we've acked the message
+	// check the fromBufferPartition to see if we've acked the message
 	for !fromBuffer.IsEmpty() {
 		select {
 		case <-ctx.Done():
@@ -1199,7 +1199,7 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 		messages := buildMessagesForReduce(count, key+strconv.Itoa(i), publishTime)
 		i++
 
-		// write the messages to fromBuffer, so that it will be available for consuming
+		// write the messages to fromBufferPartition, so that it will be available for consuming
 		offsets, _ := fromBuffer.Write(ctx, messages)
 		for _, offset := range offsets {
 			publish.PublishWatermark(wmb.Watermark(publishTime), offset, 0)
