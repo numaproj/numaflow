@@ -954,7 +954,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" should be deleted after this GetWatermark offset=101
+	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
 	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
@@ -1196,7 +1196,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" should be deleted after this GetWatermark offset=101
+	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
 	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
@@ -1519,7 +1519,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
-	// "p1" should be deleted after this GetWatermark offset=101
+	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
 	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
