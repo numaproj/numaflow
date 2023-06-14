@@ -22,6 +22,7 @@ spec:
       sink:
         log: {}
     - name: sink-all
+      partitions: 2
       scale:
         min: 1
       sink:

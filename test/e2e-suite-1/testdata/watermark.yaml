@@ -17,6 +17,7 @@ spec:
           - name: NUMAFLOW_DEBUG
             value: "true" # DO NOT forget the double quotes!!!
     - name: cat1
+      partitions: 2
       udf:
         builtin:
           name: cat # A builtin UDF which simply cats the message
@@ -33,6 +34,7 @@ spec:
           - name: NUMAFLOW_DEBUG
             value: "true" # DO NOT forget the double quotes!!!
     - name: cat3
+      partitions: 3
       udf:
         builtin:
           name: cat # A builtin UDF which simply cats the message

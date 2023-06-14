@@ -19,7 +19,7 @@ spec:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd
     - name: keyed-fixed-sum
-      partitions: 1
+      partitions: 2
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/sum
@@ -57,6 +57,7 @@ spec:
           storage:
             emptyDir: {}
     - name: sink
+      partitions: 2
       scale:
         min: 1
       sink:

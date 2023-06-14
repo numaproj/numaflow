@@ -19,6 +19,7 @@ spec:
       sink:
         log: {}
     - name: sink-after-2022
+      partitions: 2
       scale:
         min: 1
       sink:
