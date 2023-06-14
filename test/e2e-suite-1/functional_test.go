@@ -198,6 +198,25 @@ func (s *FunctionalSuite) TestSourceFiltering() {
 	w.Expect().SinkNotContains("out", expect2)
 }
 
+func (s *FunctionalSuite) TestTimeExtractionFilter() {
+	w := s.Given().Pipeline("@testdata/time-extraction-filter.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "time-extraction-filter"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	testMsgOne := `{"id": 80, "msg": "hello", "time": "2021-01-18T21:54:42.123Z", "desc": "A good ID."}`
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)))
+	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1), PodLogCheckOptionWithContainer("numa"))
+
+	testMsgTwo := `{"id": 101, "msg": "test", "time": "2021-01-18T21:54:42.123Z", "desc": "A bad ID."}`
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)))
+	w.Expect().SinkNotContains("out", testMsgTwo)
+}
+
 func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
 	w := s.Given().Pipeline("@testdata/extract-event-time-from-payload.yaml").
 		When().
