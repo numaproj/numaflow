@@ -1035,6 +1035,8 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 
 	// added 101 in the previous steps for p1, so the head should be 101 after resume
 	assert.Equal(t, int64(101), p1.GetOffsetTimelines()[0].GetHeadOffset())
+	heartBeatManagerMap["p1"].stop()
+	heartBeatManagerMap["p2"].stop()
 	wg.Wait()
 	cancel()
 }
@@ -1316,7 +1318,8 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
-
+	heartBeatManagerMap["p1"].stop()
+	heartBeatManagerMap["p2"].stop()
 	wg.Wait()
 	cancel()
 }
@@ -1673,7 +1676,8 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
-
+	heartBeatManagerMap["p1"].stop()
+	heartBeatManagerMap["p2"].stop()
 	wg.Wait()
 	cancel()
 }

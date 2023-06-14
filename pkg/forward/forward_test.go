@@ -1226,7 +1226,7 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 
 	time.Sleep(time.Second)
 	// read some data
-	// since we have produced two messages, both the partitions should have two messages each.(we write in round-robin fashion)
+	// since we have produced four messages, both the partitions should have two messages each.(we write in round-robin fashion)
 	readMessages, err := to11.Read(ctx, 2)
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, 2)
