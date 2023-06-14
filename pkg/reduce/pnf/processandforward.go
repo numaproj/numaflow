@@ -246,7 +246,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 				metrics.LabelVertex:             p.vertexName,
 				metrics.LabelPipeline:           p.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-				"partition_idx":                 p.toBuffers[edgeName][partition].GetName()}).Add(float64(len(failedMessages)))
+				"partition_name":                p.toBuffers[edgeName][partition].GetName()}).Add(float64(len(failedMessages)))
 			return false, nil
 		}
 		return true, nil
@@ -256,25 +256,25 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"partition_idx":                 p.toBuffers[edgeName][partition].GetName()}).Add(float64(len(resultMessages) - writeCount))
+		"partition_name":                p.toBuffers[edgeName][partition].GetName()}).Add(float64(len(resultMessages) - writeCount))
 
 	dropBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"partition_idx":                 p.toBuffers[edgeName][partition].GetName()}).Add(dropBytes)
+		"partition_name":                p.toBuffers[edgeName][partition].GetName()}).Add(dropBytes)
 
 	writeMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"partition_idx":                 p.toBuffers[edgeName][partition].GetName()}).Add(float64(writeCount))
+		"partition_name":                p.toBuffers[edgeName][partition].GetName()}).Add(float64(writeCount))
 
 	writeBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"partition_idx":                 p.toBuffers[edgeName][partition].GetName()}).Add(writeBytes)
+		"partition_name":                p.toBuffers[edgeName][partition].GetName()}).Add(writeBytes)
 	return offsets, ctxClosedErr
 }
 

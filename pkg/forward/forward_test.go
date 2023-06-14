@@ -1280,7 +1280,7 @@ func validateMetrics(t *testing.T, batchSize int64) {
 		# TYPE forwarder_read_total counter
 		`
 	expected := `
-		forwarder_read_total{partition_idx="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		forwarder_read_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
 	err := testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
@@ -1293,7 +1293,7 @@ func validateMetrics(t *testing.T, batchSize int64) {
 		# TYPE forwarder_write_total counter
 		`
 	writeExpected := `
-		forwarder_write_total{partition_idx="to1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		forwarder_write_total{partition_name="to1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
 	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
@@ -1306,7 +1306,7 @@ func validateMetrics(t *testing.T, batchSize int64) {
 		# TYPE forwarder_ack_total counter
 		`
 	ackExpected := `
-		forwarder_ack_total{partition_idx="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
+		forwarder_ack_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
 	`
 
 	err = testutil.CollectAndCompare(ackMessagesCount, strings.NewReader(ackMetadata+ackExpected), "forwarder_ack_total")
