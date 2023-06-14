@@ -25,8 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
-
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -34,6 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -364,8 +363,8 @@ func TestWriteToBuffer(t *testing.T) {
 		},
 		{
 			name: "test-retry-until-success",
-			buffers: []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("buffer2", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess)),
-				simplebuffer.NewInMemoryBuffer("buffer2", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess))},
+			buffers: []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess)),
+				simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess))},
 			// should throw context closed error as we keep retrying writing until context is cancelled
 			throwError: true,
 		},

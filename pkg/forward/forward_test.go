@@ -168,26 +168,22 @@ func TestNewInterStepDataForward(t *testing.T) {
 			readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, updatedBatchSize)
-			j := 0
-			for i := 0; i < updatedBatchSize; i++ {
+			for i, j := 0, 0; i < updatedBatchSize; i, j = i+1, j+2 {
 				assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
 				assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
 				assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
-				j += 2
 			}
 
 			if tt.batchSize > 1 {
 				readMessages, err = to12.Read(ctx, int64(updatedBatchSize))
 				assert.NoError(t, err, "expected no error")
 				assert.Len(t, readMessages, updatedBatchSize)
-				j = 1
-				for i := 0; i < updatedBatchSize; i++ {
+				for i, j := 0, 1; i < updatedBatchSize; i, j = i+1, j+2 {
 					assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
 					assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
 					assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
 					assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
-					j += 2
 				}
 			}
 			validateMetrics(t, batchSize)
@@ -255,13 +251,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, updatedBatchSize)
-			j := 0
-			for i := 0; i < updatedBatchSize; i++ {
+			for i, j := 0, 0; i < updatedBatchSize; i, j = i+1, j+2 {
 				assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
 				assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
 				assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
-				j += 2
 			}
 
 			if tt.batchSize > 1 {
@@ -269,13 +263,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 				readMessages, err = to12.Read(ctx, int64(updatedBatchSize))
 				assert.NoError(t, err, "expected no error")
 				assert.Len(t, readMessages, updatedBatchSize)
-				j = 1
-				for i := 0; i < updatedBatchSize; i++ {
+				for i, j := 0, 1; i < updatedBatchSize; i, j = i+1, j+2 {
 					assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
 					assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
 					assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
 					assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
-					j += 2
 				}
 			}
 			// write some data
@@ -319,6 +311,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 			otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
 			otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
 			otDecode2, _ := wmb.DecodeToWMB(otValue2)
+			// if the batch size is 1, then the watermark should be idle because
+			// one of partitions will be idle
 			if tt.batchSize > 1 {
 				assert.False(t, otDecode2.Idle)
 			} else {
@@ -326,7 +320,6 @@ func TestNewInterStepDataForward(t *testing.T) {
 			}
 
 			f.Stop()
-
 			<-stopped
 		})
 		// Explicitly tests the case where we drop all events
@@ -505,13 +498,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			assert.NoError(t, err, "expected no error")
 
 			assert.Len(t, readMessages, updatedBatchSize)
-			j := 0
-			for i := 0; i < updatedBatchSize; i++ {
+			for i, j := 0, 0; i < updatedBatchSize; i, j = i+1, j+2 {
 				assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
 				assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
 				assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
-				j += 2
 			}
 			// write some data
 			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
@@ -1235,7 +1226,7 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 
 	time.Sleep(time.Second)
 	// read some data
-	// since we have produced two messages, both the partitions should have one message each.(we write in round-robin fashion)
+	// since we have produced two messages, both the partitions should have two messages each.(we write in round-robin fashion)
 	readMessages, err := to11.Read(ctx, 2)
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, 2)
