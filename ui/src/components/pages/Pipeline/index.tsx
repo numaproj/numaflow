@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 
-import { usePipelineViewFetch } from "../../../utils/fetchWrappers/pipelineViewFetch";
+import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
 import Graph from "../../pipeline/graph/Graph";
 import { notifyError } from "../../../utils/error";
+import CircularProgress from "@mui/material/CircularProgress";
 
 import "./style.css";
 
@@ -11,7 +12,6 @@ export function Pipeline() {
   const { namespaceId, pipelineId } = useParams();
   const {
     pipeline,
-    buffers,
     vertices,
     edges,
     pipelineErr,
@@ -19,6 +19,7 @@ export function Pipeline() {
     podsErr,
     metricsErr,
     watermarkErr,
+    loading,
   } = usePipelineViewFetch(namespaceId, pipelineId);
 
   // This useEffect notifies about the errors while querying for the vertices of the pipeline
@@ -52,21 +53,18 @@ export function Pipeline() {
 
   return (
     <div data-testid={"pipeline"} style={{ overflow: "scroll !important" }}>
-      {pipeline?.spec &&
-        buffers.length > 0 &&
-        edges.length > 0 &&
-        vertices.length > 0 && (
-          <Graph
-            data={{
-              ...pipeline.spec,
-              edges: edges,
-              vertices: vertices,
-              pipeline: pipeline,
-            }}
-            namespaceId={namespaceId}
-            pipelineId={pipelineId}
-          />
-        )}
+      {!loading && (
+        <Graph
+          data={{
+            edges: edges,
+            vertices: vertices,
+            pipeline: pipeline,
+          }}
+          namespaceId={namespaceId}
+          pipelineId={pipelineId}
+        />
+      )}
+      {loading && <CircularProgress size={60} sx={{ mx: "47%", my: "15%" }} />}
     </div>
   );
 }

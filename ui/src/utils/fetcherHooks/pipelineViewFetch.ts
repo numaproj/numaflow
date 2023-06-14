@@ -32,14 +32,15 @@ export const usePipelineViewFetch = (
   const [watermarkErr, setWatermarkErr] = useState<any[] | undefined>(
     undefined
   );
+  const [loading, setLoading] = useState(true);
+
+  const BASE_API = `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
 
   // call to get pipeline
   useEffect(() => {
     const fetchPipeline = async () => {
       try {
-        const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?refreshKey=${requestKey}`
-        );
+        const response = await fetch(`${BASE_API}?refreshKey=${requestKey}`);
         if (response.ok) {
           const data = await response.json();
           setPipeline(data);
@@ -71,7 +72,7 @@ export const usePipelineViewFetch = (
     const fetchBuffers = async () => {
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/buffers?refreshKey=${requestKey}`
+          `${BASE_API}/buffers?refreshKey=${requestKey}`
         );
         if (response.ok) {
           const data = await response.json();
@@ -113,9 +114,7 @@ export const usePipelineViewFetch = (
     if (spec?.vertices) {
       Promise.allSettled(
         spec.vertices.map((vertex: any) => {
-          return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/pods`
-          )
+          return fetch(`${BASE_API}/vertices/${vertex.name}/pods`)
             .then((response) => {
               if (response.ok) {
                 return response.json();
@@ -156,9 +155,7 @@ export const usePipelineViewFetch = (
     if (spec?.vertices && vertexPods.size > 0) {
       Promise.allSettled(
         spec.vertices.map((vertex: any) => {
-          return fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertex.name}/metrics`
-          )
+          return fetch(`${BASE_API}/vertices/${vertex.name}/metrics`)
             .then((response) => {
               if (response.ok) {
                 return response.json();
@@ -256,9 +253,7 @@ export const usePipelineViewFetch = (
         setEdgeWatermark(edgeToWatermarkMap);
       } else {
         Promise.allSettled([
-          fetch(
-            `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/watermarks`
-          )
+          fetch(`${BASE_API}/watermarks`)
             .then((response) => {
               if (response.ok) {
                 return response.json();
@@ -386,9 +381,20 @@ export const usePipelineViewFetch = (
     return newEdges;
   }, [spec, buffers, edgeWatermark, ns_pl]);
 
+  //sets loading variable
+  useEffect(() => {
+    if (
+      pipeline &&
+      buffers?.length > 0 &&
+      vertices?.length > 0 &&
+      edges?.length > 0
+    ) {
+      setLoading(false);
+    }
+  }, [pipeline, vertices, edges]);
+
   return {
     pipeline,
-    buffers,
     vertices,
     edges,
     pipelineErr,
@@ -396,5 +402,6 @@ export const usePipelineViewFetch = (
     podsErr,
     metricsErr,
     watermarkErr,
+    loading,
   };
 };

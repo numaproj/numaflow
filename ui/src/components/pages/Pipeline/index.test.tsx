@@ -1,6 +1,6 @@
 import { Pipeline } from "./index";
 import { render, screen, waitFor } from "@testing-library/react";
-import { usePipelineViewFetch } from "../../../utils/fetchWrappers/pipelineViewFetch";
+import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
 
 global.ResizeObserver = require("resize-observer-polyfill");
 
@@ -12,7 +12,7 @@ jest.mock("react-router-dom", () => ({
   }),
 }));
 
-jest.mock("../../../utils/fetchWrappers/pipelineViewFetch");
+jest.mock("../../../utils/fetcherHooks/pipelineViewFetch");
 const mockedUsePipelineViewFetch = usePipelineViewFetch as jest.MockedFunction<
   typeof usePipelineViewFetch
 >;
@@ -180,28 +180,6 @@ describe("Pipeline", () => {
           udfCount: 1,
         },
       },
-      buffers: [
-        {
-          bufferName: "default-simple-pipeline-cat-0",
-          pendingCount: 0,
-          ackPendingCount: 4,
-          totalMessages: 4,
-          bufferLength: 30000,
-          bufferUsageLimit: 0.8,
-          bufferUsage: 0.00013333333333333334,
-          isFull: false,
-        },
-        {
-          bufferName: "default-simple-pipeline-out-0",
-          pendingCount: 0,
-          ackPendingCount: 0,
-          totalMessages: 0,
-          bufferLength: 30000,
-          bufferUsageLimit: 0.8,
-          bufferUsage: 0,
-          isFull: false,
-        },
-      ],
       vertices: [
         {
           id: "in",
@@ -334,6 +312,7 @@ describe("Pipeline", () => {
       podsErr: undefined,
       metricsErr: undefined,
       watermarkErr: undefined,
+      loading: false,
     });
     render(<Pipeline />);
     await waitFor(() =>
@@ -343,7 +322,6 @@ describe("Pipeline", () => {
   it("Load Pipeline screen", async () => {
     mockedUsePipelineViewFetch.mockReturnValue({
       pipeline: undefined,
-      buffers: undefined,
       vertices: undefined,
       edges: undefined,
       pipelineErr: [],
@@ -351,6 +329,7 @@ describe("Pipeline", () => {
       podsErr: [],
       metricsErr: [],
       watermarkErr: [],
+      loading: true,
     });
     render(<Pipeline />);
     await waitFor(() => expect(screen.queryByTestId("pipeline")).toBeNull());
