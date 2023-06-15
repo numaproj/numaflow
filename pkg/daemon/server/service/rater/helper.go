@@ -73,7 +73,9 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		return 0
 	}
 	for i := startIndex; i < endIndex; i++ {
-		delta += counts[i+1].delta
+		if counts[i+1] != nil && counts[i+1].IsWindowClosed() {
+			delta += counts[i+1].delta
+		}
 	}
 	return delta / float64(timeDiff)
 }
@@ -100,7 +102,9 @@ func CalculatePodRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 		return 0
 	}
 	for i := startIndex; i < endIndex; i++ {
-		delta += calculatePodDelta(counts[i], counts[i+1], podName)
+		if c1, c2 := counts[i], counts[i+1]; c1 != nil && c2 != nil && c1.IsWindowClosed() && c2.IsWindowClosed() {
+			delta += calculatePodDelta(c1, c2, podName)
+		}
 	}
 	return delta / float64(timeDiff)
 }

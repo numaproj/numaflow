@@ -25,13 +25,13 @@ import (
 // normally it is because the pod is not running
 const CountNotAvailable = -1
 
-// TimestampedCounts track the total count of processed messages for a list of pods at a given timestamp
+// TimestampedCounts track the total count of processed messages for a list of pods at a specific timestamp
 type TimestampedCounts struct {
 	// timestamp in seconds, is the time when the count is recorded
 	timestamp int64
 	// podName to count mapping
 	podCounts map[string]float64
-	// isWindowClosed indicates whether we have finished collecting pod counts for this window
+	// isWindowClosed indicates whether we have finished collecting pod counts for this timestamp
 	isWindowClosed bool
 	// delta is the total count change from the previous window, it's valid only when isWindowClosed is true
 	delta float64
@@ -48,6 +48,7 @@ func NewTimestampedCounts(t int64) *TimestampedCounts {
 	}
 }
 
+// Update updates the count for a pod if the current window is not closed
 func (tc *TimestampedCounts) Update(podName string, count float64) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
@@ -81,12 +82,14 @@ func (tc *TimestampedCounts) Snapshot() map[string]float64 {
 	return counts
 }
 
+// IsWindowClosed returns whether the window is closed
 func (tc *TimestampedCounts) IsWindowClosed() bool {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 	return tc.isWindowClosed
 }
 
+// CloseWindow closes the window and calculates the delta by comparing the current pod counts with the previous window
 func (tc *TimestampedCounts) CloseWindow(prev *TimestampedCounts) {
 	currPodCounts := tc.Snapshot()
 	delta := 0.0
