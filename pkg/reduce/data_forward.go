@@ -187,7 +187,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			metrics.LabelVertex:             df.vertexName,
 			metrics.LabelPipeline:           df.pipelineName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			"partition_name":                df.fromBufferPartition.GetName()}).Inc()
+			metrics.LabelPartitionName:      df.fromBufferPartition.GetName()}).Inc()
 	}
 
 	if len(readMessages) == 0 {
@@ -244,7 +244,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		"partition_name":                df.fromBufferPartition.GetName(),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 	}).Add(float64(len(readMessages)))
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
@@ -262,7 +262,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		"partition_name":                df.fromBufferPartition.GetName(),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 	}).Add(float64(totalBytes))
 
 	// readMessages has to be written to PBQ, acked, etc.
@@ -526,7 +526,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 						metrics.LabelVertex:             df.vertexName,
 						metrics.LabelPipeline:           df.pipelineName,
 						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-						"partition_name":                df.fromBufferPartition.GetName(),
+						metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 					}).Inc()
 
 					df.log.Errorw("Failed to ack message, retrying", zap.String("msgOffSet", o.String()), zap.Error(rErr), zap.Int("attempt", attempt))
@@ -545,7 +545,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 					metrics.LabelVertex:             df.vertexName,
 					metrics.LabelPipeline:           df.pipelineName,
 					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-					"partition_name":                df.fromBufferPartition.GetName(),
+					metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 				}).Inc()
 				return true, nil
 			})

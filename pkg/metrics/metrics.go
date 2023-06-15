@@ -43,6 +43,7 @@ const (
 	LabelVertex             = "vertex"
 	LabelPeriod             = "period"
 	LabelVertexReplicaIndex = "replica"
+	LabelPartitionName      = "partition_name"
 
 	VertexPendingMessages = "vertex_pending_messages"
 )
@@ -168,17 +169,21 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 			return
 		case <-ticker.C:
 			totalPending := int64(0)
+			skipPending := false
 			for _, pendingLag := range ms.lagReaders {
-				if p, err := pendingLag.Pending(ctx); err != nil {
+				if p, err := pendingLag.Pending(ctx); err != nil || p == isb.PendingNotAvailable {
 					log.Errorw("Failed to get pending messages", zap.Error(err))
+					skipPending = true
+					break
 				} else {
-					if p != isb.PendingNotAvailable {
-						totalPending += p
-					}
+					totalPending += p
 				}
 			}
-			ts := timestampedPending{pending: totalPending, timestamp: time.Now().Unix()}
-			ms.pendingInfo.Append(ts)
+			// Skip pending information if any pending is not available
+			if !skipPending {
+				ts := timestampedPending{pending: totalPending, timestamp: time.Now().Unix()}
+				ms.pendingInfo.Append(ts)
+			}
 		}
 	}
 }

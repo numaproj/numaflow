@@ -60,32 +60,32 @@ var ackMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_reader",
 	Name:      "ack_total",
 	Help:      "Total number of Messages Acknowledged",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "partition_name"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // ackMessageError is used to indicate the errors in the number of  messages acknowledged
 var ackMessageError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_reader",
 	Name:      "ack_error_total",
 	Help:      "Total number of Acknowledged Errors",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "partition_name"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // readMessagesCount is used to indicate the number of messages read
 var readMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_reader",
 	Name:      "read_total",
 	Help:      "Total number of Messages Read",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "partition_name"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // readBytesCount is to indicate the number of bytes read
 var readBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_reader",
 	Name:      "read_bytes_total",
 	Help:      "Total number of bytes read",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "partition_name"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // readMessagesError is used to indicate the number of read errors
 var readMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_reader",
 	Name:      "read_error_total",
 	Help:      "Total number of Read Errors",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "partition_name"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
