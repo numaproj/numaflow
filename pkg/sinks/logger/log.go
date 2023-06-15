@@ -92,6 +92,12 @@ func (t *ToLog) GetName() string {
 	return t.name
 }
 
+// GetPartitionIdx returns the partition index.
+// for sink it is always 0.
+func (t *ToLog) GetPartitionIdx() int32 {
+	return 0
+}
+
 // IsFull returns whether logging is full, which is never true.
 func (t *ToLog) IsFull() bool {
 	// printing can never be full

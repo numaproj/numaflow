@@ -34,18 +34,19 @@ import (
 )
 
 type jetStreamWriter struct {
-	name    string
-	stream  string
-	subject string
-	conn    *jsclient.NatsConn
-	js      *jsclient.JetStreamContext
-	opts    *writeOptions
-	isFull  *atomic.Bool
-	log     *zap.SugaredLogger
+	name         string
+	partitionIdx int32
+	stream       string
+	subject      string
+	conn         *jsclient.NatsConn
+	js           *jsclient.JetStreamContext
+	opts         *writeOptions
+	isFull       *atomic.Bool
+	log          *zap.SugaredLogger
 }
 
 // NewJetStreamWriter is used to provide a new instance of JetStreamBufferWriter
-func NewJetStreamWriter(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, opts ...WriteOption) (isb.PartitionWriter, error) {
+func NewJetStreamWriter(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, partitionIdx int32, opts ...WriteOption) (isb.PartitionWriter, error) {
 	o := defaultWriteOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -66,14 +67,15 @@ func NewJetStreamWriter(ctx context.Context, client jsclient.JetStreamClient, na
 	}
 
 	result := &jetStreamWriter{
-		name:    name,
-		stream:  stream,
-		subject: subject,
-		conn:    conn,
-		js:      js,
-		opts:    o,
-		isFull:  atomic.NewBool(true),
-		log:     logging.FromContext(ctx).With("partitionWriter", name).With("stream", stream).With("subject", subject),
+		name:         name,
+		partitionIdx: partitionIdx,
+		stream:       stream,
+		subject:      subject,
+		conn:         conn,
+		js:           js,
+		opts:         o,
+		isFull:       atomic.NewBool(true),
+		log:          logging.FromContext(ctx).With("partitionWriter", name).With("stream", stream).With("subject", subject),
 	}
 
 	go result.runStatusChecker(ctx)
@@ -110,8 +112,8 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 		}
 		// TODO: solid usage calculation might be incorrect due to incorrect JetStream metadata issue caused by pod migration, need to revisit this later.
 		// We should set up alerts with sort of rules to detect the metadata issue. For example, solidUsage is too much greater than softUsage for a while.
-		if solidUsage >= jw.opts.bufferUsageLimit && softUsage >= jw.opts.bufferUsageLimit {
-			jw.log.Infow("Usage is greater than bufferUsageLimit", zap.Any("solidUsage", solidUsage), zap.Any("softUsage", softUsage))
+		if solidUsage >= jw.opts.partitionUsageLimit && softUsage >= jw.opts.partitionUsageLimit {
+			jw.log.Infow("Usage is greater than partitionUsageLimit", zap.Any("solidUsage", solidUsage), zap.Any("softUsage", softUsage))
 			jw.isFull.Store(true)
 		} else {
 			jw.isFull.Store(false)
@@ -144,6 +146,10 @@ func (jw *jetStreamWriter) GetName() string {
 	return jw.name
 }
 
+func (jw *jetStreamWriter) GetPartitionIdx() int32 {
+	return jw.partitionIdx
+}
+
 func (jw *jetStreamWriter) Close() error {
 	if jw.conn != nil && !jw.conn.IsClosed() {
 		jw.conn.Close()
@@ -161,7 +167,7 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 		jw.log.Debugw("Is full")
 		isbFull.With(map[string]string{"buffer": jw.GetName()}).Inc()
 		// when buffer is full, we need to decide whether to discard the message or not.
-		switch jw.opts.bufferFullWritingStrategy {
+		switch jw.opts.partitionFullWritingStrategy {
 		case v1alpha1.DiscardLatest:
 			// user explicitly wants to discard the message when buffer if full.
 			// return no retryable error as a callback to let caller know that the message is discarded.

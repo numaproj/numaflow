@@ -26,20 +26,20 @@ import (
 type writeOptions struct {
 	// maxLength is the maximum length of the stream before it reaches full
 	maxLength int64
-	// bufferUsageLimit is the limit of buffer usage before we declare it as full
-	bufferUsageLimit float64
+	// partitionUsageLimit is the limit of partition usage before we declare it as full
+	partitionUsageLimit float64
 	// refreshInterval is used to provide the default refresh interval
 	refreshInterval time.Duration
-	// bufferFullWritingStrategy is the writing strategy when buffer is full
-	bufferFullWritingStrategy dfv1.BufferFullWritingStrategy
+	// partitionFullWritingStrategy is the writing strategy when partition is full
+	partitionFullWritingStrategy dfv1.BufferFullWritingStrategy
 }
 
 func defaultWriteOptions() *writeOptions {
 	return &writeOptions{
-		maxLength:                 dfv1.DefaultPartitionLength,
-		bufferUsageLimit:          dfv1.DefaultPartitionUsageLimit,
-		refreshInterval:           1 * time.Second,
-		bufferFullWritingStrategy: dfv1.RetryUntilSuccess,
+		maxLength:                    dfv1.DefaultPartitionLength,
+		partitionUsageLimit:          dfv1.DefaultPartitionUsageLimit,
+		refreshInterval:              1 * time.Second,
+		partitionFullWritingStrategy: dfv1.RetryUntilSuccess,
 	}
 }
 
@@ -53,10 +53,10 @@ func WithMaxLength(length int64) WriteOption {
 	}
 }
 
-// WithBufferUsageLimit sets buffer usage limit option
-func WithBufferUsageLimit(usageLimit float64) WriteOption {
+// WithPartitionUsageLimit sets partition usage limit option
+func WithPartitionUsageLimit(usageLimit float64) WriteOption {
 	return func(o *writeOptions) error {
-		o.bufferUsageLimit = usageLimit
+		o.partitionUsageLimit = usageLimit
 		return nil
 	}
 }
@@ -69,10 +69,10 @@ func WithRefreshInterval(refreshInterval time.Duration) WriteOption {
 	}
 }
 
-// WithBufferFullWritingStrategy sets the writing strategy when buffer is full
-func WithBufferFullWritingStrategy(s dfv1.BufferFullWritingStrategy) WriteOption {
+// WithPartitionFullWritingStrategy sets the writing strategy when partition is full
+func WithPartitionFullWritingStrategy(s dfv1.BufferFullWritingStrategy) WriteOption {
 	return func(o *writeOptions) error {
-		o.bufferFullWritingStrategy = s
+		o.partitionFullWritingStrategy = s
 		return nil
 	}
 }

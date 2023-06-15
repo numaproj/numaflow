@@ -41,9 +41,10 @@ var exactlyOnceInsertLuaScript string
 
 // RedisWriter is the write queue implementation powered by RedisClient.
 type RedisWriter struct {
-	Name   string
-	Stream string
-	Group  string
+	Name         string
+	PartitionIdx int32
+	Stream       string
+	Group        string
 	*PartitionWriteInfo
 	*redisclient.RedisClient
 	redisclient.Options
@@ -65,7 +66,7 @@ type PartitionWriteInfo struct {
 var _ isb.PartitionWriter = (*RedisWriter)(nil)
 
 // NewPartitionWrite returns a new redis queue writer.
-func NewPartitionWrite(ctx context.Context, client *redisclient.RedisClient, name string, group string, opts ...redisclient.Option) isb.PartitionWriter {
+func NewPartitionWrite(ctx context.Context, client *redisclient.RedisClient, name string, group string, partitionIdx int32, opts ...redisclient.Option) isb.PartitionWriter {
 	options := &redisclient.Options{
 		Pipelining:                   true,
 		InfoRefreshInterval:          time.Second,
@@ -82,9 +83,10 @@ func NewPartitionWrite(ctx context.Context, client *redisclient.RedisClient, nam
 
 	// check whether the script exists, if not then load
 	rqw := &RedisWriter{
-		Name:   name,
-		Stream: redisclient.GetRedisStreamName(name),
-		Group:  group,
+		Name:         name,
+		PartitionIdx: partitionIdx,
+		Stream:       redisclient.GetRedisStreamName(name),
+		Group:        group,
 		PartitionWriteInfo: &PartitionWriteInfo{
 			isFull:           atomic.NewBool(true),
 			refreshFullError: atomic.NewUint32(0),
@@ -252,6 +254,10 @@ func (pw *RedisWriter) GetStreamName() string {
 // GetName gets the name of the Partition.
 func (pw *RedisWriter) GetName() string {
 	return pw.Name
+}
+
+func (pw *RedisWriter) GetPartitionIdx() int32 {
+	return pw.PartitionIdx
 }
 
 // GetGroupName gets the name of the consumer group.

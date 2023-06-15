@@ -121,7 +121,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 		},
 	}}
 
-	rqw, _ := NewPartitionWrite(ctx, client, "toStream", "toGroup", redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute)).(*RedisWriter)
+	rqw, _ := NewPartitionWrite(ctx, client, "toStream", "toGroup", 0, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute)).(*RedisWriter)
 	err = client.CreateStreamGroup(ctx, rqw.GetStreamName(), "toGroup", redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
@@ -161,7 +161,7 @@ func (suite *ReadTestSuite) SetupSuite() {
 	group := "testsuitegroup1"
 	consumer := "testsuite-0"
 	count := int64(10)
-	rqw, _ := NewPartitionWrite(ctx, client, stream, group).(*RedisWriter)
+	rqw, _ := NewPartitionWrite(ctx, client, stream, group, 0).(*RedisWriter)
 	rqr, _ := NewPartitionReader(ctx, client, stream, group, consumer, 0).(*RedisReader)
 
 	suite.ctx = ctx
@@ -316,7 +316,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	toGroup := "ReadWritePerformance-group-to"
 	consumer := "ReadWritePerformance-con-0"
 	count := int64(10000)
-	rqw, _ := NewPartitionWrite(ctx, client, toStream, toGroup, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute), redisclient.WithMaxLength(20000)).(*RedisWriter)
+	rqw, _ := NewPartitionWrite(ctx, client, toStream, toGroup, 0, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute), redisclient.WithMaxLength(20000)).(*RedisWriter)
 	rqr, _ := NewPartitionReader(ctx, client, fromStream, fromGroup, consumer, 0).(*RedisReader)
 
 	toSteps := map[string][]isb.PartitionWriter{
@@ -406,7 +406,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatency() {
 
 // TestReadWriteLatencyPipelining performs the latency test during a forward.
 func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
-	suite.rqw, _ = NewPartitionWrite(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", redisclient.WithInfoRefreshInterval(2*time.Second), redisclient.WithLagDuration(time.Minute), redisclient.WithoutPipelining(), redisclient.WithMaxLength(20000)).(*RedisWriter)
+	suite.rqw, _ = NewPartitionWrite(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", 0, redisclient.WithInfoRefreshInterval(2*time.Second), redisclient.WithLagDuration(time.Minute), redisclient.WithoutPipelining(), redisclient.WithMaxLength(20000)).(*RedisWriter)
 	_ = NewPartitionReader(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", "consumer-0", 0)
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{

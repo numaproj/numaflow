@@ -29,9 +29,9 @@ import (
 
 // PublishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
 // we see a new WMB; later we only update the WMB without a ctrl message.
-func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.PartitionWriter, wmPublisher publish.Publisher, idleManager *wmb.IdleManager, toVertexPartition int32, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
+func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.PartitionWriter, wmPublisher publish.Publisher, idleManager *wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
 	var toPartitionName = toBufferPartition.GetName()
-
+	var toPartitionIdx = toBufferPartition.GetPartitionIdx()
 	if !idleManager.Exists(toPartitionName) {
 		if vertexType == dfv1.VertexTypeSink {
 			// for Sink vertex, we don't need to write any ctrl message
@@ -58,9 +58,9 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.PartitionWr
 	// publish WMB (this will naturally incr or set the timestamp of rl.wmbOffset)
 	if vertexType == dfv1.VertexTypeSource || vertexType == dfv1.VertexTypeMapUDF ||
 		vertexType == dfv1.VertexTypeReduceUDF {
-		wmPublisher.PublishIdleWatermark(wm, idleManager.Get(toPartitionName), toVertexPartition)
+		wmPublisher.PublishIdleWatermark(wm, idleManager.Get(toPartitionName), toPartitionIdx)
 	} else {
 		// for Sink vertex, and it does not care about the offset during watermark publishing
-		wmPublisher.PublishIdleWatermark(wm, nil, toVertexPartition)
+		wmPublisher.PublishIdleWatermark(wm, nil, toPartitionIdx)
 	}
 }

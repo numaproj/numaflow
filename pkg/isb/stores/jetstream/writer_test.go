@@ -90,7 +90,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			addStream(t, js, toStreamName)
 			defer deleteStream(js, toStreamName)
 
-			bw, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10))
+			bw, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0, WithMaxLength(10))
 			assert.NoError(t, err)
 			jw, _ := bw.(*jetStreamWriter)
 			defer jw.Close()
@@ -133,7 +133,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			fromStep, _ := bufferReader.(*jetStreamReader)
 			defer fromStep.Close()
 
-			bufferWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, toStreamName, toStreamName, toStreamName, WithMaxLength(10))
+			bufferWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, toStreamName, toStreamName, toStreamName, 0, WithMaxLength(10))
 			assert.NoError(t, err)
 			to1 := bufferWriter.(*jetStreamWriter)
 			defer to1.Close()
@@ -204,7 +204,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bw, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2))
+	bw, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0, WithMaxLength(10), WithPartitionUsageLimit(0.2))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
 	defer jw.Close()
@@ -263,7 +263,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bw, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2), WithBufferFullWritingStrategy(dfv1.DiscardLatest))
+	bw, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0, WithMaxLength(10), WithPartitionUsageLimit(0.2), WithPartitionFullWritingStrategy(dfv1.DiscardLatest))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
 	defer jw.Close()
@@ -349,7 +349,7 @@ func TestWriteClose(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName)
+	bufferWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 	assert.NoError(t, err)
 
 	bw := bufferWriter.(*jetStreamWriter)

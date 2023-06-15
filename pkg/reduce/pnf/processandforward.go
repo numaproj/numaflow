@@ -307,7 +307,7 @@ func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, wri
 		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
 			if !activePartition {
 				if publisher, ok := p.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, int32(index), p.log, dfv1.VertexTypeReduceUDF, wm)
+					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
 				}
 			}
 		}

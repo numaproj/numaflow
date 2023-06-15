@@ -91,6 +91,12 @@ func (b *Blackhole) GetName() string {
 	return b.name
 }
 
+// GetPartitionIdx returns the partition index.
+// for sink it is always 0.
+func (b *Blackhole) GetPartitionIdx() int32 {
+	return 0
+}
+
 // IsFull returns whether sink is full, which is never true.
 func (b *Blackhole) IsFull() bool {
 	// printing can never be full

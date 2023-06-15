@@ -69,6 +69,7 @@ type PartitionReaderInformation interface {
 // PartitionWriterInformation has information regarding the partition we are writing to.
 type PartitionWriterInformation interface {
 	GetName() string
+	GetPartitionIdx() int32
 }
 
 // SourceWatermarkPublisher publishes source watermarks based on a list of isb.ReadMessage

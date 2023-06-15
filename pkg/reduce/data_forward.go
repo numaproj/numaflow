@@ -211,8 +211,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// in this case, send idle watermark to all the toBuffer partitions
 			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.wmPublishers[toVertexName]; ok {
-					for index, bufferPartition := range toVertexBuffer {
-						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					for _, bufferPartition := range toVertexBuffer {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 					}
 				}
 			}
@@ -231,8 +231,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				// so in this case, we publish an idle watermark
 				for toVertexName, toVertexBuffer := range df.toBuffers {
 					if publisher, ok := df.wmPublishers[toVertexName]; ok {
-						for index, bufferPartition := range toVertexBuffer {
-							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+						for _, bufferPartition := range toVertexBuffer {
+							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 						}
 					}
 				}
@@ -362,8 +362,8 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			// this is to minimize watermark latency
 			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.wmPublishers[toVertexName]; ok {
-					for index, bufferPartition := range toVertexBuffer {
-						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+					for _, bufferPartition := range toVertexBuffer {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 					}
 				}
 			}

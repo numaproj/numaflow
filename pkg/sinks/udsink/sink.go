@@ -97,6 +97,12 @@ func (s *UserDefinedSink) GetName() string {
 	return s.name
 }
 
+// GetPartitionIdx returns the partition index.
+// for sink it is always 0.
+func (s *UserDefinedSink) GetPartitionIdx() int32 {
+	return 0
+}
+
 func (s *UserDefinedSink) IsFull() bool {
 	return false
 }
