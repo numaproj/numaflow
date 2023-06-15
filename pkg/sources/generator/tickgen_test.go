@@ -25,7 +25,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
@@ -45,7 +45,7 @@ func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuf
 }
 
 func TestRead(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("writer", 100, 0, simplebuffer.WithReadTimeOut(10*time.Second))
+	dest := simplepartition.NewInMemoryPartition("writer", 100, 0, simplepartition.WithReadTimeOut(10*time.Second))
 	ctx := context.Background()
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
@@ -68,7 +68,7 @@ func TestRead(t *testing.T) {
 	}
 
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	toBuffers := map[string][]isb.BufferWriter{
+	toBuffers := map[string][]isb.PartitionWriter{
 		"writer": {dest},
 	}
 
@@ -103,7 +103,7 @@ func TestStop(t *testing.T) {
 	ctx := context.Background()
 
 	// default rpu is 5. set the test to run for 2 ticks.
-	dest := simplebuffer.NewInMemoryBuffer("writer", 10, 0)
+	dest := simplepartition.NewInMemoryPartition("writer", 10, 0)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "memgen",
@@ -124,7 +124,7 @@ func TestStop(t *testing.T) {
 		Replica:  0,
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	toBuffers := map[string][]isb.BufferWriter{
+	toBuffers := map[string][]isb.PartitionWriter{
 		"writer": {dest},
 	}
 
@@ -200,7 +200,7 @@ func TestWatermark(t *testing.T) {
 	// for use by the buffer reader on the other side of the stream
 	ctx := context.Background()
 
-	dest := simplebuffer.NewInMemoryBuffer("writer", 1000, 0)
+	dest := simplepartition.NewInMemoryPartition("writer", 1000, 0)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "memgen",
@@ -220,7 +220,7 @@ func TestWatermark(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	toBuffers := map[string][]isb.BufferWriter{
+	toBuffers := map[string][]isb.PartitionWriter{
 		"writer": {dest},
 	}
 

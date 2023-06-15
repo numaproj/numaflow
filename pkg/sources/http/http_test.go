@@ -26,7 +26,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
@@ -76,12 +76,12 @@ func Test_NewHTTP(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
-	toBuffers := map[string][]isb.BufferWriter{
+	dest := simplepartition.NewInMemoryPartition("test", 100, 0)
+	toBuffers := map[string][]isb.PartitionWriter{
 		"test": {dest},
 	}
 	publishWMStores := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.PartitionWriter{})
 	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStores)
 	assert.NoError(t, err)
 	assert.False(t, h.ready)

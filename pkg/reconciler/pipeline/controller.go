@@ -195,7 +195,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	oldBuckets := make(map[string]string)
 	newBuckets := make(map[string]string)
 	for _, v := range existingObjs {
-		for _, b := range v.OwnedBuffers() {
+		for _, b := range v.OwnedPartitions() {
 			oldBuffers[b] = b
 		}
 		for _, b := range v.GetFromBuckets() {
@@ -205,7 +205,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 			oldBuckets[b] = b
 		}
 	}
-	for _, b := range pl.GetAllBuffers() {
+	for _, b := range pl.GetAllPartitions() {
 		if _, existing := oldBuffers[b]; existing {
 			delete(oldBuffers, b)
 		} else {
@@ -394,7 +394,7 @@ func (r *pipelineReconciler) findExistingVertices(ctx context.Context, pl *dfv1.
 }
 
 func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeline, log *zap.SugaredLogger) error {
-	allBuffers := pl.GetAllBuffers()
+	allBuffers := pl.GetAllPartitions()
 	allBuckets := pl.GetAllBuckets()
 	if len(allBuffers) > 0 || len(allBuckets) > 0 {
 		isbSvc := &dfv1.InterStepBufferService{}
@@ -508,8 +508,8 @@ func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
 func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.VertexLimits {
 	result := dfv1.VertexLimits{}
 	if vLimits != nil {
-		result.BufferMaxLength = vLimits.BufferMaxLength
-		result.BufferUsageLimit = vLimits.BufferUsageLimit
+		result.PartitionMaxLength = vLimits.PartitionMaxLength
+		result.PartitionUsageLimit = vLimits.PartitionUsageLimit
 		result.ReadBatchSize = vLimits.ReadBatchSize
 		result.ReadTimeout = vLimits.ReadTimeout
 	}
@@ -519,11 +519,11 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 	if result.ReadTimeout == nil {
 		result.ReadTimeout = plLimits.ReadTimeout
 	}
-	if result.BufferMaxLength == nil {
-		result.BufferMaxLength = plLimits.BufferMaxLength
+	if result.PartitionMaxLength == nil {
+		result.PartitionMaxLength = plLimits.PartitionMaxLength
 	}
-	if result.BufferUsageLimit == nil {
-		result.BufferUsageLimit = plLimits.BufferUsageLimit
+	if result.PartitionUsageLimit == nil {
+		result.PartitionUsageLimit = plLimits.PartitionUsageLimit
 	}
 	return result
 }

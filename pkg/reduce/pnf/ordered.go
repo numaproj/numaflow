@@ -58,7 +58,7 @@ type OrderedProcessor struct {
 	taskQueue           *list.List
 	pbqManager          *pbq.Manager
 	udf                 applier.ReduceApplier
-	toBuffers           map[string][]isb.BufferWriter
+	toBuffers           map[string][]isb.PartitionWriter
 	whereToDecider      forward.ToWhichStepDecider
 	watermarkPublishers map[string]publish.Publisher
 	idleManager         *wmb.IdleManager
@@ -69,7 +69,7 @@ type OrderedProcessor struct {
 func NewOrderedProcessor(ctx context.Context,
 	vertexInstance *dfv1.VertexInstance,
 	udf applier.ReduceApplier,
-	toBuffers map[string][]isb.BufferWriter,
+	toBuffers map[string][]isb.PartitionWriter,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,

@@ -142,7 +142,7 @@ message AbstractVertex {
   // +patchMergeKey=name
   repeated k8s.io.api.core.v1.Volume volumes = 8;
 
-  // Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
+  // Limits define the limitations such as partition read batch size for all the vertices of a pipeline, will override pipeline level settings
   // +optional
   optional VertexLimits limits = 9;
 
@@ -159,7 +159,7 @@ message AbstractVertex {
   // +optional
   repeated k8s.io.api.core.v1.Container sidecars = 12;
 
-  // Number of partitions of the vertex owned buffers.
+  // Number of partitions of the vertex owned partitions.
   // It applies to udf and sink vertices only.
   // +optional
   optional int32 partitions = 13;
@@ -848,19 +848,19 @@ message PipelineLimits {
   // +optional
   optional uint64 readBatchSize = 1;
 
-  // BufferMaxLength is used to define the max length of a buffer
-  // Only applies to UDF and Source vertices as only they do buffer write.
+  // PartitionMaxLength is used to define the max length of a partition
+  // Only applies to UDF and Source vertices as only they do partition write.
   // It can be overridden by the settings in vertex limits.
   // +kubebuilder:default=30000
   // +optional
-  optional uint64 bufferMaxLength = 2;
+  optional uint64 partitionMaxLength = 2;
 
-  // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-  // Only applies to UDF and Source vertices as only they do buffer write.
+  // PartitionUsageLimit is used to define the percentage of the partition usage limit, a valid value should be less than 100, for example, 85.
+  // Only applies to UDF and Source vertices as only they do partition write.
   // It will be overridden by the settings in vertex limits.
   // +kubebuilder:default=80
   // +optional
-  optional uint32 bufferUsageLimit = 3;
+  optional uint32 partitionUsageLimit = 3;
 
   // Read timeout for all the vertices in the pipeline, can be overridden by the vertex's limit settings
   // +kubebuilder:default= "1s"
@@ -892,8 +892,8 @@ message PipelineSpec {
   // +optional
   optional Lifecycle lifecycle = 4;
 
-  // Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings
-  // +kubebuilder:default={"readBatchSize": 500, "bufferMaxLength": 30000, "bufferUsageLimit": 80}
+  // Limits define the limitations such as partition read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings
+  // +kubebuilder:default={"readBatchSize": 500, "partitionMaxLength": 30000, "partitionUsageLimit": 80}
   // +optional
   optional PipelineLimits limits = 5;
 
@@ -1050,7 +1050,7 @@ message Scale {
   optional uint32 targetProcessingSeconds = 7;
 
   // TargetBufferUsage is used to define the target percentage of the buffer availability.
-  // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+  // A valid and meaningful value should be less than the PartitionUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
   // It only applies to UDF and Sink vertices because only they have buffers to read.
   // Deprecated: use targetBufferAvailability instead. Will be removed in v0.9
   // +optional
@@ -1061,11 +1061,11 @@ message Scale {
   // +optional
   optional uint32 replicasPerScale = 9;
 
-  // TargetBufferAvailability is used to define the target percentage of the buffer availability.
-  // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
-  // It only applies to UDF and Sink vertices because only they have buffers to read.
+  // TargetPartitionAvailability is used to define the target percentage of the partition availability.
+  // A valid and meaningful value should be less than the PartitionUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+  // It only applies to UDF and Sink vertices because only they have partitions to read.
   // +optional
-  optional uint32 targetBufferAvailability = 10;
+  optional uint32 targetPartitionAvailability = 10;
 }
 
 message Sink {
@@ -1222,20 +1222,20 @@ message VertexLimits {
   // +optional
   optional uint64 readBatchSize = 1;
 
-  // Read timeout duration from the source or buffer
+  // Read timeout duration from the source or partition
   // It overrides the settings from pipeline limits.
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
 
-  // BufferMaxLength is used to define the max length of a buffer.
+  // PartitionMaxLength is used to define the max length of a partition.
   // It overrides the settings from pipeline limits.
   // +optional
-  optional uint64 bufferMaxLength = 3;
+  optional uint64 partitionMaxLength = 3;
 
-  // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+  // PartitionUsageLimit is used to define the percentage of the partition usage limit, a valid value should be less than 100, for example, 85.
   // It overrides the settings from pipeline limits.
   // +optional
-  optional uint32 bufferUsageLimit = 4;
+  optional uint32 partitionUsageLimit = 4;
 }
 
 // +kubebuilder:object:root=true

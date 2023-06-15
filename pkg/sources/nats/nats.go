@@ -59,7 +59,7 @@ type natsSource struct {
 
 func New(
 	vertexInstance *dfv1.VertexInstance,
-	writers map[string][]isb.BufferWriter,
+	writers map[string][]isb.PartitionWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,

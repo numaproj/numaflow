@@ -372,10 +372,10 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 	bks := []string{}
 	// Only source vertices need to check all the pipeline buffers and buckets
 	if vertex.IsASource() {
-		bfs = append(bfs, pl.GetAllBuffers()...)
+		bfs = append(bfs, pl.GetAllPartitions()...)
 		bks = append(bks, pl.GetAllBuckets()...)
 	} else {
-		bfs = append(bfs, vertex.OwnedBuffers()...)
+		bfs = append(bfs, vertex.OwnedPartitions()...)
 		bks = append(bks, vertex.GetFromBuckets()...)
 		bks = append(bks, vertex.GetToBuckets()...)
 	}

@@ -41,7 +41,7 @@ import (
 func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetch.Fetcher, map[string]publish.Publisher, error) {
 	// if watermark is not enabled, use no-op.
 	if vertexInstance.Vertex.Spec.Watermark.Disabled {
-		names := vertexInstance.Vertex.GetToBuffers()
+		names := vertexInstance.Vertex.GetToPartitions()
 		if vertexInstance.Vertex.IsASink() {
 			// Sink has no to buffers, we use the vertex name as the buffer writer name.
 			names = append(names, vertexInstance.Vertex.Spec.Name)
@@ -69,7 +69,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 	// create a store watcher that watches the heartbeat and ot store.
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
 	// create processor manager with the store watcher which will keep track of all the active processors and updates the offset timelines accordingly.
-	processManager := processor.NewProcessorManager(ctx, storeWatcher, int32(len(vertexInstance.Vertex.OwnedBuffers())),
+	processManager := processor.NewProcessorManager(ctx, storeWatcher, int32(len(vertexInstance.Vertex.OwnedPartitions())),
 		processor.WithVertexReplica(vertexInstance.Replica), processor.WithIsReduce(vertexInstance.Vertex.IsReduceUDF()), processor.WithIsSource(vertexInstance.Vertex.IsASource()))
 
 	// create a fetcher that fetches watermark.

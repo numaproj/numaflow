@@ -25,7 +25,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
@@ -51,7 +51,7 @@ func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuf
 }
 
 func TestBlackhole_Start(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
+	fromStep := simplepartition.NewInMemoryPartition("from", 25, 0)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -89,9 +89,9 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 25, 0)
-	to2 := simplebuffer.NewInMemoryBuffer("to2", 25, 0)
+	fromStep := simplepartition.NewInMemoryPartition("from", 25, 0)
+	to1 := simplepartition.NewInMemoryPartition("to1", 25, 0)
+	to2 := simplepartition.NewInMemoryPartition("to2", 25, 0)
 
 	// start the last vertex first
 	// add 2 sinks per vertex
@@ -119,7 +119,7 @@ func TestBlackhole_ForwardToTwoVertex(t *testing.T) {
 	bh1Stopped := bh1.Start()
 	bh2Stopped := bh2.Start()
 
-	toSteps := map[string][]isb.BufferWriter{
+	toSteps := map[string][]isb.PartitionWriter{
 		"to1": {to1},
 		"to2": {to2},
 	}

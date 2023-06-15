@@ -59,8 +59,8 @@ type DataForward struct {
 	vertexName            string
 	pipelineName          string
 	vertexReplica         int32
-	fromBuffer            isb.BufferReader
-	toBuffers             map[string][]isb.BufferWriter
+	fromBuffer            isb.PartitionReader
+	toBuffers             map[string][]isb.PartitionWriter
 	wmFetcher             fetch.Fetcher
 	wmPublishers          map[string]publish.Publisher
 	windower              window.Windower
@@ -78,8 +78,8 @@ type DataForward struct {
 // NewDataForward creates a new DataForward
 func NewDataForward(ctx context.Context,
 	vertexInstance *dfv1.VertexInstance,
-	fromBuffer isb.BufferReader,
-	toBuffers map[string][]isb.BufferWriter,
+	fromBuffer isb.PartitionReader,
+	toBuffers map[string][]isb.PartitionWriter,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	fw fetch.Fetcher,

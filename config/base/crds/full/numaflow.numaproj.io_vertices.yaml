@@ -616,10 +616,10 @@ spec:
                       type: string
                     fromVertexLimits:
                       properties:
-                        bufferMaxLength:
+                        partitionMaxLength:
                           format: int64
                           type: integer
-                        bufferUsageLimit:
+                        partitionUsageLimit:
                           format: int32
                           type: integer
                         readBatchSize:
@@ -654,10 +654,10 @@ spec:
                       type: string
                     toVertexLimits:
                       properties:
-                        bufferMaxLength:
+                        partitionMaxLength:
                           format: int64
                           type: integer
-                        bufferUsageLimit:
+                        partitionUsageLimit:
                           format: int32
                           type: integer
                         readBatchSize:
@@ -1442,10 +1442,10 @@ spec:
                 type: string
               limits:
                 properties:
-                  bufferMaxLength:
+                  partitionMaxLength:
                     format: int64
                     type: integer
-                  bufferUsageLimit:
+                  partitionUsageLimit:
                     format: int32
                     type: integer
                   readBatchSize:
@@ -1506,10 +1506,10 @@ spec:
                   replicasPerScale:
                     format: int32
                     type: integer
-                  targetBufferAvailability:
+                  targetBufferUsage:
                     format: int32
                     type: integer
-                  targetBufferUsage:
+                  targetPartitionAvailability:
                     format: int32
                     type: integer
                   targetProcessingSeconds:
@@ -3143,10 +3143,10 @@ spec:
                       type: string
                     fromVertexLimits:
                       properties:
-                        bufferMaxLength:
+                        partitionMaxLength:
                           format: int64
                           type: integer
-                        bufferUsageLimit:
+                        partitionUsageLimit:
                           format: int32
                           type: integer
                         readBatchSize:
@@ -3181,10 +3181,10 @@ spec:
                       type: string
                     toVertexLimits:
                       properties:
-                        bufferMaxLength:
+                        partitionMaxLength:
                           format: int64
                           type: integer
-                        bufferUsageLimit:
+                        partitionUsageLimit:
                           format: int32
                           type: integer
                         readBatchSize:

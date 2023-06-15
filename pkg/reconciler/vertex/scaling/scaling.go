@@ -231,7 +231,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	totalBufferLength := int64(0)
 	targetAvailableBufferLength := int64(0)
 	if !vertex.IsASource() { // Only non-source vertex has buffer to read
-		bufferName := vertex.OwnedBuffers()[0]
+		bufferName := vertex.OwnedPartitions()[0]
 		if bInfo, err := dClient.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
 			return fmt.Errorf("failed to get the read buffer information of vertex %q, %w", vertex.Name, err)
 		} else {
@@ -239,7 +239,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 				return fmt.Errorf("invalid read buffer information of vertex %q, length or usage limit is missing", vertex.Name)
 			}
 			totalBufferLength = int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
-			targetAvailableBufferLength = int64(float64(*bInfo.BufferLength) * float64(vertex.Spec.Scale.GetTargetBufferAvailability()) / 100)
+			targetAvailableBufferLength = int64(float64(*bInfo.BufferLength) * float64(vertex.Spec.Scale.GetTargetPartitionAvailability()) / 100)
 			// Add to cache for back pressure calculation
 			_ = s.vertexMetricsCache.Add(*bInfo.BufferName+"/length", totalBufferLength)
 		}
@@ -391,7 +391,7 @@ func (s *Scaler) hasBackPressure(pl dfv1.Pipeline, vertex dfv1.Vertex) (bool, bo
 loop:
 	for _, e := range downstreamEdges {
 		vertexKey := pl.Namespace + "/" + pl.Name + "-" + e.To
-		bufferNames := dfv1.GenerateBufferNames(pl.Namespace, pl.Name, e.To, pl.NumOfPartitions(e.To))
+		bufferNames := dfv1.GeneratePartitionNames(pl.Namespace, pl.Name, e.To, pl.NumOfPartitions(e.To))
 		for _, bufferName := range bufferNames {
 			pendingVal, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
 			if !ok { // Vertex key has not been cached, skip it.

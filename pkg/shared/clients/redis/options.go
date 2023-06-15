@@ -36,12 +36,12 @@ type Options struct {
 	CheckBackLog bool
 	// MaxLength is the maximum length of the stream before it reaches full
 	MaxLength int64
-	// BufferUsageLimit is the limit of buffer usage before we declare it as full
-	BufferUsageLimit float64
-	// RefreshBufferWriteInfo is used to determine if we refresh buffer write info
-	RefreshBufferWriteInfo bool
-	// BufferFullWritingStrategy is the writing strategy when buffer is full
-	BufferFullWritingStrategy dfv1.BufferFullWritingStrategy
+	// PartitionUsageLimit is the limit of buffer usage before we declare it as full
+	PartitionUsageLimit float64
+	// RefreshPartitionWriteInfo is used to determine if we refresh buffer write info
+	RefreshPartitionWriteInfo bool
+	// PartitionFullWritingStrategy is the writing strategy when buffer is full
+	PartitionFullWritingStrategy dfv1.BufferFullWritingStrategy
 }
 
 // Option to apply different options
@@ -125,7 +125,7 @@ func WithMaxLength(m int64) Option {
 type bufferUsageLimit float64
 
 func (u bufferUsageLimit) Apply(o *Options) {
-	o.BufferUsageLimit = float64(u)
+	o.PartitionUsageLimit = float64(u)
 }
 
 // WithBufferUsageLimit sets the bufferUsageLimit
@@ -137,7 +137,7 @@ func WithBufferUsageLimit(u float64) Option {
 type refreshBufferWriteInfo bool
 
 func (r refreshBufferWriteInfo) Apply(o *Options) {
-	o.RefreshBufferWriteInfo = bool(r)
+	o.RefreshPartitionWriteInfo = bool(r)
 }
 
 // WithRefreshBufferWriteInfo sets the refreshBufferWriteInfo
@@ -149,10 +149,10 @@ func WithRefreshBufferWriteInfo(r bool) Option {
 type bufferFullWritingStrategy dfv1.BufferFullWritingStrategy
 
 func (s bufferFullWritingStrategy) Apply(o *Options) {
-	o.BufferFullWritingStrategy = dfv1.BufferFullWritingStrategy(s)
+	o.PartitionFullWritingStrategy = dfv1.BufferFullWritingStrategy(s)
 }
 
-// WithBufferFullWritingStrategy sets the BufferFullWritingStrategy
+// WithBufferFullWritingStrategy sets the PartitionFullWritingStrategy
 func WithBufferFullWritingStrategy(s dfv1.BufferFullWritingStrategy) Option {
 	return bufferFullWritingStrategy(s)
 }

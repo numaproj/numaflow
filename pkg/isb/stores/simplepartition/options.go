@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package simplebuffer
+package simplepartition
 
 import (
 	"time"
@@ -22,12 +22,12 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-// Options for simple buffer
+// Options for simple elements
 type options struct {
 	// readTimeOut is the timeout needed for read timeout
 	readTimeOut time.Duration
-	// bufferFullWritingStrategy is the writing strategy when buffer is full
-	bufferFullWritingStrategy dfv1.BufferFullWritingStrategy
+	// partitionFullWritingStrategy is the writing strategy when buffer is full
+	partitionFullWritingStrategy dfv1.BufferFullWritingStrategy
 }
 
 type Option func(options *options) error
@@ -40,10 +40,10 @@ func WithReadTimeOut(timeout time.Duration) Option {
 	}
 }
 
-// WithBufferFullWritingStrategy sets the writing strategy when buffer is full
-func WithBufferFullWritingStrategy(s dfv1.BufferFullWritingStrategy) Option {
+// WithPartitionFullWritingStrategy sets the writing strategy when elements is full
+func WithPartitionFullWritingStrategy(s dfv1.BufferFullWritingStrategy) Option {
 	return func(o *options) error {
-		o.bufferFullWritingStrategy = s
+		o.partitionFullWritingStrategy = s
 		return nil
 	}
 }

@@ -28,7 +28,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
@@ -170,10 +170,10 @@ func TestProcessAndForward_Process(t *testing.T) {
 	client := udfcall.NewUDSgRPCBasedUDFWithClient(c)
 
 	assert.NoError(t, err)
-	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.BufferWriter))
+	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.PartitionWriter))
 
 	// create pf using key and reducer
-	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.BufferWriter, 1), &forwardTest{}, publishWatermark, wmb.NewIdleManager(1))
+	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.PartitionWriter, 1), &forwardTest{}, publishWatermark, wmb.NewIdleManager(1))
 
 	err = pf.Process(ctx)
 	assert.NoError(t, err)
@@ -187,39 +187,39 @@ func TestProcessAndForward_Forward(t *testing.T) {
 
 	pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores())
 
-	test1Buffer11 := simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0)
-	test1Buffer12 := simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1)
+	test1Buffer11 := simplepartition.NewInMemoryPartition("buffer1-1", 10, 0)
+	test1Buffer12 := simplepartition.NewInMemoryPartition("buffer1-2", 10, 1)
 
-	test1Buffer21 := simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0)
-	test1Buffer22 := simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 1)
+	test1Buffer21 := simplepartition.NewInMemoryPartition("buffer2-1", 10, 0)
+	test1Buffer22 := simplepartition.NewInMemoryPartition("buffer2-2", 10, 1)
 
-	toBuffers1 := map[string][]isb.BufferWriter{
+	toBuffers1 := map[string][]isb.PartitionWriter{
 		"buffer1": {test1Buffer11, test1Buffer12},
 		"buffer2": {test1Buffer21, test1Buffer22},
 	}
 
 	pf1, otStores1 := createProcessAndForwardAndOTStore(ctx, "test-forward-one", pbqManager, toBuffers1)
 
-	test2Buffer11 := simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0)
-	test2Buffer12 := simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1)
+	test2Buffer11 := simplepartition.NewInMemoryPartition("buffer1-1", 10, 0)
+	test2Buffer12 := simplepartition.NewInMemoryPartition("buffer1-2", 10, 1)
 
-	test2Buffer21 := simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0)
-	test2Buffer22 := simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 1)
+	test2Buffer21 := simplepartition.NewInMemoryPartition("buffer2-1", 10, 0)
+	test2Buffer22 := simplepartition.NewInMemoryPartition("buffer2-2", 10, 1)
 
-	toBuffers2 := map[string][]isb.BufferWriter{
+	toBuffers2 := map[string][]isb.PartitionWriter{
 		"buffer1": {test2Buffer11, test2Buffer12},
 		"buffer2": {test2Buffer21, test2Buffer22},
 	}
 
 	pf2, otStores2 := createProcessAndForwardAndOTStore(ctx, "test-forward-all", pbqManager, toBuffers2)
 
-	test3Buffer11 := simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0)
-	test3buffer12 := simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1)
+	test3Buffer11 := simplepartition.NewInMemoryPartition("buffer1-1", 10, 0)
+	test3buffer12 := simplepartition.NewInMemoryPartition("buffer1-2", 10, 1)
 
-	test3Buffer21 := simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0)
-	test3Buffer22 := simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 1)
+	test3Buffer21 := simplepartition.NewInMemoryPartition("buffer2-1", 10, 0)
+	test3Buffer22 := simplepartition.NewInMemoryPartition("buffer2-2", 10, 1)
 
-	toBuffers3 := map[string][]isb.BufferWriter{
+	toBuffers3 := map[string][]isb.PartitionWriter{
 		"buffer1": {test3Buffer11, test3buffer12},
 		"buffer2": {test3Buffer21, test3Buffer22},
 	}
@@ -229,7 +229,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 	tests := []struct {
 		name       string
 		id         partition.ID
-		buffers    []*simplebuffer.InMemoryBuffer
+		buffers    []*simplepartition.InMemoryPartition
 		pf         processAndForward
 		otStores   map[string]wmstore.WatermarkKVStorer
 		expected   []bool
@@ -242,7 +242,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 				End:   time.UnixMilli(120000),
 				Slot:  "test-forward-one",
 			},
-			buffers:  []*simplebuffer.InMemoryBuffer{test1Buffer11, test1Buffer12, test1Buffer21, test1Buffer22},
+			buffers:  []*simplepartition.InMemoryPartition{test1Buffer11, test1Buffer12, test1Buffer21, test1Buffer22},
 			pf:       pf1,
 			otStores: otStores1,
 			expected: []bool{false, true, true, true}, // should have one ctrl message for buffer2
@@ -268,7 +268,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 				End:   time.UnixMilli(120000),
 				Slot:  "test-forward-all",
 			},
-			buffers:  []*simplebuffer.InMemoryBuffer{test2Buffer11, test2Buffer12, test2Buffer21, test2Buffer22},
+			buffers:  []*simplepartition.InMemoryPartition{test2Buffer11, test2Buffer12, test2Buffer21, test2Buffer22},
 			pf:       pf2,
 			otStores: otStores2,
 			expected: []bool{false, true, false, true},
@@ -294,7 +294,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 				End:   time.UnixMilli(120000),
 				Slot:  "test-drop-all",
 			},
-			buffers:  []*simplebuffer.InMemoryBuffer{test3Buffer11, test3buffer12, test3Buffer21, test3Buffer22},
+			buffers:  []*simplepartition.InMemoryPartition{test3Buffer11, test3buffer12, test3Buffer21, test3Buffer22},
 			pf:       pf3,
 			otStores: otStores3,
 			expected: []bool{true, true, true, true}, // should have one ctrl message for each buffer
@@ -351,20 +351,20 @@ func TestProcessAndForward_Forward(t *testing.T) {
 func TestWriteToBuffer(t *testing.T) {
 	tests := []struct {
 		name       string
-		buffers    []isb.BufferWriter
+		buffers    []isb.PartitionWriter
 		throwError bool
 	}{
 		{
 			name: "test-discard-latest",
-			buffers: []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.DiscardLatest)),
-				simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.DiscardLatest))},
+			buffers: []isb.PartitionWriter{simplepartition.NewInMemoryPartition("buffer1-1", 10, 0, simplepartition.WithPartitionFullWritingStrategy(v1alpha1.DiscardLatest)),
+				simplepartition.NewInMemoryPartition("buffer1-2", 10, 1, simplepartition.WithPartitionFullWritingStrategy(v1alpha1.DiscardLatest))},
 			// should not throw any error as we drop messages and finish writing before context is cancelled
 			throwError: false,
 		},
 		{
 			name: "test-retry-until-success",
-			buffers: []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess)),
-				simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess))},
+			buffers: []isb.PartitionWriter{simplepartition.NewInMemoryPartition("buffer2-1", 10, 0, simplepartition.WithPartitionFullWritingStrategy(v1alpha1.RetryUntilSuccess)),
+				simplepartition.NewInMemoryPartition("buffer2-2", 10, 0, simplepartition.WithPartitionFullWritingStrategy(v1alpha1.RetryUntilSuccess))},
 			// should throw context closed error as we keep retrying writing until context is cancelled
 			throwError: true,
 		},
@@ -376,7 +376,7 @@ func TestWriteToBuffer(t *testing.T) {
 			defer cancel()
 			var pbqManager *pbq.Manager
 			pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores())
-			toBuffer := map[string][]isb.BufferWriter{
+			toBuffer := map[string][]isb.PartitionWriter{
 				"buffer": value.buffers,
 			}
 			pf, _ := createProcessAndForwardAndOTStore(ctx, value.name, pbqManager, toBuffer)
@@ -388,7 +388,7 @@ func TestWriteToBuffer(t *testing.T) {
 	}
 }
 
-func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter) (processAndForward, map[string]wmstore.WatermarkKVStorer) {
+func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.PartitionWriter) (processAndForward, map[string]wmstore.WatermarkKVStorer) {
 
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
@@ -448,7 +448,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer
-func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
+func buildPublisherMapAndOTStore(toBuffers map[string][]isb.PartitionWriter) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
 	var ctx = context.Background()
 	processorEntity := processor.NewProcessorEntity("publisherTestPod")
 	publishers := make(map[string]publish.Publisher)

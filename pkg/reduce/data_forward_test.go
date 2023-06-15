@@ -33,7 +33,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
@@ -257,8 +257,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		toVertexName    = "reduce-to-vertex"
 	)
 	defer cancelFn()
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
-	to := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
+	to := simplepartition.NewInMemoryPartition(toVertexName, toBufferSize, 0)
 
 	wmpublisher := &EventTypeWMProgressor{
 		watermarks: make(map[string]wmb.Watermark),
@@ -267,7 +267,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	// keep on writing <count> messages every 1 second for the supplied key
 	go writeMessages(child, 10, "no-op-test", fromBuffer, wmpublisher, time.Second*1)
 
-	toBuffer := map[string][]isb.BufferWriter{
+	toBuffer := map[string][]isb.PartitionWriter{
 		toVertexName: {to},
 	}
 
@@ -347,11 +347,11 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	toBuffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
-	toBuffers := map[string][]isb.BufferWriter{
+	toBuffer := simplepartition.NewInMemoryPartition(toVertexName, toBufferSize, 0)
+	toBuffers := map[string][]isb.PartitionWriter{
 		toVertexName: {toBuffer},
 	}
 
@@ -553,11 +553,11 @@ func TestReduceDataForward_Count(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
-	toBuffer := map[string][]isb.BufferWriter{
+	buffer := simplepartition.NewInMemoryPartition(toVertexName, toBufferSize, 0)
+	toBuffer := map[string][]isb.PartitionWriter{
 		toVertexName: {buffer},
 	}
 
@@ -628,11 +628,11 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
-	toBuffer := map[string][]isb.BufferWriter{
+	buffer := simplepartition.NewInMemoryPartition(toVertexName, toBufferSize, 0)
+	toBuffer := map[string][]isb.PartitionWriter{
 		toVertexName: {buffer},
 	}
 
@@ -707,11 +707,11 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
-	toBuffer := map[string][]isb.BufferWriter{
+	buffer := simplepartition.NewInMemoryPartition(toVertexName, toBufferSize, 0)
+	toBuffer := map[string][]isb.PartitionWriter{
 		toVertexName: {buffer},
 	}
 
@@ -782,11 +782,11 @@ func TestReduceDataForward_Max(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
-	toBuffer := map[string][]isb.BufferWriter{
+	buffer := simplepartition.NewInMemoryPartition(toVertexName, toBufferSize, 0)
+	toBuffer := map[string][]isb.PartitionWriter{
 		toVertexName: {buffer},
 	}
 
@@ -858,11 +858,11 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
-	toBuffer := map[string][]isb.BufferWriter{
+	buffer := simplepartition.NewInMemoryPartition(toVertexName, toBufferSize, 0)
+	toBuffer := map[string][]isb.PartitionWriter{
 		toVertexName: {buffer},
 	}
 
@@ -954,11 +954,11 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
-	toBuffer := map[string][]isb.BufferWriter{
+	buffer := simplepartition.NewInMemoryPartition(toVertexName, toBufferSize, 0)
+	toBuffer := map[string][]isb.PartitionWriter{
 		toVertexName: {buffer},
 	}
 
@@ -1035,11 +1035,11 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	defer childCancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer := simplebuffer.NewInMemoryBuffer(toVertexName, toBufferSize, 0)
-	toBuffer := map[string][]isb.BufferWriter{
+	buffer := simplepartition.NewInMemoryPartition(toVertexName, toBufferSize, 0)
+	toBuffer := map[string][]isb.PartitionWriter{
 		toVertexName: {buffer},
 	}
 
@@ -1125,12 +1125,12 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 	defer cancel()
 
 	// create from buffers
-	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+	fromBuffer := simplepartition.NewInMemoryPartition(fromBufferName, fromBufferSize, 0)
 
 	// create to buffers
-	buffer1 := simplebuffer.NewInMemoryBuffer(toVertexName+"0", toBufferSize, 0)
-	buffer2 := simplebuffer.NewInMemoryBuffer(toVertexName+"1", toBufferSize, 1)
-	toBuffer := map[string][]isb.BufferWriter{
+	buffer1 := simplepartition.NewInMemoryPartition(toVertexName+"0", toBufferSize, 0)
+	buffer2 := simplepartition.NewInMemoryPartition(toVertexName+"1", toBufferSize, 1)
+	toBuffer := map[string][]isb.PartitionWriter{
 		toVertexName: {buffer1, buffer2},
 	}
 
@@ -1206,7 +1206,7 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 }
 
 // fetcherAndPublisher creates watermark fetcher and publishers, and keeps the processors alive by sending heartbeats
-func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryBuffer, key string) (fetch.Fetcher, publish.Publisher) {
+func fetcherAndPublisher(ctx context.Context, fromBuffer *simplepartition.InMemoryPartition, key string) (fetch.Fetcher, publish.Publisher) {
 
 	var (
 		keyspace     = key
@@ -1243,7 +1243,7 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	return f, sourcePublisher
 }
 
-func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
+func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.PartitionWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]wmstore.WatermarkKVStorer)
 
@@ -1298,7 +1298,7 @@ func buildMessagesForReduce(count int, key string, publishTime time.Time) []isb.
 }
 
 // writeMessages writes message to simple buffer and publishes the watermark using write offsets
-func writeMessages(ctx context.Context, count int, key string, fromBuffer *simplebuffer.InMemoryBuffer, publish publish.Publisher, interval time.Duration) {
+func writeMessages(ctx context.Context, count int, key string, fromBuffer *simplepartition.InMemoryPartition, publish publish.Publisher, interval time.Duration) {
 	intervalDuration := interval
 	publishTime := time.Unix(60, 0)
 	i := 1
@@ -1317,7 +1317,7 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 	}
 }
 
-func publishMessages(ctx context.Context, startTime int, messages []int, testDuration int, batchSize int, publish publish.Publisher, fromBuffer *simplebuffer.InMemoryBuffer) {
+func publishMessages(ctx context.Context, startTime int, messages []int, testDuration int, batchSize int, publish publish.Publisher, fromBuffer *simplepartition.InMemoryPartition) {
 	eventTime := startTime
 
 	inputChan := make(chan int)
@@ -1383,7 +1383,7 @@ func buildIsbMessage(messageValue int, eventTime time.Time) isb.Message {
 }
 
 // publishMessagesAllowedLatency is only used for xxxAllowedLatency test
-func publishMessagesAllowedLatency(ctx context.Context, startTime int, message int, allowedLatency int, windowSize int, batchSize int, publish publish.Publisher, fromBuffer *simplebuffer.InMemoryBuffer) {
+func publishMessagesAllowedLatency(ctx context.Context, startTime int, message int, allowedLatency int, windowSize int, batchSize int, publish publish.Publisher, fromBuffer *simplepartition.InMemoryPartition) {
 	counter := 0
 	inputMsgs := make([]isb.Message, batchSize)
 	for i := 0; i <= windowSize; i++ {

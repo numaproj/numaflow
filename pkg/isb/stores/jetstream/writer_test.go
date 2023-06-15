@@ -90,7 +90,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			addStream(t, js, toStreamName)
 			defer deleteStream(js, toStreamName)
 
-			bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10))
+			bw, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10))
 			assert.NoError(t, err)
 			jw, _ := bw.(*jetStreamWriter)
 			defer jw.Close()
@@ -128,16 +128,16 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			}}
 
 			// Forwarder logic tested here with a jetstream read and write
-			bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+			bufferReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 			assert.NoError(t, err)
 			fromStep, _ := bufferReader.(*jetStreamReader)
 			defer fromStep.Close()
 
-			bufferWriter, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, toStreamName, toStreamName, toStreamName, WithMaxLength(10))
+			bufferWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, toStreamName, toStreamName, toStreamName, WithMaxLength(10))
 			assert.NoError(t, err)
 			to1 := bufferWriter.(*jetStreamWriter)
 			defer to1.Close()
-			toSteps := map[string][]isb.BufferWriter{
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to1},
 			}
 
@@ -204,7 +204,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2))
+	bw, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
 	defer jw.Close()
@@ -263,7 +263,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2), WithBufferFullWritingStrategy(dfv1.DiscardLatest))
+	bw, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, WithMaxLength(10), WithBufferUsageLimit(0.2), WithBufferFullWritingStrategy(dfv1.DiscardLatest))
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
 	defer jw.Close()
@@ -298,7 +298,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
-		assert.Equal(t, errMsg, isb.NoRetryableBufferWriteErr{Name: streamName, Message: "Buffer full!"})
+		assert.Equal(t, errMsg, isb.NonRetryablePartitionWriteErr{Name: streamName, Message: "Buffer full!"})
 	}
 }
 
@@ -321,7 +321,7 @@ func TestWriteGetName(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferWriter, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	bufferWriter, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 	assert.NoError(t, err)
 
 	bw := bufferWriter.(*jetStreamReader)
@@ -349,7 +349,7 @@ func TestWriteClose(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferWriter, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName)
+	bufferWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName)
 	assert.NoError(t, err)
 
 	bw := bufferWriter.(*jetStreamWriter)

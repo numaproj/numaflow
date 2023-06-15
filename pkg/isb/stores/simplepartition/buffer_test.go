@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package simplebuffer
+package simplepartition
 
 import (
 	"context"
@@ -31,7 +31,7 @@ import (
 func TestNewSimpleBuffer(t *testing.T) {
 	count := int64(10)
 	readBatchSize := int64(2)
-	sb := NewInMemoryBuffer("test", count, 0)
+	sb := NewInMemoryPartition("test", count, 0)
 	ctx := context.Background()
 
 	assert.NotEmpty(t, sb.String())
@@ -69,7 +69,7 @@ func TestNewSimpleBuffer(t *testing.T) {
 
 	// try to write 3 messages and it should fail (we have only space for 2)
 	_, errs3 := sb.Write(ctx, writeMessages[0:3])
-	assert.EqualValues(t, []error{nil, nil, isb.BufferWriteErr{Name: "test", Full: true, Message: "Buffer full!"}}, errs3)
+	assert.EqualValues(t, []error{nil, nil, isb.PartitionWriteErr{Name: "test", Full: true, Message: "Buffer full!"}}, errs3)
 
 	// let's read some more
 	readMessages, err = sb.Read(ctx, 2)
@@ -82,7 +82,7 @@ func TestNewSimpleBuffer(t *testing.T) {
 
 func TestNewSimpleBuffer_BufferFullWritingStrategyIsDiscard(t *testing.T) {
 	count := int64(3)
-	sb := NewInMemoryBuffer("test", 2, 0, WithBufferFullWritingStrategy(v1alpha1.DiscardLatest))
+	sb := NewInMemoryPartition("test", 2, 0, WithPartitionFullWritingStrategy(v1alpha1.DiscardLatest))
 	ctx := context.Background()
 	assert.NotEmpty(t, sb.String())
 	assert.Equal(t, sb.IsEmpty(), true)
@@ -95,7 +95,7 @@ func TestNewSimpleBuffer_BufferFullWritingStrategyIsDiscard(t *testing.T) {
 	_, errors := sb.Write(ctx, writeMessages[0:3])
 	assert.NoError(t, errors[0])
 	assert.NoError(t, errors[1])
-	assert.EqualValues(t, []error{nil, nil, isb.NoRetryableBufferWriteErr{Name: "test", Message: "Buffer full!"}}, errors)
+	assert.EqualValues(t, []error{nil, nil, isb.NonRetryablePartitionWriteErr{Name: "test", Message: "Buffer full!"}}, errors)
 
 	// still full as we did not ack
 	assert.Equal(t, true, sb.IsFull())

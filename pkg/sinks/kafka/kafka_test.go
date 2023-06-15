@@ -25,7 +25,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
@@ -35,7 +35,7 @@ import (
 
 func TestWriteSuccessToKafka(t *testing.T) {
 	var err error
-	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25, 0)
+	fromStep := simplepartition.NewInMemoryPartition("toKafka", 25, 0)
 	toKafka := new(ToKafka)
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -47,7 +47,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	toSteps := map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}
+	toSteps := map[string][]isb.PartitionWriter{vertex.Spec.Name: {toKafka}}
 	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, getSinkGoWhereDecider(vertex.Spec.Name), applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
@@ -88,7 +88,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 
 func TestWriteFailureToKafka(t *testing.T) {
 	var err error
-	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25, 0)
+	fromStep := simplepartition.NewInMemoryPartition("toKafka", 25, 0)
 	toKafka := new(ToKafka)
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -99,7 +99,7 @@ func TestWriteFailureToKafka(t *testing.T) {
 			},
 		},
 	}}
-	toSteps := map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}
+	toSteps := map[string][]isb.PartitionWriter{vertex.Spec.Name: {toKafka}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, getSinkGoWhereDecider(vertex.Spec.Name), applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)

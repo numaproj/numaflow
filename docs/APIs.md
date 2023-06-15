@@ -343,8 +343,8 @@ type.)
 <td>
 <em>(Optional)</em>
 <p>
-Limits define the limitations such as buffer read batch size for all the
-vertices of a pipeline, will override pipeline level settings
+Limits define the limitations such as partition read batch size for all
+the vertices of a pipeline, will override pipeline level settings
 </p>
 </td>
 </tr>
@@ -394,8 +394,8 @@ List of sidecar containers belonging to the pod.
 <td>
 <em>(Optional)</em>
 <p>
-Number of partitions of the vertex owned buffers. It applies to udf and
-sink vertices only.
+Number of partitions of the vertex owned partitions. It applies to udf
+and sink vertices only.
 </p>
 </td>
 </tr>
@@ -3194,8 +3194,8 @@ Lifecycle define the Lifecycle properties
 <td>
 <em>(Optional)</em>
 <p>
-Limits define the limitations such as buffer read batch size for all the
-vertices of a pipeline, they could be overridden by each vertex’s
+Limits define the limitations such as partition read batch size for all
+the vertices of a pipeline, they could be overridden by each vertex’s
 settings
 </p>
 </td>
@@ -3275,28 +3275,28 @@ by the vertex’s limit settings
 </tr>
 <tr>
 <td>
-<code>bufferMaxLength</code></br> <em> uint64 </em>
+<code>partitionMaxLength</code></br> <em> uint64 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-BufferMaxLength is used to define the max length of a buffer Only
-applies to UDF and Source vertices as only they do buffer write. It can
-be overridden by the settings in vertex limits.
+PartitionMaxLength is used to define the max length of a partition Only
+applies to UDF and Source vertices as only they do partition write. It
+can be overridden by the settings in vertex limits.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>bufferUsageLimit</code></br> <em> uint32 </em>
+<code>partitionUsageLimit</code></br> <em> uint32 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-BufferUsageLimit is used to define the percentage of the buffer usage
-limit, a valid value should be less than 100, for example, 85. Only
-applies to UDF and Source vertices as only they do buffer write. It will
-be overridden by the settings in vertex limits.
+PartitionUsageLimit is used to define the percentage of the partition
+usage limit, a valid value should be less than 100, for example, 85.
+Only applies to UDF and Source vertices as only they do partition write.
+It will be overridden by the settings in vertex limits.
 </p>
 </td>
 </tr>
@@ -3397,8 +3397,8 @@ Lifecycle define the Lifecycle properties
 <td>
 <em>(Optional)</em>
 <p>
-Limits define the limitations such as buffer read batch size for all the
-vertices of a pipeline, they could be overridden by each vertex’s
+Limits define the limitations such as partition read batch size for all
+the vertices of a pipeline, they could be overridden by each vertex’s
 settings
 </p>
 </td>
@@ -4046,7 +4046,7 @@ only effective for source vertices.
 <p>
 TargetBufferUsage is used to define the target percentage of the buffer
 availability. A valid and meaningful value should be less than the
-BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
+PartitionUsageLimit defined in the Edge spec (or Pipeline spec), for
 example, 50. It only applies to UDF and Sink vertices because only they
 have buffers to read. Deprecated: use targetBufferAvailability instead.
 Will be removed in v0.9
@@ -4067,16 +4067,16 @@ once. The is use to prevent too aggressive scaling operations
 </tr>
 <tr>
 <td>
-<code>targetBufferAvailability</code></br> <em> uint32 </em>
+<code>targetPartitionAvailability</code></br> <em> uint32 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-TargetBufferAvailability is used to define the target percentage of the
-buffer availability. A valid and meaningful value should be less than
-the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
-example, 50. It only applies to UDF and Sink vertices because only they
-have buffers to read.
+TargetPartitionAvailability is used to define the target percentage of
+the partition availability. A valid and meaningful value should be less
+than the PartitionUsageLimit defined in the Edge spec (or Pipeline
+spec), for example, 50. It only applies to UDF and Sink vertices because
+only they have partitions to read.
 </p>
 </td>
 </tr>
@@ -4856,32 +4856,32 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-Read timeout duration from the source or buffer It overrides the
+Read timeout duration from the source or partition It overrides the
 settings from pipeline limits.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>bufferMaxLength</code></br> <em> uint64 </em>
+<code>partitionMaxLength</code></br> <em> uint64 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-BufferMaxLength is used to define the max length of a buffer. It
+PartitionMaxLength is used to define the max length of a partition. It
 overrides the settings from pipeline limits.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>bufferUsageLimit</code></br> <em> uint32 </em>
+<code>partitionUsageLimit</code></br> <em> uint32 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-BufferUsageLimit is used to define the percentage of the buffer usage
-limit, a valid value should be less than 100, for example, 85. It
+PartitionUsageLimit is used to define the percentage of the partition
+usage limit, a valid value should be less than 100, for example, 85. It
 overrides the settings from pipeline limits.
 </p>
 </td>

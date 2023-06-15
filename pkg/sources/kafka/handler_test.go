@@ -29,7 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -54,8 +54,8 @@ func TestMessageHandling(t *testing.T) {
 	value := "testvalue"
 	keys := []string{"testkey"}
 
-	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
-	toBuffers := map[string][]isb.BufferWriter{
+	dest := simplepartition.NewInMemoryPartition("test", 100, 0)
+	toBuffers := map[string][]isb.PartitionWriter{
 		"test": {dest},
 	}
 
@@ -77,7 +77,7 @@ func TestMessageHandling(t *testing.T) {
 		Replica:  0,
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.PartitionWriter{})
 	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()),
 		WithBufferSize(100), WithReadTimeOut(100*time.Millisecond))
 

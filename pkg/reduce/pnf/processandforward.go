@@ -55,7 +55,7 @@ type processAndForward struct {
 	writeMessages  []*isb.WriteMessage
 	pbqReader      pbq.Reader
 	log            *zap.SugaredLogger
-	toBuffers      map[string][]isb.BufferWriter
+	toBuffers      map[string][]isb.PartitionWriter
 	whereToDecider forward.ToWhichStepDecider
 	wmPublishers   map[string]publish.Publisher
 	idleManager    *wmb.IdleManager
@@ -69,7 +69,7 @@ func newProcessAndForward(ctx context.Context,
 	partitionID partition.ID,
 	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
-	toBuffers map[string][]isb.BufferWriter,
+	toBuffers map[string][]isb.PartitionWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
 	idleManager *wmb.IdleManager) *processAndForward {
@@ -227,8 +227,8 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 		offsets, writeErrs = p.toBuffers[edgeName][partition].Write(ctx, writeMessages)
 		for i, message := range writeMessages {
 			if writeErrs[i] != nil {
-				if errors.As(writeErrs[i], &isb.NoRetryableBufferWriteErr{}) {
-					// If toBuffer returns us a NoRetryableBufferWriteErr, we drop the message.
+				if errors.As(writeErrs[i], &isb.NonRetryablePartitionWriteErr{}) {
+					// If toBuffer returns us a NonRetryablePartitionWriteErr, we drop the message.
 					dropBytes += float64(len(message.Payload))
 				} else {
 					failedMessages = append(failedMessages, message)

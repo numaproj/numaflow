@@ -21,9 +21,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// Sourcer interface provides an isb.BufferReader abstraction over the underlying data source.
+// Sourcer interface provides an isb.PartitionReader abstraction over the underlying data source.
 // This is intended to be consumed by a connector like isb.forward
 type Sourcer interface {
-	isb.BufferReader
+	isb.PartitionReader
 	forward.StarterStopper
 }

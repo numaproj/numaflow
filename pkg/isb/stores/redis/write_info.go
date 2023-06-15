@@ -30,29 +30,29 @@ import (
 )
 
 // setWriteInfo is used to update the values of isFull flag and MINID
-func (bw *BufferWrite) setWriteInfo(_ context.Context) {
+func (pw *RedisWriter) setWriteInfo(_ context.Context) {
 	ctx := redisclient.RedisContext
-	bw.updateIsFullAndLag(ctx)
-	bw.updateMinId(ctx)
+	pw.updateIsFullAndLag(ctx)
+	pw.updateMinId(ctx)
 }
 
 // updateIsFullAndLag is used to update the isFull flag using both the buffer usage and the consumer consumerLag.
-func (bw *BufferWrite) updateIsFullAndLag(ctx context.Context) {
-	labels := map[string]string{"buffer": bw.GetName()}
+func (pw *RedisWriter) updateIsFullAndLag(ctx context.Context) {
+	labels := map[string]string{"buffer": pw.GetName()}
 
-	consumerLag, err := bw.getConsumerLag(ctx)
+	consumerLag, err := pw.getConsumerLag(ctx)
 
 	// here if the error is stream not found, we should set the isfull flag as false as write (XADD) creates the stream
 	if err != nil && strings.Contains(err.Error(), "stream not found") {
-		bw.setIsFull(false)
-		bw.setError("stream not found", err)
+		pw.setIsFull(false)
+		pw.setError("stream not found", err)
 		isbIsFullErrors.With(labels).Inc()
 		return
 	}
 
 	if err != nil {
-		bw.setIsFull(true)
-		bw.setError("error in getConsumerLag", err)
+		pw.setIsFull(true)
+		pw.setError("error in getConsumerLag", err)
 		isbIsFullErrors.With(labels).Inc()
 		return
 	}
@@ -60,62 +60,62 @@ func (bw *BufferWrite) updateIsFullAndLag(ctx context.Context) {
 	// consumerLag as metric
 	isbConsumerLag.With(labels).Set(float64(consumerLag))
 
-	lagDuration := bw.LagDuration.Milliseconds()
+	lagDuration := pw.LagDuration.Milliseconds()
 
 	// if specified consumerLag duration is 0, that means we do not want to use consumerLag to determine isFull.
 	// if lagDuration is specified we use that to compare against the consumer consumerLag (lastGenerated - lastDelivered)
 	if lagDuration != 0 && consumerLag >= lagDuration {
-		bw.log.Infow("Increasing Lag", zap.Int64("increasing consumerLag", consumerLag))
-		bw.setIsFull(true)
+		pw.log.Infow("Increasing Lag", zap.Int64("increasing consumerLag", consumerLag))
+		pw.setIsFull(true)
 	}
 
-	usage, err := bw.getUsage(ctx)
+	usage, err := pw.getUsage(ctx)
 
 	// here if the error is stream not found, we should set the isfull flag as false as write (XADD) creates the stream
 	if err != nil && strings.Contains(err.Error(), "stream not found") {
-		bw.setIsFull(false)
-		bw.setError("stream not found", err)
+		pw.setIsFull(false)
+		pw.setError("stream not found", err)
 		isbIsFullErrors.With(labels).Inc()
 		return
 	}
 
 	if err != nil {
-		bw.setIsFull(true)
-		bw.setError("updateIsFullAndLag error in getMaxLen", err)
+		pw.setIsFull(true)
+		pw.setError("updateIsFullAndLag error in getMaxLen", err)
 		isbIsFullErrors.With(labels).Inc()
 		return
 	}
 	isbBufferUsage.With(labels).Set(usage)
 
-	if usage >= bw.BufferUsageLimit {
-		bw.log.Infow("usage is greater than bufferUsageLimit", zap.Float64("usage", usage))
-		bw.setIsFull(true)
+	if usage >= pw.PartitionUsageLimit {
+		pw.log.Infow("usage is greater than bufferUsageLimit", zap.Float64("usage", usage))
+		pw.setIsFull(true)
 		return
 	}
 
-	bw.setIsFull(false)
+	pw.setIsFull(false)
 
 }
 
 // getUsage is used to obtain the % usage of the buffer
-func (bw *BufferWrite) getUsage(ctx context.Context) (float64, error) {
-	streamLen, err := bw.getStreamLength(ctx)
+func (pw *RedisWriter) getUsage(ctx context.Context) (float64, error) {
+	streamLen, err := pw.getStreamLength(ctx)
 
 	if err != nil {
 		return 0.0, err
 	}
 
 	// set stream length
-	bw.setBufferLength(streamLen)
+	pw.setBufferLength(streamLen)
 
-	maxLen := bw.MaxLength
+	maxLen := pw.MaxLength
 	var usage = float64(streamLen) / float64(maxLen)
 
 	return usage, err
 }
 
-func (bw *BufferWrite) getStreamLength(ctx context.Context) (int64, error) {
-	streamLength := bw.Client.XLen(ctx, bw.GetStreamName())
+func (pw *RedisWriter) getStreamLength(ctx context.Context) (int64, error) {
+	streamLength := pw.Client.XLen(ctx, pw.GetStreamName())
 
 	if streamLength.Err() != nil && streamLength.Err().Error() == "ERR no such key" {
 		return 0, fmt.Errorf("stream not found:%w", streamLength.Err())
@@ -135,32 +135,32 @@ func (bw *BufferWrite) getStreamLength(ctx context.Context) (int64, error) {
 // We also obtain the list of all the delivered ids for all the different consumer groups.
 // We assume that if the difference of the lastGeneratedId and min(lastDelivered) > 1 min there is a consumerLag.
 // It is tough to get the exact numbers as per https://github.com/redis/redis/issues/8392
-func (bw *BufferWrite) getConsumerLag(ctx context.Context) (int64, error) {
-	lastGeneratedId, lastGenerated, err := bw.getLastGenerated(ctx)
+func (pw *RedisWriter) getConsumerLag(ctx context.Context) (int64, error) {
+	lastGeneratedId, lastGenerated, err := pw.getLastGenerated(ctx)
 
 	if err != nil {
 		return 0, fmt.Errorf("error in getting lastGeneratedId: %w", err)
 	}
 
-	lastDeliveredId, lastDelivered, err := bw.getLastDelivered(ctx)
+	lastDeliveredId, lastDelivered, err := pw.getLastDelivered(ctx)
 
 	if err != nil {
 		return 0, fmt.Errorf("error in getting lastDeliveredId: %w", err)
 	}
 	// Set the refresh count error to 0
-	bw.BufferWriteInfo.refreshFullError.Store(0)
+	pw.PartitionWriteInfo.refreshFullError.Store(0)
 	// obtain current consumerLag
 	consumerLagDuration := time.UnixMilli(lastGeneratedId).Sub(time.UnixMilli(lastDeliveredId))
 
-	bw.setConsumerLag(consumerLagDuration)
+	pw.setConsumerLag(consumerLagDuration)
 
 	consumerLag := lastGeneratedId - lastDeliveredId
 
 	// look for exact match between lastGenerated and lastDelivered
 	if lastGenerated == lastDelivered {
-		bw.setHasUnprocessed(false)
+		pw.setHasUnprocessed(false)
 	} else {
-		bw.setHasUnprocessed(true)
+		pw.setHasUnprocessed(true)
 	}
 
 	return consumerLag, nil
@@ -172,43 +172,43 @@ func (bw *BufferWrite) getConsumerLag(ctx context.Context) (int64, error) {
 // So we do a getLastDelivered first, then perform a getPending and if it gives us a value, we can be sure that the pending will
 // be the minimal among the two. If we do not see values in getPending we can safely set minId to the lastDeliveredId.
 
-func (bw *BufferWrite) updateMinId(ctx context.Context) {
-	_, lastDelivered, err := bw.getLastDelivered(ctx)
+func (pw *RedisWriter) updateMinId(ctx context.Context) {
+	_, lastDelivered, err := pw.getLastDelivered(ctx)
 
 	if err != nil {
-		bw.setError("Error obtaining lastDeliveredId", err)
+		pw.setError("Error obtaining lastDeliveredId", err)
 	}
 
 	if lastDelivered == "" {
-		bw.log.Debugw("No last deliveredId found, leaving minId at 0-0")
+		pw.log.Debugw("No last deliveredId found, leaving minId at 0-0")
 		return
 	}
 
-	pending, err := bw.getPending(ctx)
+	pending, err := pw.getPending(ctx)
 
 	if err != nil {
-		bw.setError("Error in getting Pending results", err)
+		pw.setError("Error in getting Pending results", err)
 		return
 	}
 
 	// set pending count
-	bw.setPendingCount(pending.Val().Count)
+	pw.setPendingCount(pending.Val().Count)
 
 	// do not see a pending list, keep minId as lastDelivered as we run pending only after last delivered
 	if pending.Val().Count == 0 {
-		bw.setMinId(lastDelivered)
+		pw.setMinId(lastDelivered)
 		return
 	}
 
 	minPending := pending.Val().Lower
-	bw.setMinId(minPending)
+	pw.setMinId(minPending)
 }
 
 // getLastGenerated is used to obtain the last generatedId on the redis stream
-func (bw *BufferWrite) getLastGenerated(ctx context.Context) (int64, string, error) {
+func (pw *RedisWriter) getLastGenerated(ctx context.Context) (int64, string, error) {
 	var lastGeneratedId int64
 	var lastGenerated string
-	infoStream := bw.Client.XInfoStream(ctx, bw.GetStreamName())
+	infoStream := pw.Client.XInfoStream(ctx, pw.GetStreamName())
 	// Explicitly set error to nil if there
 	if infoStream.Err() != nil && infoStream.Err().Error() == "ERR no such key" {
 		return lastGeneratedId, lastGenerated, fmt.Errorf("stream not found: %w", infoStream.Err())
@@ -233,15 +233,15 @@ func (bw *BufferWrite) getLastGenerated(ctx context.Context) (int64, string, err
 // getLastDelivered is used to get the last delivered Id
 // We return the integer and string versions of lastDelivered here because consumer consumerLag expects an integer, whereas
 // minId expects a string
-func (bw *BufferWrite) getLastDelivered(ctx context.Context) (int64, string, error) {
+func (pw *RedisWriter) getLastDelivered(ctx context.Context) (int64, string, error) {
 	var lastDeliveredId int64
 	var lastDelivered string
 	var err error
 
-	xInfoGroups := bw.Client.XInfoGroups(ctx, bw.GetStreamName())
+	xInfoGroups := pw.Client.XInfoGroups(ctx, pw.GetStreamName())
 
 	if xInfoGroups.Err() != nil {
-		bw.setError("XInfoGroup error in getLastDelivered", xInfoGroups.Err())
+		pw.setError("XInfoGroup error in getLastDelivered", xInfoGroups.Err())
 		return lastDeliveredId, lastDelivered, xInfoGroups.Err()
 	}
 	results := xInfoGroups.Val()
@@ -249,16 +249,16 @@ func (bw *BufferWrite) getLastDelivered(ctx context.Context) (int64, string, err
 	// If you do not have a consumer you might keep writing and might run into "NO SPACE LEFT", on contrary, buffer writer won't write unless there is a reader.
 	// we return true today, but how should we handle it differently?
 	if len(results) == 0 {
-		err = fmt.Errorf("no consumers groups found for stream: %s", bw.GetStreamName())
+		err = fmt.Errorf("no consumers groups found for stream: %s", pw.GetStreamName())
 		return lastDeliveredId, lastDelivered, err
 	}
 
 	for _, result := range results {
-		if result.Name == bw.GetGroupName() {
+		if result.Name == pw.GetGroupName() {
 			lastDelivered = result.LastDeliveredID
 			lastDeliveredId, err = splitId(lastDelivered)
 			if err != nil {
-				bw.setError("Error in getConsumerLag", err)
+				pw.setError("Error in getConsumerLag", err)
 				return lastDeliveredId, lastDelivered, err
 			}
 		}
@@ -269,9 +269,9 @@ func (bw *BufferWrite) getLastDelivered(ctx context.Context) (int64, string, err
 }
 
 // getPending is used to get the list of the pending values
-func (bw *BufferWrite) getPending(ctx context.Context) (*redis.XPendingCmd, error) {
+func (pw *RedisWriter) getPending(ctx context.Context) (*redis.XPendingCmd, error) {
 
-	pending := bw.Client.XPending(ctx, bw.GetStreamName(), bw.GetGroupName())
+	pending := pw.Client.XPending(ctx, pw.GetStreamName(), pw.GetGroupName())
 
 	// see an error with pending, keep minId as 0-0
 	if pending.Err() != nil {
@@ -281,74 +281,74 @@ func (bw *BufferWrite) getPending(ctx context.Context) (*redis.XPendingCmd, erro
 }
 
 // IsFull returns whether the buffer is full. It could be approximate.
-func (bw *BufferWrite) IsFull() bool {
-	return bw.BufferWriteInfo.isFull.Load()
+func (pw *RedisWriter) IsFull() bool {
+	return pw.PartitionWriteInfo.isFull.Load()
 }
 
 // GetPendingCount is used to get the pendingCount value
-func (bw *BufferWrite) GetPendingCount() int64 {
-	return bw.BufferWriteInfo.pendingCount.Load()
+func (pw *RedisWriter) GetPendingCount() int64 {
+	return pw.PartitionWriteInfo.pendingCount.Load()
 }
 
-// GetBufferLength is used to get the bufferLength value
-func (bw *BufferWrite) GetBufferLength() int64 {
-	return bw.BufferWriteInfo.bufferLength.Load()
+// GetBufferLength is used to get the partitionLength value
+func (pw *RedisWriter) GetBufferLength() int64 {
+	return pw.PartitionWriteInfo.partitionLength.Load()
 }
 
 // GetConsumerLag returns the consumerLag of the buffer
-func (bw *BufferWrite) GetConsumerLag() time.Duration {
-	return bw.BufferWriteInfo.consumerLag.Load()
+func (pw *RedisWriter) GetConsumerLag() time.Duration {
+	return pw.PartitionWriteInfo.consumerLag.Load()
 }
 
 // GetMinId returns the MINID of the buffer
-func (bw *BufferWrite) GetMinId() string {
-	return bw.BufferWriteInfo.minId.Load()
+func (pw *RedisWriter) GetMinId() string {
+	return pw.PartitionWriteInfo.minId.Load()
 }
 
 // HasUnprocessedData tells us if we have any unprocessed data left in the buffer
-func (bw *BufferWrite) HasUnprocessedData() bool {
-	return bw.BufferWriteInfo.hasUnprocessedData.Load()
+func (pw *RedisWriter) HasUnprocessedData() bool {
+	return pw.PartitionWriteInfo.hasUnprocessedData.Load()
 }
 
 // GetRefreshFullError returns the refreshFullError count of the buffer
-func (bw *BufferWrite) GetRefreshFullError() uint32 {
-	return bw.BufferWriteInfo.refreshFullError.Load()
+func (pw *RedisWriter) GetRefreshFullError() uint32 {
+	return pw.PartitionWriteInfo.refreshFullError.Load()
 }
 
 // setIsFull is used to set the isFull value
-func (bw *BufferWrite) setIsFull(flag bool) {
-	bw.BufferWriteInfo.isFull.Store(flag)
+func (pw *RedisWriter) setIsFull(flag bool) {
+	pw.PartitionWriteInfo.isFull.Store(flag)
 }
 
 // setPendingCount is used to set the pendingCount value
-func (bw *BufferWrite) setPendingCount(pendingCount int64) {
-	bw.BufferWriteInfo.pendingCount.Store(pendingCount)
+func (pw *RedisWriter) setPendingCount(pendingCount int64) {
+	pw.PartitionWriteInfo.pendingCount.Store(pendingCount)
 }
 
-// setBufferLength is used to set the bufferLength value
-func (bw *BufferWrite) setBufferLength(bufferLength int64) {
-	bw.BufferWriteInfo.bufferLength.Store(bufferLength)
+// setBufferLength is used to set the partitionLength value
+func (pw *RedisWriter) setBufferLength(bufferLength int64) {
+	pw.PartitionWriteInfo.partitionLength.Store(bufferLength)
 }
 
 // setConsumerLag is used to set the consumerLag value
-func (bw *BufferWrite) setConsumerLag(consumerLag time.Duration) {
-	bw.BufferWriteInfo.consumerLag.Store(consumerLag)
+func (pw *RedisWriter) setConsumerLag(consumerLag time.Duration) {
+	pw.PartitionWriteInfo.consumerLag.Store(consumerLag)
 }
 
 // setMinId is used to set the minId value
-func (bw *BufferWrite) setMinId(minId string) {
-	bw.BufferWriteInfo.minId.Store(minId)
+func (pw *RedisWriter) setMinId(minId string) {
+	pw.PartitionWriteInfo.minId.Store(minId)
 }
 
 // setHasUnprocessed is used to set the value of hasProcessed.
-func (bw *BufferWrite) setHasUnprocessed(hasUnprocessed bool) {
-	bw.BufferWriteInfo.hasUnprocessedData.Store(hasUnprocessed)
+func (pw *RedisWriter) setHasUnprocessed(hasUnprocessed bool) {
+	pw.PartitionWriteInfo.hasUnprocessedData.Store(hasUnprocessed)
 }
 
 // setError is used to set error cases
-func (bw *BufferWrite) setError(errMsg string, err error) {
-	bw.log.Errorw(errMsg, zap.Error(err))
-	bw.BufferWriteInfo.refreshFullError.Inc()
+func (pw *RedisWriter) setError(errMsg string, err error) {
+	pw.log.Errorw(errMsg, zap.Error(err))
+	pw.PartitionWriteInfo.refreshFullError.Inc()
 }
 
 // splitId is used to split the Id obtained from redis.

@@ -414,7 +414,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 					},
 					"limits": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
+							Description: "Limits define the limitations such as partition read batch size for all the vertices of a pipeline, will override pipeline level settings",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"),
 						},
 					},
@@ -455,7 +455,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 					},
 					"partitions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Number of partitions of the vertex owned buffers. It applies to udf and sink vertices only.",
+							Description: "Number of partitions of the vertex owned partitions. It applies to udf and sink vertices only.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -2896,16 +2896,16 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 							Format:      "int64",
 						},
 					},
-					"bufferMaxLength": {
+					"partitionMaxLength": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertices as only they do buffer write. It can be overridden by the settings in vertex limits.",
+							Description: "PartitionMaxLength is used to define the max length of a partition Only applies to UDF and Source vertices as only they do partition write. It can be overridden by the settings in vertex limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
-					"bufferUsageLimit": {
+					"partitionUsageLimit": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertices as only they do buffer write. It will be overridden by the settings in vertex limits.",
+							Description: "PartitionUsageLimit is used to define the percentage of the partition usage limit, a valid value should be less than 100, for example, 85. Only applies to UDF and Source vertices as only they do partition write. It will be overridden by the settings in vertex limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3026,7 +3026,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 					},
 					"limits": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings",
+							Description: "Limits define the limitations such as partition read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits"),
 						},
 					},
@@ -3455,7 +3455,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"targetBufferUsage": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TargetBufferUsage is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read. Deprecated: use targetBufferAvailability instead. Will be removed in v0.9",
+							Description: "TargetBufferUsage is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the PartitionUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read. Deprecated: use targetBufferAvailability instead. Will be removed in v0.9",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3467,9 +3467,9 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 							Format:      "int64",
 						},
 					},
-					"targetBufferAvailability": {
+					"targetPartitionAvailability": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TargetBufferAvailability is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read.",
+							Description: "TargetPartitionAvailability is used to define the target percentage of the partition availability. A valid and meaningful value should be less than the PartitionUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have partitions to read.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3934,20 +3934,20 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref common.ReferenceCallback
 					},
 					"readTimeout": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Read timeout duration from the source or buffer It overrides the settings from pipeline limits.",
+							Description: "Read timeout duration from the source or partition It overrides the settings from pipeline limits.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
-					"bufferMaxLength": {
+					"partitionMaxLength": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BufferMaxLength is used to define the max length of a buffer. It overrides the settings from pipeline limits.",
+							Description: "PartitionMaxLength is used to define the max length of a partition. It overrides the settings from pipeline limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
-					"bufferUsageLimit": {
+					"partitionUsageLimit": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
+							Description: "PartitionUsageLimit is used to define the percentage of the partition usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -4183,7 +4183,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					},
 					"limits": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
+							Description: "Limits define the limitations such as partition read batch size for all the vertices of a pipeline, will override pipeline level settings",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"),
 						},
 					},
@@ -4224,7 +4224,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					},
 					"partitions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Number of partitions of the vertex owned buffers. It applies to udf and sink vertices only.",
+							Description: "Number of partitions of the vertex owned partitions. It applies to udf and sink vertices only.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

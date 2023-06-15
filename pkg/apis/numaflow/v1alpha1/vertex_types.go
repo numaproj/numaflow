@@ -301,9 +301,9 @@ func (vs VertexSpec) WithOutReplicas() VertexSpec {
 	return x
 }
 
-// OwnedBuffers returns the buffers that the vertex owns
-func (v Vertex) OwnedBuffers() []string {
-	return v.Spec.OwnedBufferNames(v.Namespace, v.Spec.PipelineName)
+// OwnedPartitions returns the partitions that the vertex owns
+func (v Vertex) OwnedPartitions() []string {
+	return v.Spec.OwnedPartitionNames(v.Namespace, v.Spec.PipelineName)
 }
 
 // GetFromBuckets returns the buckets that the vertex reads from.
@@ -332,14 +332,14 @@ func (v Vertex) GetToBuckets() []string {
 	return r
 }
 
-func (v Vertex) GetToBuffers() []string {
+func (v Vertex) GetToPartitions() []string {
 	r := []string{}
 	if v.IsASink() {
 		return r
 	}
 	for _, vt := range v.Spec.ToEdges {
 		for i := 0; i < vt.GetToVertexPartitionCount(); i++ {
-			r = append(r, GenerateBufferName(v.Namespace, v.Spec.PipelineName, vt.To, i))
+			r = append(r, GeneratePartitionName(v.Namespace, v.Spec.PipelineName, vt.To, i))
 		}
 	}
 	return r
@@ -401,7 +401,7 @@ type AbstractVertex struct {
 	// +patchStrategy=merge
 	// +patchMergeKey=name
 	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,8,rep,name=volumes"`
-	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
+	// Limits define the limitations such as partition read batch size for all the vertices of a pipeline, will override pipeline level settings
 	// +optional
 	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,9,opt,name=limits"`
 	// Settings for autoscaling
@@ -414,7 +414,7 @@ type AbstractVertex struct {
 	// List of sidecar containers belonging to the pod.
 	// +optional
 	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,12,rep,name=sidecars"`
-	// Number of partitions of the vertex owned buffers.
+	// Number of partitions of the vertex owned partitions.
 	// It applies to udf and sink vertices only.
 	// +optional
 	Partitions *int32 `json:"partitions,omitempty" protobuf:"bytes,13,rep,name=partitions"`
@@ -468,13 +468,13 @@ func (av AbstractVertex) IsReduceUDF() bool {
 	return av.UDF != nil && av.UDF.GroupBy != nil
 }
 
-func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {
+func (av AbstractVertex) OwnedPartitionNames(namespace, pipeline string) []string {
 	r := []string{}
 	if av.IsASource() {
 		return r
 	}
 	for i := 0; i < av.GetPartitionCount(); i++ {
-		r = append(r, GenerateBufferName(namespace, pipeline, av.Name, i))
+		r = append(r, GeneratePartitionName(namespace, pipeline, av.Name, i))
 	}
 	return r
 }
@@ -506,7 +506,7 @@ type Scale struct {
 	// +optional
 	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
 	// TargetBufferUsage is used to define the target percentage of the buffer availability.
-	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+	// A valid and meaningful value should be less than the PartitionUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
 	// It only applies to UDF and Sink vertices because only they have buffers to read.
 	// Deprecated: use targetBufferAvailability instead. Will be removed in v0.9
 	// +optional
@@ -515,11 +515,11 @@ type Scale struct {
 	// The is use to prevent too aggressive scaling operations
 	// +optional
 	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
-	// TargetBufferAvailability is used to define the target percentage of the buffer availability.
-	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
-	// It only applies to UDF and Sink vertices because only they have buffers to read.
+	// TargetPartitionAvailability is used to define the target percentage of the partition availability.
+	// A valid and meaningful value should be less than the PartitionUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+	// It only applies to UDF and Sink vertices because only they have partitions to read.
 	// +optional
-	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,10,opt,name=targetBufferAvailability"`
+	TargetPartitionAvailability *uint32 `json:"targetPartitionAvailability,omitempty" protobuf:"varint,10,opt,name=targetPartitionAvailability"`
 }
 
 func (s Scale) GetLookbackSeconds() int {
@@ -550,9 +550,9 @@ func (s Scale) GetTargetProcessingSeconds() int {
 	return DefaultTargetProcessingSeconds
 }
 
-func (s Scale) GetTargetBufferAvailability() int {
-	if s.TargetBufferAvailability != nil {
-		return int(*s.TargetBufferAvailability)
+func (s Scale) GetTargetPartitionAvailability() int {
+	if s.TargetPartitionAvailability != nil {
+		return int(*s.TargetPartitionAvailability)
 	}
 	if s.DeprecatedTargetBufferUsage != nil {
 		return int(*s.DeprecatedTargetBufferUsage)
@@ -588,18 +588,18 @@ type VertexLimits struct {
 	// It overrides the settings from pipeline limits.
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
-	// Read timeout duration from the source or buffer
+	// Read timeout duration from the source or partition
 	// It overrides the settings from pipeline limits.
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
-	// BufferMaxLength is used to define the max length of a buffer.
+	// PartitionMaxLength is used to define the max length of a partition.
 	// It overrides the settings from pipeline limits.
 	// +optional
-	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,3,opt,name=bufferMaxLength"`
-	// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+	PartitionMaxLength *uint64 `json:"partitionMaxLength,omitempty" protobuf:"varint,3,opt,name=partitionMaxLength"`
+	// PartitionUsageLimit is used to define the percentage of the partition usage limit, a valid value should be less than 100, for example, 85.
 	// It overrides the settings from pipeline limits.
 	// +optional
-	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
+	PartitionUsageLimit *uint32 `json:"partitionUsageLimit,omitempty" protobuf:"varint,4,opt,name=partitionUsageLimit"`
 }
 
 func (v VertexSpec) getType() containerSupplier {
@@ -645,14 +645,14 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-func GenerateBufferName(namespace, pipelineName, vertex string, index int) string {
+func GeneratePartitionName(namespace, pipelineName, vertex string, index int) string {
 	return fmt.Sprintf("%s-%s-%s-%d", namespace, pipelineName, vertex, index)
 }
 
-func GenerateBufferNames(namespace, pipelineName, vertex string, numOfPartitions int) []string {
+func GeneratePartitionNames(namespace, pipelineName, vertex string, numOfPartitions int) []string {
 	result := []string{}
 	for i := 0; i < numOfPartitions; i++ {
-		result = append(result, GenerateBufferName(namespace, pipelineName, vertex, i))
+		result = append(result, GeneratePartitionName(namespace, pipelineName, vertex, i))
 	}
 	return result
 }

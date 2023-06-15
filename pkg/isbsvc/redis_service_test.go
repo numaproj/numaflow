@@ -61,7 +61,7 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	}
 
 	// Read all the messages.
-	rqr, _ := redis.NewBufferRead(ctx, redisClient, buffer, group, "consumer", 0).(*redis.BufferRead)
+	rqr, _ := redis.NewPartitionReader(ctx, redisClient, buffer, group, "consumer", 0).(*redis.RedisReader)
 
 	readMessages, err := rqr.Read(ctx, 10)
 	assert.Nil(t, err)

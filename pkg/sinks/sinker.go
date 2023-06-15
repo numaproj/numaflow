@@ -23,6 +23,6 @@ import (
 
 // Sinker interface defines what a Sink should implement.
 type Sinker interface {
-	isb.BufferWriter
+	isb.PartitionWriter
 	forward.StarterStopper
 }

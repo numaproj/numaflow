@@ -53,7 +53,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var readers []isb.BufferReader
+	var readers []isb.PartitionReader
 	var err error
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
@@ -68,11 +68,11 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			readOptions = append(readOptions, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
 		// create reader for each partition. Each partition is a group in redis
-		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
+		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedPartitions() {
 			fromGroup := bufferPartition + "-group"
 			consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 
-			reader := redisisb.NewBufferRead(ctx, redisClient, bufferPartition, fromGroup, consumer, int32(index), readOptions...)
+			reader := redisisb.NewPartitionReader(ctx, redisClient, bufferPartition, fromGroup, consumer, int32(index), readOptions...)
 			readers = append(readers, reader)
 		}
 	case dfv1.ISBSvcTypeJetStream:
@@ -87,10 +87,10 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		// create reader for each partition. Each partition is a stream in jetstream
-		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
+		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedPartitions() {
 			fromStreamName := isbsvc.JetStreamName(bufferPartition)
 
-			reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), bufferPartition, fromStreamName, fromStreamName, int32(index), readOptions...)
+			reader, err := jetstreamisb.NewJetStreamReader(ctx, jsclient.NewInClusterJetStreamClient(), bufferPartition, fromStreamName, fromStreamName, int32(index), readOptions...)
 			if err != nil {
 				return err
 			}
@@ -101,7 +101,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	}
 	var finalWg sync.WaitGroup
 	var sinkerForMetrics Sinker
-	for index := range u.VertexInstance.Vertex.OwnedBuffers() {
+	for index := range u.VertexInstance.Vertex.OwnedPartitions() {
 		finalWg.Add(1)
 		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWatermark)
 		if err != nil {
@@ -157,7 +157,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 }
 
 // getSinker takes in the logger from the parent context
-func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher) (Sinker, error) {
+func (u *SinkProcessor) getSinker(reader isb.PartitionReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	if x := sink.Log; x != nil {
 		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), logsink.WithLogger(logger))

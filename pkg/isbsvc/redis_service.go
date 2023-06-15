@@ -126,8 +126,8 @@ func (r *isbsRedisSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, b
 // GetBufferInfo is used to provide buffer information like pending count, buffer length, has unprocessed data etc.
 func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error) {
 	group := fmt.Sprintf("%s-group", buffer)
-	rqw := redis2.NewBufferWrite(ctx, redisclient.NewInClusterRedisClient(), buffer, group, redisclient.WithRefreshBufferWriteInfo(false))
-	var bufferWrite = rqw.(*redis2.BufferWrite)
+	rqw := redis2.NewPartitionWrite(ctx, redisclient.NewInClusterRedisClient(), buffer, group, redisclient.WithRefreshBufferWriteInfo(false))
+	var bufferWrite = rqw.(*redis2.RedisWriter)
 
 	bufferInfo := &BufferInfo{
 		Name:            buffer,

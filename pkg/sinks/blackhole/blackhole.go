@@ -50,7 +50,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 
 // NewBlackhole returns Blackhole type.
 func NewBlackhole(vertex *dfv1.Vertex,
-	fromBuffer isb.BufferReader,
+	fromBuffer isb.PartitionReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	whereToDecider forward.GoWhere,
@@ -77,7 +77,7 @@ func NewBlackhole(vertex *dfv1.Vertex,
 		}
 	}
 
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {bh}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.PartitionWriter{vertex.Spec.Name: {bh}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

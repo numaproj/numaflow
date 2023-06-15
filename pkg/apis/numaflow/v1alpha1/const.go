@@ -122,9 +122,9 @@ const (
 	DefaultRequeueAfter = 10 * time.Second
 
 	// ISB
-	DefaultBufferLength     = 30000
-	DefaultBufferUsageLimit = 0.8
-	DefaultReadBatchSize    = 500
+	DefaultPartitionLength     = 30000
+	DefaultPartitionUsageLimit = 0.8
+	DefaultReadBatchSize       = 500
 
 	// Auto scaling
 	DefaultLookbackSeconds          = 180 // Default lookback seconds for calculating avg rate and pending

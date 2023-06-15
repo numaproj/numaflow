@@ -77,8 +77,8 @@ func Test_GetFromEdges(t *testing.T) {
 	assert.Equal(t, 0, len(es))
 }
 
-func Test_GetAllBuffers(t *testing.T) {
-	s := testPipeline.GetAllBuffers()
+func Test_GetAllPartitions(t *testing.T) {
+	s := testPipeline.GetAllPartitions()
 	assert.Equal(t, 2, len(s))
 	assert.Contains(t, s, testPipeline.Namespace+"-"+testPipeline.Name+"-p1-0")
 	assert.Contains(t, s, testPipeline.Namespace+"-"+testPipeline.Name+"-output-0")
@@ -348,8 +348,8 @@ func Test_GetPipelineLimits(t *testing.T) {
 		Spec: PipelineSpec{},
 	}
 	l := pl.GetPipelineLimits()
-	assert.Equal(t, int64(DefaultBufferLength), int64(*l.BufferMaxLength))
-	assert.Equal(t, float64(DefaultBufferUsageLimit), float64(*l.BufferUsageLimit)/100)
+	assert.Equal(t, int64(DefaultPartitionLength), int64(*l.PartitionMaxLength))
+	assert.Equal(t, float64(DefaultPartitionUsageLimit), float64(*l.PartitionUsageLimit)/100)
 	assert.Equal(t, int64(DefaultReadBatchSize), int64(*l.ReadBatchSize))
 	assert.Equal(t, "1s", l.ReadTimeout.Duration.String())
 
@@ -357,14 +357,14 @@ func Test_GetPipelineLimits(t *testing.T) {
 	usuageLimit := uint32(40)
 	readBatch := uint64(321)
 	pl.Spec.Limits = &PipelineLimits{
-		BufferMaxLength:  &length,
-		BufferUsageLimit: &usuageLimit,
-		ReadBatchSize:    &readBatch,
-		ReadTimeout:      &metav1.Duration{Duration: time.Duration(5 * time.Second)},
+		PartitionMaxLength:  &length,
+		PartitionUsageLimit: &usuageLimit,
+		ReadBatchSize:       &readBatch,
+		ReadTimeout:         &metav1.Duration{Duration: time.Duration(5 * time.Second)},
 	}
 	l = pl.GetPipelineLimits()
-	assert.Equal(t, length, *l.BufferMaxLength)
-	assert.Equal(t, float64(40)/100, float64(*l.BufferUsageLimit)/100)
+	assert.Equal(t, length, *l.PartitionMaxLength)
+	assert.Equal(t, float64(40)/100, float64(*l.PartitionUsageLimit)/100)
 	assert.Equal(t, readBatch, *l.ReadBatchSize)
 	assert.Equal(t, "5s", l.ReadTimeout.Duration.String())
 }
@@ -391,7 +391,7 @@ func Test_GetAllBuckets(t *testing.T) {
 	assert.Equal(t, 6, len(buckets))
 }
 
-func Test_FindVertexWithBuffer(t *testing.T) {
-	v := testPipeline.FindVertexWithBuffer(GenerateBufferName(testNamespace, testPipelineName, "p1", 0))
+func Test_FindVertexWithPartition(t *testing.T) {
+	v := testPipeline.FindVertexWithPartition(GeneratePartitionName(testNamespace, testPipelineName, "p1", 0))
 	assert.NotNil(t, v)
 }

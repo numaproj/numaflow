@@ -69,11 +69,11 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if windower == nil {
 		return fmt.Errorf("invalid window spec")
 	}
-	var readers []isb.BufferReader
-	var writers map[string][]isb.BufferWriter
+	var readers []isb.PartitionReader
+	var writers map[string][]isb.PartitionWriter
 	var err error
 	var fromBuffer string
-	fromBuffers := u.VertexInstance.Vertex.OwnedBuffers()
+	fromBuffers := u.VertexInstance.Vertex.OwnedPartitions()
 	// choose the buffer that corresponds to this reduce processor because
 	// reducer's incoming edge can have more than one partitions
 	for _, b := range fromBuffers {
@@ -86,7 +86,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("can not find from buffer")
 	}
 	// watermark variables
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToPartitions())
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		readers, writers, err = buildRedisBufferIO(ctx, u.VertexInstance)

@@ -54,7 +54,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 
 // NewUserDefinedSink returns genericSink type.
 func NewUserDefinedSink(vertex *dfv1.Vertex,
-	fromBuffer isb.BufferReader,
+	fromBuffer isb.PartitionReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	whereToDecider forward.GoWhere,
@@ -85,7 +85,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	}
 	s.udsink = udsink
 
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {s}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.PartitionWriter{vertex.Spec.Name: {s}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

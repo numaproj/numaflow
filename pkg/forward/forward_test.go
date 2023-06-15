@@ -28,7 +28,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
@@ -124,10 +124,10 @@ func TestNewInterStepDataForward(t *testing.T) {
 		t.Run(tt.name+"_basic", func(t *testing.T) {
 			metricsReset()
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
-			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
-			toSteps := map[string][]isb.BufferWriter{
+			fromStep := simplepartition.NewInMemoryPartition("from", 5*batchSize, 0)
+			to11 := simplepartition.NewInMemoryPartition("to1-1", 2*batchSize, 0)
+			to12 := simplepartition.NewInMemoryPartition("to1-2", 2*batchSize, 1)
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to11, to12},
 			}
 
@@ -202,14 +202,14 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we forward to all buffers
 		t.Run(tt.name+"_toAll", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 10*batchSize, 0)
-			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
-			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
+			fromStep := simplepartition.NewInMemoryPartition("from", 10*batchSize, 0)
+			to11 := simplepartition.NewInMemoryPartition("to1-1", 2*batchSize, 0)
+			to12 := simplepartition.NewInMemoryPartition("to1-2", 2*batchSize, 1)
 
-			to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
-			to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
+			to21 := simplepartition.NewInMemoryPartition("to2-1", 2*batchSize, 0)
+			to22 := simplepartition.NewInMemoryPartition("to2-2", 2*batchSize, 1)
 
-			toSteps := map[string][]isb.BufferWriter{
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to11, to12},
 				"to2": {to21, to22},
 			}
@@ -325,13 +325,13 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we drop all events
 		t.Run(tt.name+"_dropAll", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
-			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
+			fromStep := simplepartition.NewInMemoryPartition("from", 5*batchSize, 0)
+			to11 := simplepartition.NewInMemoryPartition("to1-1", 2*batchSize, 0)
+			to12 := simplepartition.NewInMemoryPartition("to1-2", 2*batchSize, 1)
 
-			to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
-			to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
-			toSteps := map[string][]isb.BufferWriter{
+			to21 := simplepartition.NewInMemoryPartition("to2-1", 2*batchSize, 0)
+			to22 := simplepartition.NewInMemoryPartition("to2-2", 2*batchSize, 1)
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to11, to12},
 				"to2": {to21, to22},
 			}
@@ -451,12 +451,12 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Explicitly tests the case where we forward to only one buffer
 		t.Run(tt.name+"_toOneStep", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
-			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
-			to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
-			to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
-			toSteps := map[string][]isb.BufferWriter{
+			fromStep := simplepartition.NewInMemoryPartition("from", 5*batchSize, 0)
+			to11 := simplepartition.NewInMemoryPartition("to1-1", 2*batchSize, 0)
+			to12 := simplepartition.NewInMemoryPartition("to1-2", 2*batchSize, 1)
+			to21 := simplepartition.NewInMemoryPartition("to2-1", 2*batchSize, 0)
+			to22 := simplepartition.NewInMemoryPartition("to2-2", 2*batchSize, 1)
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to11, to12},
 				"to2": {to21, to22},
 			}
@@ -555,9 +555,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Test the scenario with UDF error
 		t.Run(tt.name+"_UDFError", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			toSteps := map[string][]isb.BufferWriter{
+			fromStep := simplepartition.NewInMemoryPartition("from", 5*batchSize, 0)
+			to1 := simplepartition.NewInMemoryPartition("to1", 2*batchSize, 0)
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to1},
 			}
 
@@ -594,9 +594,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 		// Test the scenario with error
 		t.Run(tt.name+"_whereToError", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			toSteps := map[string][]isb.BufferWriter{
+			fromStep := simplepartition.NewInMemoryPartition("from", 5*batchSize, 0)
+			to1 := simplepartition.NewInMemoryPartition("to1", 2*batchSize, 0)
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to1},
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -630,9 +630,9 @@ func TestNewInterStepDataForward(t *testing.T) {
 		})
 		t.Run(tt.name+"_withInternalError", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			toSteps := map[string][]isb.BufferWriter{
+			fromStep := simplepartition.NewInMemoryPartition("from", 5*batchSize, 0)
+			to1 := simplepartition.NewInMemoryPartition("to1", 2*batchSize, 0)
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to1},
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -746,9 +746,9 @@ func (t *testWMBFetcher) GetHeadWMB(int32) wmb.WMB {
 }
 
 func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0)
-	toSteps := map[string][]isb.BufferWriter{
+	fromStep := simplepartition.NewInMemoryPartition("from", 25, 0, simplepartition.WithReadTimeOut(time.Second)) // default read timeout is 1s
+	to1 := simplepartition.NewInMemoryPartition("to1", 10, 0)
+	toSteps := map[string][]isb.PartitionWriter{
 		"to1": {to1},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -899,9 +899,9 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 }
 
 func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0, simplebuffer.WithReadTimeOut(time.Second)) // default read timeout is 1s
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0)
-	toSteps := map[string][]isb.BufferWriter{
+	fromStep := simplepartition.NewInMemoryPartition("from", 25, 0, simplepartition.WithReadTimeOut(time.Second)) // default read timeout is 1s
+	to1 := simplepartition.NewInMemoryPartition("to1", 10, 0)
+	toSteps := map[string][]isb.PartitionWriter{
 		"to1": {to1},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -1129,9 +1129,9 @@ func (p TestSourceWatermarkPublisher) PublishSourceWatermarks([]*isb.ReadMessage
 }
 
 func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
-	toSteps := map[string][]isb.BufferWriter{
+	fromStep := simplepartition.NewInMemoryPartition("from", 25, 0)
+	to1 := simplepartition.NewInMemoryPartition("to1", 10, 0, simplepartition.WithReadTimeOut(time.Second*10))
+	toSteps := map[string][]isb.PartitionWriter{
 		"to1": {to1},
 	}
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
@@ -1185,10 +1185,10 @@ func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
 }
 
 func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
-	to11 := simplebuffer.NewInMemoryBuffer("to1-0", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
-	to12 := simplebuffer.NewInMemoryBuffer("to1-1", 10, 1, simplebuffer.WithReadTimeOut(time.Second*10))
-	toSteps := map[string][]isb.BufferWriter{
+	fromStep := simplepartition.NewInMemoryPartition("from", 25, 0)
+	to11 := simplepartition.NewInMemoryPartition("to1-0", 10, 0, simplepartition.WithReadTimeOut(time.Second*10))
+	to12 := simplepartition.NewInMemoryPartition("to1-1", 10, 1, simplepartition.WithReadTimeOut(time.Second*10))
+	toSteps := map[string][]isb.PartitionWriter{
 		"to1": {to11, to12},
 	}
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
@@ -1303,9 +1303,9 @@ func TestWriteToBuffer(t *testing.T) {
 	}
 	for _, value := range tests {
 		t.Run(value.name, func(t *testing.T) {
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*value.batchSize, 0)
-			buffer := simplebuffer.NewInMemoryBuffer("to1", value.batchSize, 0, simplebuffer.WithBufferFullWritingStrategy(value.strategy))
-			toSteps := map[string][]isb.BufferWriter{
+			fromStep := simplepartition.NewInMemoryPartition("from", 5*value.batchSize, 0)
+			buffer := simplepartition.NewInMemoryPartition("to1", value.batchSize, 0, simplepartition.WithPartitionFullWritingStrategy(value.strategy))
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {buffer},
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -1342,7 +1342,7 @@ func TestWriteToBuffer(t *testing.T) {
 			messageToStep["to1"] = make([][]isb.Message, 1)
 			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
 			messageToStep["to1"][0] = append(messageToStep["to1"][0], writeMessages[0:value.batchSize+1]...)
-			_, err = f.writeToBuffers(ctx, messageToStep)
+			_, err = f.writeToBufferPartitions(ctx, messageToStep)
 
 			assert.Equal(t, value.throwError, err != nil)
 			if value.throwError {
@@ -1521,7 +1521,7 @@ func metricsReset() {
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer
-func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
+func buildPublisherMapAndOTStore(toBuffers map[string][]isb.PartitionWriter) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
 	var ctx = context.Background()
 	processorEntity := processor.NewProcessorEntity("publisherTestPod")
 	publishers := make(map[string]publish.Publisher)

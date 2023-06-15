@@ -36,8 +36,8 @@ type writeOptions struct {
 
 func defaultWriteOptions() *writeOptions {
 	return &writeOptions{
-		maxLength:                 dfv1.DefaultBufferLength,
-		bufferUsageLimit:          dfv1.DefaultBufferUsageLimit,
+		maxLength:                 dfv1.DefaultPartitionLength,
+		bufferUsageLimit:          dfv1.DefaultPartitionUsageLimit,
 		refreshInterval:           1 * time.Second,
 		bufferFullWritingStrategy: dfv1.RetryUntilSuccess,
 	}

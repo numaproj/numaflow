@@ -46,7 +46,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	fromBuffer := u.VertexInstance.Vertex.OwnedBuffers()
+	fromBuffer := u.VertexInstance.Vertex.OwnedPartitions()
 	finalWg := sync.WaitGroup{}
 
 	log = log.With("protocol", "uds-grpc-map-udf")
@@ -71,10 +71,10 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	}()
 
 	// create readers and writers
-	var readers []isb.BufferReader
-	var writers map[string][]isb.BufferWriter
+	var readers []isb.PartitionReader
+	var writers map[string][]isb.PartitionWriter
 	// watermark variables
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToPartitions())
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -175,7 +175,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		// start the forwarder for each partition using a go routine
 		go func(fromBufferPartitionName string, isdf *forward.InterStepDataForward) {
 			defer finalWg.Done()
-			log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferPartitionName), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
+			log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferPartitionName), zap.Any("to", u.VertexInstance.Vertex.GetToPartitions()))
 
 			stopped := forwarder.Start()
 			wg := &sync.WaitGroup{}

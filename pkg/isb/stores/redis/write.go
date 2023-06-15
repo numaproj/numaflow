@@ -39,41 +39,41 @@ const exactlyOnceHashWindow = time.Minute * 5
 //go:embed exactlyOnceInsert.lua
 var exactlyOnceInsertLuaScript string
 
-// BufferWrite is the write queue implementation powered by RedisClient.
-type BufferWrite struct {
+// RedisWriter is the write queue implementation powered by RedisClient.
+type RedisWriter struct {
 	Name   string
 	Stream string
 	Group  string
-	*BufferWriteInfo
+	*PartitionWriteInfo
 	*redisclient.RedisClient
 	redisclient.Options
 	log *zap.SugaredLogger
 }
 
-// BufferWriteInfo will contain the buffer infoRefreshInterval from the writer point of view.
-type BufferWriteInfo struct {
+// PartitionWriteInfo will contain the partitoin infoRefreshInterval from the writer point of view.
+type PartitionWriteInfo struct {
 	isFull           *atomic.Bool
 	consumerLag      *atomic.Duration
 	refreshFullError *atomic.Uint32
 	minId            *atomic.String
-	bufferLength     *atomic.Int64
+	partitionLength  *atomic.Int64
 	pendingCount     *atomic.Int64
-	// hasUnprocessedData indicates if there is any unprocessed data left in the buffer
+	// hasUnprocessedData indicates if there is any unprocessed data left in the partition
 	hasUnprocessedData *atomic.Bool
 }
 
-var _ isb.BufferWriter = (*BufferWrite)(nil)
+var _ isb.PartitionWriter = (*RedisWriter)(nil)
 
-// NewBufferWrite returns a new redis queue writer.
-func NewBufferWrite(ctx context.Context, client *redisclient.RedisClient, name string, group string, opts ...redisclient.Option) isb.BufferWriter {
+// NewPartitionWrite returns a new redis queue writer.
+func NewPartitionWrite(ctx context.Context, client *redisclient.RedisClient, name string, group string, opts ...redisclient.Option) isb.PartitionWriter {
 	options := &redisclient.Options{
-		Pipelining:                true,
-		InfoRefreshInterval:       time.Second,
-		LagDuration:               time.Duration(0),
-		MaxLength:                 dfv1.DefaultBufferLength,
-		BufferUsageLimit:          dfv1.DefaultBufferUsageLimit,
-		RefreshBufferWriteInfo:    true,
-		BufferFullWritingStrategy: dfv1.RetryUntilSuccess,
+		Pipelining:                   true,
+		InfoRefreshInterval:          time.Second,
+		LagDuration:                  time.Duration(0),
+		MaxLength:                    dfv1.DefaultPartitionLength,
+		PartitionUsageLimit:          dfv1.DefaultPartitionUsageLimit,
+		RefreshPartitionWriteInfo:    true,
+		PartitionFullWritingStrategy: dfv1.RetryUntilSuccess,
 	}
 
 	for _, o := range opts {
@@ -81,30 +81,30 @@ func NewBufferWrite(ctx context.Context, client *redisclient.RedisClient, name s
 	}
 
 	// check whether the script exists, if not then load
-	rqw := &BufferWrite{
+	rqw := &RedisWriter{
 		Name:   name,
 		Stream: redisclient.GetRedisStreamName(name),
 		Group:  group,
-		BufferWriteInfo: &BufferWriteInfo{
+		PartitionWriteInfo: &PartitionWriteInfo{
 			isFull:           atomic.NewBool(true),
 			refreshFullError: atomic.NewUint32(0),
 			consumerLag:      atomic.NewDuration(0),
 			minId:            atomic.NewString("0-0"),
 			// During start up if we set pending count to 0 we are saying nothing is pending.
 			pendingCount:       atomic.NewInt64(options.MaxLength),
-			bufferLength:       atomic.NewInt64(options.MaxLength),
+			partitionLength:    atomic.NewInt64(options.MaxLength),
 			hasUnprocessedData: atomic.NewBool(true),
 		},
 		RedisClient: client,
 	}
 	rqw.Options = *options
 
-	rqw.log = logging.FromContext(ctx).With("bufferWriter", rqw.GetName())
+	rqw.log = logging.FromContext(ctx).With("partitionWriter", rqw.GetName())
 
 	// setWriteInfo is used to update isFull flag and minId once
 	rqw.setWriteInfo(ctx)
 
-	if rqw.Options.RefreshBufferWriteInfo {
+	if rqw.Options.RefreshPartitionWriteInfo {
 		// refresh isFull flag at a periodic interval
 		go rqw.refreshWriteInfo(ctx)
 	}
@@ -113,86 +113,86 @@ func NewBufferWrite(ctx context.Context, client *redisclient.RedisClient, name s
 }
 
 // refreshWriteInfo is used to refresh the changes
-func (bw *BufferWrite) refreshWriteInfo(ctx context.Context) {
-	ticker := time.NewTicker(bw.Options.InfoRefreshInterval)
+func (pw *RedisWriter) refreshWriteInfo(ctx context.Context) {
+	ticker := time.NewTicker(pw.Options.InfoRefreshInterval)
 	defer ticker.Stop()
-	bw.log.Infow("refreshWriteInfo has started")
+	pw.log.Infow("refreshWriteInfo has started")
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			bw.setWriteInfo(ctx)
+			pw.setWriteInfo(ctx)
 
-			if bw.isFull.Load() {
+			if pw.isFull.Load() {
 				// execute XTRIM with MINID to avoid the deadlock since default queue purging happens on XADD and
-				// whenever a buffer is full XADD is never invoked
-				bw.trim(ctx)
+				// whenever a partition is full XADD is never invoked
+				pw.trim(ctx)
 			}
 		}
 	}
 }
 
-// trim is used to explicitly call TRIM on buffer being full
-func (bw *BufferWrite) trim(_ context.Context) {
+// trim is used to explicitly call TRIM on partition being full
+func (pw *RedisWriter) trim(_ context.Context) {
 	ctx := redisclient.RedisContext
-	bw.log.Infow("Explicit trim on MINID", zap.String("MINID", bw.minId.Load()))
-	result := bw.Client.XTrimMinID(ctx, bw.GetStreamName(), bw.minId.Load())
+	pw.log.Infow("Explicit trim on MINID", zap.String("MINID", pw.minId.Load()))
+	result := pw.Client.XTrimMinID(ctx, pw.GetStreamName(), pw.minId.Load())
 
 	if result.Err() != nil {
-		bw.log.Errorw("XTRIM failed", zap.Error(result.Err()))
+		pw.log.Errorw("XTRIM failed", zap.Error(result.Err()))
 	}
 }
 
-func (br *BufferWrite) Close() error {
+func (pw *RedisWriter) Close() error {
 	return nil
 }
 
-// Write is used to write data to the redis interstep buffer
-func (bw *BufferWrite) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
+// Write is used to write data to the redis interstep partition
+func (pw *RedisWriter) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	ctx := redisclient.RedisContext
 	var errs = make([]error, len(messages))
 
 	script := redis.NewScript(exactlyOnceInsertLuaScript)
-	labels := map[string]string{"buffer": bw.GetName()}
+	labels := map[string]string{"buffer": pw.GetName()}
 
-	if bw.IsFull() {
-		bw.log.Debugw("Is full")
+	if pw.IsFull() {
+		pw.log.Debugw("Is full")
 		isbIsFull.With(labels).Inc()
 
-		// when buffer is full, we need to decide whether to discard the message or not.
-		switch bw.BufferFullWritingStrategy {
+		// when partition is full, we need to decide whether to discard the message or not.
+		switch pw.PartitionFullWritingStrategy {
 		case dfv1.DiscardLatest:
 			// user explicitly wants to discard the message when buffer if full.
 			// return no retryable error as a callback to let caller know that the message is discarded.
-			initializeErrorArray(errs, isb.NoRetryableBufferWriteErr{Name: bw.Name, Message: "Buffer full!"})
+			initializeErrorArray(errs, isb.NonRetryablePartitionWriteErr{Name: pw.Name, Message: "Partition full!"})
 		default:
-			// Default behavior is to return a BufferWriteErr.
-			initializeErrorArray(errs, isb.BufferWriteErr{Name: bw.Name, Full: true, Message: "Buffer full!"})
+			// Default behavior is to return a PartitionWriteErr.
+			initializeErrorArray(errs, isb.PartitionWriteErr{Name: pw.Name, Full: true, Message: "Partition full!"})
 		}
 		isbWriteErrors.With(labels).Inc()
 		return nil, errs
 	}
 	// Maybe just do pipelined write, always?
-	if !bw.Pipelining {
+	if !pw.Pipelining {
 		for idx, message := range messages {
 			// Reference the Payload in Body directly when writing to Redis ISB to avoid extra marshaling.
 			// TODO: revisit directly Payload reference when Body structure changes
-			errs[idx] = script.Run(ctx, bw.Client, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID, message.Header, message.Body.Payload, bw.BufferWriteInfo.minId.String()).Err()
+			errs[idx] = script.Run(ctx, pw.Client, []string{pw.GetHashKeyName(message.EventTime), pw.Stream}, message.Header.ID, message.Header, message.Body.Payload, pw.PartitionWriteInfo.minId.String()).Err()
 		}
 	} else {
 		var scriptMissing bool
 		// use pipelining
-		errs, scriptMissing = bw.pipelinedWrite(ctx, script, messages)
+		errs, scriptMissing = pw.pipelinedWrite(ctx, script, messages)
 		// if scriptMissing, then load and retry
 		if scriptMissing {
-			if err := bw.Client.ScriptLoad(ctx, exactlyOnceInsertLuaScript).Err(); err != nil {
+			if err := pw.Client.ScriptLoad(ctx, exactlyOnceInsertLuaScript).Err(); err != nil {
 				initializeErrorArray(errs, err)
 				isbWriteErrors.With(labels).Inc()
 				return nil, errs
 			}
 			// now that we have loaded, we do not care about whether the script exists or not.
-			errs, _ = bw.pipelinedWrite(ctx, script, messages)
+			errs, _ = pw.pipelinedWrite(ctx, script, messages)
 		}
 	}
 
@@ -207,15 +207,15 @@ func initializeErrorArray(errs []error, err error) {
 }
 
 // pipelinedWrite is used to perform pipelined write messages
-func (bw *BufferWrite) pipelinedWrite(ctx context.Context, script *redis.Script, messages []isb.Message) ([]error, bool) {
+func (pw *RedisWriter) pipelinedWrite(ctx context.Context, script *redis.Script, messages []isb.Message) ([]error, bool) {
 	var errs = make([]error, len(messages))
 	var cmds = make([]*redis.Cmd, len(messages))
-	pipe := bw.Client.Pipeline()
+	pipe := pw.Client.Pipeline()
 
 	for idx, message := range messages {
 		// Reference the Payload in Body directly when writing to Redis ISB to avoid extra marshaling.
 		// TODO: revisit directly Payload reference when Body structure changes
-		cmds[idx] = script.Run(ctx, pipe, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID, message.Header, message.Body.Payload, bw.BufferWriteInfo.minId.String())
+		cmds[idx] = script.Run(ctx, pipe, []string{pw.GetHashKeyName(message.EventTime), pw.Stream}, message.Header.ID, message.Header, message.Body.Payload, pw.PartitionWriteInfo.minId.String())
 	}
 
 	scriptMissing := false
@@ -240,21 +240,21 @@ func (bw *BufferWrite) pipelinedWrite(ctx context.Context, script *redis.Script,
 }
 
 // GetHashKeyName gets the hash key name.
-func (bw *BufferWrite) GetHashKeyName(startTime time.Time) string {
-	return fmt.Sprintf("%s-h-%d", bw.Stream, startTime.Truncate(exactlyOnceHashWindow).Unix())
+func (pw *RedisWriter) GetHashKeyName(startTime time.Time) string {
+	return fmt.Sprintf("%s-h-%d", pw.Stream, startTime.Truncate(exactlyOnceHashWindow).Unix())
 }
 
 // GetStreamName gets the stream name. Stream name is derived from the name.
-func (bw *BufferWrite) GetStreamName() string {
-	return bw.Stream
+func (pw *RedisWriter) GetStreamName() string {
+	return pw.Stream
 }
 
-// GetName gets the name of the buffer.
-func (bw *BufferWrite) GetName() string {
-	return bw.Name
+// GetName gets the name of the Partition.
+func (pw *RedisWriter) GetName() string {
+	return pw.Name
 }
 
 // GetGroupName gets the name of the consumer group.
-func (bw *BufferWrite) GetGroupName() string {
-	return bw.Group
+func (pw *RedisWriter) GetGroupName() string {
+	return pw.Group
 }

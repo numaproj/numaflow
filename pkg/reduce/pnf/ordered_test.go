@@ -29,7 +29,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
@@ -70,13 +70,13 @@ func TestOrderedProcessing(t *testing.T) {
 		}
 		return messages, nil
 	})
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 100, 0)
-	toSteps := map[string][]isb.BufferWriter{
+	to1 := simplepartition.NewInMemoryPartition("to1", 100, 0)
+	toSteps := map[string][]isb.PartitionWriter{
 		"to1": {to1},
 	}
 
 	idleManager := wmb.NewIdleManager(len(toSteps))
-	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.BufferWriter))
+	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.PartitionWriter))
 
 	ctx := context.Background()
 

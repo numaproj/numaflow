@@ -298,7 +298,7 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 // NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
 func NewKafkaSource(
 	vertexInstance *dfv1.VertexInstance,
-	writers map[string][]isb.BufferWriter,
+	writers map[string][]isb.PartitionWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,

@@ -200,28 +200,28 @@ func Test_copyEdges(t *testing.T) {
 		result := copyEdges(pl, edges)
 		for _, e := range result {
 			assert.NotNil(t, e.ToVertexLimits)
-			assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*e.ToVertexLimits.BufferMaxLength))
+			assert.Equal(t, int64(dfv1.DefaultPartitionLength), int64(*e.ToVertexLimits.PartitionMaxLength))
 		}
 		onethouand := uint64(1000)
 		eighty := uint32(80)
-		pl.Spec.Limits = &dfv1.PipelineLimits{BufferMaxLength: &onethouand, BufferUsageLimit: &eighty}
+		pl.Spec.Limits = &dfv1.PipelineLimits{PartitionMaxLength: &onethouand, PartitionUsageLimit: &eighty}
 		result = copyEdges(pl, edges)
 		for _, e := range result {
 			assert.NotNil(t, e.ToVertexLimits)
-			assert.NotNil(t, e.ToVertexLimits.BufferMaxLength)
-			assert.NotNil(t, e.ToVertexLimits.BufferUsageLimit)
+			assert.NotNil(t, e.ToVertexLimits.PartitionMaxLength)
+			assert.NotNil(t, e.ToVertexLimits.PartitionUsageLimit)
 		}
 
 		twothouand := uint64(2000)
-		pl.Spec.Vertices[2].Limits = &dfv1.VertexLimits{BufferMaxLength: &twothouand}
+		pl.Spec.Vertices[2].Limits = &dfv1.VertexLimits{PartitionMaxLength: &twothouand}
 		edges = []dfv1.Edge{{From: "p1", To: "output"}}
 		result = copyEdges(pl, edges)
 		for _, e := range result {
 			assert.NotNil(t, e.ToVertexLimits)
-			assert.NotNil(t, e.ToVertexLimits.BufferMaxLength)
-			assert.Equal(t, twothouand, *e.ToVertexLimits.BufferMaxLength)
-			assert.NotNil(t, e.ToVertexLimits.BufferUsageLimit)
-			assert.Equal(t, eighty, *e.ToVertexLimits.BufferUsageLimit)
+			assert.NotNil(t, e.ToVertexLimits.PartitionMaxLength)
+			assert.Equal(t, twothouand, *e.ToVertexLimits.PartitionMaxLength)
+			assert.NotNil(t, e.ToVertexLimits.PartitionUsageLimit)
+			assert.Equal(t, eighty, *e.ToVertexLimits.PartitionUsageLimit)
 		}
 	})
 
@@ -233,7 +233,7 @@ func Test_copyEdges(t *testing.T) {
 		assert.Equal(t, "p1", result[0].From)
 		assert.Equal(t, "p2", result[0].To)
 		assert.NotNil(t, result[0].ToVertexLimits)
-		assert.Equal(t, int64(dfv1.DefaultBufferLength), int64(*result[0].ToVertexLimits.BufferMaxLength))
+		assert.Equal(t, int64(dfv1.DefaultPartitionLength), int64(*result[0].ToVertexLimits.PartitionMaxLength))
 		assert.Equal(t, int32(2), *result[0].ToVertexPartitionCount)
 		assert.Equal(t, int32(1), *result[0].FromVertexPartitionCount)
 
@@ -354,7 +354,7 @@ func Test_cleanupBuffers(t *testing.T) {
 
 	t.Run("test create cleanup buffer job no isbsvc", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		assert.Equal(t, 2, len(testObj.GetAllBuffers()))
+		assert.Equal(t, 2, len(testObj.GetAllPartitions()))
 		err := r.cleanUpBuffers(ctx, testObj, zaptest.NewLogger(t).Sugar())
 		assert.NoError(t, err)
 		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testObj.Name)

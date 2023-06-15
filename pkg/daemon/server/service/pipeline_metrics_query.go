@@ -91,13 +91,13 @@ func (ps *pipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.Li
 	resp := new(daemon.ListBuffersResponse)
 
 	buffers := []*daemon.BufferInfo{}
-	for _, buffer := range ps.pipeline.GetAllBuffers() {
+	for _, buffer := range ps.pipeline.GetAllPartitions() {
 		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, buffer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
 		}
 		log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
-		v := ps.pipeline.FindVertexWithBuffer(buffer)
+		v := ps.pipeline.FindVertexWithPartition(buffer)
 		if v == nil {
 			return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", buffer)
 		}
@@ -129,7 +129,7 @@ func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of buffer %q:%v", *req.Buffer, err)
 	}
-	v := ps.pipeline.FindVertexWithBuffer(*req.Buffer)
+	v := ps.pipeline.FindVertexWithPartition(*req.Buffer)
 	if v == nil {
 		return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", *req.Buffer)
 	}
@@ -288,14 +288,14 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 
 func getBufferLimits(pl *v1alpha1.Pipeline, v v1alpha1.AbstractVertex) (bufferLength int64, bufferUsageLimit float64) {
 	plLimits := pl.GetPipelineLimits()
-	bufferLength = int64(*plLimits.BufferMaxLength)
-	bufferUsageLimit = float64(*plLimits.BufferUsageLimit) / 100
+	bufferLength = int64(*plLimits.PartitionMaxLength)
+	bufferUsageLimit = float64(*plLimits.PartitionUsageLimit) / 100
 	if x := v.Limits; x != nil {
-		if x.BufferMaxLength != nil {
-			bufferLength = int64(*x.BufferMaxLength)
+		if x.PartitionMaxLength != nil {
+			bufferLength = int64(*x.PartitionMaxLength)
 		}
-		if x.BufferUsageLimit != nil {
-			bufferUsageLimit = float64(*x.BufferUsageLimit) / 100
+		if x.PartitionUsageLimit != nil {
+			bufferUsageLimit = float64(*x.PartitionUsageLimit) / 100
 		}
 	}
 	return bufferLength, bufferUsageLimit

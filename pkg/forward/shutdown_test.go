@@ -23,7 +23,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplepartition"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
@@ -65,9 +65,9 @@ func TestInterStepDataForward(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name+"_stop", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			toSteps := map[string][]isb.BufferWriter{
+			fromStep := simplepartition.NewInMemoryPartition("from", 5*batchSize, 0)
+			to1 := simplepartition.NewInMemoryPartition("to1", 2*batchSize, 0)
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to1},
 			}
 			ctx, cancel := context.WithCancel(context.Background())
@@ -98,9 +98,9 @@ func TestInterStepDataForward(t *testing.T) {
 		})
 		t.Run(tt.name+"_forceStop", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to", 2*batchSize, 0)
-			toSteps := map[string][]isb.BufferWriter{
+			fromStep := simplepartition.NewInMemoryPartition("from", 5*batchSize, 0)
+			to1 := simplepartition.NewInMemoryPartition("to", 2*batchSize, 0)
+			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to1},
 			}
 			ctx, cancel := context.WithCancel(context.Background())
@@ -120,7 +120,7 @@ func TestInterStepDataForward(t *testing.T) {
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 			stopped := f.Start()
-			// write some data such that the fromBuffer can be empty, that is toBuffer gets full
+			// write some data such that the fromPartition can be empty, that is toBuffer gets full
 			_, errs := fromStep.Write(ctx, writeMessages[0:4*batchSize])
 			assert.Equal(t, make([]error, 4*batchSize), errs)
 

@@ -14,11 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/* package simplebuffer is in memory ring buffer that implements the isb interface. This should be used only for local development
+/* package simplepartition is in memory ring partition that implements the isb interface. This should be used only for local development
 and testing purposes. Exactly-Once is not implemented because it is a side effect. The locking implementation is very coarse.
 */
 
-package simplebuffer
+package simplepartition
 
 import (
 	"context"
@@ -32,11 +32,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// InMemoryBuffer implements ISB interface.
-type InMemoryBuffer struct {
+// InMemoryPartition implements ISB interface.
+type InMemoryPartition struct {
 	name         string
 	size         int64
-	buffer       []elem
+	elements     []elem
 	writeIdx     int64
 	readIdx      int64
 	partitionIdx int32
@@ -44,10 +44,10 @@ type InMemoryBuffer struct {
 	rwlock       *sync.RWMutex
 }
 
-var _ isb.BufferReader = (*InMemoryBuffer)(nil)
-var _ isb.BufferWriter = (*InMemoryBuffer)(nil)
+var _ isb.PartitionReader = (*InMemoryPartition)(nil)
+var _ isb.PartitionWriter = (*InMemoryPartition)(nil)
 
-// elem is the element stored in the buffer
+// elem is the element stored in the partition.
 type elem struct {
 	header  []byte
 	body    []byte
@@ -56,77 +56,77 @@ type elem struct {
 	pending bool
 }
 
-// NewInMemoryBuffer returns a new buffer.
-func NewInMemoryBuffer(name string, size int64, partition int32, opts ...Option) *InMemoryBuffer {
+// NewInMemoryPartition returns a new partition.
+func NewInMemoryPartition(name string, size int64, partition int32, opts ...Option) *InMemoryPartition {
 
-	bufferOptions := &options{
-		readTimeOut:               time.Second,                // default read time out
-		bufferFullWritingStrategy: v1alpha1.RetryUntilSuccess, // default buffer full writing strategy
+	partitionOptions := &options{
+		readTimeOut:                  time.Second,                // default read time out
+		partitionFullWritingStrategy: v1alpha1.RetryUntilSuccess, // default elements full writing strategy
 	}
 
 	for _, o := range opts {
-		_ = o(bufferOptions)
+		_ = o(partitionOptions)
 	}
 
-	sb := &InMemoryBuffer{
+	sb := &InMemoryPartition{
 		name:         name,
 		size:         size,
-		buffer:       make([]elem, size),
+		elements:     make([]elem, size),
 		writeIdx:     int64(0),
 		readIdx:      int64(0),
 		partitionIdx: partition,
 		rwlock:       new(sync.RWMutex),
-		options:      bufferOptions,
+		options:      partitionOptions,
 	}
 	return sb
 }
 
 // Stringer
-func (b *InMemoryBuffer) String() string {
+func (b *InMemoryPartition) String() string {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
 	return fmt.Sprintf("(%s) size:%d readIdx:%d writeIdx:%d", b.name, b.size, b.readIdx, b.writeIdx)
 }
 
-// GetName returns the buffer name.
-func (b *InMemoryBuffer) GetName() string {
+// GetName returns the partition name.
+func (b *InMemoryPartition) GetName() string {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
 	return b.name
 }
 
 // GetPartitionIdx returns the partitionIdx.
-func (b *InMemoryBuffer) GetPartitionIdx() int32 {
+func (b *InMemoryPartition) GetPartitionIdx() int32 {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
 	return b.partitionIdx
 }
 
-func (b *InMemoryBuffer) Pending(_ context.Context) (int64, error) {
+func (b *InMemoryPartition) Pending(_ context.Context) (int64, error) {
 	// TODO: not implemented
 	return isb.PendingNotAvailable, nil
 }
 
 // Close does nothing.
-func (b *InMemoryBuffer) Close() error {
+func (b *InMemoryPartition) Close() error {
 	return nil
 }
 
 // IsFull returns whether the queue is full.
-func (b *InMemoryBuffer) IsFull() bool {
+func (b *InMemoryPartition) IsFull() bool {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
-	return b.buffer[b.writeIdx].dirty
+	return b.elements[b.writeIdx].dirty
 }
 
 // IsEmpty returns whether the queue is empty.
-func (b *InMemoryBuffer) IsEmpty() bool {
+func (b *InMemoryPartition) IsEmpty() bool {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
-	return b.buffer[b.readIdx].pending || !b.buffer[b.readIdx].dirty
+	return b.elements[b.readIdx].pending || !b.elements[b.readIdx].dirty
 }
 
-func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
+func (b *InMemoryPartition) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	var errs = make([]error, len(messages))
 	writeOffsets := make([]isb.Offset, len(messages))
 	for idx, message := range messages {
@@ -134,35 +134,35 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			var err1 error
 			var err2 error
 
-			// access buffer via lock
+			// access elements via lock
 			b.rwlock.Lock()
 			currentIdx := b.writeIdx
-			b.buffer[currentIdx].header, err1 = message.Header.MarshalBinary()
-			b.buffer[currentIdx].body, err2 = message.Body.MarshalBinary()
+			b.elements[currentIdx].header, err1 = message.Header.MarshalBinary()
+			b.elements[currentIdx].body, err2 = message.Body.MarshalBinary()
 			if err1 != nil || err2 != nil {
 				errs = append(errs, isb.MessageWriteErr{Name: b.name, Header: message.Header, Body: message.Body, Message: fmt.Sprintf("header:(%s) body:(%s)", err1, err2)})
 			}
 			errs[idx] = nil
-			b.buffer[currentIdx].dirty = true
+			b.elements[currentIdx].dirty = true
 			b.writeIdx = (currentIdx + 1) % b.size
 			writeOffsets[idx] = isb.SimpleIntOffset(func() int64 {
 				return currentIdx
 			})
-			// access buffer via lock
+			// access elements via lock
 			b.rwlock.Unlock()
 		} else {
-			switch b.options.bufferFullWritingStrategy {
+			switch b.options.partitionFullWritingStrategy {
 			case v1alpha1.DiscardLatest:
-				errs[idx] = isb.NoRetryableBufferWriteErr{Name: b.name, Message: "Buffer full!"}
+				errs[idx] = isb.NonRetryablePartitionWriteErr{Name: b.name, Message: "Partition full!"}
 			default:
-				errs[idx] = isb.BufferWriteErr{Name: b.name, Full: true, Message: "Buffer full!"}
+				errs[idx] = isb.PartitionWriteErr{Name: b.name, Full: true, Message: "Partition full!"}
 			}
 		}
 	}
 	return writeOffsets, errs
 }
 
-func (b *InMemoryBuffer) blockIfEmpty(ctx context.Context) error {
+func (b *InMemoryPartition) blockIfEmpty(ctx context.Context) error {
 	var err error
 	// block if isEmpty
 	for {
@@ -181,7 +181,7 @@ func (b *InMemoryBuffer) blockIfEmpty(ctx context.Context) error {
 	return err
 }
 
-func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
+func (b *InMemoryPartition) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var readMessages = make([]*isb.ReadMessage, 0, count)
 	cctx, cancel := context.WithTimeout(ctx, b.options.readTimeOut)
 	defer cancel()
@@ -194,18 +194,18 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 			if errors.Is(err, context.DeadlineExceeded) {
 				return readMessages, nil
 			}
-			return readMessages, isb.BufferReadErr{Name: b.name, Empty: true, Message: err.Error()}
+			return readMessages, isb.PartitionReadErr{Name: b.name, Empty: true, Message: err.Error()}
 		}
-		// access buffer via lock
+		// access elements via lock
 		b.rwlock.Lock()
 
 		currentIdx := b.readIdx
 		// mark it as pending
-		b.buffer[currentIdx].pending = true
+		b.elements[currentIdx].pending = true
 		b.readIdx = (currentIdx + 1) % b.size
 		// get header and body
-		header := b.buffer[currentIdx].header
-		body := b.buffer[currentIdx].body
+		header := b.elements[currentIdx].header
+		body := b.elements[currentIdx].body
 
 		b.rwlock.Unlock()
 
@@ -241,7 +241,7 @@ func buildMessage(header []byte, body []byte) (msg isb.Message, err error) {
 }
 
 // Ack acknowledges the given offsets
-func (b *InMemoryBuffer) Ack(_ context.Context, offsets []isb.Offset) []error {
+func (b *InMemoryPartition) Ack(_ context.Context, offsets []isb.Offset) []error {
 	errs := make([]error, len(offsets))
 	for index, offset := range offsets {
 		intOffset, err := strconv.Atoi(offset.String())
@@ -252,32 +252,32 @@ func (b *InMemoryBuffer) Ack(_ context.Context, offsets []isb.Offset) []error {
 		if int64(intOffset) >= b.size {
 			errs[index] = isb.MessageAckErr{
 				Name:    b.name,
-				Message: fmt.Sprintf("given index (%d) >= size of the buffer (%d)", intOffset, b.size),
+				Message: fmt.Sprintf("given index (%d) >= size of the elements (%d)", intOffset, b.size),
 				Offset:  offset,
 			}
 			continue
 		}
 
 		b.rwlock.Lock()
-		b.buffer[intOffset].ack = true
-		b.buffer[intOffset].pending = false
-		b.buffer[intOffset].dirty = false
+		b.elements[intOffset].ack = true
+		b.elements[intOffset].pending = false
+		b.elements[intOffset].dirty = false
 		b.rwlock.Unlock()
 	}
 
 	return errs
 }
 
-func (b *InMemoryBuffer) NoAck(_ context.Context, _ []isb.Offset) {}
+func (b *InMemoryPartition) NoAck(_ context.Context, _ []isb.Offset) {}
 
-// GetMessages gets the first num messages in the in mem buffer
+// GetMessages gets the first num messages in the in mem partition
 // this function is for testing purpose
-func (b *InMemoryBuffer) GetMessages(num int) []*isb.Message {
+func (b *InMemoryPartition) GetMessages(num int) []*isb.Message {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
 	var msgs = make([]*isb.Message, 0, num)
-	for i := 0; i < num && i < len(b.buffer); i++ {
-		msg, _ := buildMessage(b.buffer[i].header, b.buffer[i].body)
+	for i := 0; i < num && i < len(b.elements); i++ {
+		msg, _ := buildMessage(b.elements[i].header, b.elements[i].body)
 		msgs = append(msgs, &msg)
 	}
 	return msgs

@@ -44,8 +44,8 @@ type jetStreamWriter struct {
 	log     *zap.SugaredLogger
 }
 
-// NewJetStreamBufferWriter is used to provide a new instance of JetStreamBufferWriter
-func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, opts ...WriteOption) (isb.BufferWriter, error) {
+// NewJetStreamWriter is used to provide a new instance of JetStreamBufferWriter
+func NewJetStreamWriter(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, opts ...WriteOption) (isb.PartitionWriter, error) {
 	o := defaultWriteOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -73,7 +73,7 @@ func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClie
 		js:      js,
 		opts:    o,
 		isFull:  atomic.NewBool(true),
-		log:     logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject),
+		log:     logging.FromContext(ctx).With("partitionWriter", name).With("stream", stream).With("subject", subject),
 	}
 
 	go result.runStatusChecker(ctx)
@@ -166,12 +166,12 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 			// user explicitly wants to discard the message when buffer if full.
 			// return no retryable error as a callback to let caller know that the message is discarded.
 			for i := 0; i < len(errs); i++ {
-				errs[i] = isb.NoRetryableBufferWriteErr{Name: jw.name, Message: "Buffer full!"}
+				errs[i] = isb.NonRetryablePartitionWriteErr{Name: jw.name, Message: "Buffer full!"}
 			}
 		default:
-			// Default behavior is to return a BufferWriteErr.
+			// Default behavior is to return a PartitionWriteErr.
 			for i := 0; i < len(errs); i++ {
-				errs[i] = isb.BufferWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"}
+				errs[i] = isb.PartitionWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"}
 			}
 		}
 		isbWriteErrors.With(labels).Inc()

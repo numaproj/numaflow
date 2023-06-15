@@ -1369,13 +1369,13 @@ func (in *PipelineLimits) DeepCopyInto(out *PipelineLimits) {
 		*out = new(uint64)
 		**out = **in
 	}
-	if in.BufferMaxLength != nil {
-		in, out := &in.BufferMaxLength, &out.BufferMaxLength
+	if in.PartitionMaxLength != nil {
+		in, out := &in.PartitionMaxLength, &out.PartitionMaxLength
 		*out = new(uint64)
 		**out = **in
 	}
-	if in.BufferUsageLimit != nil {
-		in, out := &in.BufferUsageLimit, &out.BufferUsageLimit
+	if in.PartitionUsageLimit != nil {
+		in, out := &in.PartitionUsageLimit, &out.PartitionUsageLimit
 		*out = new(uint32)
 		**out = **in
 	}
@@ -1700,8 +1700,8 @@ func (in *Scale) DeepCopyInto(out *Scale) {
 		*out = new(uint32)
 		**out = **in
 	}
-	if in.TargetBufferAvailability != nil {
-		in, out := &in.TargetBufferAvailability, &out.TargetBufferAvailability
+	if in.TargetPartitionAvailability != nil {
+		in, out := &in.TargetPartitionAvailability, &out.TargetPartitionAvailability
 		*out = new(uint32)
 		**out = **in
 	}
@@ -2096,13 +2096,13 @@ func (in *VertexLimits) DeepCopyInto(out *VertexLimits) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
-	if in.BufferMaxLength != nil {
-		in, out := &in.BufferMaxLength, &out.BufferMaxLength
+	if in.PartitionMaxLength != nil {
+		in, out := &in.PartitionMaxLength, &out.PartitionMaxLength
 		*out = new(uint64)
 		**out = **in
 	}
-	if in.BufferUsageLimit != nil {
-		in, out := &in.BufferUsageLimit, &out.BufferUsageLimit
+	if in.PartitionUsageLimit != nil {
+		in, out := &in.PartitionUsageLimit, &out.PartitionUsageLimit
 		*out = new(uint32)
 		**out = **in
 	}

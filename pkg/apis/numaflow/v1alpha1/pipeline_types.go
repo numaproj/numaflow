@@ -116,11 +116,11 @@ func (p Pipeline) NumOfPartitions(vertex string) int {
 	return partitions
 }
 
-func (p Pipeline) FindVertexWithBuffer(buffer string) *AbstractVertex {
+func (p Pipeline) FindVertexWithPartition(partitionName string) *AbstractVertex {
 	// TODO: Use following code after we deprecate edge.parallelism.
 	// for _, v := range p.Spec.Vertices {
-	// 	for _, b := range v.OwnedBufferNames(p.Namespace, p.Name) {
-	// 		if buffer == b {
+	// 	for _, b := range v.OwnedPartitionNames(p.Namespace, p.Name) {
+	// 		if partitionName == b {
 	// 			return &v
 	// 		}
 	// 	}
@@ -128,8 +128,8 @@ func (p Pipeline) FindVertexWithBuffer(buffer string) *AbstractVertex {
 
 	// TODO: remove this after we deprecate edge.parallelism.
 	for _, v := range p.Spec.Vertices {
-		bufferPrefix := fmt.Sprintf("%s-%s-%s-", p.Namespace, p.Name, v.Name)
-		if strings.HasPrefix(buffer, bufferPrefix) {
+		partitionPrefix := fmt.Sprintf("%s-%s-%s-", p.Namespace, p.Name, v.Name)
+		if strings.HasPrefix(partitionName, partitionPrefix) {
 			return &v
 		}
 	}
@@ -156,12 +156,12 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 	return edges
 }
 
-func (p Pipeline) GetAllBuffers() []string {
+func (p Pipeline) GetAllPartitions() []string {
 	r := []string{}
 	// TODO: Use following code after we deprecate edge.parallelism.
 
 	// for _, v := range p.Spec.Vertices {
-	// 	r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
+	// 	r = append(r, v.OwnedPartitionNames(p.Namespace, p.Name)...)
 	// }
 
 	// TODO: remove this after we deprecate edge.parallelism.
@@ -171,9 +171,9 @@ func (p Pipeline) GetAllBuffers() []string {
 		}
 		if v.IsReduceUDF() {
 			partitions := p.NumOfPartitions(v.Name)
-			r = append(r, GenerateBufferNames(p.Namespace, p.Name, v.Name, partitions)...)
+			r = append(r, GeneratePartitionNames(p.Namespace, p.Name, v.Name, partitions)...)
 		} else {
-			r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
+			r = append(r, v.OwnedPartitionNames(p.Namespace, p.Name)...)
 		}
 	}
 	return r
@@ -332,7 +332,7 @@ func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.C
 		Resources:       standardResources,
 		Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
-	c.Args = append(c.Args, "--buffers="+strings.Join(p.GetAllBuffers(), ","))
+	c.Args = append(c.Args, "--buffers="+strings.Join(p.GetAllPartitions(), ","))
 	c.Args = append(c.Args, "--buckets="+strings.Join(p.GetAllBuckets(), ","))
 	if p.Spec.Templates != nil && p.Spec.Templates.DaemonTemplate != nil && p.Spec.Templates.DaemonTemplate.InitContainerTemplate != nil {
 		p.Spec.Templates.DaemonTemplate.InitContainerTemplate.ApplyToContainer(&c)
@@ -368,24 +368,24 @@ func (p Pipeline) GetDaemonServiceObj() *corev1.Service {
 // GetPipelineLimits returns the pipeline limits with default values
 func (p Pipeline) GetPipelineLimits() PipelineLimits {
 	defaultReadBatchSize := uint64(DefaultReadBatchSize)
-	defaultBufferMaxLength := uint64(DefaultBufferLength)
-	defaultBufferUsageLimit := uint32(100 * DefaultBufferUsageLimit)
+	defaultPartitionMaxLength := uint64(DefaultPartitionLength)
+	defaultPartitionUsageLimit := uint32(100 * DefaultPartitionUsageLimit)
 	defaultReadTimeout := time.Second
 	limits := PipelineLimits{
-		ReadBatchSize:    &defaultReadBatchSize,
-		BufferMaxLength:  &defaultBufferMaxLength,
-		BufferUsageLimit: &defaultBufferUsageLimit,
-		ReadTimeout:      &metav1.Duration{Duration: defaultReadTimeout},
+		ReadBatchSize:       &defaultReadBatchSize,
+		PartitionMaxLength:  &defaultPartitionMaxLength,
+		PartitionUsageLimit: &defaultPartitionUsageLimit,
+		ReadTimeout:         &metav1.Duration{Duration: defaultReadTimeout},
 	}
 	if x := p.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			limits.ReadBatchSize = x.ReadBatchSize
 		}
-		if x.BufferMaxLength != nil {
-			limits.BufferMaxLength = x.BufferMaxLength
+		if x.PartitionMaxLength != nil {
+			limits.PartitionMaxLength = x.PartitionMaxLength
 		}
-		if x.BufferUsageLimit != nil {
-			limits.BufferUsageLimit = x.BufferUsageLimit
+		if x.PartitionUsageLimit != nil {
+			limits.PartitionUsageLimit = x.PartitionUsageLimit
 		}
 		if x.ReadTimeout != nil {
 			limits.ReadTimeout = x.ReadTimeout
@@ -432,8 +432,8 @@ type PipelineSpec struct {
 	// +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running}
 	// +optional
 	Lifecycle Lifecycle `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`
-	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings
-	// +kubebuilder:default={"readBatchSize": 500, "bufferMaxLength": 30000, "bufferUsageLimit": 80}
+	// Limits define the limitations such as partition read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings
+	// +kubebuilder:default={"readBatchSize": 500, "partitionMaxLength": 30000, "partitionUsageLimit": 80}
 	// +optional
 	Limits *PipelineLimits `json:"limits,omitempty" protobuf:"bytes,5,opt,name=limits"`
 	// Watermark enables watermark progression across the entire pipeline.
@@ -478,18 +478,18 @@ type PipelineLimits struct {
 	// +kubebuilder:default=500
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
-	// BufferMaxLength is used to define the max length of a buffer
-	// Only applies to UDF and Source vertices as only they do buffer write.
+	// PartitionMaxLength is used to define the max length of a partition
+	// Only applies to UDF and Source vertices as only they do partition write.
 	// It can be overridden by the settings in vertex limits.
 	// +kubebuilder:default=30000
 	// +optional
-	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,2,opt,name=bufferMaxLength"`
-	// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-	// Only applies to UDF and Source vertices as only they do buffer write.
+	PartitionMaxLength *uint64 `json:"partitionMaxLength,omitempty" protobuf:"varint,2,opt,name=partitionMaxLength"`
+	// PartitionUsageLimit is used to define the percentage of the partition usage limit, a valid value should be less than 100, for example, 85.
+	// Only applies to UDF and Source vertices as only they do partition write.
 	// It will be overridden by the settings in vertex limits.
 	// +kubebuilder:default=80
 	// +optional
-	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,3,opt,name=bufferUsageLimit"`
+	PartitionUsageLimit *uint32 `json:"partitionUsageLimit,omitempty" protobuf:"varint,3,opt,name=partitionUsageLimit"`
 	// Read timeout for all the vertices in the pipeline, can be overridden by the vertex's limit settings
 	// +kubebuilder:default= "1s"
 	// +optional

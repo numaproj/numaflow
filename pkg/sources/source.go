@@ -59,11 +59,11 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var writersMap = make(map[string][]isb.BufferWriter)
+	var writersMap = make(map[string][]isb.PartitionWriter)
 
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToBuffers())
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToPartitions())
 	var sourcePublisherStores = store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 	var err error
 
@@ -73,25 +73,25 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			writeOpts := []redisclient.Option{
 				redisclient.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 			}
-			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
-				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
+			if x := e.ToVertexLimits; x != nil && x.PartitionMaxLength != nil {
+				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.PartitionMaxLength)))
 			} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
 				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+			if x := e.ToVertexLimits; x != nil && x.PartitionUsageLimit != nil {
+				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.PartitionUsageLimit)/100))
 			} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
 				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
-			var bufferWriters []isb.BufferWriter
+			buffers := dfv1.GeneratePartitionNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
+			var bufferWriters []isb.PartitionWriter
 			// create a writer for each partition.
 			for _, partition := range buffers {
 				group := partition + "-group"
 				redisClient := redisclient.NewInClusterRedisClient()
-				writer := redisisb.NewBufferWrite(ctx, redisClient, partition, group, writeOpts...)
+				writer := redisisb.NewPartitionWrite(ctx, redisClient, partition, group, writeOpts...)
 				bufferWriters = append(bufferWriters, writer)
 			}
 			writersMap[e.To] = bufferWriters
@@ -111,25 +111,25 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			writeOpts := []jetstreamisb.WriteOption{
 				jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 			}
-			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
-				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
+			if x := e.ToVertexLimits; x != nil && x.PartitionMaxLength != nil {
+				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.PartitionMaxLength)))
 			} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
 				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
-			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+			if x := e.ToVertexLimits; x != nil && x.PartitionUsageLimit != nil {
+				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.PartitionUsageLimit)/100))
 			} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
 				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			var bufferWriters []isb.BufferWriter
-			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
+			var bufferWriters []isb.PartitionWriter
+			buffers := dfv1.GeneratePartitionNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
 			// create a writer for each partition.
 			for _, buffer := range buffers {
 				streamName := isbsvc.JetStreamName(buffer)
 				jetStreamClient := jsclient.NewInClusterJetStreamClient()
-				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
+				writer, err := jetstreamisb.NewJetStreamWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
 				if err != nil {
 					return err
 				}
@@ -177,7 +177,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
 	}
-	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToBuffers()))
+	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToPartitions()))
 	stopped := sourcer.Start()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -190,7 +190,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, []isb.BufferReader{sourcer})
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, []isb.PartitionReader{sourcer})
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -207,7 +207,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 }
 
 // getSourcer is used to send the sourcer information
-func (sp *SourceProcessor) getSourcer(writers map[string][]isb.BufferWriter,
+func (sp *SourceProcessor) getSourcer(writers map[string][]isb.PartitionWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,

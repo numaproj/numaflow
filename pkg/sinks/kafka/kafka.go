@@ -58,7 +58,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 
 // NewToKafka returns ToKafka type.
 func NewToKafka(vertex *dfv1.Vertex,
-	fromBuffer isb.BufferReader,
+	fromBuffer isb.PartitionReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	whereToDecider forward.GoWhere,
@@ -90,7 +90,7 @@ func NewToKafka(vertex *dfv1.Vertex,
 		}
 	}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.PartitionWriter{vertex.Spec.Name: {toKafka}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

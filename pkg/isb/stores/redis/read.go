@@ -31,24 +31,24 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// BufferRead is the read queue implementation powered by RedisClient.
-type BufferRead struct {
+// RedisReader is the read queue implementation powered by RedisClient.
+type RedisReader struct {
 	*redisclient.RedisStreamsRead
-	*BufferReadInfo
+	*PartitionReadInfo
 }
 
-// BufferReadInfo will contain the buffer information from the reader point of view.
-type BufferReadInfo struct {
+// PartitionReadInfo will contain the partition information from the reader point of view.
+type PartitionReadInfo struct {
 	rwLock            *sync.RWMutex
 	isEmpty           bool
 	lag               *atomic.Duration
 	refreshEmptyError *atomic.Uint32
 }
 
-var _ isb.BufferReader = (*BufferRead)(nil)
+var _ isb.PartitionReader = (*RedisReader)(nil)
 
-// NewBufferRead returns a new redis buffer reader.
-func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, fromPartitionIdx int32, opts ...redisclient.Option) isb.BufferReader {
+// NewPartitionReader returns a new redis partition reader.
+func NewPartitionReader(ctx context.Context, client *redisclient.RedisClient, name string, group string, consumer string, fromPartitionIdx int32, opts ...redisclient.Option) isb.PartitionReader {
 	options := &redisclient.Options{
 		InfoRefreshInterval: time.Second,
 		ReadTimeOut:         time.Second,
@@ -59,7 +59,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 		o.Apply(options)
 	}
 
-	rqr := &BufferRead{
+	rqr := &RedisReader{
 		RedisStreamsRead: &redisclient.RedisStreamsRead{
 			Name:         name,
 			Stream:       redisclient.GetRedisStreamName(name),
@@ -75,7 +75,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 				},
 			},
 		},
-		BufferReadInfo: &BufferReadInfo{
+		PartitionReadInfo: &PartitionReadInfo{
 			rwLock:            new(sync.RWMutex),
 			isEmpty:           true,
 			lag:               atomic.NewDuration(0),
@@ -115,7 +115,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 		return messages, nil
 	}
 
-	rqr.Log = logging.FromContext(ctx).With("BufferReader", rqr.GetName())
+	rqr.Log = logging.FromContext(ctx).With("PartitionReader", rqr.GetName())
 	// updateIsEmptyFlag is used to update isEmpty flag once
 	rqr.updateIsEmptyFlag(ctx)
 
@@ -135,7 +135,7 @@ func getHeaderAndBody(field string, value interface{}) (msg isb.Message, err err
 }
 
 // refreshIsEmptyFlag is used to refresh the changes for isEmpty
-func (br *BufferRead) refreshIsEmptyFlag(ctx context.Context) {
+func (br *RedisReader) refreshIsEmptyFlag(ctx context.Context) {
 	ticker := time.NewTicker(br.Options.InfoRefreshInterval)
 	defer ticker.Stop()
 	br.Log.Infow("refreshIsEmptyFlag has started")
@@ -149,33 +149,33 @@ func (br *BufferRead) refreshIsEmptyFlag(ctx context.Context) {
 	}
 }
 
-func (br *BufferRead) Close() error {
+func (br *RedisReader) Close() error {
 	return nil
 }
 
-// IsEmpty returns whether the buffer is empty.
-func (br *BufferRead) IsEmpty() bool {
-	br.BufferReadInfo.rwLock.RLock()
-	defer br.BufferReadInfo.rwLock.RUnlock()
-	return br.BufferReadInfo.isEmpty
+// IsEmpty returns whether the partition is empty.
+func (br *RedisReader) IsEmpty() bool {
+	br.PartitionReadInfo.rwLock.RLock()
+	defer br.PartitionReadInfo.rwLock.RUnlock()
+	return br.PartitionReadInfo.isEmpty
 }
 
-// GetRefreshEmptyError returns whether the buffer has a lag
-func (br *BufferRead) GetRefreshEmptyError() uint32 {
-	return br.BufferReadInfo.refreshEmptyError.Load()
+// GetRefreshEmptyError returns whether the partition has a lag
+func (br *RedisReader) GetRefreshEmptyError() uint32 {
+	return br.PartitionReadInfo.refreshEmptyError.Load()
 }
 
-// GetLag returns the lag of the buffer
-func (br *BufferRead) GetLag() time.Duration {
-	return br.BufferReadInfo.lag.Load()
+// GetLag returns the lag of the partition
+func (br *RedisReader) GetLag() time.Duration {
+	return br.PartitionReadInfo.lag.Load()
 }
 
-// updateIsEmptyFlag is used to check if the buffer is empty. Lag of even one consumer is considered a lag.
+// updateIsEmptyFlag is used to check if the partition is empty. Lag of even one consumer is considered a lag.
 // We obtain the last generated Id for a stream using the XInfo command which is the last id added to the stream,
 // We also obtain the list of all the delivered ids for all the different consumer groups.
-// We assume that if the difference of the lastGeneratedId and lastDelivered = 0 the buffer is considered empty
+// We assume that if the difference of the lastGeneratedId and lastDelivered = 0 the partition is considered empty
 // It is tough to get the exact numbers https://github.com/redis/redis/issues/8392
-func (br *BufferRead) updateIsEmptyFlag(_ context.Context) {
+func (br *RedisReader) updateIsEmptyFlag(_ context.Context) {
 	ctx := redisclient.RedisContext
 	infoStream := br.Client.XInfoStream(ctx, br.GetStreamName())
 
@@ -230,13 +230,13 @@ func (br *BufferRead) updateIsEmptyFlag(_ context.Context) {
 	}
 
 	// Set the refresh empty error to 0
-	br.BufferReadInfo.refreshEmptyError.Store(0)
+	br.PartitionReadInfo.refreshEmptyError.Store(0)
 	// obtain current lag
 	currentLag := time.UnixMilli(lastGeneratedId).Sub(time.UnixMilli(lastDeliveredId))
 	// Get Previous lag and set the current lag
 	previousLag := br.GetLag()
 	// Set the difference between current and previous lag (+ve increasing lag, -ve decreasing lag)
-	br.BufferReadInfo.lag.Store(currentLag - previousLag)
+	br.PartitionReadInfo.lag.Store(currentLag - previousLag)
 
 	// string comparison of lastGenerated and lastDelivered
 	if lastGenerated == lastDelivered {
@@ -250,20 +250,20 @@ func (br *BufferRead) updateIsEmptyFlag(_ context.Context) {
 }
 
 // setIsEmptyFlag is used to set isEmpty flag to true
-func (br *BufferRead) setIsEmptyFlag(flag bool) {
-	br.BufferReadInfo.rwLock.Lock()
-	defer br.BufferReadInfo.rwLock.Unlock()
-	br.BufferReadInfo.isEmpty = flag
+func (br *RedisReader) setIsEmptyFlag(flag bool) {
+	br.PartitionReadInfo.rwLock.Lock()
+	defer br.PartitionReadInfo.rwLock.Unlock()
+	br.PartitionReadInfo.isEmpty = flag
 }
 
 // setError is used to set error cases
-func (br *BufferRead) setError(errMsg string, err error) {
+func (br *RedisReader) setError(errMsg string, err error) {
 	br.Log.Errorw(errMsg, zap.Error(err))
-	br.BufferReadInfo.refreshEmptyError.Inc()
+	br.PartitionReadInfo.refreshEmptyError.Inc()
 	br.setIsEmptyFlag(false)
 }
 
-func (br *BufferRead) Pending(_ context.Context) (int64, error) {
+func (br *RedisReader) Pending(_ context.Context) (int64, error) {
 	// TODO: not implemented
 	return isb.PendingNotAvailable, nil
 }
