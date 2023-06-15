@@ -2153,80 +2153,80 @@
 <tr>
 <td><code>forwarder_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Provides the total number of messages read by a given Vertex from an Inter-Step Buffer</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages read by a given Vertex from an Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>forwarder_read_bytes_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>forwarder_write_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of messages written to Inter-Step Buffer by a given Vertex</td>
 </tr>
 <tr>
 <td><code>forwarder_write_bytes_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of bytes written to Inter-Step Buffer by a given Vertex</td>
 </tr>
 <tr>
 <td><code>forwarder_ack_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>forwarder_drop_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Provides the total number of messages dropped by a given Vertex due to a full Inter-Step Buffer</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages dropped by a given Vertex due to a full Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>forwarder_drop_bytes_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Provides the total number of bytes dropped by a given Vertex due to a full Inter-Step Buffer</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of bytes dropped by a given Vertex due to a full Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>reduce_isb_reader_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Provides the total number of messages read by a given Reduce Vertex from an Inter-Step Buffer</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages read by a given Reduce Vertex from an Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>reduce_isb_reader_read_bytes_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Provides the total number of bytes read by a given Reduce Vertex from an Inter-Step Buffer</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of bytes read by a given Reduce Vertex from an Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>reduce_isb_writer_write_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of messages written to Inter-Step Buffer by a given Reduce Vertex</td>
 </tr>
 <tr>
 <td><code>reduce_isb_writer_write_bytes_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of bytes written to Inter-Step Buffer by a given Reduce Vertex</td>
 </tr>
 <tr>
 <td><code>reduce_isb_writer_drop_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Provides the total number of messages dropped by a given Reduce Vertex due to a full Inter-Step Buffer</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages dropped by a given Reduce Vertex due to a full Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>reduce_isb_writer_drop_bytes_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Provides the total number of bytes dropped by a given Reduce Vertex due to a full Inter-Step Buffer</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of bytes dropped by a given Reduce Vertex due to a full Inter-Step Buffer Partition</td>
 </tr>
 </tbody>
 </table>
@@ -2383,13 +2383,13 @@
 <tr>
 <td><code>forwarder_udf_processing_time</code></td>
 <td>Histogram</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides a histogram distribution of the processing times of User Defined Functions. (UDF's)</td>
 </tr>
 <tr>
 <td><code>forwarder_forward_chunk_processing_time</code></td>
 <td>Histogram</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides a histogram distribution of the processing times of the forwarder function as a whole</td>
 </tr>
 <tr>
@@ -2421,25 +2421,25 @@
 <tr>
 <td><code>forwarder_platform_error</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any internal errors which could stop pipeline processing</td>
 </tr>
 <tr>
 <td><code>forwarder_read_error</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any errors while reading messages by the forwarder</td>
 </tr>
 <tr>
 <td><code>forwarder_write_error</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any errors while writing messages by the forwarder</td>
 </tr>
 <tr>
 <td><code>forwarder_ack_error</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any errors while acknowledging messages by the forwarder</td>
 </tr>
 <tr>
@@ -2463,37 +2463,37 @@
 <tr>
 <td><code>isb_jetstream_read_error_total</code></td>
 <td>Counter</td>
-<td><code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any read errors with NATS Jetstream ISB</td>
 </tr>
 <tr>
 <td><code>isb_jetstream_write_error_total</code></td>
 <td>Counter</td>
-<td><code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any write errors with NATS Jetstream ISB</td>
 </tr>
 <tr>
 <td><code>isb_redis_read_error_total</code></td>
 <td>Counter</td>
-<td><code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any read errors with Redis ISB</td>
 </tr>
 <tr>
 <td><code>isb_redis_write_error_total</code></td>
 <td>Counter</td>
-<td><code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any write errors with Redis ISB</td>
 </tr>
 <tr>
 <td><code>reduce_isb_reader_read_error_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any read errors with Reducer ISB</td>
 </tr>
 <tr>
 <td><code>reduce_isb_writer_write_error_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>buffer=&lt;buffer-name&gt;</code></td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any write errors with Reducer ISB</td>
 </tr>
 <tr>
