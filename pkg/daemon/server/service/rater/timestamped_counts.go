@@ -31,14 +31,20 @@ type TimestampedCounts struct {
 	timestamp int64
 	// podName to count mapping
 	podCounts map[string]float64
-	lock      *sync.RWMutex
+	// isWindowClosed indicates whether we have finished collecting pod counts for this window
+	isWindowClosed bool
+	// delta is the total count change from the previous window, it's valid only when isWindowClosed is true
+	delta float64
+	lock  *sync.RWMutex
 }
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
-		timestamp: t,
-		podCounts: make(map[string]float64),
-		lock:      new(sync.RWMutex),
+		timestamp:      t,
+		podCounts:      make(map[string]float64),
+		isWindowClosed: false,
+		delta:          0,
+		lock:           new(sync.RWMutex),
 	}
 }
 
@@ -56,6 +62,10 @@ func (tc *TimestampedCounts) Update(podName string, count float64) {
 		// hence we'd rather keep the count as it is to avoid wrong rate calculation.
 		return
 	}
+	if tc.isWindowClosed {
+		// we skip updating if the window is already closed.
+		return
+	}
 	tc.podCounts[podName] = count
 }
 
@@ -69,6 +79,41 @@ func (tc *TimestampedCounts) Snapshot() map[string]float64 {
 		counts[k] = v
 	}
 	return counts
+}
+
+func (tc *TimestampedCounts) IsWindowClosed() bool {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	return tc.isWindowClosed
+}
+
+func (tc *TimestampedCounts) CloseWindow(prev *TimestampedCounts) {
+	currPodCounts := tc.Snapshot()
+	delta := 0.0
+	if prev == nil {
+		for _, v := range currPodCounts {
+			delta += v
+		}
+	} else {
+		prevPodCounts := prev.Snapshot()
+		for k, currCount := range currPodCounts {
+			prevCount, ok := prevPodCounts[k]
+			if !ok {
+				prevCount = 0
+			}
+			if currCount < prevCount {
+				// this can happen when a pod is restarted during the window
+				// we count the new count as the delta
+				delta += currCount
+			} else {
+				delta += currCount - prevCount
+			}
+		}
+	}
+	tc.lock.Lock()
+	defer tc.lock.Unlock()
+	tc.isWindowClosed = true
+	tc.delta = delta
 }
 
 // ToString returns a string representation of the TimestampedCounts
