@@ -173,7 +173,7 @@ func TestRedisQWrite_WithInfoRefreshInterval(t *testing.T) {
 
 	// assert the actual error that the buffer is full
 	for _, err := range errs {
-		assert.Equal(t, err, isb.PartitionWriteErr{Name: stream, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.PartitionWriteErr{Name: stream, Full: true, Message: "Partition full!"})
 	}
 }
 
@@ -213,7 +213,7 @@ func TestRedisQWrite_WithInfoRefreshInterval_WithBufferFullWritingStrategyIsDisc
 
 	// assert the NonRetryablePartitionWriteErr
 	for _, err := range errs {
-		assert.Equal(t, err, isb.NonRetryablePartitionWriteErr{Name: stream, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.NonRetryablePartitionWriteErr{Name: stream, Message: "Partition full!"})
 	}
 }
 
@@ -307,7 +307,7 @@ func Test_updateIsFullFlag(t *testing.T) {
 
 	// assert the actual error that the buffer is full
 	for _, err := range errs {
-		assert.Equal(t, err, isb.PartitionWriteErr{Name: stream, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.PartitionWriteErr{Name: stream, Full: true, Message: "Partition full!"})
 	}
 }
 
@@ -498,7 +498,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 	// Buffer is full at this point so write will fail with errors because of usage limit
 	_, errs := rqw.Write(ctx, messages)
 	for _, err := range errs {
-		assert.Equal(t, err, isb.PartitionWriteErr{Name: buffer, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.PartitionWriteErr{Name: buffer, Full: true, Message: "Partition full!"})
 	}
 
 	// Read all the messages.
