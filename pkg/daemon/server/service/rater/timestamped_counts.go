@@ -25,7 +25,7 @@ import (
 // normally it is because the pod is not running
 const CountNotAvailable = -1
 
-// TimestampedCounts track the total count of processed messages for a list of pods at a specific timestamp
+// TimestampedCounts track the total count of processed messages for a list of pods at a given timestamp
 type TimestampedCounts struct {
 	// timestamp in seconds, is the time when the count is recorded
 	timestamp int64
