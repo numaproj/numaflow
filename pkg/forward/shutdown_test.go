@@ -83,7 +83,7 @@ func TestInterStepDataForward(t *testing.T) {
 				},
 			}}
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 			stopped := f.Start()
@@ -116,7 +116,7 @@ func TestInterStepDataForward(t *testing.T) {
 				},
 			}}
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 			stopped := f.Start()

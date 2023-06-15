@@ -143,7 +143,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -193,7 +193,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			f.Stop()
 			time.Sleep(1 * time.Millisecond)
-			// only for shutdown will work as from buffer is not empty
+			// only for shutdown will work as from partition is not empty
 			f.ForceStop()
 
 			<-stopped
@@ -443,7 +443,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 				}
 			}
 
-			// since this is a dropping WhereTo, the buffer can never be full
+			// since this is a dropping WhereTo, the partition can never be full
 			f.Stop()
 
 			<-stopped
@@ -573,7 +573,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -611,7 +611,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 				},
 			}}
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -647,7 +647,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 				},
 			}}
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -784,7 +784,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatal("expected the buffer to be empty", ctx.Err())
+				t.Fatal("expected the partition to be empty", ctx.Err())
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
@@ -1145,7 +1145,7 @@ func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
 
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 	fetchWatermark := &testForwardFetcher{}
-	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 
 	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
 	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
@@ -1179,7 +1179,7 @@ func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
 	}
 	f.Stop()
 	time.Sleep(1 * time.Millisecond)
-	// only for shutdown will work as from buffer is not empty
+	// only for shutdown will work as from partition is not empty
 	f.ForceStop()
 	<-stopped
 }
@@ -1202,7 +1202,7 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 	fetchWatermark := &testForwardFetcher{}
-	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 
 	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
 	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
@@ -1254,13 +1254,13 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 	}
 	f.Stop()
 	time.Sleep(1 * time.Millisecond)
-	// only for shutdown will work as from buffer is not empty
+	// only for shutdown will work as from partition is not empty
 	f.ForceStop()
 	<-stopped
 }
 
-// TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
-func TestWriteToBuffer(t *testing.T) {
+// TestWriteToPartition tests two PartitionFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
+func TestWriteToPartition(t *testing.T) {
 	tests := []struct {
 		name          string
 		batchSize     int64
@@ -1304,9 +1304,9 @@ func TestWriteToBuffer(t *testing.T) {
 	for _, value := range tests {
 		t.Run(value.name, func(t *testing.T) {
 			fromStep := simplepartition.NewInMemoryPartition("from", 5*value.batchSize, 0)
-			buffer := simplepartition.NewInMemoryPartition("to1", value.batchSize, 0, simplepartition.WithPartitionFullWritingStrategy(value.strategy))
+			memoryPartition := simplepartition.NewInMemoryPartition("to1", value.batchSize, 0, simplepartition.WithPartitionFullWritingStrategy(value.strategy))
 			toSteps := map[string][]isb.PartitionWriter{
-				"to1": {buffer},
+				"to1": {memoryPartition},
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
@@ -1317,15 +1317,15 @@ func TestWriteToBuffer(t *testing.T) {
 				},
 			}}
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(value.batchSize), WithUDFStreaming(value.streamEnabled))
 			assert.NoError(t, err)
-			assert.False(t, buffer.IsFull())
-			assert.True(t, buffer.IsEmpty())
+			assert.False(t, memoryPartition.IsFull())
+			assert.True(t, memoryPartition.IsEmpty())
 
 			stopped := f.Start()
 			go func() {
-				for !buffer.IsFull() {
+				for !memoryPartition.IsFull() {
 					select {
 					case <-ctx.Done():
 						logging.FromContext(ctx).Fatalf("not full, %s", ctx.Err())
@@ -1337,7 +1337,7 @@ func TestWriteToBuffer(t *testing.T) {
 				f.Stop()
 			}()
 
-			// try to write to buffer after it is full.
+			// try to write to memoryPartition after it is full.
 			var messageToStep = make(map[string][][]isb.Message)
 			messageToStep["to1"] = make([][]isb.Message, 1)
 			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)

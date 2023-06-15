@@ -28,7 +28,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 )
 
-func TestNewSimpleBuffer(t *testing.T) {
+func TestNewSimplePartition(t *testing.T) {
 	count := int64(10)
 	readBatchSize := int64(2)
 	sb := NewInMemoryPartition("test", count, 0)
@@ -69,7 +69,7 @@ func TestNewSimpleBuffer(t *testing.T) {
 
 	// try to write 3 messages and it should fail (we have only space for 2)
 	_, errs3 := sb.Write(ctx, writeMessages[0:3])
-	assert.EqualValues(t, []error{nil, nil, isb.PartitionWriteErr{Name: "test", Full: true, Message: "Buffer full!"}}, errs3)
+	assert.EqualValues(t, []error{nil, nil, isb.PartitionWriteErr{Name: "test", Full: true, Message: "Partition full!"}}, errs3)
 
 	// let's read some more
 	readMessages, err = sb.Read(ctx, 2)
@@ -80,7 +80,7 @@ func TestNewSimpleBuffer(t *testing.T) {
 	assert.Equal(t, true, sb.IsFull())
 }
 
-func TestNewSimpleBuffer_BufferFullWritingStrategyIsDiscard(t *testing.T) {
+func TestNewSimplePartition_PartitionFullWritingStrategyIsDiscard(t *testing.T) {
 	count := int64(3)
 	sb := NewInMemoryPartition("test", 2, 0, WithPartitionFullWritingStrategy(v1alpha1.DiscardLatest))
 	ctx := context.Background()
@@ -95,7 +95,7 @@ func TestNewSimpleBuffer_BufferFullWritingStrategyIsDiscard(t *testing.T) {
 	_, errors := sb.Write(ctx, writeMessages[0:3])
 	assert.NoError(t, errors[0])
 	assert.NoError(t, errors[1])
-	assert.EqualValues(t, []error{nil, nil, isb.NonRetryablePartitionWriteErr{Name: "test", Message: "Buffer full!"}}, errors)
+	assert.EqualValues(t, []error{nil, nil, isb.NonRetryablePartitionWriteErr{Name: "test", Message: "Partition full!"}}, errors)
 
 	// still full as we did not ack
 	assert.Equal(t, true, sb.IsFull())

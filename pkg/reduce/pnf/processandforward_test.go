@@ -170,7 +170,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	client := udfcall.NewUDSgRPCBasedUDFWithClient(c)
 
 	assert.NoError(t, err)
-	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.PartitionWriter))
+	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(make(map[string][]isb.PartitionWriter))
 
 	// create pf using key and reducer
 	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.PartitionWriter, 1), &forwardTest{}, publishWatermark, wmb.NewIdleManager(1))

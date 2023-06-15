@@ -76,7 +76,7 @@ func TestOrderedProcessing(t *testing.T) {
 	}
 
 	idleManager := wmb.NewIdleManager(len(toSteps))
-	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.PartitionWriter))
+	_, pw := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(make(map[string][]isb.PartitionWriter))
 
 	ctx := context.Background()
 

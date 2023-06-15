@@ -81,12 +81,12 @@ type Message struct {
 	Body
 }
 
-// ReadMessage is the message read from the buffer.
+// ReadMessage is the message read from the partition.
 type ReadMessage struct {
 	Message
 	ReadOffset Offset
 	Watermark  time.Time
-	// Metadata is the metadata of the message after a message is read from the buffer.
+	// Metadata is the metadata of the message after a message is read from the partition.
 	Metadata MessageMetadata
 }
 

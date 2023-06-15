@@ -86,13 +86,13 @@ var (
 	}
 )
 
-func TestOwnedBuffers(t *testing.T) {
+func TestOwnedPartitions(t *testing.T) {
 	f := testVertex.OwnedPartitions()
 	assert.Equal(t, 1, len(f))
 	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name))
 }
 
-func TestOwnedBuffersSource(t *testing.T) {
+func TestOwnedPartitionsSource(t *testing.T) {
 	f := testSrcVertex.OwnedPartitions()
 	assert.Equal(t, 0, len(f))
 }
@@ -106,13 +106,13 @@ func TestGetFromBuckets(t *testing.T) {
 	assert.Equal(t, f[0], fmt.Sprintf("%s-%s-%s_SOURCE", testVertex.Namespace, testVertex.Spec.PipelineName, testVertex.Spec.Name))
 }
 
-func TestGetToBuffers(t *testing.T) {
+func TestGetToPartitions(t *testing.T) {
 	f := testVertex.GetToPartitions()
 	assert.Equal(t, 1, len(f))
 	assert.Contains(t, f[0], fmt.Sprintf("%s-%s-%s-0", testVertex.Namespace, testVertex.Spec.PipelineName, "output"))
 }
 
-func TestGetToBuffersSink(t *testing.T) {
+func TestGetToPartitionsSink(t *testing.T) {
 	f := testSinkVertex.GetToPartitions()
 	assert.Equal(t, 0, len(f))
 }

@@ -131,7 +131,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 		"to1": {rqw},
 	}
 
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 	f, err := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(10))
 
 	stopped := f.Start()
@@ -330,7 +330,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 		},
 	}}
 
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 	isdf, _ := forward.NewInterStepDataForward(vertex, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.ctx = ctx
@@ -419,7 +419,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 		"to1": {suite.rqw},
 	}
 
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 	suite.isdf, _ = forward.NewInterStepDataForward(vertex, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark)
 
 	suite.False(suite.rqw.IsFull())

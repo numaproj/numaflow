@@ -50,8 +50,8 @@ func (f myForwardJetStreamTest) ApplyMapStream(ctx context.Context, message *isb
 	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
 }
 
-// TestForwarderJetStreamBuffer is a test that is used to test forwarder with jetstream buffer
-func TestForwarderJetStreamBuffer(t *testing.T) {
+// TestForwarderJetStreamPartition is a test that is used to test forwarder with jetstream partition
+func TestForwarderJetStreamPartition(t *testing.T) {
 	tests := []struct {
 		name          string
 		batchSize     int64
@@ -82,11 +82,11 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			js, err := conn.JetStream()
 			assert.NoError(t, err)
 
-			streamName := "TestForwarderJetStreamBuffer"
+			streamName := "TestForwarderJetStreamPartition"
 			addStream(t, js, streamName)
 			defer deleteStream(js, streamName)
 
-			toStreamName := "TestForwarderJetStreamBuffer-to"
+			toStreamName := "TestForwarderJetStreamPartition-to"
 			addStream(t, js, toStreamName)
 			defer deleteStream(js, toStreamName)
 
@@ -97,7 +97,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			// Add some data
 			startTime := time.Unix(1636470000, 0)
 			messages := testutils.BuildTestWriteMessages(int64(10), startTime)
-			// Verify if buffer is not full.
+			// Verify if partition is not full.
 			for jw.isFull.Load() {
 				select {
 				case <-ctx.Done():
@@ -106,11 +106,11 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 					time.Sleep(1 * time.Millisecond)
 				}
 			}
-			// Add some data to buffer using write
+			// Add some data to partition using write
 			_, errs := jw.Write(ctx, messages)
 			assert.Equal(t, len(errs), 10)
 
-			// Verify if buffer is full.
+			// Verify if partition is full.
 			for !jw.isFull.Load() {
 				select {
 				case <-ctx.Done():
@@ -128,20 +128,20 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			}}
 
 			// Forwarder logic tested here with a jetstream read and write
-			bufferReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+			partitionReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 			assert.NoError(t, err)
-			fromStep, _ := bufferReader.(*jetStreamReader)
+			fromStep, _ := partitionReader.(*jetStreamReader)
 			defer fromStep.Close()
 
-			bufferWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, toStreamName, toStreamName, toStreamName, 0, WithMaxLength(10))
+			partitionWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, toStreamName, toStreamName, toStreamName, 0, WithMaxLength(10))
 			assert.NoError(t, err)
-			to1 := bufferWriter.(*jetStreamWriter)
+			to1 := partitionWriter.(*jetStreamWriter)
 			defer to1.Close()
 			toSteps := map[string][]isb.PartitionWriter{
 				"to1": {to1},
 			}
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 
@@ -152,7 +152,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			streamInfo, err := to1js.StreamInfo(toStreamName)
 			assert.NoError(t, err)
 
-			// Verify if number of messages in toBuffer is 10 (which is maxlength and hence buffer is full).
+			// Verify if number of messages in toPartition is 10 (which is maxlength and hence partition is full).
 			for streamInfo.State.Msgs != 10 {
 				streamInfo, _ = to1js.StreamInfo(toStreamName)
 				if streamInfo.State.Msgs == 10 {
@@ -166,7 +166,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 				}
 			}
 
-			// assert toBuffer is full and all messages appear in toBuffer
+			// assert toPartition is full and all messages appear in toPartition
 			time.Sleep(2 * time.Second) // wait for isFull check.
 			assert.True(t, to1.isFull.Load())
 
@@ -174,7 +174,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			assert.NoError(t, err)
 			fromStepInfo, err := fromStepJs.StreamInfo(streamName)
 			assert.NoError(t, err)
-			// Make sure all messages are cleared up from buffer as DiscardOldPolicy is false
+			// Make sure all messages are cleared up from partition as DiscardOldPolicy is false
 			assert.Equal(t, uint64(0), fromStepInfo.State.Msgs)
 
 			// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written
@@ -185,8 +185,8 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 	}
 }
 
-// TestJetStreamBufferWrite on buffer full
-func TestJetStreamBufferWriterBufferFull(t *testing.T) {
+// TestJetStreamPartitionWrite on partition full
+func TestJetStreamPartitionWriterPartitionFull(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
@@ -200,7 +200,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "TestJetStreamBufferWriterBufferFull"
+	streamName := "TestJetStreamPartitionWriterPartitionFull"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
@@ -220,11 +220,11 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
 	messages := testutils.BuildTestWriteMessages(int64(2), startTime)
-	// Add some data to buffer using write and verify no writes are performed when buffer is full
+	// Add some data to partition using write and verify no writes are performed when partition is full
 	_, errs := jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
-		assert.Nil(t, errMsg) // Buffer not full, expect no error
+		assert.Nil(t, errMsg) // partition not full, expect no error
 	}
 	timeout = time.After(10 * time.Second)
 	for !jw.isFull.Load() {
@@ -240,12 +240,12 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
 		assert.Error(t, errMsg)
-		assert.Contains(t, errMsg.Error(), "full") // Expect buffer full error
+		assert.Contains(t, errMsg.Error(), "full") // Expect partition full error
 	}
 }
 
-// TestJetStreamBufferWrite on buffer full, with writing strategy being DiscardLatest
-func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
+// TestJetStreamPartitionWrite on partition full, with writing strategy being DiscardLatest
+func TestJetStreamPartitionWriterBufferFull_DiscardLatest(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
@@ -259,7 +259,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "TestJetStreamBufferWriterBufferFull"
+	streamName := "TestJetStreamPartitionWriterBufferFull"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
@@ -279,11 +279,11 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
 	messages := testutils.BuildTestWriteMessages(int64(2), startTime)
-	// Add some data to buffer using write and verify no writes are performed when buffer is full
+	// Add some data to buffer using write and verify no writes are performed when partition is full
 	_, errs := jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
-		assert.Nil(t, errMsg) // Buffer not full, expect no error
+		assert.Nil(t, errMsg) // partition not full, expect no error
 	}
 	timeout = time.After(10 * time.Second)
 	for !jw.isFull.Load() {
@@ -298,7 +298,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
-		assert.Equal(t, errMsg, isb.NonRetryablePartitionWriteErr{Name: streamName, Message: "Buffer full!"})
+		assert.Equal(t, errMsg, isb.NonRetryablePartitionWriteErr{Name: streamName, Message: "Partition full!"})
 	}
 }
 
@@ -321,10 +321,10 @@ func TestWriteGetName(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferWriter, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	partitionReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 	assert.NoError(t, err)
 
-	bw := bufferWriter.(*jetStreamReader)
+	bw := partitionReader.(*jetStreamReader)
 	defer bw.Close()
 	assert.Equal(t, bw.GetName(), streamName)
 
@@ -349,10 +349,10 @@ func TestWriteClose(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	partitionWriter, err := NewJetStreamWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 	assert.NoError(t, err)
 
-	bw := bufferWriter.(*jetStreamWriter)
+	bw := partitionWriter.(*jetStreamWriter)
 	defer bw.Close()
 	assert.NoError(t, bw.Close())
 }

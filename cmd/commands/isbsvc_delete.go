@@ -62,7 +62,7 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
-			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets); err != nil {
+			if err = isbsClient.DeletePartitionsAndBuckets(ctx, buffers, buckets); err != nil {
 				logger.Errorw("Failed on buffers and buckets deletion.", zap.Error(err))
 				return err
 			}

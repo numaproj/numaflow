@@ -46,24 +46,24 @@ func (m *mockHttpClient) Get(url string) (*http.Response, error) {
 type mockIsbSvcClient struct {
 }
 
-func (ms *mockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer string) (*isbsvc.BufferInfo, error) {
-	return &isbsvc.BufferInfo{
-		Name:            buffer,
+func (ms *mockIsbSvcClient) GetPartitionInfo(ctx context.Context, partitionName string) (*isbsvc.PartitionInfo, error) {
+	return &isbsvc.PartitionInfo{
+		Name:            partitionName,
 		PendingCount:    10,
 		AckPendingCount: 15,
 		TotalMessages:   20,
 	}, nil
 }
 
-func (ms *mockIsbSvcClient) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...isbsvc.CreateOption) error {
+func (ms *mockIsbSvcClient) CreatePartitionsAndBuckets(ctx context.Context, partitions, buckets []string, opts ...isbsvc.CreateOption) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
+func (ms *mockIsbSvcClient) DeletePartitionsAndBuckets(ctx context.Context, partitions, buckets []string) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
+func (ms *mockIsbSvcClient) ValidatePartitionsAndBuckets(ctx context.Context, partitions, buckets []string) error {
 	return nil
 }
 
@@ -181,7 +181,7 @@ func TestGetBuffer(t *testing.T) {
 	assert.Equal(t, *resp.Buffer.BufferUsage, 0.0006666666666666666)
 }
 
-func TestListBuffers(t *testing.T) {
+func TestListPartitions(t *testing.T) {
 	pipelineName := "simple-pipeline"
 	namespace := "numaflow-system"
 	edges := []v1alpha1.Edge{

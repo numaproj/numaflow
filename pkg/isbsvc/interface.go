@@ -24,22 +24,22 @@ import (
 
 // ISBService is an interface used to do the operations on ISBSvc
 type ISBService interface {
-	CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...CreateOption) error
-	DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error
-	ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error
-	GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error)
+	CreatePartitionsAndBuckets(ctx context.Context, partitions, buckets []string, opts ...CreateOption) error
+	DeletePartitionsAndBuckets(ctx context.Context, partitions, buckets []string) error
+	ValidatePartitionsAndBuckets(ctx context.Context, partitions, buckets []string) error
+	GetPartitionInfo(ctx context.Context, partition string) (*PartitionInfo, error)
 	CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error)
 }
 
-// createOptions describes the options for creating buffers and buckets
+// createOptions describes the options for creating partitions and buckets
 type createOptions struct {
-	// config is configuration for the to be created buffers and buckets
+	// config is configuration for the to be created partitions and buckets
 	config string
 }
 
 type CreateOption func(*createOptions) error
 
-// WithConfig sets buffer and bucket config option
+// WithConfig sets partition and bucket config option
 func WithConfig(conf string) CreateOption {
 	return func(o *createOptions) error {
 		o.config = conf
@@ -47,8 +47,8 @@ func WithConfig(conf string) CreateOption {
 	}
 }
 
-// BufferInfo wraps the buffer state information
-type BufferInfo struct {
+// PartitionInfo wraps the partition state information
+type PartitionInfo struct {
 	Name            string
 	PendingCount    int64
 	AckPendingCount int64

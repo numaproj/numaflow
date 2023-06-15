@@ -42,10 +42,10 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	buffers := []string{buffer}
 	redisClient := redisclient.NewRedisClient(redisOptions)
 	isbsRedisSvc := NewISBRedisSvc(redisClient)
-	assert.NoError(t, isbsRedisSvc.CreateBuffersAndBuckets(ctx, buffers, nil))
+	assert.NoError(t, isbsRedisSvc.CreatePartitionsAndBuckets(ctx, buffers, nil))
 
 	// validate buffer
-	assert.NoError(t, isbsRedisSvc.ValidateBuffersAndBuckets(ctx, buffers, nil))
+	assert.NoError(t, isbsRedisSvc.ValidatePartitionsAndBuckets(ctx, buffers, nil))
 
 	// Verify
 	// Add some data
@@ -70,13 +70,13 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	readOffsets[0] = readMessages[0].ReadOffset.String()
 	_ = redisClient.Client.XAck(redisclient.RedisContext, stream, group, readOffsets...).Err()
 
-	// test GetBufferInfo
+	// test GetPartitionInfo
 	for _, buffer := range buffers {
-		bufferInfo, err := isbsRedisSvc.GetBufferInfo(ctx, buffer)
+		bufferInfo, err := isbsRedisSvc.GetPartitionInfo(ctx, buffer)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(9), bufferInfo.PendingCount)
 	}
 
 	// delete buffer
-	assert.NoError(t, isbsRedisSvc.DeleteBuffersAndBuckets(ctx, buffers, nil))
+	assert.NoError(t, isbsRedisSvc.DeletePartitionsAndBuckets(ctx, buffers, nil))
 }

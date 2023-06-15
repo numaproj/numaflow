@@ -79,7 +79,7 @@ func NewISBSvcCreateCommand() *cobra.Command {
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
 
-			if err = isbsClient.CreateBuffersAndBuckets(ctx, buffers, buckets, opts...); err != nil {
+			if err = isbsClient.CreatePartitionsAndBuckets(ctx, buffers, buckets, opts...); err != nil {
 				logger.Errorw("Failed to create buffers and buckets.", zap.Error(err))
 				return err
 			}

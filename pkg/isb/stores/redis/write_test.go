@@ -402,7 +402,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 		},
 	}}
 
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
@@ -446,7 +446,7 @@ func TestReadTimeout(t *testing.T) {
 		},
 	}}
 
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	stopped := f.Start()

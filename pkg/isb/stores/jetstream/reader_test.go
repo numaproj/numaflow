@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-func TestJetStreamBufferRead(t *testing.T) {
+func TestJetStreamPartitionRead(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
@@ -50,7 +50,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	js, err := conn.JetStream()
 	assert.NoError(t, err)
 
-	streamName := "testJetStreamBufferReader"
+	streamName := "testJetStreamReader"
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
@@ -61,7 +61,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
 	messages := testutils.BuildTestWriteMessages(int64(20), startTime)
-	// Verify if buffer is full.
+	// Verify if partition is full.
 	for jw.isFull.Load() {
 		select {
 		case <-ctx.Done():
@@ -81,10 +81,10 @@ func TestJetStreamBufferRead(t *testing.T) {
 		assert.NoError(t, e)
 	}
 
-	bufferReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	partitionReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 	assert.NoError(t, err)
 
-	fromStep := bufferReader.(*jetStreamReader)
+	fromStep := partitionReader.(*jetStreamReader)
 	defer fromStep.Close()
 
 	readMessages, err := fromStep.Read(ctx, 20)
@@ -149,9 +149,9 @@ func TestGetName(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	partitionReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 	assert.NoError(t, err)
-	br := bufferReader.(*jetStreamReader)
+	br := partitionReader.(*jetStreamReader)
 	assert.Equal(t, br.GetName(), streamName)
 	defer br.Close()
 
@@ -176,10 +176,10 @@ func TestClose(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	partitionReader, err := NewJetStreamReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 	assert.NoError(t, err)
 
-	br := bufferReader.(*jetStreamReader)
+	br := partitionReader.(*jetStreamReader)
 	assert.NoError(t, br.Close())
 
 }

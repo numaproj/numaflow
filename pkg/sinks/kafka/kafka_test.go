@@ -100,7 +100,7 @@ func TestWriteFailureToKafka(t *testing.T) {
 		},
 	}}
 	toSteps := map[string][]isb.PartitionWriter{vertex.Spec.Name: {toKafka}}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromPartitionMap(toSteps)
 	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, getSinkGoWhereDecider(vertex.Spec.Name), applier.Terminal, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 	toKafka.name = "Test"

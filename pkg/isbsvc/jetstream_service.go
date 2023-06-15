@@ -60,8 +60,8 @@ func WithJetStreamClient(jsClient jsclient.JetStreamClient) JSServiceOption {
 	}
 }
 
-func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...CreateOption) error {
-	if len(buffers) == 0 && len(buckets) == 0 {
+func (jss *jetStreamSvc) CreatePartitionsAndBuckets(ctx context.Context, partitions, buckets []string, opts ...CreateOption) error {
+	if len(partitions) == 0 && len(buckets) == 0 {
 		return nil
 	}
 	log := logging.FromContext(ctx)
@@ -86,12 +86,12 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
-	for _, buffer := range buffers {
-		streamName := JetStreamName(buffer)
+	for _, partition := range partitions {
+		streamName := JetStreamName(partition)
 		_, err := js.StreamInfo(streamName)
 		if err != nil {
 			if !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to query information of stream %q during buffer creating, %w", streamName, err)
+				return fmt.Errorf("failed to query information of stream %q during partition creating, %w", streamName, err)
 			}
 			if _, err := js.AddStream(&nats.StreamConfig{
 				Name:       streamName,
@@ -105,9 +105,9 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				Replicas:   v.GetInt("stream.replicas"),
 				Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period
 			}); err != nil {
-				return fmt.Errorf("failed to create stream %q and buffers, %w", streamName, err)
+				return fmt.Errorf("failed to create stream %q and partitions, %w", streamName, err)
 			}
-			log.Infow("Succeeded to create a stream and buffers", zap.String("stream", streamName), zap.Strings("buffers", []string{streamName}))
+			log.Infow("Succeeded to create a stream and partitions", zap.String("stream", streamName), zap.Strings("partitions", []string{streamName}))
 			if _, err := js.AddConsumer(streamName, &nats.ConsumerConfig{
 				Durable:       streamName,
 				DeliverPolicy: nats.DeliverAllPolicy,
@@ -129,7 +129,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 		otBucket := JetStreamOTBucket(bucket)
 		if _, err := js.KeyValue(otBucket); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otBucket, err)
+				return fmt.Errorf("failed to query information of bucket %q during partition creating, %w", otBucket, err)
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket:       otBucket,
@@ -148,7 +148,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 		procBucket := JetStreamProcessorBucket(bucket)
 		if _, err := js.KeyValue(procBucket); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procBucket, err)
+				return fmt.Errorf("failed to query information of bucket %q during partition creating, %w", procBucket, err)
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket:       procBucket,
@@ -167,8 +167,8 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	return nil
 }
 
-func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
-	if len(buffers) == 0 && len(buckets) == 0 {
+func (jss *jetStreamSvc) DeletePartitionsAndBuckets(ctx context.Context, partitions, buckets []string) error {
+	if len(partitions) == 0 && len(buckets) == 0 {
 		return nil
 	}
 	log := logging.FromContext(ctx)
@@ -181,8 +181,8 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
-	for _, buffer := range buffers {
-		streamName := JetStreamName(buffer)
+	for _, partition := range partitions {
+		streamName := JetStreamName(partition)
 		if err := js.DeleteStream(streamName); err != nil && !errors.Is(err, nats.ErrStreamNotFound) {
 			return fmt.Errorf("failed to delete stream %q, %w", streamName, err)
 		}
@@ -203,8 +203,8 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 	return nil
 }
 
-func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
-	if len(buffers) == 0 && len(buckets) == 0 {
+func (jss *jetStreamSvc) ValidatePartitionsAndBuckets(ctx context.Context, partitions, buckets []string) error {
+	if len(partitions) == 0 && len(buckets) == 0 {
 		return nil
 	}
 	nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
@@ -216,8 +216,8 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
-	for _, buffer := range buffers {
-		streamName := JetStreamName(buffer)
+	for _, partition := range partitions {
+		streamName := JetStreamName(partition)
 		if _, err := js.StreamInfo(streamName); err != nil {
 			return fmt.Errorf("failed to query information of stream %q, %w", streamName, err)
 		}
@@ -236,7 +236,7 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 	return nil
 }
 
-func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error) {
+func (jss *jetStreamSvc) GetPartitionInfo(ctx context.Context, partitionName string) (*PartitionInfo, error) {
 	var js *jsclient.JetStreamContext
 	if jss.js != nil { // Daemon server use case
 		js = jss.js
@@ -261,7 +261,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 			return nil, fmt.Errorf("failed to get a JetStream context from nats connection, %w", err)
 		}
 	}
-	streamName := JetStreamName(buffer)
+	streamName := JetStreamName(partitionName)
 	stream, err := js.StreamInfo(streamName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of stream %q", streamName)
@@ -274,13 +274,13 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	if stream.Config.Retention == nats.LimitsPolicy {
 		totalMessages = int64(consumer.NumPending) + int64(consumer.NumAckPending)
 	}
-	bufferInfo := &BufferInfo{
-		Name:            buffer,
+	partitionInfo := &PartitionInfo{
+		Name:            partitionName,
 		PendingCount:    int64(consumer.NumPending),
 		AckPendingCount: int64(consumer.NumAckPending),
 		TotalMessages:   totalMessages,
 	}
-	return bufferInfo, nil
+	return partitionInfo, nil
 }
 
 func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.Fetcher, error) {
@@ -305,8 +305,8 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 	return watermarkFetchers, nil
 }
 
-func JetStreamName(bufferName string) string {
-	return bufferName
+func JetStreamName(partitionName string) string {
+	return partitionName
 }
 
 func JetStreamOTBucket(bucketName string) string {

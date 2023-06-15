@@ -41,14 +41,14 @@ func NewISBRedisSvc(client *redisclient.RedisClient) ISBService {
 	return &isbsRedisSvc{client: client}
 }
 
-// CreateBuffers is used to create the inter-step redis buffers.
-func (r *isbsRedisSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...CreateOption) error {
-	if len(buffers) == 0 && len(buckets) == 0 {
+// CreatePartitionsAndBuckets is used to create the inter-step redis partitions.
+func (r *isbsRedisSvc) CreatePartitionsAndBuckets(ctx context.Context, partitions, buckets []string, opts ...CreateOption) error {
+	if len(partitions) == 0 && len(buckets) == 0 {
 		return nil
 	}
 	log := logging.FromContext(ctx)
 	failToCreate := false
-	for _, s := range buffers {
+	for _, s := range partitions {
 		stream := redisclient.GetRedisStreamName(s)
 		group := fmt.Sprintf("%s-group", s)
 		err := r.client.CreateStreamGroup(ctx, stream, group, redisclient.ReadFromEarliest)
@@ -69,15 +69,15 @@ func (r *isbsRedisSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buc
 	return nil
 }
 
-// DeleteBuffers is used to delete the inter-step redis buffers.
-func (r *isbsRedisSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
-	if len(buffers) == 0 && len(buckets) == 0 {
+// DeleteBuffers is used to delete the inter-step redis partitions.
+func (r *isbsRedisSvc) DeletePartitionsAndBuckets(ctx context.Context, partitions, buckets []string) error {
+	if len(partitions) == 0 && len(buckets) == 0 {
 		return nil
 	}
 	// FIXME: delete the keys created by the lua script
 	log := logging.FromContext(ctx)
 	var errList error
-	for _, s := range buffers {
+	for _, s := range partitions {
 		stream := redisclient.GetRedisStreamName(s)
 		group := fmt.Sprintf("%s-group", s)
 		if err := r.client.DeleteStreamGroup(ctx, stream, group); err != nil {
@@ -105,12 +105,12 @@ func (r *isbsRedisSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buc
 	return nil
 }
 
-// ValidateBuffers is used to validate inter-step redis buffers to see if the stream/stream group exist
-func (r *isbsRedisSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
-	if len(buffers) == 0 && len(buckets) == 0 {
+// ValidateBuffers is used to validate inter-step redis partitions to see if the stream/stream group exist
+func (r *isbsRedisSvc) ValidatePartitionsAndBuckets(ctx context.Context, partitions, buckets []string) error {
+	if len(partitions) == 0 && len(buckets) == 0 {
 		return nil
 	}
-	for _, s := range buffers {
+	for _, s := range partitions {
 		var stream = redisclient.GetRedisStreamName(s)
 		if !r.client.IsStreamExists(ctx, stream) {
 			return fmt.Errorf("s %s not existing", stream)
@@ -123,14 +123,14 @@ func (r *isbsRedisSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, b
 	return nil
 }
 
-// GetBufferInfo is used to provide buffer information like pending count, buffer length, has unprocessed data etc.
-func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error) {
-	group := fmt.Sprintf("%s-group", buffer)
-	rqw := redis2.NewPartitionWrite(ctx, redisclient.NewInClusterRedisClient(), buffer, group, 0, redisclient.WithRefreshBufferWriteInfo(false))
+// GetBufferInfo is used to provide partition information like pending count, partition length, has unprocessed data etc.
+func (r *isbsRedisSvc) GetPartitionInfo(ctx context.Context, partitionName string) (*PartitionInfo, error) {
+	group := fmt.Sprintf("%s-group", partitionName)
+	rqw := redis2.NewPartitionWrite(ctx, redisclient.NewInClusterRedisClient(), partitionName, group, 0, redisclient.WithRefreshBufferWriteInfo(false))
 	var bufferWrite = rqw.(*redis2.RedisWriter)
 
-	bufferInfo := &BufferInfo{
-		Name:            buffer,
+	bufferInfo := &PartitionInfo{
+		Name:            partitionName,
 		PendingCount:    bufferWrite.GetPendingCount(),
 		AckPendingCount: 0,                             // TODO: this should not be 0
 		TotalMessages:   bufferWrite.GetPendingCount(), // TODO: what should this be?

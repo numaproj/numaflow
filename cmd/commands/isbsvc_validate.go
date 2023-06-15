@@ -66,7 +66,7 @@ func NewISBSvcValidateCommand() *cobra.Command {
 				return fmt.Errorf("unsupported isb service type")
 			}
 			_ = wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func() (bool, error) {
-				if err = isbsClient.ValidateBuffersAndBuckets(ctx, buffers, buckets); err != nil {
+				if err = isbsClient.ValidatePartitionsAndBuckets(ctx, buffers, buckets); err != nil {
 					logger.Infow("Buffers and buckets might have not been created yet, will retry if the limit is not reached", zap.Error(err))
 					return false, nil
 				}

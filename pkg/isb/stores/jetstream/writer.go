@@ -45,7 +45,7 @@ type jetStreamWriter struct {
 	log          *zap.SugaredLogger
 }
 
-// NewJetStreamWriter is used to provide a new instance of JetStreamBufferWriter
+// NewJetStreamWriter is used to provide a new instance of JetStreamWriter
 func NewJetStreamWriter(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, partitionIdx int32, opts ...WriteOption) (isb.PartitionWriter, error) {
 	o := defaultWriteOptions()
 	for _, opt := range opts {
@@ -169,15 +169,15 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 		// when buffer is full, we need to decide whether to discard the message or not.
 		switch jw.opts.partitionFullWritingStrategy {
 		case v1alpha1.DiscardLatest:
-			// user explicitly wants to discard the message when buffer if full.
+			// user explicitly wants to discard the message when partition if full.
 			// return no retryable error as a callback to let caller know that the message is discarded.
 			for i := 0; i < len(errs); i++ {
-				errs[i] = isb.NonRetryablePartitionWriteErr{Name: jw.name, Message: "Buffer full!"}
+				errs[i] = isb.NonRetryablePartitionWriteErr{Name: jw.name, Message: "Partition full!"}
 			}
 		default:
 			// Default behavior is to return a PartitionWriteErr.
 			for i := 0; i < len(errs); i++ {
-				errs[i] = isb.PartitionWriteErr{Name: jw.name, Full: true, Message: "Buffer full!"}
+				errs[i] = isb.PartitionWriteErr{Name: jw.name, Full: true, Message: "Partition full!"}
 			}
 		}
 		isbWriteErrors.With(labels).Inc()

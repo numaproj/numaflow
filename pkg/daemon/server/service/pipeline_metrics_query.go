@@ -92,7 +92,7 @@ func (ps *pipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.Li
 
 	buffers := []*daemon.BufferInfo{}
 	for _, buffer := range ps.pipeline.GetAllPartitions() {
-		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, buffer)
+		bufferInfo, err := ps.isbSvcClient.GetPartitionInfo(ctx, buffer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
 		}
@@ -125,7 +125,7 @@ func (ps *pipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.Li
 
 // GetBuffer is used to obtain one buffer information of a pipeline
 func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
-	bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, *req.Buffer)
+	bufferInfo, err := ps.isbSvcClient.GetPartitionInfo(ctx, *req.Buffer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of buffer %q:%v", *req.Buffer, err)
 	}
