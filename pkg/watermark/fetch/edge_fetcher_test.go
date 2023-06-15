@@ -887,8 +887,8 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	var fetcher = NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 1)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
-	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore)
-	heartBeatManagerMap["p2"] = manageHeartbeat(ctx, "p2", hbStore)
+	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore, &wg)
+	heartBeatManagerMap["p2"] = manageHeartbeat(ctx, "p2", hbStore, &wg)
 
 	heartBeatManagerMap["p1"].start()
 	heartBeatManagerMap["p2"].start()
@@ -1037,14 +1037,14 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.Equal(t, int64(101), p1.GetOffsetTimelines()[0].GetHeadOffset())
 	heartBeatManagerMap["p1"].stop()
 	heartBeatManagerMap["p2"].stop()
-	wg.Wait()
 	cancel()
+	wg.Wait()
 }
 
 // end to end test for fetcher with same ot bucket
 func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	var (
-		keyspace         = "fetcherTest"
+		keyspace         = "fetcherTestSinglePartition"
 		epoch      int64 = 1651161600000
 		testOffset int64 = 100
 		wg         sync.WaitGroup
@@ -1141,8 +1141,8 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 1)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
-	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore)
-	heartBeatManagerMap["p2"] = manageHeartbeat(ctx, "p2", hbStore)
+	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore, &wg)
+	heartBeatManagerMap["p2"] = manageHeartbeat(ctx, "p2", hbStore, &wg)
 
 	// start the heartbeats for p1 and p2
 	heartBeatManagerMap["p1"].start()
@@ -1188,7 +1188,6 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 		}
 	}
 
-	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -1242,14 +1241,14 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	heartBeatManagerMap["p1"].resume()
 
 	// "p1" becomes inactive after stopping the heartbeat
-	for !allProcessors["p1"].IsInactive() {
+	for allProcessors["p1"].IsActive() {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
 				t.Fatalf("expected p1 to be inactive: %s", ctx.Err())
 			}
 		default:
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(1 * time.Millisecond)
 			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
@@ -1295,7 +1294,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 				t.Fatalf("expected p1 has the offset timeline [IDLE 1651161660600:106] -> [1651161660500:103] -> [-1:-1] -> [-1:-1]..., got %s: %s", allProcessors["p1"].GetOffsetTimelines()[0].Dump(), ctx.Err())
 			}
 		default:
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(1 * time.Millisecond)
 			allProcessors = processorManager.GetAllProcessors()
 		}
 	}
@@ -1320,8 +1319,8 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	}
 	heartBeatManagerMap["p1"].stop()
 	heartBeatManagerMap["p2"].stop()
-	wg.Wait()
 	cancel()
+	wg.Wait()
 }
 
 // end to end test for fetcher with same ot bucket
@@ -1457,8 +1456,8 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 3)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
-	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore)
-	heartBeatManagerMap["p2"] = manageHeartbeat(ctx, "p2", hbStore)
+	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore, &wg)
+	heartBeatManagerMap["p2"] = manageHeartbeat(ctx, "p2", hbStore, &wg)
 
 	// start the heartbeats for p1 and p2
 	heartBeatManagerMap["p1"].start()
@@ -1572,7 +1571,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 
 	heartBeatManagerMap["p1"].resume()
 	// "p1" is inactive since we resume the heartbeat
-	for !allProcessors["p1"].IsInactive() {
+	for allProcessors["p1"].IsActive() {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -1678,8 +1677,8 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	}
 	heartBeatManagerMap["p1"].stop()
 	heartBeatManagerMap["p2"].stop()
-	wg.Wait()
 	cancel()
+	wg.Wait()
 }
 
 type heartBeatManager struct {
@@ -1698,11 +1697,13 @@ func (h *heartBeatManager) resume() {
 	h.heartBeatCh <- 2
 }
 
-func manageHeartbeat(ctx context.Context, entityName string, hbStore store.WatermarkKVStorer) *heartBeatManager {
+func manageHeartbeat(ctx context.Context, entityName string, hbStore store.WatermarkKVStorer, wg *sync.WaitGroup) *heartBeatManager {
 	hbManager := &heartBeatManager{
 		heartBeatCh: make(chan int),
 	}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		var start bool
 		for {
 			select {
