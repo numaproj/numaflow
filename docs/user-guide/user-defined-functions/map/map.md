@@ -47,6 +47,30 @@ spec:
           image: my-python-udf-example:latest
 ```
 
+### Streaming Mode
+In cases the map function generates more than one outputs (e.g. flat map), the UDF can be
+configured to run in a streaming mode instead of batching which is the default mode.
+In streaming mode, the messages will be pushed to the downstream vertices once generated
+instead of in a batch at the end. The streaming mode can be enabled by setting the annotation
+`numaflow.numaproj.io/map-stream` to `true` in the vertex spec.
+
+Note that to maintain data orderliness, we restrict the read batch size to be `1`.
+
+```yaml
+...
+    - name:  my-vertex
+      metadata:
+        annotations:
+          numaflow.numaproj.io/map-stream: "true"
+```
+
+Check the links below to see the UDF examples in streaming mode for different languages.
+
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/function/flatmap_stream)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/flatmap_stream)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/map/flatmapstream)
+
+
 ### Available Environment Variables
 
 Some environment variables are available in the user defined function Pods, they might be useful in you own UDF implementation.
