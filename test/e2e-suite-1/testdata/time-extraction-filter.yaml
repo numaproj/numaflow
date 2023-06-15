@@ -14,6 +14,7 @@ spec:
               filterExpr: int(json(payload).id) < 100
               eventTimeExpr: json(payload).time
     - name: out
+      partitions: 2
       scale:
         min: 1
       sink:

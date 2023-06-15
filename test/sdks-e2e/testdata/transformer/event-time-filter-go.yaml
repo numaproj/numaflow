@@ -12,6 +12,7 @@ spec:
             # Filter messages based on event time, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/event_time_filter
             image: quay.io/numaio/numaflow-go/mapt-event-time-filter:latest
     - name: sink-within-2022
+      partitions: 2
       scale:
         min: 1
       sink:

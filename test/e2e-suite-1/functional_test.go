@@ -333,7 +333,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	}()
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), 5, len(buffers))
+	assert.Equal(s.T(), 8, len(buffers))
 	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "cat1", 0))
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), pipelineName, *bufferInfo.Pipeline)

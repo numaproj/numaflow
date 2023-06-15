@@ -8,6 +8,7 @@ spec:
       source:
         http: {}
     - name: go-split
+      partitions: 3
       metadata:
         annotations:
           numaflow.numaproj.io/map-stream: "true"
@@ -36,6 +37,7 @@ spec:
             # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/log
             image: quay.io/numaio/numaflow-go/sink-log:latest
     - name: python-split
+      partitions: 3
       metadata:
         annotations:
           numaflow.numaproj.io/map-stream: "true"
@@ -62,6 +64,7 @@ spec:
             # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
             image: quay.io/numaio/numaflow-python/sink-log:latest
     - name: java-split
+      partitions: 3
       metadata:
         annotations:
           numaflow.numaproj.io/map-stream: "true"
