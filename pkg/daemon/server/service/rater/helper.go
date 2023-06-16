@@ -27,7 +27,7 @@ const IndexNotFound = -1
 // UpdateCount updates the count of processed messages for a pod at a given time
 func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podName string, count float64) {
 	items := q.Items()
-	n := q.Length()
+
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
@@ -35,18 +35,21 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 			return
 		}
 	}
+
 	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
 	tc := NewTimestampedCounts(time)
 	tc.Update(podName, count)
 
 	// close the window for the most recent timestamped count
-	if n == 1 {
-		mostRecentWindow := items[n-1]
-		mostRecentWindow.CloseWindow(nil)
-	} else if n > 1 {
-		mostRecentWindow := items[n-1]
-		secondMostRecentWindow := items[n-2]
-		mostRecentWindow.CloseWindow(secondMostRecentWindow)
+	switch n := q.Length(); n {
+	case 0:
+	// if the queue is empty, we just append the new timestamped count
+	case 1:
+		// if the queue has only one element, we close the window for this element
+		items[0].CloseWindow(nil)
+	default:
+		// if the queue has more than one element, we close the window for the most recent element
+		items[n-1].CloseWindow(items[n-2])
 	}
 	q.Append(tc)
 }

@@ -91,28 +91,29 @@ func (tc *TimestampedCounts) IsWindowClosed() bool {
 
 // CloseWindow closes the window and calculates the delta by comparing the current pod counts with the previous window
 func (tc *TimestampedCounts) CloseWindow(prev *TimestampedCounts) {
-	currPodCounts := tc.Snapshot()
-	delta := 0.0
+	// prepare pod counts for both current and previous window for delta calculation
+	var prevPodCounts map[string]float64
 	if prev == nil {
-		for _, v := range currPodCounts {
-			delta += v
-		}
+		prevPodCounts = make(map[string]float64)
 	} else {
-		prevPodCounts := prev.Snapshot()
-		for k, currCount := range currPodCounts {
-			prevCount, ok := prevPodCounts[k]
-			if !ok {
-				prevCount = 0
-			}
-			if currCount < prevCount {
-				// this can happen when a pod is restarted during the window
-				// we count the new count as the delta
-				delta += currCount
-			} else {
-				delta += currCount - prevCount
-			}
+		prevPodCounts = prev.Snapshot()
+	}
+	currPodCounts := tc.Snapshot()
+
+	// calculate the delta by comparing the current pod counts with the previous window
+	delta := 0.0
+	for key, currCount := range currPodCounts {
+		prevCount := prevPodCounts[key] // if key doesn't exist in prevPodCounts, prevCount is 0
+		if currCount < prevCount {
+			// this can happen when a pod is restarted during the window
+			// we count the new count as the delta
+			delta += currCount
+		} else {
+			delta += currCount - prevCount
 		}
 	}
+
+	// finalize the window by setting isWindowClosed to true and delta to the calculated value
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	tc.isWindowClosed = true
