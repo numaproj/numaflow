@@ -75,7 +75,7 @@ func (t *testForwardFetcher) GetWatermark(offset isb.Offset, partition int32) wm
 	return wmb.Watermark(testSourceWatermark)
 }
 
-func (t *testForwardFetcher) GetHeadWatermark() wmb.Watermark {
+func (t *testForwardFetcher) GetHeadWatermark(int32) wmb.Watermark {
 	// won't be used
 	return wmb.Watermark{}
 }
@@ -697,7 +697,7 @@ func (t *testWMBFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Wa
 	return wmb.Watermark(testWMBWatermark)
 }
 
-func (t *testWMBFetcher) GetHeadWatermark() wmb.Watermark {
+func (t *testWMBFetcher) GetHeadWatermark(int32) wmb.Watermark {
 	// won't be used
 	return wmb.Watermark{}
 }

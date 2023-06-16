@@ -78,17 +78,16 @@ func (e *sourceFetcher) GetWatermark(offset isb.Offset, fromPartitionIdx int32) 
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetHeadWatermark returns the latest watermark of all the processors.
-func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
+// GetHeadWatermark returns the latest watermark of all the processors for the given partition.
+func (e *sourceFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var epoch int64 = math.MinInt64
 	for _, p := range e.processorManager.GetAllProcessors() {
 		if !p.IsActive() {
 			continue
 		}
-		for _, timeline := range p.GetOffsetTimelines() {
-			if timeline.GetHeadWatermark() > epoch {
-				epoch = timeline.GetHeadWatermark()
-			}
+		tl := p.GetOffsetTimelines()[fromPartitionIdx]
+		if tl.GetHeadWatermark() > epoch {
+			epoch = tl.GetHeadWatermark()
 		}
 	}
 	if epoch == math.MinInt64 {

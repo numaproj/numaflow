@@ -99,7 +99,7 @@ func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset, partition int32)
 	return e.watermarks[offset.String()]
 }
 
-func (e *EventTypeWMProgressor) GetHeadWatermark() wmb.Watermark {
+func (e *EventTypeWMProgressor) GetHeadWatermark(int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 

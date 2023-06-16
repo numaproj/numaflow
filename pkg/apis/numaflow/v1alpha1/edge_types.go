@@ -140,6 +140,10 @@ func (e Edge) BufferFullWritingStrategy() BufferFullWritingStrategy {
 	}
 }
 
+func (e Edge) GetEdgeName() string {
+	return fmt.Sprintf("%s-%s", e.From, e.To)
+}
+
 type BufferFullWritingStrategy string
 
 const (

@@ -128,13 +128,14 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int3
 	return wmb.Watermark(time.UnixMilli(minEpoch))
 }
 
-// GetHeadWatermark returns the latest watermark among all processors. This can be used in showing the watermark
+// GetHeadWatermark returns the latest watermark among all processors for the given partition.
+// This can be used in showing the watermark
 // progression for a vertex when not consuming the messages directly (eg. UX, tests)
 // NOTE
 //   - We don't use this function in the regular pods in the vertex.
 //   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
 //     Meaning, in the UX (daemon service) we never delete any processor.
-func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
+func (e *edgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var debugString strings.Builder
 	var headWatermark int64 = math.MaxInt64
 	var allProcessors = e.processorManager.GetAllProcessors()
@@ -143,18 +144,13 @@ func (e *edgeFetcher) GetHeadWatermark() wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		headWMB := wmb.WMB{Offset: -1}
-		for _, tl := range p.GetOffsetTimelines() {
-			if tl.GetHeadOffset() > headWMB.Offset {
-				headWMB = tl.GetHeadWMB()
-			}
-		}
-		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, headWMB.Offset, headWMB.Watermark, headWMB.Idle)
-		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, headWMB.Offset, headWMB.Watermark, headWMB.Idle))
-		if headWMB.Offset != -1 {
+		var w = p.GetOffsetTimelines()[fromPartitionIdx].GetHeadWMB()
+		e.log.Debugf("Processor: %v (headOffset:%d) (headWatermark:%d) (headIdle:%t)", p, w.Offset, w.Watermark, w.Idle)
+		debugString.WriteString(fmt.Sprintf("[Processor:%v] (headOffset:%d) (headWatermark:%d) (headIdle:%t) \n", p, w.Offset, w.Watermark, w.Idle))
+		if w.Offset != -1 {
 			// find the smallest watermark
-			if headWMB.Watermark < headWatermark {
-				headWatermark = headWMB.Watermark
+			if w.Watermark < headWatermark {
+				headWatermark = w.Watermark
 			}
 		}
 	}
