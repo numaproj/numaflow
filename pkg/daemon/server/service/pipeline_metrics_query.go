@@ -174,7 +174,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	vertexLevelRates := ps.rater.GetRates(req.GetVertex())
 
 	metricsCount := 1
-	// currently metrics is an aggregation per vertex, so same across each pod for non-reduce vertex
+	// TODO(multi-partition): currently metrics is an aggregation per vertex, so same across each pod for non-reduce vertex
 	// once multi-partition metrics are in - need to modify to per partition for every vertex
 	if abstractVertex.IsReduceUDF() {
 		metricsCount = abstractVertex.GetPartitionCount()
