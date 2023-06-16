@@ -60,7 +60,7 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		watermarkArr := make([]*daemon.EdgeWatermark, len(ps.watermarkFetchers))
 		i := 0
 		for k := range ps.watermarkFetchers {
-			edgeName := k.From + "-" + k.To
+			edgeName := k.GetEdgeName()
 			watermarks := make([]int64, len(ps.watermarkFetchers[k]))
 			for idx := range watermarks {
 				watermarks[idx] = timeZero
@@ -94,7 +94,7 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 			}
 		}
 
-		edgeName := k.From + "-" + k.To
+		edgeName := k.GetEdgeName()
 		watermarkArr[i] = &daemon.EdgeWatermark{
 			Pipeline:           &ps.pipeline.Name,
 			Edge:               &edgeName,
