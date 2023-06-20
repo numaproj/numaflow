@@ -39,8 +39,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-// edgeFetcher is a fetcher between two vertices.
-type edgeFetcher struct {
+// EdgeFetcher is a fetcher between two vertices.
+type EdgeFetcher struct {
 	ctx              context.Context
 	bucketName       string
 	storeWatcher     store.WatermarkStoreWatcher
@@ -61,7 +61,7 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 		lastProcessedWm = append(lastProcessedWm, -1)
 	}
 
-	return &edgeFetcher{
+	return &EdgeFetcher{
 		ctx:              ctx,
 		bucketName:       bucketName,
 		storeWatcher:     storeWatcher,
@@ -75,7 +75,7 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 // We calculate the watermark for the given offset and partition, update the lastProcessedWatermark of the given partition to the watermark we just calculate.
 // Then, we compare the lastProcessedWatermark from all partitions and return the minimum as the edge watermark.
 // deletes the processor if it's not active.
-func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+func (e *EdgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("Unable to get offset from isb.Offset.Sequence()", zap.Error(err))
@@ -135,7 +135,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int3
 //   - We don't use this function in the regular pods in the vertex.
 //   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
 //     Meaning, in the UX (daemon service) we never delete any processor.
-func (e *edgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
+func (e *EdgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var debugString strings.Builder
 	var headWatermark int64 = math.MaxInt64
 	var allProcessors = e.processorManager.GetAllProcessors()
@@ -165,7 +165,7 @@ func (e *edgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 // GetHeadWMB returns the latest idle WMB with the smallest watermark among all processors from all partitions for the given partition.
 // We first calculate the watermark for the given partition and update the lastProcessedWatermark of the given partition using this watermark.
 // Then, we compare this watermark with all the lastProcessedWatermark of other partitions and return the idle watermark as the edge watermark only if it's the minimum among all of the lastProcessedWatermark.
-func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
+func (e *EdgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 	var debugString strings.Builder
 
 	var headWMB = wmb.WMB{
@@ -214,7 +214,7 @@ func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 }
 
 // Close function closes the watchers.
-func (e *edgeFetcher) Close() error {
+func (e *EdgeFetcher) Close() error {
 	e.log.Infof("Closing edge watermark fetcher")
 	if e.storeWatcher != nil {
 		e.storeWatcher.HeartbeatWatcher().Close()
@@ -224,7 +224,7 @@ func (e *edgeFetcher) Close() error {
 }
 
 // getMinFromLastProcessed returns the smallest watermark among all the last processed watermarks.
-func (e *edgeFetcher) getMinFromLastProcessed(watermark int64) int64 {
+func (e *EdgeFetcher) getMinFromLastProcessed(watermark int64) int64 {
 	minWm := watermark
 	for _, wm := range e.lastProcessedWm {
 		if minWm > wm {
