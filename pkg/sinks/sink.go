@@ -106,18 +106,17 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
-	}
-
-	// Readiness check
-	if err := sinkHandler.WaitUntilReady(ctx); err != nil {
-		return fmt.Errorf("failed on UDSink readiness check, %w", err)
-	}
-	defer func() {
-		err = sinkHandler.CloseConn(ctx)
-		if err != nil {
-			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+		// Readiness check
+		if err := sinkHandler.WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on UDSink readiness check, %w", err)
 		}
-	}()
+		defer func() {
+			err = sinkHandler.CloseConn(ctx)
+			if err != nil {
+				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+			}
+		}()
+	}
 
 	var finalWg sync.WaitGroup
 	for index := range u.VertexInstance.Vertex.OwnedBuffers() {
