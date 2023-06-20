@@ -58,7 +58,7 @@ func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher
 
 // GetWatermark returns the lowest of the latest Watermark of all the processors,
 // it ignores the input Offset.
-func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
+func (e *sourceFetcher) GetWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	var epoch int64 = math.MaxInt64
 	var debugString strings.Builder
 
@@ -67,37 +67,38 @@ func (e *sourceFetcher) GetWatermark(_ isb.Offset) wmb.Watermark {
 		if !p.IsActive() {
 			continue
 		}
-		if p.GetOffsetTimeline().GetHeadWatermark() < epoch {
-			epoch = p.GetOffsetTimeline().GetHeadWatermark()
+		if p.GetOffsetTimelines()[fromPartitionIdx].GetHeadWatermark() < epoch {
+			epoch = p.GetOffsetTimelines()[fromPartitionIdx].GetHeadWatermark()
 		}
 	}
 	if epoch == math.MaxInt64 {
-		epoch = -1
+		epoch = wmb.InitialWatermark.UnixMilli()
 	}
 	e.log.Debugf("%s get watermark for offset : %+v", debugString.String(), epoch)
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetHeadWatermark returns the latest watermark of all the processors.
-func (e *sourceFetcher) GetHeadWatermark() wmb.Watermark {
+// GetHeadWatermark returns the latest watermark of all the processors for the given partition.
+func (e *sourceFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var epoch int64 = math.MinInt64
 	for _, p := range e.processorManager.GetAllProcessors() {
 		if !p.IsActive() {
 			continue
 		}
-		if p.GetOffsetTimeline().GetHeadWatermark() > epoch {
-			epoch = p.GetOffsetTimeline().GetHeadWatermark()
+		tl := p.GetOffsetTimelines()[fromPartitionIdx]
+		if tl.GetHeadWatermark() > epoch {
+			epoch = tl.GetHeadWatermark()
 		}
 	}
 	if epoch == math.MinInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
-		return wmb.Watermark(time.UnixMilli(-1))
+		return wmb.InitialWatermark
 	}
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
 // GetHeadWMB returns the latest idle WMB among all processors
-func (e *sourceFetcher) GetHeadWMB() wmb.WMB {
+func (e *sourceFetcher) GetHeadWMB(int32) wmb.WMB {
 	// TODO: what would this be...
 	return wmb.WMB{}
 }

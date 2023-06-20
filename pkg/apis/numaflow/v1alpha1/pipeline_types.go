@@ -28,7 +28,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
 )
 
 // +kubebuilder:validation:Enum="";Running;Succeeded;Failed;Pausing;Paused;Deleting
@@ -88,19 +87,6 @@ func (p Pipeline) ListAllEdges() []Edge {
 	edges := []Edge{}
 	for _, e := range p.Spec.Edges {
 		edgeCopy := e.DeepCopy()
-		toVertex := p.GetVertex(e.To)
-		if toVertex == nil {
-			continue
-		}
-		if toVertex.UDF == nil || toVertex.UDF.GroupBy == nil {
-			// Clean up parallelism if downstream vertex is not a reduce UDF.
-			// This has been validated by the controller, harmless to do it here.
-			edgeCopy.DeprecatedParallelism = nil
-		} else if edgeCopy.DeprecatedParallelism == nil || *edgeCopy.DeprecatedParallelism < 1 || !toVertex.UDF.GroupBy.Keyed {
-			// Set parallelism = 1 if it's not set, or it's a non-keyed reduce.
-			// Already validated by the controller to make sure parallelism is not > 1 if it's not keyed, harmless to check it again.
-			edgeCopy.DeprecatedParallelism = pointer.Int32(1)
-		}
 		edges = append(edges, *edgeCopy)
 	}
 	return edges
@@ -114,7 +100,7 @@ func (p Pipeline) NumOfPartitions(vertex string) int {
 	}
 	partitions := 1
 	if v.Partitions != nil {
-		partitions = v.GetPartitions()
+		partitions = v.GetPartitionCount()
 	}
 	// TODO: remove this after we deprecate edge.parallelism.
 	if v.IsReduceUDF() {

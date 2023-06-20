@@ -28,35 +28,35 @@ var writeMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_writer",
 	Name:      "write_total",
 	Help:      "Total number of Messages Written",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "buffer"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // writeBytesCount is to indicate the number of bytes written
 var writeBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_writer",
 	Name:      "write_bytes_total",
 	Help:      "Total number of bytes written",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "buffer"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // writeMessagesError is used to indicate the number of errors messages written
 var writeMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_writer",
 	Name:      "write_error_total",
 	Help:      "Total number of Write Errors",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "buffer"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // dropMessagesCount is used to indicate the number of messages dropped
 var dropMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_writer",
 	Name:      "drop_total",
 	Help:      "Total number of Messages Dropped",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "buffer"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // dropBytesCount is used to indicate the number of bytes dropped
 var dropBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_writer",
 	Name:      "drop_bytes_total",
 	Help:      "Total number of Bytes Dropped",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, "buffer"})
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // platformError is used to indicate the number of Internal/Platform errors
 var platformError = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -73,7 +73,7 @@ var reduceProcessTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   prometheus.ExponentialBucketsRange(1, 1200000, 5),
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
 
-// reduceForwardTime is used to indicate the time it took to forward the result
+// reduceForwardTime is used to indicate the time it took to forward the writeMessages
 var reduceForwardTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "reduce_pnf",
 	Name:      "forward_time",

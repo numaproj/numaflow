@@ -54,32 +54,32 @@ type CombinedEdge struct {
 	FromVertexType VertexType `json:"fromVertexType" protobuf:"bytes,2,opt,name=fromVertexType"`
 	// The number of partitions of the from vertex, if not provided, the default value is set to "1".
 	// +optional
-	FromVertexPartitions *int32 `json:"fromVertexPartitions,omitempty" protobuf:"bytes,3,opt,name=fromVertexPartitions"`
+	FromVertexPartitionCount *int32 `json:"fromVertexPartitionCount,omitempty" protobuf:"bytes,3,opt,name=fromVertexPartitionCount"`
 	// +optional
 	FromVertexLimits *VertexLimits `json:"fromVertexLimits,omitempty" protobuf:"bytes,4,opt,name=fromVertexLimits"`
 	// To vertex type.
 	ToVertexType VertexType `json:"toVertexType" protobuf:"bytes,5,opt,name=toVertexType"`
 	// The number of partitions of the to vertex, if not provided, the default value is set to "1".
 	// +optional
-	ToVertexPartitions *int32 `json:"toVertexPartitions,omitempty" protobuf:"bytes,6,opt,name=toVertexPartitions"`
+	ToVertexPartitionCount *int32 `json:"toVertexPartitionCount,omitempty" protobuf:"bytes,6,opt,name=toVertexPartitionCount"`
 	// +optional
 	ToVertexLimits *VertexLimits `json:"toVertexLimits,omitempty" protobuf:"bytes,7,opt,name=toVertexLimits"`
 }
 
 func (ce CombinedEdge) GetFromVertexPartitions() int {
-	if ce.FromVertexPartitions == nil || *ce.FromVertexPartitions < 1 {
+	if ce.FromVertexPartitionCount == nil || *ce.FromVertexPartitionCount < 1 {
 		return 1
 	}
-	return int(*ce.FromVertexPartitions)
+	return int(*ce.FromVertexPartitionCount)
 }
 
-func (ce CombinedEdge) GetToVertexPartitions() int {
+func (ce CombinedEdge) GetToVertexPartitionCount() int {
 	// The controller is responsible for setting the right value of the toPartitions.
 	// For example, a non-keyed reduce vertex having partitions > 1 should have toPartitions = 1.
-	if ce.ToVertexPartitions == nil || *ce.ToVertexPartitions < 1 {
+	if ce.ToVertexPartitionCount == nil || *ce.ToVertexPartitionCount < 1 {
 		return 1
 	}
-	return int(*ce.ToVertexPartitions)
+	return int(*ce.ToVertexPartitionCount)
 }
 
 type ForwardConditions struct {
@@ -138,6 +138,10 @@ func (e Edge) BufferFullWritingStrategy() BufferFullWritingStrategy {
 	default:
 		return RetryUntilSuccess
 	}
+}
+
+func (e Edge) GetEdgeName() string {
+	return fmt.Sprintf("%s-%s", e.From, e.To)
 }
 
 type BufferFullWritingStrategy string

@@ -21,9 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
-	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -39,8 +41,8 @@ import (
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WhereTo(_ []string, _ []string) ([]string, error) {
-	return []string{dfv1.MessageTagDrop}, nil
+func (f myForwardTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{}, nil
 }
 
 func (f myForwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -68,12 +70,13 @@ func TestOrderedProcessing(t *testing.T) {
 		}
 		return messages, nil
 	})
-	to1 := simplebuffer.NewInMemoryBuffer("to1", 100)
-	toSteps := map[string]isb.BufferWriter{
-		"to1": to1,
+	to1 := simplebuffer.NewInMemoryBuffer("to1", 100, 0)
+	toSteps := map[string][]isb.BufferWriter{
+		"to1": {to1},
 	}
+
 	idleManager := wmb.NewIdleManager(len(toSteps))
-	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string]isb.BufferWriter))
+	_, pw := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.BufferWriter))
 
 	ctx := context.Background()
 

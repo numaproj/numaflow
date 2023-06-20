@@ -529,34 +529,24 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 }
 
 func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
-	plLimits := pl.GetPipelineLimits()
 	result := []dfv1.CombinedEdge{}
 	for _, e := range edges {
-		if e.DeprecatedLimits == nil {
-			e.DeprecatedLimits = &dfv1.DeprecatedEdgeLimits{}
-		}
-		if e.DeprecatedLimits.BufferMaxLength == nil {
-			e.DeprecatedLimits.BufferMaxLength = plLimits.BufferMaxLength
-		}
-		if e.DeprecatedLimits.BufferUsageLimit == nil {
-			e.DeprecatedLimits.BufferUsageLimit = plLimits.BufferUsageLimit
-		}
 		vFrom := pl.GetVertex(e.From)
 		vTo := pl.GetVertex(e.To)
 		fromVertexLimits := mergeLimits(pl.GetPipelineLimits(), vFrom.Limits)
 		toVertexLimits := mergeLimits(pl.GetPipelineLimits(), vTo.Limits)
 		combinedEdge := dfv1.CombinedEdge{
-			Edge:                 e,
-			FromVertexType:       vFrom.GetVertexType(),
-			FromVertexPartitions: pointer.Int32(int32(vFrom.GetPartitions())),
-			FromVertexLimits:     &fromVertexLimits,
-			ToVertexLimits:       &toVertexLimits,
-			ToVertexType:         vTo.GetVertexType(),
-			ToVertexPartitions:   pointer.Int32(int32(vTo.GetPartitions())),
+			Edge:                     e,
+			FromVertexType:           vFrom.GetVertexType(),
+			FromVertexPartitionCount: pointer.Int32(int32(vFrom.GetPartitionCount())),
+			FromVertexLimits:         &fromVertexLimits,
+			ToVertexLimits:           &toVertexLimits,
+			ToVertexType:             vTo.GetVertexType(),
+			ToVertexPartitionCount:   pointer.Int32(int32(vTo.GetPartitionCount())),
 		}
 		// TODO: remove this after parallelism is removed
 		if vTo.IsReduceUDF() && vTo.UDF.GroupBy.Keyed && e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 0 {
-			combinedEdge.ToVertexPartitions = e.DeprecatedParallelism
+			combinedEdge.ToVertexPartitionCount = e.DeprecatedParallelism
 		}
 		// end of TODO
 		result = append(result, combinedEdge)

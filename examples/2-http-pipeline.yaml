@@ -12,11 +12,11 @@ spec:
           service: true
           # Optional bearer token auth
           # xxx examples should be self-contained and runnable by the user
-#         auth:
-#           # A secret selector pointing to the secret contains token
-#           token:
-#             name: my-secret
-#             key: my-key
+    #         auth:
+    #           # A secret selector pointing to the secret contains token
+    #           token:
+    #             name: my-secret
+    #             key: my-key
     - name: cat
       udf:
         builtin:

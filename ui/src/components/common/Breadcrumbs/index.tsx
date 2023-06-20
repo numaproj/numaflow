@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { useLocation, Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import MUIBreadcrumbs from "@mui/material/Breadcrumbs";
 import Typography from "@mui/material/Typography";
 
@@ -22,6 +22,8 @@ export function Breadcrumbs() {
       );
     }
     const pathParts = pathname.split("/");
+    // safety check for trailing slash
+    if (pathname.charAt(pathname.length - 1) === "/") pathParts.pop();
     switch (pathParts.length) {
       case 5: // pipeline view
         return [

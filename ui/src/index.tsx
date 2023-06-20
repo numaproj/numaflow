@@ -21,7 +21,6 @@ const theme = createTheme({
       main: "#0077C5",
     },
   },
-
 });
 
 root.render(

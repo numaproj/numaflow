@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { EdgeInfo } from "../models/pipeline";
+import { BufferInfo } from "../models/pipeline";
 import { useFetch } from "./fetch";
 
-export const useEdgesInfoFetch = (
+export const useBuffersInfoFetch = (
   namespaceId: string | undefined,
   pipelineId: string | undefined,
   requestKey: string
 ) => {
-  const [edgesInfo, setEdgesInfo] = useState<EdgeInfo[]>([]);
+  const [buffersInfo, setBuffersInfo] = useState<BufferInfo[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   const {
@@ -15,7 +15,7 @@ export const useEdgesInfoFetch = (
     loading: fetchLoading,
     error,
   } = useFetch(
-    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/edges?refreshKey=${requestKey}`
+    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/buffers?refreshKey=${requestKey}`
   );
 
   useEffect(() => {
@@ -28,11 +28,11 @@ export const useEdgesInfoFetch = (
       return;
     }
     if (data) {
-      setEdgesInfo(data);
+      setBuffersInfo(data);
       setLoading(false);
       return;
     }
   }, [data, fetchLoading]);
 
-  return { edgesInfo, error, loading };
+  return { buffersInfo, error, loading };
 };

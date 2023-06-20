@@ -47,18 +47,18 @@ import (
 // processAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
 type processAndForward struct {
-	vertexName       string
-	pipelineName     string
-	vertexReplica    int32
-	PartitionID      partition.ID
-	UDF              applier.ReduceApplier
-	result           []*isb.WriteMessage
-	pbqReader        pbq.Reader
-	log              *zap.SugaredLogger
-	toBuffers        map[string]isb.BufferWriter
-	whereToDecider   forward.ToWhichStepDecider
-	publishWatermark map[string]publish.Publisher
-	idleManager      *wmb.IdleManager
+	vertexName     string
+	pipelineName   string
+	vertexReplica  int32
+	PartitionID    partition.ID
+	UDF            applier.ReduceApplier
+	writeMessages  []*isb.WriteMessage
+	pbqReader      pbq.Reader
+	log            *zap.SugaredLogger
+	toBuffers      map[string][]isb.BufferWriter
+	whereToDecider forward.ToWhichStepDecider
+	wmPublishers   map[string]publish.Publisher
+	idleManager    *wmb.IdleManager
 }
 
 // newProcessAndForward will return a new processAndForward instance
@@ -69,26 +69,27 @@ func newProcessAndForward(ctx context.Context,
 	partitionID partition.ID,
 	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
-	toBuffers map[string]isb.BufferWriter,
+	toBuffers map[string][]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
 	idleManager *wmb.IdleManager) *processAndForward {
+
 	return &processAndForward{
-		vertexName:       vertexName,
-		pipelineName:     pipelineName,
-		vertexReplica:    vr,
-		PartitionID:      partitionID,
-		UDF:              udf,
-		pbqReader:        pbqReader,
-		log:              logging.FromContext(ctx),
-		toBuffers:        toBuffers,
-		whereToDecider:   whereToDecider,
-		publishWatermark: pw,
-		idleManager:      idleManager,
+		vertexName:     vertexName,
+		pipelineName:   pipelineName,
+		vertexReplica:  vr,
+		PartitionID:    partitionID,
+		UDF:            udf,
+		pbqReader:      pbqReader,
+		log:            logging.FromContext(ctx),
+		toBuffers:      toBuffers,
+		whereToDecider: whereToDecider,
+		wmPublishers:   pw,
+		idleManager:    idleManager,
 	}
 }
 
-// Process method reads messages from the supplied PBQ, invokes UDF to reduce the result.
+// Process method reads messages from the supplied PBQ, invokes UDF to reduce the writeMessages.
 func (p *processAndForward) Process(ctx context.Context) error {
 	var err error
 	startTime := time.Now()
@@ -98,8 +99,8 @@ func (p *processAndForward) Process(ctx context.Context) error {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 	}).Observe(float64(time.Since(startTime).Milliseconds()))
 
-	// blocking call, only returns the result after it has read all the messages from pbq
-	p.result, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
+	// blocking call, only returns the writeMessages after it has read all the messages from pbq
+	p.writeMessages, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 	return err
 }
 
@@ -119,32 +120,35 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 	messagesToStep := p.whereToStep()
 
 	// store write offsets to publish watermark
-	writeOffsets := make(map[string][]isb.Offset)
+	writeOffsets := make(map[string][][]isb.Offset)
+	for toVertexName, toVertexBuffer := range p.toBuffers {
+		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
+	}
 
 	// parallel writes to each isb
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	success := true
-	for key, messages := range messagesToStep {
-		bufferID := key
-		if len(messages) == 0 {
-			continue
-		}
-		wg.Add(1)
-		resultMessages := messages
-		go func() {
-			defer wg.Done()
-			offsets, ctxClosedErr := p.writeToBuffer(ctx, bufferID, resultMessages)
-			if ctxClosedErr != nil {
-				success = false
-				p.log.Errorw("Context closed while waiting to write the message to ISB", zap.Error(ctxClosedErr), zap.Any("partitionID", p.PartitionID))
-				return
+	for key, value := range messagesToStep {
+		for index, messages := range value {
+			if len(messages) == 0 {
+				continue
 			}
-			mu.Lock()
-			// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-			writeOffsets[bufferID] = offsets
-			mu.Unlock()
-		}()
+			wg.Add(1)
+			go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
+				defer wg.Done()
+				offsets, ctxClosedErr := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
+				if ctxClosedErr != nil {
+					success = false
+					p.log.Errorw("Context closed while waiting to write the message to ISB", zap.Error(ctxClosedErr), zap.Any("partitionID", p.PartitionID))
+					return
+				}
+				mu.Lock()
+				// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
+				writeOffsets[toVertexName][toVertexPartitionIdx] = offsets
+				mu.Unlock()
+			}(key, int32(index), messages)
+		}
 	}
 
 	// wait until all the writer go routines return
@@ -164,13 +168,13 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.
-func (p *processAndForward) whereToStep() map[string][]isb.Message {
+func (p *processAndForward) whereToStep() map[string][][]isb.Message {
 	// writer doesn't accept array of pointers
-	messagesToStep := make(map[string][]isb.Message)
+	messagesToStep := make(map[string][][]isb.Message)
 
-	var to []string
+	var to []forward.VertexBuffer
 	var err error
-	for _, msg := range p.result {
+	for _, msg := range p.writeMessages {
 		to, err = p.whereToDecider.WhereTo(msg.Keys, msg.Tags)
 		if err != nil {
 			platformError.With(map[string]string{
@@ -186,11 +190,11 @@ func (p *processAndForward) whereToStep() map[string][]isb.Message {
 			continue
 		}
 
-		for _, bufferID := range to {
-			if _, ok := messagesToStep[bufferID]; !ok {
-				messagesToStep[bufferID] = make([]isb.Message, 0)
+		for _, step := range to {
+			if _, ok := messagesToStep[step.ToVertexName]; !ok {
+				messagesToStep[step.ToVertexName] = make([][]isb.Message, len(p.toBuffers[step.ToVertexName]))
 			}
-			messagesToStep[bufferID] = append(messagesToStep[bufferID], msg.Message)
+			messagesToStep[step.ToVertexName][step.ToVertexPartitionIdx] = append(messagesToStep[step.ToVertexName][step.ToVertexPartitionIdx], msg.Message)
 		}
 
 	}
@@ -199,7 +203,7 @@ func (p *processAndForward) whereToStep() map[string][]isb.Message {
 
 // writeToBuffer writes to the ISBs.
 // TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
-func (p *processAndForward) writeToBuffer(ctx context.Context, bufferID string, resultMessages []isb.Message) ([]isb.Offset, error) {
+func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var (
 		writeCount int
 		writeBytes float64
@@ -220,7 +224,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
 		var writeErrs []error
 		var failedMessages []isb.Message
-		offsets, writeErrs = p.toBuffers[bufferID].Write(ctx, writeMessages)
+		offsets, writeErrs = p.toBuffers[edgeName][partition].Write(ctx, writeMessages)
 		for i, message := range writeMessages {
 			if writeErrs[i] != nil {
 				if errors.As(writeErrs[i], &isb.NoRetryableBufferWriteErr{}) {
@@ -242,7 +246,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 				metrics.LabelVertex:             p.vertexName,
 				metrics.LabelPipeline:           p.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-				"buffer":                        bufferID}).Add(float64(len(failedMessages)))
+				metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(float64(len(failedMessages)))
 			return false, nil
 		}
 		return true, nil
@@ -252,51 +256,58 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, bufferID string, 
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"buffer":                        bufferID}).Add(float64(len(resultMessages) - writeCount))
+		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(float64(len(resultMessages) - writeCount))
 
 	dropBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"buffer":                        bufferID}).Add(dropBytes)
+		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(dropBytes)
 
 	writeMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"buffer":                        bufferID}).Add(float64(writeCount))
+		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(float64(writeCount))
 
 	writeBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		"buffer":                        bufferID}).Add(writeBytes)
+		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(writeBytes)
 	return offsets, ctxClosedErr
 }
 
 // publishWM publishes the watermark to each edge.
-func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][]isb.Offset) {
+// TODO: support multi partitioned edges.
+func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][][]isb.Offset) {
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
-	var activeWatermarkBuffers = make(map[string]bool)
-	for bufferName, offsets := range writeOffsets {
-		if publisher, ok := p.publishWatermark[bufferName]; ok {
-			if len(offsets) > 0 {
-				publisher.PublishWatermark(wm, offsets[len(offsets)-1])
-				activeWatermarkBuffers[bufferName] = true
-				// reset because the toBuffer is not idling
-				p.idleManager.Reset(bufferName)
+	// Created as a slice since it tracks per partition of the buffer.
+	var activeWatermarkBuffers = make(map[string][]bool)
+	for toVertexName, bufferOffsets := range writeOffsets {
+		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
+		if publisher, ok := p.wmPublishers[toVertexName]; ok {
+			for index, offsets := range bufferOffsets {
+				if len(offsets) > 0 {
+					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
+					activeWatermarkBuffers[toVertexName][index] = true
+					// reset because the toBuffer partition is not idling
+					p.idleManager.Reset(p.toBuffers[toVertexName][index].GetName())
+				}
 			}
 		}
+
 	}
-	if len(activeWatermarkBuffers) < len(p.publishWatermark) {
-		// if there's any buffers that haven't received any watermark during this
-		// batch processing cycle, send an idle watermark
-		for bufferName := range p.publishWatermark {
-			if !activeWatermarkBuffers[bufferName] {
-				if publisher, ok := p.publishWatermark[bufferName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[bufferName], publisher, p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
+
+	// if there's any buffers that haven't received any watermark during this
+	// batch processing cycle, send an idle watermark
+	for toVertexName := range p.wmPublishers {
+		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
+			if !activePartition {
+				if publisher, ok := p.wmPublishers[toVertexName]; ok {
+					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, int32(index), p.log, dfv1.VertexTypeReduceUDF, wm)
 				}
 			}
 		}

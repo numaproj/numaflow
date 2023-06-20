@@ -19,11 +19,11 @@ package processor
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
@@ -41,6 +41,10 @@ func otValueToBytes(offset int64, watermark int64, idle bool, partition int32) (
 	return otValueByte, err
 }
 
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
+
 func TestProcessorManager(t *testing.T) {
 	var (
 		err          error
@@ -48,27 +52,24 @@ func TestProcessorManager(t *testing.T) {
 		keyspace     = "fetcherTest"
 		hbBucketName = keyspace + "_PROCESSORS"
 		otBucketName = keyspace + "_OT"
-		wg           sync.WaitGroup
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
 	assert.NoError(t, err)
-	defer hbStore.Close()
 	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
 	assert.NoError(t, err)
+	defer hbStore.Close()
 	defer otStore.Close()
+	defer cancel()
 
 	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
 	assert.NoError(t, err)
 	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	var processorManager = NewProcessorManager(ctx, storeWatcher)
-	// start p1 heartbeat for 3 loops
-	wg.Add(1)
+	var processorManager = NewProcessorManager(ctx, storeWatcher, 1)
+	// start p1 heartbeat for 3 loops then delete p1
 	go func() {
-		defer wg.Done()
 		var err error
 		for i := 0; i < 3; i++ {
 			err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
@@ -79,15 +80,16 @@ func TestProcessorManager(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	// start p2 heartbeat for 20 loops (20 seconds)
-	wg.Add(1)
+	// start p2 heartbeat.
 	go func() {
-		defer wg.Done()
-		var err error
-		for i := 0; i < 20; i++ {
-			err = hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-			assert.NoError(t, err)
-			time.Sleep(1 * time.Second)
+		for {
+			select {
+			case <-time.After(1 * time.Second):
+				err := hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+				assert.NoError(t, err)
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
@@ -128,10 +130,9 @@ func TestProcessorManager(t *testing.T) {
 	processorManager.DeleteProcessor("p1")
 	processorManager.DeleteProcessor("p2")
 	assert.Equal(t, 0, len(processorManager.GetAllProcessors()))
-	cancel()
 }
 
-func TestProcessorManagerWatchForMap(t *testing.T) {
+func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	var (
 		err          error
 		pipelineName       = "testFetch"
@@ -140,53 +141,44 @@ func TestProcessorManagerWatchForMap(t *testing.T) {
 		otBucketName       = keyspace + "_OT"
 		epoch        int64 = 60000
 		testOffset   int64 = 100
-		wg           sync.WaitGroup
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
 	assert.NoError(t, err)
-	defer hbStore.Close()
 	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
 	assert.NoError(t, err)
+	defer hbStore.Close()
 	defer otStore.Close()
+	defer cancel()
 
 	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
 	assert.NoError(t, err)
 	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	var processorManager = NewProcessorManager(ctx, storeWatcher)
+	var processorManager = NewProcessorManager(ctx, storeWatcher, 1)
 	// start p1 heartbeat for 3 loops
-	wg.Add(1)
 	go func(ctx context.Context) {
-		defer wg.Done()
-		var err error
 		for {
 			select {
+			case <-time.After(1 * time.Second):
+				err := hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+				assert.NoError(t, err)
 			case <-ctx.Done():
 				return
-			default:
-				err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-				assert.NoError(t, err)
-				time.Sleep(1 * time.Second)
 			}
 		}
 	}(ctx)
 
-	// start p2 heartbeat for 20 loops (20 seconds)
-	wg.Add(1)
+	// start p2 heartbeat
 	go func(ctx context.Context) {
-		defer wg.Done()
-		var err error
 		for {
 			select {
+			case <-time.After(1 * time.Second):
+				err := hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+				assert.NoError(t, err)
 			case <-ctx.Done():
 				return
-			default:
-				err = hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-				assert.NoError(t, err)
-				time.Sleep(1 * time.Second)
 			}
 		}
 	}(ctx)
@@ -213,7 +205,7 @@ func TestProcessorManagerWatchForMap(t *testing.T) {
 		err = otStore.PutKV(ctx, "p1", otValueByte)
 		assert.NoError(t, err)
 	}
-	for processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadOffset() == -1 || processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadOffset() == -1 {
+	for processorManager.GetProcessor("p1").GetOffsetTimelines()[0].GetHeadOffset() != 115 || processorManager.GetProcessor("p2").GetOffsetTimelines()[0].GetHeadOffset() != 115 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -228,16 +220,15 @@ func TestProcessorManagerWatchForMap(t *testing.T) {
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 0,
-	}, processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadWMB())
+	}, processorManager.GetProcessor("p1").GetOffsetTimelines()[0].GetHeadWMB())
 	assert.Equal(t, wmb.WMB{
 		Idle:      false,
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 0,
-	}, processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadWMB())
+	}, processorManager.GetProcessor("p2").GetOffsetTimelines()[0].GetHeadWMB())
 	processorManager.DeleteProcessor("p1")
 	processorManager.DeleteProcessor("p2")
-	cancel()
 }
 
 func TestProcessorManagerWatchForReduce(t *testing.T) {
@@ -249,53 +240,45 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		otBucketName       = keyspace + "_OT"
 		epoch        int64 = 60000
 		testOffset   int64 = 100
-		wg           sync.WaitGroup
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
 	assert.NoError(t, err)
-	defer hbStore.Close()
 	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
 	assert.NoError(t, err)
+	defer hbStore.Close()
 	defer otStore.Close()
+	defer cancel()
 
 	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
 	assert.NoError(t, err)
 	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	var processorManager = NewProcessorManager(ctx, storeWatcher, WithIsReduce(true), WithVertexReplica(2))
+	var processorManager = NewProcessorManager(ctx, storeWatcher, 1, WithIsReduce(true), WithVertexReplica(2))
 	// start p1 heartbeat for 3 loops
-	wg.Add(1)
 	go func(ctx context.Context) {
-		defer wg.Done()
-		var err error
 		for {
 			select {
+			case <-time.After(1 * time.Second):
+				err := hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+				assert.NoError(t, err)
 			case <-ctx.Done():
 				return
-			default:
-				err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
-				assert.NoError(t, err)
-				time.Sleep(1 * time.Second)
 			}
 		}
 	}(ctx)
 
-	// start p2 heartbeat for 20 loops (20 seconds)
-	wg.Add(1)
+	// start p2 heartbeat
 	go func(ctx context.Context) {
-		defer wg.Done()
 		var err error
 		for {
 			select {
-			case <-ctx.Done():
-				return
-			default:
+			case <-time.After(1 * time.Second):
 				err = hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
 				assert.NoError(t, err)
-				time.Sleep(1 * time.Second)
+			case <-ctx.Done():
+				return
 			}
 		}
 	}(ctx)
@@ -333,7 +316,7 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		err = otStore.PutKV(ctx, "p1", otValueByte)
 		assert.NoError(t, err)
 	}
-	for processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadOffset() == -1 || processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadOffset() == -1 {
+	for processorManager.GetProcessor("p1").GetOffsetTimelines()[0].GetHeadOffset() != 115 || processorManager.GetProcessor("p2").GetOffsetTimelines()[0].GetHeadOffset() != 115 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -349,14 +332,132 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 2,
-	}, processorManager.GetProcessor("p1").GetOffsetTimeline().GetHeadWMB())
+	}, processorManager.GetProcessor("p1").GetOffsetTimelines()[0].GetHeadWMB())
 	assert.Equal(t, wmb.WMB{
 		Idle:      false,
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 2,
-	}, processorManager.GetProcessor("p2").GetOffsetTimeline().GetHeadWMB())
+	}, processorManager.GetProcessor("p2").GetOffsetTimelines()[0].GetHeadWMB())
 	processorManager.DeleteProcessor("p1")
 	processorManager.DeleteProcessor("p2")
+}
+
+func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
+	var (
+		err            error
+		pipelineName         = "testFetch"
+		keyspace             = "fetcherTest"
+		hbBucketName         = keyspace + "_PROCESSORS"
+		otBucketName         = keyspace + "_OT"
+		epoch          int64 = 60000
+		testOffset     int64 = 100
+		partitionCount       = 3
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	assert.NoError(t, err)
+	defer hbStore.Close()
+	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	assert.NoError(t, err)
+	defer otStore.Close()
+
+	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
+	assert.NoError(t, err)
+	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
+	assert.NoError(t, err)
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	var processorManager = NewProcessorManager(ctx, storeWatcher, 3)
+	// start p1 heartbeat for 3 loops
+	go func(ctx context.Context) {
+		var err error
+		for {
+			select {
+			case <-time.After(1 * time.Second):
+				err = hbStore.PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+				assert.NoError(t, err)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}(ctx)
+
+	// start p2 heartbeat.
+	go func(ctx context.Context) {
+		var err error
+		for {
+			select {
+			case <-time.After(1 * time.Second):
+				err = hbStore.PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+				assert.NoError(t, err)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}(ctx)
+
+	allProcessors := processorManager.GetAllProcessors()
+	for len(allProcessors) != 2 {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			allProcessors = processorManager.GetAllProcessors()
+		}
+	}
+
+	for i := 0; i < 3; i++ {
+		epoch += 1000
+		testOffset += 5
+		for j := 0; j < partitionCount; j++ {
+			otValueByte, _ := otValueToBytes(testOffset, epoch, false, int32(j))
+			err = otStore.PutKV(ctx, "p2", otValueByte)
+			assert.NoError(t, err)
+			err = otStore.PutKV(ctx, "p1", otValueByte)
+			assert.NoError(t, err)
+		}
+	}
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("expected offset timeline to be updated: %s", ctx.Err())
+			}
+		default:
+			for _, p := range processorManager.GetAllProcessors() {
+				for _, ot := range p.GetOffsetTimelines() {
+					if ot.GetHeadWMB().Offset != 115 {
+						goto notDone
+					}
+				}
+				goto done
+			}
+		notDone:
+			time.Sleep(1 * time.Millisecond)
+		done:
+			break loop
+		}
+	}
+	for i := 0; i < partitionCount; i++ {
+		assert.Equal(t, wmb.WMB{
+			Idle:      false,
+			Offset:    115,
+			Watermark: 63000,
+			Partition: int32(i),
+		}, processorManager.GetProcessor("p1").GetOffsetTimelines()[i].GetHeadWMB())
+		assert.Equal(t, wmb.WMB{
+			Idle:      false,
+			Offset:    115,
+			Watermark: 63000,
+			Partition: int32(i),
+		}, processorManager.GetProcessor("p2").GetOffsetTimelines()[i].GetHeadWMB())
+	}
 	cancel()
+	processorManager.DeleteProcessor("p1")
+	processorManager.DeleteProcessor("p2")
 }

@@ -205,7 +205,7 @@ message CombinedEdge {
 
   // The number of partitions of the from vertex, if not provided, the default value is set to "1".
   // +optional
-  optional int32 fromVertexPartitions = 3;
+  optional int32 fromVertexPartitionCount = 3;
 
   // +optional
   optional VertexLimits fromVertexLimits = 4;
@@ -215,7 +215,7 @@ message CombinedEdge {
 
   // The number of partitions of the to vertex, if not provided, the default value is set to "1".
   // +optional
-  optional int32 toVertexPartitions = 6;
+  optional int32 toVertexPartitionCount = 6;
 
   // +optional
   optional VertexLimits toVertexLimits = 7;
@@ -1153,7 +1153,7 @@ message Templates {
 }
 
 message Transformer {
-  // +kubebuilder:validation:Enum=eventTimeExtractor;filter
+  // +kubebuilder:validation:Enum=eventTimeExtractor;filter;timeExtractionFilter
   optional string name = 1;
 
   // +optional

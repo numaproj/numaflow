@@ -21,13 +21,15 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"go.uber.org/zap"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/common/expfmt"
-	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
+
+	server "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -48,7 +50,8 @@ type pipelineMetadataQuery struct {
 	isbSvcClient      isbsvc.ISBService
 	pipeline          *v1alpha1.Pipeline
 	httpClient        metricsHttpClient
-	watermarkFetchers map[string][]fetch.Fetcher
+	watermarkFetchers map[v1alpha1.Edge][]fetch.Fetcher
+	rater             server.Ratable
 }
 
 const (
@@ -58,18 +61,23 @@ const (
 )
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
-func NewPipelineMetadataQuery(isbSvcClient isbsvc.ISBService, pipeline *v1alpha1.Pipeline, wmFetchers map[string][]fetch.Fetcher) (*pipelineMetadataQuery, error) {
+func NewPipelineMetadataQuery(
+	isbSvcClient isbsvc.ISBService,
+	pipeline *v1alpha1.Pipeline,
+	wmFetchers map[v1alpha1.Edge][]fetch.Fetcher,
+	rater server.Ratable) (*pipelineMetadataQuery, error) {
 	var err error
 	ps := pipelineMetadataQuery{
-		isbSvcClient:      isbSvcClient,
-		pipeline:          pipeline,
-		watermarkFetchers: wmFetchers,
+		isbSvcClient: isbSvcClient,
+		pipeline:     pipeline,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
 			Timeout: time.Second * 3,
 		},
+		watermarkFetchers: wmFetchers,
+		rater:             rater,
 	}
 	if err != nil {
 		return nil, err
@@ -152,34 +160,30 @@ func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daemon.GetVertexMetricsRequest) (*daemon.GetVertexMetricsResponse, error) {
 	log := logging.FromContext(ctx)
 	resp := new(daemon.GetVertexMetricsResponse)
-
 	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
+
+	// Get the headless service name
 	vertex := &v1alpha1.Vertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: vertexName,
 		},
 	}
-	podNum := int64(1)
-	// for now only reduce has parallelism might have to modify later
-	// checking parallelism for a vertex to identify reduce vertex
-	// replicas will have parallelism for reduce vertex else will be nil
-	// parallelism indicates replica count ~ multiple pods for a vertex here
-	obj := ps.pipeline.GetFromEdges(req.GetVertex())
-	if len(obj) > 0 && obj[0].DeprecatedParallelism != nil {
-		podNum = int64(*obj[0].DeprecatedParallelism)
-	}
-
-	// Get the headless service name
 	headlessServiceName := vertex.GetHeadlessServiceName()
 
-	metricsArr := make([]*daemon.VertexMetrics, podNum)
-	for i := int64(0); i < podNum; i++ {
+	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
+	vertexLevelRates := ps.rater.GetRates(req.GetVertex())
 
-		processingRates := make(map[string]float64, 0)
-		pendings := make(map[string]int64, 0)
+	metricsCount := 1
+	// TODO(multi-partition): currently metrics is an aggregation per vertex, so same across each pod for non-reduce vertex
+	// once multi-partition metrics are in - need to modify to per partition for every vertex
+	if abstractVertex.IsReduceUDF() {
+		metricsCount = abstractVertex.GetPartitionCount()
+	}
 
+	metricsArr := make([]*daemon.VertexMetrics, metricsCount)
+	for i := 0; i < metricsCount; i++ {
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
-		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.svc.cluster.local:2469/metrics
+		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
 		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 		if res, err := ps.httpClient.Get(url); err != nil {
 			log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())
@@ -196,20 +200,8 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 				return nil, err
 			}
 
-			// Check if the resultant metrics list contains the processingRate, if it does look for the period label
-			if value, ok := result[metrics.VertexProcessingRate]; ok {
-				metricsList := value.GetMetric()
-				for _, metric := range metricsList {
-					labels := metric.GetLabel()
-					for _, label := range labels {
-						if label.GetName() == metrics.LabelPeriod {
-							lookback := label.GetValue()
-							processingRates[lookback] = metric.Gauge.GetValue()
-						}
-					}
-				}
-			}
-
+			// Get the pending messages for this partition
+			pendings := make(map[string]int64, 0)
 			if value, ok := result[metrics.VertexPendingMessages]; ok {
 				metricsList := value.GetMetric()
 				for _, metric := range metricsList {
@@ -222,13 +214,23 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 					}
 				}
 			}
-
-			metricsArr[i] = &daemon.VertexMetrics{
-				Pipeline:        &ps.pipeline.Name,
-				Vertex:          req.Vertex,
-				ProcessingRates: processingRates,
-				Pendings:        pendings,
+			vm := &daemon.VertexMetrics{
+				Pipeline: &ps.pipeline.Name,
+				Vertex:   req.Vertex,
+				Pendings: pendings,
 			}
+
+			// Get the processing rate for this partition
+			if abstractVertex.IsReduceUDF() {
+				// the processing rate of this ith partition is the rate of the corresponding ith pod.
+				vm.ProcessingRates = ps.rater.GetPodRates(req.GetVertex(), i)
+			} else {
+				// if the vertex is not a reduce udf, then the processing rate is the sum of all pods in this vertex.
+				// TODO (multi-partition) - change this to display the processing rate of each partition when we finish multi-partition support for non-reduce vertices.
+				vm.ProcessingRates = vertexLevelRates
+			}
+
+			metricsArr[i] = vm
 		}
 	}
 
@@ -259,16 +261,26 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 
 		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
 		for _, vertexMetrics := range vertexResp.VertexMetrics {
-			if pending, ok := vertexMetrics.GetPendings()["default"]; ok {
-				if processingRate, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
-					if pending > 0 && processingRate == 0 {
-						resp.Status = &daemon.PipelineStatus{
-							Status:  pointer.String(PipelineStatusError),
-							Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
-						}
-						return resp, nil
-					}
+			var pending int64
+			var processingRate float64
+			if p, ok := vertexMetrics.GetPendings()["default"]; ok {
+				pending = p
+			} else {
+				continue
+			}
+
+			if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
+				processingRate = p
+			} else {
+				continue
+			}
+
+			if pending > 0 && processingRate == 0 {
+				resp.Status = &daemon.PipelineStatus{
+					Status:  pointer.String(PipelineStatusError),
+					Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
 				}
+				return resp, nil
 			}
 		}
 	}

@@ -122,6 +122,12 @@ func (r *KafkaSource) GetName() string {
 	return r.name
 }
 
+// GetPartitionIdx returns the partition number for the source vertex buffer
+// Source is like a buffer with only one partition. So, we always return 0
+func (r *KafkaSource) GetPartitionIdx() int32 {
+	return 0
+}
+
 func (r *KafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := make([]*isb.ReadMessage, 0, count)
 	timeout := time.After(r.readTimeout)
@@ -152,7 +158,8 @@ func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 	for p, t := range oldestTimestamps {
 		publisher := r.loadSourceWatermarkPublisher(p)
-		publisher.PublishWatermark(wmb.Watermark(t), nil) // Source publisher does not care about the offset
+		// toVertexPartitionIdx is 0 because we publish watermarks within source itself.
+		publisher.PublishWatermark(wmb.Watermark(t), nil, 0) // Source publisher does not care about the offset
 	}
 }
 
@@ -165,7 +172,8 @@ func (r *KafkaSource) loadSourceWatermarkPublisher(partitionID int32) publish.Pu
 	}
 	entityName := fmt.Sprintf("%s-%s-%d", r.pipelineName, r.name, partitionID)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, publish.IsSource(), publish.WithDelay(r.watermarkMaxDelay))
+	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
+	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, 1, publish.IsSource(), publish.WithDelay(r.watermarkMaxDelay))
 	r.sourcePublishWMs[partitionID] = sourcePublishWM
 	return sourcePublishWM
 }
@@ -290,7 +298,7 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 // NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
 func NewKafkaSource(
 	vertexInstance *dfv1.VertexInstance,
-	writers []isb.BufferWriter,
+	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
@@ -351,18 +359,13 @@ func NewKafkaSource(
 	handler := newConsumerHandler(kafkasource.handlerbuffer)
 	kafkasource.handler = handler
 
-	destinations := make(map[string]isb.BufferWriter, len(writers))
-	for _, w := range writers {
-		destinations[w.GetName()] = w
-	}
-
 	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(kafkasource.logger), forward.WithSourceWatermarkPublisher(kafkasource)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

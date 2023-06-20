@@ -59,7 +59,7 @@ type natsSource struct {
 
 func New(
 	vertexInstance *dfv1.VertexInstance,
-	writers []isb.BufferWriter,
+	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
@@ -84,17 +84,13 @@ func New(
 	}
 	n.messages = make(chan *isb.ReadMessage, n.bufferSize)
 
-	destinations := make(map[string]isb.BufferWriter, len(writers))
-	for _, w := range writers {
-		destinations[w.GetName()] = w
-	}
 	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(n.logger), forward.WithSourceWatermarkPublisher(n)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, n, destinations, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -104,7 +100,8 @@ func New(
 	n.cancelfn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	n.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
+	n.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	source := vertexInstance.Vertex.Spec.Source.Nats
 	opt := []natslib.Option{
@@ -218,6 +215,12 @@ func (ns *natsSource) GetName() string {
 	return ns.name
 }
 
+// GetPartitionIdx returns the partition number for the source vertex buffer
+// Source is like a buffer with only one partition. So, we always return 0
+func (ns *natsSource) GetPartitionIdx() int32 {
+	return 0
+}
+
 func (ns *natsSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var msgs []*isb.ReadMessage
 	timeout := time.After(ns.readTimeout)
@@ -244,7 +247,8 @@ func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil) // Source publisher does not care about the offset
+		// toVertexPartitionIdx is 0 because we publish watermarks within source itself.
+		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }
 

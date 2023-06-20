@@ -34,8 +34,18 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type myForwardToAllTest struct {
+}
+
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
+		ToVertexName:         "writer",
+		ToVertexPartitionIdx: 0,
+	}}, nil
+}
+
 func TestRead(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("writer", 100, simplebuffer.WithReadTimeOut(10*time.Second))
+	dest := simplebuffer.NewInMemoryBuffer("writer", 100, 0, simplebuffer.WithReadTimeOut(10*time.Second))
 	ctx := context.Background()
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
@@ -58,11 +68,12 @@ func TestRead(t *testing.T) {
 	}
 
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	toSteps := map[string]isb.BufferWriter{
-		"writer": dest,
+	toBuffers := map[string][]isb.BufferWriter{
+		"writer": {dest},
 	}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
+
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -92,7 +103,7 @@ func TestStop(t *testing.T) {
 	ctx := context.Background()
 
 	// default rpu is 5. set the test to run for 2 ticks.
-	dest := simplebuffer.NewInMemoryBuffer("writer", 10)
+	dest := simplebuffer.NewInMemoryBuffer("writer", 10, 0)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "memgen",
@@ -113,11 +124,12 @@ func TestStop(t *testing.T) {
 		Replica:  0,
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	toSteps := map[string]isb.BufferWriter{
-		"writer": dest,
+	toBuffers := map[string][]isb.BufferWriter{
+		"writer": {dest},
 	}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
+
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
@@ -188,7 +200,7 @@ func TestWatermark(t *testing.T) {
 	// for use by the buffer reader on the other side of the stream
 	ctx := context.Background()
 
-	dest := simplebuffer.NewInMemoryBuffer("writer", 1000)
+	dest := simplebuffer.NewInMemoryBuffer("writer", 1000, 0)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "memgen",
@@ -208,8 +220,12 @@ func TestWatermark(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
+	toBuffers := map[string][]isb.BufferWriter{
+		"writer": {dest},
+	}
+
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	mgen, err := NewMemGen(m, []isb.BufferWriter{dest}, forward.All, applier.Terminal, nil, nil, publishWMStore)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, nil, nil, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

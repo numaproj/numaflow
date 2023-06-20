@@ -23,6 +23,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/forward"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
@@ -51,10 +53,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var reader isb.BufferReader
+	var readers []isb.BufferReader
 	var err error
-	fromBufferName := u.VertexInstance.Vertex.OwnedBuffers()[0]
-
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	// For sinks, the buffer name is the vertex name
@@ -63,18 +63,20 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		redisClient := redisclient.NewInClusterRedisClient()
-		fromGroup := fromBufferName + "-group"
-		consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 		readOptions := []redisclient.Option{}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
-		reader = redisisb.NewBufferRead(ctx, redisClient, fromBufferName, fromGroup, consumer, readOptions...)
-	case dfv1.ISBSvcTypeJetStream:
-		streamName := isbsvc.JetStreamName(fromBufferName)
-		readOptions := []jetstreamisb.ReadOption{
-			jetstreamisb.WithUsingAckInfoAsRate(true),
+		// create reader for each partition. Each partition is a group in redis
+		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
+			fromGroup := bufferPartition + "-group"
+			consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
+
+			reader := redisisb.NewBufferRead(ctx, redisClient, bufferPartition, fromGroup, consumer, int32(index), readOptions...)
+			readers = append(readers, reader)
 		}
+	case dfv1.ISBSvcTypeJetStream:
+		var readOptions []jetstreamisb.ReadOption
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
@@ -84,41 +86,62 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		jetStreamClient := jsclient.NewInClusterJetStreamClient()
-		reader, err = jetstreamisb.NewJetStreamBufferReader(ctx, jetStreamClient, fromBufferName, streamName, streamName, readOptions...)
-		if err != nil {
-			return err
+		// create reader for each partition. Each partition is a stream in jetstream
+		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
+			fromStreamName := isbsvc.JetStreamName(bufferPartition)
+
+			reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), bufferPartition, fromStreamName, fromStreamName, int32(index), readOptions...)
+			if err != nil {
+				return err
+			}
+			readers = append(readers, reader)
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", u.ISBSvcType)
 	}
-
-	sinker, err := u.getSinker(reader, log, fetchWatermark, publishWatermark)
-	if err != nil {
-		return fmt.Errorf("failed to find a sink, errpr: %w", err)
+	var finalWg sync.WaitGroup
+	var sinkerForMetrics Sinker
+	for index := range u.VertexInstance.Vertex.OwnedBuffers() {
+		finalWg.Add(1)
+		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWatermark)
+		if err != nil {
+			return fmt.Errorf("failed to find a sink, errpr: %w", err)
+		}
+		if sinkerForMetrics == nil {
+			sinkerForMetrics = sinker
+		}
+		// start sinker using a goroutine for each partition.
+		go func(sinker Sinker, fromBufferPartitionName string) {
+			defer finalWg.Done()
+			log.Infow("Start processing sink messages ", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("fromPartition ", fromBufferPartitionName))
+			stopped := sinker.Start()
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for {
+					<-stopped
+					log.Info("Sinker stopped, exiting sink processor...")
+					return
+				}
+			}()
+			<-ctx.Done()
+			log.Info("SIGTERM exiting inside partition...", zap.String("fromPartition", fromBufferPartitionName))
+			sinker.Stop()
+			wg.Wait()
+			log.Info("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
+		}(sinker, readers[index].GetName())
 	}
 
-	log.Infow("Start processing sink messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferName))
-	stopped := sinker.Start()
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			<-stopped
-			log.Info("Sinker stopped, exiting sink processor...")
-			return
-		}
-	}()
 	var metricsOpts []metrics.Option
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
-		if serverHandler, ok := sinker.(*udsink.UserDefinedSink); ok {
-			metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, serverHandler, reader, nil)
+		if serverHandler, ok := sinkerForMetrics.(*udsink.UserDefinedSink); ok {
+			metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, serverHandler, readers)
 		} else {
 			return fmt.Errorf("unable to get the metrics options for the udsink")
 		}
 	} else {
-		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, reader, nil)
+		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, nil, readers)
 	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
@@ -127,11 +150,9 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
-	<-ctx.Done()
-	log.Info("SIGTERM, exiting...")
-	sinker.Stop()
-	wg.Wait()
-	log.Info("Exited...")
+	// wait for all the sinkers to exit
+	finalWg.Wait()
+	log.Info("All udsink processors exited...")
 	return nil
 }
 
@@ -139,13 +160,28 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	if x := sink.Log; x != nil {
-		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, logsink.WithLogger(logger))
+		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {
-		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, fetchWM, publishWM, kafkasink.WithLogger(logger))
+		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), kafkasink.WithLogger(logger))
 	} else if x := sink.Blackhole; x != nil {
-		return blackhole.NewBlackhole(u.VertexInstance.Vertex, reader, fetchWM, publishWM, blackhole.WithLogger(logger))
+		return blackhole.NewBlackhole(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), blackhole.WithLogger(logger))
 	} else if x := sink.UDSink; x != nil {
-		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, udsink.WithLogger(logger))
+		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), udsink.WithLogger(logger))
 	}
 	return nil, fmt.Errorf("invalid sink spec")
+}
+
+// getSinkGoWhereDecider returns a function that decides where to send the message
+// based on the keys and tags
+// for sink processor, we send the message to the same vertex and partition will be set to 0
+func (u *SinkProcessor) getSinkGoWhereDecider() forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
+		result = append(result, forward.VertexBuffer{
+			ToVertexName:         u.VertexInstance.Vertex.Spec.Name,
+			ToVertexPartitionIdx: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }

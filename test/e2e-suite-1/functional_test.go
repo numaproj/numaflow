@@ -108,6 +108,36 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+
+	// verify that the rate is calculated
+	timer := time.NewTimer(120 * time.Second)
+	// we use 10-second windows for rate calculation
+	// wait for 10 seconds for a new timestamped count entry to be added to the rate calculation windows
+	waitInterval := 10 * time.Second
+	succeedChan := make(chan struct{})
+	go func() {
+		for {
+			m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
+			assert.NoError(s.T(), err)
+			assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+			oneMinRate := m[0].ProcessingRates["1m"]
+			// the rate should be around 5
+			if oneMinRate < 4 || oneMinRate > 6 {
+				time.Sleep(waitInterval)
+			} else {
+				succeedChan <- struct{}{}
+				break
+			}
+		}
+	}()
+	select {
+	case <-succeedChan:
+		time.Sleep(waitInterval)
+		break
+	case <-timer.C:
+		assert.Fail(s.T(), "timed out waiting for rate to be calculated")
+	}
+	timer.Stop()
 }
 
 func (s *FunctionalSuite) TestUDFFiltering() {
@@ -166,6 +196,25 @@ func (s *FunctionalSuite) TestSourceFiltering() {
 	w.Expect().SinkNotContains("out", expect0)
 	w.Expect().SinkNotContains("out", expect1)
 	w.Expect().SinkNotContains("out", expect2)
+}
+
+func (s *FunctionalSuite) TestTimeExtractionFilter() {
+	w := s.Given().Pipeline("@testdata/time-extraction-filter.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "time-extraction-filter"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	testMsgOne := `{"id": 80, "msg": "hello", "time": "2021-01-18T21:54:42.123Z", "desc": "A good ID."}`
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)))
+	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1), PodLogCheckOptionWithContainer("numa"))
+
+	testMsgTwo := `{"id": 101, "msg": "test", "time": "2021-01-18T21:54:42.123Z", "desc": "A bad ID."}`
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)))
+	w.Expect().SinkNotContains("out", testMsgTwo)
 }
 
 func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
@@ -284,7 +333,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	}()
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipelineName)
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), 5, len(buffers))
+	assert.Equal(s.T(), 8, len(buffers))
 	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "cat1", 0))
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), pipelineName, *bufferInfo.Pipeline)

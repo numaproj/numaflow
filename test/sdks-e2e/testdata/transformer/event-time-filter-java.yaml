@@ -9,6 +9,7 @@ spec:
         http: {}
         transformer:
           container:
+            # Filter messages based on event time, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/map/eventtimefilter
             image: quay.io/numaio/numaflow-java/mapt-event-time-filter-function:latest
     - name: sink-within-2022
       scale:
@@ -21,6 +22,7 @@ spec:
       sink:
         log: {}
     - name: sink-all
+      partitions: 2
       scale:
         min: 1
       sink:

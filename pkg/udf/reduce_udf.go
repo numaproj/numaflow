@@ -22,9 +22,10 @@ import (
 	"strings"
 	"sync"
 
+	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
+
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow-go/pkg/function/client"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -55,6 +56,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var windower window.Windower
+
 	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
 
@@ -67,13 +69,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if windower == nil {
 		return fmt.Errorf("invalid window spec")
 	}
-	var reader isb.BufferReader
-	var writers map[string]isb.BufferWriter
+	var readers []isb.BufferReader
+	var writers map[string][]isb.BufferWriter
 	var err error
 	var fromBuffer string
 	fromBuffers := u.VertexInstance.Vertex.OwnedBuffers()
 	// choose the buffer that corresponds to this reduce processor because
-	// reducer's incoming edge can have more than one buffer for parallelism
+	// reducer's incoming edge can have more than one partitions
 	for _, b := range fromBuffers {
 		if strings.HasSuffix(b, fmt.Sprintf("-%d", u.VertexInstance.Replica)) {
 			fromBuffer = b
@@ -87,14 +89,17 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		reader, writers = buildRedisBufferIO(ctx, fromBuffer, u.VertexInstance)
+		readers, writers, err = buildRedisBufferIO(ctx, u.VertexInstance)
+		if err != nil {
+			return err
+		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
 		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
 		if err != nil {
 			return err
 		}
-		reader, writers, err = buildJetStreamBufferIO(ctx, fromBuffer, u.VertexInstance)
+		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance)
 		if err != nil {
 			return err
 		}
@@ -105,14 +110,14 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	// Populate shuffle function map
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 {
-			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions()))
+		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
+			s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitionCount())
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
-
-	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]string, error) {
-		result := []string{}
+	getVertexPartition := GetPartitionedBufferIdx()
+	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil
 		}
@@ -120,19 +125,31 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
 			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
-					result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
+				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
+					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
+					result = append(result, forward.VertexBuffer{
+						ToVertexName:         edge.To,
+						ToVertexPartitionIdx: toVertexPartition,
+					})
 				} else {
-					// TODO: need to shuffle for partitioned map vertex
-					result = append(result, dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
+					result = append(result, forward.VertexBuffer{
+						ToVertexName:         edge.To,
+						ToVertexPartitionIdx: getVertexPartition(edge.To, edge.GetToVertexPartitionCount()),
+					})
 				}
 			} else {
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitions() > 1 { // Need to shuffle
-						result = append(result, shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys))
+					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
+						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
+						result = append(result, forward.VertexBuffer{
+							ToVertexName:         edge.To,
+							ToVertexPartitionIdx: toVertexPartition,
+						})
 					} else {
-						// TODO: need to shuffle for partitioned map vertex
-						result = append(result, dfv1.GenerateBufferNames(u.VertexInstance.Vertex.Namespace, u.VertexInstance.Vertex.Spec.PipelineName, edge.To, edge.GetToVertexPartitions())...)
+						result = append(result, forward.VertexBuffer{
+							ToVertexName:         edge.To,
+							ToVertexPartitionIdx: getVertexPartition(edge.To, edge.GetToVertexPartitionCount()),
+						})
 					}
 				}
 			}
@@ -144,7 +161,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log = log.With("protocol", "uds-grpc-reduce-udf")
 
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
-	c, err := client.New(client.WithMaxMessageSize(maxMessageSize))
+	c, err := clientsdk.New(clientsdk.WithMaxMessageSize(maxMessageSize))
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
@@ -166,7 +183,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer))
 
 	// start metrics server
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, reader, nil)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, readers)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -195,7 +212,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, udfHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager)
 
-	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, reader, writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
+	// for reduce, we read only from one partition
+	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}

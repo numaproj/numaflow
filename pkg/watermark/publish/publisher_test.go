@@ -75,17 +75,17 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	otKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 
-	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
+	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), 1, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
 
 	var epoch int64 = 1651161600000
 	var location, _ = time.LoadLocation("UTC")
 	for i := 0; i < 3; i++ {
-		p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }))
+		p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(i) }), 0)
 		epoch += 60000
 		time.Sleep(time.Millisecond)
 	}
 	// publish a stale watermark (offset doesn't matter)
-	p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }))
+	p.PublishWatermark(wmb.Watermark(time.UnixMilli(epoch-120000).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(0) }), 0)
 
 	keys, err := p.otStore.GetAllKeys(p.ctx)
 	assert.NoError(t, err)
@@ -99,7 +99,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 
 	// simulate the next read batch where the watermark is now $epoch
 	// set offset to -1 to simulate reduce vertex publish idle watermark
-	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(-1) }))
+	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(epoch).In(location)), isb.SimpleStringOffset(func() string { return strconv.Itoa(-1) }), 0)
 	keys, err = p.otStore.GetAllKeys(p.ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"publisherTestPod1"}, keys)

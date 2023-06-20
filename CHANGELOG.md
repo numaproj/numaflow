@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.8.1 (2023-05-30)
+
+ * [4b11938](https://github.com/numaproj/numaflow/commit/4b11938700d8dadc8d3e4ba47a7a04e11659c3bd) Update manifests to v0.8.1
+ * [67277b7](https://github.com/numaproj/numaflow/commit/67277b794766dadc1a77bc77baa70277fdacf07c) fix: pipeline view fix (#755)
+ * [7cb399e](https://github.com/numaproj/numaflow/commit/7cb399e96676e43af942baf9ef2c20165c16e41f) fix: toVertexPartitions for reduce was incorrectly populated to 1 (#756)
+ * [16067af](https://github.com/numaproj/numaflow/commit/16067af2b057df5f7a09f2de90f93cadc86a651e) feat: use metrics to calculate vertex processing rate (#743)
+ * [11cd8e9](https://github.com/numaproj/numaflow/commit/11cd8e9f2bf960cfe2516e900071e4e552c53ee2) feat: enable streaming message to next vertex when batch size is 1 (#709)
+ * [a505884](https://github.com/numaproj/numaflow/commit/a5058840735f9d78c5ca9ae408c66375290dbfa9) fix: use int32 for message length (#750)
+ * [c602a52](https://github.com/numaproj/numaflow/commit/c602a5203d397585030362a3db9b9ee60dfac572) feat: using one bucket for partitioned reduce watermark propagation (#742)
+ * [ccf79c6](https://github.com/numaproj/numaflow/commit/ccf79c6d548aa5043bdc2a11de79cc861da250d6) fix(test): flakey test (#738)
+ * [af8e334](https://github.com/numaproj/numaflow/commit/af8e3346e08d3076c71f6bb649c7af8c2574943a) refactor: buffer, edge, bucket (#733)
+ * [d57bfed](https://github.com/numaproj/numaflow/commit/d57bfed42a457264087190d54662916ec9fc1589) feat: change baseHref for Numaflow UI. Fixes #375. (#698)
+ * [37dfae5](https://github.com/numaproj/numaflow/commit/37dfae58a8719f5fe806e442c0701b8f2dc5e11c) fix: let kafka source crash and restart when there is any server side error (#735)
+ * [b7a0dda](https://github.com/numaproj/numaflow/commit/b7a0dda51b185b7d0e819bbb70a97511552b2c49) feat: Autoscale for Redis Streams Source (#726)
+ * [5654e0a](https://github.com/numaproj/numaflow/commit/5654e0affe3910ee0fa7497f684fa3e1ab6babe2) feat: Redis7 as an ISB svc (#717)
+ * [9e8d8cc](https://github.com/numaproj/numaflow/commit/9e8d8cc42428cc5b8d84d9668a19a70b341a8914) chore(deps): bump github.com/gin-gonic/gin from 1.8.1 to 1.9.0 (#724)
+
+### Contributors
+
+ * Derek Wang
+ * Dillen Padhiar
+ * Julie Vogelman
+ * Keran Yang
+ * Vedant Gupta
+ * Yashash H L
+ * dependabot[bot]
+ * xdevxy
+
 ## v0.8.0 (2023-04-26)
 
  * [e57ca73](https://github.com/numaproj/numaflow/commit/e57ca739d3ca7539f2090c2509580174269b0e44) Update manifests to v0.8.0

@@ -6861,6 +6861,7 @@ spec:
                                   enum:
                                   - eventTimeExtractor
                                   - filter
+                                  - timeExtractionFilter
                                   type: string
                               required:
                               - name
@@ -8752,7 +8753,7 @@ spec:
                         readTimeout:
                           type: string
                       type: object
-                    fromVertexPartitions:
+                    fromVertexPartitionCount:
                       format: int32
                       type: integer
                     fromVertexType:
@@ -8790,7 +8791,7 @@ spec:
                         readTimeout:
                           type: string
                       type: object
-                    toVertexPartitions:
+                    toVertexPartitionCount:
                       format: int32
                       type: integer
                     toVertexType:
@@ -11037,6 +11038,7 @@ spec:
                             enum:
                             - eventTimeExtractor
                             - filter
+                            - timeExtractionFilter
                             type: string
                         required:
                         - name
@@ -11278,7 +11280,7 @@ spec:
                         readTimeout:
                           type: string
                       type: object
-                    fromVertexPartitions:
+                    fromVertexPartitionCount:
                       format: int32
                       type: integer
                     fromVertexType:
@@ -11316,7 +11318,7 @@ spec:
                         readTimeout:
                           type: string
                       type: object
-                    toVertexPartitions:
+                    toVertexPartitionCount:
                       format: int32
                       type: integer
                     toVertexType:
