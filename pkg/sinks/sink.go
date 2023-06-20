@@ -148,8 +148,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}(sinker, readers[index].GetName())
 	}
 
-	var metricsOpts []metrics.Option
-	metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, sinkHandler, readers)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, sinkHandler, readers)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
