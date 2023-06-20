@@ -112,19 +112,10 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 }
 
 func (s *UserDefinedSink) Close() error {
-	if s.udsink != nil {
-		return s.udsink.CloseConn(context.Background())
-	}
 	return nil
 }
 
 func (s *UserDefinedSink) Start() <-chan struct{} {
-	// Readiness check
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	if err := s.udsink.WaitUntilReady(ctx); err != nil {
-		s.logger.Fatalf("failed on UDSink readiness check, %s", err)
-	}
 	return s.isdf.Start()
 }
 
