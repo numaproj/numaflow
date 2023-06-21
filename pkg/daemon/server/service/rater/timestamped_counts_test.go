@@ -26,6 +26,8 @@ func TestNewTimestampedCounts(t *testing.T) {
 	tc := NewTimestampedCounts(1620000000)
 	assert.Equal(t, int64(1620000000), tc.timestamp)
 	assert.Equal(t, 0, len(tc.podCounts))
+	assert.Equal(t, false, tc.isWindowClosed)
+	assert.Equal(t, 0.0, tc.delta)
 }
 
 func TestTimestampedCounts_Update(t *testing.T) {
@@ -41,6 +43,28 @@ func TestTimestampedCounts_Update(t *testing.T) {
 	assert.Equal(t, 2, len(tc.podCounts))
 	assert.Equal(t, 20, int(tc.podCounts["pod1"]))
 	assert.Equal(t, 30, int(tc.podCounts["pod2"]))
+	assert.Equal(t, false, tc.isWindowClosed)
+	assert.Equal(t, 0.0, tc.delta)
+
+	tc.CloseWindow(nil)
+	assert.Equal(t, true, tc.isWindowClosed)
+	// (20-0) + (30-0) = 50
+	assert.Equal(t, 50.0, tc.delta)
+	// verify that updating pod counts doesn't take effect if the window is already closed
+	tc.Update("pod1", 10.0)
+	assert.Equal(t, 20, int(tc.podCounts["pod1"]))
+	tc.Update("pod2", 20.0)
+	assert.Equal(t, 30, int(tc.podCounts["pod2"]))
+
+	tc2 := NewTimestampedCounts(1620000001)
+	tc2.Update("pod1", 40.0)
+	assert.Equal(t, 40.0, tc2.podCounts["pod1"])
+	tc2.Update("pod2", 10.0)
+	assert.Equal(t, 10.0, tc2.podCounts["pod2"])
+	tc2.CloseWindow(tc)
+	assert.Equal(t, true, tc2.isWindowClosed)
+	// (40-20) + 10 = 30
+	assert.Equal(t, 30.0, tc2.delta)
 }
 
 func TestTimestampedCounts_Snapshot(t *testing.T) {

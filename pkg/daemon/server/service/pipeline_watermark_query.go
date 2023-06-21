@@ -30,29 +30,21 @@ import (
 
 // GetEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
-// TODO - return (map[string]fetch.Fetcher, error) instead of (map[string][]fetch.Fetcher, error
-func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[string][]fetch.Fetcher, error) {
-	var wmFetchers = make(map[string][]fetch.Fetcher)
+func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]fetch.Fetcher, error) {
+	var wmFetchers = make(map[v1alpha1.Edge][]fetch.Fetcher)
 	if pipeline.Spec.Watermark.Disabled {
 		return wmFetchers, nil
 	}
 
 	for _, edge := range pipeline.ListAllEdges() {
 		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
-		var partitionCount int
 		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
-		// If the vertex is a reduce vertex, then the number of partitionCount is 1, because the reduce pod will
-		// always read from one partition.
-		if isReduce {
-			partitionCount = 1
-		} else {
-			partitionCount = pipeline.GetVertex(edge.To).GetPartitionCount()
-		}
+		partitionCount := pipeline.GetVertex(edge.To).GetPartitionCount()
 		wmFetcherList, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName, partitionCount, isReduce)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 		}
-		wmFetchers[edge.From+"-"+edge.To] = wmFetcherList
+		wmFetchers[edge] = wmFetcherList
 	}
 	return wmFetchers, nil
 }
@@ -68,7 +60,7 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		watermarkArr := make([]*daemon.EdgeWatermark, len(ps.watermarkFetchers))
 		i := 0
 		for k := range ps.watermarkFetchers {
-			edgeName := k
+			edgeName := k.GetEdgeName()
 			watermarks := make([]int64, len(ps.watermarkFetchers[k]))
 			for idx := range watermarks {
 				watermarks[idx] = timeZero
@@ -91,10 +83,18 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 	for k, edgeFetchers := range ps.watermarkFetchers {
 		var latestWatermarks []int64
 		for _, fetcher := range edgeFetchers {
-			watermark := fetcher.GetHeadWatermark().UnixMilli()
-			latestWatermarks = append(latestWatermarks, watermark)
+			if ps.pipeline.GetVertex(k.To).IsReduceUDF() {
+				watermark := fetcher.GetHeadWatermark(0).UnixMilli()
+				latestWatermarks = append(latestWatermarks, watermark)
+			} else {
+				for idx := 0; idx < ps.pipeline.GetVertex(k.To).GetPartitionCount(); idx++ {
+					watermark := fetcher.GetHeadWatermark(int32(idx)).UnixMilli()
+					latestWatermarks = append(latestWatermarks, watermark)
+				}
+			}
 		}
-		edgeName := k
+
+		edgeName := k.GetEdgeName()
 		watermarkArr[i] = &daemon.EdgeWatermark{
 			Pipeline:           &ps.pipeline.Name,
 			Edge:               &edgeName,

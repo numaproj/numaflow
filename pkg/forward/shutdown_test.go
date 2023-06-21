@@ -120,7 +120,7 @@ func TestInterStepDataForward(t *testing.T) {
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 			stopped := f.Start()
-			// write some data such that the fromBuffer can be empty, that is toBuffer gets full
+			// write some data such that the fromBufferPartition can be empty, that is toBuffer gets full
 			_, errs := fromStep.Write(ctx, writeMessages[0:4*batchSize])
 			assert.Equal(t, make([]error, 4*batchSize), errs)
 

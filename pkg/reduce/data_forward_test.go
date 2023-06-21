@@ -99,7 +99,7 @@ func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset, partition int32)
 	return e.watermarks[offset.String()]
 }
 
-func (e *EventTypeWMProgressor) GetHeadWatermark() wmb.Watermark {
+func (e *EventTypeWMProgressor) GetHeadWatermark(int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 
@@ -111,6 +111,19 @@ func (e *EventTypeWMProgressor) GetHeadWMB(int32) wmb.WMB {
 type PayloadForTest struct {
 	Key   string
 	Value int
+}
+
+type myForwardTestRoundRobin struct {
+	count int
+}
+
+func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	var output = []forward.VertexBuffer{{
+		ToVertexName:         "reduce-to-vertex",
+		ToVertexPartitionIdx: int32(f.count % 2),
+	}}
+	f.count++
+	return output, nil
 }
 
 type CounterReduceTest struct {
@@ -418,7 +431,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		Watermark: 1679961600000,
 	}, otDecode)
 
-	// check the fromBuffer to see if we've acked the message
+	// check the fromBufferPartition to see if we've acked the message
 	for !fromBuffer.IsEmpty() {
 		select {
 		case <-ctx.Done():
@@ -1095,6 +1108,103 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 }
 
+// Max operation with 5 minutes window and two keys and writing to two partitions
+func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
+	var (
+		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
+		fromBufferSize = int64(100000)
+		toBufferSize   = int64(10)
+		messages       = []int{100, 99}
+		startTime      = 0 // time in millis
+		fromBufferName = "source-reduce-buffer"
+		toVertexName   = "reduce-to-vertex"
+		pipelineName   = "test-reduce-pipeline"
+		err            error
+	)
+
+	defer cancel()
+
+	// create from buffers
+	fromBuffer := simplebuffer.NewInMemoryBuffer(fromBufferName, fromBufferSize, 0)
+
+	// create to buffers
+	buffer1 := simplebuffer.NewInMemoryBuffer(toVertexName+"0", toBufferSize, 0)
+	buffer2 := simplebuffer.NewInMemoryBuffer(toVertexName+"1", toBufferSize, 1)
+	toBuffer := map[string][]isb.BufferWriter{
+		toVertexName: {buffer1, buffer2},
+	}
+
+	// create pbq manager
+	var pbqManager *pbq.Manager
+	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+	assert.NoError(t, err)
+
+	// create in memory watermark publisher and fetcher
+	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	// create a fixed window of 5 minutes
+	window := fixed.NewFixed(5 * time.Minute)
+
+	idleManager := wmb.NewIdleManager(len(toBuffer))
+	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager)
+
+	var reduceDataForward *DataForward
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, &myForwardTestRoundRobin{}, f, publishersMap,
+		window, idleManager, op, WithReadBatchSize(10))
+
+	assert.NoError(t, err)
+
+	// start the producer
+	go publishMessages(ctx, startTime, messages, 650, 10, p, fromBuffer)
+
+	// start the forwarder
+	go reduceDataForward.Start()
+
+	msgs0, readErr := buffer1.Read(ctx, 1)
+	assert.Nil(t, readErr)
+	for len(msgs0) == 0 || msgs0[0].Header.Kind == isb.WMB {
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+			msgs0, readErr = buffer1.Read(ctx, 1)
+			assert.Nil(t, readErr)
+		}
+	}
+
+	msgs1, readErr1 := buffer2.Read(ctx, 1)
+	assert.Nil(t, readErr1)
+	for len(msgs1) == 0 || msgs1[0].Header.Kind == isb.WMB {
+		select {
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+			msgs1, readErr1 = buffer2.Read(ctx, 1)
+			assert.Nil(t, readErr1)
+		}
+	}
+
+	// assert the output of reduce
+	var readMessagePayload0 PayloadForTest
+	_ = json.Unmarshal(msgs0[0].Payload, &readMessagePayload0)
+	// since the window duration is 5 minutes, the output should be
+	// 100 * 300(for key even) and 99 * 300(for key odd)
+	// we cant guarantee the order of the output
+	assert.Contains(t, []int{30000, 29700}, readMessagePayload0.Value)
+	assert.Contains(t, []string{"even", "odd"}, readMessagePayload0.Key)
+
+	var readMessagePayload1 PayloadForTest
+	_ = json.Unmarshal(msgs1[0].Payload, &readMessagePayload1)
+	assert.Contains(t, []int{30000, 29700}, readMessagePayload1.Value)
+	assert.Contains(t, []string{"even", "odd"}, readMessagePayload1.Key)
+
+}
+
 // fetcherAndPublisher creates watermark fetcher and publishers, and keeps the processors alive by sending heartbeats
 func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryBuffer, key string) (fetch.Fetcher, publish.Publisher) {
 
@@ -1139,12 +1249,12 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb
 
 	// create publisher for to Buffers
 	index := int32(0)
-	for key := range toBuffers {
+	for key, partitionedBuffers := range toBuffers {
 		publishEntity := processor.NewProcessorEntity(key)
 		hb, hbKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
 		ot, otKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
 		otStores[key] = ot
-		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), 1, publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 
 		go func() {
@@ -1199,7 +1309,7 @@ func writeMessages(ctx context.Context, count int, key string, fromBuffer *simpl
 		messages := buildMessagesForReduce(count, key+strconv.Itoa(i), publishTime)
 		i++
 
-		// write the messages to fromBuffer, so that it will be available for consuming
+		// write the messages to fromBufferPartition, so that it will be available for consuming
 		offsets, _ := fromBuffer.Write(ctx, messages)
 		for _, offset := range offsets {
 			publish.PublishWatermark(wmb.Watermark(publishTime), offset, 0)

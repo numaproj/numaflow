@@ -15,6 +15,7 @@ spec:
       source:
         http: {}
     - name: sink
+      partitions: 2
       sink:
         log: {}
   edges:

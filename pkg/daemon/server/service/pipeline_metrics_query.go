@@ -21,11 +21,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"go.uber.org/zap"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/common/expfmt"
-	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
@@ -50,7 +50,7 @@ type pipelineMetadataQuery struct {
 	isbSvcClient      isbsvc.ISBService
 	pipeline          *v1alpha1.Pipeline
 	httpClient        metricsHttpClient
-	watermarkFetchers map[string][]fetch.Fetcher
+	watermarkFetchers map[v1alpha1.Edge][]fetch.Fetcher
 	rater             server.Ratable
 }
 
@@ -64,7 +64,7 @@ const (
 func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
-	wmFetchers map[string][]fetch.Fetcher,
+	wmFetchers map[v1alpha1.Edge][]fetch.Fetcher,
 	rater server.Ratable) (*pipelineMetadataQuery, error) {
 	var err error
 	ps := pipelineMetadataQuery{
@@ -173,8 +173,15 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
 	vertexLevelRates := ps.rater.GetRates(req.GetVertex())
 
-	metricsArr := make([]*daemon.VertexMetrics, abstractVertex.GetPartitionCount())
-	for i := int64(0); i < int64(abstractVertex.GetPartitionCount()); i++ {
+	metricsCount := 1
+	// TODO(multi-partition): currently metrics is an aggregation per vertex, so same across each pod for non-reduce vertex
+	// once multi-partition metrics are in - need to modify to per partition for every vertex
+	if abstractVertex.IsReduceUDF() {
+		metricsCount = abstractVertex.GetPartitionCount()
+	}
+
+	metricsArr := make([]*daemon.VertexMetrics, metricsCount)
+	for i := 0; i < metricsCount; i++ {
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
 		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
 		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
@@ -216,7 +223,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 			// Get the processing rate for this partition
 			if abstractVertex.IsReduceUDF() {
 				// the processing rate of this ith partition is the rate of the corresponding ith pod.
-				vm.ProcessingRates = ps.rater.GetPodRates(req.GetVertex(), int(i))
+				vm.ProcessingRates = ps.rater.GetPodRates(req.GetVertex(), i)
 			} else {
 				// if the vertex is not a reduce udf, then the processing rate is the sum of all pods in this vertex.
 				// TODO (multi-partition) - change this to display the processing rate of each partition when we finish multi-partition support for non-reduce vertices.

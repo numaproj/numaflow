@@ -181,7 +181,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		needToCreate := true
 		for existingPodName, existingPod := range existingPods {
 			if strings.HasPrefix(existingPodName, podNamePrefix) {
-				if existingPod.GetAnnotations()[dfv1.KeyHash] == hash {
+				if existingPod.GetAnnotations()[dfv1.KeyHash] == hash && existingPod.Status.Phase != corev1.PodFailed {
 					needToCreate = false
 					delete(existingPods, existingPodName)
 				}

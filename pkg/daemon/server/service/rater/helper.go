@@ -26,16 +26,31 @@ const IndexNotFound = -1
 
 // UpdateCount updates the count of processed messages for a pod at a given time
 func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podName string, count float64) {
+	items := q.Items()
+
 	// find the element matching the input timestamp and update it
-	for _, i := range q.Items() {
+	for _, i := range items {
 		if i.timestamp == time {
 			i.Update(podName, count)
 			return
 		}
 	}
+
 	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
 	tc := NewTimestampedCounts(time)
 	tc.Update(podName, count)
+
+	// close the window for the most recent timestamped count
+	switch n := q.Length(); n {
+	case 0:
+	// if the queue is empty, we just append the new timestamped count
+	case 1:
+		// if the queue has only one element, we close the window for this element
+		items[0].CloseWindow(nil)
+	default:
+		// if the queue has more than one element, we close the window for the most recent element
+		items[n-1].CloseWindow(items[n-2])
+	}
 	q.Append(tc)
 }
 
@@ -47,43 +62,25 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	}
 	counts := q.Items()
 	startIndex := findStartIndex(lookbackSeconds, counts)
-	if startIndex == IndexNotFound {
+	endIndex := findEndIndex(counts)
+	if startIndex == IndexNotFound || endIndex == IndexNotFound {
 		return 0
 	}
 
 	delta := float64(0)
 	// time diff in seconds.
-	timeDiff := counts[n-1].timestamp - counts[startIndex].timestamp
+	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
 	if timeDiff == 0 {
 		// if the time difference is 0, we return 0 to avoid division by 0
 		// this should not happen in practice because we are using a 10s interval
 		return 0
 	}
-	for i := startIndex; i < n-1; i++ {
-		delta = delta + calculateDelta(counts[i], counts[i+1])
-	}
-	return delta / float64(timeDiff)
-}
-
-func calculateDelta(c1, c2 *TimestampedCounts) float64 {
-	tc1 := c1.Snapshot()
-	tc2 := c2.Snapshot()
-	delta := float64(0)
-	// Iterate over the podCounts of the second TimestampedCounts
-	for pod, count2 := range tc2 {
-		// If the pod also exists in the first TimestampedCounts
-		if count1, ok := tc1[pod]; ok {
-			// If the count has decreased, it means the pod restarted
-			if count2 < count1 {
-				delta += count2
-			} else { // If the count has increased or stayed the same
-				delta += count2 - count1
-			}
-		} else { // If the pod only exists in the second TimestampedCounts, it's a new pod
-			delta += count2
+	for i := startIndex; i < endIndex; i++ {
+		if counts[i+1] != nil && counts[i+1].IsWindowClosed() {
+			delta += counts[i+1].delta
 		}
 	}
-	return delta
+	return delta / float64(timeDiff)
 }
 
 // CalculatePodRate calculates the rate of a pod in the last lookback seconds
@@ -94,20 +91,23 @@ func CalculatePodRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 	}
 	counts := q.Items()
 	startIndex := findStartIndex(lookbackSeconds, counts)
-	if startIndex == IndexNotFound {
+	endIndex := findEndIndex(counts)
+	if startIndex == IndexNotFound || endIndex == IndexNotFound {
 		return 0
 	}
 
 	delta := float64(0)
 	// time diff in seconds.
-	timeDiff := counts[n-1].timestamp - counts[startIndex].timestamp
+	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
 	if timeDiff == 0 {
 		// if the time difference is 0, we return 0 to avoid division by 0
 		// this should not happen in practice because we are using a 10s interval
 		return 0
 	}
-	for i := startIndex; i < n-1; i++ {
-		delta = delta + calculatePodDelta(counts[i], counts[i+1], podName)
+	for i := startIndex; i < endIndex; i++ {
+		if c1, c2 := counts[i], counts[i+1]; c1 != nil && c2 != nil && c1.IsWindowClosed() && c2.IsWindowClosed() {
+			delta += calculatePodDelta(c1, c2, podName)
+		}
 	}
 	return delta / float64(timeDiff)
 }
@@ -133,18 +133,28 @@ func calculatePodDelta(c1, c2 *TimestampedCounts, podName string) float64 {
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
 	now := time.Now().Truncate(time.Second * 10).Unix()
-	if now-counts[n-2].timestamp > lookbackSeconds {
+	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {
 		// if the second last element is already outside the lookback window, we return IndexNotFound
 		return IndexNotFound
 	}
 
 	startIndex := n - 2
 	for i := n - 2; i >= 0; i-- {
-		if now-counts[i].timestamp <= lookbackSeconds {
+		if now-counts[i].timestamp <= lookbackSeconds && counts[i].IsWindowClosed() {
 			startIndex = i
 		} else {
 			break
 		}
 	}
 	return startIndex
+}
+
+func findEndIndex(counts []*TimestampedCounts) int {
+	for i := len(counts) - 1; i >= 0; i-- {
+		// if a window is not closed, we exclude it from the rate calculation
+		if counts[i].IsWindowClosed() {
+			return i
+		}
+	}
+	return IndexNotFound
 }

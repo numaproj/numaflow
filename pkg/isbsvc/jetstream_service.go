@@ -285,10 +285,14 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 
 func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.Fetcher, error) {
 	var watermarkFetchers []fetch.Fetcher
-	for i := 0; i < fromBufferPartitionCount; i++ {
+	fetchers := 1
+	if isReduce {
+		fetchers = fromBufferPartitionCount
+	}
+	// if it's not a reduce vertex, we don't need multiple watermark fetchers. We use common fetcher among all partitions.
+	for i := 0; i < fetchers; i++ {
 		hbBucketName := JetStreamProcessorBucket(bucketName)
 		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
-		// should we return error if one is successful?
 		if err != nil {
 			return nil, err
 		}
@@ -298,7 +302,12 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 			return nil, err
 		}
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
-		pm := processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+		var pm *processor.ProcessorManager
+		if isReduce {
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+		} else {
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
+		}
 		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, fromBufferPartitionCount)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}
