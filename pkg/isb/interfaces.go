@@ -69,6 +69,7 @@ type BufferReaderInformation interface {
 // BufferWriterInformation has information regarding the buffer we are writing to.
 type BufferWriterInformation interface {
 	GetName() string
+	GetPartitionIdx() int32
 }
 
 // SourceWatermarkPublisher publishes source watermarks based on a list of isb.ReadMessage

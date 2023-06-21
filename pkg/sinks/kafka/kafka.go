@@ -138,6 +138,12 @@ func (tk *ToKafka) GetName() string {
 	return tk.name
 }
 
+// GetPartitionIdx returns the partition index.
+// for sink it is always 0.
+func (tk *ToKafka) GetPartitionIdx() int32 {
+	return 0
+}
+
 // Write writes to the kafka topic.
 func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	errs := make([]error, len(messages))

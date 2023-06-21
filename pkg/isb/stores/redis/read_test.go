@@ -161,7 +161,7 @@ func (suite *ReadTestSuite) SetupSuite() {
 	group := "testsuitegroup1"
 	consumer := "testsuite-0"
 	count := int64(10)
-	rqw, _ := NewBufferWrite(ctx, client, stream, group).(*BufferWrite)
+	rqw, _ := NewBufferWrite(ctx, client, stream, group, 0).(*BufferWrite)
 	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer, 0).(*BufferRead)
 
 	suite.ctx = ctx
@@ -316,7 +316,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	toGroup := "ReadWritePerformance-group-to"
 	consumer := "ReadWritePerformance-con-0"
 	count := int64(10000)
-	rqw, _ := NewBufferWrite(ctx, client, toStream, toGroup, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute), redisclient.WithMaxLength(20000)).(*BufferWrite)
+	rqw, _ := NewBufferWrite(ctx, client, toStream, toGroup, 0, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute), redisclient.WithMaxLength(20000)).(*BufferWrite)
 	rqr, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer, 0).(*BufferRead)
 
 	toSteps := map[string][]isb.BufferWriter{
@@ -406,7 +406,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatency() {
 
 // TestReadWriteLatencyPipelining performs the latency test during a forward.
 func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
-	suite.rqw, _ = NewBufferWrite(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", redisclient.WithInfoRefreshInterval(2*time.Second), redisclient.WithLagDuration(time.Minute), redisclient.WithoutPipelining(), redisclient.WithMaxLength(20000)).(*BufferWrite)
+	suite.rqw, _ = NewBufferWrite(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", 0, redisclient.WithInfoRefreshInterval(2*time.Second), redisclient.WithLagDuration(time.Minute), redisclient.WithoutPipelining(), redisclient.WithMaxLength(20000)).(*BufferWrite)
 	_ = NewBufferRead(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", "consumer-0", 0)
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{

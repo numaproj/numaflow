@@ -54,7 +54,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName)
+	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
 	defer jw.Close()
