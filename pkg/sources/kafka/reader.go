@@ -246,13 +246,9 @@ func (r *KafkaSource) Close() error {
 	// finally, shut down the client
 	r.cancelfn()
 	if r.adminClient != nil {
+		// closes the underlying sarama client as well.
 		if err := r.adminClient.Close(); err != nil {
 			r.logger.Errorw("Error in closing kafka admin client", zap.Error(err))
-		}
-	}
-	if r.saramaClient != nil {
-		if err := r.saramaClient.Close(); err != nil {
-			r.logger.Errorw("Error in closing kafka sarama client", zap.Error(err))
 		}
 	}
 	<-r.stopch
@@ -276,6 +272,10 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 	totalPending := int64(0)
 	rep, err := r.adminClient.ListConsumerGroupOffsets(r.groupName, map[string][]int32{r.topic: partitions})
 	if err != nil {
+		err := r.refreshAdminClient()
+		if err != nil {
+			return isb.PendingNotAvailable, fmt.Errorf("failed to update the admin client, %w", err)
+		}
 		return isb.PendingNotAvailable, fmt.Errorf("failed to list consumer group offsets, %w", err)
 	}
 	for _, partition := range partitions {
@@ -372,6 +372,21 @@ func NewKafkaSource(
 	}
 	kafkasource.forwarder = forwarder
 	return kafkasource, nil
+}
+
+// refreshAdminClient refreshes the admin client
+func (r *KafkaSource) refreshAdminClient() error {
+	if _, err := r.saramaClient.RefreshController(); err != nil {
+		return fmt.Errorf("failed to refresh controller, %w", err)
+	}
+	// we are not closing the old admin client because it will close the underlying sarama client as well
+	// it is safe not close the admin client, since we are using the same sarama client we will not leak any resources(tcp connections)
+	admin, err := sarama.NewClusterAdminFromClient(r.saramaClient)
+	if err != nil {
+		return fmt.Errorf("failed to create new admin client, %w", err)
+	}
+	r.adminClient = admin
+	return nil
 }
 
 func configFromOpts(yamlconfig string) (*sarama.Config, error) {
