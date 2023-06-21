@@ -380,7 +380,7 @@ func (r *KafkaSource) refreshAdminClient() error {
 		return fmt.Errorf("failed to refresh controller, %w", err)
 	}
 	// we are not closing the old admin client because it will close the underlying sarama client as well
-	// it is safe not close the admin client, since we are using the same sarama client we will not leak any resources(tcp connections)
+	// it is safe to not close the admin client, since we are using the same sarama client we will not leak any resources(tcp connections)
 	admin, err := sarama.NewClusterAdminFromClient(r.saramaClient)
 	if err != nil {
 		return fmt.Errorf("failed to create new admin client, %w", err)
