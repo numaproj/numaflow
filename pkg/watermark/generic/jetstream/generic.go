@@ -106,7 +106,7 @@ func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) 
 	}
 
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
-	fetcherSet := make(fetch.EdgeFetcherSet)
+	edgeFetchers := make(map[string]fetch.Fetcher)
 
 	vertex := vertexInstance.Vertex
 	if vertex.IsASource() {
@@ -116,7 +116,7 @@ func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) 
 			return nil, err
 		}
 		// For source vertex, we use the vertex name as the from buffer name // TODO: verify no issues
-		fetcherSet[vertex.Spec.Name] = edgeFetcher
+		edgeFetchers[vertex.Spec.Name] = edgeFetcher
 	} else {
 		for _, e := range vertex.Spec.FromEdges {
 			fromBucket := v1alpha1.GenerateEdgeBucketName(vertexInstance.Vertex.Namespace, pipelineName, e.From, e.To)
@@ -124,11 +124,11 @@ func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) 
 			if err != nil {
 				return nil, err
 			}
-			fetcherSet[e.From] = edgeFetcher
+			edgeFetchers[e.From] = edgeFetcher
 		}
 	}
 
-	return &fetcherSet, nil
+	return fetch.NewEdgeFetcherSet(ctx, edgeFetchers), nil
 }
 
 func buildFetcherForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBucket string) (fetch.Fetcher, error) {

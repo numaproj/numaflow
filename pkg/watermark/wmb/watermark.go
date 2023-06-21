@@ -39,6 +39,14 @@ func (w Watermark) After(t time.Time) bool {
 	return time.Time(w).After(t)
 }
 
+func (w Watermark) AfterWatermark(compare Watermark) bool {
+	return w.After(time.Time(compare))
+}
+
 func (w Watermark) Before(t time.Time) bool {
 	return time.Time(w).Before(t)
+}
+
+func (w Watermark) BeforeWatermark(compare Watermark) bool {
+	return w.Before(time.Time(compare))
 }

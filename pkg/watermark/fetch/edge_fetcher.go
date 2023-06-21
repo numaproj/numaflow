@@ -75,6 +75,8 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 // We calculate the watermark for the given offset and partition, update the lastProcessedWatermark of the given partition to the watermark we just calculate.
 // Then, we compare the lastProcessedWatermark from all partitions and return the minimum as the edge watermark.
 // deletes the processor if it's not active.
+// Note that GetWatermark computes the Watermark for an individual incoming Edge (From Vertex). For overall
+// Watermark for the Vertex, we must look across all Edges (see EdgeFetcherSet)
 func (e *EdgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
