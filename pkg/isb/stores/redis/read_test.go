@@ -121,7 +121,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 		},
 	}}
 
-	rqw, _ := NewBufferWrite(ctx, client, "toStream", "toGroup", redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute)).(*BufferWrite)
+	rqw, _ := NewBufferWrite(ctx, client, "toStream", "toGroup", 0, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute)).(*BufferWrite)
 	err = client.CreateStreamGroup(ctx, rqw.GetStreamName(), "toGroup", redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
