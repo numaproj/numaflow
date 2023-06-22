@@ -25,7 +25,7 @@ import (
 const IndexNotFound = -1
 
 // UpdateCount updates the count of processed messages for a pod at a given time
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podName string, count float64) {
+func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podName string, count []float64) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
@@ -55,7 +55,7 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 }
 
 // CalculateRate calculates the rate of the vertex in the last lookback seconds
-func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) float64 {
+func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionID int) float64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
 		return 0
@@ -75,11 +75,27 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		return 0
 	}
 	for i := startIndex; i < endIndex; i++ {
-		if counts[i+1] != nil && counts[i+1].IsWindowClosed() {
-			delta += counts[i+1].delta
+		if c1, c2 := counts[i], counts[i+1]; c1 != nil && c2 != nil && c1.IsWindowClosed() && c2.IsWindowClosed() {
+			delta += calculatePartitionDelta(c1, c2, partitionID)
 		}
 	}
 	return delta / float64(timeDiff)
+}
+
+func calculatePartitionDelta(c1, c2 *TimestampedCounts, partitionID int) float64 {
+	tc1 := c1.SnapshotCopy()
+	tc2 := c2.SnapshotCopy()
+	count1, exist1 := tc1[partitionID]
+	count2, exist2 := tc2[partitionID]
+	if !exist2 {
+		return 0
+	} else if !exist1 {
+		return count2
+	} else if count2 < count1 {
+		return count2
+	} else {
+		return count2 - count1
+	}
 }
 
 // CalculatePodRate calculates the rate of a pod in the last lookback seconds

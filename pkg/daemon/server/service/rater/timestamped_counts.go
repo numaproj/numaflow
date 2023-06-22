@@ -31,6 +31,8 @@ type TimestampedCounts struct {
 	timestamp int64
 	// podName to count mapping
 	podCounts map[string]float64
+	// partition to count mapping
+	partitionCounts map[int]float64
 	// isWindowClosed indicates whether we have finished collecting pod counts for this timestamp
 	isWindowClosed bool
 	// delta is the total count change from the previous window, it's valid only when isWindowClosed is true
@@ -40,19 +42,20 @@ type TimestampedCounts struct {
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
-		timestamp:      t,
-		podCounts:      make(map[string]float64),
-		isWindowClosed: false,
-		delta:          0,
-		lock:           new(sync.RWMutex),
+		timestamp:       t,
+		podCounts:       make(map[string]float64),
+		partitionCounts: make(map[int]float64),
+		isWindowClosed:  false,
+		delta:           0,
+		lock:            new(sync.RWMutex),
 	}
 }
 
 // Update updates the count for a pod if the current window is not closed
-func (tc *TimestampedCounts) Update(podName string, count float64) {
+func (tc *TimestampedCounts) Update(podName string, count []float64) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
-	if count == CountNotAvailable {
+	if count[0] == CountNotAvailable {
 		// we choose to skip updating when count is not available for the pod, instead of removing the pod from the map.
 		// imagine if the getTotalCount call fails to scrape the count metric, and it's NOT because the pod is down.
 		// in this case getTotalCount returns CountNotAvailable.
@@ -67,7 +70,10 @@ func (tc *TimestampedCounts) Update(podName string, count float64) {
 		// we skip updating if the window is already closed.
 		return
 	}
-	tc.podCounts[podName] = count
+	for idx, val := range count {
+		tc.partitionCounts[idx] = val
+	}
+	tc.podCounts[podName] = count[0]
 }
 
 // Snapshot returns a copy of the podName to count mapping
@@ -77,6 +83,16 @@ func (tc *TimestampedCounts) Snapshot() map[string]float64 {
 	defer tc.lock.RUnlock()
 	counts := make(map[string]float64)
 	for k, v := range tc.podCounts {
+		counts[k] = v
+	}
+	return counts
+}
+
+func (tc *TimestampedCounts) SnapshotCopy() map[int]float64 {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	counts := make(map[int]float64)
+	for k, v := range tc.partitionCounts {
 		counts[k] = v
 	}
 	return counts

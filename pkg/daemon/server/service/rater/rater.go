@@ -35,7 +35,7 @@ import (
 
 type Ratable interface {
 	Start(ctx context.Context) error
-	GetRates(vertexName string) map[string]float64
+	GetRates(vertexName string, partitionID int) map[string]float64
 	GetPodRates(vertexName string, podIndex int) map[string]float64
 }
 
@@ -120,16 +120,16 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	vertexName := podInfo[1]
 	vertexType := podInfo[3]
 	podName := strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-")
-	var count float64
+	var count []float64
 	activePods := r.podTracker.GetActivePods()
 	if activePods.Contains(key) {
 		count = r.getTotalCount(vertexName, vertexType, podName)
-		if count == CountNotAvailable {
+		if count[0] == CountNotAvailable {
 			log.Debugf("Failed retrieving total count for pod %s", podName)
 		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with CountNotAvailable...", podName)
-		count = CountNotAvailable
+		count = []float64{CountNotAvailable}
 	}
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	UpdateCount(r.timestampedPodCounts[vertexName], now, podName, count)
@@ -200,18 +200,18 @@ func sleep(ctx context.Context, duration time.Duration) {
 }
 
 // getTotalCount returns the total number of messages read by the pod
-func (r *Rater) getTotalCount(vertexName, vertexType, podName string) float64 {
+func (r *Rater) getTotalCount(vertexName, vertexType, podName string) []float64 {
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if res, err := r.httpClient.Get(url); err != nil {
 		r.log.Errorf("failed reading the metrics endpoint, %v", err.Error())
-		return CountNotAvailable
+		return []float64{CountNotAvailable}
 	} else {
 		textParser := expfmt.TextParser{}
 		result, err := textParser.TextToMetricFamilies(res.Body)
 		if err != nil {
 			r.log.Errorf("failed parsing to prometheus metric families, %v", err.Error())
-			return CountNotAvailable
+			return []float64{CountNotAvailable}
 		}
 		var readTotalMetricName string
 		if vertexType == "reduce" {
@@ -221,20 +221,26 @@ func (r *Rater) getTotalCount(vertexName, vertexType, podName string) float64 {
 		}
 		if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 			metricsList := value.GetMetric()
-			return metricsList[0].Counter.GetValue()
+			//fmt.Println(metricsList)
+			//fmt.Println(metricsList[0].Counter.GetValue(), "- ", metricsList[0].Label[0].GetValue())
+			var partitionCount []float64
+			for _, ele := range metricsList {
+				partitionCount = append(partitionCount, ele.Counter.GetValue())
+			}
+			return partitionCount
 		} else {
 			r.log.Errorf("failed getting the read total metric, the metric is not available.")
-			return CountNotAvailable
+			return []float64{CountNotAvailable}
 		}
 	}
 }
 
 // GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
-func (r *Rater) GetRates(vertexName string) map[string]float64 {
+func (r *Rater) GetRates(vertexName string, partitionID int) map[string]float64 {
 	var result = make(map[string]float64)
 	// calculate rates for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap(vertexName) {
-		r := CalculateRate(r.timestampedPodCounts[vertexName], i)
+		r := CalculateRate(r.timestampedPodCounts[vertexName], i, partitionID)
 		result[n] = r
 	}
 	return result
