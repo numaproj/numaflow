@@ -273,6 +273,7 @@ readLoop:
 				select {
 				case datumCh <- d:
 				case <-ctx.Done():
+					close(datumCh)
 					return nil, ctx.Err()
 				}
 			}
@@ -280,6 +281,7 @@ readLoop:
 				break readLoop
 			}
 		case <-ctx.Done():
+			close(datumCh)
 			return nil, ctx.Err()
 		}
 	}
