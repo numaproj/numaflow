@@ -40,15 +40,31 @@ func NewEdgeFetcherSet(ctx context.Context, edgeFetchers map[string]Fetcher) Fet
 	}
 }
 
-// GetWatermark processes the Watermark for the given partition from the given offset and return the Watermark across
-// all partitions, across all Edges
-func (efs *edgeFetcherSet) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+// GetWatermark processes the Watermark for the given partition from the given offset
+func (efs *edgeFetcherSet) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int32) error {
+
+	for _, fetcher := range efs.edgeFetchers {
+		err := fetcher.ProcessOffset(inputOffset, fromPartitionIdx)
+		if err != nil {
+			return err //todo: determine if we should just do our best and continue
+		}
+	}
+	return nil
+}
+
+// GetHeadWatermark returns the latest watermark among all processors for the given partition.
+// This can be used in showing the watermark
+// progression for a vertex when not consuming the messages directly (eg. UX, tests)
+func (efs *edgeFetcherSet) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	// get the most conservative time (minimum watermark) across all Edges
 	var wm wmb.Watermark
 	overallWatermark := wmb.InitialWatermark
 	for fromVertex, fetcher := range efs.edgeFetchers {
-		wm = fetcher.GetWatermark(inputOffset, fromPartitionIdx)
-		efs.log.Debugf("Got Edge watermark from vertex=%q at offset %q while processing partition %d: %v", fromVertex, inputOffset, fromPartitionIdx, wm)
+		wm = fetcher.GetHeadWatermark(fromPartitionIdx)
+		if wm == wmb.InitialWatermark { // unset
+			continue
+		}
+		efs.log.Debugf("Got Edge Head Watermark from vertex=%q while processing partition %d: %v", fromVertex, fromPartitionIdx, wm)
 		if wm.BeforeWatermark(overallWatermark) || overallWatermark == wmb.InitialWatermark {
 			overallWatermark = wm
 		}
@@ -56,23 +72,59 @@ func (efs *edgeFetcherSet) GetWatermark(inputOffset isb.Offset, fromPartitionIdx
 	return overallWatermark
 }
 
-// GetHeadWatermark returns the latest watermark among all processors for the given partition.
-// This can be used in showing the watermark
-// progression for a vertex when not consuming the messages directly (eg. UX, tests)
-func (efs *edgeFetcherSet) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
-
-}
-
 // GetHeadWMB returns the latest idle WMB with the smallest watermark for the given partition
 // Only returns one if all Publishers are idle and if it's the smallest one of any partitions
 func (efs *edgeFetcherSet) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 	// if we get back one that's empty it means that there could be one that's not Idle, so we need to return empty
 
-	// todo: need to change the EdgeFetcher method to return a value even if it's not the smallest partition,
-	// and we can instead do the check for smallest here by calling edgeFetcherSet.getMinFromLastProcessed
+	// call GetHeadWMB() for all Edges and get the smallest one
+	var watermarkBuffer, overallHeadWMB, unsetWMB wmb.WMB
+
+	for fromVertex, fetcher := range efs.edgeFetchers {
+		watermarkBuffer = fetcher.GetHeadWMB(fromPartitionIdx)
+		if watermarkBuffer == unsetWMB { // unset
+			return wmb.WMB{}
+		}
+		efs.log.Debugf("Got Edge Head WMB from vertex=%q while processing partition %d: %v", fromVertex, fromPartitionIdx, watermarkBuffer)
+		if watermarkBuffer.Watermark != -1 {
+			// find the smallest head offset of the smallest WMB.watermark (though latest)
+			if watermarkBuffer.Watermark < overallHeadWMB.Watermark {
+				overallHeadWMB = watermarkBuffer
+			} else if watermarkBuffer.Watermark == overallHeadWMB.Watermark && watermarkBuffer.Offset < overallHeadWMB.Offset {
+				overallHeadWMB = watermarkBuffer
+			}
+		}
+	}
+
+	// we only consider idle watermark if it is smaller than or equal to min of all the last processed watermarks.
+
+	if overallHeadWMB.Watermark > efs.GetWatermark().UnixMilli() {
+		return wmb.WMB{}
+	}
+	return overallHeadWMB
 
 }
 
-func (efs *edgeFetcherSet) Close() error {
+func (efs *edgeFetcherSet) GetWatermark() wmb.Watermark {
+	// get the most conservative time (minimum watermark) across all Edges
+	var wm wmb.Watermark
+	overallWatermark := wmb.InitialWatermark
+	for fromVertex, fetcher := range efs.edgeFetchers {
+		wm = fetcher.GetWatermark()
+		efs.log.Debugf("Got Edge watermark from vertex=%q: %v", fromVertex, wm)
+		if wm.BeforeWatermark(overallWatermark) || overallWatermark == wmb.InitialWatermark {
+			overallWatermark = wm
+		}
+	}
+	return overallWatermark
+}
 
+func (efs *edgeFetcherSet) Close() error {
+	for _, fetcher := range efs.edgeFetchers {
+		err := fetcher.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

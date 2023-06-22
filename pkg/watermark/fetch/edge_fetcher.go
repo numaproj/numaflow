@@ -77,11 +77,11 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 // deletes the processor if it's not active.
 // Note that GetWatermark computes the Watermark for an individual incoming Edge (From Vertex). For overall
 // Watermark for the Vertex, we must look across all Edges (see EdgeFetcherSet)
-func (e *EdgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+func (e *EdgeFetcher) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int32) error {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("Unable to get offset from isb.Offset.Sequence()", zap.Error(err))
-		return wmb.InitialWatermark
+		return err
 	}
 	var debugString strings.Builder
 	var epoch int64 = math.MaxInt64
@@ -124,13 +124,14 @@ func (e *EdgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int3
 	e.lastProcessedWm[fromPartitionIdx] = epoch
 	// get the smallest watermark among all the partitions
 	// since we cannot compare the offset of different partitions, we get the smallest among the last processed watermarks of all the partitions
-	minEpoch := e.getMinFromLastProcessed(epoch)
+	//minEpoch := e.getMinFromLastProcessed(epoch)
 
-	e.log.Debugf("%s[%s] get watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
-	return wmb.Watermark(time.UnixMilli(minEpoch))
+	e.log.Debugf("%s[%s] processed watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
+	//return wmb.Watermark(time.UnixMilli(minEpoch))
+	return nil
 }
 
-// GetHeadWatermark returns the latest watermark among all processors for the given partition.
+// GetHeadWatermark returns the smallest head watermark among all the processors for given partition
 // This can be used in showing the watermark
 // progression for a vertex when not consuming the messages directly (eg. UX, tests)
 // NOTE
@@ -208,9 +209,9 @@ func (e *EdgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 	// update the last processed watermark for the partition
 	e.lastProcessedWm[fromPartitionIdx] = headWMB.Watermark
 	// we only consider idle watermark if it is smaller than or equal to min of all the last processed watermarks.
-	if headWMB.Watermark > e.getMinFromLastProcessed(headWMB.Watermark) {
-		return wmb.WMB{}
-	}
+	//if headWMB.Watermark > e.getMinFromLastProcessed(headWMB.Watermark) {
+	//	return wmb.WMB{}
+	//}
 	e.log.Debugf("GetHeadWMB: %s[%s] get idle head wmb for offset", debugString.String(), e.bucketName)
 	return headWMB
 }
@@ -225,13 +226,13 @@ func (e *EdgeFetcher) Close() error {
 	return nil
 }
 
-// getMinFromLastProcessed returns the smallest watermark among all the last processed watermarks.
-func (e *EdgeFetcher) getMinFromLastProcessed(watermark int64) int64 {
-	minWm := watermark
+// GetWatermark returns the smallest watermark among all the last processed watermarks.
+func (e *EdgeFetcher) GetWatermark() wmb.Watermark {
+	minWm := int64(0)
 	for _, wm := range e.lastProcessedWm {
-		if minWm > wm {
+		if minWm == int64(0) || minWm > wm {
 			minWm = wm
 		}
 	}
-	return minWm
+	return wmb.Watermark(time.UnixMilli(minWm))
 }
