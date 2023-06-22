@@ -48,6 +48,8 @@ var (
 	testStartTime = time.Unix(1636470000, 0).UTC()
 )
 
+var defaultPartitionIdx = int32(0)
+
 func TestRedisQRead_Read(t *testing.T) {
 	ctx := context.Background()
 	client := redisclient.NewRedisClient(redisOptions)
@@ -56,7 +58,7 @@ func TestRedisQRead_Read(t *testing.T) {
 	consumer := "con-0"
 
 	count := int64(10)
-	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer, 0).(*BufferRead)
+	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer, defaultPartitionIdx).(*BufferRead)
 	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
@@ -88,7 +90,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 	consumer := "readbacklog-consumer"
 
 	count := int64(10)
-	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer, 0).(*BufferRead)
+	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer, defaultPartitionIdx).(*BufferRead)
 	err := client.CreateStreamGroup(ctx, rqr.GetStreamName(), group, redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
@@ -121,7 +123,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 		},
 	}}
 
-	rqw, _ := NewBufferWrite(ctx, client, "toStream", "toGroup", 0, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute)).(*BufferWrite)
+	rqw, _ := NewBufferWrite(ctx, client, "toStream", "toGroup", defaultPartitionIdx, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute)).(*BufferWrite)
 	err = client.CreateStreamGroup(ctx, rqw.GetStreamName(), "toGroup", redisclient.ReadFromEarliest)
 	assert.NoError(t, err)
 
@@ -161,8 +163,8 @@ func (suite *ReadTestSuite) SetupSuite() {
 	group := "testsuitegroup1"
 	consumer := "testsuite-0"
 	count := int64(10)
-	rqw, _ := NewBufferWrite(ctx, client, stream, group, 0).(*BufferWrite)
-	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer, 0).(*BufferRead)
+	rqw, _ := NewBufferWrite(ctx, client, stream, group, defaultPartitionIdx).(*BufferWrite)
+	rqr, _ := NewBufferRead(ctx, client, stream, group, consumer, defaultPartitionIdx).(*BufferRead)
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -316,8 +318,8 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	toGroup := "ReadWritePerformance-group-to"
 	consumer := "ReadWritePerformance-con-0"
 	count := int64(10000)
-	rqw, _ := NewBufferWrite(ctx, client, toStream, toGroup, 0, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute), redisclient.WithMaxLength(20000)).(*BufferWrite)
-	rqr, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer, 0).(*BufferRead)
+	rqw, _ := NewBufferWrite(ctx, client, toStream, toGroup, defaultPartitionIdx, redisclient.WithInfoRefreshInterval(2*time.Millisecond), redisclient.WithLagDuration(time.Minute), redisclient.WithMaxLength(20000)).(*BufferWrite)
+	rqr, _ := NewBufferRead(ctx, client, fromStream, fromGroup, consumer, defaultPartitionIdx).(*BufferRead)
 
 	toSteps := map[string][]isb.BufferWriter{
 		"to1": {rqw},
@@ -375,7 +377,7 @@ func TestReadWritePerformanceSuite(t *testing.T) {
 
 // TestReadWriteLatency is used to look at the latency during forward.
 func (suite *ReadWritePerformance) TestReadWriteLatency() {
-	_ = NewBufferRead(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", "consumer-0", 0)
+	_ = NewBufferRead(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", "consumer-0", defaultPartitionIdx)
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)
 
@@ -406,8 +408,8 @@ func (suite *ReadWritePerformance) TestReadWriteLatency() {
 
 // TestReadWriteLatencyPipelining performs the latency test during a forward.
 func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
-	suite.rqw, _ = NewBufferWrite(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", 0, redisclient.WithInfoRefreshInterval(2*time.Second), redisclient.WithLagDuration(time.Minute), redisclient.WithoutPipelining(), redisclient.WithMaxLength(20000)).(*BufferWrite)
-	_ = NewBufferRead(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", "consumer-0", 0)
+	suite.rqw, _ = NewBufferWrite(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", defaultPartitionIdx, redisclient.WithInfoRefreshInterval(2*time.Second), redisclient.WithLagDuration(time.Minute), redisclient.WithoutPipelining(), redisclient.WithMaxLength(20000)).(*BufferWrite)
+	_ = NewBufferRead(suite.ctx, suite.rclient, "ReadWritePerformance-to", "ReadWritePerformance-group-to", "consumer-0", defaultPartitionIdx)
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",

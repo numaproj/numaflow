@@ -36,6 +36,8 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
+var defaultPartitionIdx = int32(0)
+
 func TestJetStreamBufferRead(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
@@ -54,7 +56,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
 	jw, _ := bw.(*jetStreamWriter)
 	defer jw.Close()
@@ -81,7 +83,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 		assert.NoError(t, e)
 	}
 
-	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
 
 	fromStep := bufferReader.(*jetStreamReader)
@@ -149,7 +151,7 @@ func TestGetName(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
 	br := bufferReader.(*jetStreamReader)
 	assert.Equal(t, br.GetName(), streamName)
@@ -176,7 +178,7 @@ func TestClose(t *testing.T) {
 	addStream(t, js, streamName)
 	defer deleteStream(js, streamName)
 
-	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, 0)
+	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
 
 	br := bufferReader.(*jetStreamReader)
