@@ -106,6 +106,7 @@ func Test_Single(t *testing.T) {
 	_ = nc.Publish(testSubject, []byte("3"))
 
 	msgs, err := ns.Read(context.Background(), 5)
+	assert.NoError(t, err)
 	for len(msgs) != 3 {
 		select {
 		case <-ctx.Done():
