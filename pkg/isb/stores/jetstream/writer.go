@@ -34,18 +34,19 @@ import (
 )
 
 type jetStreamWriter struct {
-	name    string
-	stream  string
-	subject string
-	conn    *jsclient.NatsConn
-	js      *jsclient.JetStreamContext
-	opts    *writeOptions
-	isFull  *atomic.Bool
-	log     *zap.SugaredLogger
+	name         string
+	partitionIdx int32
+	stream       string
+	subject      string
+	conn         *jsclient.NatsConn
+	js           *jsclient.JetStreamContext
+	opts         *writeOptions
+	isFull       *atomic.Bool
+	log          *zap.SugaredLogger
 }
 
 // NewJetStreamBufferWriter is used to provide a new instance of JetStreamBufferWriter
-func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, opts ...WriteOption) (isb.BufferWriter, error) {
+func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, partitionIdx int32, opts ...WriteOption) (isb.BufferWriter, error) {
 	o := defaultWriteOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -66,14 +67,15 @@ func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClie
 	}
 
 	result := &jetStreamWriter{
-		name:    name,
-		stream:  stream,
-		subject: subject,
-		conn:    conn,
-		js:      js,
-		opts:    o,
-		isFull:  atomic.NewBool(true),
-		log:     logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject),
+		name:         name,
+		partitionIdx: partitionIdx,
+		stream:       stream,
+		subject:      subject,
+		conn:         conn,
+		js:           js,
+		opts:         o,
+		isFull:       atomic.NewBool(true),
+		log:          logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject),
 	}
 
 	go result.runStatusChecker(ctx)
@@ -142,6 +144,10 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 
 func (jw *jetStreamWriter) GetName() string {
 	return jw.name
+}
+
+func (jw *jetStreamWriter) GetPartitionIdx() int32 {
+	return jw.partitionIdx
 }
 
 func (jw *jetStreamWriter) Close() error {

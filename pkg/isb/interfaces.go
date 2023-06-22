@@ -62,13 +62,18 @@ type BufferReader interface {
 
 // BufferReaderInformation has information regarding the buffer we are reading from.
 type BufferReaderInformation interface {
+	// GetName returns the name.
 	GetName() string
+	// GetPartitionIdx returns the partition ID.
 	GetPartitionIdx() int32
 }
 
 // BufferWriterInformation has information regarding the buffer we are writing to.
 type BufferWriterInformation interface {
+	// GetName returns the name.
 	GetName() string
+	// GetPartitionIdx returns the partition ID.
+	GetPartitionIdx() int32
 }
 
 // SourceWatermarkPublisher publishes source watermarks based on a list of isb.ReadMessage

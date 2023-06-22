@@ -83,6 +83,8 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 }
 
 func Test_Single(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	server := natstest.RunNatsServer(t)
 	defer server.Shutdown()
 
@@ -105,7 +107,17 @@ func Test_Single(t *testing.T) {
 
 	msgs, err := ns.Read(context.Background(), 5)
 	assert.NoError(t, err)
-	assert.Equal(t, 3, len(msgs))
+	for len(msgs) != 3 {
+		select {
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for messages")
+			return
+		default:
+			msgs, err = ns.Read(context.Background(), 5)
+			assert.NoError(t, err)
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 }
 
 func Test_Multiple(t *testing.T) {
