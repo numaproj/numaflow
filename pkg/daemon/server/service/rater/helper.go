@@ -41,7 +41,7 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	tc.Update(podName, count)
 
 	// close the window for the most recent timestamped count
-	switch n := q.Length(); n {
+	switch n := len(items); n {
 	case 0:
 	// if the queue is empty, we just append the new timestamped count
 	case 1:
@@ -56,11 +56,10 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 
 // CalculateRate calculates the rate of the vertex in the last lookback seconds
 func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) float64 {
-	n := q.Length()
-	if n <= 1 {
+	counts := q.Items()
+	if len(counts) <= 1 {
 		return 0
 	}
-	counts := q.Items()
 	startIndex := findStartIndex(lookbackSeconds, counts)
 	endIndex := findEndIndex(counts)
 	if startIndex == IndexNotFound || endIndex == IndexNotFound {
@@ -85,11 +84,10 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 
 // CalculatePodRate calculates the rate of a pod in the last lookback seconds
 func CalculatePodRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, podName string) float64 {
-	n := q.Length()
-	if n <= 1 {
+	counts := q.Items()
+	if len(counts) <= 1 {
 		return 0
 	}
-	counts := q.Items()
 	startIndex := findStartIndex(lookbackSeconds, counts)
 	endIndex := findEndIndex(counts)
 	if startIndex == IndexNotFound || endIndex == IndexNotFound {
