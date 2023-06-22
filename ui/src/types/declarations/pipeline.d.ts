@@ -1,4 +1,4 @@
-import { Node, Edge } from "reactflow";
+import { Edge, Node } from "reactflow";
 
 export interface VertexMetrics {
   ratePerMin: string;
@@ -43,7 +43,7 @@ export interface Pipeline {
 export interface Spec {
   vertices: PipelineVertex[];
   edges: PipelineEdge[];
-  watermark: any,
+  watermark: any;
 }
 
 export interface PipelineVertex {
