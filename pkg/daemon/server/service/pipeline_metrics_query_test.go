@@ -132,6 +132,13 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 	processingRates["5m"] = 4.894736842105263
 	processingRates["default"] = 4.894736842105263
 	assert.Equal(t, resp.VertexMetrics[0].GetProcessingRates(), processingRates)
+
+	pendings := make(map[string]int64)
+	pendings["15m"] = 4
+	pendings["1m"] = 5
+	pendings["5m"] = 6
+	pendings["default"] = 7
+	assert.Equal(t, resp.GetPendings(), pendings)
 }
 
 func TestGetBuffer(t *testing.T) {
