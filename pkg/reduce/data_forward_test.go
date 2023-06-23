@@ -72,6 +72,7 @@ var nonKeyedVertex = &dfv1.VertexInstance{
 
 type EventTypeWMProgressor struct {
 	watermarks map[string]wmb.Watermark
+	lastOffset isb.Offset
 	m          sync.Mutex
 }
 
@@ -93,10 +94,15 @@ func (e *EventTypeWMProgressor) Close() error {
 	return nil
 }
 
-func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (e *EventTypeWMProgressor) ProcessOffset(offset isb.Offset, partition int32) error {
+	e.lastOffset = offset
+	return nil
+}
+
+func (e *EventTypeWMProgressor) GetWatermark() wmb.Watermark {
 	e.m.Lock()
 	defer e.m.Unlock()
-	return e.watermarks[offset.String()]
+	return e.watermarks[e.lastOffset.String()]
 }
 
 func (e *EventTypeWMProgressor) GetHeadWatermark(int32) wmb.Watermark {
