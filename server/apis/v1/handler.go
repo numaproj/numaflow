@@ -279,7 +279,7 @@ func (h *handler) GetVertexMetrics(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, l.VertexMetrics)
+	c.JSON(http.StatusOK, l)
 }
 
 // GetPipelineWatermarks is used to provide the head watermarks for a given pipeline

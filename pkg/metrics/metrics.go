@@ -52,7 +52,7 @@ var (
 	pending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: VertexPendingMessages,
 		Help: "Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.",
-	}, []string{LabelPipeline, LabelVertex, LabelPeriod})
+	}, []string{LabelPipeline, LabelVertex, LabelPeriod, LabelPartitionName})
 
 	// fixedLookbackSeconds Always expose metrics of following lookback seconds (1m, 5m, 15m)
 	fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
@@ -70,13 +70,13 @@ type timestampedPending struct {
 // 2. Serve an endpoint to execute health checks
 type metricsServer struct {
 	vertex     *dfv1.Vertex
-	lagReaders []isb.LagReader
+	lagReaders map[string]isb.LagReader
 	// lookbackSeconds is the look back seconds for pending calculation used for autoscaling
 	lookbackSeconds     int64
 	lagCheckingInterval time.Duration
 	refreshInterval     time.Duration
-	// pendingInfo stores a list of pending/timestamp(seconds) information
-	pendingInfo *sharedqueue.OverflowQueue[timestampedPending]
+	// partitionPendingInfo stores a list of pending/timestamp(seconds) information for each partition
+	partitionPendingInfo map[string]*sharedqueue.OverflowQueue[timestampedPending]
 	// Functions that health check executes
 	healthCheckExecutors []func() error
 }
@@ -84,7 +84,7 @@ type metricsServer struct {
 type Option func(*metricsServer)
 
 // WithLagReaders sets the lag readers
-func WithLagReaders(r []isb.LagReader) Option {
+func WithLagReaders(r map[string]isb.LagReader) Option {
 	return func(m *metricsServer) {
 		m.lagReaders = r
 	}
@@ -125,10 +125,10 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler H
 			}))
 		}
 	}
-	var lagReaders []isb.LagReader
+	lagReaders := make(map[string]isb.LagReader)
 	for _, reader := range readers {
 		if x, ok := reader.(isb.LagReader); ok {
-			lagReaders = append(lagReaders, x)
+			lagReaders[reader.GetName()] = x
 		}
 	}
 	if len(lagReaders) > 0 {
@@ -150,7 +150,10 @@ func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 		}
 	}
 	if m.lagReaders != nil {
-		m.pendingInfo = sharedqueue.New[timestampedPending](1800)
+		for partitionName := range m.lagReaders {
+			m.partitionPendingInfo[partitionName] = sharedqueue.New[timestampedPending](1800)
+
+		}
 	}
 	return m
 }
@@ -168,21 +171,15 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			totalPending := int64(0)
-			skipPending := false
-			for _, pendingLag := range ms.lagReaders {
-				if p, err := pendingLag.Pending(ctx); err != nil || p == isb.PendingNotAvailable {
+			for partitionName, lagReader := range ms.lagReaders {
+				if pending, err := lagReader.Pending(ctx); err != nil {
 					log.Errorw("Failed to get pending messages", zap.Error(err))
-					skipPending = true
-					break
 				} else {
-					totalPending += p
+					if pending != isb.PendingNotAvailable {
+						ts := timestampedPending{pending: pending, timestamp: time.Now().Unix()}
+						ms.partitionPendingInfo[partitionName].Append(ts)
+					}
 				}
-			}
-			// Skip pending information if any pending is not available
-			if !skipPending {
-				ts := timestampedPending{pending: totalPending, timestamp: time.Now().Unix()}
-				ms.pendingInfo.Append(ts)
 			}
 		}
 	}
@@ -203,9 +200,11 @@ func (ms *metricsServer) exposePendingMetrics(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			if ms.lagReaders != nil {
-				for n, i := range lookbackSecondsMap {
-					if p := ms.calculatePending(i); p != isb.PendingNotAvailable {
-						pending.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(float64(p))
+				for partitionName := range ms.lagReaders {
+					for n, i := range lookbackSecondsMap {
+						if p := ms.calculatePending(i, partitionName); p != isb.PendingNotAvailable {
+							pending.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n, partitionName).Set(float64(p))
+						}
 					}
 				}
 			}
@@ -216,9 +215,9 @@ func (ms *metricsServer) exposePendingMetrics(ctx context.Context) {
 }
 
 // Calculate the avg pending of last seconds
-func (ms *metricsServer) calculatePending(seconds int64) int64 {
+func (ms *metricsServer) calculatePending(seconds int64, partitionName string) int64 {
 	result := isb.PendingNotAvailable
-	items := ms.pendingInfo.Items()
+	items := ms.partitionPendingInfo[partitionName].Items()
 	total := int64(0)
 	num := int64(0)
 	now := time.Now().Unix()

@@ -167,7 +167,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	if abstractVertex.IsASource() {
 		bufferList = append(bufferList, req.GetVertex())
 	}
-
+	partitionPendingInfo := ps.getPending(ctx, req)
 	metricsArr := make([]*daemon.VertexMetrics, len(bufferList))
 
 	for idx, partitionName := range bufferList {
@@ -177,16 +177,15 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		}
 
 		vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
+		vm.Pendings = partitionPendingInfo[partitionName]
 		metricsArr[idx] = vm
 	}
 
 	resp.VertexMetrics = metricsArr
-
-	resp.Pendings = ps.getPending(ctx, req)
 	return resp, nil
 }
 
-func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]int64 {
+func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]map[string]int64 {
 	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
 	log := logging.FromContext(ctx)
 
@@ -202,7 +201,7 @@ func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.Get
 		metricsCount = abstractVertex.GetPartitionCount()
 	}
 	headlessServiceName := vertex.GetHeadlessServiceName()
-	totalPendingMap := make(map[string]int64)
+	totalPendingMap := make(map[string]map[string]int64)
 	for idx := 0; idx < metricsCount; idx++ {
 		// Get the headless service name
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
@@ -225,12 +224,21 @@ func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.Get
 				metricsList := value.GetMetric()
 				for _, metric := range metricsList {
 					labels := metric.GetLabel()
+					lookback := ""
+					partitionName := ""
 					for _, label := range labels {
 						if label.GetName() == metrics.LabelPeriod {
-							lookback := label.GetValue()
-							totalPendingMap[lookback] += int64(metric.Gauge.GetValue())
+							lookback = label.GetValue()
+
+						}
+						if label.GetName() == metrics.LabelPartitionName {
+							partitionName = label.GetValue()
 						}
 					}
+					if _, ok := totalPendingMap[partitionName]; !ok {
+						totalPendingMap[partitionName] = make(map[string]int64)
+					}
+					totalPendingMap[partitionName][lookback] += int64(metric.Gauge.GetValue())
 				}
 			}
 		}
@@ -263,17 +271,18 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 		totalPending := int64(0)
 		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
 		for _, vertexMetrics := range vertexResp.VertexMetrics {
+			for key, value := range vertexMetrics.GetProcessingRates() {
+				println(key, " ", value)
+			}
 			if vertexMetrics.GetProcessingRates() != nil {
 				if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
 					totalProcessingRate += p
 				}
 			}
-
-		}
-
-		if vertexResp.GetPendings() != nil {
-			if p, ok := vertexResp.GetPendings()["default"]; ok {
-				totalPending = p
+			if vertexMetrics.GetPendings() != nil {
+				if p, ok := vertexMetrics.GetPendings()["default"]; ok {
+					totalPending += p
+				}
 			}
 		}
 
