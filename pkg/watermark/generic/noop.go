@@ -41,6 +41,10 @@ func (n NoOpWMProgressor) ProcessOffset(isb.Offset, int32) error {
 	return nil
 }
 
+func (n NoOpWMProgressor) ProcessOffsetGetWatermark(isb.Offset, int32) wmb.Watermark {
+	return wmb.Watermark{}
+}
+
 // PublishWatermark does a no-op watermark publish.
 func (n NoOpWMProgressor) PublishWatermark(wmb.Watermark, isb.Offset, int32) {
 }

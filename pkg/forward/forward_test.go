@@ -69,6 +69,11 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
+func (t *testForwardFetcher) ProcessOffsetGetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+	t.ProcessOffset(offset, partition)
+	return t.GetWatermark()
+}
+
 func (t *testForwardFetcher) ProcessOffset(offset isb.Offset, partition int32) error {
 	return nil
 }
@@ -693,6 +698,11 @@ func (t *testWMBFetcher) RevertBoolValue() {
 func (t *testWMBFetcher) Close() error {
 	// won't be used
 	return nil
+}
+
+func (t *testWMBFetcher) ProcessOffsetGetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+	t.ProcessOffset(offset, partition)
+	return t.GetWatermark()
 }
 
 func (t *testWMBFetcher) ProcessOffset(offset isb.Offset, partition int32) error {

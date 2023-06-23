@@ -56,6 +56,10 @@ func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher
 	}
 }
 
+func (e *sourceFetcher) ProcessOffsetGetWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+	return e.GetWatermark()
+}
+
 func (e *sourceFetcher) ProcessOffset(offset isb.Offset, fromPartitionIdx int32) error {
 	return nil
 }

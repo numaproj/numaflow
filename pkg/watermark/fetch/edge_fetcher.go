@@ -71,6 +71,14 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 	}
 }
 
+func (e *EdgeFetcher) ProcessOffsetGetWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+	err := e.ProcessOffset(offset, fromPartitionIdx)
+	if err != nil {
+		return wmb.InitialWatermark
+	}
+	return e.GetWatermark()
+}
+
 // GetWatermark gets the largest possible watermark from all the active processors of all partitions for the given offset and partition.
 // We calculate the watermark for the given offset and partition, update the lastProcessedWatermark of the given partition to the watermark we just calculate.
 // Then, we compare the lastProcessedWatermark from all partitions and return the minimum as the edge watermark.

@@ -28,10 +28,13 @@ type Fetcher interface {
 	io.Closer
 	// ProcessOffset updates state according to the incoming offset on the given partition
 	ProcessOffset(offset isb.Offset, fromPartitionIdx int32) error
+	// GetWatermark returns the current watermark based on what has been processed
+	GetWatermark() wmb.Watermark
+	// ProcessOffsetGetWatermark processes the offset on the partition indicated and returns the overall Watermark
+	// from all Partitions
+	ProcessOffsetGetWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark
 	// GetHeadWatermark returns the latest watermark among all processors
 	GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark
 	// GetHeadWMB returns the latest idle WMB among all processors
 	GetHeadWMB(fromPartitionIdx int32) wmb.WMB
-	// GetWatermark returns the current watermark based on what has been processed
-	GetWatermark() wmb.Watermark
 }

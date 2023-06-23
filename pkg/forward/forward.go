@@ -270,13 +270,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
 		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
 		// we fetch the watermark for the partition from which we read the message.
-		err := isdf.wmFetcher.ProcessOffset(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
-		if err != nil {
-			//todo
-			processorWM = wmb.InitialWatermark
-		} else {
-			processorWM = isdf.wmFetcher.GetWatermark()
-		}
+		processorWM = isdf.wmFetcher.ProcessOffsetGetWatermark(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
+
 	}
 
 	var writeOffsets map[string][][]isb.Offset
@@ -344,12 +339,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
 			// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
 			// but ideally we should use the latest to determine the IsLate attribute.
-			err = isdf.wmFetcher.ProcessOffset(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
-			if err != nil {
-				processorWM = wmb.InitialWatermark
-			} else {
-				processorWM = isdf.wmFetcher.GetWatermark()
-			}
+			processorWM = isdf.wmFetcher.ProcessOffsetGetWatermark(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
+
 			// assign isLate
 			for _, m := range writeMessages {
 				if processorWM.After(m.EventTime) { // Set late data at source level

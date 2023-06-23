@@ -40,6 +40,11 @@ func NewEdgeFetcherSet(ctx context.Context, edgeFetchers map[string]Fetcher) Fet
 	}
 }
 
+func (efs *edgeFetcherSet) ProcessOffsetGetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+	_ = efs.ProcessOffset(inputOffset, fromPartitionIdx) // even if it errored, we'll keep going
+	return efs.GetWatermark()
+}
+
 // GetWatermark processes the Watermark for the given partition from the given offset
 func (efs *edgeFetcherSet) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int32) error {
 
