@@ -32,7 +32,7 @@ type TimestampedCounts struct {
 	// podName to count mapping
 	podCounts map[string]float64
 	// partition to count mapping
-	partitionCounts map[int]float64
+	partitionCounts map[string]float64
 	// isWindowClosed indicates whether we have finished collecting pod counts for this timestamp
 	isWindowClosed bool
 	// delta is the total count change from the previous window, it's valid only when isWindowClosed is true
@@ -44,7 +44,7 @@ func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
 		timestamp:       t,
 		podCounts:       make(map[string]float64),
-		partitionCounts: make(map[int]float64),
+		partitionCounts: make(map[string]float64),
 		isWindowClosed:  false,
 		delta:           0,
 		lock:            new(sync.RWMutex),
@@ -52,28 +52,34 @@ func NewTimestampedCounts(t int64) *TimestampedCounts {
 }
 
 // Update updates the count for a pod if the current window is not closed
-func (tc *TimestampedCounts) Update(podName string, count []float64) {
+func (tc *TimestampedCounts) Update(podName string, partitionReadCounts []PartitionReadCount) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
-	if count[0] == CountNotAvailable {
-		// we choose to skip updating when count is not available for the pod, instead of removing the pod from the map.
-		// imagine if the getTotalCount call fails to scrape the count metric, and it's NOT because the pod is down.
-		// in this case getTotalCount returns CountNotAvailable.
-		// if we remove the pod from the map and then the next scrape successfully gets the count, we can reach a state that in the timestamped counts,
-		// for this single pod, at t1, count is 123456, at t2, the map doesn't contain this pod and t3, count is 123457.
+	if partitionReadCounts == nil {
+		// we choose to skip updating when partitionReadCounts is nil, instead of removing the pod from the map.
+		// imagine if the getPartitionReadCounts call fails to scrape the partitionReadCounts metric, and it's NOT because the pod is down.
+		// in this case getPartitionReadCounts returns CountNotAvailable.
+		// if we remove the pod from the map and then the next scrape successfully gets the partitionReadCounts, we can reach a state that in the timestamped counts,
+		// for this single pod, at t1, partitionReadCounts is 123456, at t2, the map doesn't contain this pod and t3, partitionReadCounts is 123457.
 		// when calculating the rate, as we sum up deltas among timestamps, we will get 123457 total delta instead of the real delta 1.
 		// one occurrence of such case can lead to extremely high rate and mess up the autoscaling.
-		// hence we'd rather keep the count as it is to avoid wrong rate calculation.
+		// hence we'd rather keep the partitionReadCounts as it is to avoid wrong rate calculation.
 		return
 	}
 	if tc.isWindowClosed {
 		// we skip updating if the window is already closed.
 		return
 	}
-	for idx, val := range count {
-		tc.partitionCounts[idx] = val
+	// since a pod can read from multiple partitions we should consider
+	// the sum of partitionReadCounts as the total count of processed messages for this pod
+	// for reduce we will always have one partitionReadCount (since reduce pod will read
+	// from single partition)
+	totalPartitionReadCount := 0.0
+	for _, ele := range partitionReadCounts {
+		tc.partitionCounts[ele.Name()] = ele.Value()
+		totalPartitionReadCount += ele.Value()
 	}
-	tc.podCounts[podName] = count[0]
+	tc.podCounts[podName] = totalPartitionReadCount
 }
 
 // Snapshot returns a copy of the podName to count mapping
@@ -88,10 +94,10 @@ func (tc *TimestampedCounts) Snapshot() map[string]float64 {
 	return counts
 }
 
-func (tc *TimestampedCounts) SnapshotCopy() map[int]float64 {
+func (tc *TimestampedCounts) SnapshotCopy() map[string]float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	counts := make(map[int]float64)
+	counts := make(map[string]float64)
 	for k, v := range tc.partitionCounts {
 		counts[k] = v
 	}

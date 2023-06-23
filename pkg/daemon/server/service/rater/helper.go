@@ -25,25 +25,25 @@ import (
 const IndexNotFound = -1
 
 // UpdateCount updates the count of processed messages for a pod at a given time
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podName string, count []float64) {
+func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podName string, partitionReadCounts []PartitionReadCount) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
-			i.Update(podName, count)
+			i.Update(podName, partitionReadCounts)
 			return
 		}
 	}
 
-	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
+	// if we cannot find a matching element, it means we need to add a new timestamped partitionReadCounts to the queue
 	tc := NewTimestampedCounts(time)
-	tc.Update(podName, count)
+	tc.Update(podName, partitionReadCounts)
 
-	// close the window for the most recent timestamped count
+	// close the window for the most recent timestamped partitionReadCounts
 	switch n := len(items); n {
 	case 0:
-	// if the queue is empty, we just append the new timestamped count
+	// if the queue is empty, we just append the new timestamped partitionReadCounts
 	case 1:
 		// if the queue has only one element, we close the window for this element
 		items[0].CloseWindow(nil)
@@ -55,7 +55,7 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 }
 
 // CalculateRate calculates the rate of the vertex in the last lookback seconds
-func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionID int) float64 {
+func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) float64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
 		return 0
@@ -75,18 +75,16 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		return 0
 	}
 	for i := startIndex; i < endIndex; i++ {
-		if c1, c2 := counts[i], counts[i+1]; c1 != nil && c2 != nil && c1.IsWindowClosed() && c2.IsWindowClosed() {
-			delta += calculatePartitionDelta(c1, c2, partitionID)
-		}
+		delta += calculatePartitionDelta(counts[i], counts[i+1], partitionName)
 	}
 	return delta / float64(timeDiff)
 }
 
-func calculatePartitionDelta(c1, c2 *TimestampedCounts, partitionID int) float64 {
+func calculatePartitionDelta(c1, c2 *TimestampedCounts, partitionName string) float64 {
 	tc1 := c1.SnapshotCopy()
 	tc2 := c2.SnapshotCopy()
-	count1, exist1 := tc1[partitionID]
-	count2, exist2 := tc2[partitionID]
+	count1, exist1 := tc1[partitionName]
+	count2, exist2 := tc2[partitionName]
 	if !exist2 {
 		return 0
 	} else if !exist1 {

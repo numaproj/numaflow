@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -35,8 +34,7 @@ import (
 
 type Ratable interface {
 	Start(ctx context.Context) error
-	GetRates(vertexName string, partitionID int) map[string]float64
-	GetPodRates(vertexName string, podIndex int) map[string]float64
+	GetRates(vertexName string, partitionName string) map[string]float64
 }
 
 // CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
@@ -64,6 +62,8 @@ type Rater struct {
 	timestampedPodCounts map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]
 	options              *options
 }
+
+// vertex -> [timestamp(podCounts{podName: count}, partitionCounts{partitionIdx: count}, isWindowClosed, delta(across all the pods))]
 
 func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater {
 	rater := Rater{
@@ -120,19 +120,19 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	vertexName := podInfo[1]
 	vertexType := podInfo[3]
 	podName := strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-")
-	var count []float64
+	var partitionReadCounts []PartitionReadCount
 	activePods := r.podTracker.GetActivePods()
 	if activePods.Contains(key) {
-		count = r.getTotalCount(vertexName, vertexType, podName)
-		if count[0] == CountNotAvailable {
-			log.Debugf("Failed retrieving total count for pod %s", podName)
+		partitionReadCounts = r.getPartitionReadCounts(vertexName, vertexType, podName)
+		if partitionReadCounts == nil {
+			log.Debugf("Failed retrieving total partitionReadCounts for pod %s", podName)
 		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with CountNotAvailable...", podName)
-		count = []float64{CountNotAvailable}
+		partitionReadCounts = nil
 	}
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
-	UpdateCount(r.timestampedPodCounts[vertexName], now, podName, count)
+	UpdateCount(r.timestampedPodCounts[vertexName], now, podName, partitionReadCounts)
 	return nil
 }
 
@@ -199,19 +199,38 @@ func sleep(ctx context.Context, duration time.Duration) {
 	}
 }
 
-// getTotalCount returns the total number of messages read by the pod
-func (r *Rater) getTotalCount(vertexName, vertexType, podName string) []float64 {
+type PartitionReadCount struct {
+	name  string
+	value float64
+}
+
+func (p *PartitionReadCount) Name() string {
+	return p.name
+}
+
+func (p *PartitionReadCount) Value() float64 {
+	return p.value
+}
+
+// pod1
+// forwarder_read_total p1 100
+// forwarder_read_total p2 110
+// forwarder_read_total p3 110
+
+// [100, 110, 110]
+// getPartitionReadCounts returns the total number of messages read by the pod
+func (r *Rater) getPartitionReadCounts(vertexName, vertexType, podName string) []PartitionReadCount {
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if res, err := r.httpClient.Get(url); err != nil {
 		r.log.Errorf("failed reading the metrics endpoint, %v", err.Error())
-		return []float64{CountNotAvailable}
+		return nil
 	} else {
 		textParser := expfmt.TextParser{}
 		result, err := textParser.TextToMetricFamilies(res.Body)
 		if err != nil {
 			r.log.Errorf("failed parsing to prometheus metric families, %v", err.Error())
-			return []float64{CountNotAvailable}
+			return nil
 		}
 		var readTotalMetricName string
 		if vertexType == "reduce" {
@@ -221,38 +240,33 @@ func (r *Rater) getTotalCount(vertexName, vertexType, podName string) []float64 
 		}
 		if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 			metricsList := value.GetMetric()
-			//fmt.Println(metricsList)
-			//fmt.Println(metricsList[0].Counter.GetValue(), "- ", metricsList[0].Label[0].GetValue())
-			var partitionCount []float64
+			var partitionReadCounts []PartitionReadCount
 			for _, ele := range metricsList {
-				partitionCount = append(partitionCount, ele.Counter.GetValue())
+				partitionName := ""
+				for _, label := range ele.Label {
+					if label.GetName() == "partition_name" {
+						partitionName = label.GetValue()
+					}
+				}
+				partitionReadCounts = append(partitionReadCounts, PartitionReadCount{
+					name:  partitionName,
+					value: ele.Counter.GetValue(),
+				})
 			}
-			return partitionCount
+			return partitionReadCounts
 		} else {
 			r.log.Errorf("failed getting the read total metric, the metric is not available.")
-			return []float64{CountNotAvailable}
+			return nil
 		}
 	}
 }
 
 // GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
-func (r *Rater) GetRates(vertexName string, partitionID int) map[string]float64 {
+func (r *Rater) GetRates(vertexName string, partitionName string) map[string]float64 {
 	var result = make(map[string]float64)
 	// calculate rates for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap(vertexName) {
-		r := CalculateRate(r.timestampedPodCounts[vertexName], i, partitionID)
-		result[n] = r
-	}
-	return result
-}
-
-// GetPodRates returns the processing rates of the pod in the format of lookback second to rate mappings
-func (r *Rater) GetPodRates(vertexName string, podIndex int) map[string]float64 {
-	podName := r.pipeline.Name + "-" + vertexName + "-" + strconv.Itoa(podIndex)
-	var result = make(map[string]float64)
-	// calculate rates for each lookback seconds
-	for n, i := range r.buildLookbackSecondsMap(vertexName) {
-		r := CalculatePodRate(r.timestampedPodCounts[vertexName], i, podName)
+		r := CalculateRate(r.timestampedPodCounts[vertexName], i, partitionName)
 		result[n] = r
 	}
 	return result

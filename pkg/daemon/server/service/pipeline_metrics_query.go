@@ -176,7 +176,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	//}
 
 	metricsArr := make([]*daemon.VertexMetrics, metricsCount)
-	for i := 0; i < metricsCount; i++ {
+	for i, partitionName := range abstractVertex.OwnedBufferNames(ps.pipeline.Namespace, req.GetPipeline()) {
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
 		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
 		//url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
@@ -218,11 +218,11 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		// Get the processing rate for this partition
 		if abstractVertex.IsReduceUDF() {
 			// the processing rate of this ith partition is the rate of the corresponding ith pod.
-			vm.ProcessingRates = ps.rater.GetPodRates(req.GetVertex(), i)
+			vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
 		} else {
 			// if the vertex is not a reduce udf, then the processing rate is the sum of all pods in this vertex.
 			// TODO (multi-partition) - change this to display the processing rate of each partition when we finish multi-partition support for non-reduce vertices.
-			vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), i)
+			vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
 		}
 
 		metricsArr[i] = vm
