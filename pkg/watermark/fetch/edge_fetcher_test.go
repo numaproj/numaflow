@@ -159,7 +159,11 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 				log:              zaptest.NewLogger(t).Sugar(),
 				lastProcessedWm:  lastProcessed,
 			}
-			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+			err := b.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0)
+			if err != nil {
+				t.Errorf("ProcessOffset() returned err: %v", err)
+			}
+			if got := b.GetWatermark(); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 17 because the timeline has been populated ahead of time
@@ -323,7 +327,11 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 				log:              zaptest.NewLogger(t).Sugar(),
 				lastProcessedWm:  tt.lastProcessedWm,
 			}
-			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+			err := b.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx)
+			if err != nil {
+				t.Errorf("ProcessOffset() returned err: %v", err)
+			}
+			if got := b.GetWatermark(); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
@@ -949,14 +957,15 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		}
 	}
 
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
+	_ = fetcher.GetWatermark()
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -990,7 +999,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	}
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
@@ -1192,14 +1201,14 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -1225,7 +1234,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
@@ -1513,9 +1522,9 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 1)
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 2)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 1)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 2)
 
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
@@ -1523,7 +1532,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -1548,7 +1557,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
+	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())

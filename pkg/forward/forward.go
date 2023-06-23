@@ -263,14 +263,20 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// for source vertex, the udf is the source data transformer.
 		// in this case, we assign time.UnixMilli(-1) to processorWM.
 		// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
-		processorWM = wmb.Watermark(time.UnixMilli(-1))
+		processorWM = wmb.InitialWatermark
 	} else {
 		// fetch watermark if available
 		// TODO: make it async (concurrent and wait later)
 		// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
 		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
 		// we fetch the watermark for the partition from which we read the message.
-		processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
+		err := isdf.wmFetcher.ProcessOffset(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
+		if err != nil {
+			//todo
+			processorWM = wmb.InitialWatermark
+		} else {
+			processorWM = isdf.wmFetcher.GetWatermark()
+		}
 	}
 
 	var writeOffsets map[string][][]isb.Offset
@@ -338,7 +344,12 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
 			// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
 			// but ideally we should use the latest to determine the IsLate attribute.
-			processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
+			err = isdf.wmFetcher.ProcessOffset(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
+			if err != nil {
+				processorWM = wmb.InitialWatermark
+			} else {
+				processorWM = isdf.wmFetcher.GetWatermark()
+			}
 			// assign isLate
 			for _, m := range writeMessages {
 				if processorWM.After(m.EventTime) { // Set late data at source level

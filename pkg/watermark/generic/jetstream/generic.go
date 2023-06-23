@@ -100,9 +100,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetch.Fetcher, error) {
 	// if watermark is not enabled, use no-op.
 	if vertexInstance.Vertex.Spec.Watermark.Disabled {
-		//???
-		fetchWatermark := generic.BuildNoOpWatermarkFetchers()
-		return fetchWatermark, nil
+		return nil, fmt.Errorf("Watermark disabled")
 	}
 
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName

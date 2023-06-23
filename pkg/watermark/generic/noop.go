@@ -36,9 +36,9 @@ func NewNoOpWMProgressor() *NoOpWMProgressor {
 	return &NoOpWMProgressor{}
 }
 
-// GetWatermark returns the default watermark.
-func (n NoOpWMProgressor) GetWatermark(isb.Offset, int32) wmb.Watermark {
-	return wmb.Watermark{}
+// ProcessOffset processes offset on partition
+func (n NoOpWMProgressor) ProcessOffset(isb.Offset, int32) error {
+	return nil
 }
 
 // PublishWatermark does a no-op watermark publish.
@@ -62,6 +62,11 @@ func (n NoOpWMProgressor) GetHeadWatermark(int32) wmb.Watermark {
 // GetHeadWMB returns the default WMB.
 func (n NoOpWMProgressor) GetHeadWMB(int32) wmb.WMB {
 	return wmb.WMB{}
+}
+
+// GetWatermark returns current Watermark
+func (n NoOpWMProgressor) GetWatermark() wmb.Watermark {
+	return wmb.Watermark{}
 }
 
 // Close stops the no-op progressor.
