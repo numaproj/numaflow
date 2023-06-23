@@ -40,7 +40,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
+func TestBuffer_ProcessOffsetGetWatermarkWithOnePartition(t *testing.T) {
 	var ctx = context.Background()
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
@@ -159,12 +159,8 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 				log:              zaptest.NewLogger(t).Sugar(),
 				lastProcessedWm:  lastProcessed,
 			}
-			err := b.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0)
-			if err != nil {
-				t.Errorf("ProcessOffset() returned err: %v", err)
-			}
-			if got := b.GetWatermark(); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+			if got := b.ProcessOffsetGetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+				t.Errorf("ProcessOffsetGetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 17 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
@@ -173,7 +169,7 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 	}
 }
 
-func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
+func TestBuffer_ProcessOffsetGetWatermarkWithMultiplePartition(t *testing.T) {
 	var ctx = context.Background()
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
@@ -327,11 +323,7 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 				log:              zaptest.NewLogger(t).Sugar(),
 				lastProcessedWm:  tt.lastProcessedWm,
 			}
-			err := b.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx)
-			if err != nil {
-				t.Errorf("ProcessOffset() returned err: %v", err)
-			}
-			if got := b.GetWatermark(); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+			if got := b.ProcessOffsetGetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
@@ -965,7 +957,6 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
 	_ = fetcher.ProcessOffset(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
-	_ = fetcher.GetWatermark()
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
