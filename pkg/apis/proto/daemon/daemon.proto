@@ -42,7 +42,6 @@ message VertexMetrics {
   required string pipeline = 1;
   required string vertex = 2;
   map<string, double> processingRates = 3;
-  map<string, int64> pendings = 4;
 }
 
 // PipelineStatus
@@ -82,6 +81,7 @@ message GetVertexMetricsRequest {
 }
 
 message GetVertexMetricsResponse {
+  map<string, int64> pendings = 4;
   repeated VertexMetrics vertexMetrics = 1;
 }
 

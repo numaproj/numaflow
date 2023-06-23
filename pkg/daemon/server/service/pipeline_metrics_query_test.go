@@ -287,9 +287,8 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 			}, nil
 		},
 	}
-	//resp, err = pipelineMetricsQueryService.GetPipelineStatus(context.Background(), req)
-	//assert.NoError(t, err)
-	// Pending used to compare and in scaling??
-	//ErrorPipelineResponse := daemon.PipelineStatus{Status: pointer.String("Error"), Message: pointer.String("Pipeline has an error. Vertex cat is not processing pending messages.")}
-	//assert.Equal(t, &ErrorPipelineResponse, resp.Status)
+	resp, err = pipelineMetricsQueryService.GetPipelineStatus(context.Background(), req)
+	assert.NoError(t, err)
+	ErrorPipelineResponse := daemon.PipelineStatus{Status: pointer.String("Error"), Message: pointer.String("Pipeline has an error. Vertex cat is not processing pending messages.")}
+	assert.Equal(t, &ErrorPipelineResponse, resp.Status)
 }

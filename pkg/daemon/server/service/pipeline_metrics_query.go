@@ -24,6 +24,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/prometheus/common/expfmt"
+	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
 	server "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
@@ -165,8 +169,8 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	}
 
 	metricsArr := make([]*daemon.VertexMetrics, len(bufferList))
-	for idx, partitionName := range bufferList {
 
+	for idx, partitionName := range bufferList {
 		vm := &daemon.VertexMetrics{
 			Pipeline: &ps.pipeline.Name,
 			Vertex:   req.Vertex,
@@ -175,8 +179,63 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
 		metricsArr[idx] = vm
 	}
+
 	resp.VertexMetrics = metricsArr
+
+	resp.Pendings = ps.getPending(ctx, req)
 	return resp, nil
+}
+
+func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]int64 {
+	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
+	log := logging.FromContext(ctx)
+
+	vertex := &v1alpha1.Vertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: vertexName,
+		},
+	}
+	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
+
+	metricsCount := 1
+	if abstractVertex.IsReduceUDF() {
+		metricsCount = abstractVertex.GetPartitionCount()
+	}
+	headlessServiceName := vertex.GetHeadlessServiceName()
+	totalPendingMap := make(map[string]int64)
+	for idx := 0; idx < metricsCount; idx++ {
+		// Get the headless service name
+		// We can query the metrics endpoint of the (i)th pod to obtain this value.
+		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
+		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, idx, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+		if res, err := ps.httpClient.Get(url); err != nil {
+			log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())
+			return nil
+		} else {
+			// expfmt Parser from prometheus to parse the metrics
+			textParser := expfmt.TextParser{}
+			result, err := textParser.TextToMetricFamilies(res.Body)
+			if err != nil {
+				log.Errorw("Error in parsing to prometheus metric families", zap.Error(err))
+				return nil
+			}
+
+			// Get the pending messages for this partition
+			if value, ok := result[metrics.VertexPendingMessages]; ok {
+				metricsList := value.GetMetric()
+				for _, metric := range metricsList {
+					labels := metric.GetLabel()
+					for _, label := range labels {
+						if label.GetName() == metrics.LabelPeriod {
+							lookback := label.GetValue()
+							totalPendingMap[lookback] += int64(metric.Gauge.GetValue())
+						}
+					}
+				}
+			}
+		}
+	}
+	return totalPendingMap
 }
 
 func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {
@@ -200,29 +259,30 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 			return resp, nil
 		}
 
+		totalProcessingRate := float64(0)
+		totalPending := int64(0)
 		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
 		for _, vertexMetrics := range vertexResp.VertexMetrics {
-			var pending int64
-			var processingRate float64
-			if p, ok := vertexMetrics.GetPendings()["default"]; ok {
-				pending = p
-			} else {
-				continue
-			}
-
-			if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
-				processingRate = p
-			} else {
-				continue
-			}
-
-			if pending > 0 && processingRate == 0 {
-				resp.Status = &daemon.PipelineStatus{
-					Status:  pointer.String(PipelineStatusError),
-					Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
+			if vertexMetrics.GetProcessingRates() != nil {
+				if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
+					totalProcessingRate += p
 				}
-				return resp, nil
 			}
+
+		}
+
+		if vertexResp.GetPendings() != nil {
+			if p, ok := vertexResp.GetPendings()["default"]; ok {
+				totalPending = p
+			}
+		}
+
+		if totalPending > 0 && totalProcessingRate == 0 {
+			resp.Status = &daemon.PipelineStatus{
+				Status:  pointer.String(PipelineStatusError),
+				Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
+			}
+			return resp, nil
 		}
 	}
 
