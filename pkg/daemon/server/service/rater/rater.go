@@ -34,7 +34,7 @@ import (
 
 type Ratable interface {
 	Start(ctx context.Context) error
-	GetRates(vertexName string, partitionName string) map[string]float64
+	GetRates(vertexName, partitionName string) map[string]float64
 }
 
 // CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
@@ -61,6 +61,20 @@ type Rater struct {
 	// timestampedPodCounts is a map between vertex name and a queue of timestamped counts for that vertex
 	timestampedPodCounts map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]
 	options              *options
+}
+
+// PartitionReadCount is a struct to maintain count of messages read for each partition
+type PartitionReadCount struct {
+	name  string
+	value float64
+}
+
+func (p *PartitionReadCount) Name() string {
+	return p.name
+}
+
+func (p *PartitionReadCount) Value() float64 {
+	return p.value
 }
 
 // vertex -> [timestamp(podCounts{podName: count}, partitionCounts{partitionIdx: count}, isWindowClosed, delta(across all the pods))]
@@ -132,7 +146,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 		partitionReadCounts = nil
 	}
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
-	UpdateCount(r.timestampedPodCounts[vertexName], now, podName, partitionReadCounts)
+	UpdateCount(r.timestampedPodCounts[vertexName], now, partitionReadCounts)
 	return nil
 }
 
@@ -199,19 +213,6 @@ func sleep(ctx context.Context, duration time.Duration) {
 	}
 }
 
-type PartitionReadCount struct {
-	name  string
-	value float64
-}
-
-func (p *PartitionReadCount) Name() string {
-	return p.name
-}
-
-func (p *PartitionReadCount) Value() float64 {
-	return p.value
-}
-
 // pod1
 // forwarder_read_total p1 100
 // forwarder_read_total p2 110
@@ -262,7 +263,7 @@ func (r *Rater) getPartitionReadCounts(vertexName, vertexType, podName string) [
 }
 
 // GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
-func (r *Rater) GetRates(vertexName string, partitionName string) map[string]float64 {
+func (r *Rater) GetRates(vertexName, partitionName string) map[string]float64 {
 	var result = make(map[string]float64)
 	// calculate rates for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap(vertexName) {

@@ -29,30 +29,24 @@ const CountNotAvailable = -1
 type TimestampedCounts struct {
 	// timestamp in seconds, is the time when the count is recorded
 	timestamp int64
-	// podName to count mapping
-	podCounts map[string]float64
 	// partition to count mapping
 	partitionCounts map[string]float64
 	// isWindowClosed indicates whether we have finished collecting pod counts for this timestamp
 	isWindowClosed bool
-	// delta is the total count change from the previous window, it's valid only when isWindowClosed is true
-	delta float64
-	lock  *sync.RWMutex
+	lock           *sync.RWMutex
 }
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
 		timestamp:       t,
-		podCounts:       make(map[string]float64),
 		partitionCounts: make(map[string]float64),
 		isWindowClosed:  false,
-		delta:           0,
 		lock:            new(sync.RWMutex),
 	}
 }
 
 // Update updates the count for a pod if the current window is not closed
-func (tc *TimestampedCounts) Update(podName string, partitionReadCounts []PartitionReadCount) {
+func (tc *TimestampedCounts) Update(partitionReadCounts []PartitionReadCount) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	if partitionReadCounts == nil {
@@ -79,22 +73,11 @@ func (tc *TimestampedCounts) Update(podName string, partitionReadCounts []Partit
 		tc.partitionCounts[ele.Name()] = ele.Value()
 		totalPartitionReadCount += ele.Value()
 	}
-	tc.podCounts[podName] = totalPartitionReadCount
 }
 
-// Snapshot returns a copy of the podName to count mapping
+// Snapshot returns a copy of the partitionName to count mapping
 // it's used to ensure the returned map is not modified by other goroutines
 func (tc *TimestampedCounts) Snapshot() map[string]float64 {
-	tc.lock.RLock()
-	defer tc.lock.RUnlock()
-	counts := make(map[string]float64)
-	for k, v := range tc.podCounts {
-		counts[k] = v
-	}
-	return counts
-}
-
-func (tc *TimestampedCounts) SnapshotCopy() map[string]float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 	counts := make(map[string]float64)
@@ -112,34 +95,11 @@ func (tc *TimestampedCounts) IsWindowClosed() bool {
 }
 
 // CloseWindow closes the window and calculates the delta by comparing the current pod counts with the previous window
-func (tc *TimestampedCounts) CloseWindow(prev *TimestampedCounts) {
-	// prepare pod counts for both current and previous window for delta calculation
-	var prevPodCounts map[string]float64
-	if prev == nil {
-		prevPodCounts = make(map[string]float64)
-	} else {
-		prevPodCounts = prev.Snapshot()
-	}
-	currPodCounts := tc.Snapshot()
-
-	// calculate the delta by comparing the current pod counts with the previous window
-	delta := 0.0
-	for key, currCount := range currPodCounts {
-		prevCount := prevPodCounts[key] // if key doesn't exist in prevPodCounts, prevCount is 0
-		if currCount < prevCount {
-			// this can happen when a pod is restarted during the window
-			// we count the new count as the delta
-			delta += currCount
-		} else {
-			delta += currCount - prevCount
-		}
-	}
-
+func (tc *TimestampedCounts) CloseWindow() {
 	// finalize the window by setting isWindowClosed to true and delta to the calculated value
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	tc.isWindowClosed = true
-	tc.delta = delta
 }
 
 // ToString returns a string representation of the TimestampedCounts
@@ -147,6 +107,6 @@ func (tc *TimestampedCounts) CloseWindow(prev *TimestampedCounts) {
 func (tc *TimestampedCounts) ToString() string {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	res := fmt.Sprintf("{timestamp: %d, podCount: %v}", tc.timestamp, tc.podCounts)
+	res := fmt.Sprintf("{timestamp: %d, partitionCount: %v}", tc.timestamp, tc.partitionCounts)
 	return res
 }

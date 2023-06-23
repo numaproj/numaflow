@@ -25,20 +25,20 @@ import (
 const IndexNotFound = -1
 
 // UpdateCount updates the count of processed messages for a pod at a given time
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podName string, partitionReadCounts []PartitionReadCount) {
+func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, partitionReadCounts []PartitionReadCount) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
-			i.Update(podName, partitionReadCounts)
+			i.Update(partitionReadCounts)
 			return
 		}
 	}
 
 	// if we cannot find a matching element, it means we need to add a new timestamped partitionReadCounts to the queue
 	tc := NewTimestampedCounts(time)
-	tc.Update(podName, partitionReadCounts)
+	tc.Update(partitionReadCounts)
 
 	// close the window for the most recent timestamped partitionReadCounts
 	switch n := len(items); n {
@@ -46,10 +46,10 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	// if the queue is empty, we just append the new timestamped partitionReadCounts
 	case 1:
 		// if the queue has only one element, we close the window for this element
-		items[0].CloseWindow(nil)
+		items[0].CloseWindow()
 	default:
 		// if the queue has more than one element, we close the window for the most recent element
-		items[n-1].CloseWindow(items[n-2])
+		items[n-1].CloseWindow()
 	}
 	q.Append(tc)
 }
@@ -81,54 +81,10 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 }
 
 func calculatePartitionDelta(c1, c2 *TimestampedCounts, partitionName string) float64 {
-	tc1 := c1.SnapshotCopy()
-	tc2 := c2.SnapshotCopy()
-	count1, exist1 := tc1[partitionName]
-	count2, exist2 := tc2[partitionName]
-	if !exist2 {
-		return 0
-	} else if !exist1 {
-		return count2
-	} else if count2 < count1 {
-		return count2
-	} else {
-		return count2 - count1
-	}
-}
-
-// CalculatePodRate calculates the rate of a pod in the last lookback seconds
-func CalculatePodRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, podName string) float64 {
-	counts := q.Items()
-	if len(counts) <= 1 {
-		return 0
-	}
-	startIndex := findStartIndex(lookbackSeconds, counts)
-	endIndex := findEndIndex(counts)
-	if startIndex == IndexNotFound || endIndex == IndexNotFound {
-		return 0
-	}
-
-	delta := float64(0)
-	// time diff in seconds.
-	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
-	if timeDiff == 0 {
-		// if the time difference is 0, we return 0 to avoid division by 0
-		// this should not happen in practice because we are using a 10s interval
-		return 0
-	}
-	for i := startIndex; i < endIndex; i++ {
-		if c1, c2 := counts[i], counts[i+1]; c1 != nil && c2 != nil && c1.IsWindowClosed() && c2.IsWindowClosed() {
-			delta += calculatePodDelta(c1, c2, podName)
-		}
-	}
-	return delta / float64(timeDiff)
-}
-
-func calculatePodDelta(c1, c2 *TimestampedCounts, podName string) float64 {
 	tc1 := c1.Snapshot()
 	tc2 := c2.Snapshot()
-	count1, exist1 := tc1[podName]
-	count2, exist2 := tc2[podName]
+	count1, exist1 := tc1[partitionName]
+	count2, exist2 := tc2[partitionName]
 	if !exist2 {
 		return 0
 	} else if !exist1 {
