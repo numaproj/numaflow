@@ -17,10 +17,9 @@ limitations under the License.
 package server
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
@@ -31,77 +30,77 @@ func TestUpdateCount(t *testing.T) {
 	t.Run("givenTimeExistsPodExistsCountAvailable_whenUpdate_thenUpdatePodCount", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update([]PartitionReadCount{{"partition1", 10.0}})
+		tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 		q.Append(tc)
 
-		UpdateCount(q, TestTime, []PartitionReadCount{{"partition1", 20.0}})
+		UpdateCount(q, TestTime, &PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
 
 		assert.Equal(t, 1, q.Length())
-		assert.Equal(t, 20.0, q.Items()[0].partitionCounts["partition1"])
+		assert.Equal(t, 20.0, q.Items()[0].podPartitionTracker["pod1"]["partition1"])
 	})
 
 	t.Run("givenTimeExistsPodNotExistsCountAvailable_whenUpdate_thenAddPodCount", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update([]PartitionReadCount{{"partition1", 20.0}})
+		tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
 		q.Append(tc)
 
-		UpdateCount(q, TestTime, []PartitionReadCount{{"partition2", 10.0}})
+		UpdateCount(q, TestTime, &PodReadCount{"pod2", map[string]float64{"partition1": 10.0}})
 
 		assert.Equal(t, 1, q.Length())
-		assert.Equal(t, 20.0, q.Items()[0].partitionCounts["partition1"])
-		assert.Equal(t, 10.0, q.Items()[0].partitionCounts["partition2"])
+		assert.Equal(t, 20.0, q.Items()[0].podPartitionTracker["pod1"]["partition1"])
+		assert.Equal(t, 10.0, q.Items()[0].podPartitionTracker["pod2"]["partition1"])
 	})
 
 	t.Run("givenTimeExistsPodExistsCountNotAvailable_whenUpdate_thenNotUpdatePod", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update([]PartitionReadCount{{"partition1", 10.0}})
+		tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 		q.Append(tc)
 
 		UpdateCount(q, TestTime, nil)
 
 		assert.Equal(t, 1, q.Length())
-		assert.Equal(t, 1, len(q.Items()[0].partitionCounts))
-		assert.Equal(t, 10.0, q.Items()[0].partitionCounts["partition1"])
+		assert.Equal(t, 1, len(q.Items()[0].podPartitionTracker))
+		assert.Equal(t, 10.0, q.Items()[0].podPartitionTracker["pod1"]["partition1"])
 	})
 
 	t.Run("givenTimeExistsPodNotExistsCountNotAvailable_whenUpdate_thenNoUpdate", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update([]PartitionReadCount{{"partition1", 10.0}})
+		tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 		q.Append(tc)
 
 		UpdateCount(q, TestTime, nil)
 
 		assert.Equal(t, 1, q.Length())
-		assert.Equal(t, 10.0, q.Items()[0].partitionCounts["partition1"])
+		assert.Equal(t, 10.0, q.Items()[0].podPartitionTracker["pod1"]["partition1"])
 	})
 
 	t.Run("givenTimeNotExistsCountAvailable_whenUpdate_thenUpdateNewTimeWithPodAndCloseWindowForPrevTime", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update([]PartitionReadCount{{"partition1", 10.0}})
+		tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 		q.Append(tc)
 
-		UpdateCount(q, TestTime+1, []PartitionReadCount{{"partition1", 20.0}})
+		UpdateCount(q, TestTime+1, &PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
 
 		assert.Equal(t, 2, q.Length())
-		assert.Equal(t, 10.0, q.Items()[0].partitionCounts["partition1"])
-		assert.Equal(t, 20.0, q.Items()[1].partitionCounts["partition1"])
+		assert.Equal(t, 10.0, q.Items()[0].podPartitionTracker["pod1"]["partition1"])
+		assert.Equal(t, 20.0, q.Items()[1].podPartitionTracker["pod1"]["partition1"])
 		assert.Equal(t, true, tc.IsWindowClosed())
 	})
 
 	t.Run("givenTimeNotExistsCountNotAvailable_whenUpdate_thenAddEmptyItem", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update([]PartitionReadCount{{"partition1", 10.0}})
+		tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 		q.Append(tc)
 
 		UpdateCount(q, TestTime+1, nil)
 
 		assert.Equal(t, 2, q.Length())
-		assert.Equal(t, 10.0, q.Items()[0].partitionCounts["partition1"])
+		assert.Equal(t, 10.0, q.Items()[0].podPartitionTracker["pod1"]["partition1"])
 		assert.Equal(t, 0, len(q.Items()[1].partitionCounts))
 	})
 }
@@ -115,7 +114,7 @@ func TestCalculateRate(t *testing.T) {
 		// only one data
 		now := time.Now()
 		tc1 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 20)
-		tc1.Update([]PartitionReadCount{{"partition1", 5.0}})
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
 		q.Append(tc1)
 		assert.Equal(t, 0.0, CalculateRate(q, 10, "partition1"))
 	})
@@ -125,15 +124,15 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update([]PartitionReadCount{{"partition1", 5.0}})
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
 		q.Append(tc1)
 		tc1.CloseWindow()
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc2.Update([]PartitionReadCount{{"partition1", 10.0}})
+		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 		q.Append(tc2)
 		tc2.CloseWindow()
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc3.Update([]PartitionReadCount{{"partition1", 20.0}})
+		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
 		q.Append(tc3)
 		tc3.CloseWindow()
 
@@ -148,15 +147,15 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update([]PartitionReadCount{{"partition1", 5.0}})
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
 		q.Append(tc1)
 		tc1.CloseWindow()
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc2.Update([]PartitionReadCount{{"partition1", 10.0}})
+		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 		q.Append(tc2)
 		tc2.CloseWindow()
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc3.Update([]PartitionReadCount{{"partition1", 20.0}})
+		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
 		q.Append(tc3)
 
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
@@ -170,19 +169,19 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
-		tc1.Update([]PartitionReadCount{{"partition1", 200.0}})
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 200.0}})
 		q.Append(tc1)
 		tc1.CloseWindow()
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc2.Update([]PartitionReadCount{{"partition1", 100.0}})
+		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
 		q.Append(tc2)
 		tc2.CloseWindow()
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update([]PartitionReadCount{{"partition1", 50.0}})
+		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 50.0}})
 		q.Append(tc3)
 		tc3.CloseWindow()
 		tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc4.Update([]PartitionReadCount{{"partition1", 80.0}})
+		tc4.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 80.0}})
 		q.Append(tc4)
 		tc4.CloseWindow()
 
@@ -197,24 +196,24 @@ func TestCalculateRate(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		now := time.Now()
 
-		tc1 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 30)
-		tc1.Update([]PartitionReadCount{{"partition1", 200.0}})
-		tc1.Update([]PartitionReadCount{{"partition2", 100.0}})
+		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 200.0}})
+		tc1.Update(&PodReadCount{"pod2", map[string]float64{"partition2": 100.0}})
 		q.Append(tc1)
 		tc1.CloseWindow()
-		tc2 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 20)
-		tc2.Update([]PartitionReadCount{{"partition1", 100.0}})
-		tc2.Update([]PartitionReadCount{{"partition2", 200.0}})
+		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
+		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
+		tc2.Update(&PodReadCount{"pod2", map[string]float64{"partition2": 200.0}})
 		q.Append(tc2)
 		tc2.CloseWindow()
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update([]PartitionReadCount{{"partition1", 50.0}})
-		tc3.Update([]PartitionReadCount{{"partition2", 300.0}})
+		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 50.0}})
+		tc3.Update(&PodReadCount{"pod2", map[string]float64{"partition2": 300.0}})
 		q.Append(tc3)
 		tc3.CloseWindow()
 		tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc4.Update([]PartitionReadCount{{"partition1", 80.0}})
-		tc4.Update([]PartitionReadCount{{"partition2", 400.0}})
+		tc4.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 80.0}})
+		tc4.Update(&PodReadCount{"pod2", map[string]float64{"partition2": 40.0}})
 		q.Append(tc4)
 		tc4.CloseWindow()
 
@@ -227,10 +226,10 @@ func TestCalculateRate(t *testing.T) {
 
 		// partition2 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition2"))
-		assert.Equal(t, 10.0, CalculateRate(q, 15, "partition2"))
-		assert.Equal(t, 10.0, CalculateRate(q, 25, "partition2"))
-		assert.Equal(t, 10.0, CalculateRate(q, 35, "partition2"))
-		assert.Equal(t, 10.0, CalculateRate(q, 100, "partition2"))
+		assert.Equal(t, 4.0, CalculateRate(q, 15, "partition2"))
+		assert.Equal(t, 7.0, CalculateRate(q, 25, "partition2"))
+		assert.Equal(t, 8.0, CalculateRate(q, 35, "partition2"))
+		assert.Equal(t, 8.0, CalculateRate(q, 100, "partition2"))
 	})
 
 	t.Run("multiplePods_givenPodsComeAndGo_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -238,26 +237,26 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 30)
-		tc1.Update([]PartitionReadCount{{"partition1", 200.0}})
-		tc1.Update([]PartitionReadCount{{"partition2", 90.0}})
-		tc1.Update([]PartitionReadCount{{"partition3", 50.0}})
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 200.0}})
+		tc1.Update(&PodReadCount{"pod2", map[string]float64{"partition2": 90.0}})
+		tc1.Update(&PodReadCount{"pod3", map[string]float64{"partition3": 50.0}})
 		q.Append(tc1)
 		tc1.CloseWindow()
 		tc2 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 20)
-		tc2.Update([]PartitionReadCount{{"partition1", 100.0}})
-		tc2.Update([]PartitionReadCount{{"partition2", 200.0}})
+		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
+		tc2.Update(&PodReadCount{"pod2", map[string]float64{"partition2": 200.0}})
 		q.Append(tc2)
 		tc2.CloseWindow()
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update([]PartitionReadCount{{"partition1", 50.0}})
-		tc3.Update([]PartitionReadCount{{"partition2", 300.0}})
-		tc3.Update([]PartitionReadCount{{"partition4", 100.0}})
+		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 50.0}})
+		tc3.Update(&PodReadCount{"pod2", map[string]float64{"partition2": 300.0}})
+		tc3.Update(&PodReadCount{"pod4", map[string]float64{"partition4": 100.0}})
 		q.Append(tc3)
 		tc3.CloseWindow()
 		tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc4.Update([]PartitionReadCount{{"partition2", 400.0}})
-		tc4.Update([]PartitionReadCount{{"partition3", 200.0}})
-		tc4.Update([]PartitionReadCount{{"partition100", 200.0}})
+		tc4.Update(&PodReadCount{"pod2", map[string]float64{"partition2": 400.0}})
+		tc4.Update(&PodReadCount{"pod3", map[string]float64{"partition3": 200.0}})
+		tc4.Update(&PodReadCount{"pod100", map[string]float64{"partition100": 200.0}})
 		q.Append(tc4)
 		tc4.CloseWindow()
 

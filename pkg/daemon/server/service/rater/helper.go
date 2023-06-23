@@ -25,7 +25,7 @@ import (
 const IndexNotFound = -1
 
 // UpdateCount updates the count of processed messages for a pod at a given time
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, partitionReadCounts []PartitionReadCount) {
+func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, partitionReadCounts *PodReadCount) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
@@ -81,8 +81,8 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 }
 
 func calculatePartitionDelta(c1, c2 *TimestampedCounts, partitionName string) float64 {
-	tc1 := c1.Snapshot()
-	tc2 := c2.Snapshot()
+	tc1 := c1.PartitionReadCountSnapshot()
+	tc2 := c2.PartitionReadCountSnapshot()
 	count1, exist1 := tc1[partitionName]
 	count2, exist2 := tc2[partitionName]
 	if !exist2 {

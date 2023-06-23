@@ -63,18 +63,18 @@ type Rater struct {
 	options              *options
 }
 
-// PartitionReadCount is a struct to maintain count of messages read for each partition
-type PartitionReadCount struct {
-	name  string
-	value float64
+// PodReadCount is a struct to maintain count of messages read for each partition
+type PodReadCount struct {
+	name                string
+	partitionReadCounts map[string]float64
 }
 
-func (p *PartitionReadCount) Name() string {
+func (p *PodReadCount) Name() string {
 	return p.name
 }
 
-func (p *PartitionReadCount) Value() float64 {
-	return p.value
+func (p *PodReadCount) PartitionReadCounts() map[string]float64 {
+	return p.partitionReadCounts
 }
 
 // vertex -> [timestamp(podCounts{podName: count}, partitionCounts{partitionIdx: count}, isWindowClosed, delta(across all the pods))]
@@ -134,19 +134,19 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	vertexName := podInfo[1]
 	vertexType := podInfo[3]
 	podName := strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-")
-	var partitionReadCounts []PartitionReadCount
+	var podReadCount *PodReadCount
 	activePods := r.podTracker.GetActivePods()
 	if activePods.Contains(key) {
-		partitionReadCounts = r.getPartitionReadCounts(vertexName, vertexType, podName)
-		if partitionReadCounts == nil {
-			log.Debugf("Failed retrieving total partitionReadCounts for pod %s", podName)
+		podReadCount = r.getPartitionReadCounts(vertexName, vertexType, podName)
+		if podReadCount == nil {
+			log.Debugf("Failed retrieving total podReadCount for pod %s", podName)
 		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with CountNotAvailable...", podName)
-		partitionReadCounts = nil
+		podReadCount = nil
 	}
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
-	UpdateCount(r.timestampedPodCounts[vertexName], now, partitionReadCounts)
+	UpdateCount(r.timestampedPodCounts[vertexName], now, podReadCount)
 	return nil
 }
 
@@ -220,7 +220,7 @@ func sleep(ctx context.Context, duration time.Duration) {
 
 // [100, 110, 110]
 // getPartitionReadCounts returns the total number of messages read by the pod
-func (r *Rater) getPartitionReadCounts(vertexName, vertexType, podName string) []PartitionReadCount {
+func (r *Rater) getPartitionReadCounts(vertexName, vertexType, podName string) *PodReadCount {
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if res, err := r.httpClient.Get(url); err != nil {
@@ -241,7 +241,7 @@ func (r *Rater) getPartitionReadCounts(vertexName, vertexType, podName string) [
 		}
 		if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 			metricsList := value.GetMetric()
-			var partitionReadCounts []PartitionReadCount
+			partitionReadCount := make(map[string]float64)
 			for _, ele := range metricsList {
 				partitionName := ""
 				for _, label := range ele.Label {
@@ -249,12 +249,10 @@ func (r *Rater) getPartitionReadCounts(vertexName, vertexType, podName string) [
 						partitionName = label.GetValue()
 					}
 				}
-				partitionReadCounts = append(partitionReadCounts, PartitionReadCount{
-					name:  partitionName,
-					value: ele.Counter.GetValue(),
-				})
+				partitionReadCount[partitionName] = ele.Counter.GetValue()
 			}
-			return partitionReadCounts
+			podReadCount := &PodReadCount{podName, partitionReadCount}
+			return podReadCount
 		} else {
 			r.log.Errorf("failed getting the read total metric, the metric is not available.")
 			return nil

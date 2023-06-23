@@ -29,6 +29,8 @@ const CountNotAvailable = -1
 type TimestampedCounts struct {
 	// timestamp in seconds, is the time when the count is recorded
 	timestamp int64
+	// pod to partitionCount mapping
+	podPartitionTracker map[string]map[string]float64
 	// partition to count mapping
 	partitionCounts map[string]float64
 	// isWindowClosed indicates whether we have finished collecting pod counts for this timestamp
@@ -38,18 +40,19 @@ type TimestampedCounts struct {
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
-		timestamp:       t,
-		partitionCounts: make(map[string]float64),
-		isWindowClosed:  false,
-		lock:            new(sync.RWMutex),
+		timestamp:           t,
+		podPartitionTracker: make(map[string]map[string]float64),
+		partitionCounts:     make(map[string]float64),
+		isWindowClosed:      false,
+		lock:                new(sync.RWMutex),
 	}
 }
 
 // Update updates the count for a pod if the current window is not closed
-func (tc *TimestampedCounts) Update(partitionReadCounts []PartitionReadCount) {
+func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
-	if partitionReadCounts == nil {
+	if podReadCount == nil {
 		// we choose to skip updating when partitionReadCounts is nil, instead of removing the pod from the map.
 		// imagine if the getPartitionReadCounts call fails to scrape the partitionReadCounts metric, and it's NOT because the pod is down.
 		// in this case getPartitionReadCounts returns CountNotAvailable.
@@ -68,16 +71,25 @@ func (tc *TimestampedCounts) Update(partitionReadCounts []PartitionReadCount) {
 	// the sum of partitionReadCounts as the total count of processed messages for this pod
 	// for reduce we will always have one partitionReadCount (since reduce pod will read
 	// from single partition)
-	totalPartitionReadCount := 0.0
-	for _, ele := range partitionReadCounts {
-		tc.partitionCounts[ele.Name()] = ele.Value()
-		totalPartitionReadCount += ele.Value()
-	}
+
+	tc.podPartitionTracker[podReadCount.Name()] = podReadCount.PartitionReadCounts()
 }
 
-// Snapshot returns a copy of the partitionName to count mapping
+// PodReadCountSnapshot returns a copy of the podName to partitionCount mapping
 // it's used to ensure the returned map is not modified by other goroutines
-func (tc *TimestampedCounts) Snapshot() map[string]float64 {
+func (tc *TimestampedCounts) PodReadCountSnapshot() map[string]map[string]float64 {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	counts := make(map[string]map[string]float64)
+	for k, v := range tc.podPartitionTracker {
+		counts[k] = v
+	}
+	return counts
+}
+
+// PartitionReadCountSnapshot returns a copy of the partitionName to count mapping
+// it's used to ensure the returned map is not modified by other goroutines
+func (tc *TimestampedCounts) PartitionReadCountSnapshot() map[string]float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 	counts := make(map[string]float64)
@@ -96,10 +108,20 @@ func (tc *TimestampedCounts) IsWindowClosed() bool {
 
 // CloseWindow closes the window and calculates the delta by comparing the current pod counts with the previous window
 func (tc *TimestampedCounts) CloseWindow() {
+	ppt := tc.PodReadCountSnapshot()
+	totalPartitionCounts := make(map[string]float64)
+
+	for _, partitionReadCounts := range ppt {
+		for k, v := range partitionReadCounts {
+			totalPartitionCounts[k] += v
+		}
+	}
+
 	// finalize the window by setting isWindowClosed to true and delta to the calculated value
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	tc.isWindowClosed = true
+	tc.partitionCounts = totalPartitionCounts
 }
 
 // ToString returns a string representation of the TimestampedCounts
