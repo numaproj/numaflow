@@ -552,7 +552,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 		},
 		{
 			name:             "all pods empty timeline",
-			processorManager: processorManager3,
+			processorManager: processorManager4,
 			want:             wmb.WMB{},
 		},
 	}
