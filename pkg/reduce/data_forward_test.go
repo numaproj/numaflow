@@ -392,6 +392,8 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		window, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
+	fmt.Println("deletethis: about to Start reduceDataForward")
+
 	// start the forwarder
 	go reduceDataForward.Start()
 
@@ -1250,8 +1252,9 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 	storeWatcher := wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	pm := processor.NewProcessorManager(ctx, storeWatcher, 1, processor.WithIsReduce(true))
-	f := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm, 1)
-	return f, sourcePublisher
+	edgeFetcher := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm, 1)
+	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, map[string]fetch.Fetcher{"fromVertex": edgeFetcher})
+	return edgeFetcherSet, sourcePublisher
 }
 
 func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {

@@ -18,6 +18,8 @@ package fetch
 
 import (
 	"context"
+	"math"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -63,14 +65,14 @@ func (efs *edgeFetcherSet) ProcessOffset(inputOffset isb.Offset, fromPartitionId
 func (efs *edgeFetcherSet) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	// get the most conservative time (minimum watermark) across all Edges
 	var wm wmb.Watermark
-	overallWatermark := wmb.InitialWatermark
+	overallWatermark := wmb.Watermark(time.UnixMilli(math.MaxInt64))
 	for fromVertex, fetcher := range efs.edgeFetchers {
 		wm = fetcher.GetHeadWatermark(fromPartitionIdx)
 		if wm == wmb.InitialWatermark { // unset
 			continue
 		}
 		efs.log.Debugf("Got Edge Head Watermark from vertex=%q while processing partition %d: %v", fromVertex, fromPartitionIdx, wm)
-		if wm.BeforeWatermark(overallWatermark) || overallWatermark == wmb.InitialWatermark {
+		if wm.BeforeWatermark(overallWatermark) {
 			overallWatermark = wm
 		}
 	}
@@ -83,7 +85,12 @@ func (efs *edgeFetcherSet) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 	// if we get back one that's empty it means that there could be one that's not Idle, so we need to return empty
 
 	// call GetHeadWMB() for all Edges and get the smallest one
-	var watermarkBuffer, overallHeadWMB, unsetWMB wmb.WMB
+	var watermarkBuffer, unsetWMB wmb.WMB
+	var overallHeadWMB = wmb.WMB{
+		// we find the head WMB based on watermark
+		Offset:    math.MaxInt64,
+		Watermark: math.MaxInt64,
+	}
 
 	for fromVertex, fetcher := range efs.edgeFetchers {
 		watermarkBuffer = fetcher.GetHeadWMB(fromPartitionIdx)
@@ -113,11 +120,11 @@ func (efs *edgeFetcherSet) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 func (efs *edgeFetcherSet) GetWatermark() wmb.Watermark {
 	// get the most conservative time (minimum watermark) across all Edges
 	var wm wmb.Watermark
-	overallWatermark := wmb.InitialWatermark
+	overallWatermark := wmb.Watermark(time.UnixMilli(math.MaxInt64))
 	for fromVertex, fetcher := range efs.edgeFetchers {
 		wm = fetcher.GetWatermark()
 		efs.log.Debugf("Got Edge watermark from vertex=%q: %v", fromVertex, wm)
-		if wm.BeforeWatermark(overallWatermark) || overallWatermark == wmb.InitialWatermark {
+		if wm.BeforeWatermark(overallWatermark) {
 			overallWatermark = wm
 		}
 	}

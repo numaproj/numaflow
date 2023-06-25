@@ -179,6 +179,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 // forwardAChunk reads a chunk of messages from isb and assigns watermark to messages
 // and writes the messages to pbq
 func (df *DataForward) forwardAChunk(ctx context.Context) {
+	df.log.Infof("deletethis: forwardAChunk")
 	readMessages, err := df.fromBufferPartition.Read(ctx, df.opts.readBatchSize)
 	totalBytes := 0
 	if err != nil {
@@ -194,6 +195,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		// we use the HeadWMB as the watermark for the idle
 		// we get the HeadWMB for the partition from which we read the messages
 		var processorWMB = df.wmFetcher.GetHeadWMB(df.fromBufferPartition.GetPartitionIdx())
+		df.log.Infof("deletethis: readMessages=0: GetHeadWMB=%+v", processorWMB)
 		if !df.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
 			df.log.Debugw("skip publishing idle watermark",
@@ -250,6 +252,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	// get the watermark for the partition from which we read the messages
 	processorWM := df.wmFetcher.ProcessOffsetGetWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
+	df.log.Infof("deletethis: ProcessOffsetGetWatermark=%+v", processorWM)
 
 	for _, m := range readMessages {
 		if !df.keyed {
