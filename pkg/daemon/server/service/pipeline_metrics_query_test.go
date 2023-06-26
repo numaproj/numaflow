@@ -102,10 +102,10 @@ func TestGetVertexMetrics(t *testing.T) {
 
 	metricsResponse := `# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
 # TYPE vertex_pending_messages gauge
-vertex_pending_messages{period="15m",pipeline="simple-pipeline",vertex="cat"} 4.011
-vertex_pending_messages{period="1m",pipeline="simple-pipeline",vertex="cat"} 5.333
-vertex_pending_messages{period="5m",pipeline="simple-pipeline",vertex="cat"} 6.002
-vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"} 7.00002
+vertex_pending_messages{period="15m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 4.011
+vertex_pending_messages{period="1m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 5.333
+vertex_pending_messages{period="5m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 6.002
+vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 7.00002
 `
 	ioReader := io.NopCloser(bytes.NewReader([]byte(metricsResponse)))
 
@@ -138,8 +138,7 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 	pendings["1m"] = 5
 	pendings["5m"] = 6
 	pendings["default"] = 7
-	// FIXME
-	//assert.Equal(t, resp.VertexMetrics[0].GetPendings(), pendings)
+	assert.Equal(t, resp.VertexMetrics[0].GetPendings(), pendings)
 }
 
 func TestGetBuffer(t *testing.T) {
@@ -257,10 +256,10 @@ func TestGetPipelineStatus(t *testing.T) {
 	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName)
 	metricsResponse := `# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
 # TYPE vertex_pending_messages gauge
-vertex_pending_messages{period="15m",pipeline="simple-pipeline",vertex="cat"} 4.011
-vertex_pending_messages{period="1m",pipeline="simple-pipeline",vertex="cat"} 5.333
-vertex_pending_messages{period="5m",pipeline="simple-pipeline",vertex="cat"} 6.002
-vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"} 7.00002
+vertex_pending_messages{period="15m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 4.011
+vertex_pending_messages{period="1m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 5.333
+vertex_pending_messages{period="5m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 6.002
+vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 7.00002
 `
 	req := &daemon.GetPipelineStatusRequest{Pipeline: &pipelineName}
 
@@ -295,9 +294,8 @@ vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"
 			}, nil
 		},
 	}
-	_, err = pipelineMetricsQueryService.GetPipelineStatus(context.Background(), req)
+	resp, err = pipelineMetricsQueryService.GetPipelineStatus(context.Background(), req)
 	assert.NoError(t, err)
-	// FIXME
-	//ErrorPipelineResponse := daemon.PipelineStatus{Status: pointer.String("Error"), Message: pointer.String("Pipeline has an error. Vertex cat is not processing pending messages.")}
-	//assert.Equal(t, &ErrorPipelineResponse, resp.Status)
+	ErrorPipelineResponse := daemon.PipelineStatus{Status: pointer.String("Error"), Message: pointer.String("Pipeline has an error. Vertex cat is not processing pending messages.")}
+	assert.Equal(t, &ErrorPipelineResponse, resp.Status)
 }

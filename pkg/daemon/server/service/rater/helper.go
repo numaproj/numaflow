@@ -36,14 +36,14 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 		}
 	}
 
-	// if we cannot find a matching element, it means we need to add a new timestamped partitionReadCounts to the queue
+	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
 	tc := NewTimestampedCounts(time)
 	tc.Update(partitionReadCounts)
 
 	// close the window for the most recent timestamped partitionReadCounts
 	switch n := len(items); n {
 	case 0:
-	// if the queue is empty, we just append the new timestamped partitionReadCounts
+	// if the queue is empty, we just append the new timestamped count
 	case 1:
 		// if the queue has only one element, we close the window for this element
 		items[0].CloseWindow()

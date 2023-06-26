@@ -55,7 +55,7 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 	if podReadCount == nil {
 		// we choose to skip updating when podReadCount is nil, instead of removing the pod from the map.
 		// imagine if the getPodReadCounts call fails to scrape the partitionReadCounts metric, and it's NOT because the pod is down.
-		// in this case getPodReadCounts returns CountNotAvailable.
+		// in this case getPodReadCounts returns nil.
 		// if we remove the pod from the map and then the next scrape successfully gets the partitionReadCounts, we can reach a state that in the timestamped counts,
 		// for this single pod, at t1, partitionReadCounts is 123456, at t2, the map doesn't contain this pod and t3, partitionReadCounts is 123457.
 		// when calculating the rate, as we sum up deltas among timestamps, we will get 123457 total delta instead of the real delta 1.

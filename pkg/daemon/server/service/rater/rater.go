@@ -63,7 +63,7 @@ type Rater struct {
 	options              *options
 }
 
-// PodReadCount is a struct to maintain count of messages read for each partition
+// PodReadCount is a struct to maintain count of messages read from each partition by a pod
 type PodReadCount struct {
 	name                string
 	partitionReadCounts map[string]float64
@@ -142,7 +142,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podName)
 		}
 	} else {
-		log.Debugf("Pod %s does not exist, updating it with CountNotAvailable...", podName)
+		log.Debugf("Pod %s does not exist, updating it with nil...", podName)
 		podReadCount = nil
 	}
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()

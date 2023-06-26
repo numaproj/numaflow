@@ -11,7 +11,6 @@ spec:
           rpu: 5
           duration: 1s
     - name: cat
-      partitions: 2
       udf:
         builtin:
           name: cat # A built-in UDF which simply cats the message

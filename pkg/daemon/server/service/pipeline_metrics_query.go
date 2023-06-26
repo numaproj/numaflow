@@ -164,7 +164,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
 	bufferList := abstractVertex.OwnedBufferNames(ps.pipeline.Namespace, ps.pipeline.Name)
 
-	// source vertex will have a single partition - "in"
+	// source vertex will have a single partition, which is the vertex name itself
 	if abstractVertex.IsASource() {
 		bufferList = append(bufferList, req.GetVertex())
 	}
@@ -273,9 +273,6 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 		totalPending := int64(0)
 		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
 		for _, vertexMetrics := range vertexResp.VertexMetrics {
-			for key, value := range vertexMetrics.GetProcessingRates() {
-				println(key, " ", value)
-			}
 			if vertexMetrics.GetProcessingRates() != nil {
 				if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
 					totalProcessingRate += p
