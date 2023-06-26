@@ -155,6 +155,7 @@ func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 }
 
 // GetVertexMetrics is used to query the metrics service and is used to obtain the processing rate of a given vertex for 1m, 5m and 15m.
+// Response contains the metrics for each partition of the vertex.
 // In the future maybe latency will also be added here?
 // Should this method live here or maybe another file?
 func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daemon.GetVertexMetricsRequest) (*daemon.GetVertexMetricsResponse, error) {
@@ -175,7 +176,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 			Pipeline: &ps.pipeline.Name,
 			Vertex:   req.Vertex,
 		}
-
+		// get the processing rate for each partition
 		vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
 		vm.Pendings = partitionPendingInfo[partitionName]
 		metricsArr[idx] = vm
@@ -185,6 +186,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	return resp, nil
 }
 
+// getPending returns the pending count for each partition of the vertex
 func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]map[string]int64 {
 	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
 	log := logging.FromContext(ctx)

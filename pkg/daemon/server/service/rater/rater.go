@@ -137,7 +137,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	var podReadCount *PodReadCount
 	activePods := r.podTracker.GetActivePods()
 	if activePods.Contains(key) {
-		podReadCount = r.getPartitionReadCounts(vertexName, vertexType, podName)
+		podReadCount = r.getPodReadCounts(vertexName, vertexType, podName)
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podName)
 		}
@@ -213,14 +213,9 @@ func sleep(ctx context.Context, duration time.Duration) {
 	}
 }
 
-// pod1
-// forwarder_read_total p1 100
-// forwarder_read_total p2 110
-// forwarder_read_total p3 110
-
-// [100, 110, 110]
-// getPartitionReadCounts returns the total number of messages read by the pod
-func (r *Rater) getPartitionReadCounts(vertexName, vertexType, podName string) *PodReadCount {
+// getPodReadCounts returns the total number of messages read by the pod
+// since a pod can read from multiple partitions, we will return a map of partition to read count.
+func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodReadCount {
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if res, err := r.httpClient.Get(url); err != nil {
@@ -260,7 +255,7 @@ func (r *Rater) getPartitionReadCounts(vertexName, vertexType, podName string) *
 	}
 }
 
-// GetRates returns the processing rates of the vertex in the format of lookback second to rate mappings
+// GetRates returns the processing rates of the vertex partition in the format of lookback second to rate mappings
 func (r *Rater) GetRates(vertexName, partitionName string) map[string]float64 {
 	var result = make(map[string]float64)
 	// calculate rates for each lookback seconds

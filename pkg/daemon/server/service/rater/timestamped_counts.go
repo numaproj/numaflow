@@ -53,9 +53,9 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	if podReadCount == nil {
-		// we choose to skip updating when partitionReadCounts is nil, instead of removing the pod from the map.
-		// imagine if the getPartitionReadCounts call fails to scrape the partitionReadCounts metric, and it's NOT because the pod is down.
-		// in this case getPartitionReadCounts returns CountNotAvailable.
+		// we choose to skip updating when podReadCount is nil, instead of removing the pod from the map.
+		// imagine if the getPodReadCounts call fails to scrape the partitionReadCounts metric, and it's NOT because the pod is down.
+		// in this case getPodReadCounts returns CountNotAvailable.
 		// if we remove the pod from the map and then the next scrape successfully gets the partitionReadCounts, we can reach a state that in the timestamped counts,
 		// for this single pod, at t1, partitionReadCounts is 123456, at t2, the map doesn't contain this pod and t3, partitionReadCounts is 123457.
 		// when calculating the rate, as we sum up deltas among timestamps, we will get 123457 total delta instead of the real delta 1.
@@ -67,11 +67,9 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 		// we skip updating if the window is already closed.
 		return
 	}
-	// since a pod can read from multiple partitions we should consider
-	// the sum of partitionReadCounts as the total count of processed messages for this pod
-	// for reduce we will always have one partitionReadCount (since reduce pod will read
-	// from single partition)
 
+	// since the pod can read from multiple partitions, we overwrite the previous partitionReadCounts for this pod
+	// with the new partitionReadCounts map, since it is a counter metric, the new value is always greater than the previous one.
 	tc.podPartitionTracker[podReadCount.Name()] = podReadCount.PartitionReadCounts()
 }
 

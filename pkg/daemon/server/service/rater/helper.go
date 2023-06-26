@@ -54,7 +54,7 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	q.Append(tc)
 }
 
-// CalculateRate calculates the rate of the vertex in the last lookback seconds
+// CalculateRate calculates the rate of the vertex partition in the last lookback seconds
 func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) float64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
@@ -74,12 +74,14 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		// this should not happen in practice because we are using a 10s interval
 		return 0
 	}
+	// TODO: revisit this logic, we can just use the slope (counts[endIndex] - counts[startIndex] / timeDiff) to calculate the rate.
 	for i := startIndex; i < endIndex; i++ {
 		delta += calculatePartitionDelta(counts[i], counts[i+1], partitionName)
 	}
 	return delta / float64(timeDiff)
 }
 
+// calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
 func calculatePartitionDelta(c1, c2 *TimestampedCounts, partitionName string) float64 {
 	tc1 := c1.PartitionReadCountSnapshot()
 	tc2 := c2.PartitionReadCountSnapshot()
