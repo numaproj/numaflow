@@ -53,24 +53,25 @@ type Scaler struct {
 
 // NewScaler returns a Scaler instance.
 func NewScaler(client client.Client, opts ...Option) *Scaler {
+	scalerOpts := defaultOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(scalerOpts)
+		}
+	}
 	s := &Scaler{
 		client:     client,
-		options:    defaultOptions(),
+		options:    scalerOpts,
 		vertexMap:  make(map[string]*list.Element),
 		vertexList: list.New(),
 		lock:       new(sync.RWMutex),
 	}
 	// cache top 100 daemon clients
-	s.daemonClientsCache, _ = lru.NewWithEvict(100, func(key, value interface{}) {
+	s.daemonClientsCache, _ = lru.NewWithEvict(s.options.clientsCacheSize, func(key, value interface{}) {
 		_ = value.(*daemonclient.DaemonClient).Close()
 	})
 	vertexMetricsCache, _ := lru.New(10000)
 	s.vertexMetricsCache = vertexMetricsCache
-	for _, opt := range opts {
-		if opt != nil {
-			opt(s.options)
-		}
-	}
 	return s
 }
 
@@ -223,6 +224,9 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
 	}
 	// Avg rate and pending for autoscaling are both in the map with key "default", see "pkg/metrics/metrics.go".
+	// vmMetrics is a map which contains metrics of all the partitions of a vertex.
+	// We need to aggregate them to get the total rate and pending of the vertex.
+	// If any of the partition doesn't have the rate or pending information, we skip scaling.
 	totalRate := float64(0)
 	totalPending := int64(0)
 	for _, m := range vMetrics {
@@ -242,7 +246,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		totalPending += pending
 	}
 
-	// Add to cache for back pressure calculation
+	// Add pending information to cache for back pressure calculation
 	_ = s.vertexMetricsCache.Add(key+"/pending", totalPending)
 	totalBufferLength := int64(0)
 	targetAvailableBufferLength := int64(0)
@@ -259,6 +263,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 				// Add to cache for back pressure calculation
 			}
 		}
+		// Add processing rate information to cache for back pressure calculation
 		_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
 	}
 	current := int32(vertex.GetReplicas())
