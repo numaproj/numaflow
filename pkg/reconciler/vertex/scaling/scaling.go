@@ -224,7 +224,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
 	}
 	// Avg rate and pending for autoscaling are both in the map with key "default", see "pkg/metrics/metrics.go".
-	// vmMetrics is a map which contains metrics of all the partitions of a vertex.
+	// vMetrics is a map which contains metrics of all the partitions of a vertex.
 	// We need to aggregate them to get the total rate and pending of the vertex.
 	// If any of the partition doesn't have the rate or pending information, we skip scaling.
 	totalRate := float64(0)
