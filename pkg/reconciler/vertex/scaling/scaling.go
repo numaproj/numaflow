@@ -48,7 +48,7 @@ type Scaler struct {
 	options    *options
 	// Cache to store the vertex metrics such as pending message number
 	vertexMetricsCache *lru.Cache
-	daemonClientsCache *ClientCache
+	daemonClientsCache *lru.Cache
 }
 
 // NewScaler returns a Scaler instance.
@@ -60,10 +60,12 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 		vertexList: list.New(),
 		lock:       new(sync.RWMutex),
 	}
+	// cache top 100 daemon clients
+	s.daemonClientsCache, _ = lru.NewWithEvict(100, func(key, value interface{}) {
+		_ = value.(*daemonclient.DaemonClient).Close()
+	})
 	vertexMetricsCache, _ := lru.New(10000)
 	s.vertexMetricsCache = vertexMetricsCache
-	// cache top 100 daemon clients
-	s.daemonClientsCache = NewClientCache(100)
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s.options)
@@ -206,16 +208,17 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		}
 	}
 	var err error
-	dClient := s.daemonClientsCache.Get(pl.GetDaemonServiceURL())
+	dClient, _ := s.daemonClientsCache.Get(pl.GetDaemonServiceURL())
 	if dClient == nil {
 		dClient, err = daemonclient.NewDaemonServiceClient(pl.GetDaemonServiceURL())
 		if err != nil {
 			return fmt.Errorf("failed to get daemon service client for pipeline %s, %w", pl.Name, err)
 		}
-		s.daemonClientsCache.Put(pl.GetDaemonServiceURL(), dClient)
+		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), dClient)
 	}
 
-	vMetrics, err := dClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
+	daemonClient := dClient.(daemonclient.DaemonClient)
+	vMetrics, err := daemonClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
 	}
@@ -245,7 +248,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	targetAvailableBufferLength := int64(0)
 	if !vertex.IsASource() { // Only non-source vertex has buffer to read
 		for _, bufferName := range vertex.OwnedBuffers() {
-			if bInfo, err := dClient.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
+			if bInfo, err := daemonClient.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
 				return fmt.Errorf("failed to get the read buffer information of vertex %q, %w", vertex.Name, err)
 			} else {
 				if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == nil {
@@ -377,7 +380,7 @@ func (s *Scaler) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			log.Info("Shutting down scaling job assigner")
 			// clear the daemon clients cache
-			s.daemonClientsCache.DeleteAll()
+			s.daemonClientsCache.Purge()
 			return nil
 		default:
 			assign()
