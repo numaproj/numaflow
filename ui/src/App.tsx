@@ -12,7 +12,7 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Namespaces } from "./components/pages/Namespace";
-import { Pipeline } from "./components/pipeline/Pipeline";
+import { Pipeline } from "./components/pages/Pipeline";
 import logo from "./images/icon-on-blue-bg.png";
 import "./App.css";
 import { Slide, ToastContainer } from "react-toastify";

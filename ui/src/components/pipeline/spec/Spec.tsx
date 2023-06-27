@@ -12,7 +12,7 @@ import {
 import { SyntheticEvent, useState } from "react";
 import TabPanel from "../../common/Tab-Panel";
 import { a11yProps } from "../../../utils";
-import { Pipeline } from "../../../utils/models/pipeline";
+import { Pipeline } from "../../../types/declarations/pipeline";
 
 interface SpecProps {
   pipeline: Pipeline;
