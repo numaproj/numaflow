@@ -211,23 +211,21 @@ func (r *ReduceSuite) TestJoinedMapVertexPipeline() {
 			case <-done:
 				return
 			default:
-				vertices := []string{"in-0", "in-1"}
 				eventTime := strconv.Itoa(startTime + i*1000)
-				for vertex := 0; vertex <= 1; vertex++ {
-					w.SendMessageTo(pipelineName, vertices[vertex], NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-						SendMessageTo(pipelineName, vertices[vertex], NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-						SendMessageTo(pipelineName, vertices[vertex], NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
-				}
+				w.SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				w.SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("5")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("6")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("7")).WithHeader("X-Numaflow-Event-Time", eventTime))
 
 			}
 		}
 	}()
 
-	// since the key can be even or odd and the window duration is 10s
-	// the sum should be 20(for even) and 40(for odd)
 	w.Expect().
-		SinkContains("sink", "80").
-		SinkContains("sink", "40")
+		SinkContains("sink", "80"). // per 10 second window: 10 * (2 + 6) = 80
+		SinkContains("sink", "160") // per 10 second window: 10 * (1 + 3 + 5 + 7) = 160
 	time.Sleep(2 * time.Minute) //todo: delete this
 	done <- struct{}{}
 }
