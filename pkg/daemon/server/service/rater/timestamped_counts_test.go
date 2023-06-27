@@ -23,57 +23,77 @@ import (
 )
 
 func TestNewTimestampedCounts(t *testing.T) {
-	tc := NewTimestampedCounts(1620000000)
-	assert.Equal(t, int64(1620000000), tc.timestamp)
-	assert.Equal(t, 0, len(tc.partitionCounts))
-	assert.Equal(t, 0, len(tc.podPartitionTracker))
+	tc := NewTimestampedCounts(TestTime)
+	assert.Equal(t, int64(TestTime), tc.timestamp)
+	assert.Equal(t, 0, len(tc.podPartitionDelta))
+	assert.Equal(t, 0, len(tc.podPartitionCount))
 	assert.Equal(t, false, tc.isWindowClosed)
 }
 
 func TestTimestampedCounts_Update(t *testing.T) {
-	tc := NewTimestampedCounts(1620000000)
+	tc := NewTimestampedCounts(TestTime)
 	tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
-	assert.Equal(t, 10.0, tc.podPartitionTracker["pod1"]["partition1"])
+	assert.Equal(t, 10.0, tc.podPartitionCount["pod1"]["partition1"])
 	tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
-	assert.Equal(t, 20.0, tc.podPartitionTracker["pod1"]["partition1"])
+	assert.Equal(t, 20.0, tc.podPartitionCount["pod1"]["partition1"])
 	tc.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 30.0}})
-	assert.Equal(t, 30.0, tc.podPartitionTracker["pod2"]["partition1"])
-	assert.Equal(t, 2, len(tc.podPartitionTracker))
+	assert.Equal(t, 30.0, tc.podPartitionCount["pod2"]["partition1"])
+	assert.Equal(t, 2, len(tc.podPartitionCount))
 	tc.Update(nil)
-	assert.Equal(t, 2, len(tc.podPartitionTracker))
-	assert.Equal(t, 20, int(tc.podPartitionTracker["pod1"]["partition1"]))
-	assert.Equal(t, 30, int(tc.podPartitionTracker["pod2"]["partition1"]))
+	assert.Equal(t, 2, len(tc.podPartitionCount))
+	assert.Equal(t, 20, int(tc.podPartitionCount["pod1"]["partition1"]))
+	assert.Equal(t, 30, int(tc.podPartitionCount["pod2"]["partition1"]))
 	assert.Equal(t, false, tc.isWindowClosed)
 
-	tc.CloseWindow()
+	tc.CloseWindow(nil)
 	assert.Equal(t, true, tc.isWindowClosed)
 	// verify that updating partition counts doesn't take effect if the window is already closed
 	tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
-	assert.Equal(t, 20, int(tc.podPartitionTracker["pod1"]["partition1"]))
+	assert.Equal(t, 20, int(tc.podPartitionCount["pod1"]["partition1"]))
 	tc.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 20.0}})
-	assert.Equal(t, 30, int(tc.podPartitionTracker["pod2"]["partition1"]))
+	assert.Equal(t, 30, int(tc.podPartitionCount["pod2"]["partition1"]))
 
-	tc2 := NewTimestampedCounts(1620000001)
+	tc2 := NewTimestampedCounts(TestTime + 1)
 	tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 40.0}})
-	assert.Equal(t, 40.0, tc2.podPartitionTracker["pod1"]["partition1"])
+	assert.Equal(t, 40.0, tc2.podPartitionCount["pod1"]["partition1"])
 	tc2.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 10.0}})
-	assert.Equal(t, 10.0, tc2.podPartitionTracker["pod2"]["partition1"])
-	tc2.CloseWindow()
+	assert.Equal(t, 10.0, tc2.podPartitionCount["pod2"]["partition1"])
+	tc2.CloseWindow(tc)
 	assert.Equal(t, true, tc2.isWindowClosed)
 }
 
 func TestTimestampedPodCounts_Snapshot(t *testing.T) {
-	tc := NewTimestampedCounts(1620000000)
+	tc := NewTimestampedCounts(TestTime)
 	tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 	tc.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 20.0}})
-	tc.Update(&PodReadCount{"pod3", map[string]float64{"partition1": 30.0}})
-	assert.Equal(t, map[string]map[string]float64{"pod1": {"partition1": 10.0}, "pod2": {"partition1": 20.0}, "pod3": {"partition1": 30.0}}, tc.PodReadCountSnapshot())
+	assert.Equal(t, map[string]map[string]float64{"pod1": {"partition1": 10.0}, "pod2": {"partition1": 20.0}}, tc.PodReadCountSnapshot())
 }
 
-func TestTimestampedPartitionCounts_Snapshot(t *testing.T) {
-	tc := NewTimestampedCounts(1620000000)
+func TestTimestampedPodDeltas_Snapshot(t *testing.T) {
+	tc := NewTimestampedCounts(TestTime)
 	tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 	tc.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 20.0}})
-	tc.CloseWindow()
-	assert.Equal(t, map[string]float64{"partition1": 30.0}, tc.PartitionReadCountSnapshot())
+	tc.CloseWindow(nil)
+
+	tc1 := NewTimestampedCounts(TestTime + 1)
+	tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
+	tc1.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 30.0}})
+	tc1.CloseWindow(tc)
+
+	assert.Equal(t, map[string]map[string]float64{"pod1": {"partition1": 10.0}, "pod2": {"partition1": 10.0}}, tc1.PodDeltaCountSnapshot())
+}
+
+func TestTimestamped_CloseWindow(t *testing.T) {
+	tc := NewTimestampedCounts(TestTime)
+	tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
+	tc.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 20.0}})
+	tc.CloseWindow(nil)
+
+	// verify that pod1 restart should give the new count instead of the difference
+	tc1 := NewTimestampedCounts(TestTime + 1)
+	tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
+	tc1.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 30.0}})
+	tc1.CloseWindow(tc)
+
+	assert.Equal(t, map[string]map[string]float64{"pod1": {"partition1": 5.0}, "pod2": {"partition1": 10.0}}, tc1.PodDeltaCountSnapshot())
 }

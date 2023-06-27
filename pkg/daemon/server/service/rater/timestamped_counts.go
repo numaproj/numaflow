@@ -119,14 +119,15 @@ func (tc *TimestampedCounts) CloseWindow(prev *TimestampedCounts) {
 		prevPartitionReadCounts := prevPodReadCount[podName]
 		for partitionName, count := range partitionReadCounts {
 			prevCount := prevPartitionReadCounts[partitionName]
-			dCount := count
+			// delta will be equal to count in case of restart
+			delta := count
 			if count >= prevCount {
-				dCount = count - prevCount
+				delta = count - prevCount
 			}
 			if _, ok := podPartitionDelta[podName]; !ok {
 				podPartitionDelta[podName] = make(map[string]float64)
 			}
-			podPartitionDelta[podName][partitionName] = dCount
+			podPartitionDelta[podName][partitionName] = delta
 		}
 	}
 
