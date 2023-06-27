@@ -215,6 +215,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	readMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
 
+	isdf.opts.logger.Debugf("deletethis: forwardAChunk(): there are %d messages to read", len(readMessages))
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
 	// reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
@@ -271,6 +272,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
 		// we fetch the watermark for the partition from which we read the message.
 		processorWM = isdf.wmFetcher.ProcessOffsetGetWatermark(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
+		isdf.opts.logger.Debugf("deletethis: got %+v back from ProcessOffsetGetWatermark", processorWM)
 
 	}
 

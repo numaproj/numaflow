@@ -68,6 +68,7 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	w.Expect().
 		SinkContains("sink", "40").
 		SinkContains("sink", "20")
+	time.Sleep(1 * time.Minute) //todo: delete this
 	done <- struct{}{}
 }
 
@@ -144,6 +145,90 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 	// and the second window duration is 60s(non-keyed)
 	// the sum should be 180(60 + 120)
 	w.Expect().SinkContains("sink", "180")
+	done <- struct{}{}
+}
+
+func (r *ReduceSuite) TestJoinedReduceVertexPipeline() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	w := r.Given().Pipeline("@testdata/join-reduce-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "join-on-reduce"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	done := make(chan struct{})
+	go func() {
+		// publish messages to source vertex, with event time starting from 60000
+		startTime := 60000
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				eventTime := strconv.Itoa(startTime + i*1000)
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+			}
+		}
+	}()
+
+	// since the key can be even or odd and the window duration is 10s
+	// the sum should be 20(for even) and 40(for odd)
+	w.Expect().
+		SinkContains("sink", "80").
+		SinkContains("sink", "40")
+	time.Sleep(1 * time.Minute) //todo: delete this
+	done <- struct{}{}
+}
+
+func (r *ReduceSuite) TestJoinedMapVertexPipeline() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	w := r.Given().Pipeline("@testdata/joined-map-vertex-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "joined-map-vertex"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	done := make(chan struct{})
+	go func() {
+		// publish messages to source vertex, with event time starting from 60000
+		startTime := 60000
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				vertices := []string{"in-0", "in-1"}
+				eventTime := strconv.Itoa(startTime + i*1000)
+				for vertex := 0; vertex <= 1; vertex++ {
+					w.SendMessageTo(pipelineName, vertices[vertex], NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+						SendMessageTo(pipelineName, vertices[vertex], NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+						SendMessageTo(pipelineName, vertices[vertex], NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				}
+
+			}
+		}
+	}()
+
+	// since the key can be even or odd and the window duration is 10s
+	// the sum should be 20(for even) and 40(for odd)
+	w.Expect().
+		SinkContains("sink", "80").
+		SinkContains("sink", "40")
+	time.Sleep(2 * time.Minute) //todo: delete this
 	done <- struct{}{}
 }
 
