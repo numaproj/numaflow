@@ -46,10 +46,10 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	// if the queue is empty, we just append the new timestamped count
 	case 1:
 		// if the queue has only one element, we close the window for this element
-		items[0].CloseWindow()
+		items[0].CloseWindow(nil)
 	default:
 		// if the queue has more than one element, we close the window for the most recent element
-		items[n-1].CloseWindow()
+		items[n-1].CloseWindow(items[n-2])
 	}
 	q.Append(tc)
 }
@@ -76,26 +76,21 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	}
 	// TODO: revisit this logic, we can just use the slope (counts[endIndex] - counts[startIndex] / timeDiff) to calculate the rate.
 	for i := startIndex; i < endIndex; i++ {
-		delta += calculatePartitionDelta(counts[i], counts[i+1], partitionName)
+		if counts[i+1] != nil && counts[i+1].IsWindowClosed() {
+			delta += calculatePartitionDelta(counts[i+1], partitionName)
+		}
 	}
 	return delta / float64(timeDiff)
 }
 
 // calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
-func calculatePartitionDelta(c1, c2 *TimestampedCounts, partitionName string) float64 {
-	tc1 := c1.PartitionReadCountSnapshot()
-	tc2 := c2.PartitionReadCountSnapshot()
-	count1, exist1 := tc1[partitionName]
-	count2, exist2 := tc2[partitionName]
-	if !exist2 {
-		return 0
-	} else if !exist1 {
-		return count2
-	} else if count2 < count1 {
-		return count2
-	} else {
-		return count2 - count1
+func calculatePartitionDelta(c1 *TimestampedCounts, partitionName string) float64 {
+	tc1 := c1.PodDeltaCountSnapshot()
+	delta := float64(0)
+	for _, partitionCount := range tc1 {
+		delta += partitionCount[partitionName]
 	}
+	return delta
 }
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds

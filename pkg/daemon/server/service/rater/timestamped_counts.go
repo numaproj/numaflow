@@ -30,9 +30,9 @@ type TimestampedCounts struct {
 	// timestamp in seconds, is the time when the count is recorded
 	timestamp int64
 	// pod to partitionCount mapping
-	podPartitionTracker map[string]map[string]float64
-	// partition to count mapping
-	partitionCounts map[string]float64
+	podPartitionCount map[string]map[string]float64
+	// pod to partition delta mapping
+	podPartitionDelta map[string]map[string]float64
 	// isWindowClosed indicates whether we have finished collecting pod counts for this timestamp
 	isWindowClosed bool
 	lock           *sync.RWMutex
@@ -40,11 +40,11 @@ type TimestampedCounts struct {
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
-		timestamp:           t,
-		podPartitionTracker: make(map[string]map[string]float64),
-		partitionCounts:     make(map[string]float64),
-		isWindowClosed:      false,
-		lock:                new(sync.RWMutex),
+		timestamp:         t,
+		podPartitionCount: make(map[string]map[string]float64),
+		podPartitionDelta: make(map[string]map[string]float64),
+		isWindowClosed:    false,
+		lock:              new(sync.RWMutex),
 	}
 }
 
@@ -70,7 +70,7 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 
 	// since the pod can read from multiple partitions, we overwrite the previous partitionReadCounts for this pod
 	// with the new partitionReadCounts map, since it is a counter metric, the new value is always greater than the previous one.
-	tc.podPartitionTracker[podReadCount.Name()] = podReadCount.PartitionReadCounts()
+	tc.podPartitionCount[podReadCount.Name()] = podReadCount.PartitionReadCounts()
 }
 
 // PodReadCountSnapshot returns a copy of the podName to partitionCount mapping
@@ -79,19 +79,19 @@ func (tc *TimestampedCounts) PodReadCountSnapshot() map[string]map[string]float6
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 	counts := make(map[string]map[string]float64)
-	for k, v := range tc.podPartitionTracker {
+	for k, v := range tc.podPartitionCount {
 		counts[k] = v
 	}
 	return counts
 }
 
-// PartitionReadCountSnapshot returns a copy of the partitionName to count mapping
+// PodDeltaCountSnapshot returns a copy of the podName to partition delta mapping
 // it's used to ensure the returned map is not modified by other goroutines
-func (tc *TimestampedCounts) PartitionReadCountSnapshot() map[string]float64 {
+func (tc *TimestampedCounts) PodDeltaCountSnapshot() map[string]map[string]float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	counts := make(map[string]float64)
-	for k, v := range tc.partitionCounts {
+	counts := make(map[string]map[string]float64)
+	for k, v := range tc.podPartitionDelta {
 		counts[k] = v
 	}
 	return counts
@@ -105,13 +105,28 @@ func (tc *TimestampedCounts) IsWindowClosed() bool {
 }
 
 // CloseWindow closes the window and calculates the delta by comparing the current pod counts with the previous window
-func (tc *TimestampedCounts) CloseWindow() {
-	ppt := tc.PodReadCountSnapshot()
-	totalPartitionCounts := make(map[string]float64)
+func (tc *TimestampedCounts) CloseWindow(prev *TimestampedCounts) {
+	podReadCount := tc.PodReadCountSnapshot()
+	var prevPodReadCount map[string]map[string]float64
+	if prev == nil {
+		prevPodReadCount = make(map[string]map[string]float64)
+	} else {
+		prevPodReadCount = prev.PodReadCountSnapshot()
+	}
+	podPartitionDelta := make(map[string]map[string]float64)
 
-	for _, partitionReadCounts := range ppt {
-		for k, v := range partitionReadCounts {
-			totalPartitionCounts[k] += v
+	for podName, partitionReadCounts := range podReadCount {
+		prevPartitionReadCounts := prevPodReadCount[podName]
+		for partitionName, count := range partitionReadCounts {
+			prevCount := prevPartitionReadCounts[partitionName]
+			dCount := count
+			if count >= prevCount {
+				dCount = count - prevCount
+			}
+			if _, ok := podPartitionDelta[podName]; !ok {
+				podPartitionDelta[podName] = make(map[string]float64)
+			}
+			podPartitionDelta[podName][partitionName] = dCount
 		}
 	}
 
@@ -119,7 +134,7 @@ func (tc *TimestampedCounts) CloseWindow() {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	tc.isWindowClosed = true
-	tc.partitionCounts = totalPartitionCounts
+	tc.podPartitionDelta = podPartitionDelta
 }
 
 // ToString returns a string representation of the TimestampedCounts
@@ -127,6 +142,6 @@ func (tc *TimestampedCounts) CloseWindow() {
 func (tc *TimestampedCounts) ToString() string {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	res := fmt.Sprintf("{timestamp: %d, partitionCount: %v}", tc.timestamp, tc.partitionCounts)
+	res := fmt.Sprintf("{timestamp: %d, partitionCount: %v}", tc.timestamp, tc.podPartitionCount)
 	return res
 }
