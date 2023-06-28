@@ -74,7 +74,13 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		// this should not happen in practice because we are using a 10s interval
 		return 0
 	}
-	// TODO: revisit this logic, we can just use the slope (counts[endIndex] - counts[startIndex] / timeDiff) to calculate the rate.
+	rate := getDiffBetweenTimestampedCounts(counts[startIndex], counts[endIndex], partitionName) / float64(timeDiff)
+
+	// valid case, means there was no restart in the last lookback seconds
+	if rate > 0 {
+		return rate
+	}
+	// maybe there was a restart, we need to iterate through the queue to compute the rate.
 	for i := startIndex; i < endIndex; i++ {
 		if counts[i+1] != nil && counts[i+1].IsWindowClosed() {
 			delta += calculatePartitionDelta(counts[i+1], partitionName)
@@ -93,6 +99,7 @@ func calculatePartitionDelta(c1 *TimestampedCounts, partitionName string) float6
 	return delta
 }
 
+// TODO: we could use binary search, benchmark it.
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
 // size of counts is at least 2
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
@@ -102,6 +109,16 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 		// if the second last element is already outside the lookback window, we return IndexNotFound
 		return IndexNotFound
 	}
+
+	// ts := now - lookBackSeconds
+	// mid = l + (r - l) / 2
+	// if !counts[mid].isWindowClosed
+	// r = mid
+	// if ts > counts[mid].timestamp
+	// l = mid
+	// else
+	// r = mid
+	// return l, r
 
 	startIndex := n - 2
 	for i := n - 2; i >= 0; i-- {
@@ -114,6 +131,7 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	return startIndex
 }
 
+// Do we need binary search here? Maybe it's not required because we only fetch the last but one element all the time?
 func findEndIndex(counts []*TimestampedCounts) int {
 	for i := len(counts) - 1; i >= 0; i-- {
 		// if a window is not closed, we exclude it from the rate calculation
@@ -122,4 +140,16 @@ func findEndIndex(counts []*TimestampedCounts) int {
 		}
 	}
 	return IndexNotFound
+}
+
+func getDiffBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName string) float64 {
+	prevPodReadCount := t1.PodReadCountSnapshot()
+	curPodReadCount := t2.PodReadCountSnapshot()
+
+	delta := 0.0
+	// finalize the window by setting isWindowClosed to true and delta to the calculated value
+	for podName, partitionReadCounts := range curPodReadCount {
+		delta += partitionReadCounts[partitionName] - prevPodReadCount[podName][partitionName]
+	}
+	return delta
 }
