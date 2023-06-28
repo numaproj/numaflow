@@ -14,7 +14,7 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
-	udferr "github.com/numaproj/numaflow/pkg/sdkclient/error"
+	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 )
 
 // client contains the grpc client for testing.
@@ -152,7 +152,7 @@ func toUDFErr(name string, err error) error {
 	}
 	statusCode, ok := status.FromError(err)
 	// default udfError
-	udfError := udferr.New(udferr.NonRetryable, statusCode.Message())
+	udfError := sdkerr.New(sdkerr.NonRetryable, statusCode.Message())
 	// check if it's a standard status code
 	if !ok {
 		// if not, the status code will be unknown which we consider as non retryable
@@ -165,7 +165,7 @@ func toUDFErr(name string, err error) error {
 		return nil
 	case codes.DeadlineExceeded, codes.Unavailable, codes.Unknown:
 		// update to retryable err
-		udfError = udferr.New(udferr.Retryable, statusCode.Message())
+		udfError = sdkerr.New(sdkerr.Retryable, statusCode.Message())
 		log.Printf("failed %s: %s", name, udfError.Error())
 		return udfError
 	default:

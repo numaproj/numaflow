@@ -27,7 +27,7 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
-	udferr "github.com/numaproj/numaflow/pkg/sdkclient/error"
+	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 	"github.com/numaproj/numaflow/pkg/udf/function"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -93,9 +93,9 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 
 	datumList, err := u.client.MapTFn(ctx, d)
 	if err != nil {
-		udfErr, _ := udferr.FromError(err)
+		udfErr, _ := sdkerr.FromError(err)
 		switch udfErr.ErrorKind() {
-		case udferr.Retryable:
+		case sdkerr.Retryable:
 			var success bool
 			_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
 				// retry every "duration * factor + [0, jitter]" interval for 5 times
@@ -106,11 +106,11 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 			}, func() (done bool, err error) {
 				datumList, err = u.client.MapTFn(ctx, d)
 				if err != nil {
-					udfErr, _ = udferr.FromError(err)
+					udfErr, _ = sdkerr.FromError(err)
 					switch udfErr.ErrorKind() {
-					case udferr.Retryable:
+					case sdkerr.Retryable:
 						return false, nil
-					case udferr.NonRetryable:
+					case sdkerr.NonRetryable:
 						return true, nil
 					default:
 						return true, nil
@@ -129,7 +129,7 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 					},
 				}
 			}
-		case udferr.NonRetryable:
+		case sdkerr.NonRetryable:
 			return nil, function.ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
