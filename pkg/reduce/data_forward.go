@@ -405,6 +405,9 @@ messagesLoop:
 			}
 		}
 
+		// We will accept data as long as window is open. If a straggler (late data) makes in before the window is closed,
+		// it is accepted.
+
 		// NOTE(potential bug): if we get a message where the event-time is < (watermark-allowedLateness), skip processing the message.
 		// This could be due to a couple of problem, eg. ack was not registered, etc.
 		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
