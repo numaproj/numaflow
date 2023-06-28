@@ -218,7 +218,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), dClient)
 	}
 
-	daemonClient := dClient.(daemonclient.DaemonClient)
+	daemonClient := dClient.(*daemonclient.DaemonClient)
 	vMetrics, err := daemonClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
