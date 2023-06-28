@@ -106,8 +106,10 @@ func Test_Single(t *testing.T) {
 	_ = nc.Publish(testSubject, []byte("3"))
 
 	msgs, err := ns.Read(context.Background(), 5)
+	readMessagesCount := len(msgs)
 	assert.NoError(t, err)
-	for len(msgs) != 3 {
+loop:
+	for {
 		select {
 		case <-ctx.Done():
 			t.Fatal("timeout waiting for messages")
@@ -115,6 +117,10 @@ func Test_Single(t *testing.T) {
 		default:
 			msgs, err = ns.Read(context.Background(), 5)
 			assert.NoError(t, err)
+			readMessagesCount += len(msgs)
+			if readMessagesCount == 3 {
+				break loop
+			}
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
