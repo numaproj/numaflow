@@ -213,8 +213,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// in this case, send idle watermark to all the toBuffer partitions
 			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.wmPublishers[toVertexName]; ok {
-					for index, bufferPartition := range toVertexBuffer {
-						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					for _, bufferPartition := range toVertexBuffer {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 					}
 				}
 			}
@@ -235,8 +235,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				// so in this case, we publish an idle watermark
 				for toVertexName, toVertexBuffer := range df.toBuffers {
 					if publisher, ok := df.wmPublishers[toVertexName]; ok {
-						for index, bufferPartition := range toVertexBuffer {
-							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+						for _, bufferPartition := range toVertexBuffer {
+							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 						}
 					}
 				}
@@ -368,8 +368,8 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			// this is to minimize watermark latency
 			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.wmPublishers[toVertexName]; ok {
-					for index, bufferPartition := range toVertexBuffer {
-						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+					for _, bufferPartition := range toVertexBuffer {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 					}
 				}
 			}
@@ -411,11 +411,14 @@ messagesLoop:
 			}
 		}
 
+		// We will accept data as long as window is open. If a straggler (late data) makes in before the window is closed,
+		// it is accepted.
+
 		// NOTE(potential bug): if we get a message where the event-time is < (watermark-allowedLateness), skip processing the message.
 		// This could be due to a couple of problem, eg. ack was not registered, etc.
 		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
 		// to be violated.
-		if message.EventTime.Before(message.Watermark.Add(-1 * df.opts.allowedLateness)) {
+		if !message.IsLate && message.EventTime.Before(message.Watermark.Add(-1*df.opts.allowedLateness)) {
 			// TODO: track as a counter metric
 			df.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
 			// mark it as a successfully written message as the message will be acked to avoid subsequent retries

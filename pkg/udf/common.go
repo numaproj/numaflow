@@ -88,9 +88,9 @@ func buildRedisBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInstance
 			writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
 		var edgeBuffers []isb.BufferWriter
-		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
-		for _, buffer := range buffers {
-			writer := redisisb.NewBufferWrite(ctx, redisClient, buffer, buffer+"-group", writeOpts...)
+		partitionedBuffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
+		for partitionIdx, partition := range partitionedBuffers {
+			writer := redisisb.NewBufferWrite(ctx, redisClient, partition, partition+"-group", int32(partitionIdx), writeOpts...)
 			edgeBuffers = append(edgeBuffers, writer)
 		}
 		writers[e.To] = edgeBuffers
@@ -166,11 +166,11 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 			writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
 
-		buffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
+		partitionedBuffers := dfv1.GenerateBufferNames(vertexInstance.Vertex.Namespace, vertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
 		var edgeBuffers []isb.BufferWriter
-		for _, buffer := range buffers {
-			streamName := isbsvc.JetStreamName(buffer)
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), buffer, streamName, streamName, writeOpts...)
+		for partitionIdx, partition := range partitionedBuffers {
+			streamName := isbsvc.JetStreamName(partition)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), partition, streamName, streamName, int32(partitionIdx), writeOpts...)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -21,11 +21,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"go.uber.org/zap"
 	"net/http"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/prometheus/common/expfmt"
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
@@ -34,7 +35,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
@@ -155,87 +155,97 @@ func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 }
 
 // GetVertexMetrics is used to query the metrics service and is used to obtain the processing rate of a given vertex for 1m, 5m and 15m.
+// Response contains the metrics for each partition of the vertex.
 // In the future maybe latency will also be added here?
 // Should this method live here or maybe another file?
 func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daemon.GetVertexMetricsRequest) (*daemon.GetVertexMetricsResponse, error) {
-	log := logging.FromContext(ctx)
 	resp := new(daemon.GetVertexMetricsResponse)
-	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
 
-	// Get the headless service name
+	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
+	bufferList := abstractVertex.OwnedBufferNames(ps.pipeline.Namespace, ps.pipeline.Name)
+
+	// source vertex will have a single partition, which is the vertex name itself
+	if abstractVertex.IsASource() {
+		bufferList = append(bufferList, req.GetVertex())
+	}
+	partitionPendingInfo := ps.getPending(ctx, req)
+	metricsArr := make([]*daemon.VertexMetrics, len(bufferList))
+
+	for idx, partitionName := range bufferList {
+		vm := &daemon.VertexMetrics{
+			Pipeline: &ps.pipeline.Name,
+			Vertex:   req.Vertex,
+		}
+		// get the processing rate for each partition
+		vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
+		vm.Pendings = partitionPendingInfo[partitionName]
+		metricsArr[idx] = vm
+	}
+
+	resp.VertexMetrics = metricsArr
+	return resp, nil
+}
+
+// getPending returns the pending count for each partition of the vertex
+func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]map[string]int64 {
+	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
+	log := logging.FromContext(ctx)
+
 	vertex := &v1alpha1.Vertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: vertexName,
 		},
 	}
-	headlessServiceName := vertex.GetHeadlessServiceName()
-
 	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
-	vertexLevelRates := ps.rater.GetRates(req.GetVertex())
 
 	metricsCount := 1
-	// TODO(multi-partition): currently metrics is an aggregation per vertex, so same across each pod for non-reduce vertex
-	// once multi-partition metrics are in - need to modify to per partition for every vertex
 	if abstractVertex.IsReduceUDF() {
 		metricsCount = abstractVertex.GetPartitionCount()
 	}
-
-	metricsArr := make([]*daemon.VertexMetrics, metricsCount)
-	for i := 0; i < metricsCount; i++ {
+	headlessServiceName := vertex.GetHeadlessServiceName()
+	totalPendingMap := make(map[string]map[string]int64)
+	for idx := 0; idx < metricsCount; idx++ {
+		// Get the headless service name
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
 		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
-		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, i, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, idx, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 		if res, err := ps.httpClient.Get(url); err != nil {
 			log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())
-			metricsArr[i] = &daemon.VertexMetrics{
-				Pipeline: &ps.pipeline.Name,
-				Vertex:   req.Vertex,
-			}
+			return nil
 		} else {
 			// expfmt Parser from prometheus to parse the metrics
 			textParser := expfmt.TextParser{}
 			result, err := textParser.TextToMetricFamilies(res.Body)
 			if err != nil {
 				log.Errorw("Error in parsing to prometheus metric families", zap.Error(err))
-				return nil, err
+				return nil
 			}
 
 			// Get the pending messages for this partition
-			pendings := make(map[string]int64, 0)
 			if value, ok := result[metrics.VertexPendingMessages]; ok {
 				metricsList := value.GetMetric()
 				for _, metric := range metricsList {
 					labels := metric.GetLabel()
+					lookback := ""
+					partitionName := ""
 					for _, label := range labels {
 						if label.GetName() == metrics.LabelPeriod {
-							lookback := label.GetValue()
-							pendings[lookback] = int64(metric.Gauge.GetValue())
+							lookback = label.GetValue()
+
+						}
+						if label.GetName() == metrics.LabelPartitionName {
+							partitionName = label.GetValue()
 						}
 					}
+					if _, ok := totalPendingMap[partitionName]; !ok {
+						totalPendingMap[partitionName] = make(map[string]int64)
+					}
+					totalPendingMap[partitionName][lookback] += int64(metric.Gauge.GetValue())
 				}
 			}
-			vm := &daemon.VertexMetrics{
-				Pipeline: &ps.pipeline.Name,
-				Vertex:   req.Vertex,
-				Pendings: pendings,
-			}
-
-			// Get the processing rate for this partition
-			if abstractVertex.IsReduceUDF() {
-				// the processing rate of this ith partition is the rate of the corresponding ith pod.
-				vm.ProcessingRates = ps.rater.GetPodRates(req.GetVertex(), i)
-			} else {
-				// if the vertex is not a reduce udf, then the processing rate is the sum of all pods in this vertex.
-				// TODO (multi-partition) - change this to display the processing rate of each partition when we finish multi-partition support for non-reduce vertices.
-				vm.ProcessingRates = vertexLevelRates
-			}
-
-			metricsArr[i] = vm
 		}
 	}
-
-	resp.VertexMetrics = metricsArr
-	return resp, nil
+	return totalPendingMap
 }
 
 func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {
@@ -259,29 +269,28 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 			return resp, nil
 		}
 
+		totalProcessingRate := float64(0)
+		totalPending := int64(0)
 		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
 		for _, vertexMetrics := range vertexResp.VertexMetrics {
-			var pending int64
-			var processingRate float64
-			if p, ok := vertexMetrics.GetPendings()["default"]; ok {
-				pending = p
-			} else {
-				continue
-			}
-
-			if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
-				processingRate = p
-			} else {
-				continue
-			}
-
-			if pending > 0 && processingRate == 0 {
-				resp.Status = &daemon.PipelineStatus{
-					Status:  pointer.String(PipelineStatusError),
-					Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
+			if vertexMetrics.GetProcessingRates() != nil {
+				if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
+					totalProcessingRate += p
 				}
-				return resp, nil
 			}
+			if vertexMetrics.GetPendings() != nil {
+				if p, ok := vertexMetrics.GetPendings()["default"]; ok {
+					totalPending += p
+				}
+			}
+		}
+
+		if totalPending > 0 && totalProcessingRate == 0 {
+			resp.Status = &daemon.PipelineStatus{
+				Status:  pointer.String(PipelineStatusError),
+				Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
+			}
+			return resp, nil
 		}
 	}
 
