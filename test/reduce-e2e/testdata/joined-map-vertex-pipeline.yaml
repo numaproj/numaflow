@@ -25,6 +25,7 @@ spec:
       source:
         http: {}
     - name: atoi
+      partitions: 2
       scale:
         min: 1
       containerTemplate:
