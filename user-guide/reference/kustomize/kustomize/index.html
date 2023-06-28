@@ -753,6 +753,20 @@
 
             
           
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
+        Event Time Extraction Filter
+      </a>
+    </li>
+  
+
+            
+          
         </ul>
       </nav>
     </li>
@@ -1376,20 +1390,6 @@
 
             
           
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../configuration/access-path/" class="md-nav__link">
-        UI Access Path
-      </a>
-    </li>
-  
-
-            
-          
         </ul>
       </nav>
     </li>
@@ -1576,6 +1576,20 @@
     <li class="md-nav__item">
       <a href="../../../../operations/controller-configmap/" class="md-nav__link">
         Controller Configuration
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../operations/ui-access-path/" class="md-nav__link">
+        UI Server Access Path
       </a>
     </li>
   
@@ -1884,9 +1898,9 @@
 <span class="nt">configurations</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-transformer-config.yaml</span>
 <span class="w">  </span><span class="c1"># Or reference the remote configuration directly.</span>
-<span class="w">  </span><span class="c1"># - https://raw.githubusercontent.com/numaproj/numaflow/main/docs/user-guide/kustomize/numaflow-transformer-config.yaml</span>
+<span class="w">  </span><span class="c1"># - https://raw.githubusercontent.com/numaproj/numaflow/main/docs/user-guide/reference/kustomize/numaflow-transformer-config.yaml</span>
 </code></pre></div>
-<p>Here is an <a href="https://github.com/numaproj/numaflow/blob/main/docs/user-guide/kustomize/examples/transformer">example</a> to use transformers with a Pipeline.</p>
+<p>Here is an <a href="https://github.com/numaproj/numaflow/tree/main/docs/user-guide/reference/kustomize/examples/transformer">example</a> to use transformers with a Pipeline.</p>
 <h2 id="patch">Patch<a class="headerlink" href="#patch" title="Permanent link">&para;</a></h2>
 <p>Starting from version 4.5.5, kustomize can use Kubernetes <a href="https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/openapi/">OpenAPI schema</a> to provide merge key and patch strategy information. To use that with Numaflow CRD objects, download <a href="https://raw.githubusercontent.com/numaproj/numaflow/main/api/json-schema/schema.json">schema.json</a> into your kustomize directory, and add it to <code>openapi</code> section.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kustomize.config.k8s.io/v1beta1</span>
@@ -1945,7 +1959,7 @@
 <span class="w">            </span><span class="no">generator:</span>
 <span class="w">              </span><span class="no">rpu: 500</span>
 </code></pre></div>
-<p>See the full example <a href="https://github.com/numaproj/numaflow/blob/main/docs/user-guide/kustomize/examples/patch">here</a>.</p>
+<p>See the full example <a href="https://github.com/numaproj/numaflow/tree/main/docs/user-guide/reference/kustomize/examples/patch">here</a>.</p>
 
               
             </article>
@@ -1966,7 +1980,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../../configuration/access-path/" class="md-footer__link md-footer__link--prev" aria-label="Previous: UI Access Path" rel="prev">
+        <a href="../../configuration/pipeline-customization/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Pipeline Customization" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -1975,7 +1989,7 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              UI Access Path
+              Pipeline Customization
             </div>
           </div>
         </a>
