@@ -309,6 +309,10 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	w.Expect().SinkNotContains("number-sink", "not an integer")
 }
 
+func (s *FunctionalSuite) TestJoinSinkVertex() {
+
+}
+
 func (s *FunctionalSuite) TestWatermarkEnabled() {
 	w := s.Given().Pipeline("@testdata/watermark.yaml").
 		When().
