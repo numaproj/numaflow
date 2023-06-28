@@ -19,24 +19,24 @@ package function
 import (
 	"context"
 	"fmt"
-	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 	"strconv"
 	"sync"
 	"time"
 
-	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	"github.com/numaproj/numaflow/pkg/udferr"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
+	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	map_applier "github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	reduce_applier "github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	udferr "github.com/numaproj/numaflow/pkg/sdkclient/error"
+	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 )
 
 // UDSgRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.

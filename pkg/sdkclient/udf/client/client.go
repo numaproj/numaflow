@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/udferr"
 	"io"
 	"log"
 	"strconv"
@@ -20,6 +19,7 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/info"
+	udferr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 )
 
 // client contains the grpc connection and the grpc client.

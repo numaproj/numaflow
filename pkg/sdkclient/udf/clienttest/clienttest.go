@@ -3,7 +3,7 @@ package clienttest
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/udferr"
+
 	"io"
 	"log"
 
@@ -14,6 +14,7 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
+	udferr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 )
 
 // client contains the grpc client for testing.
