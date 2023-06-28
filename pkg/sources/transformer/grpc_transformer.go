@@ -23,6 +23,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
@@ -30,7 +31,6 @@ import (
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 	"github.com/numaproj/numaflow/pkg/udf/function"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // gRPCBasedTransformer applies user defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
