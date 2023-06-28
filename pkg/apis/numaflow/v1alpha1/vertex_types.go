@@ -438,7 +438,7 @@ func (av AbstractVertex) GetPartitionCount() int {
 	if av.Partitions == nil || *av.Partitions < 1 {
 		return 1
 	}
-	if av.IsReduceUDF() && !av.UDF.GroupBy.Keyed {
+	if av.IsASource() || (av.IsReduceUDF() && !av.UDF.GroupBy.Keyed) {
 		return 1
 	}
 	return int(*av.Partitions)
