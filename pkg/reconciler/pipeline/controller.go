@@ -456,11 +456,6 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		} else if v.IsReduceUDF() {
 			partitions := pl.NumOfPartitions(v.Name)
 			replicas = int32(partitions)
-			// TODO: remove this after remove deprecated parallelism
-			if vCopy.Partitions == nil {
-				vCopy.Partitions = pointer.Int32(int32(partitions))
-			}
-			// end of TODO
 		} else {
 			x := vCopy.Scale
 			if x.Min != nil && *x.Min > 1 && replicas < *x.Min {
@@ -544,11 +539,6 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 			ToVertexType:             vTo.GetVertexType(),
 			ToVertexPartitionCount:   pointer.Int32(int32(vTo.GetPartitionCount())),
 		}
-		// TODO: remove this after parallelism is removed
-		if vTo.IsReduceUDF() && vTo.UDF.GroupBy.Keyed && e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 0 {
-			combinedEdge.ToVertexPartitionCount = e.DeprecatedParallelism
-		}
-		// end of TODO
 		result = append(result, combinedEdge)
 	}
 	return result

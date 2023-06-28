@@ -24,24 +24,12 @@ type Edge struct {
 	// Conditional forwarding, only allowed when "From" is a Sink or UDF.
 	// +optional
 	Conditions *ForwardConditions `json:"conditions" protobuf:"bytes,3,opt,name=conditions"`
-	// Deprecated, use vertex.spec.limits instead.
-	//
-	// Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.
-	// +optional
-	DeprecatedLimits *DeprecatedEdgeLimits `json:"limits,omitempty" protobuf:"bytes,4,opt,name=limits"`
-	// Deprecated, use vertex.spec.partitions instead.
-	//
-	// Parallelism is only effective when the "to" vertex is a reduce vertex,
-	// if it's not provided, the default value is set to "1".
-	// Parallelism is ignored when the "to" vertex is not a reduce vertex.
-	// +optional
-	DeprecatedParallelism *int32 `json:"parallelism" protobuf:"bytes,5,opt,name=parallelism"`
 	// OnFull specifies the behaviour for the write actions when the inter step buffer is full.
 	// There are currently two options, retryUntilSuccess and discardLatest.
 	// if not provided, the default value is set to "retryUntilSuccess"
 	// +kubebuilder:validation:Enum=retryUntilSuccess;discardLatest
 	// +optional
-	OnFull *BufferFullWritingStrategy `json:"onFull,omitempty" protobuf:"bytes,6,opt,name=onFull"`
+	OnFull *BufferFullWritingStrategy `json:"onFull,omitempty" protobuf:"bytes,4,opt,name=onFull"`
 }
 
 // CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.
@@ -115,17 +103,6 @@ func (tc TagConditions) GetOperator() LogicOperator {
 	default:
 		return LogicOperatorOr
 	}
-}
-
-type DeprecatedEdgeLimits struct {
-	// BufferMaxLength is used to define the max length of a buffer.
-	// It overrides the settings from pipeline limits.
-	// +optional
-	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,1,opt,name=bufferMaxLength"`
-	// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-	// It overrides the settings from pipeline limits.
-	// +optional
-	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,2,opt,name=bufferUsageLimit"`
 }
 
 func (e Edge) BufferFullWritingStrategy() BufferFullWritingStrategy {
