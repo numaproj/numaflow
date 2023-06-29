@@ -70,7 +70,7 @@ In our example, input is an HTTP source producing 2 messages each second with va
 and the event time starts from 60000. Since we have considered a fixed window of length 60s,
 and also we are producing two messages with different keys "even" and "odd", Numaflow will create
 two different windows with a start time of 60000 and an end time of 120000. So the output will be
-300(5 _ 60) and 600(10 _ 60).
+300(5 \* 60) and 600(10 \* 60).
 
 If we had used a non keyed window (`keyed: false`), we would have seen one single output with value
 of 900(300 of odd + 600 of even) for each window.
@@ -119,7 +119,7 @@ and the event time starts from 60000. Since we have considered a sliding window 
 and slide 10s, and also we are producing two messages with different keys "even" and "odd".
 Numaflow will create two different windows with a start time of 60000 and an end time of 120000,
 and because the slide duration is 10s, a next set of windows will be created with start time of
-70000 and an end time of 130000. Since it's a sum operation the output will be 300(5 _ 60) and 600(10 _ 60).
+70000 and an end time of 130000. Since it's a sum operation the output will be 300(5 \* 60) and 600(10 \* 60).
 
 `Payload -  50  Key -  odd  Start -  10000  End -  70000`, we see 50 here for odd because the
 first window has only 10 elements
@@ -153,8 +153,8 @@ Output:
 ```
 
 In our example, first we have the reduce vertex with a fixed window of duration 5s. Since the input is 5
-and 10, the output from the first reduce vertex will be 25 (5 _ 5) and 50 (5 _ 10). This will be passed
+and 10, the output from the first reduce vertex will be 25 (5 \* 5) and 50 (5 \* 10). This will be passed
 to the next non-keyed reduce vertex with the fixed window duration of 10s. This being a non-keyed, it will
-combine the inputs and produce the output of 150(25 _ 2 + 50 _ 2), which will be passed to the reduce
+combine the inputs and produce the output of 150(25 \* 2 + 50 \* 2), which will be passed to the reduce
 vertex with a sliding window of duration 60s and with the slide duration of 10s. Hence the final output
 will be 900(150 \* 6).
