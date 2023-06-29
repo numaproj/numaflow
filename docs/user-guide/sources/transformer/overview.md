@@ -5,7 +5,7 @@ The Source Data Transformer is a feature that allows users to execute custom cod
 This functionality offers two primary advantages to users:
 
 1. Event Time Assignment - It enables users to extract the event time from the message payload, providing a more precise and accurate event time than the default mechanisms like LOG_APPEND_TIME of Kafka for Kafka source, custom HTTP header for HTTP source, and others.
-2. Early data processing - It pre-processes the data, or filters out unwanted data at source vertex, saving the cost of creating another UDF vertex and the inter-step buffer.
+2. Early data processing - It pre-processes the data, or filters out unwanted data at source vertex, saving the cost of creating another UDF vertex and an inter-step buffer.
 
 Source Data Transformer runs as a sidecar container in a Source Vertex Pod. Data processing in the transformer is supposed to be idempotent.
 The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.
