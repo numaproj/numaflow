@@ -1865,6 +1865,21 @@ see documentation for event time extractor expression <a href="event-time-extrac
 <span class="w">              </span><span class="nt">expression</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">json(payload).item[0].time</span>
 <span class="w">              </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2006-01-02T15:04:05Z07:00</span>
 </code></pre></div>
+<p><strong>Time Extraction Filter</strong></p>
+<p>A <code>timeExtractionFilter</code> implements both the <code>eventTimeExtractor</code> and <code>filter</code> built-in functions. It evaluates a message on a pipeline and if valid, extracts event time from the payload of the messsage.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">        </span><span class="nt">transformer</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">builtin</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">timeExtractionFilter</span>
+<span class="w">            </span><span class="nt">kwargs</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">filterExpr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int(json(payload).id) &lt; 100</span>
+<span class="w">              </span><span class="nt">eventTimeExpr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">json(payload).item[1].time</span>
+<span class="w">              </span><span class="nt">eventTimeFormat</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2006-01-02T15:04:05Z07:00</span>
+</code></pre></div>
 
               
             </article>

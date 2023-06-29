@@ -2041,12 +2041,12 @@
 
 <h1 id="reduce-udf">Reduce UDF<a class="headerlink" href="#reduce-udf" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>Reduce is one of the most commonly used abstractions in a stream processing pipeline to define 
-aggregation functions on a stream of data. It is the reduce feature that helps us solve problems like 
-"performs a summary operation(such as counting the number of occurrence of a key, yielding user login 
+<p>Reduce is one of the most commonly used abstractions in a stream processing pipeline to define
+aggregation functions on a stream of data. It is the reduce feature that helps us solve problems like
+"performs a summary operation(such as counting the number of occurrence of a key, yielding user login
 frequencies), etc."Since the input an unbounded stream (with infinite entries), we need an additional
 parameter to convert the unbounded problem to a bounded problem and provide results on that. That
-bounding condition is "time", eg, "number of users logged in per minute". So while processing an 
+bounding condition is "time", eg, "number of users logged in per minute". So while processing an
 unbounded stream of data, we need a way to group elements into finite chunks using time. To build these
 chunks the reduce function is applied to the set of records produced using the concept of <a href="../windowing/windowing/">windowing</a>.</p>
 <h2 id="reduce-pseudo-code">Reduce Pseudo code<a class="headerlink" href="#reduce-pseudo-code" title="Permanent link">&para;</a></h2>
@@ -2061,7 +2061,7 @@ powerful functions can be applied using this reduce semantics.</p>
     <span class="n">accumulator</span> <span class="o">=</span> <span class="n">initialize_accumalor</span><span class="p">()</span>
     <span class="c1"># we are iterating on the input set of elements</span>
     <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">datums</span><span class="p">:</span>
-        <span class="c1"># accumulator.add_input() can be any function. </span>
+        <span class="c1"># accumulator.add_input() can be any function.</span>
         <span class="c1"># e.g., it could be as simple as accumulator += 1</span>
         <span class="n">accumulator</span><span class="o">.</span><span class="n">add_input</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
     <span class="c1"># once we are done with iterating on the elements, we return the result</span>
@@ -2069,46 +2069,42 @@ powerful functions can be applied using this reduce semantics.</p>
     <span class="k">return</span> <span class="n">Messages</span><span class="p">(</span><span class="n">Message</span><span class="p">(</span><span class="n">acumulator</span><span class="o">.</span><span class="n">result</span><span class="p">(),</span> <span class="n">keys</span><span class="p">))</span>
 </code></pre></div>
 <h2 id="specification">Specification<a class="headerlink" href="#specification" title="Permanent link">&para;</a></h2>
-<p>The structure for defining a reduce vertex is as follows.
+<p>The structure for defining a reduce vertex is as follows.</p>
 <div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-udf</span>
 <span class="w">  </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-udf:latest</span>
 <span class="w">    </span><span class="nt">groupBy</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">window</span><span class="p">:</span>
-<span class="w">        </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+<span class="w">      </span><span class="nt">window</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">...</span>
 <span class="w">      </span><span class="nt">keyed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">...</span>
-<span class="w">      </span><span class="nt">storage</span><span class="p">:</span>
-<span class="w">        </span><span class="l l-Scalar l-Scalar-Plain">...</span>
-</code></pre></div></p>
+<span class="w">      </span><span class="nt">storage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+</code></pre></div>
 <p>The reduce spec adds a new section called <code>groupBy</code> and this how we differentiate a <em>map</em> vertex
 from <em>reduce</em> vertex. There are two important fields, the <a href="../windowing/windowing/"><em>window</em></a>
 and <a href="../windowing/windowing/#non-keyed-vs-keyed-windows"><em>keyed</em></a>. These two fields play an
 important role in grouping the data together and pass it to the user-defined reduce code.</p>
-<p>The reduce supports a parallelism value while defining the edge. This is because auto-scaling is 
-not supported in reduce vertex. If <code>parallelism</code> is not defined default of one will be used.</p>
-<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">edge1</span>
-<span class="w">  </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-reduce</span>
-<span class="w">  </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
+<p>The reduce supports parallelism processing by defining a <code>partitions</code> in the vertex. This is because auto-scaling is not supported in reduce vertex. If <code>partitions</code> is not defined default of one will be used.</p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-reduce-udf</span>
+<span class="w">  </span><span class="nt">partitions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
 </code></pre></div>
-<p>It is wrong to give a <code>parallelism</code> &gt; <code>1</code> if it is a <em>non-keyed</em> vertex (<code>keyed: false</code>).</p>
+<p>It is wrong to give a <code>partitions</code> &gt; <code>1</code> if it is a <em>non-keyed</em> vertex (<code>keyed: false</code>).</p>
 <p>There are a couple of <a href="../examples/">examples</a> that demonstrates Fixed windows, Sliding windows,
 chaining of windows, keyed streams, etc.</p>
 <h2 id="time-characteristics">Time Characteristics<a class="headerlink" href="#time-characteristics" title="Permanent link">&para;</a></h2>
-<p>All windowing operations generate new records as an output of reduce operations. Event-time and Watermark 
-are two main primitives that determine how the time propagates in a streaming application. so for all new 
-records generated in a reduce operation, event time is set to the end time of the window. </p>
-<p>For example, for a reduce operation over a keyed/non-keyed window with a start and end defined by 
-<code>[2031-09-29T18:47:00Z, 2031-09-29T18:48:00Z)</code>, event time for all the records generated will be set to 
-<code>2031-09-29T18:47:59.999Z</code> since millisecond is the smallest granularity (as of now) event time is set to 
-the last timestamp that belongs to a window. </p>
-<p>Watermark is treated similarly, the watermark is set to the last timestamp for a given window. 
+<p>All windowing operations generate new records as an output of reduce operations. Event-time and Watermark
+are two main primitives that determine how the time propagates in a streaming application. so for all new
+records generated in a reduce operation, event time is set to the end time of the window.</p>
+<p>For example, for a reduce operation over a keyed/non-keyed window with a start and end defined by
+<code>[2031-09-29T18:47:00Z, 2031-09-29T18:48:00Z)</code>, event time for all the records generated will be set to
+<code>2031-09-29T18:47:59.999Z</code> since millisecond is the smallest granularity (as of now) event time is set to
+the last timestamp that belongs to a window.</p>
+<p>Watermark is treated similarly, the watermark is set to the last timestamp for a given window.
 So for the example above, the value of the watermark will be set to the last timestamp, i.e., <code>2031-09-29T18:47:59.999Z</code>.</p>
-<p>This applies to all the window types regardless of whether they are keyed or non-keyed windows. </p>
+<p>This applies to all the window types regardless of whether they are keyed or non-keyed windows.</p>
 <h2 id="allowed-lateness">Allowed Lateness<a class="headerlink" href="#allowed-lateness" title="Permanent link">&para;</a></h2>
-<p><code>allowedLateness</code> flag on the Reduce vertex will allow late data to be 
+<p><code>allowedLateness</code> flag on the Reduce vertex will allow late data to be
 processed by slowing the down the close-of-book operation of the Reduce vertex. Late data will be included for
-the Reduce operation as long as the late data is not later than <code>(CurrentWatermark - AllowedLateness)</code>. 
+the Reduce operation as long as the late data is not later than <code>(CurrentWatermark - AllowedLateness)</code>.
 Without <code>allowedLateness</code>, late data will be rejected and dropped. Each Reduce vertex can have its own <code>allowedLateness</code>.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
@@ -2117,22 +2113,21 @@ Without <code>allowedLateness</code>, late data will be rejected and dropped. Ea
 <span class="w">        </span><span class="nt">allowedLateness</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span><span class="w"> </span><span class="c1"># Optional, allowedLateness is disabled by default</span>
 </code></pre></div>
 <h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
-<p>Reduce unlike map requires persistence. To support persistence user has to define the 
+<p>Reduce unlike map requires persistence. To support persistence user has to define the
 <code>storage</code> configuration. We replay the data stored in this storage on pod startup if there has
 been a restart of the reduce pod caused due to pod migrations, etc.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
 <span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">groupBy</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">storage</span><span class="p">:</span>
-<span class="w">           </span><span class="l l-Scalar l-Scalar-Plain">....</span>
+<span class="w">        </span><span class="nt">storage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">....</span>
 </code></pre></div>
 <h3 id="persistent-volume-claim-pvc">Persistent Volume Claim (PVC)<a class="headerlink" href="#persistent-volume-claim-pvc" title="Permanent link">&para;</a></h3>
 <p><code>persistentVolumeClaim</code> supports the following fields, <code>volumeSize</code>, <code>storageClassName</code>, and<code>accessMode</code>.
-As name suggests,<code>volumeSize</code> specifies the size of the volume. <code>accessMode</code> can be of many types, but for 
+As name suggests,<code>volumeSize</code> specifies the size of the volume. <code>accessMode</code> can be of many types, but for
 reduce use case we need only <code>ReadWriteOnce</code>. <code>storageClassName</code> can also be provided, more info on storage class
 can be found <a href="https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1">here</a>. The default
-value of <code>storageClassName</code> is <code>default</code> which is default StorageClass may be deployed to a Kubernetes 
+value of <code>storageClassName</code> is <code>default</code> which is default StorageClass may be deployed to a Kubernetes
 cluster by addon manager during installation.</p>
 <h4 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
@@ -2146,10 +2141,10 @@ cluster by addon manager during installation.</p>
 </code></pre></div>
 <h3 id="emptydir">EmptyDir<a class="headerlink" href="#emptydir" title="Permanent link">&para;</a></h3>
 <p>We also support <code>emptyDir</code> for quick experimentation. We do not recommend this in production
-setup. If we use <code>emptyDir</code>, we will end up in data loss if there are pod migrations. <code>emptyDir</code> 
+setup. If we use <code>emptyDir</code>, we will end up in data loss if there are pod migrations. <code>emptyDir</code>
 also takes an optional <code>sizeLimit</code>. <code>medium</code> field controls where emptyDir volumes are stored.
-By default emptyDir volumes are stored on whatever medium that backs the node such as disk, SSD, 
-or network storage, depending on your environment. If you set the <code>medium</code> field to <code>"Memory"</code>, 
+By default emptyDir volumes are stored on whatever medium that backs the node such as disk, SSD,
+or network storage, depending on your environment. If you set the <code>medium</code> field to <code>"Memory"</code>,
 Kubernetes mounts a tmpfs (RAM-backed filesystem) for you instead.</p>
 <h4 id="example_1">Example<a class="headerlink" href="#example_1" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
