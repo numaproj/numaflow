@@ -28,9 +28,9 @@ import (
 )
 
 type expressions struct {
-	filterExpr    string
-	eventTimeExpr string
-	format        string
+	filterExpr      string
+	eventTimeExpr   string
+	eventTimeFormat string
 }
 
 func New(args map[string]string) (functionsdk.MapTFunc, error) {
@@ -45,15 +45,15 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 		return nil, fmt.Errorf(`missing "eventTimeExpr"`)
 	}
 
-	var format string
-	if format, existing = args["format"]; !existing {
-		format = ""
+	var eventTimeFormat string
+	if eventTimeFormat, existing = args["eventTimeFormat"]; !existing {
+		eventTimeFormat = ""
 	}
 
 	e := expressions{
-		filterExpr:    filterExpr,
-		eventTimeExpr: eventTimeExpr,
-		format:        format,
+		filterExpr:      filterExpr,
+		eventTimeExpr:   eventTimeExpr,
+		eventTimeFormat: eventTimeFormat,
 	}
 
 	return func(ctx context.Context, keys []string, datum functionsdk.Datum) functionsdk.MessageTs {
@@ -79,8 +79,8 @@ func (e expressions) apply(et time.Time, payload []byte) (functionsdk.MessageT, 
 		}
 		var newEventTime time.Time
 		time.Local, _ = time.LoadLocation("UTC")
-		if e.format != "" {
-			newEventTime, err = time.Parse(e.format, timeStr)
+		if e.eventTimeFormat != "" {
+			newEventTime, err = time.Parse(e.eventTimeFormat, timeStr)
 		} else {
 			newEventTime, err = dateparse.ParseStrict(timeStr)
 		}
