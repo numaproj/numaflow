@@ -505,21 +505,15 @@ type Scale struct {
 	// rate, thus less replicas. It's only effective for source vertices.
 	// +optional
 	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
-	// TargetBufferUsage is used to define the target percentage of the buffer availability.
-	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
-	// It only applies to UDF and Sink vertices because only they have buffers to read.
-	// Deprecated: use targetBufferAvailability instead. Will be removed in v0.9
-	// +optional
-	DeprecatedTargetBufferUsage *uint32 `json:"targetBufferUsage,omitempty" protobuf:"varint,8,opt,name=targetBufferUsage"`
-	// ReplicasPerScale defines maximum replicas can be scaled up or down at once.
-	// The is use to prevent too aggressive scaling operations
-	// +optional
-	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
 	// TargetBufferAvailability is used to define the target percentage of the buffer availability.
 	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
 	// It only applies to UDF and Sink vertices because only they have buffers to read.
 	// +optional
 	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,10,opt,name=targetBufferAvailability"`
+	// ReplicasPerScale defines maximum replicas can be scaled up or down at once.
+	// The is use to prevent too aggressive scaling operations
+	// +optional
+	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
 }
 
 func (s Scale) GetLookbackSeconds() int {
@@ -553,9 +547,6 @@ func (s Scale) GetTargetProcessingSeconds() int {
 func (s Scale) GetTargetBufferAvailability() int {
 	if s.TargetBufferAvailability != nil {
 		return int(*s.TargetBufferAvailability)
-	}
-	if s.DeprecatedTargetBufferUsage != nil {
-		return int(*s.DeprecatedTargetBufferUsage)
 	}
 	return DefaultTargetBufferAvailability
 }

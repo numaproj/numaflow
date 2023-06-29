@@ -77,14 +77,8 @@ func buildRedisBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInstance
 		}
 		if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
 			writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
-		} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
-			// TODO: remove this after deprecation period
-			writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 		}
 		if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
-			writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
-		} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
-			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
 		var edgeBuffers []isb.BufferWriter
@@ -155,14 +149,8 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 		}
 		if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
 			writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
-		} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
-			// TODO: remove this after deprecation period
-			writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 		}
 		if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
-			writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
-		} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
-			// TODO: remove this after deprecation period
 			writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 		}
 
