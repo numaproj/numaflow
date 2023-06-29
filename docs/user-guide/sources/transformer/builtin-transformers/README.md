@@ -40,3 +40,22 @@ spec:
               expression: json(payload).item[0].time
               format: 2006-01-02T15:04:05Z07:00
 ```
+
+**Time Extraction Filter**
+
+A `timeExtractionFilter` implements both the `eventTimeExtractor` and `filter` built-in functions. It evaluates a message on a pipeline and if valid, extracts event time from the payload of the messsage.
+
+```yaml
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+        transformer:
+          builtin:
+            name: timeExtractionFilter
+            kwargs:
+              filterExpr: int(json(payload).id) < 100
+              eventTimeExpr: json(payload).item[1].time
+              eventTimeFormat: 2006-01-02T15:04:05Z07:00
+```

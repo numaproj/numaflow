@@ -48,5 +48,5 @@ spec:
             kwargs:
               filterExpr: int(json(payload).id) < 100
               eventTimeExpr: json(payload).item[1].time
-              format: 2006-01-02T15:04:05Z07:00
+              eventTimeFormat: 2006-01-02T15:04:05Z07:00
 ```

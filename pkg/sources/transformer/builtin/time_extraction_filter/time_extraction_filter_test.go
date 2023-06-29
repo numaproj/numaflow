@@ -86,7 +86,7 @@ func TestFilterEventTime(t *testing.T) {
 	})
 
 	t.Run("Valid JSON expression for filter and eventTimeExtractor", func(t *testing.T) {
-		handle, err := New(map[string]string{"filterExpr": "int(json(payload).item[1].id) == 2", "eventTimeExpr": "json(payload).item[1].time", "format": time.RFC3339})
+		handle, err := New(map[string]string{"filterExpr": "int(json(payload).item[1].id) == 2", "eventTimeExpr": "json(payload).item[1].time", "eventTimeFormat": time.RFC3339})
 		assert.NoError(t, err)
 
 		result := handle(context.Background(), []string{"test-key"}, &testDatum{
@@ -105,7 +105,7 @@ func TestFilterEventTime(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON expression for filter", func(t *testing.T) {
-		handle, err := New(map[string]string{"filterExpr": "int(json(payload).item[1].id) == 3", "eventTimeExpr": "json(payload).item[1].time", "format": time.RFC3339})
+		handle, err := New(map[string]string{"filterExpr": "int(json(payload).item[1].id) == 3", "eventTimeExpr": "json(payload).item[1].time", "eventTimeFormat": time.RFC3339})
 		assert.NoError(t, err)
 
 		result := handle(context.Background(), []string{"test-key"}, &testDatum{
@@ -118,7 +118,7 @@ func TestFilterEventTime(t *testing.T) {
 	})
 
 	t.Run("Valid JSON expression for filter, incorrect format to eventTime", func(t *testing.T) {
-		handle, err := New(map[string]string{"filterExpr": "int(json(payload).item[1].id) == 2", "eventTimeExpr": "json(payload).item[1].time", "format": time.ANSIC})
+		handle, err := New(map[string]string{"filterExpr": "int(json(payload).item[1].id) == 2", "eventTimeExpr": "json(payload).item[1].time", "eventTimeFormat": time.ANSIC})
 		assert.NoError(t, err)
 
 		testInputEventTime := time.Date(2022, 1, 4, 2, 3, 4, 5, time.UTC)
