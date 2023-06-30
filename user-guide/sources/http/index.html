@@ -2018,7 +2018,7 @@
 <li>Port-forward (for testing)</li>
 </ul>
 <h3 id="clusterip-service">ClusterIP Service<a class="headerlink" href="#clusterip-service" title="Permanent link">&para;</a></h3>
-<p>An HTTP Source Vertex can generate a <code>ClusterIP</code> Service if <code>service: true</code> is specified, the service name is in the format of <code>{pipelineName}-{vertexName}</code>, so the HTTP Source can be accessed through <code>https://{pipelineName}-{vertexName}.{namespace}.svc.cluster.local:8443/vertices/{vertexName}</code> within the cluster.</p>
+<p>An HTTP Source Vertex can generate a <code>ClusterIP</code> Service if <code>service: true</code> is specified, the service name is in the format of <code>{pipelineName}-{vertexName}</code>, so the HTTP Source can be accessed through <code>https://{pipelineName}-{vertexName}.{namespace}.svc:8443/vertices/{vertexName}</code> within the cluster.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
