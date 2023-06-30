@@ -179,12 +179,54 @@ func (r *ReduceSuite) TestJoinedReduceVertexPipeline() {
 		}
 	}()
 
-	// since the key can be even or odd and the window duration is 10s
-	// the sum should be 20(for even) and 40(for odd)
+	// todo: this only tests for one occurrence: ideally should verify all
 	w.Expect().
-		SinkContains("sink", "80").
-		SinkContains("sink", "40")
-	time.Sleep(1 * time.Minute) //todo: delete this
+		SinkContains("sink", "40"). // per 10 second window: (10 * 2) * 2 atoi vertices
+		SinkContains("sink", "80")  // per 10 second window: 10 * (1 + 3) * 2 atoi vertices
+	time.Sleep(2 * time.Minute) //todo: delete this
+	done <- struct{}{}
+}
+
+func (r *ReduceSuite) TestJoinedReduceVertexPipeline2() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	w := r.Given().Pipeline("@testdata/join-reduce-pipeline-2.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "join-on-reduce"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	done := make(chan struct{})
+	go func() {
+		// publish messages to source vertex, with event time starting from 60000
+		startTime := 60000
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				eventTime := strconv.Itoa(startTime + i*1000)
+				w.SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				w.SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("5")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("6")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("7")).WithHeader("X-Numaflow-Event-Time", eventTime))
+
+			}
+		}
+	}()
+
+	// todo: this only tests for one occurrence: ideally should verify all
+	w.Expect().
+		SinkContains("sink", "80"). // per 10 second window: 10 * (2 + 6) = 80
+		SinkContains("sink", "160") // per 10 second window: 10 * (1 + 3 + 5 + 7) = 160
+	time.Sleep(2 * time.Minute) //todo: delete this
 	done <- struct{}{}
 }
 
@@ -223,6 +265,7 @@ func (r *ReduceSuite) TestJoinedMapVertexPipeline() {
 		}
 	}()
 
+	// todo: this only tests for one occurrence: ideally should verify all
 	w.Expect().
 		SinkContains("sink", "80"). // per 10 second window: 10 * (2 + 6) = 80
 		SinkContains("sink", "160") // per 10 second window: 10 * (1 + 3 + 5 + 7) = 160

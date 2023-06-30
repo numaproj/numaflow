@@ -67,7 +67,7 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 		storeWatcher:     storeWatcher,
 		processorManager: manager,
 		lastProcessedWm:  lastProcessedWm,
-		log:              log,
+		log:              log.With("bucket", bucketName),
 	}
 }
 
@@ -135,6 +135,7 @@ func (e *EdgeFetcher) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int
 	//minEpoch := e.getMinFromLastProcessed(epoch)
 
 	e.log.Debugf("%s[%s] processed watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
+	e.log.Debugf("deletethis: got watermark %+v for offset %d", epoch, offset)
 	//return wmb.Watermark(time.UnixMilli(minEpoch))
 	return nil
 }

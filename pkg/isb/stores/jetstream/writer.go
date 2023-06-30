@@ -271,7 +271,7 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 			} else {
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
 				errs[idx] = nil
-				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
+				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain))
 			}
 		}(msg, index)
 	}

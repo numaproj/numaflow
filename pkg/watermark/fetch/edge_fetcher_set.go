@@ -71,7 +71,7 @@ func (efs *edgeFetcherSet) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermar
 		if wm == wmb.InitialWatermark { // unset
 			continue
 		}
-		efs.log.Debugf("Got Edge Head Watermark from vertex=%q while processing partition %d: %v", fromVertex, fromPartitionIdx, wm)
+		efs.log.Debugf("Got Edge Head Watermark from vertex=%q while processing partition %d: %v", fromVertex, fromPartitionIdx, wm.UnixMilli())
 		if wm.BeforeWatermark(overallWatermark) {
 			overallWatermark = wm
 		}
@@ -123,7 +123,7 @@ func (efs *edgeFetcherSet) GetWatermark() wmb.Watermark {
 	overallWatermark := wmb.Watermark(time.UnixMilli(math.MaxInt64))
 	for fromVertex, fetcher := range efs.edgeFetchers {
 		wm = fetcher.GetWatermark()
-		efs.log.Debugf("Got Edge watermark from vertex=%q: %v", fromVertex, wm)
+		efs.log.Debugf("Got Edge watermark from vertex=%q: %v", fromVertex, wm.UnixMilli())
 		if wm.BeforeWatermark(overallWatermark) {
 			overallWatermark = wm
 		}
