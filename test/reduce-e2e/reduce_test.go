@@ -269,7 +269,7 @@ func (r *ReduceSuite) TestJoinedMapVertexPipeline() {
 	w.Expect().
 		SinkContains("sink", "80"). // per 10 second window: 10 * (2 + 6) = 80
 		SinkContains("sink", "160") // per 10 second window: 10 * (1 + 3 + 5 + 7) = 160
-	time.Sleep(2 * time.Minute) //todo: delete this
+	//time.Sleep(2 * time.Minute) //todo: delete this
 	done <- struct{}{}
 }
 
