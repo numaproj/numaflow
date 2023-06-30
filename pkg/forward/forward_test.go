@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 }
 
 func (t *testForwardFetcher) ProcessOffsetGetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
-	t.ProcessOffset(offset, partition)
+	_ = t.ProcessOffset(offset, partition)
 	return t.GetWatermark()
 }
 
@@ -787,7 +787,7 @@ func (t *testWMBFetcher) Close() error {
 }
 
 func (t *testWMBFetcher) ProcessOffsetGetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
-	t.ProcessOffset(offset, partition)
+	_ = t.ProcessOffset(offset, partition)
 	return t.GetWatermark()
 }
 
