@@ -118,7 +118,7 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 	r.isbs.Status.MarkDeployed()
 	return &dfv1.BufferServiceConfig{
 		JetStream: &dfv1.JetStreamConfig{
-			URL: fmt.Sprintf("nats://%s.%s.svc.cluster.local:%s", generateJetStreamServiceName(r.isbs), r.isbs.Namespace, strconv.Itoa(int(clientPort))),
+			URL: fmt.Sprintf("nats://%s.%s.svc:%s", generateJetStreamServiceName(r.isbs), r.isbs.Namespace, strconv.Itoa(int(clientPort))),
 			Auth: &dfv1.NatsAuth{
 				Basic: &dfv1.BasicAuth{
 					User: &corev1.SecretKeySelector{
@@ -395,7 +395,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	}
 	routes := []string{}
 	for j := 0; j < replicas; j++ {
-		routes = append(routes, fmt.Sprintf("nats://%s-%s.%s.%s.svc.cluster.local:%s", ssName, strconv.Itoa(j), svcName, r.isbs.Namespace, strconv.Itoa(int(clusterPort))))
+		routes = append(routes, fmt.Sprintf("nats://%s-%s.%s.%s.svc:%s", ssName, strconv.Itoa(j), svcName, r.isbs.Namespace, strconv.Itoa(int(clusterPort))))
 	}
 	settings := r.config.ISBSvc.JetStream.Settings
 	if x := r.isbs.Spec.JetStream.Settings; x != nil {

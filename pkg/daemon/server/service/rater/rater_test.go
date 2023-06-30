@@ -39,7 +39,7 @@ import (
 //func (m *mockHttpClient) Get(url string) (*http.Response, error) {
 //	m.lock.Lock()
 //	defer m.lock.Unlock()
-//	if url == "https://p-v-0.p-v-headless.default.svc.cluster.local:2469/metrics" {
+//	if url == "https://p-v-0.p-v-headless.default.svc:2469/metrics" {
 //		m.podOneCount = m.podOneCount + 20
 //		resp := &http.Response{
 //			StatusCode: 200,
@@ -49,7 +49,7 @@ import (
 //forwarder_read_total{buffer="input",pipeline="simple-pipeline",vertex="input"} %d
 //`, m.podOneCount))))}
 //		return resp, nil
-//	} else if url == "https://p-v-1.p-v-headless.default.svc.cluster.local:2469/metrics" {
+//	} else if url == "https://p-v-1.p-v-headless.default.svc:2469/metrics" {
 //		m.podTwoCount = m.podTwoCount + 60
 //		resp := &http.Response{
 //			StatusCode: 200,
@@ -67,11 +67,11 @@ import (
 //func (m *mockHttpClient) Head(url string) (*http.Response, error) {
 //	m.lock.Lock()
 //	defer m.lock.Unlock()
-//	if url == "https://p-v-0.p-v-headless.default.svc.cluster.local:2469/metrics" {
+//	if url == "https://p-v-0.p-v-headless.default.svc:2469/metrics" {
 //		return &http.Response{
 //			StatusCode: 200,
 //			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
-//	} else if url == "https://p-v-1.p-v-headless.default.svc.cluster.local:2469/metrics" {
+//	} else if url == "https://p-v-1.p-v-headless.default.svc:2469/metrics" {
 //		return &http.Response{
 //			StatusCode: 200,
 //			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil

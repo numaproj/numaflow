@@ -183,7 +183,7 @@ func (p Pipeline) GetDaemonDeploymentName() string {
 	return fmt.Sprintf("%s-daemon", p.Name)
 }
 func (p Pipeline) GetDaemonServiceURL() string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", p.GetDaemonServiceName(), p.Namespace, DaemonServicePort)
+	return fmt.Sprintf("%s.%s.svc:%d", p.GetDaemonServiceName(), p.Namespace, DaemonServicePort)
 }
 
 func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Deployment, error) {
