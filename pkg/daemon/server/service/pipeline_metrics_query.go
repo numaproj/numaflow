@@ -207,8 +207,8 @@ func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.Get
 	for idx := 0; idx < metricsCount; idx++ {
 		// Get the headless service name
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
-		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
-		url := fmt.Sprintf("https://%s-%v.%s.%s.svc.cluster.local:%v/metrics", vertexName, idx, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2469/metrics
+		url := fmt.Sprintf("https://%s-%v.%s.%s.svc:%v/metrics", vertexName, idx, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 		if res, err := ps.httpClient.Get(url); err != nil {
 			log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())
 			return nil

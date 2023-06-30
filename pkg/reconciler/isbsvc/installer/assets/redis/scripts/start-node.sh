@@ -33,8 +33,8 @@ get_full_hostname() {
 
 REDISPORT=$(get_port "$HOSTNAME" "REDIS")
 
-HEADLESS_SERVICE="{{.HeadlessServiceName}}.{{.Namespace}}.svc.cluster.local"
-REDIS_SERVICE="{{.ServiceName}}.{{.Namespace}}.svc.cluster.local"
+HEADLESS_SERVICE="{{.HeadlessServiceName}}.{{.Namespace}}.svc"
+REDIS_SERVICE="{{.ServiceName}}.{{.Namespace}}.svc"
 SENTINEL_SERVICE_PORT=$(get_port "{{.ServiceName}}" "TCP_SENTINEL")
 
 

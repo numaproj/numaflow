@@ -217,7 +217,7 @@ func sleep(ctx context.Context, duration time.Duration) {
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodReadCount {
 	// scrape the read total metric from pod metric port
-	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if res, err := r.httpClient.Get(url); err != nil {
 		r.log.Errorf("failed reading the metrics endpoint, %v", err.Error())
 		return nil

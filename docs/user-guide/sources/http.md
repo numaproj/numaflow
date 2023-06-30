@@ -38,7 +38,7 @@ Data could be sent to an HTTP source through:
 
 ### ClusterIP Service
 
-An HTTP Source Vertex can generate a `ClusterIP` Service if `service: true` is specified, the service name is in the format of `{pipelineName}-{vertexName}`, so the HTTP Source can be accessed through `https://{pipelineName}-{vertexName}.{namespace}.svc.cluster.local:8443/vertices/{vertexName}` within the cluster.
+An HTTP Source Vertex can generate a `ClusterIP` Service if `service: true` is specified, the service name is in the format of `{pipelineName}-{vertexName}`, so the HTTP Source can be accessed through `https://{pipelineName}-{vertexName}.{namespace}.svc:8443/vertices/{vertexName}` within the cluster.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1

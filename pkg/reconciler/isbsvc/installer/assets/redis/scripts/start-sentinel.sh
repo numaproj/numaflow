@@ -4,8 +4,8 @@
 . /opt/bitnami/scripts/libvalidations.sh
 . /opt/bitnami/scripts/libfile.sh
 
-HEADLESS_SERVICE="{{.HeadlessServiceName}}.{{.Namespace}}.svc.cluster.local"
-REDIS_SERVICE="{{.ServiceName}}.{{.Namespace}}.svc.cluster.local"
+HEADLESS_SERVICE="{{.HeadlessServiceName}}.{{.Namespace}}.svc"
+REDIS_SERVICE="{{.ServiceName}}.{{.Namespace}}.svc"
 
 get_port() {
     hostname="$1"
