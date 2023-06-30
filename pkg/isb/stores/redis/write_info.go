@@ -356,6 +356,7 @@ func (bw *BufferWrite) setError(errMsg string, err error) {
 // Today we care only about the timestamp and compare just that.
 func splitId(id string) (int64, error) {
 	splitId := strings.Split(id, "-")
+	fmt.Printf("splitId: %q\n", splitId) //todo: delete this
 	idValue, err := strconv.ParseInt(splitId[0], 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("ParseFloat err: %w", err)
