@@ -19,6 +19,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -357,6 +358,8 @@ func (bw *BufferWrite) setError(errMsg string, err error) {
 func splitId(id string) (int64, error) {
 	splitId := strings.Split(id, "-")
 	fmt.Printf("splitId: %q\n", splitId) //todo: delete this
+	debug.PrintStack()
+
 	idValue, err := strconv.ParseInt(splitId[0], 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("ParseFloat err: %w", err)
