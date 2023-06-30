@@ -95,7 +95,7 @@ func (e *EventTypeWMProgressor) Close() error {
 }
 
 func (e *EventTypeWMProgressor) ProcessOffsetGetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
-	e.ProcessOffset(offset, partition)
+	_ = e.ProcessOffset(offset, partition)
 	return e.GetWatermark()
 }
 
