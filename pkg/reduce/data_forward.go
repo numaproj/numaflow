@@ -397,14 +397,7 @@ messagesLoop:
 				writtenMessages = append(writtenMessages, message)
 				continue
 			} else { // if the message falls in the next window that is about to be closed, keep it
-				var startTime time.Time
-				// bit of an overkill, but this is an unlikely path
-				if nextWin == nil {
-					startTime = time.Time{}
-				} else {
-					startTime = nextWin.StartTime()
-				}
-				df.log.Debugw("Keeping the late message for next condition check because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", startTime.UnixMilli()))
+				df.log.Debugw("Keeping the late message for next condition check because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", nextWin.StartTime().UnixMilli()))
 			}
 		}
 
