@@ -382,7 +382,10 @@ messagesLoop:
 		if message.IsLate {
 			// we should be able to get the late message in as long as there is an open window
 			nextWin := df.pbqManager.NextWindowToBeClosed()
-			if nextWin != nil && message.EventTime.Before(nextWin.StartTime()) {
+			// if there is no window open, drop the message
+			if nextWin == nil {
+				continue
+			} else if message.EventTime.Before(nextWin.StartTime()) { // if the message doesn't fall in the next window that is about to be closed drop it.
 				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWin.StartTime()))
 				droppedMessagesCount.With(map[string]string{
 					metrics.LabelVertex:             df.vertexName,
@@ -393,7 +396,7 @@ messagesLoop:
 				// mark it as a successfully written message as the message will be acked to avoid subsequent retries
 				writtenMessages = append(writtenMessages, message)
 				continue
-			} else {
+			} else { // if the message falls in the next window that is about to be closed, keep it
 				var startTime time.Time
 				// bit of an overkill, but this is an unlikely path
 				if nextWin == nil {
