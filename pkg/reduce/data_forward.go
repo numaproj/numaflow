@@ -384,6 +384,8 @@ messagesLoop:
 			nextWin := df.pbqManager.NextWindowToBeClosed()
 			// if there is no window open, drop the message
 			if nextWin == nil {
+				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+				writtenMessages = append(writtenMessages, message)
 				continue
 			} else if message.EventTime.Before(nextWin.StartTime()) { // if the message doesn't fall in the next window that is about to be closed drop it.
 				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWin.StartTime()))
