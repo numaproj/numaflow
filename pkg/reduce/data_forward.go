@@ -122,6 +122,7 @@ func NewDataForward(ctx context.Context,
 
 // Start starts reading messages from ISG
 func (df *DataForward) Start() {
+
 	for {
 		select {
 		case <-df.ctx.Done():
@@ -134,6 +135,7 @@ func (df *DataForward) Start() {
 
 			return
 		default:
+			df.log.Debugf("deletethis: DataForward forwardAChunk")
 			// pass the child context so that the reader can be closed.
 			// this way we can avoid the race condition and have all the read messages persisted
 			// and acked.
@@ -254,7 +256,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	// get the watermark for the partition from which we read the messages
 	processorWM := df.wmFetcher.ProcessOffsetGetWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
-	df.log.Infof("deletethis: ProcessOffsetGetWatermark associated with offset %d (last offset=%d)=%+v", readMessages[0].ReadOffset, readMessages[len(readMessages)-1].ReadOffset, processorWM)
+	df.log.Infof("deletethis: ProcessOffsetGetWatermark associated with offset %+v (last offset=%+v)=%d", readMessages[0].ReadOffset, readMessages[len(readMessages)-1].ReadOffset, processorWM.UnixMilli())
 
 	for _, m := range readMessages {
 		if !df.keyed {
