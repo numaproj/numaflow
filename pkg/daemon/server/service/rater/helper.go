@@ -25,20 +25,20 @@ import (
 const IndexNotFound = -1
 
 // UpdateCount updates the count of processed messages for a pod at a given time
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, partitionReadCounts *PodReadCount) {
+func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodReadCount) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
-			i.Update(partitionReadCounts)
+			i.Update(podReadCounts)
 			return
 		}
 	}
 
 	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
 	tc := NewTimestampedCounts(time)
-	tc.Update(partitionReadCounts)
+	tc.Update(podReadCounts)
 
 	// close the window for the most recent timestamped partitionReadCounts
 	switch n := len(items); n {
@@ -46,10 +46,10 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	// if the queue is empty, we just append the new timestamped count
 	case 1:
 		// if the queue has only one element, we close the window for this element
-		items[0].CloseWindow(nil)
+		items[0].CloseWindow()
 	default:
 		// if the queue has more than one element, we close the window for the most recent element
-		items[n-1].CloseWindow(items[n-2])
+		items[n-1].CloseWindow()
 	}
 	q.Append(tc)
 }
@@ -76,62 +76,79 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	}
 	rate := getDiffBetweenTimestampedCounts(counts[startIndex], counts[endIndex], partitionName) / float64(timeDiff)
 
-	// valid case, means there was no restart in the last lookback seconds
+	// positive slope, meaning there was no restart in the last lookback seconds
 	if rate > 0 {
 		return rate
 	}
+
 	// maybe there was a restart, we need to iterate through the queue to compute the rate.
 	for i := startIndex; i < endIndex; i++ {
-		if counts[i+1] != nil && counts[i+1].IsWindowClosed() {
-			delta += calculatePartitionDelta(counts[i+1], partitionName)
+		if counts[i] != nil && counts[i+1] != nil && counts[i].IsWindowClosed() && counts[i+1].IsWindowClosed() {
+			delta += calculatePartitionDelta(counts[i], counts[i+1], partitionName)
 		}
 	}
 	return delta / float64(timeDiff)
 }
 
-// calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
-func calculatePartitionDelta(c1 *TimestampedCounts, partitionName string) float64 {
-	tc1 := c1.PodDeltaCountSnapshot()
+func getDiffBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName string) float64 {
+	prevPodReadCount := t1.PodReadCountSnapshot()
+	currPodReadCount := t2.PodReadCountSnapshot()
+
 	delta := float64(0)
-	for _, partitionCount := range tc1 {
-		delta += partitionCount[partitionName]
+	for podName, partitionReadCounts := range currPodReadCount {
+		delta += partitionReadCounts[partitionName] - prevPodReadCount[podName][partitionName]
 	}
 	return delta
 }
 
-// TODO: we could use binary search, benchmark it.
+// calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
+func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) float64 {
+	prevPodReadCount := tc1.PodReadCountSnapshot()
+	currPodReadCount := tc2.PodReadCountSnapshot()
+
+	delta := float64(0)
+	for podName, partitionReadCounts := range currPodReadCount {
+		currCount := partitionReadCounts[partitionName]
+		prevCount := prevPodReadCount[podName][partitionName]
+		// pod delta will be equal to current count in case of restart
+		podDelta := currCount
+		if currCount >= prevCount {
+			podDelta = currCount - prevCount
+		}
+		delta += podDelta
+	}
+
+	return delta
+}
+
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
 // size of counts is at least 2
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
-	now := time.Now().Truncate(time.Second * 10).Unix()
+	now := time.Now().Truncate(CountWindow).Unix()
 	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {
 		// if the second last element is already outside the lookback window, we return IndexNotFound
 		return IndexNotFound
 	}
 
-	// ts := now - lookBackSeconds
-	// mid = l + (r - l) / 2
-	// if !counts[mid].isWindowClosed
-	// r = mid
-	// if ts > counts[mid].timestamp
-	// l = mid
-	// else
-	// r = mid
-	// return l, r
-
 	startIndex := n - 2
-	for i := n - 2; i >= 0; i-- {
-		if now-counts[i].timestamp <= lookbackSeconds && counts[i].IsWindowClosed() {
-			startIndex = i
+	b := 0
+	e := n - 2
+	lastTimestamp := now - lookbackSeconds
+	for b <= e {
+		mid := b + (e-b)/2
+		if counts[mid].timestamp >= lastTimestamp {
+			if counts[mid].IsWindowClosed() {
+				startIndex = mid
+			}
+			e = mid - 1
 		} else {
-			break
+			b = mid + 1
 		}
 	}
 	return startIndex
 }
 
-// Do we need binary search here? Maybe it's not required because we only fetch the last but one element all the time?
 func findEndIndex(counts []*TimestampedCounts) int {
 	for i := len(counts) - 1; i >= 0; i-- {
 		// if a window is not closed, we exclude it from the rate calculation
@@ -140,16 +157,4 @@ func findEndIndex(counts []*TimestampedCounts) int {
 		}
 	}
 	return IndexNotFound
-}
-
-func getDiffBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName string) float64 {
-	prevPodReadCount := t1.PodReadCountSnapshot()
-	curPodReadCount := t2.PodReadCountSnapshot()
-
-	delta := 0.0
-	// finalize the window by setting isWindowClosed to true and delta to the calculated value
-	for podName, partitionReadCounts := range curPodReadCount {
-		delta += partitionReadCounts[partitionName] - prevPodReadCount[podName][partitionName]
-	}
-	return delta
 }
