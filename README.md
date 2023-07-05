@@ -18,7 +18,7 @@ full-featured stream processing platforms.
 ## Use Cases
 
 - Real-time data analytics applications. 
-- Event driven applications such as anomaly detection, monitoring and alerting. 
+- Event driven applications such as anomaly detection, monitoring, and alerting. 
 - Streaming applications such as data instrumentation and data movement. 
 - Workflows running in a streaming manner.
 
@@ -37,8 +37,9 @@ full-featured stream processing platforms.
 
 ## Roadmap
 
-- Multi partitioned edges for higher throughput (v0.9)
-- Decentralized ISB (v0.10)
+- Multi-partitioned edges for higher throughput (v0.9)
+- JOIN Vertex and Side Inputs feature (v0.10)
+- User-defined Source (v0.11)
 
 ## Demo
 
