@@ -22,9 +22,12 @@ limitations under the License.
 package publish
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -148,20 +151,30 @@ func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset, toVertex
 
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
-		p.log.Errorw("Unable to publish watermark", zap.Int32("partition", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+		p.log.Errorw("Unable to publish watermark", zap.Uint64("goroutine", getGID()), zap.Int32("partition", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 	}
 
 	for {
 		err := p.otStore.PutKV(p.ctx, key, value)
 		if err != nil {
-			p.log.Errorw("Unable to publish watermark", zap.Int32("partition", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+			p.log.Errorw("Unable to publish watermark", zap.Uint64("goroutine", getGID()), zap.Int32("partition", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
-			p.log.Debugw("New watermark published with offset", zap.Int32("partition", toVertexPartitionIdx), zap.Int64("head", p.GetHeadWM(toVertexPartitionIdx).UnixMilli()), zap.Int64("new", validWM.UnixMilli()), zap.Int64("offset", seq))
+			p.log.Debugw("New watermark published with offset", zap.Uint64("goroutine", getGID()), zap.Int32("partition", toVertexPartitionIdx), zap.Int64("head", p.GetHeadWM(toVertexPartitionIdx).UnixMilli()), zap.Int64("new", validWM.UnixMilli()), zap.Int64("offset", seq))
 			break
 		}
 	}
+}
+
+// todo: temporary
+func getGID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	b = bytes.TrimPrefix(b, []byte("goroutine "))
+	b = b[:bytes.IndexByte(b, ' ')]
+	n, _ := strconv.ParseUint(string(b), 10, 64)
+	return n
 }
 
 // validateWatermark checks if the new watermark is greater than the head watermark, return true if yes,
@@ -173,13 +186,13 @@ func (p *publish) validateWatermark(wm wmb.Watermark, toVertexPartitionIdx int32
 	// update p.headWatermarks only if wm > p.headWatermarks
 	headWM := p.GetHeadWM(toVertexPartitionIdx)
 	if wm.After(time.Time(headWM)) {
-		p.log.Debugw("New watermark is updated for the head watermark", zap.Int32("partition", toVertexPartitionIdx), zap.String("head", headWM.String()), zap.String("new", wm.String()))
+		p.log.Debugw("New watermark is updated for the head watermark", zap.Uint64("goroutine", getGID()), zap.Int32("partition", toVertexPartitionIdx), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		p.SetHeadWM(wm, toVertexPartitionIdx)
 	} else if wm.Before(time.Time(headWM)) {
-		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.Int32("partition", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
+		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.Uint64("goroutine", getGID()), zap.Int32("partition", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	} else {
-		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.Int32("partition", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
+		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.Uint64("goroutine", getGID()), zap.Int32("partition", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	}
 	return wm, false
