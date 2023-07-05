@@ -333,21 +333,18 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 }
 
 func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, partitionProcessingRate []float64, partitionPending []int64, partitionBufferLengths []int64, partitionAvailableBufferLengths []int64) int32 {
-	maxDesired := int32(0)
+	maxDesired := int32(1)
 	// We calculate the max desired replicas based on the pending messages and processing rate for each partition.
 	for i := 0; i < len(partitionPending); i++ {
 		rate := partitionProcessingRate[i]
 		pending := partitionPending[i]
+		var desired int32
 		if pending == 0 || rate == 0 {
 			// Pending is 0 and rate is not 0, or rate is 0 and pending is not 0, we don't do anything.
 			// Technically this would not happen because the pending includes ackpending, which means rate and pending are either both 0, or both > 0.
 			// But we still keep this check here for safety.
-			if maxDesired < int32(vertex.Status.Replicas) {
-				maxDesired = int32(vertex.Status.Replicas)
-			}
 			continue
 		}
-		var desired int32
 		if vertex.IsASource() {
 			// For sources, we calculate the time of finishing processing the pending messages,
 			// and then we know how many replicas are needed to get them done in target seconds.
