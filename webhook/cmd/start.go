@@ -45,12 +45,12 @@ func Start() {
 		restConfig, err = rest.InClusterConfig()
 	}
 	if err != nil {
-		logger.Fatalf("", zap.Error(err))
+		logger.Fatalw("Failed to get kubeconfig", zap.Error(err))
 	}
 
 	namespace, defined := os.LookupEnv(namespaceEnvVar)
 	if !defined {
-		logger.Fatal("namespace variable")
+		logger.Fatal("Required namespace variable isn't set")
 	}
 
 	kubeClient := kubernetes.NewForConfigOrDie(restConfig)
@@ -59,7 +59,7 @@ func Start() {
 	portStr := sharedutil.LookupEnvStringOr(portEnvVar, "443")
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		logger.Fatal("port var")
+		logger.Fatal("port should be a number, not valid")
 	}
 
 	options := webhook.Options{
@@ -83,7 +83,7 @@ func Start() {
 	}
 	ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
 	if err := controller.Run(ctx); err != nil {
-		logger.Fatalw("", zap.Error(err))
+		logger.Fatalw("Failed to create admission controller", zap.Error(err))
 	}
 
 }
