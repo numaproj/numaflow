@@ -155,7 +155,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
 		assert.Equal(t, 0.5, CalculateRate(q, 25, "partition1"))
 		assert.Equal(t, 0.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, 5.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
+		assert.Equal(t, 5.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("singlePod_givenCountIncreases_whenCalculateRate_thenReturnRate_excludeOpenWindow", func(t *testing.T) {
@@ -179,7 +179,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
 		assert.Equal(t, 0.5, CalculateRate(q, 25, "partition1"))
 		assert.Equal(t, 0.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, 5.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
+		assert.Equal(t, 5.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("singlePod_givenCountDecreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -208,7 +208,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 5.0, CalculateRate(q, 25, "partition1"))
 		assert.Equal(t, 7.5, CalculateRate(q, 35, "partition1"))
 		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, -150.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[2], "partition1"))
+		assert.Equal(t, -150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition1"))
 
 	})
 
@@ -238,7 +238,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 5.0, CalculateRate(q, 25, "partition1"))
 		assert.Equal(t, 7.5, CalculateRate(q, 35, "partition1"))
 		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, -150.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[2], "partition1"))
+		assert.Equal(t, -150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition1"))
 	})
 
 	t.Run("multiplePods_givenCountIncreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -265,7 +265,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
 		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition1"))
 		assert.Equal(t, 15.0, CalculateRate(q, 35, "partition1"))
-		assert.Equal(t, 150.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
+		assert.Equal(t, 150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("multiplePods_givenCountDecreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -292,7 +292,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
 		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition1"))
 		assert.Equal(t, 30.0, CalculateRate(q, 35, "partition1"))
-		assert.Equal(t, -200.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
+		assert.Equal(t, -200.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("multiplePods_givenOnePodRestarts_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -319,7 +319,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
 		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition1"))
 		assert.Equal(t, 25.0, CalculateRate(q, 35, "partition1"))
-		assert.Equal(t, -50.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
+		assert.Equal(t, -50.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("multiplePods_givenPodsComeAndGo_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -356,7 +356,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 5.0, CalculateRate(q, 25, "partition1"))
 		assert.Equal(t, 7.5, CalculateRate(q, 35, "partition1"))
 		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, -150.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[2], "partition1"))
+		assert.Equal(t, -150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition1"))
 
 		// partition2 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition2"))
@@ -364,7 +364,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 10.0, CalculateRate(q, 25, "partition2"))
 		assert.Equal(t, 10.5, CalculateRate(q, 35, "partition2"))
 		assert.Equal(t, 10.5, CalculateRate(q, 100, "partition2"))
-		assert.Equal(t, 210.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[2], "partition2"))
+		assert.Equal(t, 210.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition2"))
 
 		// partition3 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition3"))
@@ -372,7 +372,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 20.0, CalculateRate(q, 25, "partition3"))
 		assert.Equal(t, 7.5, CalculateRate(q, 35, "partition3"))
 		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition3"))
-		assert.Equal(t, 150.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[2], "partition3"))
+		assert.Equal(t, 150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition3"))
 
 		// partition4 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition4"))
@@ -380,7 +380,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 10.0, CalculateRate(q, 25, "partition4"))
 		assert.Equal(t, 5.0, CalculateRate(q, 35, "partition4"))
 		assert.Equal(t, 5.0, CalculateRate(q, 100, "partition4"))
-		assert.Equal(t, 100.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[2], "partition4"))
+		assert.Equal(t, 100.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition4"))
 
 		// partition100 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition100"))
@@ -388,7 +388,7 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition100"))
 		assert.Equal(t, 0.0, CalculateRate(q, 35, "partition100"))
 		assert.Equal(t, 0.0, CalculateRate(q, 100, "partition100"))
-		assert.Equal(t, 0.0, getDiffBetweenTimestampedCounts(qItems[0], qItems[2], "partition100"))
+		assert.Equal(t, 0.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition100"))
 	})
 }
 
@@ -447,5 +447,63 @@ func TestFindStartIndex(t *testing.T) {
 		assert.Equal(t, 4, findStartIndex(10, qItems))
 		assert.Equal(t, -1, findStartIndex(5, qItems))
 		assert.Equal(t, -1, findStartIndex(1, qItems))
+	})
+}
+
+func TestCalculatePartitionDelta(t *testing.T) {
+	t.Run("givenTimeExistsPartitionExistsAndIncreases_whenCalculateDelta_thenReturnDelta", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+
+		now := time.Now()
+		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
+		q.Append(tc1)
+		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
+		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
+		q.Append(tc2)
+
+		assert.Equal(t, 5.0, calculatePartitionDelta(tc1, tc2, "partition1"))
+	})
+
+	t.Run("givenTimeExistsPartitionExistsAndDecreases_whenCalculateDelta_thenReturnDelta", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+
+		now := time.Now()
+		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
+		q.Append(tc1)
+		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
+		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
+		q.Append(tc2)
+
+		assert.Equal(t, 10.0, calculatePartitionDelta(tc1, tc2, "partition1"))
+	})
+
+	t.Run("givenTimeExistsPartitionNotExists_whenCalculateDelta_thenReturnDelta", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+
+		now := time.Now()
+		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
+		q.Append(tc1)
+		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
+		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition2": 5.0}})
+		q.Append(tc2)
+
+		assert.Equal(t, 5.0, calculatePartitionDelta(tc1, tc2, "partition2"))
+	})
+
+	t.Run("givenTimeExistsPartitionNotExists_whenCalculateDelta_thenReturnDelta", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+
+		now := time.Now()
+		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
+		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
+		q.Append(tc1)
+		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
+		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition2": 5.0}})
+		q.Append(tc2)
+
+		assert.Equal(t, 0.0, calculatePartitionDelta(tc1, tc2, "partition1"))
 	})
 }

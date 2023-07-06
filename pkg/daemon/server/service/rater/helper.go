@@ -74,7 +74,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		// this should not happen in practice because we are using a 10s interval
 		return 0
 	}
-	rate := getDiffBetweenTimestampedCounts(counts[startIndex], counts[endIndex], partitionName) / float64(timeDiff)
+	rate := getDeltaBetweenTimestampedCounts(counts[startIndex], counts[endIndex], partitionName) / float64(timeDiff)
 
 	// positive slope, meaning there was no restart in the last lookback seconds
 	if rate > 0 {
@@ -90,7 +90,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	return delta / float64(timeDiff)
 }
 
-func getDiffBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName string) float64 {
+func getDeltaBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName string) float64 {
 	prevPodReadCount := t1.PodReadCountSnapshot()
 	currPodReadCount := t2.PodReadCountSnapshot()
 
@@ -132,18 +132,18 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	}
 
 	startIndex := n - 2
-	b := 0
-	e := n - 2
+	left := 0
+	right := n - 2
 	lastTimestamp := now - lookbackSeconds
-	for b <= e {
-		mid := b + (e-b)/2
+	for left <= right {
+		mid := left + (right-left)/2
 		if counts[mid].timestamp >= lastTimestamp {
 			if counts[mid].IsWindowClosed() {
 				startIndex = mid
 			}
-			e = mid - 1
+			right = mid - 1
 		} else {
-			b = mid + 1
+			left = mid + 1
 		}
 	}
 	return startIndex
