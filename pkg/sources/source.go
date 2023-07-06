@@ -75,23 +75,17 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
-			} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
-				// TODO: remove this branch when deprecated limits are removed
-				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
 			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
-			} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
-				// TODO: remove this branch when deprecated limits are removed
-				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
-			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
+			partitionedBuffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
 			var bufferWriters []isb.BufferWriter
 			// create a writer for each partition.
-			for _, partition := range buffers {
+			for partitionIdx, partition := range partitionedBuffers {
 				group := partition + "-group"
 				redisClient := redisclient.NewInClusterRedisClient()
-				writer := redisisb.NewBufferWrite(ctx, redisClient, partition, group, writeOpts...)
+				writer := redisisb.NewBufferWrite(ctx, redisClient, partition, group, int32(partitionIdx), writeOpts...)
 				bufferWriters = append(bufferWriters, writer)
 			}
 			writersMap[e.To] = bufferWriters
@@ -113,23 +107,17 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
-			} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
-				// TODO: remove this branch when deprecated limits are removed
-				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
 			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
-			} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
-				// TODO: remove this branch when deprecated limits are removed
-				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 			var bufferWriters []isb.BufferWriter
-			buffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
+			partitionedBuffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
 			// create a writer for each partition.
-			for _, buffer := range buffers {
-				streamName := isbsvc.JetStreamName(buffer)
+			for partitionIdx, partition := range partitionedBuffers {
+				streamName := isbsvc.JetStreamName(partition)
 				jetStreamClient := jsclient.NewInClusterJetStreamClient()
-				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, buffer, streamName, streamName, writeOpts...)
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, partition, streamName, streamName, int32(partitionIdx), writeOpts...)
 				if err != nil {
 					return err
 				}

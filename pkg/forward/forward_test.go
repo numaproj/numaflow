@@ -279,46 +279,70 @@ func TestNewInterStepDataForward(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-				for otKeys1 == nil {
-					otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-					time.Sleep(time.Millisecond * 100)
+			loop:
+				for {
+					select {
+					case <-ctx.Done():
+						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+						break loop
+					default:
+						if len(otKeys1) == 0 {
+							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+							time.Sleep(time.Millisecond * 10)
+						} else {
+							// NOTE: in this test we only have one processor to publish
+							// so len(otKeys) should always be 1
+							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+							otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+							otDecode1, _ := wmb.DecodeToWMB(otValue1)
+							if tt.batchSize > 1 && !otDecode1.Idle {
+								break loop
+							} else if tt.batchSize == 1 && otDecode1.Idle {
+								break loop
+							} else {
+								time.Sleep(time.Millisecond * 10)
+							}
+						}
+					}
+
 				}
 			}()
-			wg.Wait()
-			// NOTE: in this test we only have one processor to publish
-			// so len(otKeys) should always be 1
-			otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-			otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
-			otDecode1, _ := wmb.DecodeToWMB(otValue1)
-			if tt.batchSize > 1 {
-				assert.False(t, otDecode1.Idle)
-			} else {
-				assert.True(t, otDecode1.Idle)
-			}
 
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-				for otKeys2 == nil {
-					otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
-					time.Sleep(time.Millisecond * 100)
+			loop:
+				for {
+					select {
+					case <-ctx.Done():
+						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+						break loop
+					default:
+						if len(otKeys2) == 0 {
+							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+							time.Sleep(time.Millisecond * 10)
+						} else {
+							// NOTE: in this test we only have one processor to publish
+							// so len(otKeys) should always be 1
+							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+							otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
+							otDecode1, _ := wmb.DecodeToWMB(otValue2)
+							// if the batch size is 1, then the watermark should be idle because
+							// one of partitions will be idle
+							if tt.batchSize > 1 && !otDecode1.Idle {
+								break loop
+							} else if tt.batchSize == 1 && otDecode1.Idle {
+								break loop
+							} else {
+								time.Sleep(time.Millisecond * 10)
+							}
+						}
+					}
+
 				}
 			}()
 			wg.Wait()
-			// NOTE: in this test we only have one processor to publish
-			// so len(otKeys) should always be 1
-			otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-			otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
-			otDecode2, _ := wmb.DecodeToWMB(otValue2)
-			// if the batch size is 1, then the watermark should be idle because
-			// one of partitions will be idle
-			if tt.batchSize > 1 {
-				assert.False(t, otDecode2.Idle)
-			} else {
-				assert.True(t, otDecode2.Idle)
-			}
-
 			f.Stop()
 			<-stopped
 		})
@@ -368,36 +392,69 @@ func TestNewInterStepDataForward(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-				for otKeys1 == nil {
-					otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-					time.Sleep(time.Millisecond * 100)
+				otKeys1, _ := otStores["to2"].GetAllKeys(ctx)
+			loop:
+				for {
+					select {
+					case <-ctx.Done():
+						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+						break loop
+					default:
+						if len(otKeys1) == 0 {
+							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+							time.Sleep(time.Millisecond * 10)
+						} else {
+							// NOTE: in this test we only have one processor to publish
+							// so len(otKeys) should always be 1
+							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+							otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+							otDecode1, _ := wmb.DecodeToWMB(otValue1)
+							// if the batch size is 1, then the watermark should be idle because
+							// one of partitions will be idle
+							if otDecode1.Idle {
+								break loop
+							} else {
+								time.Sleep(time.Millisecond * 10)
+							}
+						}
+					}
+
 				}
 			}()
-			wg.Wait()
-			// NOTE: in this test we only have one processor to publish
-			// so len(otKeys) should always be 1
-			otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-			otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
-			otDecode1, _ := wmb.DecodeToWMB(otValue1)
-			assert.True(t, otDecode1.Idle)
 
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-				for otKeys2 == nil {
-					otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
-					time.Sleep(time.Millisecond * 100)
+			loop:
+				for {
+					select {
+					case <-ctx.Done():
+						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+						break loop
+					default:
+						if len(otKeys2) == 0 {
+							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+							time.Sleep(time.Millisecond * 10)
+						} else {
+							// NOTE: in this test we only have one processor to publish
+							// so len(otKeys) should always be 1
+							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+							otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
+							otDecode2, _ := wmb.DecodeToWMB(otValue2)
+							// if the batch size is 1, then the watermark should be idle because
+							// one of partitions will be idle
+							if otDecode2.Idle {
+								break loop
+							} else {
+								time.Sleep(time.Millisecond * 10)
+							}
+						}
+					}
+
 				}
 			}()
 			wg.Wait()
-			// NOTE: in this test we only have one processor to publish
-			// so len(otKeys) should always be 1
-			otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-			otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
-			otDecode2, _ := wmb.DecodeToWMB(otValue2)
-			assert.True(t, otDecode2.Idle)
 
 			msgs := to11.GetMessages(1)
 			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
@@ -513,39 +570,68 @@ func TestNewInterStepDataForward(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-				for otKeys1 == nil {
-					otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-					time.Sleep(time.Millisecond * 100)
+			loop:
+				for {
+					select {
+					case <-ctx.Done():
+						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+						break loop
+					default:
+						if len(otKeys1) == 0 {
+							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+							time.Sleep(time.Millisecond * 10)
+						} else {
+							// NOTE: in this test we only have one processor to publish
+							// so len(otKeys) should always be 1
+							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+							otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+							otDecode1, _ := wmb.DecodeToWMB(otValue1)
+							if tt.batchSize > 1 && !otDecode1.Idle {
+								break loop
+							} else if tt.batchSize == 1 && otDecode1.Idle {
+								break loop
+							} else {
+								time.Sleep(time.Millisecond * 10)
+							}
+						}
+					}
+
 				}
 			}()
-			wg.Wait()
-			// NOTE: in this test we only have one processor to publish
-			// so len(otKeys) should always be 1
-			otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
-			otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
-			otDecode1, _ := wmb.DecodeToWMB(otValue1)
-			if tt.batchSize > 1 {
-				assert.False(t, otDecode1.Idle)
-			} else {
-				assert.True(t, otDecode1.Idle)
-			}
 
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-				for otKeys2 == nil {
-					otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
-					time.Sleep(time.Millisecond * 100)
+			loop:
+				for {
+					select {
+					case <-ctx.Done():
+						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+						break loop
+					default:
+						if len(otKeys2) == 0 {
+							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+							time.Sleep(time.Millisecond * 10)
+						} else {
+							// NOTE: in this test we only have one processor to publish
+							// so len(otKeys) should always be 1
+							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+							otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
+							otDecode2, _ := wmb.DecodeToWMB(otValue2)
+							// if the batch size is 1, then the watermark should be idle because
+							// one of partitions will be idle
+							if otDecode2.Idle {
+								break loop
+							} else {
+								time.Sleep(time.Millisecond * 10)
+							}
+						}
+					}
+
 				}
 			}()
 			wg.Wait()
-			// NOTE: in this test we only have one processor to publish
-			// so len(otKeys) should always be 1
-			otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
-			otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
-			otDecode2, _ := wmb.DecodeToWMB(otValue2)
-			assert.True(t, otDecode2.Idle)
 
 			// stop will cancel the contexts and therefore the forwarder stops without waiting
 			f.Stop()
@@ -806,7 +892,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 		otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
 		for otKeys1 == nil {
 			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
+			time.Sleep(time.Millisecond * 10)
 		}
 	}()
 	wg.Wait()
@@ -934,7 +1020,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 		otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
 		for otKeys1 == nil {
 			otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-			time.Sleep(time.Millisecond * 100)
+			time.Sleep(time.Millisecond * 10)
 		}
 	}()
 	wg.Wait()

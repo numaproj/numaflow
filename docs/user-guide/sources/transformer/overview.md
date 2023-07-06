@@ -5,7 +5,7 @@ The Source Data Transformer is a feature that allows users to execute custom cod
 This functionality offers two primary advantages to users:
 
 1. Event Time Assignment - It enables users to extract the event time from the message payload, providing a more precise and accurate event time than the default mechanisms like LOG_APPEND_TIME of Kafka for Kafka source, custom HTTP header for HTTP source, and others.
-1. Early Data Filtering - It filters out unwanted data at source vertex, saving the cost of creating the filtering UDF vertex and the inter-step buffer between source and the filtering UDF.
+2. Early data processing - It pre-processes the data, or filters out unwanted data at source vertex, saving the cost of creating another UDF vertex and an inter-step buffer.
 
 Source Data Transformer runs as a sidecar container in a Source Vertex Pod. Data processing in the transformer is supposed to be idempotent.
 The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.
@@ -16,7 +16,7 @@ There are some [Built-in Transformers](builtin-transformers/README.md) that can 
 
 ## Build Your Own Transformer
 
-You can build your own transformer in multiple languages. A User Defined Transformer could be as simple as the example below in Golang. 
+You can build your own transformer in multiple languages. A User Defined Transformer could be as simple as the example below in Golang.
 In the example, the transformer extracts event times from `timestamp` of the JSON payload and assigns them to messages as new event times. It also filters out unwanted messages based on `filterOut` of the payload.
 
 ```golang
@@ -46,7 +46,7 @@ func Handle(_ context.Context, keys []string, data functionsdk.Datum) functionsd
 	if ts, ok := jsonObject["timestamp"]; ok {
 		eventTime = time.Unix(int64(ts.(float64)), 0)
 	}
-	
+
 	// data filtering
 	var filterOut bool
 	if f, ok := jsonObject["filterOut"]; ok {
@@ -97,8 +97,8 @@ Some environment variables are available in the source vertex Pods, they might b
 
 Configuration data can be provided to the transformer container at runtime multiple ways.
 
-* [`environment variables`](../../reference/configuration/environment-variables.md)
-* `args`
-* `command`
-* [`volumes`](../../reference/configuration/volumes.md)
-* [`init containers`](../../reference/configuration/init-containers.md)
+- [`environment variables`](../../reference/configuration/environment-variables.md)
+- `args`
+- `command`
+- [`volumes`](../../reference/configuration/volumes.md)
+- [`init containers`](../../reference/configuration/init-containers.md)

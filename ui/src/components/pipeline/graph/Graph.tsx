@@ -17,7 +17,7 @@ import "reactflow/dist/style.css";
 import dagre from "dagre";
 import EdgeInfo from "../edgeinfo/EdgeInfo";
 import NodeInfo from "../nodeinfo/NodeInfo";
-import { GraphData } from "../../../utils/models/pipeline";
+import { GraphData } from "../../../types/declarations/pipeline";
 import "./Graph.css";
 import Spec from "../spec/Spec";
 import { Card } from "@mui/material";

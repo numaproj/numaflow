@@ -25,23 +25,23 @@ import (
 const IndexNotFound = -1
 
 // UpdateCount updates the count of processed messages for a pod at a given time
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podName string, count float64) {
+func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, partitionReadCounts *PodReadCount) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
-			i.Update(podName, count)
+			i.Update(partitionReadCounts)
 			return
 		}
 	}
 
 	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
 	tc := NewTimestampedCounts(time)
-	tc.Update(podName, count)
+	tc.Update(partitionReadCounts)
 
-	// close the window for the most recent timestamped count
-	switch n := q.Length(); n {
+	// close the window for the most recent timestamped partitionReadCounts
+	switch n := len(items); n {
 	case 0:
 	// if the queue is empty, we just append the new timestamped count
 	case 1:
@@ -54,13 +54,12 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	q.Append(tc)
 }
 
-// CalculateRate calculates the rate of the vertex in the last lookback seconds
-func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) float64 {
-	n := q.Length()
-	if n <= 1 {
+// CalculateRate calculates the rate of the vertex partition in the last lookback seconds
+func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) float64 {
+	counts := q.Items()
+	if len(counts) <= 1 {
 		return 0
 	}
-	counts := q.Items()
 	startIndex := findStartIndex(lookbackSeconds, counts)
 	endIndex := findEndIndex(counts)
 	if startIndex == IndexNotFound || endIndex == IndexNotFound {
@@ -75,57 +74,23 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		// this should not happen in practice because we are using a 10s interval
 		return 0
 	}
+	// TODO: revisit this logic, we can just use the slope (counts[endIndex] - counts[startIndex] / timeDiff) to calculate the rate.
 	for i := startIndex; i < endIndex; i++ {
 		if counts[i+1] != nil && counts[i+1].IsWindowClosed() {
-			delta += counts[i+1].delta
+			delta += calculatePartitionDelta(counts[i+1], partitionName)
 		}
 	}
 	return delta / float64(timeDiff)
 }
 
-// CalculatePodRate calculates the rate of a pod in the last lookback seconds
-func CalculatePodRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, podName string) float64 {
-	n := q.Length()
-	if n <= 1 {
-		return 0
-	}
-	counts := q.Items()
-	startIndex := findStartIndex(lookbackSeconds, counts)
-	endIndex := findEndIndex(counts)
-	if startIndex == IndexNotFound || endIndex == IndexNotFound {
-		return 0
-	}
-
+// calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
+func calculatePartitionDelta(c1 *TimestampedCounts, partitionName string) float64 {
+	tc1 := c1.PodDeltaCountSnapshot()
 	delta := float64(0)
-	// time diff in seconds.
-	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
-	if timeDiff == 0 {
-		// if the time difference is 0, we return 0 to avoid division by 0
-		// this should not happen in practice because we are using a 10s interval
-		return 0
+	for _, partitionCount := range tc1 {
+		delta += partitionCount[partitionName]
 	}
-	for i := startIndex; i < endIndex; i++ {
-		if c1, c2 := counts[i], counts[i+1]; c1 != nil && c2 != nil && c1.IsWindowClosed() && c2.IsWindowClosed() {
-			delta += calculatePodDelta(c1, c2, podName)
-		}
-	}
-	return delta / float64(timeDiff)
-}
-
-func calculatePodDelta(c1, c2 *TimestampedCounts, podName string) float64 {
-	tc1 := c1.Snapshot()
-	tc2 := c2.Snapshot()
-	count1, exist1 := tc1[podName]
-	count2, exist2 := tc2[podName]
-	if !exist2 {
-		return 0
-	} else if !exist1 {
-		return count2
-	} else if count2 < count1 {
-		return count2
-	} else {
-		return count2 - count1
-	}
+	return delta
 }
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds

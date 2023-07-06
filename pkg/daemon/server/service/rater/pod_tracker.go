@@ -122,8 +122,8 @@ func (pt *PodTracker) GetActivePods() *UniqueStringList {
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	// using the vertex headless service to check if a pod exists or not.
-	// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc.cluster.local:2469/metrics
-	url := fmt.Sprintf("https://%s.%s.%s.svc.cluster.local:%v/metrics", podName, pt.pipeline.Name+"-"+vertexName+"-headless", pt.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+	// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2469/metrics
+	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, pt.pipeline.Name+"-"+vertexName+"-headless", pt.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	if _, err := pt.httpClient.Head(url); err != nil {
 		// during performance test (100 pods per vertex), we never saw a false negative, meaning every time isActive returns false,
 		// it truly means the pod doesn't exist.

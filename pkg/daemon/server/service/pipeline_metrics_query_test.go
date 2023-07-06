@@ -79,17 +79,13 @@ func (mr *mockRater_TestGetVertexMetrics) Start(ctx context.Context) error {
 	return nil
 }
 
-func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string) map[string]float64 {
+func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionName string) map[string]float64 {
 	res := make(map[string]float64)
 	res["default"] = 4.894736842105263
 	res["1m"] = 5.084745762711864
 	res["5m"] = 4.894736842105263
 	res["15m"] = 4.894736842105263
 	return res
-}
-
-func (mr *mockRater_TestGetVertexMetrics) GetPodRates(vertexName string, podIndex int) map[string]float64 {
-	return nil
 }
 
 func TestGetVertexMetrics(t *testing.T) {
@@ -106,10 +102,10 @@ func TestGetVertexMetrics(t *testing.T) {
 
 	metricsResponse := `# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
 # TYPE vertex_pending_messages gauge
-vertex_pending_messages{period="15m",pipeline="simple-pipeline",vertex="cat"} 4.011
-vertex_pending_messages{period="1m",pipeline="simple-pipeline",vertex="cat"} 5.333
-vertex_pending_messages{period="5m",pipeline="simple-pipeline",vertex="cat"} 6.002
-vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"} 7.00002
+vertex_pending_messages{period="15m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 4.011
+vertex_pending_messages{period="1m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 5.333
+vertex_pending_messages{period="5m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 6.002
+vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 7.00002
 `
 	ioReader := io.NopCloser(bytes.NewReader([]byte(metricsResponse)))
 
@@ -229,7 +225,7 @@ func (mr *mockRater_TestGetPipelineStatus) Start(ctx context.Context) error {
 	return nil
 }
 
-func (mr *mockRater_TestGetPipelineStatus) GetRates(vertexName string) map[string]float64 {
+func (mr *mockRater_TestGetPipelineStatus) GetRates(vertexName string, partitionName string) map[string]float64 {
 	res := make(map[string]float64)
 	if mr.isActivelyProcessing {
 		res["default"] = 4.894736842105263
@@ -243,10 +239,6 @@ func (mr *mockRater_TestGetPipelineStatus) GetRates(vertexName string) map[strin
 		res["15m"] = 0
 	}
 	return res
-}
-
-func (mr *mockRater_TestGetPipelineStatus) GetPodRates(vertexName string, podIndex int) map[string]float64 {
-	return nil
 }
 
 func TestGetPipelineStatus(t *testing.T) {
@@ -264,10 +256,10 @@ func TestGetPipelineStatus(t *testing.T) {
 	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName)
 	metricsResponse := `# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
 # TYPE vertex_pending_messages gauge
-vertex_pending_messages{period="15m",pipeline="simple-pipeline",vertex="cat"} 4.011
-vertex_pending_messages{period="1m",pipeline="simple-pipeline",vertex="cat"} 5.333
-vertex_pending_messages{period="5m",pipeline="simple-pipeline",vertex="cat"} 6.002
-vertex_pending_messages{period="default",pipeline="simple-pipeline",vertex="cat"} 7.00002
+vertex_pending_messages{period="15m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 4.011
+vertex_pending_messages{period="1m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 5.333
+vertex_pending_messages{period="5m",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 6.002
+vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0",pipeline="simple-pipeline",vertex="cat"} 7.00002
 `
 	req := &daemon.GetPipelineStatusRequest{Pipeline: &pipelineName}
 

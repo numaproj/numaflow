@@ -211,8 +211,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// in this case, send idle watermark to all the toBuffer partitions
 			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.wmPublishers[toVertexName]; ok {
-					for index, bufferPartition := range toVertexBuffer {
-						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					for _, bufferPartition := range toVertexBuffer {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 					}
 				}
 			}
@@ -231,8 +231,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				// so in this case, we publish an idle watermark
 				for toVertexName, toVertexBuffer := range df.toBuffers {
 					if publisher, ok := df.wmPublishers[toVertexName]; ok {
-						for index, bufferPartition := range toVertexBuffer {
-							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+						for _, bufferPartition := range toVertexBuffer {
+							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 						}
 					}
 				}
@@ -362,8 +362,8 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			// this is to minimize watermark latency
 			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.wmPublishers[toVertexName]; ok {
-					for index, bufferPartition := range toVertexBuffer {
-						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, int32(index), df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+					for _, bufferPartition := range toVertexBuffer {
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
 					}
 				}
 			}
@@ -382,7 +382,12 @@ messagesLoop:
 		if message.IsLate {
 			// we should be able to get the late message in as long as there is an open window
 			nextWin := df.pbqManager.NextWindowToBeClosed()
-			if nextWin != nil && message.EventTime.Before(nextWin.StartTime()) {
+			// if there is no window open, drop the message
+			if nextWin == nil {
+				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+				writtenMessages = append(writtenMessages, message)
+				continue
+			} else if message.EventTime.Before(nextWin.StartTime()) { // if the message doesn't fall in the next window that is about to be closed drop it.
 				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWin.StartTime()))
 				droppedMessagesCount.With(map[string]string{
 					metrics.LabelVertex:             df.vertexName,
@@ -393,23 +398,19 @@ messagesLoop:
 				// mark it as a successfully written message as the message will be acked to avoid subsequent retries
 				writtenMessages = append(writtenMessages, message)
 				continue
-			} else {
-				var startTime time.Time
-				// bit of an overkill, but this is an unlikely path
-				if nextWin == nil {
-					startTime = time.Time{}
-				} else {
-					startTime = nextWin.StartTime()
-				}
-				df.log.Debugw("Keeping the late message for next condition check because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", startTime.UnixMilli()))
+			} else { // if the message falls in the next window that is about to be closed, keep it
+				df.log.Debugw("Keeping the late message for next condition check because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", nextWin.StartTime().UnixMilli()))
 			}
 		}
+
+		// We will accept data as long as window is open. If a straggler (late data) makes in before the window is closed,
+		// it is accepted.
 
 		// NOTE(potential bug): if we get a message where the event-time is < (watermark-allowedLateness), skip processing the message.
 		// This could be due to a couple of problem, eg. ack was not registered, etc.
 		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
 		// to be violated.
-		if message.EventTime.Before(message.Watermark.Add(-1 * df.opts.allowedLateness)) {
+		if !message.IsLate && message.EventTime.Before(message.Watermark.Add(-1*df.opts.allowedLateness)) {
 			// TODO: track as a counter metric
 			df.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
 			// mark it as a successfully written message as the message will be acked to avoid subsequent retries

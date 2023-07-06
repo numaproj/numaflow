@@ -40,7 +40,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                      schema_pkg_apis_numaflow_v1alpha1_Container(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":              schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate":                 schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DeprecatedEdgeLimits":           schema_pkg_apis_numaflow_v1alpha1_DeprecatedEdgeLimits(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge":                           schema_pkg_apis_numaflow_v1alpha1_Edge(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                    schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions":              schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref),
@@ -578,19 +577,6 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
 						},
 					},
-					"limits": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Deprecated, use vertex.spec.limits instead.\n\nLimits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DeprecatedEdgeLimits"),
-						},
-					},
-					"parallelism": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Deprecated, use vertex.spec.partitions instead.\n\nParallelism is only effective when the \"to\" vertex is a reduce vertex, if it's not provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
 					"onFull": {
 						SchemaProps: spec.SchemaProps{
 							Description: "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
@@ -643,7 +629,7 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DeprecatedEdgeLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"},
 	}
 }
 
@@ -958,32 +944,6 @@ func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallba
 	}
 }
 
-func schema_pkg_apis_numaflow_v1alpha1_DeprecatedEdgeLimits(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"bufferMaxLength": {
-						SchemaProps: spec.SchemaProps{
-							Description: "BufferMaxLength is used to define the max length of a buffer. It overrides the settings from pipeline limits.",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
-					"bufferUsageLimit": {
-						SchemaProps: spec.SchemaProps{
-							Description: "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -1010,19 +970,6 @@ func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
 						},
 					},
-					"limits": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Deprecated, use vertex.spec.limits instead.\n\nLimits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DeprecatedEdgeLimits"),
-						},
-					},
-					"parallelism": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Deprecated, use vertex.spec.partitions instead.\n\nParallelism is only effective when the \"to\" vertex is a reduce vertex, if it's not provided, the default value is set to \"1\". Parallelism is ignored when the \"to\" vertex is not a reduce vertex.",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
 					"onFull": {
 						SchemaProps: spec.SchemaProps{
 							Description: "OnFull specifies the behaviour for the write actions when the inter step buffer is full. There are currently two options, retryUntilSuccess and discardLatest. if not provided, the default value is set to \"retryUntilSuccess\"",
@@ -1035,7 +982,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DeprecatedEdgeLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"},
 	}
 }
 
@@ -3453,9 +3400,9 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 							Format:      "int64",
 						},
 					},
-					"targetBufferUsage": {
+					"targetBufferAvailability": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TargetBufferUsage is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read. Deprecated: use targetBufferAvailability instead. Will be removed in v0.9",
+							Description: "TargetBufferAvailability is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3463,13 +3410,6 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					"replicasPerScale": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
-					"targetBufferAvailability": {
-						SchemaProps: spec.SchemaProps{
-							Description: "TargetBufferAvailability is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
