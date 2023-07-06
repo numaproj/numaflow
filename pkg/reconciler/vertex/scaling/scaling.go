@@ -228,6 +228,9 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	// vMetrics is a map which contains metrics of all the partitions of a vertex.
 	// We need to aggregate them to get the total rate and pending of the vertex.
 	// If any of the partition doesn't have the rate or pending information, we skip scaling.
+	// we need both aggregated and partition level metrics for scaling, because we use aggregated metrics to
+	// determine whether we can scale down to 0 and for calculating back pressure, and partition level metrics to determine
+	// the max desired replicas among all the partitions.
 	partitionRates := make([]float64, 0)
 	partitionPending := make([]int64, 0)
 	totalRate := float64(0)
@@ -343,6 +346,8 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, parti
 			// Pending is 0 and rate is not 0, or rate is 0 and pending is not 0, we don't do anything.
 			// Technically this would not happen because the pending includes ackpending, which means rate and pending are either both 0, or both > 0.
 			// But we still keep this check here for safety.
+			// in this case, we don't update the desired replicas because we don't know how many replicas are needed.
+			// we cannot go with current replicas because ideally we should scale down when pending is 0 or rate is 0.
 			continue
 		}
 		if vertex.IsASource() {
@@ -360,6 +365,7 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, parti
 				desired = int32(math.Round(float64(partitionAvailableBufferLengths[i]) / singleReplicaContribution))
 			}
 		}
+		// we only scale down to zero when the total pending and total rate are both zero.
 		if desired == 0 {
 			desired = 1
 		}
