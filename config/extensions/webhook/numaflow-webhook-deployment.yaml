@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: numaflow-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: numaflow-webhook
+  template:
+    metadata:
+      labels:
+        app: numaflow-webhook
+    spec:
+      containers:
+      - name: webhook
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        args:
+        - webhook-service
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: PORT
+          value: "443"              
+      serviceAccountName: numaflow-webhook-sa
