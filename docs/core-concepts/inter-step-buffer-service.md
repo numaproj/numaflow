@@ -83,7 +83,7 @@ A sample JetStream configuration:
 ```
 # https://docs.nats.io/running-a-nats-service/configuration#limits
 # Only "max_payload" is supported for configuration in this section.
-# Max payload size, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload can be set up to 64MB.
+# Max payload size in bytes, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload can be set up to 64MB.
 max_payload: 1048576
 #
 # https://docs.nats.io/running-a-nats-service/configuration#jetstream
