@@ -52,7 +52,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	// we consider the last but one element as the end index because the last element might be incomplete
 	// we can be sure that the last but one element in the queue is complete.
 	endIndex := len(counts) - 2
-	if startIndex == IndexNotFound || endIndex == IndexNotFound {
+	if startIndex == IndexNotFound {
 		return 0
 	}
 
