@@ -31,7 +31,7 @@ type client struct {
 // New creates a new client object.
 func New(inputOptions ...Option) (*client, error) {
 	var opts = &options{
-		maxMessageSize:             function.DefaultMaxMessageSize,
+		maxMessageSize:             1024 * 1024 * 64, // 64 MB
 		serverInfoFilePath:         info.ServerInfoFilePath,
 		tcpSockAddr:                function.TCP_ADDR,
 		udsSockAddr:                function.UDS_ADDR,

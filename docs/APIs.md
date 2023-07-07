@@ -2166,11 +2166,16 @@ type.)
 <td>
 <em>(Optional)</em>
 <p>
-JetStream configuration, if not specified, global settings in
+Nats/JetStream configuration, if not specified, global settings in
 numaflow-controller-config will be used. See
+<a href="https://docs.nats.io/running-a-nats-service/configuration#limits">https://docs.nats.io/running-a-nats-service/configuration#limits</a>
+and
 <a href="https://docs.nats.io/running-a-nats-service/configuration#jetstream">https://docs.nats.io/running-a-nats-service/configuration#jetstream</a>.
-Only configure “max_memory_store” or “max_file_store”, do not set
-“store_dir” as it has been hardcoded.
+For limits, only “max_payload” is supported for configuration, defaults
+to 1048576 (1MB), not recommended to use values over 8388608 (8MB) but
+max_payload can be set up to 67108864 (64MB). For jetstream, only
+“max_memory_store” and “max_file_store” are supported for configuration,
+do not set “store_dir” as it has been hardcoded.
 </p>
 </td>
 </tr>
