@@ -19,6 +19,7 @@ package nats
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
 
@@ -65,6 +66,8 @@ func natsJetStreamConnection(ctx context.Context, url string, natsOptions []nats
 		nats.ReconnectHandler(func(nnc *nats.Conn) {
 			log.Info("Nats: reconnected to nats server")
 		}),
+		// Write (and flush) timeout
+		nats.FlusherTimeout(10 * time.Second),
 	}
 
 	opts = append(opts, natsOptions...)

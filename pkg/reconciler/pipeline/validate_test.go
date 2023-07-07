@@ -192,14 +192,6 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "over the max limit")
 	})
 
-	t.Run("parallelism on non-reduce vertex", func(t *testing.T) {
-		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Edges[0].DeprecatedParallelism = pointer.Int32(3)
-		err := ValidatePipeline(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), `"parallelism" is not allowed for an edge leading to a non-reduce vertex`)
-	})
-
 	t.Run("no type", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "abc"})
@@ -403,16 +395,17 @@ func TestValidateReducePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "a customized image is required")
 	})
 
-	t.Run("test source with keyed", func(t *testing.T) {
+	t.Run("test partitions", func(t *testing.T) {
 		testObj := testReducePipeline.DeepCopy()
-		testObj.Spec.Edges[0].DeprecatedParallelism = pointer.Int32(2)
+		testObj.Spec.Vertices[0].Partitions = pointer.Int32(2)
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), `"parallelism" should not > 1 for non-keyed windowing`)
-		testObj.Spec.Edges[0].DeprecatedParallelism = pointer.Int32(-1)
+		assert.Contains(t, err.Error(), `partitions should not > 1 for source vertices`)
+		testObj.Spec.Vertices[0].Partitions = nil
+		testObj.Spec.Vertices[1].Partitions = pointer.Int32(2)
 		err = ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), `"parallelism" is < 1`)
+		assert.Contains(t, err.Error(), `partitions should not > 1 for non-keyed reduce vertices`)
 	})
 
 	t.Run("no storage", func(t *testing.T) {

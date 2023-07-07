@@ -287,18 +287,6 @@ message DaemonTemplate {
   optional ContainerTemplate initContainerTemplate = 4;
 }
 
-message DeprecatedEdgeLimits {
-  // BufferMaxLength is used to define the max length of a buffer.
-  // It overrides the settings from pipeline limits.
-  // +optional
-  optional uint64 bufferMaxLength = 1;
-
-  // BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
-  // It overrides the settings from pipeline limits.
-  // +optional
-  optional uint32 bufferUsageLimit = 2;
-}
-
 message Edge {
   optional string from = 1;
 
@@ -308,26 +296,12 @@ message Edge {
   // +optional
   optional ForwardConditions conditions = 3;
 
-  // Deprecated, use vertex.spec.limits instead.
-  //
-  // Limits define the limitations such as buffer read batch size for the edge, will override pipeline level settings.
-  // +optional
-  optional DeprecatedEdgeLimits limits = 4;
-
-  // Deprecated, use vertex.spec.partitions instead.
-  //
-  // Parallelism is only effective when the "to" vertex is a reduce vertex,
-  // if it's not provided, the default value is set to "1".
-  // Parallelism is ignored when the "to" vertex is not a reduce vertex.
-  // +optional
-  optional int32 parallelism = 5;
-
   // OnFull specifies the behaviour for the write actions when the inter step buffer is full.
   // There are currently two options, retryUntilSuccess and discardLatest.
   // if not provided, the default value is set to "retryUntilSuccess"
   // +kubebuilder:validation:Enum=retryUntilSuccess;discardLatest
   // +optional
-  optional string onFull = 6;
+  optional string onFull = 4;
 }
 
 // FixedWindow describes a fixed window
@@ -1049,23 +1023,16 @@ message Scale {
   // +optional
   optional uint32 targetProcessingSeconds = 7;
 
-  // TargetBufferUsage is used to define the target percentage of the buffer availability.
-  // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
-  // It only applies to UDF and Sink vertices because only they have buffers to read.
-  // Deprecated: use targetBufferAvailability instead. Will be removed in v0.9
-  // +optional
-  optional uint32 targetBufferUsage = 8;
-
-  // ReplicasPerScale defines maximum replicas can be scaled up or down at once.
-  // The is use to prevent too aggressive scaling operations
-  // +optional
-  optional uint32 replicasPerScale = 9;
-
   // TargetBufferAvailability is used to define the target percentage of the buffer availability.
   // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
   // It only applies to UDF and Sink vertices because only they have buffers to read.
   // +optional
   optional uint32 targetBufferAvailability = 10;
+
+  // ReplicasPerScale defines maximum replicas can be scaled up or down at once.
+  // The is use to prevent too aggressive scaling operations
+  // +optional
+  optional uint32 replicasPerScale = 9;
 }
 
 message Sink {

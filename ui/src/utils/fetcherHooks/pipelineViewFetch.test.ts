@@ -54,13 +54,11 @@ describe("Custom Pipeline hook", () => {
               from: "in",
               to: "cat",
               conditions: null,
-              parallelism: null,
             },
             {
               from: "cat",
               to: "out",
               conditions: null,
-              parallelism: null,
             },
           ],
           watermark: {

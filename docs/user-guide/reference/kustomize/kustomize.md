@@ -11,10 +11,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 configurations:
   - numaflow-transformer-config.yaml
   # Or reference the remote configuration directly.
-  # - https://raw.githubusercontent.com/numaproj/numaflow/main/docs/user-guide/kustomize/numaflow-transformer-config.yaml
+  # - https://raw.githubusercontent.com/numaproj/numaflow/main/docs/user-guide/reference/kustomize/numaflow-transformer-config.yaml
 ```
 
-Here is an [example](https://github.com/numaproj/numaflow/blob/main/docs/user-guide/kustomize/examples/transformer) to use transformers with a Pipeline.
+Here is an [example](https://github.com/numaproj/numaflow/tree/main/docs/user-guide/reference/kustomize/examples/transformer) to use transformers with a Pipeline.
 
 ## Patch
 
@@ -84,4 +84,4 @@ patchesStrategicMerge:
               rpu: 500
 ```
 
-See the full example [here](https://github.com/numaproj/numaflow/blob/main/docs/user-guide/kustomize/examples/patch).
+See the full example [here](https://github.com/numaproj/numaflow/tree/main/docs/user-guide/reference/kustomize/examples/patch).

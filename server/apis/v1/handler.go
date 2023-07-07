@@ -341,5 +341,5 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 }
 
 func daemonSvcAddress(ns, pipeline string) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
+	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
 }

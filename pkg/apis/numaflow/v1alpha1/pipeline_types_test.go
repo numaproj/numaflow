@@ -53,7 +53,6 @@ func Test_ListAllEdges(t *testing.T) {
 	pl.Spec.Vertices[1].UDF.GroupBy = &GroupBy{}
 	es = pl.ListAllEdges()
 	assert.Equal(t, 2, len(es))
-	pl.Spec.Edges[0].DeprecatedParallelism = pointer.Int32(3)
 	es = pl.ListAllEdges()
 	assert.Equal(t, 2, len(es))
 }

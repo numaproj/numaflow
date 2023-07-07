@@ -1,4 +1,4 @@
-package udferr
+package error
 
 import (
 	"fmt"

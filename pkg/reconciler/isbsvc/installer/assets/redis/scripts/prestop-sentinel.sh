@@ -3,10 +3,10 @@
 . /opt/bitnami/scripts/libvalidations.sh
 . /opt/bitnami/scripts/libos.sh
 
-HEADLESS_SERVICE="{{.HeadlessServiceName}}.{{.Namespace}}.svc.cluster.local"
+HEADLESS_SERVICE="{{.HeadlessServiceName}}.{{.Namespace}}.svc"
 SENTINEL_SERVICE_ENV_NAME=REDIS_SENTINEL_SERVICE_PORT_TCP_SENTINEL
 SENTINEL_SERVICE_PORT=${!SENTINEL_SERVICE_ENV_NAME}
-REDIS_SERVICE="{{.ServiceName}}.{{.Namespace}}.svc.cluster.local"
+REDIS_SERVICE="{{.ServiceName}}.{{.Namespace}}.svc"
 
 get_full_hostname() {
     hostname="$1"

@@ -102,35 +102,15 @@ func (p Pipeline) NumOfPartitions(vertex string) int {
 	if v.Partitions != nil {
 		partitions = v.GetPartitionCount()
 	}
-	// TODO: remove this after we deprecate edge.parallelism.
-	if v.IsReduceUDF() {
-		if !v.UDF.GroupBy.Keyed {
-			return 1
-		}
-		e := p.GetFromEdges(vertex)[0]
-		if e.DeprecatedParallelism != nil && *e.DeprecatedParallelism > 1 {
-			partitions = int(*e.DeprecatedParallelism)
-		}
-	}
-	// end TODO
 	return partitions
 }
 
 func (p Pipeline) FindVertexWithBuffer(buffer string) *AbstractVertex {
-	// TODO: Use following code after we deprecate edge.parallelism.
-	// for _, v := range p.Spec.Vertices {
-	// 	for _, b := range v.OwnedBufferNames(p.Namespace, p.Name) {
-	// 		if buffer == b {
-	// 			return &v
-	// 		}
-	// 	}
-	// }
-
-	// TODO: remove this after we deprecate edge.parallelism.
 	for _, v := range p.Spec.Vertices {
-		bufferPrefix := fmt.Sprintf("%s-%s-%s-", p.Namespace, p.Name, v.Name)
-		if strings.HasPrefix(buffer, bufferPrefix) {
-			return &v
+		for _, b := range v.OwnedBufferNames(p.Namespace, p.Name) {
+			if buffer == b {
+				return &v
+			}
 		}
 	}
 	return nil
@@ -158,23 +138,8 @@ func (p Pipeline) GetFromEdges(vertexName string) []Edge {
 
 func (p Pipeline) GetAllBuffers() []string {
 	r := []string{}
-	// TODO: Use following code after we deprecate edge.parallelism.
-
-	// for _, v := range p.Spec.Vertices {
-	// 	r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
-	// }
-
-	// TODO: remove this after we deprecate edge.parallelism.
 	for _, v := range p.Spec.Vertices {
-		if v.IsASource() {
-			continue
-		}
-		if v.IsReduceUDF() {
-			partitions := p.NumOfPartitions(v.Name)
-			r = append(r, GenerateBufferNames(p.Namespace, p.Name, v.Name, partitions)...)
-		} else {
-			r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
-		}
+		r = append(r, v.OwnedBufferNames(p.Namespace, p.Name)...)
 	}
 	return r
 }
@@ -218,7 +183,7 @@ func (p Pipeline) GetDaemonDeploymentName() string {
 	return fmt.Sprintf("%s-daemon", p.Name)
 }
 func (p Pipeline) GetDaemonServiceURL() string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", p.GetDaemonServiceName(), p.Namespace, DaemonServicePort)
+	return fmt.Sprintf("%s.%s.svc:%d", p.GetDaemonServiceName(), p.Namespace, DaemonServicePort)
 }
 
 func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Deployment, error) {

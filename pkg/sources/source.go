@@ -75,14 +75,8 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
-			} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
-				// TODO: remove this branch when deprecated limits are removed
-				writeOpts = append(writeOpts, redisclient.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
 			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
-			} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
-				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, redisclient.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 			partitionedBuffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
@@ -113,14 +107,8 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			}
 			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
 				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
-			} else if x := e.DeprecatedLimits; x != nil && x.BufferMaxLength != nil {
-				// TODO: remove this branch when deprecated limits are removed
-				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
 			}
 			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
-			} else if x := e.DeprecatedLimits; x != nil && x.BufferUsageLimit != nil {
-				// TODO: remove this branch when deprecated limits are removed
 				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
 			}
 			var bufferWriters []isb.BufferWriter
