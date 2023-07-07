@@ -46,9 +46,10 @@ type JetStreamBufferService struct {
 	Persistence *PersistenceStrategy `json:"persistence,omitempty" protobuf:"bytes,6,opt,name=persistence"`
 	// +optional
 	AbstractPodTemplate `json:",inline" protobuf:"bytes,7,opt,name=abstractPodTemplate"`
-	// JetStream configuration, if not specified, global settings in numaflow-controller-config will be used.
-	// See https://docs.nats.io/running-a-nats-service/configuration#jetstream.
-	// Only configure "max_memory_store" or "max_file_store", do not set "store_dir" as it has been hardcoded.
+	// Nats/JetStream configuration, if not specified, global settings in numaflow-controller-config will be used.
+	// See https://docs.nats.io/running-a-nats-service/configuration#limits and https://docs.nats.io/running-a-nats-service/configuration#jetstream.
+	// For limits, only "max_payload" is supported for configuration, defaults to 1048576 (1MB), not recommended to use values over 8388608 (8MB) but max_payload can be set up to 67108864 (64MB).
+	// For jetstream, only "max_memory_store" and "max_file_store" are supported for configuration, do not set "store_dir" as it has been hardcoded.
 	// +optional
 	Settings *string `json:"settings,omitempty" protobuf:"bytes,8,opt,name=settings"`
 	// Optional arguments to start nats-server. For example, "-D" to enable debugging output, "-DV" to enable debugging and tracing.

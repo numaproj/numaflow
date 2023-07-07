@@ -43,7 +43,7 @@ func (b *Builtin) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	server.New().RegisterMapper(executor).Start(ctx)
+	server.New().RegisterMapper(executor).Start(ctx, server.WithMaxMessageSize(1024*1024*64))
 	return nil
 }
 
