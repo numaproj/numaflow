@@ -1555,6 +1555,20 @@
 
             
           
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/reference/configuration/max-message-size/" class="md-nav__link">
+        Maximum Message Size
+      </a>
+    </li>
+  
+
+            
+          
         </ul>
       </nav>
     </li>
@@ -2179,8 +2193,13 @@
 </ul>
 <p>This optional property can be used to override the default configuration defined in the ConfigMap <code>numaflow-controller-config</code>.</p>
 <p>A sample JetStream configuration:</p>
-<div class="highlight"><pre><span></span><code># https://docs.nats.io/running-a-nats-service/configuration#jetstream
-# Only configure &quot;max_memory_store&quot; or &quot;max_file_store&quot;, do not set &quot;store_dir&quot; as it has been hardcoded.
+<div class="highlight"><pre><span></span><code># https://docs.nats.io/running-a-nats-service/configuration#limits
+# Only &quot;max_payload&quot; is supported for configuration in this section.
+# Max payload size in bytes, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload can be set up to 64MB.
+max_payload: 1048576
+#
+# https://docs.nats.io/running-a-nats-service/configuration#jetstream
+# Only configure &quot;max_memory_store&quot; or &quot;max_file_store&quot; in this section, do not set &quot;store_dir&quot; as it has been hardcoded.
 #
 # e.g. 1G. -1 means no limit, up to 75% of available memory. This only take effect for streams created using memory storage.
 max_memory_store: -1
