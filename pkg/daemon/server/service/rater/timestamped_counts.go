@@ -31,16 +31,13 @@ type TimestampedCounts struct {
 	timestamp int64
 	// pod to partitionCount mapping
 	podPartitionCount map[string]map[string]float64
-	// isWindowClosed indicates whether we have finished collecting pod counts for this timestamp
-	isWindowClosed bool
-	lock           *sync.RWMutex
+	lock              *sync.RWMutex
 }
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
 		timestamp:         t,
 		podPartitionCount: make(map[string]map[string]float64),
-		isWindowClosed:    false,
 		lock:              new(sync.RWMutex),
 	}
 }
@@ -60,10 +57,6 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 		// hence we'd rather keep the partitionReadCounts as it is to avoid wrong rate calculation.
 		return
 	}
-	if tc.isWindowClosed {
-		// we skip updating if the window is already closed.
-		return
-	}
 
 	// since the pod can read from multiple partitions, we overwrite the previous partitionReadCounts for this pod
 	// with the new partitionReadCounts map, since it is a counter metric, the new value is always greater than the previous one.
@@ -80,21 +73,6 @@ func (tc *TimestampedCounts) PodReadCountSnapshot() map[string]map[string]float6
 		counts[k] = v
 	}
 	return counts
-}
-
-// IsWindowClosed returns whether the window is closed
-func (tc *TimestampedCounts) IsWindowClosed() bool {
-	tc.lock.RLock()
-	defer tc.lock.RUnlock()
-	return tc.isWindowClosed
-}
-
-// CloseWindow closes the window
-func (tc *TimestampedCounts) CloseWindow() {
-	// finalize the window by setting isWindowClosed to true
-	tc.lock.Lock()
-	defer tc.lock.Unlock()
-	tc.isWindowClosed = true
 }
 
 // ToString returns a string representation of the TimestampedCounts

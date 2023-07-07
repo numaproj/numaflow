@@ -39,18 +39,6 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
 	tc := NewTimestampedCounts(time)
 	tc.Update(podReadCounts)
-
-	// close the window for the most recent timestamped partitionReadCounts
-	switch n := len(items); n {
-	case 0:
-	// if the queue is empty, we just append the new timestamped count
-	case 1:
-		// if the queue has only one element, we close the window for this element
-		items[0].CloseWindow()
-	default:
-		// if the queue has more than one element, we close the window for the most recent element
-		items[n-1].CloseWindow()
-	}
 	q.Append(tc)
 }
 
@@ -61,7 +49,9 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		return 0
 	}
 	startIndex := findStartIndex(lookbackSeconds, counts)
-	endIndex := findEndIndex(counts)
+	// we consider the last but one element as the end index because the last element might be incomplete
+	// we can be sure that the last but one element in the queue is complete.
+	endIndex := len(counts) - 2
 	if startIndex == IndexNotFound || endIndex == IndexNotFound {
 		return 0
 	}
@@ -83,7 +73,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 
 	// maybe there was a restart, we need to iterate through the queue to compute the rate.
 	for i := startIndex; i < endIndex; i++ {
-		if counts[i] != nil && counts[i+1] != nil && counts[i].IsWindowClosed() && counts[i+1].IsWindowClosed() {
+		if counts[i] != nil && counts[i+1] != nil {
 			delta += calculatePartitionDelta(counts[i], counts[i+1], partitionName)
 		}
 	}
@@ -138,23 +128,11 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	for left <= right {
 		mid := left + (right-left)/2
 		if counts[mid].timestamp >= lastTimestamp {
-			if counts[mid].IsWindowClosed() {
-				startIndex = mid
-			}
+			startIndex = mid
 			right = mid - 1
 		} else {
 			left = mid + 1
 		}
 	}
 	return startIndex
-}
-
-func findEndIndex(counts []*TimestampedCounts) int {
-	for i := len(counts) - 1; i >= 0; i-- {
-		// if a window is not closed, we exclude it from the rate calculation
-		if counts[i].IsWindowClosed() {
-			return i
-		}
-	}
-	return IndexNotFound
 }
