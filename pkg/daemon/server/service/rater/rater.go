@@ -218,40 +218,42 @@ func sleep(ctx context.Context, duration time.Duration) {
 func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodReadCount {
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
-	if res, err := r.httpClient.Get(url); err != nil {
+	resp, err := r.httpClient.Get(url)
+	if err != nil {
 		r.log.Errorf("failed reading the metrics endpoint, %v", err.Error())
 		return nil
+	}
+	defer resp.Body.Close()
+
+	textParser := expfmt.TextParser{}
+	result, err := textParser.TextToMetricFamilies(resp.Body)
+	if err != nil {
+		r.log.Errorf("failed parsing to prometheus metric families, %v", err.Error())
+		return nil
+	}
+	var readTotalMetricName string
+	if vertexType == "reduce" {
+		readTotalMetricName = "reduce_isb_reader_read_total"
 	} else {
-		textParser := expfmt.TextParser{}
-		result, err := textParser.TextToMetricFamilies(res.Body)
-		if err != nil {
-			r.log.Errorf("failed parsing to prometheus metric families, %v", err.Error())
-			return nil
-		}
-		var readTotalMetricName string
-		if vertexType == "reduce" {
-			readTotalMetricName = "reduce_isb_reader_read_total"
-		} else {
-			readTotalMetricName = "forwarder_read_total"
-		}
-		if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
-			metricsList := value.GetMetric()
-			partitionReadCount := make(map[string]float64)
-			for _, ele := range metricsList {
-				partitionName := ""
-				for _, label := range ele.Label {
-					if label.GetName() == "partition_name" {
-						partitionName = label.GetValue()
-					}
+		readTotalMetricName = "forwarder_read_total"
+	}
+	if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
+		metricsList := value.GetMetric()
+		partitionReadCount := make(map[string]float64)
+		for _, ele := range metricsList {
+			partitionName := ""
+			for _, label := range ele.Label {
+				if label.GetName() == "partition_name" {
+					partitionName = label.GetValue()
 				}
-				partitionReadCount[partitionName] = ele.Counter.GetValue()
 			}
-			podReadCount := &PodReadCount{podName, partitionReadCount}
-			return podReadCount
-		} else {
-			r.log.Errorf("failed getting the read total metric, the metric is not available.")
-			return nil
+			partitionReadCount[partitionName] = ele.Counter.GetValue()
 		}
+		podReadCount := &PodReadCount{podName, partitionReadCount}
+		return podReadCount
+	} else {
+		r.log.Errorf("failed getting the read total metric, the metric is not available.")
+		return nil
 	}
 }
 
