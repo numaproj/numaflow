@@ -224,7 +224,7 @@ func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodRea
 		return nil
 	}
 	defer resp.Body.Close()
-	
+
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
