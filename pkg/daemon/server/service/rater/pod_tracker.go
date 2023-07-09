@@ -99,12 +99,8 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 						if pt.isActive(v.Name, podName) {
 							pt.activePods.PushBack(podKey)
 						} else {
-							// if a pod is not active, we can assume all the following pods are not active as well.
+							// if the pod is not active, remove it from the active pod list
 							pt.activePods.Remove(podKey)
-							// we assume all the pods are ordered with continuous indices, hence as we keep increasing the index, if we don't find one, we can stop looking.
-							// the assumption holds because when we scale down, we always scale down from the last pod.
-							// there can be a case when a pod in the middle crashes, causing us missing counting the following pods.
-							// such case is rare and if it happens, it can lead to lower rate then the real one. It is acceptable because it will recover when the crashed pod is restarted.
 						}
 					}
 				}
