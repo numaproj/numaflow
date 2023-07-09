@@ -124,7 +124,7 @@ func TestRater_Start(t *testing.T) {
 	}()
 	go func() {
 		for {
-			if r.GetRates("v", "p-v-1")["default"] <= 0 || r.GetRates("v", "p-v-1")["default"] <= 0 {
+			if r.GetRates("v", "p-v-0")["default"] <= 0 || r.GetRates("v", "p-v-1")["default"] <= 0 {
 				time.Sleep(time.Second)
 			} else {
 				succeedChan <- struct{}{}
