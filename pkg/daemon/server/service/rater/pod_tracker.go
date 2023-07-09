@@ -100,12 +100,11 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 							pt.activePods.PushBack(podKey)
 						} else {
 							// if a pod is not active, we can assume all the following pods are not active as well.
-							pt.removePodsFromIndex(i, v.Name, vType, int(v.Scale.GetMaxReplicas()))
+							pt.activePods.Remove(podKey)
 							// we assume all the pods are ordered with continuous indices, hence as we keep increasing the index, if we don't find one, we can stop looking.
 							// the assumption holds because when we scale down, we always scale down from the last pod.
 							// there can be a case when a pod in the middle crashes, causing us missing counting the following pods.
 							// such case is rare and if it happens, it can lead to lower rate then the real one. It is acceptable because it will recover when the crashed pod is restarted.
-							break
 						}
 					}
 				}
@@ -119,13 +118,6 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 func (pt *PodTracker) getPodKey(index int, vertexName string, vertexType string) string {
 	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
 	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index), vertexType}, PodInfoSeparator)
-}
-
-func (pt *PodTracker) removePodsFromIndex(index int, vertexName string, vertexType string, maxReplicas int) {
-	for i := index; i < maxReplicas; i++ {
-		podKey := pt.getPodKey(i, vertexName, vertexType)
-		pt.activePods.Remove(podKey)
-	}
 }
 
 func (pt *PodTracker) GetActivePods() *UniqueStringList {
