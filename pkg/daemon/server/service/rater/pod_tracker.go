@@ -95,17 +95,12 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 					}
 					for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
 						podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
-						// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
-						podKey := strings.Join([]string{pt.pipeline.Name, v.Name, fmt.Sprintf("%d", i), vType}, PodInfoSeparator)
+						podKey := pt.getPodKey(i, v.Name, vType)
 						if pt.isActive(v.Name, podName) {
 							pt.activePods.PushBack(podKey)
 						} else {
+							// if the pod is not active, remove it from the active pod list
 							pt.activePods.Remove(podKey)
-							// we assume all the pods are ordered with continuous indices, hence as we keep increasing the index, if we don't find one, we can stop looking.
-							// the assumption holds because when we scale down, we always scale down from the last pod.
-							// there can be a case when a pod in the middle crashes, causing us missing counting the following pods.
-							// such case is rare and if it happens, it can lead to lower rate then the real one. It is acceptable because it will recover when the crashed pod is restarted.
-							break
 						}
 					}
 				}
@@ -114,6 +109,11 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 		}
 	}()
 	return nil
+}
+
+func (pt *PodTracker) getPodKey(index int, vertexName string, vertexType string) string {
+	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
+	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index), vertexType}, PodInfoSeparator)
 }
 
 func (pt *PodTracker) GetActivePods() *UniqueStringList {

@@ -17,8 +17,13 @@ limitations under the License.
 package server
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,57 +33,55 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-// commented out mock client code because it's not used (lint)
+type raterMockHttpClient struct {
+	podOneCount int64
+	podTwoCount int64
+	lock        *sync.RWMutex
+}
 
-//type mockHttpClient struct {
-//	podOneCount int64
-//	podTwoCount int64
-//	lock        *sync.RWMutex
-//}
-//
-//func (m *mockHttpClient) Get(url string) (*http.Response, error) {
-//	m.lock.Lock()
-//	defer m.lock.Unlock()
-//	if url == "https://p-v-0.p-v-headless.default.svc:2469/metrics" {
-//		m.podOneCount = m.podOneCount + 20
-//		resp := &http.Response{
-//			StatusCode: 200,
-//			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
-//# HELP forwarder_read_total Total number of Messages Read
-//# TYPE forwarder_read_total counter
-//forwarder_read_total{buffer="input",pipeline="simple-pipeline",vertex="input"} %d
-//`, m.podOneCount))))}
-//		return resp, nil
-//	} else if url == "https://p-v-1.p-v-headless.default.svc:2469/metrics" {
-//		m.podTwoCount = m.podTwoCount + 60
-//		resp := &http.Response{
-//			StatusCode: 200,
-//			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
-//# HELP forwarder_read_total Total number of Messages Read
-//# TYPE forwarder_read_total counter
-//forwarder_read_total{buffer="input",pipeline="simple-pipeline",vertex="input"} %d
-//`, m.podTwoCount))))}
-//		return resp, nil
-//	} else {
-//		return nil, nil
-//	}
-//}
-//
-//func (m *mockHttpClient) Head(url string) (*http.Response, error) {
-//	m.lock.Lock()
-//	defer m.lock.Unlock()
-//	if url == "https://p-v-0.p-v-headless.default.svc:2469/metrics" {
-//		return &http.Response{
-//			StatusCode: 200,
-//			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
-//	} else if url == "https://p-v-1.p-v-headless.default.svc:2469/metrics" {
-//		return &http.Response{
-//			StatusCode: 200,
-//			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
-//	} else {
-//		return nil, fmt.Errorf("unknown url: %s", url)
-//	}
-//}
+func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if url == "https://p-v-0.p-v-headless.default.svc:2469/metrics" {
+		m.podOneCount = m.podOneCount + 20
+		resp := &http.Response{
+			StatusCode: 200,
+			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
+# HELP forwarder_read_total Total number of Messages Read
+# TYPE forwarder_read_total counter
+forwarder_read_total{buffer="input",pipeline="simple-pipeline",vertex="input",partition_name="p-v-0"} %d
+`, m.podOneCount))))}
+		return resp, nil
+	} else if url == "https://p-v-1.p-v-headless.default.svc:2469/metrics" {
+		m.podTwoCount = m.podTwoCount + 60
+		resp := &http.Response{
+			StatusCode: 200,
+			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
+# HELP forwarder_read_total Total number of Messages Read
+# TYPE forwarder_read_total counter
+forwarder_read_total{buffer="input",pipeline="simple-pipeline",vertex="input", partition_name="p-v-1"} %d
+`, m.podTwoCount))))}
+		return resp, nil
+	} else {
+		return nil, nil
+	}
+}
+
+func (m *raterMockHttpClient) Head(url string) (*http.Response, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if url == "https://p-v-0.p-v-headless.default.svc:2469/metrics" {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
+	} else if url == "https://p-v-1.p-v-headless.default.svc:2469/metrics" {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
+	} else {
+		return nil, fmt.Errorf("unknown url: %s", url)
+	}
+}
 
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
@@ -89,9 +92,8 @@ func TestMain(m *testing.M) {
 // then we verify that the rate calculator is able to calculate a positive rate for the vertex
 // note: this test doesn't test the accuracy of the calculated rate, the calculation is tested by helper_test.go
 func TestRater_Start(t *testing.T) {
-	// FIXME: this test is flaky
-	t.SkipNow()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*29)
+	lookBackSeconds := uint32(30)
 	defer cancel()
 	pipeline := &v1alpha1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
@@ -100,14 +102,17 @@ func TestRater_Start(t *testing.T) {
 		},
 		Spec: v1alpha1.PipelineSpec{
 			Vertices: []v1alpha1.AbstractVertex{
-				{Name: "v"},
+				{
+					Name:  "v",
+					Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds},
+				},
 			},
 		},
 	}
-	r := NewRater(ctx, pipeline)
-	podTracker := NewPodTracker(ctx, pipeline, WithRefreshInterval(time.Second*5))
-	//podTracker.httpClient = &mockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
-	//r.httpClient = &mockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
+	r := NewRater(ctx, pipeline, WithTaskInterval(1000))
+	podTracker := NewPodTracker(ctx, pipeline, WithRefreshInterval(time.Second*1))
+	podTracker.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
+	r.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.podTracker = podTracker
 
 	timer := time.NewTimer(60 * time.Second)
@@ -119,7 +124,7 @@ func TestRater_Start(t *testing.T) {
 	}()
 	go func() {
 		for {
-			if r.GetRates("v", "v0")["1m"] <= 0 || r.GetRates("v", "v1")["1m"] <= 0 {
+			if r.GetRates("v", "p-v-0")["default"] <= 0 || r.GetRates("v", "p-v-1")["default"] <= 0 {
 				time.Sleep(time.Second)
 			} else {
 				succeedChan <- struct{}{}
