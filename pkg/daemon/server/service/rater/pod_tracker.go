@@ -95,17 +95,12 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 					}
 					for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
 						podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
-						// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
-						podKey := strings.Join([]string{pt.pipeline.Name, v.Name, fmt.Sprintf("%d", i), vType}, PodInfoSeparator)
+						podKey := pt.getPodKey(i, v.Name, vType)
 						if pt.isActive(v.Name, podName) {
 							pt.activePods.PushBack(podKey)
 						} else {
+							// if the pod is not active, remove it from the active pod list
 							pt.activePods.Remove(podKey)
-							// we assume all the pods are ordered with continuous indices, hence as we keep increasing the index, if we don't find one, we can stop looking.
-							// the assumption holds because when we scale down, we always scale down from the last pod.
-							// there can be a case when a pod in the middle crashes, causing us missing counting the following pods.
-							// such case is rare and if it happens, it can lead to lower rate then the real one. It is acceptable because it will recover when the crashed pod is restarted.
-							break
 						}
 					}
 				}
@@ -116,6 +111,11 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 	return nil
 }
 
+func (pt *PodTracker) getPodKey(index int, vertexName string, vertexType string) string {
+	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
+	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index), vertexType}, PodInfoSeparator)
+}
+
 func (pt *PodTracker) GetActivePods() *UniqueStringList {
 	return pt.activePods
 }
@@ -124,12 +124,15 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	// using the vertex headless service to check if a pod exists or not.
 	// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2469/metrics
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, pt.pipeline.Name+"-"+vertexName+"-headless", pt.pipeline.Namespace, v1alpha1.VertexMetricsPort)
-	if _, err := pt.httpClient.Head(url); err != nil {
+	resp, err := pt.httpClient.Head(url)
+	if err != nil {
 		// during performance test (100 pods per vertex), we never saw a false negative, meaning every time isActive returns false,
 		// it truly means the pod doesn't exist.
 		// in reality, we can imagine that a pod can be active but the Head request times out for some reason and returns an incorrect false,
 		// if we ever observe such case, we can think about adding retry here.
+		pt.log.Debugf("Failed to check if pod %s is active: %v", podName, err)
 		return false
 	}
+	_ = resp.Body.Close()
 	return true
 }

@@ -3,9 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow-go/pkg/sink"
 	"log"
 	"time"
+
+	"github.com/numaproj/numaflow-go/pkg/sink"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"github.com/numaproj/numaflow-go/pkg/info"
@@ -28,6 +29,7 @@ func New(inputOptions ...Option) (*client, error) {
 		sockAddr:                   sink.Addr,
 		serverInfoFilePath:         info.ServerInfoFilePath,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
+		maxMessageSize:             1024 * 1024 * 64,  // 64 MB
 	}
 
 	for _, inputOption := range inputOptions {
@@ -52,7 +54,8 @@ func New(inputOptions ...Option) (*client, error) {
 
 	c := new(client)
 	sockAddr := fmt.Sprintf("%s:%s", sink.Protocol, opts.sockAddr)
-	conn, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.maxMessageSize), grpc.MaxCallSendMsgSize(opts.maxMessageSize)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
 	}

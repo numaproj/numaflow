@@ -92,6 +92,7 @@ nav:
             - user-guide/reference/configuration/init-containers.md
             - user-guide/reference/configuration/sidecar-containers.md
             - user-guide/reference/configuration/pipeline-customization.md
+            - user-guide/reference/configuration/max-message-size.md
           - user-guide/reference/kustomize/kustomize.md
           - APIs.md
   - Operator Manual:
