@@ -85,6 +85,12 @@ func (t *OffsetTimeline) Put(node wmb.WMB) {
 				}
 				return
 			} else {
+				// This can happen if the publisher of the watermark is a Map Vertex reading from >1 partition. In that case, there is one goroutine per
+				// partition and the following example can happen some of the time for two goroutines G1 and G2 both publishing to the same OffsetTimeline:
+				// 1. G1 determines watermark x and publishes to offsets 100-101
+				// 2. G2 determines watermark x and publishes to offsets 102-103
+				// 3. G2 publishes watermark x for offset 103
+				// 4. G1 publishes watermark x for offset 101
 				t.log.Debugw("Watermark the same but Input offset smaller than the existing offset - skipping", zap.Int64("watermark", node.Watermark),
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
