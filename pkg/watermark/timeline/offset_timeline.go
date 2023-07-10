@@ -85,7 +85,7 @@ func (t *OffsetTimeline) Put(node wmb.WMB) {
 				}
 				return
 			} else {
-				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.Watermark),
+				t.log.Debugw("Watermark the same but Input offset smaller than the existing offset - skipping", zap.Int64("watermark", node.Watermark),
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
 			}
