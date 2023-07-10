@@ -190,7 +190,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 		pipelineName:   vertexInstance.Vertex.Spec.PipelineName,
 		genfn:          recordGenerator,
 		vertexInstance: vertexInstance,
-		srcchan:        make(chan record, rpu*5),
+		srcchan:        make(chan record, rpu*int(keyCount)*5),
 		readTimeout:    3 * time.Second, // default timeout
 	}
 
@@ -334,7 +334,7 @@ func (mg *memgen) NewWorker(ctx context.Context, rate int) func(chan time.Time, 
 				t := ts.UnixNano()
 				for i := 0; i < rate; i++ {
 					for k := int32(0); k < mg.keyCount; k++ {
-						key := fmt.Sprintf("key-%d", k)
+						key := fmt.Sprintf("key-%d-%d", mg.vertexInstance.Replica, k)
 						payload := mg.genfn(mg.msgSize, mg.value, t)
 						r := record{data: payload, offset: time.Now().UTC().UnixNano(), key: key}
 						select {
