@@ -28,10 +28,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
-func test_EdgeFetcherSet_ProcessOffsetGetWatermark(t *testing.T) {
+func Test_EdgeFetcherSet_ProcessOffsetGetWatermark(t *testing.T) {
 	var ctx = context.Background()
 
 	// test fetching from 2 edges
@@ -103,16 +104,54 @@ func test_EdgeFetcherSet_ProcessOffsetGetWatermark(t *testing.T) {
 		offset          int64
 		partitionIdx    int32
 		want            int64
-		lastProcessedWm [][]int64 // last processed watermark for each pod on each vertex
+		lastProcessedWm [][]int64 // last processed watermark for each partition for each edge
 	}{
+
 		{
-			name:         "offset_9",
-			offset:       9,
-			want:         -1,
+			// test case where we end up using one of the lastProcessedWms since it's smallest
+			// for first EdgeFetcher:
+			//// offset 23 on partition 0 will produce WM 8
+			//// if lastProcessedWm on other partitions is 7, we take 7 since 7<8
+			// for second EdgeFetcher:
+			//// offset 23 on partition 0 will produce WM 10
+			//// if lastProcessedWm on other partitions is 9, we take 9 since 9<10
+			// then we compare EdgeFetchers 1 and 2 and get 7 since 7<9
+			name:         "useLastProcessedWm",
+			offset:       23,
+			want:         7,
 			partitionIdx: 0,
 			lastProcessedWm: [][]int64{
-				{-1, -1},
-				{-1},
+				{7, 7, 7},
+				{9, 9, 9},
+			},
+		},
+		{
+			// test case where we end up using the newly calculated watermark for one of the EdgeFetchers since it's smallest
+			// for first EdgeFetcher:
+			//// offset 23 on partition 0 will produce WM 8
+			//// if lastProcessedWm on other partitions is 9, we take 8 since 8<9
+			// for second EdgeFetcher:
+			//// offset 23 on partition 0 will produce WM 10
+			//// if lastProcessedWm on other partitions is 9, we take 9 since 9<10
+			// then we compare EdgeFetchers 1 and 2 and get 8 since 8<9
+			name:         "useLastProcessedWm",
+			offset:       23,
+			want:         8,
+			partitionIdx: 0,
+			lastProcessedWm: [][]int64{
+				{6, 9, 9},
+				{9, 9, 9},
+			},
+		},
+		{
+			// test case in which other partitions haven't been processed yet
+			name:         "unprocessedPartitions",
+			offset:       15,
+			want:         -1,
+			partitionIdx: 1,
+			lastProcessedWm: [][]int64{
+				{-1, -1, -1},
+				{-1, -1, -1},
 			},
 		},
 	}
@@ -123,14 +162,15 @@ func test_EdgeFetcherSet_ProcessOffsetGetWatermark(t *testing.T) {
 			// create EdgeFetcherSet with 2 EdgeFetchers
 			efs := &edgeFetcherSet{
 				edgeFetchers: map[string]Fetcher{},
-				log:          zaptest.NewLogger(t).Sugar(),
+				log:          zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel)).Sugar(),
 			}
+
 			for vertex := 0; vertex < numIncomingVertices; vertex++ {
 				vertexName := fmt.Sprintf("vertex-%d", vertex)
 				efs.edgeFetchers[vertexName] = &EdgeFetcher{
 					ctx:              ctx,
 					processorManager: processorManagers[vertex],
-					log:              zaptest.NewLogger(t).Sugar(),
+					log:              zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel)).Sugar(),
 					lastProcessedWm:  tt.lastProcessedWm[vertex],
 				}
 			}
