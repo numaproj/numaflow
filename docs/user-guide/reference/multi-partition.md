@@ -1,9 +1,9 @@
 # Multi-partitioned Edges
 
-To achieve high throughput(>10k), users can create a vertex with multiple partitions. 
+To achieve high throughput(>10k), users can create a multi partitioned edges.
 Multi partitioned edges are only supported for pipelines with jetstream as ISB. 
 
-The following example shows how to create a pipeline with multi-partitioned edges.
+The following snippet shows how to configure a vertex with multiple partitions:
 
 ```yaml
     - name: cat
