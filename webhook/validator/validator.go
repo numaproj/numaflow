@@ -21,25 +21,48 @@ type Validator interface {
 }
 
 // GetValidator returns a Validator instance
-func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient v1alpha1.InterStepBufferServiceInterface, kind metav1.GroupVersionKind, oldBytes []byte, newBytes []byte) (Validator, error) {
+func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient v1alpha1.InterStepBufferServiceInterface, PipelineClient v1alpha1.PipelineInterface, kind metav1.GroupVersionKind, oldBytes []byte, newBytes []byte) (Validator, error) {
 	log := logging.FromContext(ctx)
-	var new *dfv1.InterStepBufferService
-	if len(newBytes) > 0 {
-		new = &dfv1.InterStepBufferService{}
-		if err := json.Unmarshal(newBytes, new); err != nil {
-			log.Errorf("Could not unmarshal new raw object: %v", err)
-			return nil, err
+	switch kind.Kind {
+	case "InterStepBufferService":
+		var new *dfv1.InterStepBufferService
+		if len(newBytes) > 0 {
+			new = &dfv1.InterStepBufferService{}
+			if err := json.Unmarshal(newBytes, new); err != nil {
+				log.Errorf("Could not unmarshal new raw object: %v", err)
+				return nil, err
+			}
 		}
-	}
-	var old *dfv1.InterStepBufferService
-	if len(oldBytes) > 0 {
-		old = &dfv1.InterStepBufferService{}
-		if err := json.Unmarshal(oldBytes, old); err != nil {
-			log.Errorf("Could not unmarshal old raw object: %v", err)
-			return nil, err
+		var old *dfv1.InterStepBufferService
+		if len(oldBytes) > 0 {
+			old = &dfv1.InterStepBufferService{}
+			if err := json.Unmarshal(oldBytes, old); err != nil {
+				log.Errorf("Could not unmarshal old raw object: %v", err)
+				return nil, err
+			}
 		}
+		return NewISBServiceValidator(client, ISBSVCClient, old, new), nil
+	case "Pipeline":
+		var new *dfv1.Pipeline
+		if len(newBytes) > 0 {
+			new = &dfv1.Pipeline{}
+			if err := json.Unmarshal(newBytes, new); err != nil {
+				log.Errorf("Could not unmarshal new raw object: %v", err)
+				return nil, err
+			}
+		}
+		var old *dfv1.Pipeline
+		if len(oldBytes) > 0 {
+			old = &dfv1.Pipeline{}
+			if err := json.Unmarshal(oldBytes, old); err != nil {
+				log.Errorf("Could not unmarshal old raw object: %v", err)
+				return nil, err
+			}
+		}
+		return NewPipelineValidator(client, PipelineClient, old, new), nil
+	default:
+		return nil, fmt.Errorf("Unrecognized kind: %v", kind)
 	}
-	return NewISBServiceValidator(client, ISBSVCClient, old, new), nil
 }
 
 // DeniedResponse constructs a denied AdmissionResonse

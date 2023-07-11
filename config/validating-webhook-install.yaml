@@ -52,6 +52,7 @@ rules:
   - numaproj.io
   resources:
   - interstepbufferservices
+  - pipelines
   verbs:
   - get
   - list
@@ -114,6 +115,12 @@ spec:
               fieldPath: metadata.namespace
         - name: PORT
           value: "443"
+        - name: DEPLOYMENT_NAME
+          value: numaflow-webhook
+        - name: SERVICE_NAME
+          value: numaflow-webhook
+        - name: CLUSTER_ROLE_NAME
+          value: numaflow-webhook
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         name: webhook

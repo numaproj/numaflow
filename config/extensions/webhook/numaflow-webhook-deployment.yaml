@@ -25,4 +25,10 @@ spec:
               fieldPath: metadata.namespace
         - name: PORT
           value: "443"              
+        - name: DEPLOYMENT_NAME
+          value: numaflow-webhook
+        - name: SERVICE_NAME
+          value: numaflow-webhook
+        - name: CLUSTER_ROLE_NAME
+          value: numaflow-webhook
       serviceAccountName: numaflow-webhook-sa

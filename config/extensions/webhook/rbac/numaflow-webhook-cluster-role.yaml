@@ -50,6 +50,7 @@ rules:
       - watch
     resources:
       - interstepbufferservices
+      - pipelines
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:

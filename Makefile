@@ -201,7 +201,7 @@ manifests: crds
 	kubectl kustomize config/advanced-install/namespaced-numaflow-server > config/advanced-install/namespaced-numaflow-server.yaml
 	kubectl kustomize config/advanced-install/numaflow-server > config/advanced-install/numaflow-server.yaml
 	kubectl kustomize config/advanced-install/minimal-crds > config/advanced-install/minimal-crds.yaml
-	kubectl kustomize config/extensions/webhook > config/install-validating-webhook.yaml
+	kubectl kustomize config/extensions/webhook > config/validating-webhook-install.yaml
 
 $(GOPATH)/bin/golangci-lint:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b `go env GOPATH`/bin v1.49.0

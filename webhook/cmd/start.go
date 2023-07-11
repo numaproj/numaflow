@@ -78,6 +78,7 @@ func Start() {
 		Options:      options,
 		Handlers: map[schema.GroupVersionKind]runtime.Object{
 			{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "InterStepBufferService"}: &dfv1.InterStepBufferService{},
+			{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "Pipeline"}:               &dfv1.Pipeline{},
 		},
 		Logger: logger,
 	}

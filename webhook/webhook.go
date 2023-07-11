@@ -5,13 +5,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
-
-	"fmt"
 
 	"github.com/go-openapi/inflect"
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
@@ -54,8 +53,9 @@ type Options struct {
 
 // Controller for validation webhook
 type AdmissionController struct {
-	Client       kubernetes.Interface
-	ISBSVCClient v1alpha1.InterStepBufferServiceInterface
+	Client         kubernetes.Interface
+	ISBSVCClient   v1alpha1.InterStepBufferServiceInterface
+	PipelineClient v1alpha1.PipelineInterface
 
 	Options  Options
 	Handlers map[schema.GroupVersionKind]runtime.Object
@@ -241,7 +241,7 @@ func (ac *AdmissionController) admit(ctx context.Context, request *admissionv1.A
 		log.Infof("Operation not interested: %v %v", request.Kind, request.Operation)
 		return &admissionv1.AdmissionResponse{Allowed: true}
 	}
-	v, err := validator.GetValidator(ctx, ac.Client, ac.ISBSVCClient, request.Kind, request.OldObject.Raw, request.Object.Raw)
+	v, err := validator.GetValidator(ctx, ac.Client, ac.ISBSVCClient, ac.PipelineClient, request.Kind, request.OldObject.Raw, request.Object.Raw)
 	if err != nil {
 		return validator.DeniedResponse("failed to get a validator: %v", err)
 	}

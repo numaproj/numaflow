@@ -18,8 +18,9 @@ const (
 )
 
 var (
-	fakeK8sClient    = fakeClient.NewSimpleClientset()
-	fakeISBSvcClient = fake.FakeInterStepBufferServices{}
+	fakeK8sClient      = fakeClient.NewSimpleClientset()
+	fakeISBSvcClient   = fake.FakeInterStepBufferServices{}
+	fakePipelineClient = fake.FakePipelines{}
 )
 
 func contextWithLogger(t *testing.T) context.Context {
@@ -57,12 +58,55 @@ func fakeJetStreamISBSvc() *dfv1.InterStepBufferService {
 	}
 }
 
+func fakePipeline() *dfv1.Pipeline {
+	return &dfv1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pl",
+			Namespace: "test-ns",
+		},
+		Spec: dfv1.PipelineSpec{
+			Vertices: []dfv1.AbstractVertex{
+				{
+					Name: "input",
+					Source: &dfv1.Source{
+						UDTransformer: &dfv1.UDTransformer{
+							Builtin: &dfv1.Transformer{Name: "filter"},
+						}},
+				},
+				{
+					Name: "p1",
+					UDF: &dfv1.UDF{
+						Builtin: &dfv1.Function{Name: "cat"},
+					},
+				},
+				{
+					Name: "output",
+					Sink: &dfv1.Sink{},
+				},
+			},
+			Edges: []dfv1.Edge{
+				{From: "input", To: "p1"},
+				{From: "p1", To: "output"},
+			},
+		},
+	}
+}
+
 func TestGetValidator(t *testing.T) {
 	t.Run("test get InterStepBufferService validator", func(t *testing.T) {
 		bytes, err := json.Marshal(fakeISBSvc())
 		assert.NoError(t, err)
 		assert.NotNil(t, bytes)
-		v, err := GetValidator(contextWithLogger(t), fakeK8sClient, &fakeISBSvcClient, metav1.GroupVersionKind{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "InterStepBufferService"}, nil, bytes)
+		v, err := GetValidator(contextWithLogger(t), fakeK8sClient, &fakeISBSvcClient, &fakePipelineClient, metav1.GroupVersionKind{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "InterStepBufferService"}, nil, bytes)
+		assert.NoError(t, err)
+		assert.NotNil(t, v)
+	})
+
+	t.Run("test get Pipeline validator", func(t *testing.T) {
+		bytes, err := json.Marshal(fakePipeline())
+		assert.NoError(t, err)
+		assert.NotNil(t, bytes)
+		v, err := GetValidator(contextWithLogger(t), fakeK8sClient, &fakeISBSvcClient, &fakePipelineClient, metav1.GroupVersionKind{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "Pipeline"}, nil, bytes)
 		assert.NoError(t, err)
 		assert.NotNil(t, v)
 	})
