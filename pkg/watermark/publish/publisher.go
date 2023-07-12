@@ -22,12 +22,9 @@ limitations under the License.
 package publish
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
@@ -151,30 +148,20 @@ func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset, toVertex
 
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
-		p.log.Errorw("Unable to publish watermark", zap.Uint64("goroutine", getGID()), zap.Int32("partition", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+		p.log.Errorw("Unable to publish watermark", zap.Int32("partition", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 	}
 
 	for {
 		err := p.otStore.PutKV(p.ctx, key, value)
 		if err != nil {
-			p.log.Errorw("Unable to publish watermark", zap.Uint64("goroutine", getGID()), zap.Int32("partition", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+			p.log.Errorw("Unable to publish watermark", zap.Int32("partition", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
-			p.log.Debugw("New watermark published with offset", zap.Uint64("goroutine", getGID()), zap.Int32("partition", toVertexPartitionIdx), zap.Int64("head", p.GetHeadWM(toVertexPartitionIdx).UnixMilli()), zap.Int64("new", validWM.UnixMilli()), zap.Int64("offset", seq))
+			p.log.Debugw("New watermark published with offset", zap.Int32("partition", toVertexPartitionIdx), zap.Int64("head", p.GetHeadWM(toVertexPartitionIdx).UnixMilli()), zap.Int64("new", validWM.UnixMilli()), zap.Int64("offset", seq))
 			break
 		}
 	}
-}
-
-// todo: temporary
-func getGID() uint64 {
-	b := make([]byte, 64)
-	b = b[:runtime.Stack(b, false)]
-	b = bytes.TrimPrefix(b, []byte("goroutine "))
-	b = b[:bytes.IndexByte(b, ' ')]
-	n, _ := strconv.ParseUint(string(b), 10, 64)
-	return n
 }
 
 // validateWatermark checks if the new watermark is greater than the head watermark, return true if yes,
