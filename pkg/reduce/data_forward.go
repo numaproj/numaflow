@@ -224,8 +224,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// if toBeClosed window exists, and the watermark we fetch has already passed the endTime of this window
 			// then it means the overall dataflow of the pipeline has already reached a later time point
 			// so we can close the window and process the data in this window
-			// TODO: we can't just close this based on one Watermark having reached this time; we need to verify that all Watermarks
-			// have reached this time
 			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); nextWin.EndTime().Before(watermark) {
 				closedWindows := df.windower.RemoveWindows(watermark)
 				for _, win := range closedWindows {
