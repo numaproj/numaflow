@@ -148,18 +148,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		if _, existing := sinks[e.From]; existing {
 			return fmt.Errorf("sink vertex %q can not be define as 'from'", e.To)
 		}
-		if e.DeprecatedParallelism != nil {
-			if _, ok := reduceUdfs[e.To]; !ok {
-				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" is not allowed for an edge leading to a non-reduce vertex`, e.From, e.To)
-			}
-			if *e.DeprecatedParallelism < 1 {
-				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" is < 1`, e.From, e.To)
-			}
-			if *e.DeprecatedParallelism > 1 && !reduceUdfs[e.To].UDF.GroupBy.Keyed {
-				// We only support single partition non-keyed windowing.
-				return fmt.Errorf(`invalid edge (%s - %s), "parallelism" should not > 1 for non-keyed windowing`, e.From, e.To)
-			}
-		}
 		namesInEdges[e.From] = true
 		namesInEdges[e.To] = true
 	}
@@ -204,6 +192,17 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	}
 	if min > max {
 		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
+	}
+	if v.Partitions != nil {
+		if *v.Partitions < 0 {
+			return fmt.Errorf("vertex %q: number of partitions should not be smaller than 0", v.Name)
+		}
+		if *v.Partitions > 1 && v.IsReduceUDF() && !v.UDF.GroupBy.Keyed {
+			return fmt.Errorf("vertex %q: partitions should not > 1 for non-keyed reduce vertices", v.Name)
+		}
+		if *v.Partitions > 1 && v.IsASource() {
+			return fmt.Errorf("vertex %q: partitions should not > 1 for source vertices", v.Name)
+		}
 	}
 	for _, ic := range v.InitContainers {
 		if isReservedContainerName(ic.Name) {

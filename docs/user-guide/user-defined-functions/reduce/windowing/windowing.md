@@ -61,8 +61,8 @@ to a set of keyed problems and apply a non-keyed function at the end. This will
 help solve the original problem in a scalable manner without affecting the
 result's completeness and/or accuracy.
 
-When a `keyed` window is used, an optional `parallelism` can be specified in the
-`edge` leading to the vertex for parallel processing.
+When a `keyed` window is used, an optional `partitions` can be specified in the
+vertex for parallel processing.
 
 ### Usage
 
@@ -73,12 +73,9 @@ are not horizontally scalable as mentioned above.
 ```yaml
 vertices:
   - name: my-reduce
+    partitions: 5 # Optional, defaults to 1
     udf:
       groupBy:
         window: ...
         keyed: true # Optional, defaults to false
-edges:
-  - from: prev-udf
-    to: my-reduce
-    parallelism: 5 # Optional, defaults to 1
 ```

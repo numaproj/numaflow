@@ -937,54 +937,6 @@ ContainerTemplate </a> </em>
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.DeprecatedEdgeLimits">
-DeprecatedEdgeLimits
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>)
-</p>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>
-Field
-</th>
-<th>
-Description
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>bufferMaxLength</code></br> <em> uint64 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-BufferMaxLength is used to define the max length of a buffer. It
-overrides the settings from pipeline limits.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>bufferUsageLimit</code></br> <em> uint32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-BufferUsageLimit is used to define the percentage of the buffer usage
-limit, a valid value should be less than 100, for example, 85. It
-overrides the settings from pipeline limits.
-</p>
-</td>
-</tr>
-</tbody>
-</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Edge">
 Edge
 </h3>
@@ -1031,39 +983,6 @@ ForwardConditions </a> </em>
 <em>(Optional)</em>
 <p>
 Conditional forwarding, only allowed when “From” is a Sink or UDF.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>limits</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.DeprecatedEdgeLimits">
-DeprecatedEdgeLimits </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-Deprecated, use vertex.spec.limits instead.
-</p>
-<p>
-Limits define the limitations such as buffer read batch size for the
-edge, will override pipeline level settings.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>parallelism</code></br> <em> int32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-Deprecated, use vertex.spec.partitions instead.
-</p>
-<p>
-Parallelism is only effective when the “to” vertex is a reduce vertex,
-if it’s not provided, the default value is set to “1”. Parallelism is
-ignored when the “to” vertex is not a reduce vertex.
 </p>
 </td>
 </tr>
@@ -2247,11 +2166,16 @@ type.)
 <td>
 <em>(Optional)</em>
 <p>
-JetStream configuration, if not specified, global settings in
+Nats/JetStream configuration, if not specified, global settings in
 numaflow-controller-config will be used. See
+<a href="https://docs.nats.io/running-a-nats-service/configuration#limits">https://docs.nats.io/running-a-nats-service/configuration#limits</a>
+and
 <a href="https://docs.nats.io/running-a-nats-service/configuration#jetstream">https://docs.nats.io/running-a-nats-service/configuration#jetstream</a>.
-Only configure “max_memory_store” or “max_file_store”, do not set
-“store_dir” as it has been hardcoded.
+For limits, only “max_payload” is supported for configuration, defaults
+to 1048576 (1MB), not recommended to use values over 8388608 (8MB) but
+max_payload can be set up to 67108864 (64MB). For jetstream, only
+“max_memory_store” and “max_file_store” are supported for configuration,
+do not set “store_dir” as it has been hardcoded.
 </p>
 </td>
 </tr>
@@ -4039,17 +3963,16 @@ only effective for source vertices.
 </tr>
 <tr>
 <td>
-<code>targetBufferUsage</code></br> <em> uint32 </em>
+<code>targetBufferAvailability</code></br> <em> uint32 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-TargetBufferUsage is used to define the target percentage of the buffer
-availability. A valid and meaningful value should be less than the
-BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
+TargetBufferAvailability is used to define the target percentage of the
+buffer availability. A valid and meaningful value should be less than
+the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
 example, 50. It only applies to UDF and Sink vertices because only they
-have buffers to read. Deprecated: use targetBufferAvailability instead.
-Will be removed in v0.9
+have buffers to read.
 </p>
 </td>
 </tr>
@@ -4062,21 +3985,6 @@ Will be removed in v0.9
 <p>
 ReplicasPerScale defines maximum replicas can be scaled up or down at
 once. The is use to prevent too aggressive scaling operations
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>targetBufferAvailability</code></br> <em> uint32 </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-TargetBufferAvailability is used to define the target percentage of the
-buffer availability. A valid and meaningful value should be less than
-the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for
-example, 50. It only applies to UDF and Sink vertices because only they
-have buffers to read.
 </p>
 </td>
 </tr>

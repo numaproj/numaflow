@@ -58,6 +58,7 @@ nav:
                   - Overview: "user-guide/sources/transformer/builtin-transformers/README.md"
                   - Filter: "user-guide/sources/transformer/builtin-transformers/filter.md"
                   - Event Time Extractor: "user-guide/sources/transformer/builtin-transformers/event-time-extractor.md"
+                  - Event Time Extraction Filter: "user-guide/sources/transformer/builtin-transformers/time-extraction-filter.md"
       - Sinks:
           - Overview: "user-guide/sinks/overview.md"
           - user-guide/sinks/kafka.md
@@ -91,7 +92,7 @@ nav:
             - user-guide/reference/configuration/init-containers.md
             - user-guide/reference/configuration/sidecar-containers.md
             - user-guide/reference/configuration/pipeline-customization.md
-            - user-guide/reference/configuration/access-path.md
+            - user-guide/reference/configuration/max-message-size.md
           - user-guide/reference/kustomize/kustomize.md
           - APIs.md
   - Operator Manual:
@@ -99,6 +100,7 @@ nav:
       - operations/installation.md
       - Configuration:
           - Controller Configuration: "operations/controller-configmap.md"
+          - UI Server Access Path: "operations/ui-access-path.md"
           - operations/metrics/metrics.md
           - operations/grafana.md
   - Contributor Guide:
@@ -108,6 +110,7 @@ nav:
           - specifications/controllers.md
           - specifications/autoscaling.md
           - Edges, Buffers and Buckets: "specifications/edges-buffers-buckets.md"
+          - Side Inputes: "specifications/side-inputs.md"
       - development/debugging.md
       - development/static-code-analysis.md
       - development/releasing.md

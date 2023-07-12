@@ -1,7 +1,5 @@
 # Edges, Buffers and Buckets
 
-![Proposal](../assets/proposal.svg)
-
 > This document describes the concepts of `Edge`, `Buffer` and `Bucket` in a pipeline.
 
 ## Edges
@@ -27,6 +25,7 @@ spec:
         container:
           image: quay.io/numaio/numaflow-go/map-even-odd
     - name: compute-sum
+      partitions: 2
       udf:
         container:
           image: quay.io/numaio/numaflow-go/reduce-sum
@@ -45,7 +44,6 @@ spec:
       to: atoi
     - from: atoi
       to: compute-sum
-      parallelism: 2
     - from: compute-sum
       to: out
 ```

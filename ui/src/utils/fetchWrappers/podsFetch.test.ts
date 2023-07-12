@@ -293,7 +293,7 @@ describe("podsFetch test", () => {
                     "value": "eyJqZXRzdHJlYW0iOnsidXJsIjoibmF0czovL2lzYnMtZGVmYXVsdC1qcy1zdmMuZGF0YWZsb3ctc3lzdGVtLnN2Yy5jbHVzdGVyLmxvY2FsOjQyMjIiLCJhdXRoIjp7InVzZXIiOnsibmFtZSI6ImlzYnMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXVzZXIifSwicGFzc3dvcmQiOnsibmFtZSI6ImlzYnMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19LCJidWZmZXJDb25maWciOiJjb25zdW1lcjpcbiAgYWNrd2FpdDogNjBzXG4gIG1heGFja3BlbmRpbmc6IDIwMDAwXG5zdHJlYW06XG4gIGR1cGxpY2F0ZXM6IDYwc1xuICBtYXhhZ2U6IDE2OGhcbiAgbWF4Ynl0ZXM6IC0xXG4gIG1heG1zZ3M6IDUwMDAwXG4gIHJlcGxpY2FzOiAzXG4gIHJldGVudGlvbjogMVxuIn19"
                 }, {
                     "name": "NUMAFLOW_ISBS_JETSTREAM_URL",
-                    "value": "nats://isbs-default-js-svc.numaflow-system.svc.cluster.local:4222"
+                    "value": "nats://isbs-default-js-svc.numaflow-system.svc:4222"
                 }, {
                     "name": "NUMAFLOW_ISBS_JETSTREAM_TLS_ENABLED",
                     "value": "false"
@@ -348,7 +348,7 @@ describe("podsFetch test", () => {
                     "value": "eyJqZXRzdHJlYW0iOnsidXJsIjoibmF0czovL2lzYnMtZGVmYXVsdC1qcy1zdmMuZGF0YWZsb3ctc3lzdGVtLnN2Yy5jbHVzdGVyLmxvY2FsOjQyMjIiLCJhdXRoIjp7InVzZXIiOnsibmFtZSI6ImlzYnMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXVzZXIifSwicGFzc3dvcmQiOnsibmFtZSI6ImlzYnMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19LCJidWZmZXJDb25maWciOiJjb25zdW1lcjpcbiAgYWNrd2FpdDogNjBzXG4gIG1heGFja3BlbmRpbmc6IDIwMDAwXG5zdHJlYW06XG4gIGR1cGxpY2F0ZXM6IDYwc1xuICBtYXhhZ2U6IDE2OGhcbiAgbWF4Ynl0ZXM6IC0xXG4gIG1heG1zZ3M6IDUwMDAwXG4gIHJlcGxpY2FzOiAzXG4gIHJldGVudGlvbjogMVxuIn19"
                 }, {
                     "name": "NUMAFLOW_ISBS_JETSTREAM_URL",
-                    "value": "nats://isbs-default-js-svc.numaflow-system.svc.cluster.local:4222"
+                    "value": "nats://isbs-default-js-svc.numaflow-system.svc:4222"
                 }, {
                     "name": "NUMAFLOW_ISBS_JETSTREAM_TLS_ENABLED",
                     "value": "false"

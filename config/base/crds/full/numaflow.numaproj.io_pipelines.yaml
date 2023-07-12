@@ -79,23 +79,11 @@ spec:
                       type: object
                     from:
                       type: string
-                    limits:
-                      properties:
-                        bufferMaxLength:
-                          format: int64
-                          type: integer
-                        bufferUsageLimit:
-                          format: int32
-                          type: integer
-                      type: object
                     onFull:
                       enum:
                       - retryUntilSuccess
                       - discardLatest
                       type: string
-                    parallelism:
-                      format: int32
-                      type: integer
                     to:
                       type: string
                   required:
@@ -3010,9 +2998,6 @@ spec:
                           format: int32
                           type: integer
                         targetBufferAvailability:
-                          format: int32
-                          type: integer
-                        targetBufferUsage:
                           format: int32
                           type: integer
                         targetProcessingSeconds:

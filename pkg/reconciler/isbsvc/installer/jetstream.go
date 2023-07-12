@@ -118,7 +118,7 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 	r.isbs.Status.MarkDeployed()
 	return &dfv1.BufferServiceConfig{
 		JetStream: &dfv1.JetStreamConfig{
-			URL: fmt.Sprintf("nats://%s.%s.svc.cluster.local:%s", generateJetStreamServiceName(r.isbs), r.isbs.Namespace, strconv.Itoa(int(clientPort))),
+			URL: fmt.Sprintf("nats://%s.%s.svc:%s", generateJetStreamServiceName(r.isbs), r.isbs.Namespace, strconv.Itoa(int(clientPort))),
 			Auth: &dfv1.NatsAuth{
 				Basic: &dfv1.BasicAuth{
 					User: &corev1.SecretKeySelector{
@@ -395,11 +395,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	}
 	routes := []string{}
 	for j := 0; j < replicas; j++ {
-		routes = append(routes, fmt.Sprintf("nats://%s-%s.%s.%s.svc.cluster.local:%s", ssName, strconv.Itoa(j), svcName, r.isbs.Namespace, strconv.Itoa(int(clusterPort))))
-	}
-	settings := r.config.ISBSvc.JetStream.Settings
-	if x := r.isbs.Spec.JetStream.Settings; x != nil {
-		settings = *x
+		routes = append(routes, fmt.Sprintf("nats://%s-%s.%s.%s.svc:%s", ssName, strconv.Itoa(j), svcName, r.isbs.Namespace, strconv.Itoa(int(clusterPort))))
 	}
 	encryptionSettings := ""
 	if r.isbs.Spec.JetStream.Encryption {
@@ -415,6 +411,17 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
   }
 `
 	}
+	// Merge Nats settings
+	v := viper.New()
+	v.SetConfigType("yaml")
+	if err := v.ReadConfig(bytes.NewBufferString(r.config.ISBSvc.JetStream.Settings)); err != nil {
+		return fmt.Errorf("invalid jetstream settings in global configuration, %w", err)
+	}
+	if x := r.isbs.Spec.JetStream.Settings; x != nil {
+		if err := v.MergeConfig(bytes.NewBufferString(*x)); err != nil {
+			return fmt.Errorf("failed to merge customized jetstream settings, %w", err)
+		}
+	}
 	confTpl := template.Must(template.ParseFS(jetStremAssets, "assets/jetstream/nats.conf"))
 	var confTplOutput bytes.Buffer
 	if err := confTpl.Execute(&confTplOutput, struct {
@@ -423,7 +430,9 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 		ClusterPort        string
 		ClientPort         string
 		Routes             string
-		Settings           string
+		MaxPayload         string
+		MaxMemoryStore     string
+		MaxFileStore       string
 		EncryptionSettings string
 		TLSConfig          string
 	}{
@@ -432,7 +441,9 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 		ClusterPort:        strconv.Itoa(int(clusterPort)),
 		ClientPort:         strconv.Itoa(int(clientPort)),
 		Routes:             strings.Join(routes, ","),
-		Settings:           settings,
+		MaxPayload:         v.GetString("max_payload"),
+		MaxFileStore:       v.GetString("max_file_store"),
+		MaxMemoryStore:     v.GetString("max_memory_store"),
 		EncryptionSettings: encryptionSettings,
 		TLSConfig:          clusterTLSConfig,
 	}); err != nil {
