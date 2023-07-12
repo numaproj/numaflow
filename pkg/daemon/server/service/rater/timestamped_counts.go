@@ -21,15 +21,12 @@ import (
 	"sync"
 )
 
-// CountNotAvailable indicates the rater is not able to collect the count of processed messages for a pod
-// normally it is because the pod is not running
-const CountNotAvailable = -1
-
 // TimestampedCounts track the total count of processed messages for a list of pods at a given timestamp
 type TimestampedCounts struct {
 	// timestamp in seconds, is the time when the count is recorded
 	timestamp int64
-	// pod to partitionCount mapping
+	// the key of podPartitionCount represents the pod name, the value represents partition counts map for the pod
+	// partition counts map holds mappings between partition name and the count of messages processed by the partition
 	podPartitionCount map[string]map[string]float64
 	lock              *sync.RWMutex
 }
@@ -42,7 +39,7 @@ func NewTimestampedCounts(t int64) *TimestampedCounts {
 	}
 }
 
-// Update updates the count for a pod if the current window is not closed
+// Update updates the count of processed messages for a pod
 func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
@@ -57,15 +54,12 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 		// hence we'd rather keep the partitionReadCounts as it is to avoid wrong rate calculation.
 		return
 	}
-
-	// since the pod can read from multiple partitions, we overwrite the previous partitionReadCounts for this pod
-	// with the new partitionReadCounts map, since it is a counter metric, the new value is always greater than the previous one.
 	tc.podPartitionCount[podReadCount.Name()] = podReadCount.PartitionReadCounts()
 }
 
-// PodReadCountSnapshot returns a copy of the podName to partitionCount mapping
+// PodPartitionCountSnapshot returns a copy of podPartitionCount
 // it's used to ensure the returned map is not modified by other goroutines
-func (tc *TimestampedCounts) PodReadCountSnapshot() map[string]map[string]float64 {
+func (tc *TimestampedCounts) PodPartitionCountSnapshot() map[string]map[string]float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 	counts := make(map[string]map[string]float64)
@@ -80,6 +74,6 @@ func (tc *TimestampedCounts) PodReadCountSnapshot() map[string]map[string]float6
 func (tc *TimestampedCounts) ToString() string {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	res := fmt.Sprintf("{timestamp: %d, partitionCount: %v}", tc.timestamp, tc.podPartitionCount)
+	res := fmt.Sprintf("{timestamp: %d, podPartitionCount: %v}", tc.timestamp, tc.podPartitionCount)
 	return res
 }
