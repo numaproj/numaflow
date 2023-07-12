@@ -66,6 +66,8 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 
 	if rate := getDeltaBetweenTimestampedCounts(counts[startIndex], counts[endIndex], partitionName) / float64(timeDiff); rate > 0 {
 		// positive slope, meaning there was no restart in the last lookback seconds
+		// TODO - FIX IT - the statement above doesn't always hold true.
+		// see https://github.com/numaproj/numaflow/pull/810#discussion_r1261203309
 		return rate
 	}
 
