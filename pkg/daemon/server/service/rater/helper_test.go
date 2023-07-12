@@ -91,19 +91,17 @@ func TestUpdateCount(t *testing.T) {
 		assert.Equal(t, 10.0, q.Items()[0].podPartitionCount["pod1"]["partition1"])
 	})
 
-	t.Run("givenTimeNotExistsCountAvailable_whenUpdate_thenUpdateNewTimeWithPodAndCloseWindowForPrevTime", func(t *testing.T) {
+	t.Run("givenTimeNotExistsCountAvailable_whenUpdate_thenAddNewItem", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
 		tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 		q.Append(tc)
 
 		UpdateCount(q, TestTime+1, &PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
-		qItems := q.Items()
 
 		assert.Equal(t, 2, q.Length())
 		assert.Equal(t, 10.0, q.Items()[0].podPartitionCount["pod1"]["partition1"])
 		assert.Equal(t, 20.0, q.Items()[1].podPartitionCount["pod1"]["partition1"])
-		assert.Equal(t, 10.0, calculatePartitionDelta(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("givenTimeNotExistsCountNotAvailable_whenUpdate_thenAddEmptyItem", func(t *testing.T) {
@@ -147,35 +145,15 @@ func TestCalculateRate(t *testing.T) {
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
 		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
 		q.Append(tc3)
-		qItems := q.Items()
 
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 0.5, CalculateRate(q, 25, "partition1"))
+		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 0.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, 5.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
-	})
-
-	t.Run("singlePod_givenCountIncreases_whenCalculateRate_thenReturnRate_excludeOpenWindow", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-		now := time.Now()
-
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
-		q.Append(tc1)
-		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
-		q.Append(tc2)
-		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
-		q.Append(tc3)
-		qItems := q.Items()
-
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
-		assert.Equal(t, 0.5, CalculateRate(q, 25, "partition1"))
-		assert.Equal(t, 0.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, 5.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("singlePod_givenCountDecreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -194,41 +172,17 @@ func TestCalculateRate(t *testing.T) {
 		tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
 		tc4.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 80.0}})
 		q.Append(tc4)
-		qItems := q.Items()
 
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		// tc2 and tc3 are used to calculate the rate
 		assert.Equal(t, 5.0, CalculateRate(q, 25, "partition1"))
+		// tc1, 2 and 3 are used to calculate the rate
 		assert.Equal(t, 7.5, CalculateRate(q, 35, "partition1"))
+		// tc1, 2 and 3 are used to calculate the rate
 		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, -150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition1"))
-
-	})
-
-	t.Run("singlePod_givenCountDecreases_whenCalculateRate_thenReturnRate_excludeOpenWindow", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-		now := time.Now()
-
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
-		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 200.0}})
-		q.Append(tc1)
-		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
-		q.Append(tc2)
-		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 50.0}})
-		q.Append(tc3)
-		tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc4.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 80.0}})
-		q.Append(tc4)
-		qItems := q.Items()
-
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
-		assert.Equal(t, 5.0, CalculateRate(q, 25, "partition1"))
-		assert.Equal(t, 7.5, CalculateRate(q, 35, "partition1"))
-		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, -150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition1"))
 	})
 
 	t.Run("multiplePods_givenCountIncreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -247,13 +201,15 @@ func TestCalculateRate(t *testing.T) {
 		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 200.0}})
 		tc3.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 300.0}})
 		q.Append(tc3)
-		qItems := q.Items()
 
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition1"))
+		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 15.0, CalculateRate(q, 35, "partition1"))
-		assert.Equal(t, 150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("multiplePods_givenCountDecreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -272,13 +228,15 @@ func TestCalculateRate(t *testing.T) {
 		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 50.0}})
 		tc3.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 100.0}})
 		q.Append(tc3)
-		qItems := q.Items()
 
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition1"))
+		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 30.0, CalculateRate(q, 35, "partition1"))
-		assert.Equal(t, -200.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("multiplePods_givenOnePodRestarts_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -297,13 +255,15 @@ func TestCalculateRate(t *testing.T) {
 		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 200.0}})
 		tc3.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 100.0}})
 		q.Append(tc3)
-		qItems := q.Items()
 
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition1"))
+		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 25.0, CalculateRate(q, 35, "partition1"))
-		assert.Equal(t, -50.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[1], "partition1"))
 	})
 
 	t.Run("multiplePods_givenPodsComeAndGo_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -329,15 +289,18 @@ func TestCalculateRate(t *testing.T) {
 		tc4.Update(&PodReadCount{"pod2", map[string]float64{"partition2": 400.0}})
 		tc4.Update(&PodReadCount{"pod100", map[string]float64{"partition100": 200.0}})
 		q.Append(tc4)
-		qItems := q.Items()
 
 		// partition1 rate
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		// no enough data collected within lookback seconds, expect 0 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		// tc2 and tc3 are used to calculate the rate
 		assert.Equal(t, 5.0, CalculateRate(q, 25, "partition1"))
+		// tc1, 2 and 3 are used to calculate the rate
 		assert.Equal(t, 7.5, CalculateRate(q, 35, "partition1"))
+		// tc1, 2 and 3 are used to calculate the rate
 		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition1"))
-		assert.Equal(t, -150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition1"))
 
 		// partition2 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition2"))
@@ -345,7 +308,6 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 10.0, CalculateRate(q, 25, "partition2"))
 		assert.Equal(t, 10.5, CalculateRate(q, 35, "partition2"))
 		assert.Equal(t, 10.5, CalculateRate(q, 100, "partition2"))
-		assert.Equal(t, 210.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition2"))
 
 		// partition3 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition3"))
@@ -353,7 +315,6 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 20.0, CalculateRate(q, 25, "partition3"))
 		assert.Equal(t, 7.5, CalculateRate(q, 35, "partition3"))
 		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition3"))
-		assert.Equal(t, 150.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition3"))
 
 		// partition4 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition4"))
@@ -361,7 +322,6 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 10.0, CalculateRate(q, 25, "partition4"))
 		assert.Equal(t, 5.0, CalculateRate(q, 35, "partition4"))
 		assert.Equal(t, 5.0, CalculateRate(q, 100, "partition4"))
-		assert.Equal(t, 100.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition4"))
 
 		// partition100 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition100"))
@@ -369,118 +329,5 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition100"))
 		assert.Equal(t, 0.0, CalculateRate(q, 35, "partition100"))
 		assert.Equal(t, 0.0, CalculateRate(q, 100, "partition100"))
-		assert.Equal(t, 0.0, getDeltaBetweenTimestampedCounts(qItems[0], qItems[2], "partition100"))
-	})
-}
-
-func TestFindStartIndex(t *testing.T) {
-	t.Run("givenCollectedTimeLessThanTwo_whenFindIndex_thenReturnIndexNotFound", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-		// no data
-		qItems := q.Items()
-
-		assert.Equal(t, IndexNotFound, findStartIndex(10, qItems))
-
-		// only one data
-		now := time.Now()
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
-		q.Append(tc1)
-		qItems = q.Items()
-
-		assert.Equal(t, IndexNotFound, findStartIndex(10, qItems))
-	})
-
-	t.Run("givenTimeExists_whenFindIndex_thenReturnIndex", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-		now := time.Now()
-
-		tc := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 50)
-		tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 4.0}})
-		q.Append(tc)
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 40)
-		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
-		q.Append(tc1)
-		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
-		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 6.0}})
-		q.Append(tc2)
-		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 7.0}})
-		q.Append(tc3)
-		// keeping window open for last two timestamped counts
-		tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc4.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 8.0}})
-		q.Append(tc4)
-		tc5 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 5)
-		tc5.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 9.0}})
-		q.Append(tc5)
-		qItems := q.Items()
-
-		assert.Equal(t, 0, findStartIndex(55, qItems))
-		assert.Equal(t, 0, findStartIndex(50, qItems))
-		assert.Equal(t, 1, findStartIndex(40, qItems))
-		assert.Equal(t, 2, findStartIndex(30, qItems))
-		assert.Equal(t, 3, findStartIndex(20, qItems))
-		assert.Equal(t, 4, findStartIndex(10, qItems))
-		assert.Equal(t, -1, findStartIndex(5, qItems))
-		assert.Equal(t, -1, findStartIndex(1, qItems))
-	})
-}
-
-func TestCalculatePartitionDelta(t *testing.T) {
-	t.Run("givenTimeExistsPartitionExistsAndIncreases_whenCalculateDelta_thenReturnDelta", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-
-		now := time.Now()
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
-		q.Append(tc1)
-		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
-		q.Append(tc2)
-
-		assert.Equal(t, 5.0, calculatePartitionDelta(tc1, tc2, "partition1"))
-	})
-
-	t.Run("givenTimeExistsPartitionExistsAndDecreases_whenCalculateDelta_thenReturnDelta", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-
-		now := time.Now()
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0}})
-		q.Append(tc1)
-		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
-		q.Append(tc2)
-
-		assert.Equal(t, 10.0, calculatePartitionDelta(tc1, tc2, "partition1"))
-	})
-
-	t.Run("givenTimeExistsPartitionNotExists_whenCalculateDelta_thenReturnDelta", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-
-		now := time.Now()
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
-		q.Append(tc1)
-		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition2": 5.0}})
-		q.Append(tc2)
-
-		assert.Equal(t, 5.0, calculatePartitionDelta(tc1, tc2, "partition2"))
-	})
-
-	t.Run("givenTimeExistsPartitionNotExists_whenCalculateDelta_thenReturnDelta", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-
-		now := time.Now()
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
-		q.Append(tc1)
-		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition2": 5.0}})
-		q.Append(tc2)
-
-		assert.Equal(t, 0.0, calculatePartitionDelta(tc1, tc2, "partition1"))
 	})
 }
