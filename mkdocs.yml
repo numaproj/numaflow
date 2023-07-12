@@ -111,6 +111,7 @@ nav:
           - specifications/controllers.md
           - specifications/autoscaling.md
           - Edges, Buffers and Buckets: "specifications/edges-buffers-buckets.md"
+          - Side Inputes: "specifications/side-inputs.md"
       - development/debugging.md
       - development/static-code-analysis.md
       - development/releasing.md

@@ -1,7 +1,5 @@
 # Edges, Buffers and Buckets
 
-![Proposal](../assets/proposal.svg)
-
 > This document describes the concepts of `Edge`, `Buffer` and `Bucket` in a pipeline.
 
 ## Edges
