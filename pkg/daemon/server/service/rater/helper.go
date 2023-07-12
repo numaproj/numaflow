@@ -96,7 +96,7 @@ func getDeltaBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName s
 }
 
 // calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
-// calculatePartitionDelta doesn't accept negative delta, when encounters one, it treats it as a pod restart.
+// calculatePartitionDelta doesn't accept negative delta, when encounters one, it treats it as a pod restart and uses the current read count as delta.
 func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) float64 {
 	delta := float64(0)
 	if tc1 == nil || tc2 == nil {
