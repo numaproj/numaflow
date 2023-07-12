@@ -386,13 +386,15 @@ type VertexSpec struct {
 type AbstractVertex struct {
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
 	// +optional
-	Source *Source `json:"source,omitempty" protobuf:"bytes,2,rep,name=source"`
+	Source *Source `json:"source,omitempty" protobuf:"bytes,2,opt,name=source"`
 	// +optional
-	Sink *Sink `json:"sink,omitempty" protobuf:"bytes,3,rep,name=sink"`
+	Sink *Sink `json:"sink,omitempty" protobuf:"bytes,3,opt,name=sink"`
 	// +optional
-	UDF *UDF `json:"udf,omitempty" protobuf:"bytes,4,rep,name=udf"`
+	UDF *UDF `json:"udf,omitempty" protobuf:"bytes,4,opt,name=udf"`
+	// Container template for the main numa container.
 	// +optional
-	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,5,rep,name=containerTemplate"`
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,5,opt,name=containerTemplate"`
+	// Container template for all the vertex pod init containers spawned by numaflow, excluding the ones specified by the user.
 	// +optional
 	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,6,opt,name=initContainerTemplate"`
 	// +optional
@@ -407,17 +409,23 @@ type AbstractVertex struct {
 	// Settings for autoscaling
 	// +optional
 	Scale Scale `json:"scale,omitempty" protobuf:"bytes,10,opt,name=scale"`
-	// List of init containers belonging to the pod.
+	// List of customized init containers belonging to the pod.
 	// More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,11,rep,name=initContainers"`
-	// List of sidecar containers belonging to the pod.
+	// List of customized sidecar containers belonging to the pod.
 	// +optional
 	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,12,rep,name=sidecars"`
 	// Number of partitions of the vertex owned buffers.
 	// It applies to udf and sink vertices only.
 	// +optional
-	Partitions *int32 `json:"partitions,omitempty" protobuf:"bytes,13,rep,name=partitions"`
+	Partitions *int32 `json:"partitions,omitempty" protobuf:"bytes,13,opt,name=partitions"`
+	// Names of the side inputs used in this vertex.
+	// +optional
+	SideInputs []string `json:"sideInputs,omitempty" protobuf:"bytes,14,rep,name=sideInputs"`
+	// Container template for the side inputs watcher container.
+	// +optional
+	SideInputsContainerTemplate *ContainerTemplate `json:"sideInputsContainerTemplate,omitempty" protobuf:"bytes,15,opt,name=sideInputsContainerTemplate"`
 }
 
 func (av AbstractVertex) GetVertexType() VertexType {

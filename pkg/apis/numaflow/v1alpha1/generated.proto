@@ -128,9 +128,11 @@ message AbstractVertex {
   // +optional
   optional UDF udf = 4;
 
+  // Container template for the main numa container.
   // +optional
   optional ContainerTemplate containerTemplate = 5;
 
+  // Container template for all the vertex pod init containers spawned by numaflow, excluding the ones specified by the user.
   // +optional
   optional ContainerTemplate initContainerTemplate = 6;
 
@@ -150,12 +152,12 @@ message AbstractVertex {
   // +optional
   optional Scale scale = 10;
 
-  // List of init containers belonging to the pod.
+  // List of customized init containers belonging to the pod.
   // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
   // +optional
   repeated k8s.io.api.core.v1.Container initContainers = 11;
 
-  // List of sidecar containers belonging to the pod.
+  // List of customized sidecar containers belonging to the pod.
   // +optional
   repeated k8s.io.api.core.v1.Container sidecars = 12;
 
@@ -163,6 +165,14 @@ message AbstractVertex {
   // It applies to udf and sink vertices only.
   // +optional
   optional int32 partitions = 13;
+
+  // Names of the side inputs used in this vertex.
+  // +optional
+  repeated string sideInputs = 14;
+
+  // Container template for the side inputs watcher container.
+  // +optional
+  optional ContainerTemplate sideInputsContainerTemplate = 15;
 }
 
 message Authorization {
@@ -818,12 +828,12 @@ message Pipeline {
 }
 
 message PipelineLimits {
-  // Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings
+  // Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.
   // +kubebuilder:default=500
   // +optional
   optional uint64 readBatchSize = 1;
 
-  // BufferMaxLength is used to define the max length of a buffer
+  // BufferMaxLength is used to define the max length of a buffer.
   // Only applies to UDF and Source vertices as only they do buffer write.
   // It can be overridden by the settings in vertex limits.
   // +kubebuilder:default=30000
@@ -880,6 +890,10 @@ message PipelineSpec {
   // Templates is used to customize additional kubernetes resources required for the Pipeline
   // +optional
   optional Templates templates = 7;
+
+  // SideInputs defines the Side Inputs of a pipeline.
+  // +optional
+  repeated SideInput sideInputs = 8;
 }
 
 message PipelineStatus {
@@ -1036,6 +1050,39 @@ message Scale {
   optional uint32 replicasPerScale = 9;
 }
 
+// SideInputs defines information of a Side Input
+message SideInput {
+  optional string name = 1;
+
+  optional Container container = 2;
+
+  optional SideInputTrigger trigger = 3;
+}
+
+message SideInputTrigger {
+  // +optional
+  optional string schedule = 1;
+
+  // +optional
+  optional string interval = 2;
+
+  // +optional
+  optional string timezone = 3;
+}
+
+message SideInputsManagerTemplate {
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 1;
+
+  // Template for the side inputs manager numa container
+  // +optional
+  optional ContainerTemplate containerTemplate = 2;
+
+  // Template for the side inputs manager init container
+  // +optional
+  optional ContainerTemplate initContainerTemplate = 3;
+}
+
 message Sink {
   optional Log log = 1;
 
@@ -1111,13 +1158,17 @@ message TagConditions {
 }
 
 message Templates {
-  // DaemonTemplate is used to customize the Daemon Deployment
+  // DaemonTemplate is used to customize the Daemon Deployment.
   // +optional
   optional DaemonTemplate daemon = 1;
 
-  // JobTemplate is used to customize Jobs
+  // JobTemplate is used to customize Jobs.
   // +optional
   optional JobTemplate job = 2;
+
+  // SideInputsManagerTemplate is used to customize the Side Inputs Manager.
+  // +optional
+  optional SideInputsManagerTemplate sideInputsManager = 3;
 }
 
 message Transformer {

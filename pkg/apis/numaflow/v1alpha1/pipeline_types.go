@@ -175,6 +175,11 @@ func (p Pipeline) GetDownstreamEdges(vertexName string) []Edge {
 	return result
 }
 
+// HasSideInputs returns if the pipeline has side inputs.
+func (p Pipeline) HasSideInputs() bool {
+	return len(p.Spec.SideInputs) > 0
+}
+
 func (p Pipeline) GetDaemonServiceName() string {
 	return fmt.Sprintf("%s-daemon-svc", p.Name)
 }
@@ -408,6 +413,9 @@ type PipelineSpec struct {
 	// Templates is used to customize additional kubernetes resources required for the Pipeline
 	// +optional
 	Templates *Templates `json:"templates,omitempty" protobuf:"bytes,7,opt,name=templates"`
+	// SideInputs defines the Side Inputs of a pipeline.
+	// +optional
+	SideInputs []SideInput `json:"sideInputs,omitempty" protobuf:"bytes,8,rep,name=sideInputs"`
 }
 
 type Watermark struct {
@@ -421,7 +429,7 @@ type Watermark struct {
 	MaxDelay *metav1.Duration `json:"maxDelay,omitempty" protobuf:"bytes,2,opt,name=maxDelay"`
 }
 
-// GetMaxDelay returns the configured max delay with a default value
+// GetMaxDelay returns the configured max delay with a default value.
 func (wm Watermark) GetMaxDelay() time.Duration {
 	if wm.MaxDelay != nil {
 		return wm.MaxDelay.Duration
@@ -430,20 +438,23 @@ func (wm Watermark) GetMaxDelay() time.Duration {
 }
 
 type Templates struct {
-	// DaemonTemplate is used to customize the Daemon Deployment
+	// DaemonTemplate is used to customize the Daemon Deployment.
 	// +optional
 	DaemonTemplate *DaemonTemplate `json:"daemon,omitempty" protobuf:"bytes,1,opt,name=daemon"`
-	// JobTemplate is used to customize Jobs
+	// JobTemplate is used to customize Jobs.
 	// +optional
 	JobTemplate *JobTemplate `json:"job,omitempty" protobuf:"bytes,2,opt,name=job"`
+	// SideInputsManagerTemplate is used to customize the Side Inputs Manager.
+	// +optional
+	SideInputsManagerTemplate *SideInputsManagerTemplate `json:"sideInputsManager,omitempty" protobuf:"bytes,3,opt,name=sideInputsManager"`
 }
 
 type PipelineLimits struct {
-	// Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings
+	// Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.
 	// +kubebuilder:default=500
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
-	// BufferMaxLength is used to define the max length of a buffer
+	// BufferMaxLength is used to define the max length of a buffer.
 	// Only applies to UDF and Source vertices as only they do buffer write.
 	// It can be overridden by the settings in vertex limits.
 	// +kubebuilder:default=30000

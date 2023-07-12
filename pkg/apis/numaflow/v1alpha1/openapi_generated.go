@@ -83,6 +83,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                           schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                      schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                          schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput":                      schema_pkg_apis_numaflow_v1alpha1_SideInput(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputTrigger":               schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputsManagerTemplate":      schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink":                           schema_pkg_apis_numaflow_v1alpha1_Sink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow":                  schema_pkg_apis_numaflow_v1alpha1_SlidingWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source":                         schema_pkg_apis_numaflow_v1alpha1_Source(ref),
@@ -268,12 +271,14 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 					},
 					"containerTemplate": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+							Description: "Container template for the main numa container.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
 					"initContainerTemplate": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+							Description: "Container template for all the vertex pod init containers spawned by numaflow, excluding the ones specified by the user.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
 					"metadata": {
@@ -426,7 +431,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 					},
 					"initContainers": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+							Description: "List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -440,7 +445,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 					},
 					"sidecars": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of sidecar containers belonging to the pod.",
+							Description: "List of customized sidecar containers belonging to the pod.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -457,6 +462,27 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							Description: "Number of partitions of the vertex owned buffers. It applies to udf and sink vertices only.",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"sideInputs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Names of the side inputs used in this vertex.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"sideInputsContainerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Container template for the side inputs watcher container.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
 				},
@@ -2838,14 +2864,14 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"readBatchSize": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings",
+							Description: "Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"bufferMaxLength": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BufferMaxLength is used to define the max length of a buffer Only applies to UDF and Source vertices as only they do buffer write. It can be overridden by the settings in vertex limits.",
+							Description: "BufferMaxLength is used to define the max length of a buffer. Only applies to UDF and Source vertices as only they do buffer write. It can be overridden by the settings in vertex limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -2990,11 +3016,25 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates"),
 						},
 					},
+					"sideInputs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SideInputs defines the Side Inputs of a pipeline.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
 	}
 }
 
@@ -3420,6 +3460,211 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_SideInput(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SideInputs defines information of a Side Input",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"container": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
+						},
+					},
+					"trigger": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputTrigger"),
+						},
+					},
+				},
+				Required: []string{"name", "container", "trigger"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputTrigger"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"schedule": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"interval": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"timezone": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Metadata sets the pods's metadata, i.e. annotations and labels",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata"),
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"tolerations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod's tolerations.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Toleration"),
+									},
+								},
+							},
+						},
+					},
+					"securityContext": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field.",
+							Ref:         ref("k8s.io/api/core/v1.PodSecurityContext"),
+						},
+					},
+					"imagePullSecrets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-merge-key": "name",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.LocalObjectReference"),
+									},
+								},
+							},
+						},
+					},
+					"priorityClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"affinity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+							Ref:         ref("k8s.io/api/core/v1.Affinity"),
+						},
+					},
+					"serviceAccountName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServiceAccountName applied to the pod",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"runtimeClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"automountServiceAccountToken": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"dnsPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dnsConfig": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy.",
+							Ref:         ref("k8s.io/api/core/v1.PodDNSConfig"),
+						},
+					},
+					"containerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Template for the side inputs manager numa container",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
+					"initContainerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Template for the side inputs manager init container",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3639,21 +3884,27 @@ func schema_pkg_apis_numaflow_v1alpha1_Templates(ref common.ReferenceCallback) c
 				Properties: map[string]spec.Schema{
 					"daemon": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DaemonTemplate is used to customize the Daemon Deployment",
+							Description: "DaemonTemplate is used to customize the Daemon Deployment.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate"),
 						},
 					},
 					"job": {
 						SchemaProps: spec.SchemaProps{
-							Description: "JobTemplate is used to customize Jobs",
+							Description: "JobTemplate is used to customize Jobs.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JobTemplate"),
+						},
+					},
+					"sideInputsManager": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SideInputsManagerTemplate is used to customize the Side Inputs Manager.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputsManagerTemplate"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JobTemplate"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JobTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputsManagerTemplate"},
 	}
 }
 
@@ -3978,12 +4229,14 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					},
 					"containerTemplate": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+							Description: "Container template for the main numa container.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
 					"initContainerTemplate": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+							Description: "Container template for all the vertex pod init containers spawned by numaflow, excluding the ones specified by the user.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
 					"metadata": {
@@ -4136,7 +4389,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					},
 					"initContainers": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+							Description: "List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -4150,7 +4403,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					},
 					"sidecars": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of sidecar containers belonging to the pod.",
+							Description: "List of customized sidecar containers belonging to the pod.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -4167,6 +4420,27 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Description: "Number of partitions of the vertex owned buffers. It applies to udf and sink vertices only.",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"sideInputs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Names of the side inputs used in this vertex.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"sideInputsContainerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Container template for the side inputs watcher container.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
 					"pipelineName": {
