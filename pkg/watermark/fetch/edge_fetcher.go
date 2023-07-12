@@ -130,13 +130,8 @@ func (e *EdgeFetcher) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int
 	e.Lock()
 	defer e.Unlock()
 	e.lastProcessedWm[fromPartitionIdx] = epoch
-	// get the smallest watermark among all the partitions
-	// since we cannot compare the offset of different partitions, we get the smallest among the last processed watermarks of all the partitions
-	//minEpoch := e.getMinFromLastProcessed(epoch)
 
 	e.log.Debugf("%s[%s] processed watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
-	e.log.Debugf("deletethis: got watermark %+v for offset %d", epoch, offset)
-	//return wmb.Watermark(time.UnixMilli(minEpoch))
 	return nil
 }
 
@@ -236,6 +231,7 @@ func (e *EdgeFetcher) Close() error {
 }
 
 // GetWatermark returns the smallest watermark among all the last processed watermarks.
+// This is based on what has actually been processed, as compared to GetHeadWatermark() which is the state of the OffsetTimeline (K/V store)
 func (e *EdgeFetcher) GetWatermark() wmb.Watermark {
 	minWm := int64(0)
 	for _, wm := range e.lastProcessedWm {

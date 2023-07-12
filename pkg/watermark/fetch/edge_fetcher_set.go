@@ -49,14 +49,14 @@ func (efs *edgeFetcherSet) ProcessOffsetGetWatermark(inputOffset isb.Offset, fro
 
 // GetWatermark processes the Watermark for the given partition from the given offset
 func (efs *edgeFetcherSet) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int32) error {
-
+	var returnErr error
 	for _, fetcher := range efs.edgeFetchers {
 		err := fetcher.ProcessOffset(inputOffset, fromPartitionIdx)
 		if err != nil {
-			return err //todo: determine if we should just do our best and continue
+			returnErr = err // instead of returning error immediately, first try processing offset for all edge fetchers
 		}
 	}
-	return nil
+	return returnErr
 }
 
 // GetHeadWatermark returns the latest watermark among all processors for the given partition.
