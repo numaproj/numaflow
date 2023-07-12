@@ -81,8 +81,8 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 }
 
 func getDeltaBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName string) float64 {
-	prevPodReadCount := t1.PodReadCountSnapshot()
-	currPodReadCount := t2.PodReadCountSnapshot()
+	prevPodReadCount := t1.PodPartitionCountSnapshot()
+	currPodReadCount := t2.PodPartitionCountSnapshot()
 
 	delta := float64(0)
 	for podName, partitionReadCounts := range currPodReadCount {
@@ -93,8 +93,8 @@ func getDeltaBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName s
 
 // calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
 func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) float64 {
-	prevPodReadCount := tc1.PodReadCountSnapshot()
-	currPodReadCount := tc2.PodReadCountSnapshot()
+	prevPodReadCount := tc1.PodPartitionCountSnapshot()
+	currPodReadCount := tc2.PodPartitionCountSnapshot()
 
 	delta := float64(0)
 	for podName, partitionReadCounts := range currPodReadCount {
