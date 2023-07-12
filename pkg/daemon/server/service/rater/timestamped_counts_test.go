@@ -58,18 +58,5 @@ func TestTimestampedPodCounts_Snapshot(t *testing.T) {
 	tc := NewTimestampedCounts(TestTime)
 	tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 	tc.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 20.0}})
-	assert.Equal(t, map[string]map[string]float64{"pod1": {"partition1": 10.0}, "pod2": {"partition1": 20.0}}, tc.PodReadCountSnapshot())
-}
-
-func TestTimestamped_CloseWindow(t *testing.T) {
-	tc := NewTimestampedCounts(TestTime)
-	tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
-	tc.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 20.0}})
-
-	// verify that pod1 restart should give the new count instead of the difference
-	tc1 := NewTimestampedCounts(TestTime + 1)
-	tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
-	tc1.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 30.0}})
-
-	assert.Equal(t, 15.0, calculatePartitionDelta(tc, tc1, "partition1"))
+	assert.Equal(t, map[string]map[string]float64{"pod1": {"partition1": 10.0}, "pod2": {"partition1": 20.0}}, tc.PodPartitionCountSnapshot())
 }

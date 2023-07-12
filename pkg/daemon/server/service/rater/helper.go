@@ -56,7 +56,6 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		return 0
 	}
 
-	delta := float64(0)
 	// time diff in seconds.
 	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
 	if timeDiff == 0 {
@@ -64,39 +63,23 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		// this should not happen in practice because we are using a 10s interval
 		return 0
 	}
-	rate := getDeltaBetweenTimestampedCounts(counts[startIndex], counts[endIndex], partitionName) / float64(timeDiff)
 
-	// positive slope, meaning there was no restart in the last lookback seconds
-	if rate > 0 {
-		return rate
-	}
-
-	// maybe there was a restart, we need to iterate through the queue to compute the rate.
+	delta := float64(0)
 	for i := startIndex; i < endIndex; i++ {
-		if counts[i] != nil && counts[i+1] != nil {
-			delta += calculatePartitionDelta(counts[i], counts[i+1], partitionName)
-		}
+		delta += calculatePartitionDelta(counts[i], counts[i+1], partitionName)
 	}
 	return delta / float64(timeDiff)
 }
 
-func getDeltaBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName string) float64 {
-	prevPodReadCount := t1.PodReadCountSnapshot()
-	currPodReadCount := t2.PodReadCountSnapshot()
-
-	delta := float64(0)
-	for podName, partitionReadCounts := range currPodReadCount {
-		delta += partitionReadCounts[partitionName] - prevPodReadCount[podName][partitionName]
-	}
-	return delta
-}
-
 // calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
 func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) float64 {
-	prevPodReadCount := tc1.PodReadCountSnapshot()
-	currPodReadCount := tc2.PodReadCountSnapshot()
-
 	delta := float64(0)
+	if tc1 == nil || tc2 == nil {
+		// we calculate delta only when both input timestamped counts are non-nil
+		return delta
+	}
+	prevPodReadCount := tc1.PodPartitionCountSnapshot()
+	currPodReadCount := tc2.PodPartitionCountSnapshot()
 	for podName, partitionReadCounts := range currPodReadCount {
 		currCount := partitionReadCounts[partitionName]
 		prevCount := prevPodReadCount[podName][partitionName]
@@ -107,12 +90,10 @@ func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) 
 		}
 		delta += podDelta
 	}
-
 	return delta
 }
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
-// size of counts is at least 2
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
 	now := time.Now().Truncate(CountWindow).Unix()
