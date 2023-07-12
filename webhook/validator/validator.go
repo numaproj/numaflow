@@ -24,7 +24,7 @@ type Validator interface {
 func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient v1alpha1.InterStepBufferServiceInterface, PipelineClient v1alpha1.PipelineInterface, kind metav1.GroupVersionKind, oldBytes []byte, newBytes []byte) (Validator, error) {
 	log := logging.FromContext(ctx)
 	switch kind.Kind {
-	case "InterStepBufferService":
+	case dfv1.ISBGroupVersionKind.Kind:
 		var new *dfv1.InterStepBufferService
 		if len(newBytes) > 0 {
 			new = &dfv1.InterStepBufferService{}
@@ -42,7 +42,7 @@ func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient
 			}
 		}
 		return NewISBServiceValidator(client, ISBSVCClient, old, new), nil
-	case "Pipeline":
+	case dfv1.PipelineGroupVersionKind.Kind:
 		var new *dfv1.Pipeline
 		if len(newBytes) > 0 {
 			new = &dfv1.Pipeline{}
