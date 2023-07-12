@@ -313,8 +313,8 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition3"))
 		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition3"))
 		assert.Equal(t, 20.0, CalculateRate(q, 25, "partition3"))
-		assert.Equal(t, 7.5, CalculateRate(q, 35, "partition3"))
-		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition3"))
+		assert.Equal(t, 10.0, CalculateRate(q, 35, "partition3"))
+		assert.Equal(t, 10.0, CalculateRate(q, 100, "partition3"))
 
 		// partition4 rate
 		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition4"))

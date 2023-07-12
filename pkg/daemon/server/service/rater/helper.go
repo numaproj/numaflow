@@ -64,14 +64,6 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		return 0
 	}
 
-	if rate := getDeltaBetweenTimestampedCounts(counts[startIndex], counts[endIndex], partitionName) / float64(timeDiff); rate > 0 {
-		// positive slope, meaning there was no restart in the last lookback seconds
-		// TODO - FIX IT - the statement above doesn't always hold true.
-		// see https://github.com/numaproj/numaflow/pull/810#discussion_r1261203309
-		return rate
-	}
-
-	// maybe there was a restart, we need to iterate through the queue to compute the rate.
 	delta := float64(0)
 	for i := startIndex; i < endIndex; i++ {
 		delta += calculatePartitionDelta(counts[i], counts[i+1], partitionName)
@@ -79,24 +71,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	return delta / float64(timeDiff)
 }
 
-// getDeltaBetweenTimestampedCounts returns the total count changes between two timestamped counts for a partition
-// by simply looping through the current pod list, comparing each pod read count with previous timestamped counts and summing up the deltas.
-// getDeltaBetweenTimestampedCounts accepts negative deltas.
-func getDeltaBetweenTimestampedCounts(t1, t2 *TimestampedCounts, partitionName string) float64 {
-	delta := float64(0)
-	if t1 == nil || t2 == nil {
-		return delta
-	}
-	prevPodReadCount := t1.PodPartitionCountSnapshot()
-	currPodReadCount := t2.PodPartitionCountSnapshot()
-	for podName, partitionReadCounts := range currPodReadCount {
-		delta += partitionReadCounts[partitionName] - prevPodReadCount[podName][partitionName]
-	}
-	return delta
-}
-
 // calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
-// calculatePartitionDelta doesn't accept negative delta, when encounters one, it treats it as a pod restart and uses the current read count as delta.
 func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) float64 {
 	delta := float64(0)
 	if tc1 == nil || tc2 == nil {
