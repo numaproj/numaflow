@@ -3,7 +3,7 @@ kind: Kustomization
 
 resources:
   - ../../config/cluster-install
-
+  - ../../config/extensions/webhook
 patches:
   - patch: |-
       - op: add
