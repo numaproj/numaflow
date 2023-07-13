@@ -187,8 +187,21 @@ func (p Pipeline) GetDaemonServiceName() string {
 func (p Pipeline) GetDaemonDeploymentName() string {
 	return fmt.Sprintf("%s-daemon", p.Name)
 }
+
 func (p Pipeline) GetDaemonServiceURL() string {
 	return fmt.Sprintf("%s.%s.svc:%d", p.GetDaemonServiceName(), p.Namespace, DaemonServicePort)
+}
+
+func (p Pipeline) GetSideInputsDeployments() ([]*appv1.Deployment, error) {
+	deployments := []*appv1.Deployment{}
+	for _, sideInput := range p.Spec.SideInputs {
+		deployment, err := sideInput.GetDeploymentObj(p.Namespace, p.Name)
+		if err != nil {
+			return nil, err
+		}
+		deployments = append(deployments, deployment)
+	}
+	return deployments, nil
 }
 
 func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Deployment, error) {

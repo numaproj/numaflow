@@ -82,3 +82,12 @@ type GetJetStreamServiceSpecReq struct {
 	MonitorPort int32             `protobuf:"bytes,4,opt,name=monitorPort"`
 	MetricsPort int32             `protobuf:"bytes,5,opt,name=metricsPort"`
 }
+
+type GetSideInputDeploymentReq struct {
+	ISBSvcType ISBSvcType        `protobuf:"bytes,1,opt,name=isbSvcType"`
+	Pipeline   Pipeline          `protobuf:"bytes,2,opt,name=pipeline"`
+	Image      string            `protobuf:"bytes,3,opt,name=image"`
+	PullPolicy corev1.PullPolicy `protobuf:"bytes,4,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
+	Env        []corev1.EnvVar   `protobuf:"bytes,5,rep,name=env"`
+	Labels     map[string]string `protobuf:"bytes,6,rep,name=labels"`
+}
