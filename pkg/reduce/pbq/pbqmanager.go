@@ -284,8 +284,9 @@ func (m *Manager) Replay(ctx context.Context) {
 	m.log.Infow("Finished replaying records from store", zap.Duration("took", time.Since(tm)), zap.Any("partitions", partitionsIds))
 }
 
-// NextWindowToBeClosed returns the next keyed window that is yet to be closed
-func (m *Manager) NextWindowToBeClosed() window.AlignedKeyedWindower {
+// NextWindowToBeMaterialized returns the next keyed window that is yet to be materialized(GCed)
+// will be used by the data forwarder to publish the idle watermark.
+func (m *Manager) NextWindowToBeMaterialized() window.AlignedKeyedWindower {
 	if m.yetToBeClosed.Len() == 0 {
 		return nil
 	}

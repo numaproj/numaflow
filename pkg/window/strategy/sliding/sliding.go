@@ -97,3 +97,11 @@ func (s *Sliding) InsertIfNotPresent(kw window.AlignedKeyedWindower) (window.Ali
 func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 	return s.entries.RemoveWindows(wm)
 }
+
+// NextWindowToBeClosed returns the next window which is yet to be closed.
+func (s *Sliding) NextWindowToBeClosed() window.AlignedKeyedWindower {
+	if s.entries.Len() == 0 {
+		return nil
+	}
+	return s.entries.Front()
+}

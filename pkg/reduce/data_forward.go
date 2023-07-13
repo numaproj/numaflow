@@ -204,7 +204,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 
-		nextWin := df.pbqManager.NextWindowToBeClosed()
+		nextWin := df.pbqManager.NextWindowToBeMaterialized()
 		if nextWin == nil {
 			// if all the windows are closed already, and the len(readBatch) == 0
 			// then it means there's an idle situation
@@ -353,7 +353,7 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 	}
 
 	// solve Reduce withholding of watermark where we do not send WM until the window is closed.
-	if nextWin := df.pbqManager.NextWindowToBeClosed(); nextWin != nil {
+	if nextWin := df.pbqManager.NextWindowToBeMaterialized(); nextWin != nil {
 		// minus 1 ms because if it's the same as the end time the window would have already been closed
 		if watermark := time.Time(wm).Add(-1 * time.Millisecond); nextWin.EndTime().After(watermark) {
 			// publish idle watermark so that the next vertex doesn't need to wait for the window to close to
@@ -381,7 +381,7 @@ messagesLoop:
 		// drop the late messages only if there is no window open
 		if message.IsLate {
 			// we should be able to get the late message in as long as there is an open window
-			nextWin := df.pbqManager.NextWindowToBeClosed()
+			nextWin := df.windower.NextWindowToBeClosed()
 			// if there is no window open, drop the message
 			if nextWin == nil {
 				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
@@ -429,7 +429,7 @@ messagesLoop:
 		windows := df.upsertWindowsAndKeys(message)
 
 		// for each window we will have a PBQ. A message could belong to multiple windows (e.g., sliding).
-		// We need to write the messages to these PBQs.
+		// We need to write the messages to these PBQs
 		for _, kw := range windows {
 
 			for _, partitionID := range kw.Partitions() {
