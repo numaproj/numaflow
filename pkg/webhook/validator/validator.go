@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
+	admissionv1 "k8s.io/api/admission/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	admissionv1 "k8s.io/api/admission/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 type Validator interface {
@@ -61,7 +61,7 @@ func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient
 		}
 		return NewPipelineValidator(client, PipelineClient, old, new), nil
 	default:
-		return nil, fmt.Errorf("Unrecognized kind: %v", kind)
+		return nil, fmt.Errorf("unrecognized kind: %v", kind)
 	}
 }
 

@@ -14,21 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package commands
-
-import (
-	"github.com/spf13/cobra"
-
-	webhookcmd "github.com/numaproj/numaflow/pkg/webhook/cmd"
-)
-
-func NewWebhookCommand() *cobra.Command {
-	command := &cobra.Command{
-		Use:   "webhook-service",
-		Short: "Start validating Numaflow webhook server",
-		Run: func(cmd *cobra.Command, args []string) {
-			webhookcmd.Start()
-		},
-	}
-	return command
-}
+// Package webhook is used for running validating admission webhook.
+package webhook

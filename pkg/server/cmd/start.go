@@ -25,9 +25,9 @@ import (
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 
+	"github.com/numaproj/numaflow/pkg/server/routes"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
-	"github.com/numaproj/numaflow/server/routes"
 )
 
 var (

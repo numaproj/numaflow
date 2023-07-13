@@ -13,10 +13,6 @@ import (
 	"time"
 
 	"github.com/go-openapi/inflect"
-	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
-	commontls "github.com/numaproj/numaflow/pkg/shared/tls"
-	"github.com/numaproj/numaflow/webhook/validator"
 	"go.uber.org/zap"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -29,6 +25,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	clientadmissionregistrationv1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1"
+
+	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	commontls "github.com/numaproj/numaflow/pkg/shared/tls"
+	"github.com/numaproj/numaflow/pkg/webhook/validator"
 )
 
 const (
@@ -267,7 +268,7 @@ func (ac *AdmissionController) generateSecret(ctx context.Context) (*corev1.Secr
 	}
 	deployment, err := ac.Client.AppsV1().Deployments(ac.Options.Namespace).Get(ctx, ac.Options.DeploymentName, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("Failed to fetch webhook deployment, %w", err)
+		return nil, fmt.Errorf("failed to fetch webhook deployment, %w", err)
 	}
 	deploymentRef := metav1.NewControllerRef(deployment, appsv1.SchemeGroupVersion.WithKind("Deployment"))
 	secret := &corev1.Secret{
