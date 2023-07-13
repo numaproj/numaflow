@@ -7,4 +7,5 @@ spec:
     - port: 443
       targetPort: 443
   selector:
-    app: numaflow-webhook
+    app.kubernetes.io/part-of: numaflow
+    app.kubernetes.io/component: numaflow-webhook
