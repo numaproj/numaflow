@@ -21,7 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	v1 "github.com/numaproj/numaflow/pkg/server/apis/v1"
+	v1 "github.com/numaproj/numaflow/server/apis/v1"
 )
 
 type SystemInfo struct {
