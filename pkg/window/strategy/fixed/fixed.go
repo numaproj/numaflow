@@ -83,3 +83,11 @@ func (f *Fixed) InsertIfNotPresent(kw window.AlignedKeyedWindower) (aw window.Al
 func (f *Fixed) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
 	return f.entries.RemoveWindows(wm)
 }
+
+// NextWindowToBeClosed returns the next window which is yet to be closed.
+func (f *Fixed) NextWindowToBeClosed() window.AlignedKeyedWindower {
+	if f.entries.Len() == 0 {
+		return nil
+	}
+	return f.entries.Front()
+}

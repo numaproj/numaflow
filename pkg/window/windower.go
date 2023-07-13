@@ -51,4 +51,7 @@ type Windower interface {
 	InsertIfNotPresent(aw AlignedKeyedWindower) (AlignedKeyedWindower, bool)
 	// RemoveWindows returns list of window(s) that can be closed
 	RemoveWindows(time time.Time) []AlignedKeyedWindower
+	// NextWindowToBeClosed returns the next window yet to be closed.
+	// will be used by the data forwarder to check if the late message can be considered for processing.
+	NextWindowToBeClosed() AlignedKeyedWindower
 }
