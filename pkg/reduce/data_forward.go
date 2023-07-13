@@ -190,6 +190,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			metrics.LabelPartitionName:      df.fromBufferPartition.GetName()}).Inc()
 	}
 
+	// idle watermark
 	if len(readMessages) == 0 {
 		// we use the HeadWMB as the watermark for the idle
 		// we get the HeadWMB for the partition from which we read the messages
@@ -204,8 +205,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 
-		nextWin := df.pbqManager.NextWindowToBeMaterialized()
-		if nextWin == nil {
+		nextWinAsSeenByReader := df.pbqManager.NextWindowToBeMaterialized()
+		if nextWinAsSeenByReader == nil {
 			// if all the windows are closed already, and the len(readBatch) == 0
 			// then it means there's an idle situation
 			// in this case, send idle watermark to all the toBuffer partitions
@@ -220,7 +221,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// if toBeClosed window exists, and the watermark we fetch has already passed the endTime of this window
 			// then it means the overall dataflow of the pipeline has already reached a later time point
 			// so we can close the window and process the data in this window
-			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); nextWin.EndTime().Before(watermark) {
+			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); nextWinAsSeenByReader.EndTime().Before(watermark) {
 				closedWindows := df.windower.RemoveWindows(watermark)
 				for _, win := range closedWindows {
 					df.ClosePartitions(win.Partitions())
@@ -353,9 +354,9 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 	}
 
 	// solve Reduce withholding of watermark where we do not send WM until the window is closed.
-	if nextWin := df.pbqManager.NextWindowToBeMaterialized(); nextWin != nil {
+	if nextWinAsSeenByReader := df.pbqManager.NextWindowToBeMaterialized(); nextWinAsSeenByReader != nil {
 		// minus 1 ms because if it's the same as the end time the window would have already been closed
-		if watermark := time.Time(wm).Add(-1 * time.Millisecond); nextWin.EndTime().After(watermark) {
+		if watermark := time.Time(wm).Add(-1 * time.Millisecond); nextWinAsSeenByReader.EndTime().After(watermark) {
 			// publish idle watermark so that the next vertex doesn't need to wait for the window to close to
 			// start processing data whose watermark is smaller than the endTime of the toBeClosed window
 
@@ -381,14 +382,14 @@ messagesLoop:
 		// drop the late messages only if there is no window open
 		if message.IsLate {
 			// we should be able to get the late message in as long as there is an open window
-			nextWin := df.windower.NextWindowToBeClosed()
+			nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
 			// if there is no window open, drop the message
-			if nextWin == nil {
+			if nextWinAsSeenByWriter == nil {
 				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
 				writtenMessages = append(writtenMessages, message)
 				continue
-			} else if message.EventTime.Before(nextWin.StartTime()) { // if the message doesn't fall in the next window that is about to be closed drop it.
-				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWin.StartTime()))
+			} else if message.EventTime.Before(nextWinAsSeenByWriter.StartTime()) { // if the message doesn't fall in the next window that is about to be closed drop it.
+				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
 				droppedMessagesCount.With(map[string]string{
 					metrics.LabelVertex:             df.vertexName,
 					metrics.LabelPipeline:           df.pipelineName,
@@ -399,7 +400,7 @@ messagesLoop:
 				writtenMessages = append(writtenMessages, message)
 				continue
 			} else { // if the message falls in the next window that is about to be closed, keep it
-				df.log.Debugw("Keeping the late message for next condition check because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", nextWin.StartTime().UnixMilli()))
+				df.log.Debugw("Keeping the late message for next condition check because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", nextWinAsSeenByWriter.StartTime().UnixMilli()))
 			}
 		}
 

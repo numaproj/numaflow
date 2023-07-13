@@ -285,7 +285,10 @@ func (m *Manager) Replay(ctx context.Context) {
 }
 
 // NextWindowToBeMaterialized returns the next keyed window that is yet to be materialized(GCed)
-// will be used by the data forwarder to publish the idle watermark.
+// will be used by the data forwarder to publish the idle watermark. While publishing idle watermark, we have to be
+// conservative. PBQManager's view of next window to be materialized is conservative as it is on the reading side.
+// We SHOULD NOT use NextWindowToBeMaterialized to write data to because it could fail (channel could have been closed but
+// GC is yet to happen), this function should only be on readonly path.
 func (m *Manager) NextWindowToBeMaterialized() window.AlignedKeyedWindower {
 	if m.yetToBeClosed.Len() == 0 {
 		return nil
