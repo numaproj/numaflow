@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: numaflow-webhook-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: numaflow-webhook
+subjects:
+  - kind: ServiceAccount
+    name: numaflow-webhook-sa
+    namespace: numaflow-system
