@@ -45,4 +45,5 @@ func init() {
 	rootCmd.AddCommand(NewDaemonServerCommand())
 	rootCmd.AddCommand(NewServerCommand())
 	rootCmd.AddCommand(NewServerInitCommand())
+	rootCmd.AddCommand(NewWebhookCommand())
 }
