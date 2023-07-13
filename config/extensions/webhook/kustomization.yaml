@@ -12,3 +12,4 @@ namespace: numaflow-system
 images:
   - name: quay.io/numaproj/numaflow
     newTag: latest
+

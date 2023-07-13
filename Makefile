@@ -292,6 +292,8 @@ update-manifests-version:
 	mv /tmp/base_kustomization.yaml config/advanced-install/namespaced-controller/kustomization.yaml
 	cat config/advanced-install/numaflow-server/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/base_kustomization.yaml
 	mv /tmp/base_kustomization.yaml config/advanced-install/numaflow-server/kustomization.yaml
+	cat config/extensions/webhook/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/base_kustomization.yaml
+	mv /tmp/base_kustomization.yaml config/extensions/webhook/kustomization.yaml
 	cat Makefile | sed 's/^VERSION?=.*/VERSION?=$(VERSION)/' | sed 's/^BASE_VERSION:=.*/BASE_VERSION:=$(VERSION)/' > /tmp/ae_makefile
 	mv /tmp/ae_makefile Makefile
 
