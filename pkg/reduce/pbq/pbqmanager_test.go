@@ -376,23 +376,23 @@ func TestManager_NextWindowToBeClosed(t *testing.T) {
 	pq4, err = pbqManager.CreateNewPBQ(ctx, partitionFour, kwFour)
 	assert.NoError(t, err)
 
-	aw := pbqManager.NextWindowToBeClosed()
+	aw := pbqManager.NextWindowToBeMaterialized()
 	assert.Equal(t, aw.EndTime(), time.Unix(120, 0))
 
 	_ = pq1.GC()
-	aw = pbqManager.NextWindowToBeClosed()
+	aw = pbqManager.NextWindowToBeMaterialized()
 	assert.Equal(t, aw.EndTime(), time.Unix(120, 0))
 
 	_ = pq2.GC()
-	aw = pbqManager.NextWindowToBeClosed()
+	aw = pbqManager.NextWindowToBeMaterialized()
 	assert.Equal(t, aw.EndTime(), time.Unix(240, 0))
 
 	_ = pq3.GC()
-	aw = pbqManager.NextWindowToBeClosed()
+	aw = pbqManager.NextWindowToBeMaterialized()
 	assert.Equal(t, aw.EndTime(), time.Unix(240, 0))
 
 	_ = pq4.GC()
-	aw = pbqManager.NextWindowToBeClosed()
+	aw = pbqManager.NextWindowToBeMaterialized()
 	assert.Nil(t, aw)
 
 }
