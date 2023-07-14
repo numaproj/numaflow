@@ -314,13 +314,7 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "same from and to")
 	})
 
-	t.Run("N from -> 1 to", func(t *testing.T) {
-		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "input", To: "output"})
-		err := ValidatePipeline(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not supported")
-	})
+	// todo: we can test for certain types of invalid cycles here instead
 
 	t.Run("or conditional forwarding", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
