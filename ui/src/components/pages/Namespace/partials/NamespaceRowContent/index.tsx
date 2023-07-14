@@ -30,22 +30,22 @@ export function NamespaceRowContent(props: NamespaceRowContentProps) {
           fontSize: "1rem",
         }}
       >
+        <Box
+          sx={{
+            fontWeight: 400,
+            fontSize: "0.8rem",
+            color: "#0000008a",
+            width: "fit-content",
+            mx: "1rem",
+          }}
+        >
+          Pipelines
+        </Box>
         <List>
           {pipelines &&
             pipelines.map((pipelineId, idx) => {
               return (
                 <div key={`ns-row-list-${idx}`}>
-                  <Box
-                    sx={{
-                      fontWeight: 400,
-                      fontSize: "0.8rem",
-                      color: "#0000008a",
-                      width: "fit-content",
-                      mx: "1rem",
-                    }}
-                  >
-                    Pipelines
-                  </Box>
                   <ListItem key={pipelineId}>
                     <Link
                       to={`/namespaces/${namespaceId}/pipelines/${pipelineId}`}
