@@ -142,11 +142,13 @@ export const usePipelineViewFetch = (
           if (podsErr.length > 0) setPodsErr(podsErr);
         })
         .then(() => {
-          setVertexPods(vertexToPodsMap);
+          if (!isEqual(vertexPods, vertexToPodsMap)) {
+            setVertexPods(vertexToPodsMap);
+          }
         })
         .catch(console.error);
     }
-  }, [spec]);
+  }, [spec, requestKey]);
 
   const getVertexMetrics = useCallback(() => {
     const vertexToMetricsMap = new Map();
