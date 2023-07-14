@@ -174,6 +174,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 		// start the forwarder for each partition using a go routine
 		go func(fromBufferPartitionName string, isdf *forward.InterStepDataForward) {
+			// TODO - nitpicking fromBufferPartitionName and isdf are redundant, isdf.reader can be used to get the partition name
 			defer finalWg.Done()
 			log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferPartitionName), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
 
