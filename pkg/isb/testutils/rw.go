@@ -50,7 +50,8 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 					MessageInfo: isb.MessageInfo{
 						EventTime: tmpTime,
 					},
-					ID:   fmt.Sprintf("%s-%d", "testVertex", i),
+					//ID:   fmt.Sprintf("%s-%d", "testVertex", i),
+					ID:   fmt.Sprintf("%d", i),
 					Keys: []string{},
 				},
 				Body: isb.Body{Payload: result},
@@ -83,6 +84,7 @@ func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.Read
 
 	for idx, writeMessage := range writeMessages {
 		offset, _ := strconv.Atoi(writeMessage.Header.ID)
+		fmt.Printf("deletethis: result of Atoi on %q=%d\n", writeMessage.Header.ID, offset)
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
 			ReadOffset: isb.SimpleIntOffset(func() int64 { return int64(offset) }),
