@@ -50,7 +50,6 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 					MessageInfo: isb.MessageInfo{
 						EventTime: tmpTime,
 					},
-					//ID:   fmt.Sprintf("%s-%d", "testVertex", i),
 					ID:   fmt.Sprintf("%d", i),
 					Keys: []string{},
 				},
