@@ -1845,7 +1845,7 @@ spec:
                         format: int32
                         type: integer
                     type: object
-                  sideInputsManager:
+                  sideInputManager:
                     properties:
                       affinity:
                         properties:

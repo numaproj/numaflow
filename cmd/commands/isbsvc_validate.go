@@ -68,16 +68,16 @@ func NewISBSvcValidateCommand() *cobra.Command {
 			}
 			_ = wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func() (bool, error) {
 				if err = isbsClient.ValidateBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore); err != nil {
-					logger.Infow("Buffers and buckets might have not been created yet, will retry if the limit is not reached", zap.Error(err))
+					logger.Infow("Buffers, buckets and side inputs store might have not been created yet, will retry if the limit is not reached", zap.Error(err))
 					return false, nil
 				}
 				return true, nil
 			})
 			if err != nil {
-				logger.Errorw("Failed on buffer and bucket validation after retrying.", zap.Error(err))
+				logger.Errorw("Failed buffer, bucket and side inputs store validation after retrying.", zap.Error(err))
 				return err
 			}
-			logger.Info("Validate buffers and buckets successfully")
+			logger.Info("Validate buffers, buckets and side inputs store successfully")
 			return nil
 		},
 	}

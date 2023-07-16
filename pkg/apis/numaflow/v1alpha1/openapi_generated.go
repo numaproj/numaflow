@@ -85,8 +85,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                      schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                          schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput":                      schema_pkg_apis_numaflow_v1alpha1_SideInput(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputManagerTemplate":       schema_pkg_apis_numaflow_v1alpha1_SideInputManagerTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputTrigger":               schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputsManagerTemplate":      schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink":                           schema_pkg_apis_numaflow_v1alpha1_Sink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow":                  schema_pkg_apis_numaflow_v1alpha1_SlidingWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source":                         schema_pkg_apis_numaflow_v1alpha1_Source(ref),
@@ -3550,37 +3550,7 @@ func schema_pkg_apis_numaflow_v1alpha1_SideInput(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"schedule": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"interval": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"timezone": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_numaflow_v1alpha1_SideInputManagerTemplate(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -3719,6 +3689,36 @@ func schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref common.Refe
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"schedule": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"interval": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"timezone": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -3951,17 +3951,17 @@ func schema_pkg_apis_numaflow_v1alpha1_Templates(ref common.ReferenceCallback) c
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JobTemplate"),
 						},
 					},
-					"sideInputsManager": {
+					"sideInputManager": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SideInputsManagerTemplate is used to customize the Side Inputs Manager.",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputsManagerTemplate"),
+							Description: "SideInputManagerTemplate is used to customize the Side Inputs Manager.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputManagerTemplate"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JobTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputsManagerTemplate"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JobTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputManagerTemplate"},
 	}
 }
 

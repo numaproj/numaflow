@@ -14,15 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
-
-type SideInputManagerTemplate struct {
-	// +optional
-	AbstractPodTemplate `json:",inline" protobuf:"bytes,1,opt,name=abstractPodTemplate"`
-	// Template for the side inputs manager numa container
-	// +optional
-	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,2,opt,name=containerTemplate"`
-	// Template for the side inputs manager init container
-	// +optional
-	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,3,opt,name=initContainerTemplate"`
-}
+// Package sideinputs is used for Side Inputs features.
+//
+// It contains the following subpackages:
+// - initializer: used for init container on the vertex pod to initialize the Side Inputs data.
+// - manager: used for run the service in the numa container of a Side Input Manager.
+// - watcher: used for the service in the sidecar container of a vertex pod for watching Side Inputs data changes.
+package sideinputs

@@ -1071,18 +1071,7 @@ message SideInput {
   optional SideInputTrigger trigger = 3;
 }
 
-message SideInputTrigger {
-  // +optional
-  optional string schedule = 1;
-
-  // +optional
-  optional string interval = 2;
-
-  // +optional
-  optional string timezone = 3;
-}
-
-message SideInputsManagerTemplate {
+message SideInputManagerTemplate {
   // +optional
   optional AbstractPodTemplate abstractPodTemplate = 1;
 
@@ -1093,6 +1082,17 @@ message SideInputsManagerTemplate {
   // Template for the side inputs manager init container
   // +optional
   optional ContainerTemplate initContainerTemplate = 3;
+}
+
+message SideInputTrigger {
+  // +optional
+  optional string schedule = 1;
+
+  // +optional
+  optional string interval = 2;
+
+  // +optional
+  optional string timezone = 3;
 }
 
 message Sink {
@@ -1178,9 +1178,9 @@ message Templates {
   // +optional
   optional JobTemplate job = 2;
 
-  // SideInputsManagerTemplate is used to customize the Side Inputs Manager.
+  // SideInputManagerTemplate is used to customize the Side Inputs Manager.
   // +optional
-  optional SideInputsManagerTemplate sideInputsManager = 3;
+  optional SideInputManagerTemplate sideInputManager = 3;
 }
 
 message Transformer {

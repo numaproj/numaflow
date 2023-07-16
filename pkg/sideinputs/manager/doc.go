@@ -14,15 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
-
-type SideInputManagerTemplate struct {
-	// +optional
-	AbstractPodTemplate `json:",inline" protobuf:"bytes,1,opt,name=abstractPodTemplate"`
-	// Template for the side inputs manager numa container
-	// +optional
-	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,2,opt,name=containerTemplate"`
-	// Template for the side inputs manager init container
-	// +optional
-	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,3,opt,name=initContainerTemplate"`
-}
+// Package manager is used for run the service in the numa container of a Side Input Manager.
+package manager

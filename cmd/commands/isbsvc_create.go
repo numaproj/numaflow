@@ -81,10 +81,10 @@ func NewISBSvcCreateCommand() *cobra.Command {
 			}
 
 			if err = isbsClient.CreateBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, opts...); err != nil {
-				logger.Errorw("Failed to create buffers and buckets.", zap.Error(err))
+				logger.Errorw("Failed to create buffers, buckets and side inputs store.", zap.Error(err))
 				return err
 			}
-			logger.Info("Created buffers and buckets successfully")
+			logger.Info("Created buffers, buckets and side inputs store successfully")
 			return nil
 		},
 	}

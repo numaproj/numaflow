@@ -40,7 +40,7 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:   "isbsvc-delete",
-		Short: "Delete ISB Service buffers and buckets",
+		Short: "Delete ISB Service buffers, buckets and side inputs store",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := logging.NewLogger().Named("isbsvc-delete")
 			pipelineName, defined := os.LookupEnv(v1alpha1.EnvPipelineName)
@@ -64,10 +64,10 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
 			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore); err != nil {
-				logger.Errorw("Failed on buffers and buckets deletion.", zap.Error(err))
+				logger.Errorw("Failed on buffers, buckets and side inputs store deletion.", zap.Error(err))
 				return err
 			}
-			logger.Info("Deleted buffers and buckets successfully")
+			logger.Info("Deleted buffers, buckets and side inputs store successfully")
 			return nil
 		},
 	}

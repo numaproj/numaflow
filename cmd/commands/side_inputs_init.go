@@ -28,7 +28,8 @@ import (
 
 func NewSideInputsInitCommand() *cobra.Command {
 	var (
-		isbSvcType string
+		isbSvcType      string
+		sideInputsStore string
 	)
 	command := &cobra.Command{
 		Use:   "side-inputs-init",
@@ -47,5 +48,6 @@ func NewSideInputsInitCommand() *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "jetstream", "ISB Service type, e.g. jetstream")
+	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
 	return command
 }

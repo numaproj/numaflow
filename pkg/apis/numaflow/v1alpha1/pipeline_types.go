@@ -475,9 +475,9 @@ type Templates struct {
 	// JobTemplate is used to customize Jobs.
 	// +optional
 	JobTemplate *JobTemplate `json:"job,omitempty" protobuf:"bytes,2,opt,name=job"`
-	// SideInputsManagerTemplate is used to customize the Side Inputs Manager.
+	// SideInputManagerTemplate is used to customize the Side Inputs Manager.
 	// +optional
-	SideInputsManagerTemplate *SideInputsManagerTemplate `json:"sideInputsManager,omitempty" protobuf:"bytes,3,opt,name=sideInputsManager"`
+	SideInputManagerTemplate *SideInputManagerTemplate `json:"sideInputManager,omitempty" protobuf:"bytes,3,opt,name=sideInputManager"`
 }
 
 type PipelineLimits struct {

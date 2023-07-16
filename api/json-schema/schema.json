@@ -19129,21 +19129,7 @@
       ],
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.SideInputTrigger": {
-      "properties": {
-        "interval": {
-          "type": "string"
-        },
-        "schedule": {
-          "type": "string"
-        },
-        "timezone": {
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "io.numaproj.numaflow.v1alpha1.SideInputsManagerTemplate": {
+    "io.numaproj.numaflow.v1alpha1.SideInputManagerTemplate": {
       "properties": {
         "affinity": {
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity",
@@ -19216,6 +19202,20 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
           },
           "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.SideInputTrigger": {
+      "properties": {
+        "interval": {
+          "type": "string"
+        },
+        "schedule": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
         }
       },
       "type": "object"
@@ -19336,9 +19336,9 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.JobTemplate",
           "description": "JobTemplate is used to customize Jobs."
         },
-        "sideInputsManager": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SideInputsManagerTemplate",
-          "description": "SideInputsManagerTemplate is used to customize the Side Inputs Manager."
+        "sideInputManager": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SideInputManagerTemplate",
+          "description": "SideInputManagerTemplate is used to customize the Side Inputs Manager."
         }
       },
       "type": "object"

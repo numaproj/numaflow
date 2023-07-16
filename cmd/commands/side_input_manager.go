@@ -17,35 +17,54 @@ limitations under the License.
 package commands
 
 import (
-	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"os"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/daemon/server"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sideinputs/manager"
 )
 
 func NewSideInputManagerCommand() *cobra.Command {
 	var (
-		isbSvcType string
+		isbSvcType      string
+		sideInputsStore string
 	)
 	command := &cobra.Command{
 		Use:   "side-input-manager",
-		Short: "Start a Side Inputa Manager",
+		Short: "Start a Side Input Manager",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := logging.NewLogger().Named("side-input-manager")
 
-			pl, err := decodePipeline()
+			encodedSiceInputSpec, defined := os.LookupEnv(dfv1.EnvSideInputObject)
+			if !defined {
+				return fmt.Errorf("environment %q is not defined", dfv1.EnvSideInputObject)
+			}
+			decodeSideInputBytes, err := base64.StdEncoding.DecodeString(encodedSiceInputSpec)
 			if err != nil {
-				return fmt.Errorf("failed to decode the pipeline spec: %v", err)
+				return fmt.Errorf("failed to decode encoded SideInput object, error: %w", err)
+			}
+			sideInput := &dfv1.SideInput{}
+			if err = json.Unmarshal(decodeSideInputBytes, sideInput); err != nil {
+				return fmt.Errorf("failed to unmarshal SideInput object, error: %w", err)
 			}
 
-			ctx := logging.WithLogger(context.Background(), logger)
-			server := server.NewDaemonServer(pl, v1alpha1.ISBSvcType(isbSvcType))
-			return server.Run(ctx)
+			pipelineName, defined := os.LookupEnv(dfv1.EnvPipelineName)
+			if !defined {
+				return fmt.Errorf("environment %q is not defined", dfv1.EnvPipelineName)
+			}
+
+			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
+			sideInputManager := manager.NewSideInputManager(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInput)
+			return sideInputManager.Start(ctx)
 		},
 	}
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "jetstream", "ISB Service type, e.g. jetstream")
+	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
 	return command
 }
