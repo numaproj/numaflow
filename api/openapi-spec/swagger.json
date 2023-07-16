@@ -18067,7 +18067,7 @@
         }
       }
     },
-    "io.numaproj.numaflow.v1alpha1.GetVertexPodSpecReq": {
+    "io.numaproj.numaflow.v1alpha1.GetSideInputDeploymentReq": {
       "type": "object",
       "required": [
         "ISBSvcType",
@@ -18089,6 +18089,36 @@
           "type": "string"
         },
         "PullPolicy": {
+          "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.GetVertexPodSpecReq": {
+      "type": "object",
+      "required": [
+        "ISBSvcType",
+        "Image",
+        "PullPolicy",
+        "Env",
+        "SideInputsStoreName"
+      ],
+      "properties": {
+        "Env": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
+          }
+        },
+        "ISBSvcType": {
+          "type": "string"
+        },
+        "Image": {
+          "type": "string"
+        },
+        "PullPolicy": {
+          "type": "string"
+        },
+        "SideInputsStoreName": {
           "type": "string"
         }
       }

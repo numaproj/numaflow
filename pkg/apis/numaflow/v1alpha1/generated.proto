@@ -473,6 +473,16 @@ message GetRedisStatefulSetSpecReq {
   optional string healthConfigMapName = 15;
 }
 
+message GetSideInputDeploymentReq {
+  optional string isbSvcType = 1;
+
+  optional string image = 2;
+
+  optional string pullPolicy = 3;
+
+  repeated k8s.io.api.core.v1.EnvVar env = 4;
+}
+
 message GetVertexPodSpecReq {
   optional string isbSvcType = 1;
 
@@ -481,6 +491,8 @@ message GetVertexPodSpecReq {
   optional string pullPolicy = 3;
 
   repeated k8s.io.api.core.v1.EnvVar env = 4;
+
+  optional string sideInputsStoreName = 5;
 }
 
 // GroupBy indicates it is a reducer UDF

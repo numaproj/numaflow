@@ -275,11 +275,11 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 
 		sideInputsWatcher := corev1.Container{
 			Name:            CtrSideInputsWatcher,
-			Env:             envVars,
+			Env:             req.Env,
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
 			Resources:       standardResources,
-			Args:            []string{"side-inputs-watcher", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsDataStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+			Args:            []string{"side-inputs-watcher", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		}
 		sideInputsWatcher.Env = append(sideInputsWatcher.Env, v.commonEnvs()...)
 		if x := v.Spec.SideInputsContainerTemplate; x != nil {
@@ -329,7 +329,7 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
 			Resources:       standardResources,
-			Args:            []string{"side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsDataStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+			Args:            []string{"side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		})
 	}
 

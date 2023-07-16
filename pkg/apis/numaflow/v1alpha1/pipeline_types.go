@@ -196,7 +196,7 @@ func (p Pipeline) GetSideInputDeploymentName(sideInputName string) string {
 	return fmt.Sprintf("%s-si-%s", p.Name, sideInputName)
 }
 
-func (p Pipeline) GetSideInputsDataStoreName() string {
+func (p Pipeline) GetSideInputsStoreName() string {
 	return fmt.Sprintf("%s-side-inputs", p.Name)
 }
 
@@ -204,10 +204,10 @@ func (p Pipeline) GetSideInputsDeployments(req GetSideInputDeploymentReq) ([]*ap
 	commonEnvVars := []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
-		{Name: EnvPipelineName, Value: p.Name}}
+	}
 	deployments := []*appv1.Deployment{}
 	for _, sideInput := range p.Spec.SideInputs {
-		deployment, err := sideInput.GetDeploymentObj(req)
+		deployment, err := sideInput.getDeploymentObj(p, req)
 		if err != nil {
 			return nil, err
 		}
@@ -216,6 +216,7 @@ func (p Pipeline) GetSideInputsDeployments(req GetSideInputDeploymentReq) ([]*ap
 		}
 		deployment.Spec.Template.Spec.InitContainers[0].Env = append(deployment.Spec.Template.Spec.InitContainers[0].Env, corev1.EnvVar{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)})
 		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)})
+		deployment.Spec.Template.Spec.Containers[1].Env = append(deployment.Spec.Template.Spec.Containers[1].Env, commonEnvVars...)
 		deployments = append(deployments, deployment)
 	}
 	return deployments, nil

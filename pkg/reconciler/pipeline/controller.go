@@ -184,6 +184,13 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
 	}
 
+	// Create or update the Side Input Manager deployments
+	if err := r.createOrUpdateSIMDeployments(ctx, pl, isbSvc.Status.Config); err != nil {
+		log.Errorw("Failed to create or update Side Input Manager deployments", zap.Error(err))
+		pl.Status.MarkDeployFailed("CreateOrUpdateSIMDeploymentsFailed", err.Error())
+		return ctrl.Result{}, err
+	}
+
 	existingObjs, err := r.findExistingVertices(ctx, pl)
 	if err != nil {
 		log.Errorw("Failed to find existing vertices", zap.Error(err))
@@ -249,6 +256,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 			pl.Status.MarkDeployFailed("DeleteStaleVertexFailed", err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to delete vertex, err: %w", err)
 		}
+		log.Infow("Deleted stale vertex successfully", zap.String("vertex", v.Name))
 	}
 
 	// create batch job
@@ -389,6 +397,81 @@ func (r *pipelineReconciler) findExistingVertices(ctx context.Context, pl *dfv1.
 	result := make(map[string]dfv1.Vertex)
 	for _, v := range vertices.Items {
 		result[v.Name] = v
+	}
+	return result, nil
+}
+
+// Create or update Side Input Mapager deployments
+func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig) error {
+	log := logging.FromContext(ctx)
+	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
+	envs = append(envs, corev1.EnvVar{Name: dfv1.EnvPipelineName, Value: pl.Name})
+	req := dfv1.GetSideInputDeploymentReq{
+		ISBSvcType: isbSvcType,
+		Image:      r.image,
+		PullPolicy: corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
+		Env:        envs,
+	}
+
+	newObjs, err := pl.GetSideInputsDeployments(req)
+	if err != nil {
+		pl.Status.MarkDeployFailed("BuildSIMObjsFailed", err.Error())
+		return fmt.Errorf("failed to build Side Input Manager Deployments, %w", err)
+	}
+	existingObjs, err := r.findExistingSIMDeploys(ctx, pl)
+	if err != nil {
+		pl.Status.MarkDeployFailed("FindExistingSIMFailed", err.Error())
+		return fmt.Errorf("failed to find existing Side Input Manager Deployments, %w", err)
+	}
+	for _, newObj := range newObjs {
+		deployHash := sharedutil.MustHash(newObj.Spec)
+		if newObj.Annotations == nil {
+			newObj.Annotations = make(map[string]string)
+		}
+		newObj.Annotations[dfv1.KeyHash] = deployHash
+		if oldObj, existing := existingObjs[newObj.Name]; !existing {
+			if err := r.client.Create(ctx, newObj); err != nil {
+				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
+					continue
+				} else {
+					pl.Status.MarkDeployFailed("CreateSIMDeploymentFailed", err.Error())
+					return fmt.Errorf("failed to create Side Input Manager Deployment %q, %w", newObj.Name, err)
+				}
+			}
+			log.Infow("Created Side Input Manager Deployment successfully", zap.String("deployment", newObj.Name))
+		} else {
+			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
+				oldObj.Spec = newObj.Spec
+				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
+				if err := r.client.Update(ctx, &oldObj); err != nil {
+					pl.Status.MarkDeployFailed("UpdateSIMDeploymentFailed", err.Error())
+					return fmt.Errorf("failed to update Side Input Manager Deployment %q, %w", oldObj.Name, err)
+				}
+				log.Infow("Updated Side Input Manager Deployment successfully", zap.String("deployment", oldObj.Name))
+			}
+			delete(existingObjs, oldObj.Name)
+		}
+	}
+	for _, v := range existingObjs {
+		if err := r.client.Delete(ctx, &v); err != nil {
+			pl.Status.MarkDeployFailed("DeleteStaleSIMDeploymentFailed", err.Error())
+			return fmt.Errorf("failed to delete stale Side Input Manager Deployment %q, %w", v.Name, err)
+		}
+		log.Infow("Deleted stale Side Input Manager Deployment successfully", zap.String("deployment", v.Name))
+	}
+	return nil
+}
+
+// Find existing Side Input Manager Deployment objects.
+func (r *pipelineReconciler) findExistingSIMDeploys(ctx context.Context, pl *dfv1.Pipeline) (map[string]appv1.Deployment, error) {
+	deployments := &appv1.DeploymentList{}
+	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + pl.Name + "," + dfv1.KeyComponent + "=" + dfv1.ComponentSideInputManager)
+	if err := r.client.List(ctx, deployments, &client.ListOptions{Namespace: pl.Namespace, LabelSelector: selector}); err != nil {
+		return nil, fmt.Errorf("failed to list existing Side Input Manager deployments: %w", err)
+	}
+	result := make(map[string]appv1.Deployment)
+	for _, d := range deployments.Items {
+		result[d.Name] = d
 	}
 	return result, nil
 }

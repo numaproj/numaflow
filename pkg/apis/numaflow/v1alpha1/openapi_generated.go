@@ -51,6 +51,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetJetStreamStatefulSetSpecReq": schema_pkg_apis_numaflow_v1alpha1_GetJetStreamStatefulSetSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisServiceSpecReq":         schema_pkg_apis_numaflow_v1alpha1_GetRedisServiceSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisStatefulSetSpecReq":     schema_pkg_apis_numaflow_v1alpha1_GetRedisStatefulSetSpecReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetSideInputDeploymentReq":      schema_pkg_apis_numaflow_v1alpha1_GetSideInputDeploymentReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetVertexPodSpecReq":            schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy":                        schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource":                     schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref),
@@ -1601,7 +1602,7 @@ func schema_pkg_apis_numaflow_v1alpha1_GetRedisStatefulSetSpecReq(ref common.Ref
 	}
 }
 
-func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_numaflow_v1alpha1_GetSideInputDeploymentReq(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1643,6 +1644,62 @@ func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceC
 					},
 				},
 				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.EnvVar"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ISBSvcType": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"Image": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"PullPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"Env": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.EnvVar"),
+									},
+								},
+							},
+						},
+					},
+					"SideInputsStoreName": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "SideInputsStoreName"},
 			},
 		},
 		Dependencies: []string{

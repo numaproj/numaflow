@@ -18063,7 +18063,7 @@
       ],
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.GetVertexPodSpecReq": {
+    "io.numaproj.numaflow.v1alpha1.GetSideInputDeploymentReq": {
       "properties": {
         "Env": {
           "items": {
@@ -18086,6 +18086,36 @@
         "Image",
         "PullPolicy",
         "Env"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.GetVertexPodSpecReq": {
+      "properties": {
+        "Env": {
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
+          },
+          "type": "array"
+        },
+        "ISBSvcType": {
+          "type": "string"
+        },
+        "Image": {
+          "type": "string"
+        },
+        "PullPolicy": {
+          "type": "string"
+        },
+        "SideInputsStoreName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ISBSvcType",
+        "Image",
+        "PullPolicy",
+        "Env",
+        "SideInputsStoreName"
       ],
       "type": "object"
     },

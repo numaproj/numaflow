@@ -42,8 +42,8 @@ type SideInputTrigger struct {
 	Timezone *string `json:"timezone" protobuf:"bytes,3,opt,name=timezone"`
 }
 
-func (si SideInput) GetDeploymentObj(req GetSideInputDeploymentReq) (*appv1.Deployment, error) {
-	numaContainer, err := si.getNumaContainer(req)
+func (si SideInput) getDeploymentObj(pipeline Pipeline, req GetSideInputDeploymentReq) (*appv1.Deployment, error) {
+	numaContainer, err := si.getNumaContainer(pipeline, req)
 	if err != nil {
 		return nil, err
 	}
@@ -51,16 +51,16 @@ func (si SideInput) GetDeploymentObj(req GetSideInputDeploymentReq) (*appv1.Depl
 		KeyPartOf:        Project,
 		KeyManagedBy:     ControllerPipeline,
 		KeyComponent:     ComponentSideInputManager,
-		KeyPipelineName:  req.Pipeline.Name,
+		KeyPipelineName:  pipeline.Name,
 		KeySideInputName: si.Name,
 	}
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Pipeline.GetSideInputDeploymentName(si.Name),
-			Namespace: req.Pipeline.Namespace,
+			Name:      pipeline.GetSideInputDeploymentName(si.Name),
+			Namespace: pipeline.Namespace,
 			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(req.Pipeline.GetObjectMeta(), PipelineGroupVersionKind),
+				*metav1.NewControllerRef(pipeline.GetObjectMeta(), PipelineGroupVersionKind),
 			},
 		},
 		Spec: appv1.DeploymentSpec{
@@ -76,14 +76,14 @@ func (si SideInput) GetDeploymentObj(req GetSideInputDeploymentReq) (*appv1.Depl
 				},
 				Spec: corev1.PodSpec{
 					Containers:     []corev1.Container{*numaContainer, si.getUDContainer(req)},
-					InitContainers: []corev1.Container{si.getInitContainer(req)},
+					InitContainers: []corev1.Container{si.getInitContainer(pipeline, req)},
 				},
 			},
 		},
 	}, nil
 }
 
-func (si SideInput) getInitContainer(req GetSideInputDeploymentReq) corev1.Container {
+func (si SideInput) getInitContainer(pipeline Pipeline, req GetSideInputDeploymentReq) corev1.Container {
 	c := corev1.Container{
 		Name:            CtrInit,
 		Env:             req.Env,
@@ -92,14 +92,14 @@ func (si SideInput) getInitContainer(req GetSideInputDeploymentReq) corev1.Conta
 		Resources:       standardResources,
 		Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
-	c.Args = append(c.Args, "--side-inputs-store="+req.Pipeline.GetSideInputsDataStoreName())
-	if x := req.Pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.InitContainerTemplate != nil {
+	c.Args = append(c.Args, "--side-inputs-store="+pipeline.GetSideInputsStoreName())
+	if x := pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.InitContainerTemplate != nil {
 		x.SideInputsManagerTemplate.InitContainerTemplate.ApplyToContainer(&c)
 	}
 	return c
 }
 
-func (si SideInput) getNumaContainer(req GetSideInputDeploymentReq) (*corev1.Container, error) {
+func (si SideInput) getNumaContainer(pipeline Pipeline, req GetSideInputDeploymentReq) (*corev1.Container, error) {
 	sideInputCopy := &SideInput{
 		Name:    si.Name,
 		Trigger: si.Trigger,
@@ -119,9 +119,9 @@ func (si SideInput) getNumaContainer(req GetSideInputDeploymentReq) (*corev1.Con
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
 		Resources:       standardResources,
-		Args:            []string{"side-input-manager", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.Pipeline.GetSideInputsDataStoreName()},
+		Args:            []string{"side-input-manager", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + pipeline.GetSideInputsStoreName()},
 	}
-	if x := req.Pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.ContainerTemplate != nil {
+	if x := pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.ContainerTemplate != nil {
 		x.SideInputsManagerTemplate.ContainerTemplate.ApplyToContainer(c)
 	}
 	return c, nil

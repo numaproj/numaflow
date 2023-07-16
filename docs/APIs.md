@@ -1718,6 +1718,59 @@ Description
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.GetSideInputDeploymentReq">
+GetSideInputDeploymentReq
+</h3>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ISBSvcType</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ISBSvcType"> ISBSvcType </a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>Image</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>PullPolicy</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
+Kubernetes core/v1.PullPolicy </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>Env</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
+\[\]Kubernetes core/v1.EnvVar </a> </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">
 GetVertexPodSpecReq
 </h3>
@@ -1765,6 +1818,13 @@ Kubernetes core/v1.PullPolicy </a> </em>
 <code>Env</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>SideInputsStoreName</code></br> <em> string </em>
 </td>
 <td>
 </td>
@@ -1904,6 +1964,7 @@ ISBSvcType (<code>string</code> alias)
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.GetDaemonDeploymentReq">GetDaemonDeploymentReq</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.GetSideInputDeploymentReq">GetSideInputDeploymentReq</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">GetVertexPodSpecReq</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBufferServiceStatus">InterStepBufferServiceStatus</a>)
 </p>
