@@ -270,6 +270,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 			bks = append(bks, k)
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
+		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "create")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
@@ -413,7 +414,7 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 		Env:        envs,
 	}
 
-	newObjs, err := pl.GetSideInputsDeployments(req)
+	newObjs, err := pl.GetSideInputManagerDeployments(req)
 	if err != nil {
 		pl.Status.MarkDeployFailed("BuildSIMObjsFailed", err.Error())
 		return fmt.Errorf("failed to build Side Input Manager Deployments, %w", err)
@@ -497,6 +498,7 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		args := []string{}
 		args = append(args, fmt.Sprintf("--buffers=%s", strings.Join(allBuffers, ",")))
 		args = append(args, fmt.Sprintf("--buckets=%s", strings.Join(allBuckets, ",")))
+		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
 
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cleanup")
 		batchJob.OwnerReferences = []metav1.OwnerReference{}

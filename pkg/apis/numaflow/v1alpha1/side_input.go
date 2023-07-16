@@ -42,7 +42,7 @@ type SideInputTrigger struct {
 	Timezone *string `json:"timezone" protobuf:"bytes,3,opt,name=timezone"`
 }
 
-func (si SideInput) getDeploymentObj(pipeline Pipeline, req GetSideInputDeploymentReq) (*appv1.Deployment, error) {
+func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputDeploymentReq) (*appv1.Deployment, error) {
 	numaContainer, err := si.getNumaContainer(pipeline, req)
 	if err != nil {
 		return nil, err

@@ -35,14 +35,15 @@ import (
 func NewISBSvcCreateCommand() *cobra.Command {
 
 	var (
-		isbSvcType string
-		buffers    []string
-		buckets    []string
+		isbSvcType      string
+		buffers         []string
+		buckets         []string
+		sideInputsStore string
 	)
 
 	command := &cobra.Command{
 		Use:   "isbsvc-create",
-		Short: "Create buffers and buckets",
+		Short: "Create buffers, buckets and side inputs store",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := logging.NewLogger().Named("isbsvc-create")
 			pipelineName, defined := os.LookupEnv(v1alpha1.EnvPipelineName)
@@ -79,7 +80,7 @@ func NewISBSvcCreateCommand() *cobra.Command {
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
 
-			if err = isbsClient.CreateBuffersAndBuckets(ctx, buffers, buckets, opts...); err != nil {
+			if err = isbsClient.CreateBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, opts...); err != nil {
 				logger.Errorw("Failed to create buffers and buckets.", zap.Error(err))
 				return err
 			}
@@ -90,5 +91,6 @@ func NewISBSvcCreateCommand() *cobra.Command {
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "", "ISB Service type, e.g. jetstream")
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to create") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to create") // --buckets=xxa,xxb --buckets=xxc
+	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
 	return command
 }

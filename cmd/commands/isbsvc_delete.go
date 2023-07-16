@@ -32,9 +32,10 @@ import (
 
 func NewISBSvcDeleteCommand() *cobra.Command {
 	var (
-		isbSvcType string
-		buffers    []string
-		buckets    []string
+		isbSvcType      string
+		buffers         []string
+		buckets         []string
+		sideInputsStore string
 	)
 
 	command := &cobra.Command{
@@ -62,7 +63,7 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
-			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets); err != nil {
+			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore); err != nil {
 				logger.Errorw("Failed on buffers and buckets deletion.", zap.Error(err))
 				return err
 			}
@@ -73,5 +74,6 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "", "ISB Service type, e.g. jetstream")
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to delete") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to delete") // --buckets=xxa,xxb --buckets=xxc	return command
+	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
 	return command
 }
