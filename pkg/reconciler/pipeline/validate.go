@@ -173,6 +173,11 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			return fmt.Errorf("the length of the pipeline name plus the vertex name is over the max limit. (%s-%s), %v", pl.Name, v.Name, errs)
 		}
 	}
+
+	if err := validateSideInputs(*pl); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -259,10 +264,18 @@ func validateUDF(udf dfv1.UDF) error {
 	return nil
 }
 
+func validateSideInputs(pl dfv1.Pipeline) error {
+	// TODO: validate side inputs
+	return nil
+}
+
 func isReservedContainerName(name string) bool {
 	return name == dfv1.CtrInit ||
 		name == dfv1.CtrMain ||
 		name == dfv1.CtrUdf ||
 		name == dfv1.CtrUdsink ||
-		name == dfv1.CtrUdtransformer
+		name == dfv1.CtrUdtransformer ||
+		name == dfv1.CtrUdSideInput ||
+		name == dfv1.CtrInitSideInputs ||
+		name == dfv1.CtrSideInputsWatcher
 }

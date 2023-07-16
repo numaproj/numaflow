@@ -192,13 +192,30 @@ func (p Pipeline) GetDaemonServiceURL() string {
 	return fmt.Sprintf("%s.%s.svc:%d", p.GetDaemonServiceName(), p.Namespace, DaemonServicePort)
 }
 
-func (p Pipeline) GetSideInputsDeployments() ([]*appv1.Deployment, error) {
+func (p Pipeline) GetSideInputDeploymentName(sideInputName string) string {
+	return fmt.Sprintf("%s-si-%s", p.Name, sideInputName)
+}
+
+func (p Pipeline) GetSideInputsDataStoreName() string {
+	return fmt.Sprintf("%s-side-inputs", p.Name)
+}
+
+func (p Pipeline) GetSideInputsDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {
+	commonEnvVars := []corev1.EnvVar{
+		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
+		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+		{Name: EnvPipelineName, Value: p.Name}}
 	deployments := []*appv1.Deployment{}
 	for _, sideInput := range p.Spec.SideInputs {
-		deployment, err := sideInput.GetDeploymentObj(p.Namespace, p.Name)
+		deployment, err := sideInput.GetDeploymentObj(req)
 		if err != nil {
 			return nil, err
 		}
+		for i := 0; i < len(deployment.Spec.Template.Spec.Containers); i++ {
+			deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, commonEnvVars...)
+		}
+		deployment.Spec.Template.Spec.InitContainers[0].Env = append(deployment.Spec.Template.Spec.InitContainers[0].Env, corev1.EnvVar{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)})
+		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)})
 		deployments = append(deployments, deployment)
 	}
 	return deployments, nil
@@ -222,7 +239,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvPipelineObject, Value: encodedPipeline},
-		{Name: "GODEBUG", Value: os.Getenv("GODEBUG")},
+		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{
@@ -304,7 +321,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 
 func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.Container {
 	envVars := []corev1.EnvVar{
-		{Name: "GODEBUG", Value: os.Getenv("GODEBUG")},
+		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{

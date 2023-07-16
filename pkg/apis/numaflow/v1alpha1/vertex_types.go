@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,6 +75,10 @@ func (v Vertex) IsASource() bool {
 
 func (v Vertex) HasUDTransformer() bool {
 	return v.Spec.HasUDTransformer()
+}
+
+func (v Vertex) HasSideInputs() bool {
+	return len(v.Spec.SideInputs) > 0
 }
 
 func (v Vertex) IsASink() bool {
@@ -259,10 +264,39 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		}
 	}
 
+	initContainers := v.getInitContainers(req)
+
+	if v.HasSideInputs() {
+		sideInputsVolName := "side-inputs-vol"
+		volumes = append(volumes, corev1.Volume{
+			Name:         sideInputsVolName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+
+		sideInputsWatcher := corev1.Container{
+			Name:            CtrSideInputsWatcher,
+			Env:             envVars,
+			Image:           req.Image,
+			ImagePullPolicy: req.PullPolicy,
+			Resources:       standardResources,
+			Args:            []string{"side-inputs-watcher", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsDataStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+		}
+		sideInputsWatcher.Env = append(sideInputsWatcher.Env, v.commonEnvs()...)
+		if x := v.Spec.SideInputsContainerTemplate; x != nil {
+			x.ApplyToContainer(&sideInputsWatcher)
+		}
+		containers = append(containers, sideInputsWatcher)
+		for i := 1; i < len(containers); i++ {
+			containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
+		}
+		// Side Inputs init container
+		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
+	}
+
 	spec := &corev1.PodSpec{
 		Subdomain:      v.GetHeadlessServiceName(),
 		Volumes:        append(volumes, v.Spec.Volumes...),
-		InitContainers: v.getInitContainers(req),
+		InitContainers: initContainers,
 		Containers:     append(containers, v.Spec.Sidecars...),
 	}
 	v.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
@@ -275,7 +309,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 	envVars := []corev1.EnvVar{
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
-		{Name: "GODEBUG", Value: os.Getenv("GODEBUG")},
+		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
 	initContainers := []corev1.Container{
@@ -288,6 +322,17 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 			Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 		},
 	}
+	if v.HasSideInputs() {
+		initContainers = append(initContainers, corev1.Container{
+			Name:            CtrInitSideInputs,
+			Env:             envVars,
+			Image:           req.Image,
+			ImagePullPolicy: req.PullPolicy,
+			Resources:       standardResources,
+			Args:            []string{"side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsDataStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+		})
+	}
+
 	if v.Spec.InitContainerTemplate != nil {
 		v.Spec.InitContainerTemplate.ApplyToNumaflowContainers(initContainers)
 	}

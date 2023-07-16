@@ -38,6 +38,7 @@ const (
 	KeyPipelineName     = "numaflow.numaproj.io/pipeline-name"
 	KeyVertexName       = "numaflow.numaproj.io/vertex-name"
 	KeyReplica          = "numaflow.numaproj.io/replica"
+	KeySideInputName    = "numaflow.numaproj.io/side-input-name"
 	KeyDefaultContainer = "kubectl.kubernetes.io/default-container"
 
 	// ID key in the header of sources like http
@@ -62,23 +63,26 @@ const (
 	JetStreamConfigMapKey                = "nats-js"              // key for nats-js.conf in the configmap
 
 	// container names.
-	CtrInit          = "init"
-	CtrMain          = "numa"
-	CtrUdf           = "udf"
-	CtrUdsink        = "udsink"
-	CtrUdtransformer = "transformer"
+	CtrInit              = "init"
+	CtrMain              = "numa"
+	CtrUdf               = "udf"
+	CtrUdsink            = "udsink"
+	CtrUdtransformer     = "transformer"
+	CtrUdSideInput       = "udsi"
+	CtrInitSideInputs    = "init-side-inputs"
+	CtrSideInputsWatcher = "side-inputs-watcher"
 
 	// components
-	ComponentISBSvc = "isbsvc"
-	ComponentDaemon = "daemon"
-	ComponentVertex = "vertex"
-	ComponentJob    = "job"
+	ComponentISBSvc           = "isbsvc"
+	ComponentDaemon           = "daemon"
+	ComponentVertex           = "vertex"
+	ComponentJob              = "job"
+	ComponentSideInputManager = "side-input-manager"
 
 	// controllers
 	ControllerISBSvc   = "isbsvc-controller"
 	ControllerPipeline = "pipeline-controller"
 	ControllerVertex   = "vertex-controller"
-	ControllerWatchdog = "watchdog"
 
 	// ENV vars
 	EnvNamespace                      = "NUMAFLOW_NAMESPACE"
@@ -88,6 +92,7 @@ const (
 	EnvReplica                        = "NUMAFLOW_REPLICA"
 	EnvVertexObject                   = "NUMAFLOW_VERTEX_OBJECT"
 	EnvPipelineObject                 = "NUMAFLOW_PIPELINE_OBJECT"
+	EnvSideInputObject                = "NUMAFLOW_SIDE_INPUT_OBJECT"
 	EnvImage                          = "NUMAFLOW_IMAGE"
 	EnvImagePullPolicy                = "NUMAFLOW_IMAGE_PULL_POLICY"
 	EnvISBSvcRedisSentinelURL         = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_URL"
@@ -111,6 +116,7 @@ const (
 	EnvCPULimit                       = "NUMAFLOW_CPU_LIMIT"
 	EnvMemoryRequest                  = "NUMAFLOW_MEMORY_REQUEST"
 	EnvMemoryLimit                    = "NUMAFLOW_MEMORY_LIMIT"
+	EnvGoDebug                        = "GODEBUG"
 
 	PathVarRun            = "/var/run/numaflow"
 	VertexMetricsPort     = 2469
@@ -120,6 +126,8 @@ const (
 	DaemonServicePort     = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
+
+	PathSideInputsMount = "/var/numaflow/side-inputs"
 
 	// ISB
 	DefaultBufferLength     = 30000

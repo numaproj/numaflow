@@ -17,8 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"os"
-	strings "strings"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -41,47 +42,107 @@ type SideInputTrigger struct {
 	Timezone *string `json:"timezone" protobuf:"bytes,3,opt,name=timezone"`
 }
 
-func (si SideInput) GetDeploymentSpec(req GetSideInputDeploymentReq) *appv1.Deployment {
+func (si SideInput) GetDeploymentObj(req GetSideInputDeploymentReq) (*appv1.Deployment, error) {
+	numaContainer, err := si.getNumaContainer(req)
+	if err != nil {
+		return nil, err
+	}
+	labels := map[string]string{
+		KeyPartOf:        Project,
+		KeyManagedBy:     ControllerPipeline,
+		KeyComponent:     ComponentSideInputManager,
+		KeyPipelineName:  req.Pipeline.Name,
+		KeySideInputName: si.Name,
+	}
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "req.Name",
+			Name:      req.Pipeline.GetSideInputDeploymentName(si.Name),
 			Namespace: req.Pipeline.Namespace,
+			Labels:    labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(req.Pipeline.GetObjectMeta(), PipelineGroupVersionKind),
+			},
 		},
 		Spec: appv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: req.Labels,
+				MatchLabels: labels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      req.Labels,
-					Annotations: map[string]string{},
+					Labels: labels,
+					Annotations: map[string]string{
+						KeyDefaultContainer: CtrUdSideInput,
+					},
 				},
 				Spec: corev1.PodSpec{
-					Containers:     []corev1.Container{si.getInitContainer(req)},
+					Containers:     []corev1.Container{*numaContainer, si.getUDContainer(req)},
 					InitContainers: []corev1.Container{si.getInitContainer(req)},
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 func (si SideInput) getInitContainer(req GetSideInputDeploymentReq) corev1.Container {
-	envVars := []corev1.EnvVar{
-		{Name: "GODEBUG", Value: os.Getenv("GODEBUG")},
-	}
-	envVars = append(envVars, req.Env...)
 	c := corev1.Container{
 		Name:            CtrInit,
-		Env:             envVars,
+		Env:             req.Env,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
 		Resources:       standardResources,
 		Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
-	c.Args = append(c.Args, "--buffers="+strings.Join(p.GetAllBuffers(), ","))
-	c.Args = append(c.Args, "--buckets="+strings.Join(p.GetAllBuckets(), ","))
-	if p.Spec.Templates != nil && p.Spec.Templates.DaemonTemplate != nil && p.Spec.Templates.DaemonTemplate.InitContainerTemplate != nil {
-		p.Spec.Templates.DaemonTemplate.InitContainerTemplate.ApplyToContainer(&c)
+	c.Args = append(c.Args, "--side-inputs-store="+req.Pipeline.GetSideInputsDataStoreName())
+	if x := req.Pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.InitContainerTemplate != nil {
+		x.SideInputsManagerTemplate.InitContainerTemplate.ApplyToContainer(&c)
 	}
 	return c
+}
+
+func (si SideInput) getNumaContainer(req GetSideInputDeploymentReq) (*corev1.Container, error) {
+	sideInputCopy := &SideInput{
+		Name:    si.Name,
+		Trigger: si.Trigger,
+	}
+	siBytes, err := json.Marshal(sideInputCopy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal SideInput spec")
+	}
+	encodedSideInput := base64.StdEncoding.EncodeToString(siBytes)
+	envVars := []corev1.EnvVar{
+		{Name: EnvSideInputObject, Value: encodedSideInput},
+	}
+	envVars = append(envVars, req.Env...)
+	c := &corev1.Container{
+		Name:            CtrMain,
+		Env:             envVars,
+		Image:           req.Image,
+		ImagePullPolicy: req.PullPolicy,
+		Resources:       standardResources,
+		Args:            []string{"side-input-manager", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.Pipeline.GetSideInputsDataStoreName()},
+	}
+	if x := req.Pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.ContainerTemplate != nil {
+		x.SideInputsManagerTemplate.ContainerTemplate.ApplyToContainer(c)
+	}
+	return c, nil
+}
+
+func (si SideInput) getUDContainer(req GetSideInputDeploymentReq) corev1.Container {
+	cb := containerBuilder{}.
+		name(CtrUdSideInput).
+		image(si.Container.Image).
+		imagePullPolicy(req.PullPolicy)
+	if si.Container.ImagePullPolicy != nil {
+		cb = cb.imagePullPolicy(*si.Container.ImagePullPolicy)
+	}
+	if len(si.Container.Command) > 0 {
+		cb = cb.command(si.Container.Command...)
+	}
+	if len(si.Container.Args) > 0 {
+		cb = cb.args(si.Container.Args...)
+	}
+	// Do not append the envs from req here, as they might contain sensitive information
+	cb = cb.appendEnv(si.Container.Env...).appendVolumeMounts(si.Container.VolumeMounts...).
+		resources(si.Container.Resources).securityContext(si.Container.SecurityContext).appendEnvFrom(si.Container.EnvFrom...)
+	return cb.build()
 }

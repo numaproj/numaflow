@@ -26,15 +26,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewSideInputsManagerCommand() *cobra.Command {
+func NewSideInputManagerCommand() *cobra.Command {
 	var (
 		isbSvcType string
 	)
 	command := &cobra.Command{
-		Use:   "side-inputs-manager",
-		Short: "Start the Side Inputs Manager",
+		Use:   "side-input-manager",
+		Short: "Start a Side Inputa Manager",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("side-inputs-manager")
+			logger := logging.NewLogger().Named("side-input-manager")
 
 			pl, err := decodePipeline()
 			if err != nil {
