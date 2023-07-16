@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.0-rc2 (2023-07-13)
+
+ * [d0df669a](https://github.com/numaproj/numaflow/commit/d0df669a8bb9f07fffe1d5add792444ebfb33835) Update manifests to v0.9.0-rc2
+ * [c8aaeff8](https://github.com/numaproj/numaflow/commit/c8aaeff8ca796b43279d9b784883d632bf4b8d32) fix: use windower to fetch next window yet to be closed (#850)
+ * [bcda8dcf](https://github.com/numaproj/numaflow/commit/bcda8dcfcdbde7821c201b37f5d5ce99148a341c) feat: implement optional validation webhook. Fixes #817. (#832)
+ * [e605504d](https://github.com/numaproj/numaflow/commit/e605504d40fce533c64569d0d30a8533df62299d) chore(deps): bump semver from 6.3.0 to 6.3.1 in /ui (#845)
+
+### Contributors
+
+ * Derek Wang
+ * Dillen Padhiar
+ * Yashash H L
+ * dependabot[bot]
+
 ## v0.9.0-rc1 (2023-07-11)
 
  * [40f45410](https://github.com/numaproj/numaflow/commit/40f45410780c51c8109650e2835a105543d3f77c) Update manifests to v0.9.0-rc1
