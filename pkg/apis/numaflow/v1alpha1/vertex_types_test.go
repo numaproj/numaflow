@@ -196,6 +196,7 @@ func TestGetPodSpec(t *testing.T) {
 		Env: []corev1.EnvVar{
 			{Name: "test-env", Value: "test-val"},
 		},
+		SideInputsStoreName: "test-store",
 	}
 	t.Run("test source", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
@@ -352,6 +353,25 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, sidecarEnvNames, EnvMemoryLimit)
 		assert.Contains(t, sidecarEnvNames, EnvCPURequest)
 		assert.Contains(t, sidecarEnvNames, EnvMemoryRequest)
+	})
+
+	t.Run("test udf with side inputs", func(t *testing.T) {
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.SideInputs = []string{"input1", "input2"}
+		testObj.Spec.UDF = &UDF{
+			Builtin: &Function{
+				Name: "cat",
+			},
+		}
+		s, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(s.Containers))
+		assert.Equal(t, CtrMain, s.Containers[0].Name)
+		assert.Equal(t, CtrUdf, s.Containers[1].Name)
+		assert.Equal(t, CtrSideInputsWatcher, s.Containers[2].Name)
+		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		assert.Equal(t, CtrInitSideInputs, s.InitContainers[1].Name)
 	})
 }
 
