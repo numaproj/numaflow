@@ -28,6 +28,8 @@ import (
 	"github.com/Shopify/sarama"
 	"go.uber.org/zap"
 
+	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
@@ -54,7 +56,7 @@ type KafkaSource struct {
 	// kafka brokers
 	brokers []string
 	// forwarder that writes the consumed data to destination
-	forwarder *forward.InterStepDataForward
+	forwarder *sourceforward.DataForward
 	// context cancel function
 	cancelfn context.CancelFunc
 	// lifecycle context
@@ -359,13 +361,13 @@ func NewKafkaSource(
 	handler := newConsumerHandler(kafkasource.handlerbuffer)
 	kafkasource.handler = handler
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(kafkasource.logger), forward.WithSourceWatermarkPublisher(kafkasource)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithVertexType(dfv1.VertexTypeSource), sourceforward.WithLogger(kafkasource.logger), sourceforward.WithSourceWatermarkPublisher(kafkasource)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

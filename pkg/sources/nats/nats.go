@@ -25,6 +25,8 @@ import (
 	natslib "github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
+	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
@@ -52,7 +54,7 @@ type natsSource struct {
 	readTimeout time.Duration
 
 	cancelfn  context.CancelFunc
-	forwarder *forward.InterStepDataForward
+	forwarder *sourceforward.DataForward
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
 }
@@ -84,13 +86,13 @@ func New(
 	}
 	n.messages = make(chan *isb.ReadMessage, n.bufferSize)
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(n.logger), forward.WithSourceWatermarkPublisher(n)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithVertexType(dfv1.VertexTypeSource), sourceforward.WithLogger(n.logger), sourceforward.WithSourceWatermarkPublisher(n)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
