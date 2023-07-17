@@ -19209,7 +19209,7 @@
     "io.numaproj.numaflow.v1alpha1.SideInputTrigger": {
       "properties": {
         "interval": {
-          "type": "string"
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "schedule": {
           "type": "string"

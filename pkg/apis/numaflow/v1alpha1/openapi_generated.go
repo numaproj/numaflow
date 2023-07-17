@@ -3706,8 +3706,7 @@ func schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref common.ReferenceCall
 					},
 					"interval": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"timezone": {
@@ -3719,6 +3718,8 @@ func schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref common.ReferenceCall
 				},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 

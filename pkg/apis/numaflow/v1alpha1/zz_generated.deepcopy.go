@@ -1780,7 +1780,7 @@ func (in *SideInputTrigger) DeepCopyInto(out *SideInputTrigger) {
 	}
 	if in.Interval != nil {
 		in, out := &in.Interval, &out.Interval
-		*out = new(string)
+		*out = new(metav1.Duration)
 		**out = **in
 	}
 	if in.Timezone != nil {

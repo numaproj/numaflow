@@ -37,7 +37,7 @@ type SideInputTrigger struct {
 	// +optional
 	Schedule *string `json:"schedule" protobuf:"bytes,1,opt,name=schedule"`
 	// +optional
-	Interval *string `json:"interval" protobuf:"bytes,2,opt,name=interval"`
+	Interval *metav1.Duration `json:"interval" protobuf:"bytes,2,opt,name=interval"`
 	// +optional
 	Timezone *string `json:"timezone" protobuf:"bytes,3,opt,name=timezone"`
 }

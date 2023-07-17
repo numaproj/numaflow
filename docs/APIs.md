@@ -4255,7 +4255,9 @@ Description
 </tr>
 <tr>
 <td>
-<code>interval</code></br> <em> string </em>
+<code>interval</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <em>(Optional)</em>

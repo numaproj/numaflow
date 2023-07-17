@@ -265,7 +265,43 @@ func validateUDF(udf dfv1.UDF) error {
 }
 
 func validateSideInputs(pl dfv1.Pipeline) error {
-	// TODO: validate side inputs
+	sideInputs := make(map[string]bool)
+	for _, si := range pl.Spec.SideInputs {
+		if si.Name == "" {
+			return fmt.Errorf("side input name is missing")
+		}
+		if _, existing := sideInputs[si.Name]; existing {
+			return fmt.Errorf("side input %q is defined more than once", si.Name)
+		}
+		sideInputs[si.Name] = true
+		if si.Container == nil {
+			return fmt.Errorf("side input %q: container is missing", si.Name)
+		}
+		if si.Container.Image == "" {
+			return fmt.Errorf("side input %q: image is missing", si.Name)
+		}
+		if si.Trigger == nil {
+			return fmt.Errorf("side input %q: trigger is missing", si.Name)
+		}
+		if si.Trigger.Schedule == nil && si.Trigger.Interval == nil {
+			return fmt.Errorf("side input %q: either schedule or interval is required", si.Name)
+		}
+		if si.Trigger.Schedule != nil && si.Trigger.Interval != nil {
+			return fmt.Errorf("side input %q: schedule and interval cannot be used together", si.Name)
+		}
+	}
+	for _, v := range pl.Spec.Vertices {
+		namesInVertex := make(map[string]bool)
+		for _, si := range v.SideInputs {
+			if _, existing := sideInputs[si]; !existing {
+				return fmt.Errorf("vertex %q: side input %q is not defined", v.Name, si)
+			}
+			if _, existing := namesInVertex[si]; existing {
+				return fmt.Errorf("vertex %q: side input %q is defined more than once", v.Name, si)
+			}
+			namesInVertex[si] = true
+		}
+	}
 	return nil
 }
 

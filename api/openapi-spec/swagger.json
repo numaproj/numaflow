@@ -19196,7 +19196,7 @@
       "type": "object",
       "properties": {
         "interval": {
-          "type": "string"
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "schedule": {
           "type": "string"
