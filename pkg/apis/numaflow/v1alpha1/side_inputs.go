@@ -99,8 +99,8 @@ func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputD
 			},
 		},
 	}
-	if x := pipeline.Spec.Templates; x != nil && x.SideInputManagerTemplate != nil {
-		x.SideInputManagerTemplate.ApplyToPodTemplateSpec(&deployment.Spec.Template)
+	if x := pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil {
+		x.SideInputsManagerTemplate.ApplyToPodTemplateSpec(&deployment.Spec.Template)
 	}
 	for i := range deployment.Spec.Template.Spec.Containers {
 		deployment.Spec.Template.Spec.Containers[i].VolumeMounts = append(deployment.Spec.Template.Spec.Containers[i].VolumeMounts, volumeMounts...)
@@ -118,8 +118,8 @@ func (si SideInput) getInitContainer(pipeline Pipeline, req GetSideInputDeployme
 		Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
 	c.Args = append(c.Args, "--side-inputs-store="+pipeline.GetSideInputsStoreName())
-	if x := pipeline.Spec.Templates; x != nil && x.SideInputManagerTemplate != nil && x.SideInputManagerTemplate.InitContainerTemplate != nil {
-		x.SideInputManagerTemplate.InitContainerTemplate.ApplyToContainer(&c)
+	if x := pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.InitContainerTemplate != nil {
+		x.SideInputsManagerTemplate.InitContainerTemplate.ApplyToContainer(&c)
 	}
 	return c
 }
@@ -146,8 +146,8 @@ func (si SideInput) getNumaContainer(pipeline Pipeline, req GetSideInputDeployme
 		Resources:       standardResources,
 		Args:            []string{"side-inputs-manager", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + pipeline.GetSideInputsStoreName()},
 	}
-	if x := pipeline.Spec.Templates; x != nil && x.SideInputManagerTemplate != nil && x.SideInputManagerTemplate.ContainerTemplate != nil {
-		x.SideInputManagerTemplate.ContainerTemplate.ApplyToContainer(c)
+	if x := pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.ContainerTemplate != nil {
+		x.SideInputsManagerTemplate.ContainerTemplate.ApplyToContainer(c)
 	}
 	return c, nil
 }
@@ -172,7 +172,7 @@ func (si SideInput) getUDContainer(req GetSideInputDeploymentReq) corev1.Contain
 	return cb.build()
 }
 
-type SideInputManagerTemplate struct {
+type SideInputsManagerTemplate struct {
 	// +optional
 	AbstractPodTemplate `json:",inline" protobuf:"bytes,1,opt,name=abstractPodTemplate"`
 	// Template for the side inputs manager numa container

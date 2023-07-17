@@ -197,7 +197,7 @@ func (p Pipeline) GetSideInputsManagerDeploymentName(sideInputName string) strin
 }
 
 func (p Pipeline) GetSideInputsStoreName() string {
-	return p.Name
+	return fmt.Sprintf("%s-%s", p.Namespace, p.Name)
 }
 
 func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {
@@ -474,9 +474,9 @@ type Templates struct {
 	// JobTemplate is used to customize Jobs.
 	// +optional
 	JobTemplate *JobTemplate `json:"job,omitempty" protobuf:"bytes,2,opt,name=job"`
-	// SideInputManagerTemplate is used to customize the Side Inputs Manager.
+	// SideInputsManagerTemplate is used to customize the Side Inputs Manager.
 	// +optional
-	SideInputManagerTemplate *SideInputManagerTemplate `json:"sideInputManager,omitempty" protobuf:"bytes,3,opt,name=sideInputManager"`
+	SideInputsManagerTemplate *SideInputsManagerTemplate `json:"sideInputsManager,omitempty" protobuf:"bytes,3,opt,name=sideInputsManager"`
 }
 
 type PipelineLimits struct {

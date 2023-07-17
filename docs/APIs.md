@@ -24,7 +24,7 @@ AbstractPodTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.SideInputManagerTemplate">SideInputManagerTemplate</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>)
 </p>
 <p>
 <p>
@@ -829,7 +829,7 @@ ContainerTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.SideInputManagerTemplate">SideInputManagerTemplate</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>)
 </p>
 <p>
 <p>
@@ -4171,8 +4171,57 @@ SideInputTrigger </a> </em>
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.SideInputManagerTemplate">
-SideInputManagerTemplate
+<h3 id="numaflow.numaproj.io/v1alpha1.SideInputTrigger">
+SideInputTrigger
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SideInput">SideInput</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>schedule</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>interval</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>timezone</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">
+SideInputsManagerTemplate
 </h3>
 <p>
 (<em>Appears on:</em>
@@ -4230,55 +4279,6 @@ ContainerTemplate </a> </em>
 <p>
 Template for the side inputs manager init container
 </p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="numaflow.numaproj.io/v1alpha1.SideInputTrigger">
-SideInputTrigger
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.SideInput">SideInput</a>)
-</p>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>
-Field
-</th>
-<th>
-Description
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>schedule</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
-<code>interval</code></br> <em>
-<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
-Kubernetes meta/v1.Duration </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
-<code>timezone</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
 </td>
 </tr>
 </tbody>
@@ -4675,14 +4675,14 @@ JobTemplate is used to customize Jobs.
 </tr>
 <tr>
 <td>
-<code>sideInputManager</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.SideInputManagerTemplate">
-SideInputManagerTemplate </a> </em>
+<code>sideInputsManager</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">
+SideInputsManagerTemplate </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-SideInputManagerTemplate is used to customize the Side Inputs Manager.
+SideInputsManagerTemplate is used to customize the Side Inputs Manager.
 </p>
 </td>
 </tr>
