@@ -287,7 +287,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		}
 		containers = append(containers, sideInputsWatcher)
 		for i := 1; i < len(containers); i++ {
-			containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 			if containers[i].Name == CtrSideInputsWatcher {
 				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 			} else {
