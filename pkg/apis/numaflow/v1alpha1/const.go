@@ -77,7 +77,7 @@ const (
 	ComponentDaemon           = "daemon"
 	ComponentVertex           = "vertex"
 	ComponentJob              = "job"
-	ComponentSideInputManager = "side-input-manager"
+	ComponentSideInputManager = "side-inputs-manager"
 
 	// controllers
 	ControllerISBSvc   = "isbsvc-controller"

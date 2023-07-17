@@ -19096,7 +19096,7 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.SideInput": {
-      "description": "SideInputs defines information of a Side Input",
+      "description": "SideInput defines information of a Side Input",
       "type": "object",
       "required": [
         "name",
@@ -19112,6 +19112,14 @@
         },
         "trigger": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SideInputTrigger"
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.Volume"
+          },
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge"
         }
       }
     },

@@ -18,6 +18,6 @@ limitations under the License.
 //
 // It contains the following subpackages:
 // - initializer: used for init container on the vertex pod to initialize the Side Inputs data.
-// - manager: used for run the service in the numa container of a Side Input Manager.
+// - manager: used for run the service in the numa container of a Side Inputs Manager.
 // - watcher: used for the service in the sidecar container of a vertex pod for watching Side Inputs data changes.
 package sideinputs

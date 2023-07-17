@@ -4120,7 +4120,7 @@ SideInput
 </p>
 <p>
 <p>
-SideInputs defines information of a Side Input
+SideInput defines information of a Side Input
 </p>
 </p>
 <table>
@@ -4148,6 +4148,16 @@ Description
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 <td>
+</td>
+</tr>
+<tr>
+<td>
+<code>volumes</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#volume-v1-core">
+\[\]Kubernetes core/v1.Volume </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 <tr>

@@ -86,9 +86,17 @@ func Test_getInitContainer(t *testing.T) {
 }
 
 func Test_getManagerDeploymentObj(t *testing.T) {
-	deploy, err := testSideInput.getManagerDeploymentObj(*testPipeline, testGetSideInputDeploymentReq)
+	newObj := testSideInput.DeepCopy()
+	newObj.Volumes = []corev1.Volume{
+		{
+			Name:         "test-vol",
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
+	}
+	deploy, err := newObj.getManagerDeploymentObj(*testPipeline, testGetSideInputDeploymentReq)
 	assert.NoError(t, err)
 	assert.NotNil(t, deploy)
 	assert.Equal(t, 1, len(deploy.Spec.Template.Spec.InitContainers))
 	assert.Equal(t, 2, len(deploy.Spec.Template.Spec.Containers))
+	assert.Equal(t, 2, len(deploy.Spec.Template.Spec.Volumes))
 }

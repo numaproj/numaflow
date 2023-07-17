@@ -26,11 +26,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// SideInputs defines information of a Side Input
+// SideInput defines information of a Side Input
 type SideInput struct {
-	Name      string            `json:"name" protobuf:"bytes,1,opt,name=name"`
-	Container *Container        `json:"container" protobuf:"bytes,2,opt,name=container"`
-	Trigger   *SideInputTrigger `json:"trigger" protobuf:"bytes,3,opt,name=trigger"`
+	Name      string     `json:"name" protobuf:"bytes,1,opt,name=name"`
+	Container *Container `json:"container" protobuf:"bytes,2,opt,name=container"`
+	// +optional
+	// +patchStrategy=merge
+	// +patchMergeKey=name
+	Volumes []corev1.Volume   `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,3,rep,name=volumes"`
+	Trigger *SideInputTrigger `json:"trigger" protobuf:"bytes,4,opt,name=trigger"`
 }
 
 type SideInputTrigger struct {
@@ -54,7 +58,20 @@ func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputD
 		KeyPipelineName:  pipeline.Name,
 		KeySideInputName: si.Name,
 	}
-	return &appv1.Deployment{
+	varVolumeName := "var-run-numaflow"
+	volumes := []corev1.Volume{
+		{
+			Name: varVolumeName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
+				Medium: corev1.StorageMediumMemory,
+			}},
+		},
+	}
+	if len(si.Volumes) > 0 {
+		volumes = append(volumes, si.Volumes...)
+	}
+	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
+	deployment := &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pipeline.GetSideInputDeploymentName(si.Name),
 			Namespace: pipeline.Namespace,
@@ -77,10 +94,18 @@ func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputD
 				Spec: corev1.PodSpec{
 					Containers:     []corev1.Container{*numaContainer, si.getUDContainer(req)},
 					InitContainers: []corev1.Container{si.getInitContainer(pipeline, req)},
+					Volumes:        volumes,
 				},
 			},
 		},
-	}, nil
+	}
+	if x := pipeline.Spec.Templates; x != nil && x.SideInputManagerTemplate != nil {
+		x.SideInputManagerTemplate.ApplyToPodTemplateSpec(&deployment.Spec.Template)
+	}
+	for _, c := range deployment.Spec.Template.Spec.Containers {
+		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
+	}
+	return deployment, nil
 }
 
 func (si SideInput) getInitContainer(pipeline Pipeline, req GetSideInputDeploymentReq) corev1.Container {
@@ -119,7 +144,7 @@ func (si SideInput) getNumaContainer(pipeline Pipeline, req GetSideInputDeployme
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
 		Resources:       standardResources,
-		Args:            []string{"side-input-manager", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + pipeline.GetSideInputsStoreName()},
+		Args:            []string{"side-inputs-manager", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + pipeline.GetSideInputsStoreName()},
 	}
 	if x := pipeline.Spec.Templates; x != nil && x.SideInputManagerTemplate != nil && x.SideInputManagerTemplate.ContainerTemplate != nil {
 		x.SideInputManagerTemplate.ContainerTemplate.ApplyToContainer(c)

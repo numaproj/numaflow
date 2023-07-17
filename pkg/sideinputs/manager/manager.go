@@ -28,15 +28,15 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-type sideInputManager struct {
+type sideInputsManager struct {
 	isbSvcType      dfv1.ISBSvcType
 	pipelineName    string
 	sideInputsStore string
 	sideInput       *dfv1.SideInput
 }
 
-func NewSideInputManager(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsStore string, sideInput *dfv1.SideInput) *sideInputManager {
-	return &sideInputManager{
+func NewSideInputsManager(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsStore string, sideInput *dfv1.SideInput) *sideInputsManager {
+	return &sideInputsManager{
 		isbSvcType:      isbSvcType,
 		sideInputsStore: sideInputsStore,
 		pipelineName:    pipelineName,
@@ -44,9 +44,9 @@ func NewSideInputManager(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsSto
 	}
 }
 
-func (sim *sideInputManager) Start(ctx context.Context) error {
+func (sim *sideInputsManager) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
-	log.Infof("Starting Side Input Manager for %q", sim.sideInput.Name)
+	log.Infof("Starting Side Inputs Manager for %q", sim.sideInput.Name)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

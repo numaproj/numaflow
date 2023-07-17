@@ -30,16 +30,16 @@ import (
 	"github.com/numaproj/numaflow/pkg/sideinputs/manager"
 )
 
-func NewSideInputManagerCommand() *cobra.Command {
+func NewSideInputsManagerCommand() *cobra.Command {
 	var (
 		isbSvcType      string
 		sideInputsStore string
 	)
 	command := &cobra.Command{
-		Use:   "side-input-manager",
-		Short: "Start a Side Input Manager",
+		Use:   "side-inputs-manager",
+		Short: "Start a Side Inputs Manager",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("side-input-manager")
+			logger := logging.NewLogger().Named("side-inputs-manager")
 
 			encodedSiceInputSpec, defined := os.LookupEnv(dfv1.EnvSideInputObject)
 			if !defined {
@@ -60,7 +60,7 @@ func NewSideInputManagerCommand() *cobra.Command {
 			}
 
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
-			sideInputManager := manager.NewSideInputManager(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInput)
+			sideInputManager := manager.NewSideInputsManager(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInput)
 			return sideInputManager.Start(ctx)
 		},
 	}

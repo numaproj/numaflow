@@ -1062,13 +1062,18 @@ message Scale {
   optional uint32 replicasPerScale = 9;
 }
 
-// SideInputs defines information of a Side Input
+// SideInput defines information of a Side Input
 message SideInput {
   optional string name = 1;
 
   optional Container container = 2;
 
-  optional SideInputTrigger trigger = 3;
+  // +optional
+  // +patchStrategy=merge
+  // +patchMergeKey=name
+  repeated k8s.io.api.core.v1.Volume volumes = 3;
+
+  optional SideInputTrigger trigger = 4;
 }
 
 message SideInputManagerTemplate {
