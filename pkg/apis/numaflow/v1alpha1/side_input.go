@@ -73,7 +73,7 @@ func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputD
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 	deployment := &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      pipeline.GetSideInputDeploymentName(si.Name),
+			Name:      pipeline.GetSideInputsManagerDeploymentName(si.Name),
 			Namespace: pipeline.Namespace,
 			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
@@ -102,8 +102,8 @@ func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputD
 	if x := pipeline.Spec.Templates; x != nil && x.SideInputManagerTemplate != nil {
 		x.SideInputManagerTemplate.ApplyToPodTemplateSpec(&deployment.Spec.Template)
 	}
-	for _, c := range deployment.Spec.Template.Spec.Containers {
-		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
+	for i := range deployment.Spec.Template.Spec.Containers {
+		deployment.Spec.Template.Spec.Containers[i].VolumeMounts = append(deployment.Spec.Template.Spec.Containers[i].VolumeMounts, volumeMounts...)
 	}
 	return deployment, nil
 }

@@ -192,7 +192,7 @@ func (p Pipeline) GetDaemonServiceURL() string {
 	return fmt.Sprintf("%s.%s.svc:%d", p.GetDaemonServiceName(), p.Namespace, DaemonServicePort)
 }
 
-func (p Pipeline) GetSideInputDeploymentName(sideInputName string) string {
+func (p Pipeline) GetSideInputsManagerDeploymentName(sideInputName string) string {
 	return fmt.Sprintf("%s-si-%s", p.Name, sideInputName)
 }
 
@@ -200,7 +200,7 @@ func (p Pipeline) GetSideInputsStoreName() string {
 	return p.Name
 }
 
-func (p Pipeline) GetSideInputManagerDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {
+func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {
 	commonEnvVars := []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},

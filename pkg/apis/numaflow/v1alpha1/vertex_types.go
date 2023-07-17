@@ -267,7 +267,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	initContainers := v.getInitContainers(req)
 
 	if v.HasSideInputs() {
-		sideInputsVolName := "side-inputs-vol"
+		sideInputsVolName := "var-run-side-inputs"
 		volumes = append(volumes, corev1.Volume{
 			Name:         sideInputsVolName,
 			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},

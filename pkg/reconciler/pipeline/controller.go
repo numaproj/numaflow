@@ -414,7 +414,7 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 		Env:        envs,
 	}
 
-	newObjs, err := pl.GetSideInputManagerDeployments(req)
+	newObjs, err := pl.GetSideInputsManagerDeployments(req)
 	if err != nil {
 		pl.Status.MarkDeployFailed("BuildSIMObjsFailed", err.Error())
 		return fmt.Errorf("failed to build Side Inputs Manager Deployments, %w", err)
