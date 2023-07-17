@@ -171,3 +171,14 @@ func (si SideInput) getUDContainer(req GetSideInputDeploymentReq) corev1.Contain
 		resources(si.Container.Resources).securityContext(si.Container.SecurityContext).appendEnvFrom(si.Container.EnvFrom...)
 	return cb.build()
 }
+
+type SideInputManagerTemplate struct {
+	// +optional
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,1,opt,name=abstractPodTemplate"`
+	// Template for the side inputs manager numa container
+	// +optional
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,2,opt,name=containerTemplate"`
+	// Template for the side inputs manager init container
+	// +optional
+	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,3,opt,name=initContainerTemplate"`
+}
