@@ -46,7 +46,7 @@ func NewSideInputManager(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsSto
 
 func (sim *sideInputManager) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
-	log.Infof("starting side input manager for %q", sim.sideInput.Name)
+	log.Infof("Starting Side Input Manager for %q", sim.sideInput.Name)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -66,7 +66,9 @@ func (sim *sideInputManager) Start(ctx context.Context) error {
 	}
 
 	// TODO(SI): do something
-	fmt.Println(isbSvcClient == nil)
+	// Periodically call the ud container and write data to the store.
+	fmt.Printf("ISB Svc Client nil: %v\n", isbSvcClient == nil)
+	fmt.Printf("Pipeline: %s, SideInput: %s\n", sim.pipelineName, sim.sideInput.Name)
 
 	<-ctx.Done()
 	return nil

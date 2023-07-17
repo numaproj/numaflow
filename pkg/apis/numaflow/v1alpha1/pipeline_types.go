@@ -212,11 +212,10 @@ func (p Pipeline) GetSideInputManagerDeployments(req GetSideInputDeploymentReq) 
 			return nil, err
 		}
 		for i := 0; i < len(deployment.Spec.Template.Spec.Containers); i++ {
-			deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, commonEnvVars...)
+			deployment.Spec.Template.Spec.Containers[i].Env = append(deployment.Spec.Template.Spec.Containers[i].Env, commonEnvVars...)
 		}
 		deployment.Spec.Template.Spec.InitContainers[0].Env = append(deployment.Spec.Template.Spec.InitContainers[0].Env, corev1.EnvVar{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)})
 		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)})
-		deployment.Spec.Template.Spec.Containers[1].Env = append(deployment.Spec.Template.Spec.Containers[1].Env, commonEnvVars...)
 		deployments = append(deployments, deployment)
 	}
 	return deployments, nil

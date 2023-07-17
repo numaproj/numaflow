@@ -19,10 +19,11 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/daemon/server"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sideinputs/initializer"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +31,7 @@ func NewSideInputsInitCommand() *cobra.Command {
 	var (
 		isbSvcType      string
 		sideInputsStore string
+		sideInputs      []string
 	)
 	command := &cobra.Command{
 		Use:   "side-inputs-init",
@@ -37,17 +39,22 @@ func NewSideInputsInitCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := logging.NewLogger().Named("side-inputs-init")
 
-			pl, err := decodePipeline()
-			if err != nil {
-				return fmt.Errorf("failed to decode the pipeline spec: %v", err)
+			pipelineName, defined := os.LookupEnv(dfv1.EnvPipelineName)
+			if !defined {
+				return fmt.Errorf("environment %q is not defined", dfv1.EnvPipelineName)
+			}
+
+			if len(sideInputs) == 0 {
+				return fmt.Errorf("no side inputs are defined for this vertex")
 			}
 
 			ctx := logging.WithLogger(context.Background(), logger)
-			server := server.NewDaemonServer(pl, v1alpha1.ISBSvcType(isbSvcType))
-			return server.Run(ctx)
+			sideInputsInitializer := initializer.NewSideInputsInitializer(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInputs)
+			return sideInputsInitializer.Run(ctx)
 		},
 	}
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "jetstream", "ISB Service type, e.g. jetstream")
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
+	command.Flags().StringSliceVar(&sideInputs, "side-inputs", []string{}, "Side Input names") // --side-inputs=si1,si2 --side-inputs=si3
 	return command
 }
