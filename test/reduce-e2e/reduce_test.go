@@ -68,7 +68,6 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	w.Expect().
 		SinkContains("sink", "40").
 		SinkContains("sink", "20")
-	//time.Sleep(1 * time.Minute) //todo: delete this
 	done <- struct{}{}
 }
 
@@ -183,7 +182,6 @@ func (r *ReduceSuite) TestJoinedReduceVertexPipeline() {
 	w.Expect().
 		SinkContains("sink", "40"). // per 10 second window: (10 * 2) * 2 atoi vertices
 		SinkContains("sink", "80")  // per 10 second window: 10 * (1 + 3) * 2 atoi vertices
-	//time.Sleep(2 * time.Minute) //todo: delete this
 	done <- struct{}{}
 }
 
@@ -226,7 +224,6 @@ func (r *ReduceSuite) TestJoinedReduceVertexPipeline2() {
 	w.Expect().
 		SinkContains("sink", "80"). // per 10 second window: 10 * (2 + 6) = 80
 		SinkContains("sink", "160") // per 10 second window: 10 * (1 + 3 + 5 + 7) = 160
-	//time.Sleep(2 * time.Minute) //todo: delete this
 	done <- struct{}{}
 }
 
@@ -246,7 +243,7 @@ func (r *ReduceSuite) TestJoinedMapVertexPipeline() {
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
 		startTime := 60000
-		for i := 0; true; i++ {
+		for i := 0; i < 5; i++ {
 			select {
 			case <-ctx.Done():
 				return
@@ -265,11 +262,10 @@ func (r *ReduceSuite) TestJoinedMapVertexPipeline() {
 		}
 	}()
 
-	// todo: this only tests for one occurrence: ideally should verify all
+	// todo: this only tests for one occurrence: consider verifying that all match? (but test will take longer)
 	w.Expect().
 		SinkContains("sink", "80"). // per 10 second window: 10 * (2 + 6) = 80
 		SinkContains("sink", "160") // per 10 second window: 10 * (1 + 3 + 5 + 7) = 160
-	//time.Sleep(2 * time.Minute) //todo: delete this
 	done <- struct{}{}
 }
 
