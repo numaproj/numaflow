@@ -48,19 +48,12 @@ func (s myShutdownTest) ApplyMapStream(ctx context.Context, message *isb.ReadMes
 
 func TestInterStepDataForward(t *testing.T) {
 	tests := []struct {
-		name          string
-		batchSize     int64
-		streamEnabled bool
+		name      string
+		batchSize int64
 	}{
 		{
-			name:          "stream_forward",
-			batchSize:     1,
-			streamEnabled: true,
-		},
-		{
-			name:          "batch_forward",
-			batchSize:     5,
-			streamEnabled: false,
+			name:      "batch_forward",
+			batchSize: 5,
 		},
 	}
 	for _, tt := range tests {
@@ -85,7 +78,7 @@ func TestInterStepDataForward(t *testing.T) {
 			}}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data but buffer is not full even though we are not reading
@@ -118,10 +111,10 @@ func TestInterStepDataForward(t *testing.T) {
 			}}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
 			assert.NoError(t, err)
 			stopped := f.Start()
-			// write some data such that the fromBufferPartition can be empty, that is toBuffer gets full
+			// write some data such that the reader can be empty, that is toBuffer gets full
 			_, errs := fromStep.Write(ctx, writeMessages[0:4*batchSize])
 			assert.Equal(t, make([]error, 4*batchSize), errs)
 
