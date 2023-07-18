@@ -215,7 +215,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	readMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
 
-	isdf.opts.logger.Debugf("deletethis: forwardAChunk(): there are %d messages to read", len(readMessages))
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
 	// reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
@@ -272,7 +271,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
 		// we fetch the watermark for the partition from which we read the message.
 		processorWM = isdf.wmFetcher.ProcessOffsetGetWatermark(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
-		isdf.opts.logger.Debugf("deletethis: got %+v back from ProcessOffsetGetWatermark", processorWM)
 
 	}
 
@@ -501,7 +499,8 @@ func (isdf *InterStepDataForward) streamMessage(
 		// to send the result to. Then update the toBuffer(s) with writeMessage.
 		msgIndex := 0
 		for writeMessage := range writeMessageCh {
-			// add partition to the ID, this is to make sure that the ID is unique across partitions
+			// add partition to the ID, to make sure that the ID is unique across partitions
+			// also add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
 			writeMessage.ID = fmt.Sprintf("%s-%d-%d-%s", dataMessages[0].ReadOffset.String(), isdf.fromBufferPartition.GetPartitionIdx(), msgIndex, isdf.vertexName)
 			msgIndex += 1
 			udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(1))
@@ -723,7 +722,8 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 		} else {
 			// if we do not get a time from UDF, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
-				// add partition to the ID, this is to make sure that the ID is unique across partitions
+				// add partition to the ID, to make sure that the ID is unique across partitions
+				// also add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
 				m.ID = fmt.Sprintf("%s-%d-%d-%s", readMessage.ReadOffset.String(), isdf.fromBufferPartition.GetPartitionIdx(), index, isdf.vertexName)
 				if m.EventTime.IsZero() {
 					m.EventTime = readMessage.EventTime
