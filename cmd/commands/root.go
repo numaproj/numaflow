@@ -45,4 +45,8 @@ func init() {
 	rootCmd.AddCommand(NewDaemonServerCommand())
 	rootCmd.AddCommand(NewServerCommand())
 	rootCmd.AddCommand(NewServerInitCommand())
+	rootCmd.AddCommand(NewWebhookCommand())
+	rootCmd.AddCommand(NewSideInputsInitCommand())
+	rootCmd.AddCommand(NewSideInputsManagerCommand())
+	rootCmd.AddCommand(NewSideInputsWatcherCommand())
 }

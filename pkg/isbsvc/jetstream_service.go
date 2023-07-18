@@ -60,7 +60,7 @@ func WithJetStreamClient(jsClient jsclient.JetStreamClient) JSServiceOption {
 	}
 }
 
-func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...CreateOption) error {
+func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, opts ...CreateOption) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}
@@ -86,6 +86,26 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
+	if sideInputsStore != "" {
+		bucket := JetStreamSideInputsStoreBucket(sideInputsStore)
+		if _, err := js.KeyValue(bucket); err != nil {
+			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+				return fmt.Errorf("failed to query information of bucket %q, %w", bucket, err)
+			}
+			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
+				Bucket:       bucket,
+				MaxValueSize: 0,
+				History:      1,                   // No history
+				TTL:          time.Hour * 24 * 30, // 30 days
+				MaxBytes:     0,
+				Storage:      nats.FileStorage,
+				Replicas:     3,
+			}); err != nil {
+				return fmt.Errorf("failed to create side inputs bucket %q, %w", bucket, err)
+			}
+			log.Infow("Succeeded to create a side inputs bucket", zap.String("bucket", bucket))
+		}
+	}
 	for _, buffer := range buffers {
 		streamName := JetStreamName(buffer)
 		_, err := js.StreamInfo(streamName)
@@ -107,7 +127,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}); err != nil {
 				return fmt.Errorf("failed to create stream %q and buffers, %w", streamName, err)
 			}
-			log.Infow("Succeeded to create a stream and buffers", zap.String("stream", streamName), zap.Strings("buffers", []string{streamName}))
+			log.Infow("Succeeded to create a stream", zap.String("stream", streamName))
 			if _, err := js.AddConsumer(streamName, &nats.ConsumerConfig{
 				Durable:       streamName,
 				DeliverPolicy: nats.DeliverAllPolicy,
@@ -167,7 +187,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	return nil
 }
 
-func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
+func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}
@@ -200,10 +220,18 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 		}
 		log.Infow("Succeeded to delete a processor bucket", zap.String("bucket", procBucket))
 	}
+
+	if sideInputsStore != "" {
+		sideInputsBucket := JetStreamSideInputsStoreBucket(sideInputsStore)
+		if err := js.DeleteKeyValue(sideInputsBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete side inputs bucket %q, %w", sideInputsBucket, err)
+		}
+		log.Infow("Succeeded to delete a side inputs bucket", zap.String("bucket", sideInputsBucket))
+	}
 	return nil
 }
 
-func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
+func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}
@@ -231,6 +259,12 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 		procBucket := JetStreamProcessorBucket(bucket)
 		if _, err := js.KeyValue(procBucket); err != nil {
 			return fmt.Errorf("failed to query processor bucket %q, %w", procBucket, err)
+		}
+	}
+	if sideInputsStore != "" {
+		sideInputsBucket := JetStreamSideInputsStoreBucket(sideInputsStore)
+		if _, err := js.KeyValue(sideInputsBucket); err != nil {
+			return fmt.Errorf("failed to query side inputs store %q, %w", sideInputsBucket, err)
 		}
 	}
 	return nil
@@ -324,4 +358,8 @@ func JetStreamOTBucket(bucketName string) string {
 
 func JetStreamProcessorBucket(bucketName string) string {
 	return fmt.Sprintf("%s_PROCESSORS", bucketName)
+}
+
+func JetStreamSideInputsStoreBucket(sideInputStoreName string) string {
+	return fmt.Sprintf("%s_SIDE_INPUTS", sideInputStoreName)
 }

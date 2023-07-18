@@ -201,6 +201,7 @@ manifests: crds
 	kubectl kustomize config/advanced-install/namespaced-numaflow-server > config/advanced-install/namespaced-numaflow-server.yaml
 	kubectl kustomize config/advanced-install/numaflow-server > config/advanced-install/numaflow-server.yaml
 	kubectl kustomize config/advanced-install/minimal-crds > config/advanced-install/minimal-crds.yaml
+	kubectl kustomize config/extensions/webhook > config/validating-webhook-install.yaml
 
 $(GOPATH)/bin/golangci-lint:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b `go env GOPATH`/bin v1.49.0
@@ -291,6 +292,8 @@ update-manifests-version:
 	mv /tmp/base_kustomization.yaml config/advanced-install/namespaced-controller/kustomization.yaml
 	cat config/advanced-install/numaflow-server/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/base_kustomization.yaml
 	mv /tmp/base_kustomization.yaml config/advanced-install/numaflow-server/kustomization.yaml
+	cat config/extensions/webhook/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/base_kustomization.yaml
+	mv /tmp/base_kustomization.yaml config/extensions/webhook/kustomization.yaml
 	cat Makefile | sed 's/^VERSION?=.*/VERSION?=$(VERSION)/' | sed 's/^BASE_VERSION:=.*/BASE_VERSION:=$(VERSION)/' > /tmp/ae_makefile
 	mv /tmp/ae_makefile Makefile
 

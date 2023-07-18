@@ -65,7 +65,9 @@ type Rater struct {
 
 // PodReadCount is a struct to maintain count of messages read from each partition by a pod
 type PodReadCount struct {
-	name                string
+	// pod name
+	name string
+	// key represents partition name, value represents the count of messages read by the corresponding partition
 	partitionReadCounts map[string]float64
 }
 
@@ -76,8 +78,6 @@ func (p *PodReadCount) Name() string {
 func (p *PodReadCount) PartitionReadCounts() map[string]float64 {
 	return p.partitionReadCounts
 }
-
-// vertex -> [timestamp(podCounts{podName: count}, partitionCounts{partitionIdx: count}, isWindowClosed, delta(across all the pods))]
 
 func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater {
 	rater := Rater{
