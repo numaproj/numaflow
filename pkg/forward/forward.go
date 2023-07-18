@@ -502,7 +502,7 @@ func (isdf *InterStepDataForward) streamMessage(
 		msgIndex := 0
 		for writeMessage := range writeMessageCh {
 			// add partition to the ID, this is to make sure that the ID is unique across partitions
-			writeMessage.ID = fmt.Sprintf("%s-%s-%d-%d", isdf.vertexName, dataMessages[0].ReadOffset.String(), isdf.fromBufferPartition.GetPartitionIdx(), msgIndex) // todo: make sure we do this for all other setting of ID!!
+			writeMessage.ID = fmt.Sprintf("%s-%d-%d-%s", dataMessages[0].ReadOffset.String(), isdf.fromBufferPartition.GetPartitionIdx(), msgIndex, isdf.vertexName)
 			msgIndex += 1
 			udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(1))
 
