@@ -2170,7 +2170,7 @@ Using K8s CronJob/Job will be a <a href="https://github.com/istio/istio/issues/6
 <div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nx">RetrieveSideInput</span><span class="p">()</span><span class="w"> </span><span class="p">([]</span><span class="nx">bytes</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 </code></pre></div>
 <ul>
-<li>A main function to start the service in the Side Input Manager user container.</li>
+<li>A main function to start the service in the Side Inputs Manager user container.</li>
 <li>A helper function to be used in the udf/udsink/transformer containers to get the Side Inputs, which reads, watches and caches the data from the shared volume.</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nx">SideInput</span><span class="p">[</span><span class="nx">T</span><span class="w"> </span><span class="kt">any</span><span class="p">](</span><span class="nx">name</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">parseFunc</span><span class="w"> </span><span class="kd">func</span><span class="p">([]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">T</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">))</span><span class="w"> </span><span class="p">(</span><span class="nx">T</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
