@@ -145,8 +145,7 @@ func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 			op.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
 			return
 		}
-		op.log.Errorw("Process failed", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(err))
-		time.Sleep(retryDelay)
+		op.log.Panic("Process failed exiting...", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(err))
 	}
 
 	// indicate that we are done with reduce UDF invocation.
