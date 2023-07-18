@@ -1274,7 +1274,7 @@ func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, int(count))
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{"testVertex-" + writeMessages[0].Header.ID + "-0-0", "testVertex-" + writeMessages[1].Header.ID + "-0-0"},
+	assert.Equal(t, []interface{}{writeMessages[0].Header.ID, writeMessages[1].Header.ID},
 		[]interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
@@ -1336,7 +1336,7 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[2].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{"testVertex-" + writeMessages[0].Header.ID + "-0-0", "testVertex-" + writeMessages[2].Header.ID + "-0-0"},
+	assert.Equal(t, []interface{}{writeMessages[0].Header.ID, writeMessages[2].Header.ID},
 		[]interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
@@ -1351,7 +1351,7 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[1].Header.Keys, writeMessages[3].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{"testVertex-" + writeMessages[1].Header.ID + "-0-0", "testVertex-" + writeMessages[3].Header.ID + "-0-0"},
+	assert.Equal(t, []interface{}{writeMessages[1].Header.ID, writeMessages[3].Header.ID},
 		[]interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
