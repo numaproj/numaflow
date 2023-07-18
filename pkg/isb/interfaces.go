@@ -56,7 +56,7 @@ type BufferReader interface {
 	Read(context.Context, int64) ([]*ReadMessage, error)
 	// Ack acknowledges an array of offset.
 	Ack(context.Context, []Offset) []error
-	// NoAck cancel acknowledgement of an array of offset.
+	// NoAck cancels acknowledgement of an array of offset.
 	NoAck(context.Context, []Offset)
 }
 

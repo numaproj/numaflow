@@ -14,9 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-Package forward does the Read (reader) -> Process (UDF) -> Forward (toBuffers) -> Ack (reader) loop.
-*/
 package forward
 
 import (
@@ -42,21 +39,21 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-// TODO - update the comments
-// DataForward forwards the data from previous step to the current step via inter-step buffer.
+// DataForward reads data from source and forwards to inter-step buffers
 type DataForward struct {
 	// I have my reasons for overriding the default principle https://github.com/golang/go/issues/22602
 	ctx context.Context
 	// cancelFn cancels our new context, our cancellation is little more complex and needs to be well orchestrated, hence
 	// we need something more than a cancel().
 	cancelFn context.CancelFunc
-	reader   isb.BufferReader
-	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
-	toBuffers map[string][]isb.BufferWriter
-	FSD       forward.ToWhichStepDecider
-	UDF       applier.MapApplier
-	wmFetcher fetch.Fetcher
-	// wmPublishers stores the vertex to publisher mapping
+	// reader reads data from source.
+	reader isb.BufferReader
+	// toBuffers store the toVertex name to its owned buffers mapping.
+	toBuffers          map[string][]isb.BufferWriter
+	toWhichStepDecider forward.ToWhichStepDecider
+	transformer        applier.MapApplier
+	wmFetcher          fetch.Fetcher
+	// wmPublishers stores the vertex to publisher mapping.
 	wmPublishers map[string]publish.Publisher
 	opts         options
 	vertexName   string
@@ -68,12 +65,13 @@ type DataForward struct {
 	Shutdown
 }
 
-// NewDataForward creates an inter-step forwarder.
-func NewDataForward(vertex *dfv1.Vertex,
+// NewDataForward creates a source data forwarder
+func NewDataForward(
+	vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
 	toSteps map[string][]isb.BufferWriter,
-	fsd forward.ToWhichStepDecider,
-	applyUDF applier.MapApplier,
+	toWhichStepDecider forward.ToWhichStepDecider,
+	transformer applier.MapApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*DataForward, error) {
@@ -86,25 +84,24 @@ func NewDataForward(vertex *dfv1.Vertex,
 	// creating a context here which is managed by the forwarder's lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 	var isdf = DataForward{
-		ctx:          ctx,
-		cancelFn:     cancel,
-		reader:       fromStep,
-		toBuffers:    toSteps,
-		FSD:          fsd,
-		UDF:          applyUDF,
-		wmFetcher:    fetchWatermark,
-		wmPublishers: publishWatermark,
-		// should we do a check here for the values not being null?
-		vertexName:   vertex.Spec.Name,
-		pipelineName: vertex.Spec.PipelineName,
-		idleManager:  wmb.NewIdleManager(len(toSteps)),
-		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable
+		ctx:                ctx,
+		cancelFn:           cancel,
+		reader:             fromStep,
+		toBuffers:          toSteps,
+		toWhichStepDecider: toWhichStepDecider,
+		transformer:        transformer,
+		wmFetcher:          fetchWatermark,
+		wmPublishers:       publishWatermark,
+		vertexName:         vertex.Spec.Name,
+		pipelineName:       vertex.Spec.PipelineName,
+		idleManager:        wmb.NewIdleManager(len(toSteps)),
+		wmbChecker:         wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
 		opts: *options,
 	}
-	// Add logger from parent ctx to child context.
+	// add logger from parent ctx to child context.
 	isdf.ctx = logging.WithLogger(ctx, options.logger)
 	if isdf.opts.srcWatermarkPublisher == nil {
 		return nil, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder")
@@ -145,11 +142,11 @@ func (isdf *DataForward) Start() <-chan struct{} {
 
 	go func() {
 		wg.Wait()
-		// Clean up resources for buffer reader and all the writers if any.
+		// clean up resources for source reader and all the writers if any.
 		if err := isdf.reader.Close(); err != nil {
-			log.Errorw("Failed to close buffer reader, shutdown anyways...", zap.Error(err))
+			log.Errorw("Failed to close source reader, shutdown anyways...", zap.Error(err))
 		} else {
-			log.Infow("Closed buffer reader", zap.String("bufferFrom", isdf.reader.GetName()))
+			log.Infow("Closed source reader", zap.String("sourceFrom", isdf.reader.GetName()))
 		}
 		for _, buffer := range isdf.toBuffers {
 			for _, partition := range buffer {
@@ -160,13 +157,11 @@ func (isdf *DataForward) Start() <-chan struct{} {
 				}
 			}
 		}
-
 		// stop watermark fetcher
 		if err := isdf.wmFetcher.Close(); err != nil {
 			log.Errorw("Failed to close watermark fetcher", zap.Error(err))
 		}
-
-		// stop watermark publisher
+		// stop watermark publishers
 		for _, publisher := range isdf.wmPublishers {
 			if err := publisher.Close(); err != nil {
 				log.Errorw("Failed to close watermark publisher", zap.Error(err))
@@ -174,21 +169,20 @@ func (isdf *DataForward) Start() <-chan struct{} {
 		}
 		close(stopped)
 	}()
-
 	return stopped
 }
 
-// readWriteMessagePair represents a read message and its processed (via UDF) write messages.
+// readWriteMessagePair represents a read message and its processed (via transformer) write messages.
 type readWriteMessagePair struct {
-	readMessage   *isb.ReadMessage
-	writeMessages []*isb.WriteMessage
-	udfError      error
+	readMessage      *isb.ReadMessage
+	writeMessages    []*isb.WriteMessage
+	transformerError error
 }
 
 // forwardAChunk forwards a chunk of message from the reader to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
-// buffer-not-reachable, etc., but does not include errors due to user code UDFs, WhereTo, etc.
+// buffer-not-reachable, etc., but does not include errors due to user code transformer, WhereTo, etc.
 func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	start := time.Now()
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
@@ -196,7 +190,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// responsibility of the Read function to do that.
 	readMessages, err := isdf.reader.Read(ctx, isdf.opts.readBatchSize)
 	if err != nil {
-		isdf.opts.logger.Warnw("failed to read reader", zap.Error(err))
+		isdf.opts.logger.Warnw("failed to read from source", zap.Error(err))
 		forward.ReadMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
 	}
 	forward.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(readMessages)))
@@ -234,33 +228,21 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
-
-	// store the offsets of the messages we read from ISB
+	// store the offsets of the messages we read from source
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
 		readOffsets[idx] = m.ReadOffset
+		// for source forwarder, below if statement should always hold true, since we never publish idle watermark to source reader buffer
 		if m.Kind == isb.Data {
 			dataMessages = append(dataMessages, m)
 		}
 	}
 
-	var processorWM wmb.Watermark
-	if isdf.opts.vertexType == dfv1.VertexTypeSource {
-		// for source vertex, the udf is the source data transformer.
-		// in this case, we assign time.UnixMilli(-1) to processorWM.
-		// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
-		processorWM = wmb.Watermark(time.UnixMilli(-1))
-	} else {
-		// fetch watermark if available
-		// TODO: make it async (concurrent and wait later)
-		// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
-		// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
-		// we fetch the watermark for the partition from which we read the message.
-		processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.reader.GetPartitionIdx())
-	}
+	// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
+	// hence we assign time.UnixMilli(-1) to processorWM.
+	processorWM := wmb.Watermark(time.UnixMilli(-1))
 
 	var writeOffsets map[string][][]isb.Offset
-
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][][]isb.Message)
 	for toVertex := range isdf.toBuffers {
@@ -268,79 +250,76 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
 	}
 
-	// udf concurrent processing request channel
-	udfCh := make(chan *readWriteMessagePair)
-	// udfResults stores the results after UDF processing for all read messages. It indexes
+	// user defined transformer concurrent processing request channel
+	transformerCh := make(chan *readWriteMessagePair)
+	// transformerResults stores the results after user defined transformer processing for all read messages. It indexes
 	// a read message to the corresponding write message
-	udfResults := make([]readWriteMessagePair, len(dataMessages))
-	// applyUDF, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
+	transformerResults := make([]readWriteMessagePair, len(dataMessages))
+	// applyTransformer, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
 
-	// create a pool of UDF Processors
+	// create a pool of Transformer Processors
 	var wg sync.WaitGroup
-	for i := 0; i < isdf.opts.udfConcurrency; i++ {
+	for i := 0; i < isdf.opts.transformerConcurrency; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			isdf.concurrentApplyUDF(ctx, udfCh)
+			isdf.concurrentApplyTransformer(ctx, transformerCh)
 		}()
 	}
-	concurrentUDFProcessingStart := time.Now()
+	concurrentTransformerProcessingStart := time.Now()
 
-	// send to UDF only the data messages
+	// send to transformer only the data messages
 	for idx, m := range dataMessages {
 		// emit message size metric
 		forward.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(m.Payload)))
-		// assign watermark to the message. assign time.UnixMilli(-1) as watermark when we are at source vertex.
+		// assign watermark to the message
 		m.Watermark = time.Time(processorWM)
-		// send UDF processing work to the channel
-		udfResults[idx].readMessage = m
-		udfCh <- &udfResults[idx]
+		// send transformer processing work to the channel
+		transformerResults[idx].readMessage = m
+		transformerCh <- &transformerResults[idx]
 	}
 	// let the go routines know that there is no more work
-	close(udfCh)
-	// wait till the processing is done. this will not be an infinite wait because the UDF processing will exit if
+	close(transformerCh)
+	// wait till the processing is done. this will not be an infinite wait because the transformer processing will exit if
 	// context.Done() is closed.
 	wg.Wait()
-	isdf.opts.logger.Debugw("concurrent applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
-	forward.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
-	// UDF processing is done.
+	isdf.opts.logger.Debugw("concurrent applyTransformer completed", zap.Int("concurrency", isdf.opts.transformerConcurrency), zap.Duration("took", time.Since(concurrentTransformerProcessingStart)))
+	forward.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
+	// transformer processing is done.
 
-	// if vertex type is source, it means we have finished the source data transformation.
-	// let's publish source watermark and assign IsLate attribute based on new event time.
-	if isdf.opts.vertexType == dfv1.VertexTypeSource {
-		var writeMessages []*isb.WriteMessage
-		var transformedReadMessages []*isb.ReadMessage
-		for _, m := range udfResults {
-			writeMessages = append(writeMessages, m.writeMessages...)
-			for _, message := range m.writeMessages {
-				// we convert each writeMessage to isb.ReadMessage by providing its parent ReadMessage's ReadOffset.
-				// since we use message event time instead of the watermark to determine and publish source watermarks,
-				// time.UnixMilli(-1) is assigned to the message watermark. transformedReadMessages are immediately
-				// used below for publishing source watermarks.
-				transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
-			}
+	// publish source watermark and assign IsLate attribute based on new event time.
+	var writeMessages []*isb.WriteMessage
+	var transformedReadMessages []*isb.ReadMessage
+	for _, m := range transformerResults {
+		writeMessages = append(writeMessages, m.writeMessages...)
+		for _, message := range m.writeMessages {
+			// we convert each writeMessage to isb.ReadMessage by providing its parent ReadMessage's ReadOffset.
+			// since we use message event time instead of the watermark to determine and publish source watermarks,
+			// time.UnixMilli(-1) is assigned to the message watermark. transformedReadMessages are immediately
+			// used below for publishing source watermarks.
+			transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
 		}
-		// publish source watermark
-		isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
-		// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
-		// but ideally we should use the latest to determine the IsLate attribute.
-		processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.reader.GetPartitionIdx())
-		// assign isLate
-		for _, m := range writeMessages {
-			if processorWM.After(m.EventTime) { // Set late data at source level
-				m.IsLate = true
-			}
+	}
+	// publish source watermark
+	isdf.opts.srcWatermarkPublisher.PublishSourceWatermarks(transformedReadMessages)
+	// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
+	// but ideally we should use the latest to determine the IsLate attribute.
+	processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.reader.GetPartitionIdx())
+	// assign isLate
+	for _, m := range writeMessages {
+		if processorWM.After(m.EventTime) { // Set late data at source level
+			m.IsLate = true
 		}
 	}
 
 	// let's figure out which vertex to send the results to.
 	// update the toBuffer(s) with writeMessages.
-	for _, m := range udfResults {
-		// look for errors in udf processing, if we see even 1 error NoAck all messages
+	for _, m := range transformerResults {
+		// look for errors in transformer processing, if we see even 1 error NoAck all messages
 		// then return. Handling partial retrying is not worth ATM.
-		if m.udfError != nil {
+		if m.transformerError != nil {
 			forward.UdfError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
-			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(m.udfError))
+			isdf.opts.logger.Errorw("failed to apply source transformer", zap.Error(m.transformerError))
 			// As there's no partial failure, non-ack all the readOffsets
 			isdf.reader.NoAck(ctx, readOffsets)
 			return
@@ -374,21 +353,13 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
 		if publisher, ok := isdf.wmPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
-				if isdf.opts.vertexType == dfv1.VertexTypeSource || isdf.opts.vertexType == dfv1.VertexTypeMapUDF ||
-					isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
-					if len(offsets) > 0 {
-						publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
-						activeWatermarkBuffers[toVertexName][index] = true
-						// reset because the toBuffer partition is no longer idling
-						isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
-					}
-					// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
-				} else { // For Sink vertex, and it does not care about the offset during watermark publishing
-					publisher.PublishWatermark(processorWM, nil, int32(index))
+				if len(offsets) > 0 {
+					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is no longer idling
 					isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
 				}
+				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 			}
 		}
 	}
@@ -415,12 +386,12 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	// when we apply udf, we don't handle partial errors (it's either non or all, non will return early),
+	// when we apply transformer, we don't handle partial errors (it's either non or all, non will return early),
 	// so we should be able to ack all the readOffsets including data messages and control messages
 	err = isdf.ackFromBuffer(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
-		isdf.opts.logger.Errorw("failed to ack from buffer", zap.Error(err))
+		isdf.opts.logger.Errorw("failed to ack from source", zap.Error(err))
 		forward.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(readOffsets)))
 		return
 	}
@@ -567,40 +538,40 @@ func (isdf *DataForward) writeToBuffer(ctx context.Context, toBufferPartition is
 	return writeOffsets, nil
 }
 
-// concurrentApplyUDF applies the UDF based on the request from the channel
-func (isdf *DataForward) concurrentApplyUDF(ctx context.Context, readMessagePair <-chan *readWriteMessagePair) {
+// concurrentApplyTransformer applies the transformer based on the request from the channel
+func (isdf *DataForward) concurrentApplyTransformer(ctx context.Context, readMessagePair <-chan *readWriteMessagePair) {
 	for message := range readMessagePair {
 		start := time.Now()
 		forward.UdfReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
-		writeMessages, err := isdf.applyUDF(ctx, message.readMessage)
+		writeMessages, err := isdf.applyTransformer(ctx, message.readMessage)
 		forward.UdfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(writeMessages)))
 		message.writeMessages = append(message.writeMessages, writeMessages...)
-		message.udfError = err
+		message.transformerError = err
 		forward.UdfProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 	}
 }
 
-// applyUDF applies the UDF and will block if there is any InternalErr. On the other hand, if this is a UserError
+// applyTransformer applies the transformer and will block if there is any InternalErr. On the other hand, if this is a UserError
 // the skip flag is set. ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
-// The UserError retry will be done on the ApplyUDF.
-func (isdf *DataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+// The UserError retry will be done on the applyTransformer.
+func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
-		writeMessages, err := isdf.UDF.ApplyMap(ctx, readMessage)
+		writeMessages, err := isdf.transformer.ApplyMap(ctx, readMessage)
 		if err != nil {
-			isdf.opts.logger.Errorw("UDF.Apply error", zap.Error(err))
+			isdf.opts.logger.Errorw("Transformer.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.
 			time.Sleep(isdf.opts.retryInterval)
 			// keep retrying, I cannot think of a use case where a user could say, errors are fine :-)
 			// as a platform we should not lose or corrupt data.
 			// this does not mean we should prohibit this from a shutdown.
 			if ok, _ := isdf.IsShuttingDown(); ok {
-				isdf.opts.logger.Errorw("UDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
+				isdf.opts.logger.Errorw("Transformer.Apply, Stop called while stuck on an internal error", zap.Error(err))
 				forward.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName}).Inc()
 				return nil, err
 			}
 			continue
 		} else {
-			// if we do not get a time from UDF, we set it to the time from (N-1)th vertex
+			// if we do not get a time from Transformer, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
 				// add partition to the ID, this is to make sure that the ID is unique across partitions
 				m.ID = fmt.Sprintf("%s-%d-%d", readMessage.ReadOffset.String(), isdf.reader.GetPartitionIdx(), index)
@@ -616,7 +587,7 @@ func (isdf *DataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMess
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
 func (isdf *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-	to, err := isdf.FSD.WhereTo(writeMessage.Keys, writeMessage.Tags)
+	to, err := isdf.toWhichStepDecider.WhereTo(writeMessage.Keys, writeMessage.Tags)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.reader.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
 		// a shutdown can break the blocking loop caused due to InternalErr

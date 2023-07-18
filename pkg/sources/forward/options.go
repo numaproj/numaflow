@@ -30,8 +30,8 @@ import (
 type options struct {
 	// readBatchSize is the default batch size
 	readBatchSize int64
-	// udfConcurrency sets the concurrency for concurrent UDF processing
-	udfConcurrency int
+	// transformerConcurrency sets the concurrency for concurrent transformer processing
+	transformerConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
 	// vertexType indicates the type of the vertex
@@ -46,10 +46,10 @@ type Option func(*options) error
 
 func DefaultOptions() *options {
 	return &options{
-		readBatchSize:  dfv1.DefaultReadBatchSize,
-		udfConcurrency: dfv1.DefaultReadBatchSize,
-		retryInterval:  time.Millisecond,
-		logger:         logging.NewLogger(),
+		readBatchSize:          dfv1.DefaultReadBatchSize,
+		transformerConcurrency: dfv1.DefaultReadBatchSize,
+		retryInterval:          time.Millisecond,
+		logger:                 logging.NewLogger(),
 	}
 }
 
@@ -69,10 +69,10 @@ func WithReadBatchSize(f int64) Option {
 	}
 }
 
-// WithUDFConcurrency sets concurrency for UDF processing
-func WithUDFConcurrency(f int) Option {
+// WithTransformerConcurrency sets concurrency for UDF processing
+func WithTransformerConcurrency(f int) Option {
 	return func(o *options) error {
-		o.udfConcurrency = f
+		o.transformerConcurrency = f
 		return nil
 	}
 }
