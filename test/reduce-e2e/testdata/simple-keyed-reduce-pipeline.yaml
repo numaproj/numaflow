@@ -9,10 +9,6 @@ spec:
     - name: in
       scale:
         min: 1
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: "true"
       source:
         http: {}
     - name: atoi
