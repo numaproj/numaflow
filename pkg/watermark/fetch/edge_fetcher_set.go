@@ -42,6 +42,8 @@ func NewEdgeFetcherSet(ctx context.Context, edgeFetchers map[string]Fetcher) Fet
 	}
 }
 
+// ProcessOffsetGetWatermark processes the offset on the partition indicated and returns the overall Watermark
+// from all Partitions
 func (efs *edgeFetcherSet) ProcessOffsetGetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	_ = efs.ProcessOffset(inputOffset, fromPartitionIdx) // even if it errored, we'll keep going
 	return efs.GetWatermark()
@@ -117,6 +119,7 @@ func (efs *edgeFetcherSet) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 
 }
 
+// GetWatermark returns the current watermark based on what has been processed
 func (efs *edgeFetcherSet) GetWatermark() wmb.Watermark {
 	// get the most conservative time (minimum watermark) across all Edges
 	var wm wmb.Watermark
