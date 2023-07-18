@@ -201,7 +201,7 @@ func (r *ReduceSuite) TestJoinedMapVertexPipeline() {
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
 		startTime := 60000
-		for i := 0; i < 5; i++ {
+		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():
 				return
@@ -224,6 +224,7 @@ func (r *ReduceSuite) TestJoinedMapVertexPipeline() {
 	w.Expect().
 		SinkContains("sink", "80"). // per 10 second window: 10 * (2 + 6) = 80
 		SinkContains("sink", "160") // per 10 second window: 10 * (1 + 3 + 5 + 7) = 160
+
 	done <- struct{}{}
 }
 
