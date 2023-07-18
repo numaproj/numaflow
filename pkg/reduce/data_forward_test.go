@@ -392,8 +392,6 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		window, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
-	fmt.Println("deletethis: about to Start reduceDataForward")
-
 	// start the forwarder
 	go reduceDataForward.Start()
 
