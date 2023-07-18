@@ -139,7 +139,7 @@ func New(
 	}
 
 	// Create Source Data Forwarder
-	forwardOpts := []sourceforward.Option{sourceforward.WithVertexType(dfv1.VertexTypeSource), sourceforward.WithLogger(redisStreamsSource.Log), sourceforward.WithSourceWatermarkPublisher(redisStreamsSource)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(redisStreamsSource.Log), sourceforward.WithSourceWatermarkPublisher(redisStreamsSource)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))

@@ -211,7 +211,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	gensrc.lifecycleCtx = cctx
 	gensrc.cancel = cancel
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithVertexType(dfv1.VertexTypeSource), sourceforward.WithLogger(gensrc.logger), sourceforward.WithSourceWatermarkPublisher(gensrc)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(gensrc.logger), sourceforward.WithSourceWatermarkPublisher(gensrc)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))

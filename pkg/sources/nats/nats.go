@@ -86,7 +86,7 @@ func New(
 	}
 	n.messages = make(chan *isb.ReadMessage, n.bufferSize)
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithVertexType(dfv1.VertexTypeSource), sourceforward.WithLogger(n.logger), sourceforward.WithSourceWatermarkPublisher(n)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(n.logger), sourceforward.WithSourceWatermarkPublisher(n)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))

@@ -361,7 +361,7 @@ func NewKafkaSource(
 	handler := newConsumerHandler(kafkasource.handlerbuffer)
 	kafkasource.handler = handler
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithVertexType(dfv1.VertexTypeSource), sourceforward.WithLogger(kafkasource.logger), sourceforward.WithSourceWatermarkPublisher(kafkasource)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(kafkasource.logger), sourceforward.WithSourceWatermarkPublisher(kafkasource)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))

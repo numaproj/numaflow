@@ -192,7 +192,7 @@ func New(
 	}()
 	h.shutdown = server.Shutdown
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithVertexType(dfv1.VertexTypeSource), sourceforward.WithLogger(h.logger), sourceforward.WithSourceWatermarkPublisher(h)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(h.logger), sourceforward.WithSourceWatermarkPublisher(h)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
