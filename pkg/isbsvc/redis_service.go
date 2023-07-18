@@ -42,7 +42,7 @@ func NewISBRedisSvc(client *redisclient.RedisClient) ISBService {
 }
 
 // CreateBuffers is used to create the inter-step redis buffers.
-func (r *isbsRedisSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...CreateOption) error {
+func (r *isbsRedisSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, opts ...CreateOption) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}
@@ -70,7 +70,7 @@ func (r *isbsRedisSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buc
 }
 
 // DeleteBuffers is used to delete the inter-step redis buffers.
-func (r *isbsRedisSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
+func (r *isbsRedisSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}
@@ -106,7 +106,7 @@ func (r *isbsRedisSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buc
 }
 
 // ValidateBuffers is used to validate inter-step redis buffers to see if the stream/stream group exist
-func (r *isbsRedisSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error {
+func (r *isbsRedisSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}

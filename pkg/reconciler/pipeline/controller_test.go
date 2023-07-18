@@ -416,3 +416,103 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 		assert.Equal(t, "test-pl-daemon", deployList.Items[0].Name)
 	})
 }
+
+func Test_createOrUpdateSIMDeployments(t *testing.T) {
+	cl := fake.NewClientBuilder().Build()
+	ctx := context.TODO()
+	r := &pipelineReconciler{
+		client: cl,
+		scheme: scheme.Scheme,
+		config: fakeConfig,
+		image:  testFlowImage,
+		logger: zaptest.NewLogger(t).Sugar(),
+	}
+
+	t.Run("no side inputs", func(t *testing.T) {
+		err := r.createOrUpdateSIMDeployments(ctx, testPipeline, fakeIsbSvcConfig)
+		assert.NoError(t, err)
+		deployList := appv1.DeploymentList{}
+		err = cl.List(context.Background(), &deployList, &client.ListOptions{Namespace: testNamespace, LabelSelector: labels.SelectorFromSet(labels.Set{dfv1.KeyComponent: dfv1.ComponentSideInputManager})})
+		assert.NoError(t, err)
+		assert.Len(t, deployList.Items, 0)
+	})
+
+	t.Run("one side input", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.SideInputs = []dfv1.SideInput{
+			{
+				Name: "s1",
+				Container: &dfv1.Container{
+					Image: "test",
+				},
+				Trigger: &dfv1.SideInputTrigger{
+					Schedule: pointer.String("1 * * * *"),
+				},
+			},
+		}
+		err := r.createOrUpdateSIMDeployments(ctx, testObj, fakeIsbSvcConfig)
+		assert.NoError(t, err)
+		deployList := appv1.DeploymentList{}
+		err = cl.List(context.Background(), &deployList, &client.ListOptions{Namespace: testNamespace, LabelSelector: labels.SelectorFromSet(labels.Set{dfv1.KeyComponent: dfv1.ComponentSideInputManager})})
+		assert.NoError(t, err)
+		assert.Len(t, deployList.Items, 1)
+		assert.Equal(t, testObj.GetSideInputsManagerDeploymentName("s1"), deployList.Items[0].Name)
+	})
+
+	t.Run("two side inputs", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.SideInputs = []dfv1.SideInput{
+			{
+				Name: "s1",
+				Container: &dfv1.Container{
+					Image: "test",
+				},
+				Trigger: &dfv1.SideInputTrigger{
+					Schedule: pointer.String("1 * * * *"),
+				},
+			},
+			{
+				Name: "s2",
+				Container: &dfv1.Container{
+					Image: "test",
+				},
+				Trigger: &dfv1.SideInputTrigger{
+					Schedule: pointer.String("1 * * * *"),
+				},
+			},
+		}
+		err := r.createOrUpdateSIMDeployments(ctx, testObj, fakeIsbSvcConfig)
+		assert.NoError(t, err)
+		deployList := appv1.DeploymentList{}
+		err = cl.List(context.Background(), &deployList, &client.ListOptions{Namespace: testNamespace, LabelSelector: labels.SelectorFromSet(labels.Set{dfv1.KeyComponent: dfv1.ComponentSideInputManager})})
+		assert.NoError(t, err)
+		assert.Len(t, deployList.Items, 2)
+		assert.Equal(t, testObj.GetSideInputsManagerDeploymentName("s1"), deployList.Items[0].Name)
+		assert.Equal(t, testObj.GetSideInputsManagerDeploymentName("s2"), deployList.Items[1].Name)
+	})
+
+	t.Run("update side inputs", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.SideInputs = []dfv1.SideInput{
+			{
+				Name: "s1",
+				Container: &dfv1.Container{
+					Image: "test",
+				},
+				Trigger: &dfv1.SideInputTrigger{
+					Schedule: pointer.String("1 * * * *"),
+				},
+			},
+		}
+		err := r.createOrUpdateSIMDeployments(ctx, testObj, fakeIsbSvcConfig)
+		assert.NoError(t, err)
+		testObj.Spec.SideInputs[0].Name = "s2"
+		err = r.createOrUpdateSIMDeployments(ctx, testObj, fakeIsbSvcConfig)
+		assert.NoError(t, err)
+		deployList := appv1.DeploymentList{}
+		err = cl.List(context.Background(), &deployList, &client.ListOptions{Namespace: testNamespace, LabelSelector: labels.SelectorFromSet(labels.Set{dfv1.KeyComponent: dfv1.ComponentSideInputManager})})
+		assert.NoError(t, err)
+		assert.Len(t, deployList.Items, 1)
+		assert.Equal(t, testObj.GetSideInputsManagerDeploymentName("s2"), deployList.Items[0].Name)
+	})
+}

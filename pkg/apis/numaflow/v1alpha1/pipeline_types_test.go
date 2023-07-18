@@ -394,3 +394,30 @@ func Test_FindVertexWithBuffer(t *testing.T) {
 	v := testPipeline.FindVertexWithBuffer(GenerateBufferName(testNamespace, testPipelineName, "p1", 0))
 	assert.NotNil(t, v)
 }
+
+func Test_GetSideInputManagerDeployments(t *testing.T) {
+	t.Run("side inputs not enabled", func(t *testing.T) {
+		deployments, err := testPipeline.GetSideInputsManagerDeployments(testGetSideInputDeploymentReq)
+		assert.Nil(t, err)
+		assert.Equal(t, 0, len(deployments))
+	})
+
+	t.Run("side inputs enabled", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.SideInputs = []SideInput{
+			{
+				Name: "side-input-1",
+				Container: &Container{
+					Image: "side-input-1",
+				},
+				Trigger: &SideInputTrigger{
+					Schedule: pointer.String("0 0 * * *"),
+				},
+			},
+		}
+		deployments, err := testObj.GetSideInputsManagerDeployments(testGetSideInputDeploymentReq)
+		assert.Nil(t, err)
+		assert.Equal(t, 1, len(deployments))
+		assert.Equal(t, 2, len(deployments[0].Spec.Template.Spec.Containers))
+	})
+}

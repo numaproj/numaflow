@@ -24,9 +24,9 @@ import (
 
 // ISBService is an interface used to do the operations on ISBSvc
 type ISBService interface {
-	CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, opts ...CreateOption) error
-	DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error
-	ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string) error
+	CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, opts ...CreateOption) error
+	DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error
+	ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error
 	GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error)
 	CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error)
 }

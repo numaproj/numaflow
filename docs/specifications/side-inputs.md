@@ -88,7 +88,7 @@ Some new features will be added to the Numaflow SDK.
     RetrieveSideInput() ([]bytes, error)
   ```
 
-- A main function to start the service in the Side Input Manager user container.
+- A main function to start the service in the Side Inputs Manager user container.
 - A helper function to be used in the udf/udsink/transformer containers to get the Side Inputs, which reads, watches and caches the data from the shared volume.
 
   ```go
