@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/pprof"
+	"os"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -33,11 +35,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	server "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
-
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/daemon/server/service"
+	server "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -194,6 +195,15 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.Handle("/metrics", promhttp.Handler())
-
+	pprofEnabled := os.Getenv(v1alpha1.EnvDebug) == "true" || os.Getenv(v1alpha1.EnvPPROF) == "true"
+	if pprofEnabled {
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	} else {
+		log.Info("Not enabling pprof debug endpoints")
+	}
 	return &httpServer
 }

@@ -32,14 +32,15 @@ import (
 
 func NewISBSvcDeleteCommand() *cobra.Command {
 	var (
-		isbSvcType string
-		buffers    []string
-		buckets    []string
+		isbSvcType      string
+		buffers         []string
+		buckets         []string
+		sideInputsStore string
 	)
 
 	command := &cobra.Command{
 		Use:   "isbsvc-delete",
-		Short: "Delete ISB Service buffers and buckets",
+		Short: "Delete ISB Service buffers, buckets and side inputs store",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := logging.NewLogger().Named("isbsvc-delete")
 			pipelineName, defined := os.LookupEnv(v1alpha1.EnvPipelineName)
@@ -62,16 +63,17 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
-			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets); err != nil {
-				logger.Errorw("Failed on buffers and buckets deletion.", zap.Error(err))
+			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore); err != nil {
+				logger.Errorw("Failed on buffers, buckets and side inputs store deletion.", zap.Error(err))
 				return err
 			}
-			logger.Info("Deleted buffers and buckets successfully")
+			logger.Info("Deleted buffers, buckets and side inputs store successfully")
 			return nil
 		},
 	}
 	command.Flags().StringVar(&isbSvcType, "isbsvc-type", "", "ISB Service type, e.g. jetstream")
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to delete") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to delete") // --buckets=xxa,xxb --buckets=xxc	return command
+	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
 	return command
 }

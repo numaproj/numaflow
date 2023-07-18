@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -500,5 +501,55 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
 		assert.Equal(t, 2, len(pods.Items[0].Spec.Containers))
+	})
+
+	t.Run("test reconcile udf with side inputs", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		testPl := testPipeline.DeepCopy()
+		testPl.Spec.SideInputs = []dfv1.SideInput{
+			{
+				Name: "s1",
+				Container: &dfv1.Container{
+					Image: "test",
+				},
+				Trigger: &dfv1.SideInputTrigger{
+					Schedule: pointer.String("1 * * * *"),
+				},
+			},
+		}
+		testPl.Spec.Vertices[1].SideInputs = []string{"s1"}
+		err = cl.Create(ctx, testPl)
+		assert.Nil(t, err)
+		r := &vertexReconciler{
+			client: cl,
+			scheme: scheme.Scheme,
+			config: fakeConfig,
+			image:  testFlowImage,
+			scaler: scaling.NewScaler(cl),
+			logger: zaptest.NewLogger(t).Sugar(),
+		}
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.UDF = &dfv1.UDF{
+			Builtin: &dfv1.Function{
+				Name: "cat",
+			},
+		}
+		testObj.Spec.SideInputs = []string{"s1"}
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		pods := &corev1.PodList{}
+		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testPipelineName + "," + dfv1.KeyVertexName + "=" + testVertexSpecName)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(pods.Items))
+		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
+		assert.Equal(t, 3, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
 	})
 }
