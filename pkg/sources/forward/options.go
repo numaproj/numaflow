@@ -22,7 +22,6 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -34,8 +33,6 @@ type options struct {
 	transformerConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
-	// srcWatermarkPublisher is used to publish source watermark
-	srcWatermarkPublisher isb.SourceWatermarkPublisher
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
 }
@@ -79,14 +76,6 @@ func WithTransformerConcurrency(f int) Option {
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *options) error {
 		o.logger = l
-		return nil
-	}
-}
-
-// WithSourceWatermarkPublisher sets the source watermark publisher
-func WithSourceWatermarkPublisher(p isb.SourceWatermarkPublisher) Option {
-	return func(o *options) error {
-		o.srcWatermarkPublisher = p
 		return nil
 	}
 }

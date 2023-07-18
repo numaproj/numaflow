@@ -86,13 +86,13 @@ func New(
 	}
 	n.messages = make(chan *isb.ReadMessage, n.bufferSize)
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(n.logger), sourceforward.WithSourceWatermarkPublisher(n)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(n.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, publishWM, n, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

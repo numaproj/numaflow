@@ -139,13 +139,13 @@ func New(
 	}
 
 	// Create Source Data Forwarder
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(redisStreamsSource.Log), sourceforward.WithSourceWatermarkPublisher(redisStreamsSource)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(redisStreamsSource.Log)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, redisStreamsSource, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, redisStreamsSource, writers, fsd, mapApplier, fetchWM, publishWM, redisStreamsSource, forwardOpts...)
 	if err != nil {
 		redisStreamsSource.Log.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

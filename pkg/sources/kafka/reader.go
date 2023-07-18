@@ -361,13 +361,13 @@ func NewKafkaSource(
 	handler := newConsumerHandler(kafkasource.handlerbuffer)
 	kafkasource.handler = handler
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(kafkasource.logger), sourceforward.WithSourceWatermarkPublisher(kafkasource)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(kafkasource.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, publishWM, kafkasource, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

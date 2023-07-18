@@ -192,14 +192,14 @@ func New(
 	}()
 	h.shutdown = server.Shutdown
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(h.logger), sourceforward.WithSourceWatermarkPublisher(h)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(h.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
-	h.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, h, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	h.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, h, writers, fsd, mapApplier, fetchWM, publishWM, h, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
