@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -188,4 +190,152 @@ func createProcessorManager(ctx context.Context, partitionCount int32) *processo
 	otWatcher := noop.NewKVOpWatch()
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	return processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+}
+
+type TestEdgeFetcher struct {
+	// are all of the publishers to this EdgeFetcher Idle?
+	allProcessorsIdle bool
+
+	currentWatermark wmb.Watermark
+
+	currentHeadWatermark wmb.Watermark
+}
+
+func (t *TestEdgeFetcher) ProcessOffsetGetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+	return t.GetWatermark()
+}
+
+func (t *TestEdgeFetcher) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int32) error {
+	return nil
+}
+
+func (t *TestEdgeFetcher) GetWatermark() wmb.Watermark {
+	return t.currentWatermark
+}
+func (t *TestEdgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
+	if t.allProcessorsIdle {
+		return wmb.WMB{Watermark: t.GetHeadWatermark(fromPartitionIdx).UnixMilli()}
+	} else {
+		return wmb.WMB{}
+	}
+}
+func (t *TestEdgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
+	return t.currentHeadWatermark
+}
+func (t *TestEdgeFetcher) Close() error {
+	return nil
+}
+
+func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
+
+	// cases to test:
+	// (should test 1 Edge Fetcher as well as 2)
+	// 1. one of them has all publishers Idle and 1 doesn't: should return WMB{}
+	// 2. all publishers Idle: should not return WMB{} and should return most conservative Watermark
+	// 3. all publishers Idle but somehow the GetWatermark() of one of the EdgeFetchers is higher than the returned value
+
+	tests := []struct {
+		name         string
+		edgeFetchers map[string]Fetcher
+		expectedWMB  wmb.WMB
+	}{
+		{
+			"oneNonIdle",
+			map[string]Fetcher{
+				"nonidle": &TestEdgeFetcher{
+					allProcessorsIdle:    false,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+				},
+			},
+			wmb.WMB{},
+		},
+		{
+			"oneIdle",
+			map[string]Fetcher{
+				"idle": &TestEdgeFetcher{
+					allProcessorsIdle:    true,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 58, 0, time.UTC)),
+				},
+			},
+			wmb.WMB{Watermark: time.Date(2023, 11, 17, 20, 34, 58, 0, time.UTC).UnixMilli()},
+		},
+		{
+			"twoNonIdle",
+			map[string]Fetcher{
+				"nonidle1": &TestEdgeFetcher{
+					allProcessorsIdle:    false,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+				},
+				"nonidle2": &TestEdgeFetcher{
+					allProcessorsIdle:    false,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 58, 0, time.UTC)),
+				},
+			},
+			wmb.WMB{},
+		},
+		{
+			"oneOfTwoIdle",
+			map[string]Fetcher{
+				"idle": &TestEdgeFetcher{
+					allProcessorsIdle:    true,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+				},
+				"nonidle": &TestEdgeFetcher{
+					allProcessorsIdle:    false,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+				},
+			},
+			wmb.WMB{},
+		},
+		{
+			"twoIdle",
+			map[string]Fetcher{
+				"idle": &TestEdgeFetcher{
+					allProcessorsIdle:    true,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+				},
+				"idle2": &TestEdgeFetcher{
+					allProcessorsIdle:    true,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+				},
+			},
+			wmb.WMB{Watermark: time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC).UnixMilli()},
+		},
+		{
+			"exceedingWM",
+			map[string]Fetcher{
+				"idle": &TestEdgeFetcher{
+					allProcessorsIdle:    true,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+				},
+				"idle2": &TestEdgeFetcher{
+					allProcessorsIdle:    true,
+					currentWatermark:     wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 58, 0, time.UTC)),
+					currentHeadWatermark: wmb.Watermark(time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC)),
+				},
+			},
+			wmb.WMB{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			efs := &edgeFetcherSet{
+				edgeFetchers: tt.edgeFetchers,
+				log:          zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel)).Sugar(),
+			}
+			headWMB := efs.GetHeadWMB(1)
+			assert.Equal(t, tt.expectedWMB, headWMB)
+		})
+	}
 }
