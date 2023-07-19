@@ -77,9 +77,9 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 	}
 	var nc *nats.Conn
 	var err error
-	if options.autoReconnect == false {
+	if !options.autoReconnect {
 		nc, err = isc.connect(ctx, nats.NoReconnect(), nats.ReconnectHandler(func(nc *nats.Conn) {
-			log.Error("Reconnection should never happen")
+			log.Error("Default Auto reconnection shouldn't happen")
 		}))
 	} else {
 		nc, err = isc.connect(ctx, nats.ReconnectHandler(func(nnc *nats.Conn) {

@@ -18,7 +18,6 @@ package wmb
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/binary"
 	"reflect"
 	"testing"
@@ -207,11 +206,4 @@ func TestWMB_EncodeToBytes(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestDecodeToWMB2(t *testing.T) {
-	s := "AIPaEAAAAAAA2NmHbYkBAAABAAAA"
-	ds, _ := base64.StdEncoding.DecodeString(s)
-	dw, _ := DecodeToWMB(ds)
-	println(dw.Watermark)
 }
