@@ -30,10 +30,11 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"go.uber.org/zap"
 )
 
 // ProcessorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor). The code is running on Vn vertex.
@@ -241,7 +242,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
-				// a new processor's OT might take up to 5 secs to be reflected because we are not waiting for it to be added. 
+				// a new processor's OT might take up to 5 secs to be reflected because we are not waiting for it to be added.
 				// This should not be a problem because the processor will send heartbeat as soon as it boots up.
 				// In case we miss it, we might see a delay.
 				p := v.GetProcessor(value.Key())
