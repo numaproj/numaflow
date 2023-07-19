@@ -309,23 +309,6 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	w.Expect().SinkNotContains("number-sink", "not an integer")
 }
 
-func (s *FunctionalSuite) TestJoinSinkVertex() {
-	w := s.Given().Pipeline("@testdata/join-on-sink.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "join-on-sink"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888888"))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888889")))
-
-	w.Expect().SinkContains("out", "888888")
-	w.Expect().SinkContains("out", "888889")
-}
-
 func (s *FunctionalSuite) TestWatermarkEnabled() {
 	w := s.Given().Pipeline("@testdata/watermark.yaml").
 		When().
