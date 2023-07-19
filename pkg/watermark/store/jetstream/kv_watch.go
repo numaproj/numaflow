@@ -59,7 +59,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 			// update the watcher reference to the new connection
 			jsw.log.Info("Recreating kv watchers")
 			for _, w := range jsw.kvWatchers {
-				w.kvw = jsw.newWatcher().kvw
+				w.RefreshWatcher(jsw.newWatcher().kvw)
 			}
 			jsw.log.Infow("updated kv watchers")
 		}), jsclient.NoAutoReconnect(), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
@@ -146,7 +146,7 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 					// there are no more values to receive and the channel is closed, but context is not done yet
 					// meaning: there could be an auto reconnection to JetStream while the service is still running
 					// therefore, recreate the kvWatcher using the new JetStream context
-					kvWatcher.kvw = jsw.newWatcher().kvw
+					kvWatcher.RefreshWatcher(jsw.newWatcher().kvw)
 					jsw.log.Infow("Succeeded to recreate the watcher, since the channel is closed")
 				}
 				if value == nil {
@@ -183,11 +183,11 @@ func (jsw *jetStreamWatch) newWatcher() *KeyWatcher {
 		kv, err = jsw.js.KeyValue(jsw.kvBucketName)
 		time.Sleep(100 * time.Millisecond)
 	}
-	kvWatcher, err := kv.WatchAll()
+	kvWatcher, err := kv.WatchAll(nats.IncludeHistory())
 	// keep looping because the watermark won't work without a watcher
 	for err != nil {
 		jsw.log.Errorw("WatchAll failed", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
-		kvWatcher, err = kv.WatchAll()
+		kvWatcher, err = kv.WatchAll(nats.IncludeHistory())
 		time.Sleep(100 * time.Millisecond)
 	}
 	kw := &KeyWatcher{
