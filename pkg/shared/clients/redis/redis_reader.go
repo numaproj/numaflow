@@ -21,9 +21,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 // RedisStreamsRead is the read queue implementation powered by RedisClient.
@@ -58,7 +59,7 @@ func (br *RedisStreamsRead) GetName() string {
 	return br.Name
 }
 
-// GetPartition returns the partition number.
+// GetPartitionIdx returns the partition number.
 func (br *RedisStreamsRead) GetPartitionIdx() int32 {
 	return br.PartitionIdx
 }

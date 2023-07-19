@@ -37,29 +37,29 @@ func NewIdleManager(length int) *IdleManager {
 }
 
 // Exists returns true if the given toBuffer partition name exists in the IdleManager map.
-func (im *IdleManager) Exists(toBufferName string) bool {
+func (im *IdleManager) Exists(toBufferPartitionName string) bool {
 	im.lock.RLock()
 	defer im.lock.RUnlock()
-	return im.wmbOffset[toBufferName] != nil
+	return im.wmbOffset[toBufferPartitionName] != nil
 }
 
 // Get gets the offset for the given toBuffer partition name.
-func (im *IdleManager) Get(toBufferName string) isb.Offset {
+func (im *IdleManager) Get(toBufferPartitionName string) isb.Offset {
 	im.lock.RLock()
 	defer im.lock.RUnlock()
-	return im.wmbOffset[toBufferName]
+	return im.wmbOffset[toBufferPartitionName]
 }
 
 // Update will update the existing item or add if not present for the given toBuffer partition name.
-func (im *IdleManager) Update(toBufferName string, newOffset isb.Offset) {
+func (im *IdleManager) Update(toBufferPartitionName string, newOffset isb.Offset) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
-	im.wmbOffset[toBufferName] = newOffset
+	im.wmbOffset[toBufferPartitionName] = newOffset
 }
 
 // Reset will clear the item for the given toBuffer partition name.
-func (im *IdleManager) Reset(toBufferName string) {
+func (im *IdleManager) Reset(toBufferPartitionName string) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
-	im.wmbOffset[toBufferName] = nil
+	im.wmbOffset[toBufferPartitionName] = nil
 }
