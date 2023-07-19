@@ -63,9 +63,6 @@ func natsJetStreamConnection(ctx context.Context, url string, natsOptions []nats
 				log.Info("Nats: disconnected")
 			}
 		}),
-		nats.ReconnectHandler(func(nnc *nats.Conn) {
-			log.Info("Nats: reconnected to nats server")
-		}),
 		// Write (and flush) timeout
 		nats.FlusherTimeout(10 * time.Second),
 	}

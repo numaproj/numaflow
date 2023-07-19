@@ -42,7 +42,7 @@ func NewInClusterJetStreamClient() *inClusterJetStreamClient {
 }
 
 // Function to get a nats connection
-func (isc *inClusterJetStreamClient) connect(ctx context.Context) (*nats.Conn, error) {
+func (isc *inClusterJetStreamClient) connect(ctx context.Context, opts ...nats.Option) (*nats.Conn, error) {
 	url, existing := os.LookupEnv(dfv1.EnvISBSvcJetStreamURL)
 	if !existing {
 		return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvISBSvcJetStreamURL)
@@ -62,23 +62,34 @@ func (isc *inClusterJetStreamClient) connect(ctx context.Context) (*nats.Conn, e
 			InsecureSkipVerify: true,
 		}))
 	}
+	natsOpts = append(natsOpts, opts...)
 	return natsJetStreamConnection(ctx, url, natsOpts)
 }
 
 // Connect is used to establish an inCluster NATS JetStream connection
 func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStreamClientOption) (*NatsConn, error) {
+	log := logging.FromContext(ctx)
 	options := defaultJetStreamClientOptions()
 	for _, o := range opts {
 		if o != nil {
 			o(options)
 		}
 	}
-	nc, err := isc.connect(ctx)
+	var nc *nats.Conn
+	var err error
+	if options.autoReconnect == false {
+		nc, err = isc.connect(ctx, nats.NoReconnect(), nats.ReconnectHandler(func(nc *nats.Conn) {
+			log.Error("Reconnection should never happen")
+		}))
+	} else {
+		nc, err = isc.connect(ctx, nats.ReconnectHandler(func(nnc *nats.Conn) {
+			log.Info("Nats: auto reconnected to nats server by default")
+		}))
+	}
 	if err != nil {
 		return nil, err
 	}
 	natsConn := NewNatsConn(nc)
-	log := logging.FromContext(ctx)
 	if options.reconnect {
 		// Start auto reconnection daemon.
 		// Raw Nats auto reconnection is not always working

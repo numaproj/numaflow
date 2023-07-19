@@ -51,6 +51,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 
 	connectAndWatch := func() (*jsclient.NatsConn, *jsclient.JetStreamContext, error) {
 		conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(c *jsclient.NatsConn) {
+			jsw.log.Infow("Reconnection handler inside kv watcher was invoked")
 			if jsw.js == nil {
 				jsw.log.Error("JetStreamContext is nil inside kv watcher")
 				return
@@ -60,7 +61,8 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 			for _, w := range jsw.kvWatchers {
 				w.kvw = jsw.newWatcher().kvw
 			}
-		}), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
+			jsw.log.Infow("updated kv watchers")
+		}), jsclient.NoAutoReconnect(), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
 			jsw.log.Errorw("Nats JetStream connection lost inside kv watcher", zap.Error(err))
 		}))
 		if err != nil {
@@ -141,6 +143,8 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 				return
 			case value, ok := <-kvWatcher.Updates():
 				if !ok {
+					jsw.log.Info("no entry for this")
+					kvWatcher.kvw = jsw.newWatcher().kvw
 					continue
 				}
 				if value == nil {
@@ -150,6 +154,7 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 				jsw.log.Debug(value.Key(), value.Value(), value.Operation())
 				switch value.Operation() {
 				case nats.KeyValuePut:
+					jsw.log.Info("Received a put event", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 					updates <- kvEntry{
 						key:   value.Key(),
 						value: value.Value(),
@@ -161,8 +166,6 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 						value: value.Value(),
 						op:    store.KVDelete,
 					}
-				case nats.KeyValuePurge:
-					// do nothing
 				}
 			}
 		}
@@ -178,11 +181,11 @@ func (jsw *jetStreamWatch) newWatcher() *KeyWatcher {
 		kv, err = jsw.js.KeyValue(jsw.kvBucketName)
 		time.Sleep(100 * time.Millisecond)
 	}
-	kvWatcher, err := kv.WatchAll(nats.IncludeHistory())
+	kvWatcher, err := kv.WatchAll()
 	// keep looping because the watermark won't work without a watcher
 	for err != nil {
 		jsw.log.Errorw("WatchAll failed", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
-		kvWatcher, err = kv.WatchAll(nats.IncludeHistory())
+		kvWatcher, err = kv.WatchAll()
 		time.Sleep(100 * time.Millisecond)
 	}
 	kw := &KeyWatcher{

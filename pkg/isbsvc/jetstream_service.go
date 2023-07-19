@@ -154,12 +154,12 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket:       otBucket,
 				MaxValueSize: v.GetInt32("otBucket.maxValueSize"),
-				History:      uint8(v.GetUint("otBucket.history")),
-				TTL:          v.GetDuration("otBucket.ttl"),
-				MaxBytes:     v.GetInt64("otBucket.maxBytes"),
-				Storage:      nats.StorageType(v.GetInt("otBucket.storage")),
-				Replicas:     v.GetInt("otBucket.replicas"),
-				Placement:    nil,
+				//History:      uint8(v.GetUint("otBucket.history")),
+				TTL:       v.GetDuration("otBucket.ttl"),
+				MaxBytes:  v.GetInt64("otBucket.maxBytes"),
+				Storage:   nats.StorageType(v.GetInt("otBucket.storage")),
+				Replicas:  v.GetInt("otBucket.replicas"),
+				Placement: nil,
 			}); err != nil {
 				return fmt.Errorf("failed to create offset timeline bucket %q, %w", otBucket, err)
 			}
