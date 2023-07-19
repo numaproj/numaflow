@@ -1404,7 +1404,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 3)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 3)
 	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 3)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
