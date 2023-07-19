@@ -28,6 +28,8 @@ import (
 
 	"go.uber.org/zap"
 
+	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
@@ -116,8 +118,8 @@ type memgen struct {
 	// cancel function .
 	// once terminated the source will not generate any more records.
 	cancel context.CancelFunc
-	// forwarder to read from the source and write to the interstep buffer.
-	forwarder *forward.InterStepDataForward
+	// forwarder to read from the source and write to the inter step buffer.
+	forwarder *sourceforward.DataForward
 	// lifecycleCtx context is used to control the lifecycle of this instance.
 	lifecycleCtx context.Context
 	// read timeout for the reader
@@ -209,10 +211,10 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	gensrc.lifecycleCtx = cctx
 	gensrc.cancel = cancel
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSource), forward.WithLogger(gensrc.logger), forward.WithSourceWatermarkPublisher(gensrc)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(gensrc.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
@@ -220,7 +222,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := forward.NewInterStepDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, publishWM, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, publishWM, gensrc, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
