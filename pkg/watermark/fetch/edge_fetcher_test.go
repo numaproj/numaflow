@@ -866,17 +866,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.NoError(t, err)
 	defer otStore.Close()
 
-	otValueByte, err := otValueToBytes(testOffset, epoch, false, 0)
-	assert.NoError(t, err)
-	err = otStore.PutKV(ctx, "p1", otValueByte)
-	assert.NoError(t, err)
-
 	epoch += 60000
-
-	otValueByte, err = otValueToBytes(testOffset+5, epoch, false, 0)
-	assert.NoError(t, err)
-	err = otStore.PutKV(ctx, "p2", otValueByte)
-	assert.NoError(t, err)
 
 	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
 	assert.NoError(t, err)
@@ -901,7 +891,6 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 			}
 		default:
-			//println("waiting for processors to be added")
 			time.Sleep(1 * time.Millisecond)
 			allProcessors = processorManager.GetAllProcessors()
 		}
@@ -909,6 +898,27 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 
 	assert.True(t, allProcessors["p1"].IsActive())
 	assert.True(t, allProcessors["p2"].IsActive())
+
+	otValueByte, err := otValueToBytes(testOffset, epoch, false, 0)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	otValueByte, err = otValueToBytes(testOffset+5, epoch, false, 0)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p2", otValueByte)
+	assert.NoError(t, err)
+
+	for allProcessors["p1"].GetOffsetTimelines()[0].GetHeadOffset() != 100 {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("expected p1 head offset to be 100: %s", ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
 
 	heartBeatManagerMap["p1"].stop()
 
@@ -935,17 +945,6 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		default:
 			time.Sleep(1 * time.Millisecond)
 			allProcessors = processorManager.GetAllProcessors()
-		}
-	}
-
-	for allProcessors["p1"].GetOffsetTimelines()[0].GetHeadOffset() != 100 {
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected p1 head offset to be 100: %s", ctx.Err())
-			}
-		default:
-			time.Sleep(1 * time.Millisecond)
 		}
 	}
 
@@ -1107,30 +1106,6 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	assert.NoError(t, err)
 	defer otStore.Close()
 
-	// put values into otStore
-	// this first entry should not be in the offset timeline because we set the wmb bucket history to 2
-	otValueByte, err := otValueToBytes(testOffset, epoch+100, false, 0)
-	assert.NoError(t, err)
-	err = otStore.PutKV(ctx, "p1", otValueByte)
-	assert.NoError(t, err)
-
-	otValueByte, err = otValueToBytes(testOffset+1, epoch+200, false, 0)
-	assert.NoError(t, err)
-	err = otStore.PutKV(ctx, "p1", otValueByte)
-	assert.NoError(t, err)
-
-	otValueByte, err = otValueToBytes(testOffset+2, epoch+300, false, 0)
-	assert.NoError(t, err)
-	err = otStore.PutKV(ctx, "p1", otValueByte)
-	assert.NoError(t, err)
-
-	epoch += 60000
-
-	otValueByte, err = otValueToBytes(testOffset+5, epoch+500, false, 0)
-	assert.NoError(t, err)
-	err = otStore.PutKV(ctx, "p2", otValueByte)
-	assert.NoError(t, err)
-
 	// create watchers for heartbeat and offset timeline
 	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
@@ -1161,7 +1136,42 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 		}
 	}
 
-	for allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[1651161600300:102] -> [1651161600200:101] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
+	for !allProcessors["p1"].IsActive() {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("expected p1 to be active, got %t: %s", allProcessors["p1"].IsActive(), ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+
+	// put values into otStore
+	// this first entry should not be in the offset timeline because we set the wmb bucket history to 2
+	otValueByte, err := otValueToBytes(testOffset, epoch+100, false, 0)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	otValueByte, err = otValueToBytes(testOffset+1, epoch+200, false, 0)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	otValueByte, err = otValueToBytes(testOffset+2, epoch+300, false, 0)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p1", otValueByte)
+	assert.NoError(t, err)
+
+	epoch += 60000
+
+	otValueByte, err = otValueToBytes(testOffset+5, epoch+500, false, 0)
+	assert.NoError(t, err)
+	err = otStore.PutKV(ctx, "p2", otValueByte)
+	assert.NoError(t, err)
+
+	for allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[1651161600300:102] -> [1651161600200:101] -> [1651161600100:100] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -1215,7 +1225,6 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 				t.Fatalf("expected p1 to be active: %s", ctx.Err())
 			}
 		default:
-			//println("waiting for p1 to be active line 1221")
 			time.Sleep(1 * time.Millisecond)
 			allProcessors = processorManager.GetAllProcessors()
 		}
@@ -1389,6 +1398,36 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.NoError(t, err)
 	defer otStore.Close()
 
+	// create watchers for heartbeat and offset timeline
+	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	assert.NoError(t, err)
+	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	assert.NoError(t, err)
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 3)
+	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 3)
+
+	var heartBeatManagerMap = make(map[string]*heartBeatManager)
+	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore, &wg)
+	heartBeatManagerMap["p2"] = manageHeartbeat(ctx, "p2", hbStore, &wg)
+
+	// start the heartbeats for p1 and p2
+	heartBeatManagerMap["p1"].start()
+	heartBeatManagerMap["p2"].start()
+
+	allProcessors := processorManager.GetAllProcessors()
+	for len(allProcessors) != 2 {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
+			}
+		default:
+			time.Sleep(1 * time.Millisecond)
+			allProcessors = processorManager.GetAllProcessors()
+		}
+	}
+
 	// put values into otStore
 	otValueByteOne, err := otValueToBytes(testOffset, epoch+100, false, 0)
 	assert.NoError(t, err)
@@ -1445,36 +1484,6 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.NoError(t, err)
 	err = otStore.PutKV(ctx, "p2", otValueByteThree)
 	assert.NoError(t, err)
-
-	// create watchers for heartbeat and offset timeline
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
-	assert.NoError(t, err)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 3)
-	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 3)
-
-	var heartBeatManagerMap = make(map[string]*heartBeatManager)
-	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore, &wg)
-	heartBeatManagerMap["p2"] = manageHeartbeat(ctx, "p2", hbStore, &wg)
-
-	// start the heartbeats for p1 and p2
-	heartBeatManagerMap["p1"].start()
-	heartBeatManagerMap["p2"].start()
-
-	allProcessors := processorManager.GetAllProcessors()
-	for len(allProcessors) != 2 {
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
-			}
-		default:
-			time.Sleep(1 * time.Millisecond)
-			allProcessors = processorManager.GetAllProcessors()
-		}
-	}
 
 	for allProcessors["p1"].GetOffsetTimelines()[0].Dump() != "[1651161600300:102] -> [1651161600200:101] -> [1651161600100:100] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" &&
 		allProcessors["p1"].GetOffsetTimelines()[1].Dump() != "[1651161600300:102] -> [1651161600200:101] -> [1651161600100:100] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1] -> [-1:-1]" &&

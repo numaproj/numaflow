@@ -130,13 +130,9 @@ func (op *OrderedProcessor) SchedulePnF(
 // to wait for the close-of-book on the PBQ to materialize the writeMessages.
 func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 	start := time.Now()
-	for {
-		// FIXME: this error handling won't work with streams. We cannot do infinite retries
-		//  because whatever is written to the stream is lost between retries.
-		err := t.pf.Process(ctx)
-		if err == nil {
-			break
-		} else if err == ctx.Err() {
+	err := t.pf.Process(ctx)
+	if err != nil {
+		if err == ctx.Err() {
 			udfError.With(map[string]string{
 				metrics.LabelVertex:             op.vertexName,
 				metrics.LabelPipeline:           op.pipelineName,
@@ -144,9 +140,10 @@ func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 			}).Inc()
 			op.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
 			return
+		} else {
+			// panic since we cannot retry, when the pod restarts, it will replay the records from the PBQ.
+			op.log.Panic("Process failed exiting...", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(err))
 		}
-		op.log.Errorw("Process failed", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(err))
-		time.Sleep(retryDelay)
 	}
 
 	// indicate that we are done with reduce UDF invocation.
