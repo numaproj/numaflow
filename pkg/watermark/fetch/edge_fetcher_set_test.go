@@ -178,7 +178,6 @@ func Test_EdgeFetcherSet_ProcessOffsetGetWatermark(t *testing.T) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 
-			//todo: add test of GetHeadWatermark like edge_fetcher_test.go??
 		})
 	}
 
