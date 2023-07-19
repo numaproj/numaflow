@@ -575,7 +575,7 @@ func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.
 			// if we do not get a time from Transformer, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
 				// add partition to the ID, this is to make sure that the ID is unique across partitions
-				m.ID = fmt.Sprintf("%s-%d-%d", readMessage.ReadOffset.String(), isdf.reader.GetPartitionIdx(), index)
+				m.ID = fmt.Sprintf("%s-%d-%d-%s", readMessage.ReadOffset.String(), isdf.reader.GetPartitionIdx(), index, isdf.vertexName)
 				if m.EventTime.IsZero() {
 					m.EventTime = readMessage.EventTime
 				}
