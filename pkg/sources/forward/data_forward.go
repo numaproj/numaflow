@@ -305,7 +305,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	isdf.srcWMPublisher.PublishSourceWatermarks(transformedReadMessages)
 	// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
 	// but ideally we should use the latest to determine the IsLate attribute.
-	processorWM = isdf.wmFetcher.GetWatermark(readMessages[0].ReadOffset, isdf.reader.GetPartitionIdx())
+	processorWM = isdf.wmFetcher.ProcessOffsetGetWatermark(readMessages[0].ReadOffset, isdf.reader.GetPartitionIdx())
 	// assign isLate
 	for _, m := range writeMessages {
 		if processorWM.After(m.EventTime) { // Set late data at source level
