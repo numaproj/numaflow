@@ -181,6 +181,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 			return
 		case value := <-watchCh:
 			if value == nil {
+				v.log.Warnw("nil value received from heartbeat watcher")
 				continue
 			}
 			switch value.Operation() {

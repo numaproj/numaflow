@@ -22,11 +22,10 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
-
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"go.uber.org/zap"
 )
 
 // jetStreamWatch implements the watermark's KV store backed up by Jetstream.
@@ -35,6 +34,7 @@ type jetStreamWatch struct {
 	kvBucketName string
 	conn         *jsclient.NatsConn
 	js           *jsclient.JetStreamContext
+	kvWatchers   []*KeyWatcher
 	log          *zap.SugaredLogger
 }
 
@@ -42,38 +42,54 @@ var _ store.WatermarkKVWatcher = (*jetStreamWatch)(nil)
 
 // NewKVJetStreamKVWatch returns KVJetStreamWatch specific to JetStream which implements the WatermarkKVWatcher interface.
 func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketName string, client jsclient.JetStreamClient, opts ...JSKVWatcherOption) (store.WatermarkKVWatcher, error) {
-	var err error
-	conn, err := client.Connect(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get nats connection, %w", err)
-	}
-
-	js, err := conn.JetStream()
-	if err != nil {
-		if !conn.IsClosed() {
-			conn.Close()
-		}
-		return nil, fmt.Errorf("failed to get JetStream context for writer")
-	}
-
-	j := &jetStreamWatch{
+	jsw := &jetStreamWatch{
 		pipelineName: pipelineName,
 		kvBucketName: kvBucketName,
-		conn:         conn,
-		js:           js,
+		kvWatchers:   make([]*KeyWatcher, 0),
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("kvBucketName", kvBucketName),
 	}
 
-	// At this point, kvWatcher of type nats.KeyWatcher is nil
+	connectAndWatch := func() (*jsclient.NatsConn, *jsclient.JetStreamContext, error) {
+		conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(c *jsclient.NatsConn) {
+			if jsw.js == nil {
+				jsw.log.Error("JetStreamContext is nil inside kv watcher")
+				return
+			}
+			// update the watcher reference to the new connection
+			jsw.log.Info("Recreating kv watchers")
+			for _, w := range jsw.kvWatchers {
+				w.kvw = jsw.newWatcher().kvw
+			}
+		}), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
+			jsw.log.Errorw("Nats JetStream connection lost inside kv watcher", zap.Error(err))
+		}))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get nats connection, %w", err)
+		}
+		js, err := conn.JetStream()
+		if err != nil {
+			conn.Close()
+			return nil, nil, fmt.Errorf("failed to get jetstream context, %w", err)
+		}
+		return conn, js, nil
+	}
 
+	conn, js, err := connectAndWatch()
+
+	if err != nil {
+		return nil, err
+	}
+
+	jsw.conn = conn
+	jsw.js = js
 	// options if any
 	for _, o := range opts {
-		if err := o(j); err != nil {
-			j.Close()
+		if err := o(jsw); err != nil {
+			jsw.Close()
 			return nil, err
 		}
 	}
-	return j, nil
+	return jsw, nil
 }
 
 // JSKVWatcherOption is to pass in Jetstream options.
@@ -105,6 +121,7 @@ func (k kvEntry) Operation() store.KVWatchOp {
 func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
 	var err error
 	kvWatcher := jsw.newWatcher()
+	jsw.kvWatchers = append(jsw.kvWatchers, kvWatcher)
 	var updates = make(chan store.WatermarkKVEntry)
 	var stopped = make(chan struct{})
 	go func() {
@@ -124,14 +141,10 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 				return
 			case value, ok := <-kvWatcher.Updates():
 				if !ok {
-					// there are no more values to receive and the channel is closed, but context is not done yet
-					// meaning: there could be an auto reconnection to JetStream while the service is still running
-					// therefore, recreate the kvWatcher using the new JetStream context
-					kvWatcher = jsw.newWatcher()
-					jsw.log.Infow("Succeeded to recreate the watcher")
+					continue
 				}
 				if value == nil {
-					// watcher initialization and subscription send nil value
+					jsw.log.Infow("watcher initialization and subscription send nil value")
 					continue
 				}
 				jsw.log.Debug(value.Key(), value.Value(), value.Operation())
@@ -157,7 +170,7 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 	return updates, stopped
 }
 
-func (jsw *jetStreamWatch) newWatcher() nats.KeyWatcher {
+func (jsw *jetStreamWatch) newWatcher() *KeyWatcher {
 	kv, err := jsw.js.KeyValue(jsw.kvBucketName)
 	// keep looping because the watermark won't work without a watcher
 	for err != nil {
@@ -172,7 +185,10 @@ func (jsw *jetStreamWatch) newWatcher() nats.KeyWatcher {
 		kvWatcher, err = kv.WatchAll(nats.IncludeHistory())
 		time.Sleep(100 * time.Millisecond)
 	}
-	return kvWatcher
+	kw := &KeyWatcher{
+		kvw: kvWatcher,
+	}
+	return kw
 }
 
 // GetKVName returns the KV store (bucket) name.

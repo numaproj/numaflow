@@ -48,7 +48,7 @@ type Publisher interface {
 	GetLatestWatermark() wmb.Watermark
 }
 
-// publish publishes the watermark for a processor entity.
+// publish publishes the watermark and heartbeat for a processor entity.
 type publish struct {
 	ctx    context.Context
 	entity processor.ProcessorEntitier
