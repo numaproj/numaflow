@@ -72,8 +72,16 @@ func TestMain(m *testing.M) {
 
 // GetWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testForwardFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (t *testForwardFetcher) ProcessOffsetGetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+	return t.GetWatermark()
+}
+
+func (t *testForwardFetcher) GetWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
+}
+
+func (t *testForwardFetcher) ProcessOffset(offset isb.Offset, fromPartitionIdx int32) error {
+	return nil
 }
 
 func (t *testForwardFetcher) GetHeadWatermark(int32) wmb.Watermark {
@@ -771,10 +779,17 @@ func (t *testWMBFetcher) Close() error {
 	return nil
 }
 
+func (t *testWMBFetcher) ProcessOffsetGetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+	return t.GetWatermark()
+}
+
 // GetWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testWMBFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (t *testWMBFetcher) GetWatermark() wmb.Watermark {
 	return wmb.Watermark(testWMBWatermark)
+}
+func (t *testWMBFetcher) ProcessOffset(offset isb.Offset, fromPartitionIdx int32) error {
+	return nil
 }
 
 func (t *testWMBFetcher) GetHeadWatermark(int32) wmb.Watermark {
