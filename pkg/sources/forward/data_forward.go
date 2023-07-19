@@ -62,8 +62,6 @@ type DataForward struct {
 	pipelineName   string
 	// idleManager manages the idle watermark status.
 	idleManager *wmb.IdleManager
-	// wmbChecker checks if the idle watermark is valid.
-	wmbChecker wmb.WMBChecker
 	Shutdown
 }
 
@@ -99,7 +97,6 @@ func NewDataForward(
 		vertexName:           vertex.Spec.Name,
 		pipelineName:         vertex.Spec.PipelineName,
 		idleManager:          wmb.NewIdleManager(len(toSteps)),
-		wmbChecker:           wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
@@ -199,44 +196,13 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
 	// reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
-		// When the read length is zero, the write length is definitely zero too
-		// meaning there's no data to be published to the next vertex, and we consider this
-		// situation as idling.
-		// In order to continue propagating watermark, we will set watermark idle=true and publish it.
-		// We also publish a control message if this is the first time we get this idle situation.
-		// we use the HeadWMB as the watermark for the idle
-		// we get the HeadWMB for the partition from which we read the messages
-		var processorWMB = isdf.wmFetcher.GetHeadWMB(isdf.reader.GetPartitionIdx())
-		if !isdf.wmbChecker.ValidateHeadWMB(processorWMB) {
-			// validation failed, skip publishing
-			isdf.opts.logger.Debugw("skip publishing idle watermark",
-				zap.Int("counter", isdf.wmbChecker.GetCounter()),
-				zap.Int64("offset", processorWMB.Offset),
-				zap.Int64("watermark", processorWMB.Watermark),
-				zap.Bool("Idle", processorWMB.Idle))
-			return
-		}
-
-		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
-		for toVertexName, toVertexBuffer := range isdf.toBuffers {
-			for _, partition := range toVertexBuffer {
-				if p, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, partition, p, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeSource, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
-				}
-			}
-		}
 		return
 	}
 
-	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
 	// store the offsets of the messages we read from source
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
 		readOffsets[idx] = m.ReadOffset
-		// for source forwarder, below if statement should always hold true, since we never publish idle watermark to source reader buffer
-		if m.Kind == isb.Data {
-			dataMessages = append(dataMessages, m)
-		}
 	}
 
 	// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
@@ -255,7 +221,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	transformerCh := make(chan *readWriteMessagePair)
 	// transformerResults stores the results after user defined transformer processing for all read messages. It indexes
 	// a read message to the corresponding write message
-	transformerResults := make([]readWriteMessagePair, len(dataMessages))
+	transformerResults := make([]readWriteMessagePair, len(readMessages))
 	// applyTransformer, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
 
 	// create a pool of Transformer Processors
@@ -270,7 +236,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	concurrentTransformerProcessingStart := time.Now()
 
 	// send to transformer only the data messages
-	for idx, m := range dataMessages {
+	for idx, m := range readMessages {
 		// emit message size metric
 		forward.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(m.Payload)))
 		// assign watermark to the message
@@ -364,24 +330,16 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 			}
 		}
 	}
-	// - condition1 "len(dataMessages) > 0" :
-	//   Meaning, we do have some data messages, but we may not have written to all out buffers or its partitions.
-	//   It could be all data messages are dropped, or conditional forwarding to part of the out buffers.
-	//   If we don't have this condition check, when dataMessages is zero but ctrlMessages > 0, we will
-	//   wrongly publish an idle watermark without the ctrl message and the ctrl message tracking map.
-	// - condition 2 "len(activeWatermarkBuffers) < len(isdf.toVertexWMPublishers)" :
-	//   send idle watermark only if we have idle out buffers
-	// Note: When the len(dataMessages) is 0, meaning all the readMessages are control messages, we choose not to do extra steps
-	// This is because, if the idle continues, we will eventually handle the idle watermark when we read the next batch where the len(readMessages) will be zero
-	if len(dataMessages) > 0 {
-		for bufferName := range isdf.toVertexWMPublishers {
-			for index, activePartition := range activeWatermarkBuffers[bufferName] {
-				if !activePartition {
-					// use the watermark of the current read batch for the idle watermark
-					// same as read len==0 because there's no event published to the buffer
-					if p, ok := isdf.toVertexWMPublishers[bufferName]; ok {
-						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName][index], p, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeSource, processorWM)
-					}
+
+	// condition "len(activeWatermarkBuffers) < len(isdf.toVertexWMPublishers)" :
+	// send idle watermark only if we have idle out buffers
+	for bufferName := range isdf.toVertexWMPublishers {
+		for index, activePartition := range activeWatermarkBuffers[bufferName] {
+			if !activePartition {
+				// use the watermark of the current read batch for the idle watermark
+				// same as read len==0 because there's no event published to the buffer
+				if p, ok := isdf.toVertexWMPublishers[bufferName]; ok {
+					idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName][index], p, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeSource, processorWM)
 				}
 			}
 		}
