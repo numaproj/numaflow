@@ -67,7 +67,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", sim.isbSvcType)
 	}
 
-	// TODO: remove it.
+	// TODO(SI): remove it.
 	fmt.Printf("ISB Svc Client nil: %v\n", isbSvcClient == nil)
 
 	f := func() {
