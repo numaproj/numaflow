@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -222,6 +220,7 @@ func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
 	w := s.Given().Pipeline("@testdata/extract-event-time-from-payload.yaml").
 		When().
 		CreatePipelineAndWait()
+	currentTime := time.Now().UnixMilli()
 	defer w.DeletePipelineAndWait()
 	pipelineName := "extract-event-time"
 
@@ -279,8 +278,9 @@ wmLoop:
 					assert.Fail(s.T(), err.Error())
 				}
 				println(edgeWM)
-				// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark matches one of the assigned event times.
-				assert.True(s.T(), edgeWM >= time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli())
+				// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark is greater than the event time of the first message
+				// and less than the current time.
+				assert.True(s.T(), edgeWM >= time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() && edgeWM < currentTime)
 				break wmLoop
 			}
 			time.Sleep(time.Second)
