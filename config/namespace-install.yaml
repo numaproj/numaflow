@@ -12560,7 +12560,7 @@ data:
             maxAckPending: 25000
           otBucket:
             maxValueSize: 0
-            history: 5
+            history: 1
             ttl: 3h
             maxBytes: 0
             # 0: File, 1: Memory
