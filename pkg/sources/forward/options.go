@@ -29,27 +29,22 @@ import (
 type options struct {
 	// readBatchSize is the default batch size
 	readBatchSize int64
-	// udfConcurrency sets the concurrency for concurrent UDF processing
-	udfConcurrency int
+	// transformerConcurrency sets the concurrency for concurrent transformer processing
+	transformerConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
-	// vertexType indicates the type of the vertex
-	vertexType dfv1.VertexType
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
-	// enableMapUdfStream indicates whether the message streaming is enabled or not for UDF processing
-	enableMapUdfStream bool
 }
 
 type Option func(*options) error
 
 func DefaultOptions() *options {
 	return &options{
-		readBatchSize:      dfv1.DefaultReadBatchSize,
-		udfConcurrency:     dfv1.DefaultReadBatchSize,
-		retryInterval:      time.Millisecond,
-		logger:             logging.NewLogger(),
-		enableMapUdfStream: false,
+		readBatchSize:          dfv1.DefaultReadBatchSize,
+		transformerConcurrency: dfv1.DefaultReadBatchSize,
+		retryInterval:          time.Millisecond,
+		logger:                 logging.NewLogger(),
 	}
 }
 
@@ -69,10 +64,10 @@ func WithReadBatchSize(f int64) Option {
 	}
 }
 
-// WithUDFConcurrency sets concurrency for UDF processing
-func WithUDFConcurrency(f int) Option {
+// WithTransformerConcurrency sets concurrency for UDF processing
+func WithTransformerConcurrency(f int) Option {
 	return func(o *options) error {
-		o.udfConcurrency = f
+		o.transformerConcurrency = f
 		return nil
 	}
 }
@@ -81,22 +76,6 @@ func WithUDFConcurrency(f int) Option {
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *options) error {
 		o.logger = l
-		return nil
-	}
-}
-
-// WithVertexType sets the type of the vertex
-func WithVertexType(t dfv1.VertexType) Option {
-	return func(o *options) error {
-		o.vertexType = t
-		return nil
-	}
-}
-
-// WithUDFStreaming sets streaming for UDF processing
-func WithUDFStreaming(f bool) Option {
-	return func(o *options) error {
-		o.enableMapUdfStream = f
 		return nil
 	}
 }
