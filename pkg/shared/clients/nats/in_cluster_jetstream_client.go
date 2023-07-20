@@ -76,16 +76,15 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 		}
 	}
 	var nc *nats.Conn
+
 	var err error
-	if !options.autoReconnect {
-		nc, err = isc.connect(ctx, nats.NoReconnect(), nats.ReconnectHandler(func(nc *nats.Conn) {
-			log.Error("Default Auto reconnection shouldn't happen")
-		}))
+	// If autoReconnectHandler is set, use it
+	if options.autoReconnectHandler != nil {
+		nc, err = isc.connect(ctx, nats.ReconnectHandler(options.autoReconnectHandler))
 	} else {
-		nc, err = isc.connect(ctx, nats.ReconnectHandler(func(nnc *nats.Conn) {
-			log.Info("Nats: auto reconnected to nats server by default")
-		}))
+		nc, err = isc.connect(ctx)
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +107,7 @@ func (isc *inClusterJetStreamClient) Connect(ctx context.Context, opts ...JetStr
 						return
 					}
 					natsConn.Conn = conn
-					natsConn.reloadContexts()
+					natsConn.ReloadContexts()
 					log.Info("Succeeded to reconnect to Nat JetStream server")
 					if options.reconnectHandler != nil {
 						options.reconnectHandler(natsConn)

@@ -58,11 +58,18 @@ func natsJetStreamConnection(ctx context.Context, url string, natsOptions []nats
 		nats.MaxReconnects(-1),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			if err != nil {
-				log.Error(err, "Nats: connection lost")
+				log.Error(err, "Nats default: connection lost")
 			} else {
-				log.Info("Nats: disconnected")
+				log.Info("Nats default: disconnected")
 			}
 		}),
+		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
+			log.Error(err, "Nats default: error occurred for subscription")
+		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			log.Info("Nats default: connection closed")
+		}),
+		nats.RetryOnFailedConnect(true),
 		// Write (and flush) timeout
 		nats.FlusherTimeout(10 * time.Second),
 	}

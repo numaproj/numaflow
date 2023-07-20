@@ -51,19 +51,24 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 
 	connectAndWatch := func() (*jsclient.NatsConn, *jsclient.JetStreamContext, error) {
 		conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(c *jsclient.NatsConn) {
-			jsw.log.Infow("Reconnection handler inside kv watcher was invoked")
-			if jsw.js == nil {
-				jsw.log.Error("JetStreamContext is nil inside kv watcher")
-				return
-			}
 			// update the watcher reference to the new connection
-			jsw.log.Info("Recreating kv watchers")
+			jsw.log.Info("Recreating kv watchers inside custom reconnect handler")
+			// recreate the watchers
 			for _, w := range jsw.kvWatchers {
 				w.RefreshWatcher(jsw.newWatcher().kvw)
 			}
-			jsw.log.Infow("updated kv watchers")
-		}), jsclient.NoAutoReconnect(), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
+		}), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
 			jsw.log.Errorw("Nats JetStream connection lost inside kv watcher", zap.Error(err))
+		}), jsclient.AutoReconnectHandler(func(nc *nats.Conn) {
+			// update the watcher reference to the new connection
+			jsw.conn.Conn = nc
+			// reload the contexts
+			jsw.conn.ReloadContexts()
+			jsw.log.Info("Recreating kv watchers inside auto reconnect handler")
+			// recreate the watchers
+			for _, w := range jsw.kvWatchers {
+				w.RefreshWatcher(jsw.newWatcher().kvw)
+			}
 		}))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get nats connection, %w", err)

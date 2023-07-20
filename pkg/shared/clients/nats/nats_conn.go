@@ -105,8 +105,8 @@ retry:
 	return !failed
 }
 
-// reloadContexts is a function to recreate JetStreamContext after reconnection.
-func (nc *NatsConn) reloadContexts() {
+// ReloadContexts is a function to recreate JetStreamContext after reconnection.
+func (nc *NatsConn) ReloadContexts() {
 	if nc.Conn == nil || nc.Conn.IsClosed() || !nc.Conn.IsConnected() {
 		return
 	}

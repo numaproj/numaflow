@@ -18,14 +18,16 @@ package nats
 
 import (
 	"time"
+
+	"github.com/nats-io/nats.go"
 )
 
 // jsClientOptions is a struct of the options for JetStream client.
 type jsClientOptions struct {
 	reconnect               bool
-	autoReconnect           bool
 	connectionCheckInterval time.Duration
 	reconnectHandler        func(*NatsConn)
+	autoReconnectHandler    nats.ConnHandler
 	disconnectHandler       func(*NatsConn, error)
 }
 
@@ -33,7 +35,6 @@ type jsClientOptions struct {
 func defaultJetStreamClientOptions() *jsClientOptions {
 	return &jsClientOptions{
 		reconnect:               true,
-		autoReconnect:           true,
 		connectionCheckInterval: 6 * time.Second,
 	}
 }
@@ -44,13 +45,6 @@ type JetStreamClientOption func(*jsClientOptions)
 func NoReconnect() JetStreamClientOption {
 	return func(opts *jsClientOptions) {
 		opts.reconnect = false
-	}
-}
-
-// NoAutoReconnect is an Option to set no auto reconnect.
-func NoAutoReconnect() JetStreamClientOption {
-	return func(opts *jsClientOptions) {
-		opts.autoReconnect = false
 	}
 }
 
@@ -72,5 +66,12 @@ func ReconnectHandler(f func(*NatsConn)) JetStreamClientOption {
 func DisconnectErrHandler(f func(*NatsConn, error)) JetStreamClientOption {
 	return func(opts *jsClientOptions) {
 		opts.disconnectHandler = f
+	}
+}
+
+// AutoReconnectHandler is an Option to set the auto reconnected handler.
+func AutoReconnectHandler(cb nats.ConnHandler) JetStreamClientOption {
+	return func(opts *jsClientOptions) {
+		opts.autoReconnectHandler = cb
 	}
 }
