@@ -2207,6 +2207,48 @@
 </thead>
 <tbody>
 <tr>
+<td><code>source_forwarder_read_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages read by a given Source Vertex</td>
+</tr>
+<tr>
+<td><code>source_forwarder_read_bytes_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of bytes read by a given Source Vertex</td>
+</tr>
+<tr>
+<td><code>source_forwarder_write_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages written to Inter-Step Buffer by a given Source Vertex</td>
+</tr>
+<tr>
+<td><code>source_forwarder_write_bytes_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of bytes written to Inter-Step Buffer by a given Source Vertex</td>
+</tr>
+<tr>
+<td><code>source_forwarder_ack_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages acknowledged by a given Source Vertex</td>
+</tr>
+<tr>
+<td><code>source_forwarder_drop_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages dropped by a given Source Vertex due to a full Inter-Step Buffer Partition</td>
+</tr>
+<tr>
+<td><code>source_forwarder_drop_bytes_total</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of bytes dropped by a given Source Vertex due to a full Inter-Step Buffer Partition</td>
+</tr>
+<tr>
 <td><code>forwarder_read_total</code></td>
 <td>Counter</td>
 <td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
@@ -2437,6 +2479,18 @@
 </thead>
 <tbody>
 <tr>
+<td><code>source_forwarder_transformer_processing_time</code></td>
+<td>Histogram</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides a histogram distribution of the processing times of User Defined Source Transformer</td>
+</tr>
+<tr>
+<td><code>source_forwarder_forward_chunk_processing_time</code></td>
+<td>Histogram</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides a histogram distribution of the processing times of the source forwarder function as a whole</td>
+</tr>
+<tr>
 <td><code>forwarder_udf_processing_time</code></td>
 <td>Histogram</td>
 <td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
@@ -2474,6 +2528,30 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><code>source_forwarder_platform_error</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Indicates any internal errors which could stop pipeline processing</td>
+</tr>
+<tr>
+<td><code>source_forwarder_read_error</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Indicates any errors while reading messages by the source forwarder</td>
+</tr>
+<tr>
+<td><code>source_forwarder_write_error</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Indicates any errors while writing messages by the source forwarder</td>
+</tr>
+<tr>
+<td><code>source_forwarder_ack_error</code></td>
+<td>Counter</td>
+<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Indicates any errors while acknowledging messages by the source forwarder</td>
+</tr>
 <tr>
 <td><code>forwarder_platform_error</code></td>
 <td>Counter</td>
