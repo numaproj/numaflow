@@ -84,6 +84,7 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
+				pt.log.Infof("Context is cancelled. Stopping tracking active pods for pipeline %s...", pt.pipeline.Name)
 				return
 			case <-ticker.C:
 				for _, v := range pt.pipeline.Spec.Vertices {
@@ -130,7 +131,7 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 		// it truly means the pod doesn't exist.
 		// in reality, we can imagine that a pod can be active but the Head request times out for some reason and returns an incorrect false,
 		// if we ever observe such case, we can think about adding retry here.
-		pt.log.Debugf("Failed to check if pod %s is active: %v", podName, err)
+		pt.log.Debugf("Sending HEAD request to pod %s is unsuccessful: %v, treating the pod as inactive", podName, err)
 		return false
 	}
 	_ = resp.Body.Close()
