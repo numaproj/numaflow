@@ -169,7 +169,7 @@ func Test_EdgeFetcherSet_ProcessOffsetGetWatermark(t *testing.T) {
 
 			for vertex := 0; vertex < numIncomingVertices; vertex++ {
 				vertexName := fmt.Sprintf("vertex-%d", vertex)
-				efs.edgeFetchers[vertexName] = &EdgeFetcher{
+				efs.edgeFetchers[vertexName] = &edgeFetcher{
 					ctx:              ctx,
 					processorManager: processorManagers[vertex],
 					log:              zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel)).Sugar(),

@@ -152,7 +152,7 @@ func TestBuffer_ProcessOffsetGetWatermarkWithOnePartition(t *testing.T) {
 			for i := 0; i < 1; i++ {
 				lastProcessed = append(lastProcessed, -1)
 			}
-			b := &EdgeFetcher{
+			b := &edgeFetcher{
 				ctx:              ctx,
 				bucketName:       "testBucket",
 				processorManager: tt.processorManager,
@@ -317,7 +317,7 @@ func TestBuffer_ProcessOffsetGetWatermarkWithMultiplePartition(t *testing.T) {
 			for i := 0; i < 3; i++ {
 				lastProcessed[i] = wmb.InitialWatermark.UnixMilli()
 			}
-			b := &EdgeFetcher{
+			b := &edgeFetcher{
 				ctx:              ctx,
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
@@ -366,7 +366,7 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e := &EdgeFetcher{
+			e := &edgeFetcher{
 				ctx:              ctx,
 				bucketName:       bucketName,
 				storeWatcher:     storeWatcher,
@@ -562,7 +562,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 			for i := 0; i < int(partitionCount); i++ {
 				lastProcessedWm[i] = 100
 			}
-			e := &EdgeFetcher{
+			e := &edgeFetcher{
 				ctx:              ctx,
 				bucketName:       bucketName,
 				storeWatcher:     storeWatcher,
