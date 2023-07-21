@@ -54,21 +54,13 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 			// update the watcher reference to the new connection
 			jsw.log.Info("Recreating kv watchers inside custom reconnect handler")
 			// recreate the watchers
-			for _, w := range jsw.kvWatchers {
-				w.RefreshWatcher(jsw.newWatcher().kvw)
-			}
+			jsw.refreshWatchers()
 		}), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
 			jsw.log.Errorw("Nats JetStream connection lost inside kv watcher", zap.Error(err))
 		}), jsclient.AutoReconnectHandler(func(nc *nats.Conn) {
-			// update the watcher reference to the new connection
-			jsw.conn.Conn = nc
-			// reload the contexts
-			jsw.conn.ReloadContexts()
 			jsw.log.Info("Recreating kv watchers inside auto reconnect handler")
 			// recreate the watchers
-			for _, w := range jsw.kvWatchers {
-				w.RefreshWatcher(jsw.newWatcher().kvw)
-			}
+			jsw.refreshWatchers()
 		}))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get nats connection, %w", err)
@@ -212,5 +204,12 @@ func (jsw *jetStreamWatch) Close() {
 	// otherwise `kvWatcher.Stop()` will raise the nats connection is closed error
 	if !jsw.conn.IsClosed() {
 		jsw.conn.Close()
+	}
+}
+
+// refreshWatchers recreates the watchers.
+func (jsw *jetStreamWatch) refreshWatchers() {
+	for _, w := range jsw.kvWatchers {
+		w.RefreshWatcher(jsw.newWatcher().kvw)
 	}
 }

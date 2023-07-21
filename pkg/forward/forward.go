@@ -205,6 +205,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
 	readMessages, err := isdf.fromBufferPartition.Read(ctx, isdf.opts.readBatchSize)
+	isdf.opts.logger.Debugw("Read from buffer", zap.String("bufferFrom", isdf.fromBufferPartition.GetName()), zap.Int64("length", int64(len(readMessages))))
 	if err != nil {
 		isdf.opts.logger.Warnw("failed to read fromBufferPartition", zap.Error(err))
 		ReadMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
@@ -336,6 +337,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.fromBufferPartition.NoAck(ctx, readOffsets)
 			return
 		}
+		isdf.opts.logger.Debugw("writeToBuffers completed")
 	} else {
 		writeOffsets, err = isdf.streamMessage(ctx, dataMessages, processorWM)
 		if err != nil {

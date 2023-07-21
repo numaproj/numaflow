@@ -185,6 +185,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
+				v.log.Debugw("Processor heartbeat watcher received a put", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
 				if p == nil || p.IsDeleted() {
@@ -243,6 +244,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 			}
 			switch value.Operation() {
 			case store.KVPut:
+				v.log.Debugw("Processor timeline watcher received a put", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 				// a new processor's OT might take up to 5 secs to be reflected because we are not waiting for it to be added.
 				// This should not be a problem because the processor will send heartbeat as soon as it boots up.
 				// In case we miss it, we might see a delay.
