@@ -458,7 +458,7 @@ func (isdf *InterStepDataForward) streamMessage(
 		for writeMessage := range writeMessageCh {
 			// add partition to the ID, to make sure that the ID is unique across partitions
 			// also add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
-			writeMessage.ID = fmt.Sprintf("%s-%d-%d-%s", dataMessages[0].ReadOffset.String(), isdf.fromBufferPartition.GetPartitionIdx(), msgIndex, isdf.vertexName)
+			writeMessage.ID = fmt.Sprintf("%s-%s-%d-%d", dataMessages[0].ReadOffset.String(), isdf.vertexName, isdf.fromBufferPartition.GetPartitionIdx(), msgIndex)
 			msgIndex += 1
 			UdfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(1))
 
@@ -681,7 +681,7 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 			for index, m := range writeMessages {
 				// add partition to the ID, to make sure that the ID is unique across partitions
 				// also add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
-				m.ID = fmt.Sprintf("%s-%d-%d-%s", readMessage.ReadOffset.String(), isdf.fromBufferPartition.GetPartitionIdx(), index, isdf.vertexName)
+				m.ID = fmt.Sprintf("%s-%s-%d-%d", readMessage.ReadOffset.String(), isdf.vertexName, isdf.fromBufferPartition.GetPartitionIdx(), index)
 				if m.EventTime.IsZero() {
 					m.EventTime = readMessage.EventTime
 				}

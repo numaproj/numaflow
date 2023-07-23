@@ -51,7 +51,7 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 					MessageInfo: isb.MessageInfo{
 						EventTime: tmpTime,
 					},
-					ID:   fmt.Sprintf("%d-0-0-testVertex", i),
+					ID:   fmt.Sprintf("%d-testVertex-0-0", i), // TODO: hard coded ID suffix ATM, make configurable if needed
 					Keys: []string{},
 				},
 				Body: isb.Body{Payload: result},
