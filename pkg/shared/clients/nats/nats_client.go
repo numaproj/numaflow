@@ -28,8 +28,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/pkg/sources/nats"
 
+	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 )
 
