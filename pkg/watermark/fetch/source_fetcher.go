@@ -73,7 +73,7 @@ func (e *sourceFetcher) GetWatermark() wmb.Watermark {
 	for _, p := range e.processorManager.GetAllProcessors() {
 
 		if len(p.GetOffsetTimelines()) != 1 {
-			e.log.Fatalf("sourceFetcher %+v has %d offset timelines??, expected 1", e, len(p.GetOffsetTimelines()))
+			e.log.Fatalf("sourceFetcher %+v has %d offset timelines, expected 1", e, len(p.GetOffsetTimelines()))
 		}
 		offsetTimeline := p.GetOffsetTimelines()[0]
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))

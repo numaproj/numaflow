@@ -227,9 +227,9 @@ func (e *edgeFetcher) Close() error {
 
 // GetWatermark returns the smallest watermark among all the last processed watermarks.
 func (e *edgeFetcher) GetWatermark() wmb.Watermark {
-	minWm := int64(0)
+	minWm := int64(math.MaxInt64)
 	for _, wm := range e.lastProcessedWm {
-		if minWm == int64(0) || minWm > wm {
+		if minWm > wm {
 			minWm = wm
 		}
 	}

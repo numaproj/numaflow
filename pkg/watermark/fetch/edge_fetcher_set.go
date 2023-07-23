@@ -18,6 +18,7 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"math"
 	"time"
 
@@ -29,9 +30,8 @@ import (
 
 // a set of EdgeFetchers, incoming to a Vertex
 // (In the case of a Join Vertex, there are multiple incoming Edges)
-// key=name of From Vertex
 type edgeFetcherSet struct {
-	edgeFetchers map[string]Fetcher
+	edgeFetchers map[string]Fetcher // key = name of From Vertex
 	log          *zap.SugaredLogger
 }
 
@@ -49,7 +49,7 @@ func (efs *edgeFetcherSet) ProcessOffsetGetWatermark(inputOffset isb.Offset, fro
 	return efs.GetWatermark()
 }
 
-// GetWatermark processes the Watermark for the given partition from the given offset
+// ProcessOffset processes the Watermark for the given partition from the given offset
 func (efs *edgeFetcherSet) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int32) error {
 	var returnErr error
 	for _, fetcher := range efs.edgeFetchers {
@@ -135,11 +135,15 @@ func (efs *edgeFetcherSet) GetWatermark() wmb.Watermark {
 }
 
 func (efs *edgeFetcherSet) Close() error {
+	aggregateErr := ""
 	for _, fetcher := range efs.edgeFetchers {
 		err := fetcher.Close()
 		if err != nil {
-			return err
+			aggregateErr += err.Error() + "; "
 		}
+	}
+	if aggregateErr != "" {
+		return errors.New(aggregateErr)
 	}
 	return nil
 }
