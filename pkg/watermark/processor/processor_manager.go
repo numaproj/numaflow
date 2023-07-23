@@ -48,7 +48,8 @@ type ProcessorManager struct {
 	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
 	// used for tracking watermark.
 	processors map[string]*ProcessorToFetch
-	bucket     string
+	// name of the bucket, used for logging
+	bucket string
 	// fromBufferPartitionCount is the number of partitions in the fromBuffer
 	fromBufferPartitionCount int32
 	lock                     sync.RWMutex

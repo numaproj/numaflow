@@ -172,10 +172,10 @@ func (p *publish) validateWatermark(wm wmb.Watermark, toVertexPartitionIdx int32
 	}
 	// update p.headWatermarks only if wm > p.headWatermarks
 	headWM := p.GetHeadWM(toVertexPartitionIdx)
-	if wm.After(time.Time(headWM)) {
+	if wm.AfterWatermark(headWM) {
 		p.log.Debugw("New watermark is updated for the head watermark", zap.Int32("partition", toVertexPartitionIdx), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		p.SetHeadWM(wm, toVertexPartitionIdx)
-	} else if wm.Before(time.Time(headWM)) {
+	} else if wm.BeforeWatermark(headWM) {
 		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.Int32("partition", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	} else {
@@ -252,7 +252,7 @@ func (p *publish) loadLatestFromStore() wmb.Watermark {
 func (p *publish) GetLatestWatermark() wmb.Watermark {
 	var latestWatermark = wmb.InitialWatermark
 	for _, wm := range p.headWatermarks {
-		if wm.After(time.Time(latestWatermark)) {
+		if wm.AfterWatermark(latestWatermark) {
 			latestWatermark = wm
 		}
 	}
