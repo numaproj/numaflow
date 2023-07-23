@@ -61,6 +61,10 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 	//FIXME: make size configurable
 	natsClientPool, err = jsclient.NewClientPool(ctx, 3)
+	if err != nil {
+		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+	}
+	defer natsClientPool.CloseAll()
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	// For sinks, the buffer name is the vertex name

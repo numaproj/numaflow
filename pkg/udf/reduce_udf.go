@@ -68,8 +68,9 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	//FIXME: make size configurable
 	natsClientPool, err = jsclient.NewClientPool(ctx, 3)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
 	}
+	defer natsClientPool.CloseAll()
 
 	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding

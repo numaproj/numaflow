@@ -52,6 +52,10 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	//FIXME: make size configurable
 	natsClientPool, err := jsclient.NewClientPool(ctx, 3)
+	if err != nil {
+		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+	}
+	defer natsClientPool.CloseAll()
 
 	fromBuffer := u.VertexInstance.Vertex.OwnedBuffers()
 	log = log.With("protocol", "uds-grpc-map-udf")

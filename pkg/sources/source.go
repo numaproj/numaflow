@@ -63,8 +63,9 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// FIXME: make size configurable
 	natsClientPool, err := jsclient.NewClientPool(ctx, 3)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
 	}
+	defer natsClientPool.CloseAll()
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToBuffers())
