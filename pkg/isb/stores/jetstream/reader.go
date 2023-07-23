@@ -25,20 +25,17 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/util/wait"
-
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"go.uber.org/zap"
 )
 
 type jetStreamReader struct {
 	name                   string
 	stream                 string
 	subject                string
-	conn                   *jsclient.NatsConn
-	js                     *jsclient.JetStreamContext
+	client                 *jsclient.NATSClient
 	sub                    *nats.Subscription
 	opts                   *readOptions
 	inProgressTickDuration time.Duration
@@ -47,7 +44,7 @@ type jetStreamReader struct {
 }
 
 // NewJetStreamBufferReader is used to provide a new JetStream buffer reader connection
-func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, partitionIdx int32, opts ...ReadOption) (isb.BufferReader, error) {
+func NewJetStreamBufferReader(ctx context.Context, client *jsclient.NATSClient, name, stream, subject string, partitionIdx int32, opts ...ReadOption) (isb.BufferReader, error) {
 	log := logging.FromContext(ctx).With("bufferReader", name).With("stream", stream).With("subject", subject)
 	o := defaultReadOptions()
 	for _, opt := range opts {
@@ -57,82 +54,40 @@ func NewJetStreamBufferReader(ctx context.Context, client jsclient.JetStreamClie
 			}
 		}
 	}
-	result := &jetStreamReader{
+	reader := &jetStreamReader{
 		name:         name,
 		stream:       stream,
 		subject:      subject,
+		client:       client,
 		partitionIdx: partitionIdx,
 		opts:         o,
 		log:          log,
 	}
 
-	connectAndSubscribe := func() (*jsclient.NatsConn, *jsclient.JetStreamContext, *nats.Subscription, error) {
-		conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(c *jsclient.NatsConn) {
-			if result.js == nil {
-				log.Error("JetStreamContext is nil")
-				return
-			}
-			var e error
-			_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
-				Steps:    5,
-				Duration: 1 * time.Second,
-				Factor:   1.0,
-				Jitter:   0.1,
-			}, func() (bool, error) {
-				var s *nats.Subscription
-				if s, e = result.js.PullSubscribe(subject, stream, nats.Bind(stream, stream)); e != nil {
-					log.Errorw("Failed to re-subscribe to the stream after reconnection, will retry if the limit is not reached", zap.Error(e))
-					return false, nil
-				} else {
-					result.sub = s
-					log.Info("Re-subscribed to the stream successfully")
-					return true, nil
-				}
-			})
-			if e != nil {
-				// Let it panic to start over
-				log.Fatalw("Failed to re-subscribe after retries", zap.Error(e))
-			}
-		}), jsclient.DisconnectErrHandler(func(nc *jsclient.NatsConn, err error) {
-			log.Errorw("Nats JetStream connection lost", zap.Error(err))
-		}))
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to get nats connection, %w", err)
-		}
-		js, err := conn.JetStream()
-		if err != nil {
-			conn.Close()
-			return nil, nil, nil, fmt.Errorf("failed to get jetstream context, %w", err)
-		}
-		sub, err := js.PullSubscribe(subject, stream, nats.Bind(stream, stream))
-		if err != nil {
-			conn.Close()
-			return nil, nil, nil, fmt.Errorf("failed to subscribe jet stream subject %q, %w", subject, err)
-		}
-		return conn, js, sub, nil
+	jsContext, err := reader.client.JetStreamContext()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get JetStream context, %w", err)
 	}
 
-	conn, js, sub, err := connectAndSubscribe()
+	consumer, err := jsContext.ConsumerInfo(stream, stream)
 	if err != nil {
-		return nil, err
-	}
-
-	consumer, err := js.ConsumerInfo(stream, stream)
-	if err != nil {
-		conn.Close()
 		return nil, fmt.Errorf("failed to get consumer info, %w", err)
 	}
+
 	// If ackWait is 3s, ticks every 2s.
 	inProgessTickSeconds := int64(consumer.Config.AckWait.Seconds() * 2 / 3)
 	if inProgessTickSeconds < 1 {
 		inProgessTickSeconds = 1
 	}
 
-	result.conn = conn
-	result.js = js
-	result.sub = sub
-	result.inProgressTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
-	return result, nil
+	sub, err := reader.client.Subscribe(subject, stream, nats.Bind(stream, stream))
+	if err != nil {
+		return nil, fmt.Errorf("failed to subscribe to subject %q, %w", subject, err)
+	}
+
+	reader.sub = sub
+	reader.inProgressTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
+	return reader, nil
 }
 
 func (jr *jetStreamReader) GetName() string {
@@ -149,18 +104,11 @@ func (jr *jetStreamReader) Close() error {
 			jr.log.Errorw("Failed to unsubscribe", zap.Error(err))
 		}
 	}
-	if jr.conn != nil && !jr.conn.IsClosed() {
-		jr.conn.Close()
-	}
 	return nil
 }
 
 func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
-	c, err := jr.js.ConsumerInfo(jr.stream, jr.stream)
-	if err != nil {
-		return isb.PendingNotAvailable, fmt.Errorf("failed to get consumer info, %w", err)
-	}
-	return int64(c.NumPending) + int64(c.NumAckPending), nil
+	return jr.client.PendingForStream(jr.stream, jr.stream)
 }
 
 func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
