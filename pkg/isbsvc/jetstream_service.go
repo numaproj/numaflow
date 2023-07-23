@@ -272,10 +272,11 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 
 func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error) {
 	var js nats.JetStreamContext
+	var err error
 	if jss.js != nil { // Daemon server use case
 		js = jss.js
 	} else if jss.jsClient != nil { // Daemon server first time access use case
-		js, err := jss.jsClient.JetStreamContext()
+		js, err = jss.jsClient.JetStreamContext()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get a JetStream context from nats connection, %w", err)
 		}
@@ -290,6 +291,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 		if err != nil {
 			return nil, fmt.Errorf("failed to get a JetStream context from nats connection, %w", err)
 		}
+		jss.js = js
 	}
 	streamName := JetStreamName(buffer)
 	stream, err := js.StreamInfo(streamName)

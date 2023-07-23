@@ -68,6 +68,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		isbSvcClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
 	case v1alpha1.ISBSvcTypeJetStream:
 		natsClient, err := jsclient.NewNATSClient(ctx)
+		defer natsClient.Close()
 		if err != nil {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err

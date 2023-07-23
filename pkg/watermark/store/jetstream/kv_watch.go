@@ -106,7 +106,7 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 				close(stopped)
 				return
 			case value, ok := <-kvWatcher.Updates():
-				jsw.log.Infow("Received a value from the watcher", zap.String("watcher", jsw.GetKVName()), zap.Any("value", value), zap.Bool("ok", ok))
+				jsw.log.Debugw("Received a value from the watcher", zap.String("watcher", jsw.GetKVName()), zap.Any("value", value), zap.Bool("ok", ok))
 				if !ok {
 					// there are no more values to receive and the channel is closed, but context is not done yet
 					// meaning: there could be an auto reconnection to JetStream while the service is still running
@@ -120,14 +120,14 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 				}
 				switch value.Operation() {
 				case nats.KeyValuePut:
-					jsw.log.Infow("Received a put event", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+					jsw.log.Debugw("Received a put event", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 					updates <- kvEntry{
 						key:   value.Key(),
 						value: value.Value(),
 						op:    store.KVPut,
 					}
 				case nats.KeyValueDelete:
-					jsw.log.Infow("Received a delete event", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+					jsw.log.Debugw("Received a delete event", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 					updates <- kvEntry{
 						key:   value.Key(),
 						value: value.Value(),

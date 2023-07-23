@@ -18,6 +18,7 @@ import (
 
 // NATSClient is a client for NATS server
 type NATSClient struct {
+	// we don't need a lock, because nats conn is protected by its own internal mutex
 	nc  *nats.Conn
 	log *zap.SugaredLogger
 }

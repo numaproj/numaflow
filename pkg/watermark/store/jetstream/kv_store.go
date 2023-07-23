@@ -45,9 +45,7 @@ var _ store.WatermarkKVStorer = (*jetStreamStore)(nil)
 // NewKVJetStreamKVStore returns KVJetStreamStore.
 func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (store.WatermarkKVStorer, error) {
 	var err error
-	var jsStore *jetStreamStore
-
-	jsStore = &jetStreamStore{
+	var jsStore = &jetStreamStore{
 		pipelineName: pipelineName,
 		client:       client,
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
