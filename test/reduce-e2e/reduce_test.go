@@ -147,10 +147,10 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 	done <- struct{}{}
 }
 
-func (r *ReduceSuite) TestJoinedReduceVertexPipeline() {
+func (r *ReduceSuite) TestJoinOnReducePipeline() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	w := r.Given().Pipeline("@testdata/join-reduce-pipeline.yaml").
+	w := r.Given().Pipeline("@testdata/join-on-reduce-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
@@ -185,14 +185,14 @@ func (r *ReduceSuite) TestJoinedReduceVertexPipeline() {
 	done <- struct{}{}
 }
 
-func (r *ReduceSuite) TestJoinedMapVertexPipeline() {
+func (r *ReduceSuite) TestJoinOnMapPipeline() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	w := r.Given().Pipeline("@testdata/joined-map-vertex-pipeline.yaml").
+	w := r.Given().Pipeline("@testdata/join-on-map-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "joined-map-vertex"
+	pipelineName := "join-on-map"
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()

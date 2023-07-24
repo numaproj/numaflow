@@ -65,6 +65,8 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 	return fetchWatermark, publishWatermark, nil
 }
 
+// buildFetcher creates a Fetcher (implemented by EdgeFetcherSet) which is used to fetch the Watermarks for a given Vertex
+// (for all incoming Edges) and resolve the overall Watermark for the Vertex
 func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetch.Fetcher, error) {
 	// if watermark is not enabled, use no-op.
 	if vertexInstance.Vertex.Spec.Watermark.Disabled {
@@ -97,6 +99,8 @@ func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) 
 	return fetch.NewEdgeFetcherSet(ctx, edgeFetchers), nil
 }
 
+// buildFetcherForBucket creates a Fetcher (implemented by EdgeFetcher) which is used to fetch the Watermarks for a single incoming Edge
+// to a Vertex (a single Edge has a single Bucket)
 func buildFetcherForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBucket string) (fetch.Fetcher, error) {
 	var fetchWatermark fetch.Fetcher
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
@@ -130,6 +134,7 @@ func buildFetcherForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexI
 	return fetchWatermark, nil
 }
 
+// buildPublishers creates the Watermark Publishers for a given Vertex, one per Edge
 func buildPublishers(ctx context.Context, pipelineName string, vertexInstance *v1alpha1.VertexInstance) (map[string]publish.Publisher, error) {
 	// Publisher map creation, we need a publisher per out buffer.
 	var publishWatermark = make(map[string]publish.Publisher)
