@@ -52,7 +52,7 @@ func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName 
 	}
 
 	// for JetStream KeyValue store, the bucket should have been created in advance
-	jsStore.kv, err = jsStore.client.CreateKVStore(bucketName)
+	jsStore.kv, err = jsStore.client.BindKVStore(bucketName)
 	if err != nil {
 		return nil, err
 	}

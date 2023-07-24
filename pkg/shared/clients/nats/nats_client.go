@@ -122,8 +122,8 @@ func (c *NATSClient) Subscribe(subject string, stream string, opts ...nats.SubOp
 	return jsContext.PullSubscribe(subject, stream, opts...)
 }
 
-// CreateKVStore creates a new key value store for the given bucket name
-func (c *NATSClient) CreateKVStore(bucketName string) (nats.KeyValue, error) {
+// BindKVStore lookup and bind to an existing KeyValue store and return the KeyValue interface
+func (c *NATSClient) BindKVStore(bucketName string) (nats.KeyValue, error) {
 	var (
 		err       error
 		jsContext nats.JetStreamContext

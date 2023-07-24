@@ -18,12 +18,12 @@ package jetstream
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -31,12 +31,14 @@ import (
 
 // jetStreamWatch implements the watermark's KV store backed up by Jetstream.
 type jetStreamWatch struct {
-	pipelineName string
-	kvBucketName string
-	client       *jsclient.NATSClient
-	hbTimer      *time.Timer
-	log          *zap.SugaredLogger
-	opts         *options
+	pipelineName      string
+	kvBucketName      string
+	client            *jsclient.NATSClient
+	kvStore           nats.KeyValue
+	previousFetchTime time.Time
+	kvwTimer          *time.Timer
+	log               *zap.SugaredLogger
+	opts              *options
 }
 
 var _ store.WatermarkKVWatcher = (*jetStreamWatch)(nil)
@@ -50,11 +52,17 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 		o(kvOpts)
 	}
 
+	kvStore, err := client.BindKVStore(kvBucketName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to bind kv store: %w", err)
+	}
+
 	jsw := &jetStreamWatch{
 		pipelineName: pipelineName,
 		kvBucketName: kvBucketName,
 		client:       client,
-		hbTimer:      time.NewTimer(kvOpts.heartbeatThreshold),
+		kvStore:      kvStore,
+		kvwTimer:     time.NewTimer(kvOpts.watcherCreationThreshold),
 		opts:         kvOpts,
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("kvBucketName", kvBucketName),
 	}
@@ -105,6 +113,13 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 				close(stopped)
 				return
 			case value, ok := <-kvWatcher.Updates():
+				// we are getting updates from the watcher, reset the timer
+				// drain the timer channel if it is not empty before resetting
+				if !jsw.kvwTimer.Stop() {
+					<-jsw.kvwTimer.C
+				}
+				jsw.kvwTimer.Reset(jsw.opts.watcherCreationThreshold)
+
 				jsw.log.Debugw("Received a value from the watcher", zap.String("watcher", jsw.GetKVName()), zap.Any("value", value), zap.Bool("ok", ok))
 				if !ok {
 					// there are no more values to receive and the channel is closed, but context is not done yet
@@ -112,6 +127,7 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 					// therefore, recreate the kvWatcher using the new JetStream context
 					tempWatcher := kvWatcher
 					kvWatcher = jsw.newWatcher(ctx)
+					value.Created()
 					err = tempWatcher.Stop()
 					if err != nil {
 						jsw.log.Warnw("Failed to stop the watcher", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
@@ -123,15 +139,8 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 					jsw.log.Infow("watcher initialization and subscription got nil value")
 					continue
 				}
-				// check if the key is a heartbeat key, if so, reset the hb timer
-				if value.Key() == v1alpha1.KVHeartbeatKey {
-					jsw.log.Debug("Received a heartbeat event", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
-					if !jsw.hbTimer.Stop() {
-						<-jsw.hbTimer.C
-					}
-					jsw.hbTimer.Reset(jsw.opts.heartbeatThreshold)
-					continue
-				}
+				jsw.previousFetchTime = value.Created()
+
 				switch value.Operation() {
 				case nats.KeyValuePut:
 					jsw.log.Debug("Received a put event", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
@@ -148,15 +157,25 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 						op:    store.KVDelete,
 					}
 				}
-			case <-jsw.hbTimer.C:
-				// if the timer expired, it means that the watcher is not receiving any kv heartbeats
-				// recreate the watcher and stop the old one
-				jsw.log.Warn("Heartbeat timer expired", zap.String("watcher", jsw.GetKVName()))
-				jsw.log.Warn("Recreating the watcher")
-				tempWatcher := kvWatcher
-				kvWatcher = jsw.newWatcher(ctx)
-				err = tempWatcher.Stop()
-				jsw.hbTimer.Reset(jsw.opts.heartbeatThreshold)
+			case <-jsw.kvwTimer.C:
+				// if the timer expired, it means that the watcher is not receiving any updates
+				kvLastUpdatedTime := jsw.lastUpdateKVTime()
+				// if the last update time is before the previous fetch time, it means that the store is not getting any updates
+				// therefore, we don't have to recreate the watcher
+				if kvLastUpdatedTime.Before(jsw.previousFetchTime) {
+					jsw.log.Debug("The watcher is not receiving any updates, but the store is not getting any updates either")
+				} else {
+					// if the last update time is after the previous fetch time, it means that the store is getting updates but the watcher is not receiving any
+					// therefore, we have to recreate the watcher
+					jsw.log.Warn("The watcher is not receiving any updates", zap.String("watcher", jsw.GetKVName()), zap.Time("lastUpdateKVTime", kvLastUpdatedTime), zap.Time("previousFetchTime", jsw.previousFetchTime))
+					jsw.log.Warn("Recreating the watcher")
+					tempWatcher := kvWatcher
+					kvWatcher = jsw.newWatcher(ctx)
+					err = tempWatcher.Stop()
+				}
+				// reset the timer, since we have drained the timer channel its safe to reset it
+				jsw.kvwTimer.Reset(jsw.opts.watcherCreationThreshold)
+
 			}
 		}
 	}()
@@ -172,6 +191,29 @@ func (jsw *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return kvWatcher
+}
+
+// lastUpdateKVTime returns the last update time of the kv store
+func (jsw *jetStreamWatch) lastUpdateKVTime() time.Time {
+	keys, err := jsw.kvStore.Keys()
+	for err != nil {
+		jsw.log.Errorw("Failed to get keys", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
+		keys, err = jsw.kvStore.Keys()
+		time.Sleep(100 * time.Millisecond)
+	}
+	var lastUpdate = time.Time{}
+	for _, key := range keys {
+		value, err := jsw.kvStore.Get(key)
+		for err != nil {
+			jsw.log.Errorw("Failed to get value", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
+			value, err = jsw.kvStore.Get(key)
+			time.Sleep(100 * time.Millisecond)
+		}
+		if value.Created().After(lastUpdate) {
+			lastUpdate = value.Created()
+		}
+	}
+	return lastUpdate
 }
 
 // GetKVName returns the KV store (bucket) name.

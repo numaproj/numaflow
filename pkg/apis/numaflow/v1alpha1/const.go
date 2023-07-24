@@ -167,7 +167,7 @@ const (
 
 	// KV store
 	KVHeartbeatKey      = "kv-heartbeat"
-	KVHeartbeatInterval = 300 * time.Second // Default kv heartbeat interval in seconds
+	KVHeartbeatInterval = 10 * time.Second // Default kv heartbeat interval in seconds
 )
 
 var (
