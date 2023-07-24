@@ -164,10 +164,6 @@ const (
 
 	// UDF map streaming
 	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
-
-	// KV store
-	KVHeartbeatKey      = "kv-heartbeat"
-	KVHeartbeatInterval = 10 * time.Second // Default kv heartbeat interval in seconds
 )
 
 var (
