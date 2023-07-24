@@ -21,11 +21,12 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"go.uber.org/zap"
 )
 
 // jetStreamWatch implements the watermark's KV store backed up by Jetstream.
