@@ -60,7 +60,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	defer cancel()
 
 	//FIXME: make size configurable
-	natsClientPool, err = jsclient.NewClientPool(ctx, 3)
+	natsClientPool, err = jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(2))
 	if err != nil {
 		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,14 +19,16 @@ import (
 
 // NATSClient is a client for NATS server
 type NATSClient struct {
-	// we don't need a lock, because nats conn is protected by its own internal mutex
-	nc  *nats.Conn
-	log *zap.SugaredLogger
+	sync.Mutex
+	nc    *nats.Conn
+	jsCtx nats.JetStreamContext
+	log   *zap.SugaredLogger
 }
 
 // NewNATSClient Create a new NATS client
 func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient, error) {
 	log := logging.FromContext(ctx)
+	var jsCtx nats.JetStreamContext
 	opts := []nats.Option{
 		// Enable Nats auto reconnect
 		// if max reconnects is set to -1, it will try to reconnect forever
@@ -46,6 +49,10 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		// disconnect handler to log when we lose connection
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			log.Error("Nats default: disconnected", zap.Error(err))
+		}),
+		// reconnect handler to log when we reconnect
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			log.Info("Nats default: reconnected")
 		}),
 		// Write (and flush) timeout
 		nats.FlusherTimeout(10 * time.Second),
@@ -75,7 +82,11 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 	if nc, err := nats.Connect(url, opts...); err != nil {
 		return nil, fmt.Errorf("failed to connect to nats url=%s: %w", url, err)
 	} else {
-		return &NATSClient{nc: nc, log: logging.FromContext(ctx)}, nil
+		jsCtx, err = nc.JetStream()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create to nats jetstream context: %w", err)
+		}
+		return &NATSClient{nc: nc, jsCtx: jsCtx, log: logging.FromContext(ctx)}, nil
 	}
 }
 
@@ -134,19 +145,14 @@ func (c *NATSClient) CreateKVWatcher(bucketName string, opts ...nats.WatchOpt) (
 // PendingForStream returns the number of pending messages for the given consumer and stream
 func (c *NATSClient) PendingForStream(consumer string, stream string) (int64, error) {
 	var (
-		err       error
-		jsContext nats.JetStreamContext
-		cInfo     *nats.ConsumerInfo
+		err   error
+		cInfo *nats.ConsumerInfo
 	)
+	// We only need lock for this function, because we are using a common js context
+	c.Lock()
+	defer c.Unlock()
 
-	// REVISIT: we are creating a new JetStreamContext for every call to PendingForStream
-	// should be ok since the connection is shared and the context is cheap to create.
-	jsContext, err = c.nc.JetStream()
-	if err != nil {
-		return isb.PendingNotAvailable, err
-	}
-
-	cInfo, err = jsContext.ConsumerInfo(consumer, stream)
+	cInfo, err = c.jsCtx.ConsumerInfo(consumer, stream)
 	if err != nil {
 		return isb.PendingNotAvailable, fmt.Errorf("failed to get consumer info, %w", err)
 	}

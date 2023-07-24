@@ -13,10 +13,15 @@ type ClientPool struct {
 }
 
 // NewClientPool returns a new pool of NATS clients of the given size
-func NewClientPool(ctx context.Context, size int) (*ClientPool, error) {
+func NewClientPool(ctx context.Context, opts ...Option) (*ClientPool, error) {
 	clients := list.New()
+	options := defaultOptions()
 
-	for i := 0; i < size; i++ {
+	for _, o := range opts {
+		o(options)
+	}
+
+	for i := 0; i < options.clientPoolSize; i++ {
 		client, err := NewNATSClient(ctx)
 		if err != nil {
 			return nil, err

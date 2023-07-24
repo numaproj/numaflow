@@ -29,6 +29,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
@@ -61,19 +62,24 @@ func NewDaemonServer(pl *v1alpha1.Pipeline, isbSvcType v1alpha1.ISBSvcType) *dae
 
 func (ds *daemonServer) Run(ctx context.Context) error {
 	log := logging.FromContext(ctx)
-	var isbSvcClient isbsvc.ISBService
-	var err error
+	var (
+		isbSvcClient   isbsvc.ISBService
+		err            error
+		natsClientPool *jsclient.ClientPool
+	)
+
+	natsClientPool, err = jsclient.NewClientPool(ctx)
+	defer natsClientPool.CloseAll()
+
+	if err != nil {
+		log.Errorw("Failed to get a NATS client pool.", zap.Error(err))
+		return err
+	}
 	switch ds.isbSvcType {
 	case v1alpha1.ISBSvcTypeRedis:
 		isbSvcClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
 	case v1alpha1.ISBSvcTypeJetStream:
-		natsClient, err := jsclient.NewNATSClient(ctx)
-		defer natsClient.Close()
-		if err != nil {
-			log.Errorw("Failed to get a NATS client.", zap.Error(err))
-			return err
-		}
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithJetStreamClient(natsClient))
+		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithJetStreamClient(natsClientPool.NextAvailableClient()))
 		if err != nil {
 			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 			return err
@@ -129,6 +135,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = grpcServer.Serve(grpcL) }()
 	go func() { _ = httpServer.Serve(httpL) }()
 	go func() { _ = tcpm.Serve() }()
+	go func() { ds.publishHeartbeatsForKVStore(ctx, natsClientPool.NextAvailableClient()) }()
 
 	log.Infof("Daemon server started successfully on %s", address)
 	// Start the rater
@@ -212,4 +219,91 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 		log.Info("Not enabling pprof debug endpoints")
 	}
 	return &httpServer
+}
+
+// publishHeartbeatsForKVStore publishes heartbeats for all the KV stores
+// every KVHeartbeatInterval. This is done to ensure that the KV watchers are
+// working correctly. If the KV watchers stop watching for any reason, we will
+// not get any heartbeats, and they will be recreated.
+func (ds *daemonServer) publishHeartbeatsForKVStore(ctx context.Context, natsClient *jsclient.NATSClient) {
+	// Close the client
+	defer natsClient.Close()
+
+	var (
+		err           error
+		jsCtx         nats.JetStreamContext
+		retryInterval = 3 * time.Second
+	)
+	log := logging.FromContext(ctx)
+	for {
+		jsCtx, err = natsClient.JetStreamContext()
+		if err != nil {
+			log.Errorf("Failed to create JetStream context: %v", err)
+			time.Sleep(retryInterval)
+		} else {
+			break
+		}
+	}
+
+	ticker := time.NewTicker(v1alpha1.KVHeartbeatInterval)
+	defer ticker.Stop()
+
+	kvStores := make([]nats.KeyValue, 0)
+	for bucketName := range jsCtx.KeyValueStoreNames() {
+		var kv nats.KeyValue
+		for {
+			// We need to strip the prefix "KV_" from the bucket name
+			kv, err = jsCtx.KeyValue(bucketName[3:])
+			if err != nil {
+				log.Errorf("Failed to create KV store for bucket %s: %v", bucketName, err)
+				time.Sleep(retryInterval)
+			} else {
+				break
+			}
+		}
+		kvStores = append(kvStores, kv)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info("Stopping publishing heartbeats for KV store")
+			return
+		case <-ticker.C:
+			for _, kv := range kvStores {
+				for {
+					_, err = kv.Put(v1alpha1.KVHeartbeatKey, []byte(time.Now().String()))
+					if err != nil {
+						log.Errorf("Failed to publish heartbeat for KV store %s: %v", kv.Bucket(), err)
+						time.Sleep(retryInterval)
+					} else {
+						log.Info("Published heartbeat for KV store", zap.String("bucket", kv.Bucket()))
+						break
+					}
+				}
+			}
+		}
+	}
+}
+
+// infiniteRetryFunc executes the given retryFunc in a loop until it succeeds.
+func infiniteRetryFunc(ctx context.Context, retryFunc func() error) {
+	var log = logging.FromContext(ctx)
+	var err error
+	var retryInterval = 3 * time.Second
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			err = retryFunc()
+			if err == nil {
+				return
+			} else {
+				log.Warn("Failed to execute retry function", zap.Error(err))
+				time.Sleep(retryInterval)
+			}
+		}
+	}
 }
