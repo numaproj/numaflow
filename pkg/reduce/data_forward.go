@@ -251,7 +251,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	// get the watermark for the partition from which we read the messages
-	processorWM := df.wmFetcher.ProcessOffsetGetWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
+	processorWM := df.wmFetcher.UpdateAndFetchWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
 
 	for _, m := range readMessages {
 		if !df.keyed {

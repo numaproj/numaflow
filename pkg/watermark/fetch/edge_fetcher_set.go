@@ -42,23 +42,19 @@ func NewEdgeFetcherSet(ctx context.Context, edgeFetchers map[string]Fetcher) Fet
 	}
 }
 
-// ProcessOffsetGetWatermark processes the offset on the partition indicated and returns the overall Watermark
+// UpdateAndFetchWatermark processes the offset on the partition indicated and returns the overall Watermark
 // from all Partitions
-func (efs *edgeFetcherSet) ProcessOffsetGetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
-	_ = efs.ProcessOffset(inputOffset, fromPartitionIdx) // even if it errored, we'll keep going
-	return efs.GetWatermark()
-}
-
-// ProcessOffset processes the Watermark for the given partition from the given offset
-func (efs *edgeFetcherSet) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int32) error {
-	var returnErr error
-	for _, fetcher := range efs.edgeFetchers {
-		err := fetcher.ProcessOffset(inputOffset, fromPartitionIdx)
-		if err != nil {
-			returnErr = err // instead of returning error immediately, first try processing offset for all edge fetchers
+func (efs *edgeFetcherSet) UpdateAndFetchWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+	var wm wmb.Watermark
+	overallWatermark := wmb.Watermark(time.UnixMilli(math.MaxInt64))
+	for fromVertex, fetcher := range efs.edgeFetchers {
+		wm = fetcher.UpdateAndFetchWatermark(inputOffset, fromPartitionIdx)
+		efs.log.Debugf("Got Edge watermark from vertex=%q: %v", fromVertex, wm.UnixMilli())
+		if wm.BeforeWatermark(overallWatermark) {
+			overallWatermark = wm
 		}
 	}
-	return returnErr
+	return overallWatermark
 }
 
 // GetHeadWatermark returns the latest watermark among all processors for the given partition.

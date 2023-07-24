@@ -176,7 +176,7 @@ func Test_EdgeFetcherSet_ProcessOffsetGetWatermark(t *testing.T) {
 					lastProcessedWm:  tt.lastProcessedWm[vertex],
 				}
 			}
-			if got := efs.ProcessOffsetGetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+			if got := efs.UpdateAndFetchWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 
@@ -201,12 +201,8 @@ type TestEdgeFetcher struct {
 	currentHeadWatermark wmb.Watermark
 }
 
-func (t *TestEdgeFetcher) ProcessOffsetGetWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+func (t *TestEdgeFetcher) UpdateAndFetchWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	return t.GetWatermark()
-}
-
-func (t *TestEdgeFetcher) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int32) error {
-	return nil
 }
 
 func (t *TestEdgeFetcher) GetWatermark() wmb.Watermark {

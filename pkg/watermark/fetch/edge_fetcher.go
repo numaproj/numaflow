@@ -71,19 +71,19 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 	}
 }
 
-// ProcessOffsetGetWatermark processes the offset on the partition indicated and returns the overall Watermark
+// UpdateAndFetchWatermark processes the offset on the partition indicated and returns the overall Watermark
 // from all Partitions
-func (e *edgeFetcher) ProcessOffsetGetWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
-	err := e.ProcessOffset(offset, fromPartitionIdx)
+func (e *edgeFetcher) UpdateAndFetchWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+	err := e.updateWatermark(offset, fromPartitionIdx)
 	if err != nil {
 		return wmb.InitialWatermark
 	}
 	return e.GetWatermark()
 }
 
-// ProcessOffset updates state (lastProcessedWm) for the given partition based on the provided offset.
+// updateWatermark updates state (lastProcessedWm) for the given partition based on the provided offset.
 // Also deletes the processor if it's not active.
-func (e *edgeFetcher) ProcessOffset(inputOffset isb.Offset, fromPartitionIdx int32) error {
+func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx int32) error {
 	var offset, err = inputOffset.Sequence()
 	if err != nil {
 		e.log.Errorw("Unable to get offset from isb.Offset.Sequence()", zap.Error(err))

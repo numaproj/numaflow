@@ -259,7 +259,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
 	// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
 	// we fetch the watermark for the partition from which we read the message.
-	processorWM := isdf.wmFetcher.ProcessOffsetGetWatermark(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
+	processorWM := isdf.wmFetcher.UpdateAndFetchWatermark(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
 
 	var writeOffsets map[string][][]isb.Offset
 	if !isdf.opts.enableMapUdfStream {

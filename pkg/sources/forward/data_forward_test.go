@@ -71,16 +71,12 @@ func TestMain(m *testing.M) {
 
 // GetWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testForwardFetcher) ProcessOffsetGetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (t *testForwardFetcher) UpdateAndFetchWatermark(offset isb.Offset, partition int32) wmb.Watermark {
 	return t.GetWatermark()
 }
 
 func (t *testForwardFetcher) GetWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
-}
-
-func (t *testForwardFetcher) ProcessOffset(offset isb.Offset, fromPartitionIdx int32) error {
-	return nil
 }
 
 func (t *testForwardFetcher) GetHeadWatermark(int32) wmb.Watermark {

@@ -36,12 +36,7 @@ func NewNoOpWMProgressor() *NoOpWMProgressor {
 	return &NoOpWMProgressor{}
 }
 
-// ProcessOffset processes offset on partition
-func (n NoOpWMProgressor) ProcessOffset(isb.Offset, int32) error {
-	return nil
-}
-
-func (n NoOpWMProgressor) ProcessOffsetGetWatermark(isb.Offset, int32) wmb.Watermark {
+func (n NoOpWMProgressor) UpdateAndFetchWatermark(isb.Offset, int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 
