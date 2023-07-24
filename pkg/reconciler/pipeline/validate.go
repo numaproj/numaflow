@@ -155,7 +155,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("not all the vertex names are defined in edges")
 	}
 
-	// todo: prevent pipelines with Cycles in the case that there is a Reduce Vertex at the point of the cycle or to the right of it
+	// TODO(Join): prevent pipelines with Cycles in the case that there is a Reduce Vertex at the point of the cycle or to the right of it
 
 	for _, v := range pl.Spec.Vertices {
 		if err := validateVertex(v); err != nil {
