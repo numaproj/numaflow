@@ -1166,58 +1166,58 @@ func (f myForwardApplyTransformerErrTest) ApplyMapStream(_ context.Context, _ *i
 
 func validateMetrics(t *testing.T, batchSize int64) {
 	metadata := `
-		# HELP forwarder_read_total Total number of Messages Read
-		# TYPE forwarder_read_total counter
+		# HELP source_forwarder_read_total Total number of Messages Read
+		# TYPE source_forwarder_read_total counter
 		`
 	expected := `
-		forwarder_read_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		source_forwarder_read_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
-	err := testutil.CollectAndCompare(forward.ReadMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
+	err := testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "source_forwarder_read_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 
 	writeMetadata := `
-		# HELP forwarder_write_total Total number of Messages Written
-		# TYPE forwarder_write_total counter
+		# HELP source_forwarder_write_total Total number of Messages Written
+		# TYPE source_forwarder_write_total counter
 		`
 	var writeExpected string
 	if batchSize > 1 {
 		writeExpected = `
-		forwarder_write_total{partition_name="to1-1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
-		forwarder_write_total{partition_name="to1-2",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
+		source_forwarder_write_total{partition_name="to1-1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
+		source_forwarder_write_total{partition_name="to1-2",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
 	`
 	} else {
 		writeExpected = `
-		forwarder_write_total{partition_name="to1-1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
-		forwarder_write_total{partition_name="to1-2",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(0)) + `
+		source_forwarder_write_total{partition_name="to1-1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		source_forwarder_write_total{partition_name="to1-2",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(0)) + `
 	`
 	}
 
-	err = testutil.CollectAndCompare(forward.WriteMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
+	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "source_forwarder_write_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 
 	ackMetadata := `
-		# HELP forwarder_ack_total Total number of Messages Acknowledged
-		# TYPE forwarder_ack_total counter
+		# HELP source_forwarder_ack_total Total number of Messages Acknowledged
+		# TYPE source_forwarder_ack_total counter
 		`
 	ackExpected := `
-		forwarder_ack_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
+		source_forwarder_ack_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
 	`
 
-	err = testutil.CollectAndCompare(forward.AckMessagesCount, strings.NewReader(ackMetadata+ackExpected), "forwarder_ack_total")
+	err = testutil.CollectAndCompare(ackMessagesCount, strings.NewReader(ackMetadata+ackExpected), "source_forwarder_ack_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
 
 func metricsReset() {
-	forward.ReadMessagesCount.Reset()
-	forward.WriteMessagesCount.Reset()
-	forward.AckMessagesCount.Reset()
+	readMessagesCount.Reset()
+	writeMessagesCount.Reset()
+	ackMessagesCount.Reset()
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer
