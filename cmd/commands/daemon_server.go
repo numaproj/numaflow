@@ -17,13 +17,13 @@ limitations under the License.
 package commands
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/daemon/server"
@@ -46,7 +46,7 @@ func NewDaemonServerCommand() *cobra.Command {
 				return fmt.Errorf("failed to decode the pipeline spec: %v", err)
 			}
 
-			ctx := logging.WithLogger(context.Background(), logger)
+			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
 			server := server.NewDaemonServer(pl, v1alpha1.ISBSvcType(isbSvcType))
 			return server.Run(ctx)
 		},

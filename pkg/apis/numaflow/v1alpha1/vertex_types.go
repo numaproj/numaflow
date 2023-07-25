@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,6 +75,10 @@ func (v Vertex) IsASource() bool {
 
 func (v Vertex) HasUDTransformer() bool {
 	return v.Spec.HasUDTransformer()
+}
+
+func (v Vertex) HasSideInputs() bool {
+	return len(v.Spec.SideInputs) > 0
 }
 
 func (v Vertex) IsASink() bool {
@@ -259,10 +264,44 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		}
 	}
 
+	initContainers := v.getInitContainers(req)
+
+	if v.HasSideInputs() {
+		sideInputsVolName := "var-run-side-inputs"
+		volumes = append(volumes, corev1.Volume{
+			Name:         sideInputsVolName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+
+		sideInputsWatcher := corev1.Container{
+			Name:            CtrSideInputsWatcher,
+			Env:             req.Env,
+			Image:           req.Image,
+			ImagePullPolicy: req.PullPolicy,
+			Resources:       standardResources,
+			Args:            []string{"side-inputs-watcher", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+		}
+		sideInputsWatcher.Env = append(sideInputsWatcher.Env, v.commonEnvs()...)
+		if x := v.Spec.SideInputsContainerTemplate; x != nil {
+			x.ApplyToContainer(&sideInputsWatcher)
+		}
+		containers = append(containers, sideInputsWatcher)
+		for i := 1; i < len(containers); i++ {
+			if containers[i].Name == CtrSideInputsWatcher {
+				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
+			} else {
+				// Readonly mount for user defined containers
+				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
+			}
+		}
+		// Side Inputs init container
+		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
+	}
+
 	spec := &corev1.PodSpec{
 		Subdomain:      v.GetHeadlessServiceName(),
 		Volumes:        append(volumes, v.Spec.Volumes...),
-		InitContainers: v.getInitContainers(req),
+		InitContainers: initContainers,
 		Containers:     append(containers, v.Spec.Sidecars...),
 	}
 	v.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
@@ -275,7 +314,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 	envVars := []corev1.EnvVar{
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
-		{Name: "GODEBUG", Value: os.Getenv("GODEBUG")},
+		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
 	initContainers := []corev1.Container{
@@ -288,6 +327,17 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 			Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 		},
 	}
+	if v.HasSideInputs() {
+		initContainers = append(initContainers, corev1.Container{
+			Name:            CtrInitSideInputs,
+			Env:             envVars,
+			Image:           req.Image,
+			ImagePullPolicy: req.PullPolicy,
+			Resources:       standardResources,
+			Args:            []string{"side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+		})
+	}
+
 	if v.Spec.InitContainerTemplate != nil {
 		v.Spec.InitContainerTemplate.ApplyToNumaflowContainers(initContainers)
 	}
@@ -386,13 +436,15 @@ type VertexSpec struct {
 type AbstractVertex struct {
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
 	// +optional
-	Source *Source `json:"source,omitempty" protobuf:"bytes,2,rep,name=source"`
+	Source *Source `json:"source,omitempty" protobuf:"bytes,2,opt,name=source"`
 	// +optional
-	Sink *Sink `json:"sink,omitempty" protobuf:"bytes,3,rep,name=sink"`
+	Sink *Sink `json:"sink,omitempty" protobuf:"bytes,3,opt,name=sink"`
 	// +optional
-	UDF *UDF `json:"udf,omitempty" protobuf:"bytes,4,rep,name=udf"`
+	UDF *UDF `json:"udf,omitempty" protobuf:"bytes,4,opt,name=udf"`
+	// Container template for the main numa container.
 	// +optional
-	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,5,rep,name=containerTemplate"`
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,5,opt,name=containerTemplate"`
+	// Container template for all the vertex pod init containers spawned by numaflow, excluding the ones specified by the user.
 	// +optional
 	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,6,opt,name=initContainerTemplate"`
 	// +optional
@@ -407,17 +459,23 @@ type AbstractVertex struct {
 	// Settings for autoscaling
 	// +optional
 	Scale Scale `json:"scale,omitempty" protobuf:"bytes,10,opt,name=scale"`
-	// List of init containers belonging to the pod.
+	// List of customized init containers belonging to the pod.
 	// More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,11,rep,name=initContainers"`
-	// List of sidecar containers belonging to the pod.
+	// List of customized sidecar containers belonging to the pod.
 	// +optional
 	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,12,rep,name=sidecars"`
 	// Number of partitions of the vertex owned buffers.
 	// It applies to udf and sink vertices only.
 	// +optional
-	Partitions *int32 `json:"partitions,omitempty" protobuf:"bytes,13,rep,name=partitions"`
+	Partitions *int32 `json:"partitions,omitempty" protobuf:"bytes,13,opt,name=partitions"`
+	// Names of the side inputs used in this vertex.
+	// +optional
+	SideInputs []string `json:"sideInputs,omitempty" protobuf:"bytes,14,rep,name=sideInputs"`
+	// Container template for the side inputs watcher container.
+	// +optional
+	SideInputsContainerTemplate *ContainerTemplate `json:"sideInputsContainerTemplate,omitempty" protobuf:"bytes,15,opt,name=sideInputsContainerTemplate"`
 }
 
 func (av AbstractVertex) GetVertexType() VertexType {
@@ -469,7 +527,7 @@ func (av AbstractVertex) IsReduceUDF() bool {
 }
 
 func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {
-	r := []string{}
+	var r []string
 	if av.IsASource() {
 		return r
 	}
@@ -641,7 +699,7 @@ func GenerateBufferName(namespace, pipelineName, vertex string, index int) strin
 }
 
 func GenerateBufferNames(namespace, pipelineName, vertex string, numOfPartitions int) []string {
-	result := []string{}
+	var result []string
 	for i := 0; i < numOfPartitions; i++ {
 		result = append(result, GenerateBufferName(namespace, pipelineName, vertex, i))
 	}

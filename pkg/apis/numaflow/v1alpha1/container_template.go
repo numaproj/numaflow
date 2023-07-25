@@ -53,7 +53,7 @@ func (ct *ContainerTemplate) ApplyToContainer(c *corev1.Container) {
 // ApplyToNumaflowContainers updates any numa or init containers with the values from the ContainerTemplate
 func (ct *ContainerTemplate) ApplyToNumaflowContainers(containers []corev1.Container) {
 	for i := range containers {
-		if containers[i].Name == CtrMain || containers[i].Name == CtrInit {
+		if containers[i].Name == CtrMain || containers[i].Name == CtrInit || containers[i].Name == CtrInitSideInputs {
 			ct.ApplyToContainer(&containers[i])
 		}
 	}

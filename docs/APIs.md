@@ -23,7 +23,8 @@ AbstractPodTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>)
 </p>
 <p>
 <p>
@@ -298,6 +299,9 @@ ContainerTemplate </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
+<p>
+Container template for the main numa container.
+</p>
 </td>
 </tr>
 <tr>
@@ -308,6 +312,10 @@ ContainerTemplate </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
+<p>
+Container template for all the vertex pod init containers spawned by
+numaflow, excluding the ones specified by the user.
+</p>
 </td>
 </tr>
 <tr>
@@ -369,7 +377,7 @@ Settings for autoscaling
 <td>
 <em>(Optional)</em>
 <p>
-List of init containers belonging to the pod. More info:
+List of customized init containers belonging to the pod. More info:
 <a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">https://kubernetes.io/docs/concepts/workloads/pods/init-containers/</a>
 </p>
 </td>
@@ -383,7 +391,7 @@ List of init containers belonging to the pod. More info:
 <td>
 <em>(Optional)</em>
 <p>
-List of sidecar containers belonging to the pod.
+List of customized sidecar containers belonging to the pod.
 </p>
 </td>
 </tr>
@@ -396,6 +404,30 @@ List of sidecar containers belonging to the pod.
 <p>
 Number of partitions of the vertex owned buffers. It applies to udf and
 sink vertices only.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>sideInputs</code></br> <em> \[\]string </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Names of the side inputs used in this vertex.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>sideInputsContainerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Container template for the side inputs watcher container.
 </p>
 </td>
 </tr>
@@ -678,6 +710,7 @@ Container
 </h3>
 <p>
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SideInput">SideInput</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDSink">UDSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
@@ -795,7 +828,8 @@ ContainerTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.DaemonTemplate">DaemonTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>)
 </p>
 <p>
 <p>
@@ -1684,6 +1718,59 @@ Description
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.GetSideInputDeploymentReq">
+GetSideInputDeploymentReq
+</h3>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ISBSvcType</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ISBSvcType"> ISBSvcType </a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>Image</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>PullPolicy</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
+Kubernetes core/v1.PullPolicy </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>Env</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
+\[\]Kubernetes core/v1.EnvVar </a> </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">
 GetVertexPodSpecReq
 </h3>
@@ -1731,6 +1818,13 @@ Kubernetes core/v1.PullPolicy </a> </em>
 <code>Env</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>SideInputsStoreName</code></br> <em> string </em>
 </td>
 <td>
 </td>
@@ -1870,6 +1964,7 @@ ISBSvcType (<code>string</code> alias)
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.GetDaemonDeploymentReq">GetDaemonDeploymentReq</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.GetSideInputDeploymentReq">GetSideInputDeploymentReq</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">GetVertexPodSpecReq</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBufferServiceStatus">InterStepBufferServiceStatus</a>)
 </p>
@@ -3149,6 +3244,19 @@ for the Pipeline
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>sideInputs</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SideInput"> \[\]SideInput </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SideInputs defines the Side Inputs of a pipeline.
+</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -3193,7 +3301,7 @@ Description
 <em>(Optional)</em>
 <p>
 Read batch size for all the vertices in the pipeline, can be overridden
-by the vertex’s limit settings
+by the vertex’s limit settings.
 </p>
 </td>
 </tr>
@@ -3204,7 +3312,7 @@ by the vertex’s limit settings
 <td>
 <em>(Optional)</em>
 <p>
-BufferMaxLength is used to define the max length of a buffer Only
+BufferMaxLength is used to define the max length of a buffer. Only
 applies to UDF and Source vertices as only they do buffer write. It can
 be overridden by the settings in vertex limits.
 </p>
@@ -3349,6 +3457,19 @@ Watermark enables watermark progression across the entire pipeline.
 <p>
 Templates is used to customize additional kubernetes resources required
 for the Pipeline
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>sideInputs</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SideInput"> \[\]SideInput </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SideInputs defines the Side Inputs of a pipeline.
 </p>
 </td>
 </tr>
@@ -3990,6 +4111,178 @@ once. The is use to prevent too aggressive scaling operations
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SideInput">
+SideInput
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+</p>
+<p>
+<p>
+SideInput defines information of a Side Input
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>container</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>volumes</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#volume-v1-core">
+\[\]Kubernetes core/v1.Volume </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>trigger</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SideInputTrigger">
+SideInputTrigger </a> </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SideInputTrigger">
+SideInputTrigger
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SideInput">SideInput</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>schedule</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>interval</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>timezone</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">
+SideInputsManagerTemplate
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates">Templates</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
+</td>
+<td>
+<p>
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
+</p>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Template for the side inputs manager numa container
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>initContainerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Template for the side inputs manager init container
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Sink">
 Sink
 </h3>
@@ -4363,7 +4656,7 @@ Description
 <td>
 <em>(Optional)</em>
 <p>
-DaemonTemplate is used to customize the Daemon Deployment
+DaemonTemplate is used to customize the Daemon Deployment.
 </p>
 </td>
 </tr>
@@ -4376,7 +4669,20 @@ DaemonTemplate is used to customize the Daemon Deployment
 <td>
 <em>(Optional)</em>
 <p>
-JobTemplate is used to customize Jobs
+JobTemplate is used to customize Jobs.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>sideInputsManager</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">
+SideInputsManagerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SideInputsManagerTemplate is used to customize the Side Inputs Manager.
 </p>
 </td>
 </tr>

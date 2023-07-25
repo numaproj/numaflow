@@ -541,3 +541,75 @@ func TestValidateUDF(t *testing.T) {
 		assert.Contains(t, err.Error(), `"length" is missing`)
 	})
 }
+
+func Test_validateSideInputs(t *testing.T) {
+	testObj := testPipeline.DeepCopy()
+	err := validateSideInputs(*testObj)
+	assert.NoError(t, err)
+	testObj.Spec.SideInputs = []dfv1.SideInput{
+		{Name: ""},
+	}
+	err = validateSideInputs(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `name is missing`)
+
+	testObj.Spec.SideInputs = []dfv1.SideInput{
+		{Name: "s1"},
+	}
+	err = validateSideInputs(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `container is missing`)
+
+	testObj.Spec.SideInputs[0].Container = &dfv1.Container{}
+	err = validateSideInputs(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `image is missing`)
+
+	testObj.Spec.SideInputs[0].Container.Image = "my-image:latest"
+	err = validateSideInputs(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `trigger is missing`)
+
+	testObj.Spec.SideInputs[0].Trigger = &dfv1.SideInputTrigger{}
+	err = validateSideInputs(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `either schedule or interval is required`)
+
+	testObj.Spec.SideInputs[0].Trigger.Interval = &metav1.Duration{Duration: time.Duration(200 * time.Second)}
+	testObj.Spec.SideInputs[0].Trigger.Schedule = pointer.String("0 2 * * *")
+	err = validateSideInputs(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `schedule and interval cannot be used together`)
+	testObj.Spec.SideInputs[0].Trigger.Schedule = nil
+
+	testObj.Spec.SideInputs = append(testObj.Spec.SideInputs, dfv1.SideInput{
+		Name: "s1",
+		Container: &dfv1.Container{
+			Image: "my-image:latest",
+		},
+		Trigger: &dfv1.SideInputTrigger{
+			Interval: &metav1.Duration{Duration: time.Duration(200 * time.Second)},
+		},
+	})
+	err = validateSideInputs(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `is defined more than once`)
+
+	testObj.Spec.SideInputs[1].Name = "s2"
+	err = validateSideInputs(*testObj)
+	assert.NoError(t, err)
+
+	testObj.Spec.Vertices[1].SideInputs = []string{"s1", "s1"}
+	err = validateSideInputs(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `is defined more than once`)
+
+	testObj.Spec.Vertices[1].SideInputs = []string{"s1", "s3"}
+	err = validateSideInputs(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `is not defined`)
+
+	testObj.Spec.Vertices[1].SideInputs = []string{"s1", "s2"}
+	err = validateSideInputs(*testObj)
+	assert.NoError(t, err)
+}

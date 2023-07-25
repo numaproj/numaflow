@@ -349,18 +349,24 @@ export const usePipelineViewFetch = (
       // backpressure for a buffer is the count of total pending message
       // map from edge-id( from-Vertex - to-Vertex ) to sum of backpressure
       const edgeBackpressureLabel = new Map();
+      const edgeIsFull = new Map();
 
       buffers.forEach((buffer) => {
         const sidx = ns_pl.length;
         const eidx = buffer?.bufferName?.lastIndexOf("-");
         const id = buffer?.bufferName?.substring(sidx, eidx);
-        if (edgeBackpressureLabel.get(id) === undefined)
+        // condition check is similar for isFull so combining into one
+        if (edgeBackpressureLabel.get(id) === undefined) {
           edgeBackpressureLabel.set(id, Number(buffer?.totalMessages));
-        else
+          edgeIsFull.set(id, buffer?.isFull);
+        } else {
           edgeBackpressureLabel.set(
             id,
             edgeBackpressureLabel.get(id) + Number(buffer?.totalMessages)
           );
+          if (buffer?.isFull === true && buffer?.isFull !== edgeIsFull.get(id))
+            edgeIsFull.set(id, buffer.isFull);
+        }
       });
 
       spec.edges.forEach((edge: any) => {
@@ -372,6 +378,7 @@ export const usePipelineViewFetch = (
           data: {
             conditions: edge?.conditions,
             backpressureLabel: edgeBackpressureLabel.get(edge?.to),
+            isFull: edgeIsFull.get(edge?.to),
           },
         } as Edge;
         pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
