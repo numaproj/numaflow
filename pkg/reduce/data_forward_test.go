@@ -1214,7 +1214,7 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	// publisher for source
 	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, wmstore.BuildWatermarkStore(hb, ot), 1, publish.WithAutoRefreshHeartbeatDisabled())
 
-	// publish heartbeat manually for the processors
+	// publish heartbeat manually for the processor
 	go func() {
 		for {
 			select {
@@ -1231,6 +1231,10 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 	storeWatcher := wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	pm := processor.NewProcessorManager(ctx, storeWatcher, 1, processor.WithIsReduce(true))
+	for waitForReadyP := pm.GetProcessor(fromBuffer.GetName()); waitForReadyP == nil; waitForReadyP = pm.GetProcessor(fromBuffer.GetName()) {
+		// wait until the test processor has been added to the processor list
+		time.Sleep(time.Millisecond * 100)
+	}
 	f := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm, 1)
 	return f, sourcePublisher
 }
