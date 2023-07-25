@@ -127,7 +127,6 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 					// therefore, recreate the kvWatcher using the new JetStream context
 					tempWatcher := kvWatcher
 					kvWatcher = jsw.newWatcher(ctx)
-					value.Created()
 					err = tempWatcher.Stop()
 					if err != nil {
 						jsw.log.Warnw("Failed to stop the watcher", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
@@ -163,7 +162,7 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVE
 				// if the last update time is before the previous fetch time, it means that the store is not getting any updates
 				// therefore, we don't have to recreate the watcher
 				if kvLastUpdatedTime.Before(jsw.previousFetchTime) {
-					jsw.log.Debug("The watcher is not receiving any updates, but the store is not getting any updates either")
+					jsw.log.Debug("The watcher is not receiving any updates, but the store is not getting any updates either", zap.String("watcher", jsw.GetKVName()), zap.Time("lastUpdateKVTime", kvLastUpdatedTime), zap.Time("previousFetchTime", jsw.previousFetchTime))
 				} else {
 					// if the last update time is after the previous fetch time, it means that the store is getting updates but the watcher is not receiving any
 					// therefore, we have to recreate the watcher
