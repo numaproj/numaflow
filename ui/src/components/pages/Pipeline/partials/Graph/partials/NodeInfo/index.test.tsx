@@ -1,4 +1,4 @@
-import NodeInfo from "./NodeInfo";
+import NodeInfo from "./index";
 import { render, screen } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 
@@ -22,7 +22,6 @@ describe("NodeInfo", () => {
         />
       </BrowserRouter>
     );
-    expect(screen.getByTestId("vertex-info")).toBeVisible();
     expect(screen.getByTestId("pods-view")).toBeVisible();
   });
 

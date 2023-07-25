@@ -311,16 +311,18 @@ export const usePipelineViewFetch = (
         newNode.position = { x: 0, y: 0 };
         // change this in the future if you would like to make it draggable
         newNode.draggable = false;
+        newNode.type = "custom";
+        newNode.data.nodeInfo = vertex;
         if (vertex?.source) {
-          newNode.type = "source";
-          newNode.data.source = vertex;
+          newNode.data.type = "source";
+          // newNode.data.source = vertex;
         } else if (vertex?.sink) {
-          newNode.type = "sink";
-          newNode.data.sink = vertex;
+          newNode.data.type = "sink";
+          // newNode.data.sink = vertex;
           newNode.data.test = vertex.name;
         } else {
-          newNode.data.udf = vertex;
-          newNode.type = "udf";
+          // newNode.data.udf = vertex;
+          newNode.data.type = "udf";
         }
         newNode.data.vertexMetrics = vertexMetrics.has(vertex?.name)
           ? vertexMetrics.get(vertex?.name)

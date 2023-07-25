@@ -1,6 +1,6 @@
-import Graph from "./Graph";
 import { render, screen, waitFor } from "@testing-library/react";
 import { Position } from "reactflow";
+import Graph from "./index";
 
 global.ResizeObserver = require("resize-observer-polyfill");
 

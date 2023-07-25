@@ -1,3 +1,5 @@
+import { SyntheticEvent, useState } from "react";
+
 import {
   Box,
   Paper,
@@ -9,14 +11,9 @@ import {
   TableRow,
   Tabs,
 } from "@mui/material";
-import { SyntheticEvent, useState } from "react";
-import TabPanel from "../../common/Tab-Panel";
-import { a11yProps } from "../../../utils";
-import { Pipeline } from "../../../types/declarations/pipeline";
-
-interface SpecProps {
-  pipeline: Pipeline;
-}
+import TabPanel from "../../../../../../common/Tab-Panel";
+import { a11yProps } from "../../../../../../../utils";
+import { SpecProps } from "../../../../../../../types/declarations/graph";
 
 export default function Spec(props: SpecProps) {
   const { pipeline } = props;
@@ -27,6 +24,8 @@ export default function Spec(props: SpecProps) {
     setValue(newValue);
   };
 
+  const fontWeightStyle = { fontWeight: "bold" };
+
   return (
     <Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -36,11 +35,7 @@ export default function Spec(props: SpecProps) {
           aria-label="pipeline details"
         >
           <Tab
-            sx={{
-              fontWeight: "bold",
-              color: "grey",
-              fontFamily: "IBM Plex Sans",
-            }}
+            sx={fontWeightStyle}
             label="Pipeline Details"
             {...a11yProps(0)}
           />
@@ -49,7 +44,7 @@ export default function Spec(props: SpecProps) {
       <TabPanel value={value} index={0}>
         <TableContainer
           component={Paper}
-          sx={{ borderBottom: 1, borderColor: "divider", width: 500 }}
+          sx={{ borderBottom: 1, borderColor: "divider", width: 600 }}
         >
           <Table
             sx={{ borderBottom: 1, borderColor: "divider" }}
@@ -57,17 +52,19 @@ export default function Spec(props: SpecProps) {
           >
             <TableBody>
               <TableRow data-testid="phase">
-                <TableCell>Phase</TableCell>
+                <TableCell sx={fontWeightStyle}>Phase</TableCell>
                 <TableCell align="left">{pipeline?.status?.phase}</TableCell>
               </TableRow>
               <TableRow data-testid="creation-timestamp">
-                <TableCell>Creation Timestamp</TableCell>
+                <TableCell sx={fontWeightStyle}>Creation Timestamp</TableCell>
                 <TableCell align="left">
                   {pipeline?.metadata?.creationTimestamp}
                 </TableCell>
               </TableRow>
               <TableRow data-testid="last-updated-timestamp">
-                <TableCell>Last Updated Timestamp</TableCell>
+                <TableCell sx={fontWeightStyle}>
+                  Last Updated Timestamp
+                </TableCell>
                 <TableCell align="left">
                   {pipeline?.status?.lastUpdated}
                 </TableCell>
