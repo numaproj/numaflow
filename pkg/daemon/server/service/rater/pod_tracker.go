@@ -91,8 +91,10 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 					var vType string
 					if v.IsReduceUDF() {
 						vType = "reduce"
+					} else if v.IsASource() {
+						vType = "source"
 					} else {
-						vType = "non_reduce"
+						vType = "other"
 					}
 					for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
 						podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
