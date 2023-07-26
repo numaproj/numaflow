@@ -75,7 +75,7 @@ func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClie
 		js:           js,
 		opts:         o,
 		isFull:       atomic.NewBool(true),
-		log:          logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject).With("partition", partitionIdx),
+		log:          logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject).With("partitionIdx", partitionIdx),
 	}
 
 	go result.runStatusChecker(ctx)
