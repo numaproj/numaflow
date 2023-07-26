@@ -109,6 +109,7 @@ func (e *edgeFetcher) GetWatermark(inputOffset isb.Offset, fromPartitionIdx int3
 		// if the pod is not active and the head offset of all the timelines is less than the input offset, delete the processor
 		// (this means we are processing data later than what the stale processor has processed)
 		if p.IsDeleted() && (offset > headOffset) {
+			e.log.Info("Deleting processor because it's stale", zap.String("processor", p.GetEntity().GetName()))
 			e.processorManager.DeleteProcessor(p.GetEntity().GetName())
 		}
 	}

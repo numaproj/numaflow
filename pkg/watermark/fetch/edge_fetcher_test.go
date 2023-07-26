@@ -1056,12 +1056,11 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	defer cancel()
 
 	// connect to NATS
-	nc, err := natstest.JetStreamClient(t, s).Connect(context.TODO())
-	assert.NoError(t, err)
+	nc := natstest.JetStreamClient(t, s)
 	defer nc.Close()
 
 	// create JetStream Context
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
+	js, err := nc.JetStreamContext(nats.PublishAsyncMaxPending(256))
 	assert.NoError(t, err)
 
 	// create heartbeat bucket
@@ -1348,12 +1347,11 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	defer cancel()
 
 	// connect to NATS
-	nc, err := natstest.JetStreamClient(t, s).Connect(context.TODO())
-	assert.NoError(t, err)
+	nc := natstest.JetStreamClient(t, s)
 	defer nc.Close()
 
 	// create JetStream Context
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
+	js, err := nc.JetStreamContext(nats.PublishAsyncMaxPending(256))
 	assert.NoError(t, err)
 
 	// create heartbeat bucket

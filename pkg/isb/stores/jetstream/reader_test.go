@@ -28,7 +28,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 )
 
@@ -46,10 +45,8 @@ func TestJetStreamBufferRead(t *testing.T) {
 	defer cancel()
 
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
-	conn, err := defaultJetStreamClient.Connect(ctx)
-	assert.NoError(t, err)
-	defer conn.Close()
-	js, err := conn.JetStream()
+	defer defaultJetStreamClient.Close()
+	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 
 	streamName := "testJetStreamBufferReader"
@@ -102,7 +99,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	}
 	assert.Equal(t, 20, len(offsetsInsideReadMessages))
 
-	fromStepJs, err := fromStep.conn.JetStream()
+	fromStepJs, err := fromStep.client.JetStreamContext()
 	assert.NoError(t, err)
 	streamInfo, err := fromStepJs.StreamInfo(streamName)
 	assert.NoError(t, err)
@@ -141,11 +138,9 @@ func TestGetName(t *testing.T) {
 	defer cancel()
 
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
-	conn, err := defaultJetStreamClient.Connect(ctx)
+	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
-	js, err := conn.JetStream()
-	assert.NoError(t, err)
-	defer conn.Close()
+	defer defaultJetStreamClient.Close()
 
 	streamName := "getName"
 	addStream(t, js, streamName)
@@ -168,10 +163,8 @@ func TestClose(t *testing.T) {
 	defer cancel()
 
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
-	conn, err := defaultJetStreamClient.Connect(ctx)
-	assert.NoError(t, err)
-	defer conn.Close()
-	js, err := conn.JetStream()
+	defer defaultJetStreamClient.Close()
+	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 
 	streamName := "close"
@@ -186,7 +179,7 @@ func TestClose(t *testing.T) {
 
 }
 
-func addStream(t *testing.T, js *jsclient.JetStreamContext, streamName string) {
+func addStream(t *testing.T, js nats.JetStreamContext, streamName string) {
 
 	_, err := js.AddStream(&nats.StreamConfig{
 		Name:       streamName,
@@ -210,7 +203,7 @@ func addStream(t *testing.T, js *jsclient.JetStreamContext, streamName string) {
 
 }
 
-func deleteStream(js *jsclient.JetStreamContext, streamName string) {
+func deleteStream(js nats.JetStreamContext, streamName string) {
 	_ = js.DeleteConsumer(streamName, streamName)
 	_ = js.DeleteStream(streamName)
 }
