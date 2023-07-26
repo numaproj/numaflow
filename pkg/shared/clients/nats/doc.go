@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package jetstream provides interface and two implementations to connect Nats JetStream.
+// Package nats provides interface and two implementations to connect Nats JetStream.
 //
 // Function NewDefaultJetStreamClient(url string, opts ...nats.Option) returns a client with
 // default implementation, which relies on the input url and other nats connection options.

@@ -48,7 +48,7 @@ type Publisher interface {
 	GetLatestWatermark() wmb.Watermark
 }
 
-// publish publishes the watermark for a processor entity.
+// publish publishes the watermark and heartbeat for a processor entity.
 type publish struct {
 	ctx    context.Context
 	entity processor.ProcessorEntitier
@@ -176,7 +176,7 @@ func (p *publish) validateWatermark(wm wmb.Watermark, toVertexPartitionIdx int32
 		p.log.Debugw("New watermark is updated for the head watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		p.SetHeadWM(wm, toVertexPartitionIdx)
 	} else if wm.BeforeWatermark(headWM) {
-		p.log.Warnw("Skip publishing the new watermark because it's older than the current watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
+		p.log.Infow("Skip publishing the new watermark because it's older than the current watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	} else {
 		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))

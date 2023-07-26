@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/goleak"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -83,10 +82,6 @@ func (m *raterMockHttpClient) Head(url string) (*http.Response, error) {
 	} else {
 		return nil, fmt.Errorf("unknown url: %s", url)
 	}
-}
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
 }
 
 // TestRater_Start tests the rater by mocking the http client

@@ -14,11 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package nats
+package server
 
-import "context"
+import (
+	"testing"
 
-// JetStreamClient is used to provide a JetStream client
-type JetStreamClient interface {
-	Connect(ctx context.Context, opts ...JetStreamClientOption) (*NatsConn, error)
+	"go.uber.org/goleak"
+)
+
+// apply go leak verification to all tests in this package
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 }
