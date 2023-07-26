@@ -37,8 +37,8 @@ import (
 type jetStreamSvc struct {
 	pipelineName string
 
-	jsClient jsclient.JetStreamClient
-	js       *jsclient.JetStreamContext
+	jsClient *jsclient.NATSClient
+	js       nats.JetStreamContext
 }
 
 func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBService, error) {
@@ -53,7 +53,7 @@ func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBServic
 
 type JSServiceOption func(*jetStreamSvc) error
 
-func WithJetStreamClient(jsClient jsclient.JetStreamClient) JSServiceOption {
+func WithJetStreamClient(jsClient *jsclient.NATSClient) JSServiceOption {
 	return func(j *jetStreamSvc) error {
 		j.jsClient = jsClient
 		return nil
@@ -77,12 +77,12 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 		return err
 	}
 
-	nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
+	nc, err := jsclient.NewNATSClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 	}
 	defer nc.Close()
-	js, err := nc.JetStream()
+	js, err := nc.JetStreamContext()
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
@@ -192,12 +192,12 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 		return nil
 	}
 	log := logging.FromContext(ctx)
-	nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
+	nc, err := jsclient.NewNATSClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 	}
 	defer nc.Close()
-	js, err := nc.JetStream()
+	js, err := nc.JetStreamContext()
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
@@ -235,12 +235,12 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}
-	nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
+	nc, err := jsclient.NewNATSClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 	}
 	defer nc.Close()
-	js, err := nc.JetStream()
+	js, err := nc.JetStreamContext()
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
@@ -271,29 +271,27 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 }
 
 func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error) {
-	var js *jsclient.JetStreamContext
+	var js nats.JetStreamContext
+	var err error
 	if jss.js != nil { // Daemon server use case
 		js = jss.js
 	} else if jss.jsClient != nil { // Daemon server first time access use case
-		nc, err := jss.jsClient.Connect(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get nats connection with given JetStream client, %w", err)
-		}
-		js, err = nc.JetStream()
+		js, err = jss.jsClient.JetStreamContext()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get a JetStream context from nats connection, %w", err)
 		}
 		jss.js = js
 	} else { // Short running use case
-		nc, err := jsclient.NewInClusterJetStreamClient().Connect(ctx)
+		nc, err := jsclient.NewNATSClient(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 		}
 		defer nc.Close()
-		js, err = nc.JetStream()
+		js, err = nc.JetStreamContext()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get a JetStream context from nats connection, %w", err)
 		}
+		jss.js = js
 	}
 	streamName := JetStreamName(buffer)
 	stream, err := js.StreamInfo(streamName)

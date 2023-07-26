@@ -28,14 +28,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 )
 
-func createAndLaterDeleteBucket(js *jsclient.JetStreamContext, kvConfig *nats.KeyValueConfig) (func(), error) {
+func createAndLaterDeleteBucket(js nats.JetStreamContext, kvConfig *nats.KeyValueConfig) (func(), error) {
 	kv, err := js.CreateKeyValue(kvConfig)
 	if err != nil {
 		return nil, err
@@ -53,9 +52,8 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	var ctx = context.Background()
 
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
-	conn, err := defaultJetStreamClient.Connect(ctx)
-	assert.NoError(t, err)
-	js, err := conn.JetStream()
+	defer defaultJetStreamClient.Close()
+	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 
 	var keyspace = "publisherTest"
@@ -115,5 +113,5 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	_ = p.Close()
 
 	_, err = p.heartbeatStore.GetValue(ctx, publishEntity.GetName())
-	assert.Equal(t, nats.ErrConnectionClosed, err)
+	assert.Equal(t, nats.ErrKeyNotFound, err)
 }

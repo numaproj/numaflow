@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 
 	"go.uber.org/zap"
 
@@ -52,10 +53,23 @@ type ReduceUDFProcessor struct {
 }
 
 func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
+	var (
+		readers        []isb.BufferReader
+		writers        map[string][]isb.BufferWriter
+		fromBuffer     string
+		err            error
+		natsClientPool *jsclient.ClientPool
+		windower       window.Windower
+	)
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var windower window.Windower
+
+	natsClientPool, err = jsclient.NewClientPool(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+	}
+	defer natsClientPool.CloseAll()
 
 	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
@@ -69,10 +83,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if windower == nil {
 		return fmt.Errorf("invalid window spec")
 	}
-	var readers []isb.BufferReader
-	var writers map[string][]isb.BufferWriter
-	var err error
-	var fromBuffer string
+
 	fromBuffers := u.VertexInstance.Vertex.OwnedBuffers()
 	// choose the buffer that corresponds to this reduce processor because
 	// reducer's incoming edge can have more than one partitions
@@ -95,11 +106,11 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
 			return err
 		}
-		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance)
+		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
 		if err != nil {
 			return err
 		}

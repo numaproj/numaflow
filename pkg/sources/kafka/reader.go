@@ -294,6 +294,7 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 		}
 		totalPending += partitionOffset - block.Offset
 	}
+	kafkaPending.WithLabelValues(r.name, r.pipelineName, r.topic, r.groupName).Set(float64(totalPending))
 	return totalPending, nil
 }
 

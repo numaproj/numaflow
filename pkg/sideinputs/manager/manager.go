@@ -58,7 +58,12 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	case dfv1.ISBSvcTypeRedis:
 		return fmt.Errorf("unsupported isbsvc type %q", sim.isbSvcType)
 	case dfv1.ISBSvcTypeJetStream:
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(sim.pipelineName, isbsvc.WithJetStreamClient(jsclient.NewInClusterJetStreamClient()))
+		natsClient, err := jsclient.NewNATSClient(ctx)
+		if err != nil {
+			log.Errorw("Failed to get a NATS client.", zap.Error(err))
+			return err
+		}
+		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(sim.pipelineName, isbsvc.WithJetStreamClient(natsClient))
 		if err != nil {
 			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 			return err

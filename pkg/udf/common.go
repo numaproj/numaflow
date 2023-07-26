@@ -93,7 +93,7 @@ func buildRedisBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInstance
 	return readers, writers, nil
 }
 
-func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInstance) ([]isb.BufferReader, map[string][]isb.BufferWriter, error) {
+func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInstance, clientPool *jsclient.ClientPool) ([]isb.BufferReader, map[string][]isb.BufferWriter, error) {
 
 	// create readers for owned buffer partitions.
 	var readers []isb.BufferReader
@@ -122,7 +122,7 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 		fromStreamName := isbsvc.JetStreamName(fromBufferPartition)
 		// reduce processor only has one buffer partition
 		// since we read from one buffer partition, fromPartitionIdx is 0.
-		reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), fromBufferPartition, fromStreamName, fromStreamName, 0, readOptions...)
+		reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, clientPool.NextAvailableClient(), fromBufferPartition, fromStreamName, fromStreamName, 0, readOptions...)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -132,7 +132,7 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 		for index, bufferPartition := range vertexInstance.Vertex.OwnedBuffers() {
 			fromStreamName := isbsvc.JetStreamName(bufferPartition)
 
-			reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, jsclient.NewInClusterJetStreamClient(), bufferPartition, fromStreamName, fromStreamName, int32(index), readOptions...)
+			reader, err := jetstreamisb.NewJetStreamBufferReader(ctx, clientPool.NextAvailableClient(), bufferPartition, fromStreamName, fromStreamName, int32(index), readOptions...)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -158,7 +158,7 @@ func buildJetStreamBufferIO(ctx context.Context, vertexInstance *dfv1.VertexInst
 		var edgeBuffers []isb.BufferWriter
 		for partitionIdx, partition := range partitionedBuffers {
 			streamName := isbsvc.JetStreamName(partition)
-			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jsclient.NewInClusterJetStreamClient(), partition, streamName, streamName, int32(partitionIdx), writeOpts...)
+			writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, clientPool.NextAvailableClient(), partition, streamName, streamName, int32(partitionIdx), writeOpts...)
 			if err != nil {
 				return nil, nil, err
 			}
