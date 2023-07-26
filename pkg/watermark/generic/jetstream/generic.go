@@ -52,12 +52,12 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 
-	fetchWatermark, err := buildFetcher(ctx, vertexInstance)
+	fetchWatermark, err := buildFetcher(ctx, vertexInstance, client)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	publishWatermark, err := buildPublishers(ctx, pipelineName, vertexInstance)
+	publishWatermark, err := buildPublishers(ctx, pipelineName, vertexInstance, client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -67,7 +67,7 @@ func BuildWatermarkProgressors(ctx context.Context, vertexInstance *v1alpha1.Ver
 
 // buildFetcher creates a Fetcher (implemented by EdgeFetcherSet) which is used to fetch the Watermarks for a given Vertex
 // (for all incoming Edges) and resolve the overall Watermark for the Vertex
-func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) (fetch.Fetcher, error) {
+func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (fetch.Fetcher, error) {
 	// if watermark is not enabled, use no-op.
 	if vertexInstance.Vertex.Spec.Watermark.Disabled {
 		return nil, fmt.Errorf("watermark disabled")
@@ -79,7 +79,7 @@ func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) 
 	vertex := vertexInstance.Vertex
 	if vertex.IsASource() {
 		fromBucket := v1alpha1.GenerateSourceBucketName(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name)
-		edgeFetcher, err := buildFetcherForBucket(ctx, vertexInstance, fromBucket)
+		edgeFetcher, err := buildFetcherForBucket(ctx, vertexInstance, fromBucket, client)
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +88,7 @@ func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) 
 	} else {
 		for _, e := range vertex.Spec.FromEdges {
 			fromBucket := v1alpha1.GenerateEdgeBucketName(vertexInstance.Vertex.Namespace, pipelineName, e.From, e.To)
-			edgeFetcher, err := buildFetcherForBucket(ctx, vertexInstance, fromBucket)
+			edgeFetcher, err := buildFetcherForBucket(ctx, vertexInstance, fromBucket, client)
 			if err != nil {
 				return nil, err
 			}
@@ -101,7 +101,7 @@ func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance) 
 
 // buildFetcherForBucket creates a Fetcher (implemented by EdgeFetcher) which is used to fetch the Watermarks for a single incoming Edge
 // to a Vertex (a single Edge has a single Bucket)
-func buildFetcherForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBucket string) (fetch.Fetcher, error) {
+func buildFetcherForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBucket string, client *jsclient.NATSClient) (fetch.Fetcher, error) {
 	var fetchWatermark fetch.Fetcher
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 	hbBucketName := isbsvc.JetStreamProcessorBucket(fromBucket)
@@ -135,7 +135,7 @@ func buildFetcherForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexI
 }
 
 // buildPublishers creates the Watermark Publishers for a given Vertex, one per Edge
-func buildPublishers(ctx context.Context, pipelineName string, vertexInstance *v1alpha1.VertexInstance) (map[string]publish.Publisher, error) {
+func buildPublishers(ctx context.Context, pipelineName string, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (map[string]publish.Publisher, error) {
 	// Publisher map creation, we need a publisher per out buffer.
 	var publishWatermark = make(map[string]publish.Publisher)
 	var processorName = fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
