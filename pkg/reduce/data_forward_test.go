@@ -94,12 +94,12 @@ func (e *EventTypeWMProgressor) Close() error {
 	return nil
 }
 
-func (e *EventTypeWMProgressor) UpdateAndFetchWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (e *EventTypeWMProgressor) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
 	e.lastOffset = offset
-	return e.GetWatermark()
+	return e.getWatermark()
 }
 
-func (e *EventTypeWMProgressor) GetWatermark() wmb.Watermark {
+func (e *EventTypeWMProgressor) getWatermark() wmb.Watermark {
 	e.m.Lock()
 	defer e.m.Unlock()
 	return e.watermarks[e.lastOffset.String()]

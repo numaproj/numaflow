@@ -36,7 +36,7 @@ func NewNoOpWMProgressor() *NoOpWMProgressor {
 	return &NoOpWMProgressor{}
 }
 
-func (n NoOpWMProgressor) UpdateAndFetchWatermark(isb.Offset, int32) wmb.Watermark {
+func (n NoOpWMProgressor) ComputeWatermark(isb.Offset, int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 
@@ -61,11 +61,6 @@ func (n NoOpWMProgressor) GetHeadWatermark(int32) wmb.Watermark {
 // GetHeadWMB returns the default WMB.
 func (n NoOpWMProgressor) GetHeadWMB(int32) wmb.WMB {
 	return wmb.WMB{}
-}
-
-// GetWatermark returns current Watermark
-func (n NoOpWMProgressor) GetWatermark() wmb.Watermark {
-	return wmb.Watermark{}
 }
 
 // Close stops the no-op progressor.

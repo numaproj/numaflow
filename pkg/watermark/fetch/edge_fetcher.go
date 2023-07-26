@@ -71,14 +71,14 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 	}
 }
 
-// UpdateAndFetchWatermark processes the offset on the partition indicated and returns the overall Watermark
+// ComputeWatermark processes the offset on the partition indicated and returns the overall Watermark
 // from all Partitions
-func (e *edgeFetcher) UpdateAndFetchWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+func (e *edgeFetcher) ComputeWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	err := e.updateWatermark(offset, fromPartitionIdx)
 	if err != nil {
 		return wmb.InitialWatermark
 	}
-	return e.GetWatermark()
+	return e.getWatermark()
 }
 
 // updateWatermark updates state (lastProcessedWm) for the given partition based on the provided offset.
@@ -138,7 +138,7 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 // progression for a vertex when not consuming the messages directly (eg. UX, tests)
 // NOTE
 //   - We don't use this function in the regular pods in the vertex.
-//   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in the GetWatermark never happens.
+//   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in updateWatermark() never happens.
 //     Meaning, in the UX (daemon service) we never delete any processor.
 func (e *edgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var debugString strings.Builder
@@ -211,6 +211,17 @@ func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 	// update the last processed watermark for the partition
 	e.lastProcessedWm[fromPartitionIdx] = headWMB.Watermark
 
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// TODO(join): the check below is temporarily remaining here instead of in EdgeFetcherSet::GetHeadWMB() so that this method
+	// can maintain its existing contract.
+	// Note that this means this method will return wmb.WMB{} some of the time which will cause EdgeFetcherSet::GetHeadWMB() to do the same
+	// even in cases where the overall Idle WMB < overall last processed watermark.
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// we only consider idle watermark if it is smaller than or equal to min of all the last processed watermarks.
+	if headWMB.Watermark > e.getWatermark().UnixMilli() {
+		return wmb.WMB{}
+	}
+
 	e.log.Debugf("GetHeadWMB: %s[%s] get idle head wmb for offset", debugString.String(), e.bucketName)
 	return headWMB
 }
@@ -225,8 +236,8 @@ func (e *edgeFetcher) Close() error {
 	return nil
 }
 
-// GetWatermark returns the smallest watermark among all the last processed watermarks.
-func (e *edgeFetcher) GetWatermark() wmb.Watermark {
+// getWatermark returns the smallest watermark among all the last processed watermarks.
+func (e *edgeFetcher) getWatermark() wmb.Watermark {
 	minWm := int64(math.MaxInt64)
 	for _, wm := range e.lastProcessedWm {
 		if minWm > wm {

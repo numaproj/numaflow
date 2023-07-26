@@ -176,8 +176,8 @@ func Test_EdgeFetcherSet_ProcessOffsetGetWatermark(t *testing.T) {
 					lastProcessedWm:  tt.lastProcessedWm[vertex],
 				}
 			}
-			if got := efs.UpdateAndFetchWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+			if got := efs.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 
 		})
@@ -201,11 +201,11 @@ type TestEdgeFetcher struct {
 	currentHeadWatermark wmb.Watermark
 }
 
-func (t *TestEdgeFetcher) UpdateAndFetchWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
-	return t.GetWatermark()
+func (t *TestEdgeFetcher) ComputeWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+	return t.getWatermark()
 }
 
-func (t *TestEdgeFetcher) GetWatermark() wmb.Watermark {
+func (t *TestEdgeFetcher) getWatermark() wmb.Watermark {
 	return t.currentWatermark
 }
 func (t *TestEdgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
@@ -305,7 +305,7 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 			},
 			wmb.WMB{Watermark: time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC).UnixMilli()},
 		},
-		{
+		/*{ //TODO(join): this is temporarily removed since the underlying code is temporarily removed
 			"exceedingWM",
 			map[string]Fetcher{
 				"idle": &TestEdgeFetcher{
@@ -320,7 +320,7 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 				},
 			},
 			wmb.WMB{},
-		},
+		},*/
 	}
 
 	for _, tt := range tests {

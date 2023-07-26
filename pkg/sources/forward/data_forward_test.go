@@ -69,13 +69,13 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-// GetWatermark uses current time as the watermark because we want to make sure
+// ComputeWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testForwardFetcher) UpdateAndFetchWatermark(offset isb.Offset, partition int32) wmb.Watermark {
-	return t.GetWatermark()
+func (t *testForwardFetcher) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+	return t.getWatermark()
 }
 
-func (t *testForwardFetcher) GetWatermark() wmb.Watermark {
+func (t *testForwardFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Numaproj Authors.
+Copyright 202 The Numaproj Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -42,13 +42,13 @@ func NewEdgeFetcherSet(ctx context.Context, edgeFetchers map[string]Fetcher) Fet
 	}
 }
 
-// UpdateAndFetchWatermark processes the offset on the partition indicated and returns the overall Watermark
+// ComputeWatermark processes the offset on the partition indicated and returns the overall Watermark
 // from all Partitions
-func (efs *edgeFetcherSet) UpdateAndFetchWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+func (efs *edgeFetcherSet) ComputeWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	var wm wmb.Watermark
 	overallWatermark := wmb.Watermark(time.UnixMilli(math.MaxInt64))
 	for fromVertex, fetcher := range efs.edgeFetchers {
-		wm = fetcher.UpdateAndFetchWatermark(inputOffset, fromPartitionIdx)
+		wm = fetcher.ComputeWatermark(inputOffset, fromPartitionIdx)
 		efs.log.Debugf("Got Edge watermark from vertex=%q: %v", fromVertex, wm.UnixMilli())
 		if wm.BeforeWatermark(overallWatermark) {
 			overallWatermark = wm
@@ -106,28 +106,18 @@ func (efs *edgeFetcherSet) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 		}
 	}
 
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// TODO(join): the check below has been temporarily moved from here to EdgeFetcher::GetHeadWMB() so that EdgeFetcher::GetHeadWMB()
+	// can maintain its existing contract.
+	// Note that this means that method will return wmb.WMB{} some of the time which will cause this to do the same
+	// even in cases where the overall Idle WMB < overall last processed watermark.
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// we only consider idle watermark if it is smaller than or equal to min of all the last processed watermarks.
-
-	if overallHeadWMB.Watermark > efs.GetWatermark().UnixMilli() {
-		return wmb.WMB{}
-	}
+	//if overallHeadWMB.Watermark > efs.GetWatermark().UnixMilli() {
+	//	return wmb.WMB{}
+	//}
 	return overallHeadWMB
 
-}
-
-// GetWatermark returns the current watermark based on what has been processed
-func (efs *edgeFetcherSet) GetWatermark() wmb.Watermark {
-	// get the most conservative time (minimum watermark) across all Edges
-	var wm wmb.Watermark
-	overallWatermark := wmb.Watermark(time.UnixMilli(math.MaxInt64))
-	for fromVertex, fetcher := range efs.edgeFetchers {
-		wm = fetcher.GetWatermark()
-		efs.log.Debugf("Got Edge watermark from vertex=%q: %v", fromVertex, wm.UnixMilli())
-		if wm.BeforeWatermark(overallWatermark) {
-			overallWatermark = wm
-		}
-	}
-	return overallWatermark
 }
 
 func (efs *edgeFetcherSet) Close() error {
