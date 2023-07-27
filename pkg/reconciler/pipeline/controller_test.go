@@ -109,7 +109,7 @@ func init() {
 
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
-	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(1000))
+	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 	_, ok := r.(*pipelineReconciler)
 	assert.True(t, ok)
 }
@@ -124,11 +124,12 @@ func Test_reconcile(t *testing.T) {
 		err := cl.Create(ctx, testIsbSvc)
 		assert.Nil(t, err)
 		r := &pipelineReconciler{
-			client: cl,
-			scheme: scheme.Scheme,
-			config: fakeConfig,
-			image:  testFlowImage,
-			logger: zaptest.NewLogger(t).Sugar(),
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   fakeConfig,
+			image:    testFlowImage,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
 		}
 		testObj := testPipeline.DeepCopy()
 		_, err = r.reconcile(ctx, testObj)
@@ -142,6 +143,60 @@ func Test_reconcile(t *testing.T) {
 		err = r.client.List(ctx, jobs, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(jobs.Items))
+	})
+}
+
+func Test_reconcileEvents(t *testing.T) {
+	t.Run("test reconcile - invalid name", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		r := &pipelineReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   fakeConfig,
+			image:    testFlowImage,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testPipeline.DeepCopy()
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		testObj.Name = "very-very-very-loooooooooooooooooooooooooooooooooooong"
+		_, err = r.reconcile(ctx, testObj)
+		assert.Error(t, err)
+		events := getEvents(r, 1)
+		assert.Equal(t, "Warning ReconcilePipelineFailed the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]", events[0])
+	})
+
+	t.Run("test reconcile - duplicate vertex", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		r := &pipelineReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   fakeConfig,
+			image:    testFlowImage,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testPipeline.DeepCopy()
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input", Source: &dfv1.Source{}})
+		_, err = r.reconcile(ctx, testObj)
+		assert.Error(t, err)
+		events := getEvents(r, 1)
+		assert.Equal(t, "Warning ReconcilePipelineFailed duplicate vertex name \"input\"", events[0])
 	})
 }
 
@@ -516,4 +571,13 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 		assert.Len(t, deployList.Items, 1)
 		assert.Equal(t, testObj.GetSideInputsManagerDeploymentName("s2"), deployList.Items[0].Name)
 	})
+}
+
+func getEvents(reconciler *pipelineReconciler, num int) []string {
+	c := reconciler.recorder.(*record.FakeRecorder).Events
+	events := make([]string, num)
+	for i := 0; i < num; i++ {
+		events[i] = <-c
+	}
+	return events
 }

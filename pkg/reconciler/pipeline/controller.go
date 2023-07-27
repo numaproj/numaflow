@@ -81,7 +81,6 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	result, reconcileErr := r.reconcile(ctx, plCopy)
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
-		r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", reconcileErr.Error())
 	}
 	plCopy.Status.LastUpdated = metav1.Now()
 	if needsUpdate(pl, plCopy) {
@@ -106,6 +105,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
 					log.Errorw("Failed to check if it's safe to delete the pipeline", zap.Error(err))
+					r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to check if it's safe to delete the pipeline")
 					return ctrl.Result{}, err
 				}
 
@@ -118,6 +118,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			// Finalizer logic should be added here.
 			if err := r.cleanUpBuffers(ctx, pl, log); err != nil {
 				log.Errorw("Failed to create buffer clean up job", zap.Error(err))
+				r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to create buffer clean up job")
 				return ctrl.Result{}, err
 
 			}
@@ -135,6 +136,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			log.Errorw("Updated desired pipeline phase failed", zap.Error(err))
+			r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to create buffer clean up job")
 			return ctrl.Result{}, err
 		}
 		if pl.Status.Phase != oldPhase {
@@ -147,7 +149,11 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	}
 
 	// Regular pipeline update
-	return r.reconcileNonLifecycleChanges(ctx, pl)
+	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
+	if err != nil {
+		r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", err.Error())
+	}
+	return result, err
 }
 
 // reconcileNonLifecycleChanges do the jobs not related to pipeline lifecycle changes.
