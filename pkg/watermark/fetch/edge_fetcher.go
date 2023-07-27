@@ -127,8 +127,8 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 	}
 	// update the last processed watermark for the partition
 	e.Lock()
-	defer e.Unlock()
 	e.lastProcessedWm[fromPartitionIdx] = epoch
+	e.Unlock()
 
 	e.log.Debugf("%s[%s] processed watermark for offset %d: %+v", debugString.String(), e.bucketName, offset, epoch)
 	return nil
@@ -207,10 +207,10 @@ func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 		return wmb.WMB{}
 	}
 
-	e.Lock()
-	defer e.Unlock()
 	// update the last processed watermark for the partition
+	e.Lock()
 	e.lastProcessedWm[fromPartitionIdx] = headWMB.Watermark
+	e.Unlock()
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// TODO(join): the check below is temporarily remaining here instead of in EdgeFetcherSet::GetHeadWMB() so that this method
@@ -240,10 +240,12 @@ func (e *edgeFetcher) Close() error {
 // getWatermark returns the smallest watermark among all the last processed watermarks.
 func (e *edgeFetcher) getWatermark() wmb.Watermark {
 	minWm := int64(math.MaxInt64)
+	e.Lock()
 	for _, wm := range e.lastProcessedWm {
 		if minWm > wm {
 			minWm = wm
 		}
 	}
+	e.Unlock()
 	return wmb.Watermark(time.UnixMilli(minWm))
 }
