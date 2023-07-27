@@ -169,7 +169,7 @@ func TestBuffer_ComputeWatermarkWithOnePartition(t *testing.T) {
 	}
 }
 
-func TestBuffer_ProcessOffsetGetWatermarkWithMultiplePartition(t *testing.T) {
+func TestBuffer_ComputeGetWatermarkWithMultiplePartition(t *testing.T) {
 	var ctx = context.Background()
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
