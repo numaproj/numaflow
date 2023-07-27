@@ -324,7 +324,7 @@ func TestBuffer_ComputeGetWatermarkWithMultiplePartition(t *testing.T) {
 				lastProcessedWm:  tt.lastProcessedWm,
 			}
 			if got := b.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
