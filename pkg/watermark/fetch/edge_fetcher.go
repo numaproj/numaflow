@@ -47,7 +47,7 @@ type edgeFetcher struct {
 	processorManager *processor.ProcessorManager
 	lastProcessedWm  []int64
 	log              *zap.SugaredLogger
-	sync.Mutex
+	sync.RWMutex
 }
 
 // NewEdgeFetcher returns a new edge fetcher.
@@ -240,12 +240,12 @@ func (e *edgeFetcher) Close() error {
 // getWatermark returns the smallest watermark among all the last processed watermarks.
 func (e *edgeFetcher) getWatermark() wmb.Watermark {
 	minWm := int64(math.MaxInt64)
-	e.Lock()
+	e.RLock()
 	for _, wm := range e.lastProcessedWm {
 		if minWm > wm {
 			minWm = wm
 		}
 	}
-	e.Unlock()
+	e.RUnlock()
 	return wmb.Watermark(time.UnixMilli(minWm))
 }
