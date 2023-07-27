@@ -34,7 +34,7 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-func Test_EdgeFetcherSet_ProcessOffsetGetWatermark(t *testing.T) {
+func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 	var ctx = context.Background()
 
 	// test fetching from 2 edges

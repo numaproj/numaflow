@@ -40,7 +40,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-func TestBuffer_ProcessOffsetGetWatermarkWithOnePartition(t *testing.T) {
+func TestBuffer_ComputeWatermarkWithOnePartition(t *testing.T) {
 	var ctx = context.Background()
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
@@ -160,7 +160,7 @@ func TestBuffer_ProcessOffsetGetWatermarkWithOnePartition(t *testing.T) {
 				lastProcessedWm:  lastProcessed,
 			}
 			if got := b.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-				t.Errorf("ProcessOffsetGetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 17 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
@@ -169,7 +169,7 @@ func TestBuffer_ProcessOffsetGetWatermarkWithOnePartition(t *testing.T) {
 	}
 }
 
-func TestBuffer_ProcessOffsetGetWatermarkWithMultiplePartition(t *testing.T) {
+func TestBuffer_ComputeGetWatermarkWithMultiplePartition(t *testing.T) {
 	var ctx = context.Background()
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
@@ -324,7 +324,7 @@ func TestBuffer_ProcessOffsetGetWatermarkWithMultiplePartition(t *testing.T) {
 				lastProcessedWm:  tt.lastProcessedWm,
 			}
 			if got := b.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
