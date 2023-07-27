@@ -160,7 +160,7 @@ func TestBuffer_ProcessOffsetGetWatermarkWithOnePartition(t *testing.T) {
 				lastProcessedWm:  lastProcessed,
 			}
 			if got := b.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-				t.Errorf("ProcessOffsetGetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 17 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
