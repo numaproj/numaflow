@@ -14,30 +14,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package watcher
+package syncronizer
 
 import (
 	"context"
 	"fmt"
-	"path"
-
-	"go.uber.org/zap"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"go.uber.org/zap"
+	"path"
 )
 
-type sideInputsWatcher struct {
+type sideInputsSyncronizer struct {
 	isbSvcType      dfv1.ISBSvcType
 	pipelineName    string
 	sideInputsStore string
 	sideInputs      []string
 }
 
-func NewSideInputsWatcher(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsStore string, sideInputs []string) *sideInputsWatcher {
-	return &sideInputsWatcher{
+func NewSideInputsSyncronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsStore string, sideInputs []string) *sideInputsSyncronizer {
+	return &sideInputsSyncronizer{
 		isbSvcType:      isbSvcType,
 		sideInputsStore: sideInputsStore,
 		pipelineName:    pipelineName,
@@ -45,18 +43,20 @@ func NewSideInputsWatcher(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsSt
 	}
 }
 
-func (siw *sideInputsWatcher) Start(ctx context.Context) error {
+func (siw *sideInputsSyncronizer) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	log.Infow("Starting Side Inputs Watcher", zap.Strings("sideInputs", siw.sideInputs))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	var isbSvcClient isbsvc.ISBService
+	var natsClient *jsclient.NATSClient
+	var err error
 	switch siw.isbSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		return fmt.Errorf("unsupported isbsvc type %q", siw.isbSvcType)
 	case dfv1.ISBSvcTypeJetStream:
-		natsClient, err := jsclient.NewNATSClient(ctx)
+		natsClient, err = jsclient.NewNATSClient(ctx)
 		if err != nil {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err

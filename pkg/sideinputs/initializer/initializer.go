@@ -19,7 +19,9 @@ package initializer
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
 	"path"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -50,11 +52,13 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	log.Infow("Starting Side Inputs Initializer", zap.Strings("sideInputs", sii.sideInputs))
 
 	var isbSvcClient isbsvc.ISBService
+	var natsClient *jsclient.NATSClient
+	var err error
 	switch sii.isbSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		return fmt.Errorf("unsupported isbsvc type %q", sii.isbSvcType)
 	case dfv1.ISBSvcTypeJetStream:
-		natsClient, err := jsclient.NewNATSClient(ctx)
+		natsClient, err = jsclient.NewNATSClient(ctx)
 		if err != nil {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err
@@ -67,7 +71,38 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sii.isbSvcType)
 	}
+	bucketName := isbsvc.JetStreamSideInputsStoreBucket(sii.sideInputsStore)
+	watch, err := jetstream.NewKVJetStreamKVWatch(ctx, sii.pipelineName, bucketName, natsClient)
+	if err != nil {
+		return err
+	}
+	retCh := make(chan []byte, 1)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		watchCh, stopped := watch.Watch(ctx)
+		for {
+			select {
+			case <-stopped:
+				retCh <- nil
+			case value := <-watchCh:
+				if value == nil {
+					log.Warnw("nil value received from SideInput watcher")
+					continue
+				}
+				log.Debug("SideInput value received ",
+					zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+				retCh <- value.Value()
+			}
+		}
+	}()
+	wg.Wait()
+	close(retCh)
 
+	for val := range retCh {
+		fmt.Println(string(val))
+	}
 	// TODO(SI): do something
 	// Wait for the data is ready in the side input store, and then copy the data to the disk
 	fmt.Printf("ISB Svc Client nil: %v\n", isbSvcClient == nil)
