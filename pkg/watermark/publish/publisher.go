@@ -148,17 +148,17 @@ func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset, toVertex
 
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
-		p.log.Errorw("Unable to publish watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+		p.log.Errorw("Unable to publish watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 	}
 
 	for {
 		err := p.otStore.PutKV(p.ctx, key, value)
 		if err != nil {
-			p.log.Errorw("Unable to publish watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+			p.log.Errorw("Unable to publish watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
-			p.log.Debugw("New watermark published with offset", zap.Int64("head", p.GetHeadWM(toVertexPartitionIdx).UnixMilli()), zap.Int64("new", validWM.UnixMilli()), zap.Int64("offset", seq))
+			p.log.Debugw("New watermark published with offset", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.Int64("head", p.GetHeadWM(toVertexPartitionIdx).UnixMilli()), zap.Int64("new", validWM.UnixMilli()), zap.Int64("offset", seq))
 			break
 		}
 	}
@@ -172,14 +172,14 @@ func (p *publish) validateWatermark(wm wmb.Watermark, toVertexPartitionIdx int32
 	}
 	// update p.headWatermarks only if wm > p.headWatermarks
 	headWM := p.GetHeadWM(toVertexPartitionIdx)
-	if wm.After(time.Time(headWM)) {
-		p.log.Debugw("New watermark is updated for the head watermark", zap.String("head", headWM.String()), zap.String("new", wm.String()))
+	if wm.AfterWatermark(headWM) {
+		p.log.Debugw("New watermark is updated for the head watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		p.SetHeadWM(wm, toVertexPartitionIdx)
-	} else if wm.Before(time.Time(headWM)) {
-		p.log.Infow("Skip publishing the new watermark because it's older than the current watermark", zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
+	} else if wm.BeforeWatermark(headWM) {
+		p.log.Infow("Skip publishing the new watermark because it's older than the current watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	} else {
-		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
+		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	}
 	return wm, false
@@ -210,17 +210,17 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset, toVe
 
 	value, err := otValue.EncodeToBytes()
 	if err != nil {
-		p.log.Errorw("Unable to publish idle watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+		p.log.Errorw("Unable to publish idle watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 	}
 
 	for {
 		err := p.otStore.PutKV(p.ctx, key, value)
 		if err != nil {
-			p.log.Errorw("Unable to publish idle watermark", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
+			p.log.Errorw("Unable to publish idle watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Error(err))
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
-			p.log.Debugw("New idle watermark published", zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Int64("offset", seq), zap.Int64("watermark", validWM.UnixMilli()))
+			p.log.Debugw("New idle watermark published", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Int64("offset", seq), zap.Int64("watermark", validWM.UnixMilli()))
 			break
 		}
 	}
@@ -252,7 +252,7 @@ func (p *publish) loadLatestFromStore() wmb.Watermark {
 func (p *publish) GetLatestWatermark() wmb.Watermark {
 	var latestWatermark = wmb.InitialWatermark
 	for _, wm := range p.headWatermarks {
-		if wm.After(time.Time(latestWatermark)) {
+		if wm.AfterWatermark(latestWatermark) {
 			latestWatermark = wm
 		}
 	}

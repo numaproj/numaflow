@@ -42,13 +42,13 @@ type OffsetTimeline struct {
 }
 
 // NewOffsetTimeline returns OffsetTimeline.
-func NewOffsetTimeline(ctx context.Context, c int) *OffsetTimeline {
+func NewOffsetTimeline(ctx context.Context, c int, bucket string) *OffsetTimeline {
 	// Initialize a new empty watermarks DLL with nil values of the size capacity.
 	// This is to avoid length check: when a new element is added, the tail element will be deleted.
 	offsetTimeline := OffsetTimeline{
 		ctx:      ctx,
 		capacity: c,
-		log:      logging.FromContext(ctx),
+		log:      logging.FromContext(ctx).With("bucket", bucket),
 	}
 
 	for i := 0; i < c; i++ {
@@ -97,7 +97,7 @@ func (t *OffsetTimeline) Put(node wmb.WMB) {
 			}
 		} else if node.Watermark > elementNode.Watermark {
 			if node.Offset < elementNode.Offset {
-				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.Watermark),
+				t.log.Errorw("The new input offset should never be smaller than the existing offset", zap.Int64("watermark", node.Watermark), zap.Int64("existingWatermark", elementNode.Watermark),
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
 			}

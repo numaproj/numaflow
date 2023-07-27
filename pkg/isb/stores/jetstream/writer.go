@@ -71,7 +71,7 @@ func NewJetStreamBufferWriter(ctx context.Context, client *jsclient.NATSClient, 
 		js:           js,
 		opts:         o,
 		isFull:       atomic.NewBool(true),
-		log:          logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject),
+		log:          logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject).With("partitionIdx", partitionIdx),
 	}
 
 	go result.runStatusChecker(ctx)
@@ -265,7 +265,7 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 			} else {
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
 				errs[idx] = nil
-				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
+				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain))
 			}
 		}(msg, index)
 	}

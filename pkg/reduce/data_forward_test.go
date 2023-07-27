@@ -74,6 +74,7 @@ var nonKeyedVertex = &dfv1.VertexInstance{
 
 type EventTypeWMProgressor struct {
 	watermarks map[string]wmb.Watermark
+	lastOffset isb.Offset
 	m          sync.Mutex
 }
 
@@ -95,10 +96,15 @@ func (e *EventTypeWMProgressor) Close() error {
 	return nil
 }
 
-func (e *EventTypeWMProgressor) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (e *EventTypeWMProgressor) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+	e.lastOffset = offset
+	return e.getWatermark()
+}
+
+func (e *EventTypeWMProgressor) getWatermark() wmb.Watermark {
 	e.m.Lock()
 	defer e.m.Unlock()
-	return e.watermarks[offset.String()]
+	return e.watermarks[e.lastOffset.String()]
 }
 
 func (e *EventTypeWMProgressor) GetHeadWatermark(int32) wmb.Watermark {
@@ -1232,13 +1238,14 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_PROCESSORS", hbWatcherCh)
 	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
 	storeWatcher := wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	pm := processor.NewProcessorManager(ctx, storeWatcher, 1, processor.WithIsReduce(true))
+	pm := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 1, processor.WithIsReduce(true))
 	for waitForReadyP := pm.GetProcessor(fromBuffer.GetName()); waitForReadyP == nil; waitForReadyP = pm.GetProcessor(fromBuffer.GetName()) {
 		// wait until the test processor has been added to the processor list
 		time.Sleep(time.Millisecond * 100)
 	}
-	f := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm, 1)
-	return f, sourcePublisher
+	edgeFetcher := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm, 1)
+	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, map[string]fetch.Fetcher{"fromVertex": edgeFetcher})
+	return edgeFetcherSet, sourcePublisher
 }
 
 func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {

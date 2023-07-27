@@ -155,14 +155,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("not all the vertex names are defined in edges")
 	}
 
-	// Do not support N FROM -> 1 TO for now.
-	toInEdges := make(map[string]bool)
-	for _, e := range pl.Spec.Edges {
-		if _, existing := toInEdges[e.To]; existing {
-			return fmt.Errorf("vertex %q has multiple 'from', which is not supported yet", e.To)
-		}
-		toInEdges[e.To] = true
-	}
+	// TODO(Join): prevent pipelines with Cycles in the case that there is a Reduce Vertex at the point of the cycle or to the right of it
 
 	for _, v := range pl.Spec.Vertices {
 		if err := validateVertex(v); err != nil {

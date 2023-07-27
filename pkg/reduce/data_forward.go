@@ -122,6 +122,7 @@ func NewDataForward(ctx context.Context,
 
 // Start starts reading messages from ISG
 func (df *DataForward) Start() {
+
 	for {
 		select {
 		case <-df.ctx.Done():
@@ -250,7 +251,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	// get the watermark for the partition from which we read the messages
-	processorWM := df.wmFetcher.GetWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
+	processorWM := df.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
+
 	for _, m := range readMessages {
 		if !df.keyed {
 			m.Keys = []string{dfv1.DefaultKeyForNonKeyedData}

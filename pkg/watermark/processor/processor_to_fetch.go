@@ -79,11 +79,11 @@ func (p *ProcessorToFetch) String() string {
 }
 
 // NewProcessorToFetch creates ProcessorToFetch.
-func NewProcessorToFetch(ctx context.Context, processor ProcessorEntitier, capacity int, fromBufferPartitionCount int32) *ProcessorToFetch {
+func NewProcessorToFetch(ctx context.Context, processor ProcessorEntitier, bucket string, capacity int, fromBufferPartitionCount int32) *ProcessorToFetch {
 
 	var offsetTimelines []*timeline.OffsetTimeline
 	for i := int32(0); i < fromBufferPartitionCount; i++ {
-		t := timeline.NewOffsetTimeline(ctx, capacity)
+		t := timeline.NewOffsetTimeline(ctx, capacity, bucket)
 		offsetTimelines = append(offsetTimelines, t)
 	}
 	p := &ProcessorToFetch{

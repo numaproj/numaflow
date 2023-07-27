@@ -140,7 +140,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
 		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
-			s := shuffle.NewShuffle(sp.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitionCount())
+			s := shuffle.NewShuffle(edge.To, edge.GetToVertexPartitionCount())
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 		toVertexPartitionMap[edge.To] = edge.GetToVertexPartitionCount()

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -50,7 +51,7 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 					MessageInfo: isb.MessageInfo{
 						EventTime: tmpTime,
 					},
-					ID:   fmt.Sprintf("%d", i),
+					ID:   fmt.Sprintf("%d-testVertex-0-0", i), // TODO: hard coded ID suffix ATM, make configurable if needed
 					Keys: []string{},
 				},
 				Body: isb.Body{Payload: result},
@@ -82,10 +83,13 @@ func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.Read
 	var readMessages = make([]isb.ReadMessage, count)
 
 	for idx, writeMessage := range writeMessages {
-		offset, _ := strconv.Atoi(writeMessage.Header.ID)
+		splitStr := strings.Split(writeMessage.Header.ID, "-")
+		offset, _ := strconv.Atoi(splitStr[0])
 		readMessages[idx] = isb.ReadMessage{
-			Message:    writeMessage,
-			ReadOffset: isb.SimpleIntOffset(func() int64 { return int64(offset) }),
+			Message: writeMessage,
+			ReadOffset: isb.SimpleIntOffset(func() int64 {
+				return int64(offset)
+			}),
 		}
 	}
 
