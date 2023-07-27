@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -51,11 +52,12 @@ type vertexReconciler struct {
 	image  string
 	logger *zap.SugaredLogger
 
-	scaler *scaling.Scaler
+	scaler   *scaling.Scaler
+	recorder record.EventRecorder
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, scaler *scaling.Scaler, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &vertexReconciler{client: client, scheme: scheme, config: config, image: image, scaler: scaler, logger: logger}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, scaler *scaling.Scaler, logger *zap.SugaredLogger, recorder record.EventRecorder) reconcile.Reconciler {
+	return &vertexReconciler{client: client, scheme: scheme, config: config, image: image, scaler: scaler, logger: logger, recorder: recorder}
 }
 
 func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -228,6 +230,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			if err := r.client.Create(ctx, pod); err != nil {
 				log.Errorw("Failed to create pod", zap.String("pod", pod.Name), zap.Error(err))
 				vertex.Status.MarkPhaseFailed("CreatePodFailed", err.Error())
+				r.recorder.Event(pod, corev1.EventTypeWarning, "CreatePodFailed", err.Error())
 				return ctrl.Result{}, err
 			}
 			log.Infow("Succeeded to create a pod", zap.String("pod", pod.Name))

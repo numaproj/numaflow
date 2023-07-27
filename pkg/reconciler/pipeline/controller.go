@@ -44,6 +44,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"k8s.io/client-go/tools/record"
 )
 
 const (
@@ -55,13 +56,14 @@ type pipelineReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 
-	config *reconciler.GlobalConfig
-	image  string
-	logger *zap.SugaredLogger
+	config   *reconciler.GlobalConfig
+	image    string
+	logger   *zap.SugaredLogger
+	recorder record.EventRecorder
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &pipelineReconciler{client: client, scheme: scheme, config: config, image: image, logger: logger}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, logger *zap.SugaredLogger, recorder record.EventRecorder) reconcile.Reconciler {
+	return &pipelineReconciler{client: client, scheme: scheme, config: config, image: image, logger: logger, recorder: recorder}
 }
 
 func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -79,6 +81,7 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	result, reconcileErr := r.reconcile(ctx, plCopy)
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
+		r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", reconcileErr.Error())
 	}
 	plCopy.Status.LastUpdated = metav1.Now()
 	if needsUpdate(pl, plCopy) {
@@ -777,6 +780,7 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 				return false, err
 			}
 			log.Infow("Scaled vertex", zap.Int32("from", origin), zap.Int32("to", replicas), zap.String("vertex", vertex.Name))
+			r.recorder.Event(pl, corev1.EventTypeNormal, "ScalingVertex", fmt.Sprintf("Scaled vertex %s to %d", vertex.Name, replicas))
 			isVertexPatched = true
 		}
 	}
