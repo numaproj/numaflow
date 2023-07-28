@@ -234,6 +234,8 @@ func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodRea
 	var readTotalMetricName string
 	if vertexType == "reduce" {
 		readTotalMetricName = "reduce_isb_reader_read_total"
+	} else if vertexType == "source" {
+		readTotalMetricName = "source_forwarder_read_total"
 	} else {
 		readTotalMetricName = "forwarder_read_total"
 	}

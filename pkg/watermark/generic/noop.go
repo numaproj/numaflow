@@ -36,8 +36,7 @@ func NewNoOpWMProgressor() *NoOpWMProgressor {
 	return &NoOpWMProgressor{}
 }
 
-// GetWatermark returns the default watermark.
-func (n NoOpWMProgressor) GetWatermark(isb.Offset, int32) wmb.Watermark {
+func (n NoOpWMProgressor) ComputeWatermark(isb.Offset, int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 

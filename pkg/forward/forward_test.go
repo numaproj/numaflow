@@ -69,9 +69,13 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-// GetWatermark uses current time as the watermark because we want to make sure
+func (t *testForwardFetcher) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+	return t.getWatermark()
+}
+
+// getWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testForwardFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (t *testForwardFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
 }
 
@@ -777,9 +781,13 @@ func (t *testWMBFetcher) Close() error {
 	return nil
 }
 
-// GetWatermark uses current time as the watermark because we want to make sure
+func (t *testWMBFetcher) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+	return t.getWatermark()
+}
+
+// getWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testWMBFetcher) GetWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (t *testWMBFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testWMBWatermark)
 }
 
@@ -1140,10 +1148,6 @@ func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]Verte
 	return output, nil
 }
 
-// for source forward test, in transformer, we assign to the message a new event time that is before test source watermark,
-// such that we can verify message IsLate attribute gets set to true.
-var testSourceNewEventTime = testSourceWatermark.Add(time.Duration(-1) * time.Minute)
-
 func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 		_ = ctx
@@ -1155,8 +1159,6 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 		_ = payload
 		// copy the payload
 		result := payload
-		// assign new event time
-		parentPaneInfo.EventTime = testSourceNewEventTime
 		var key []string
 
 		writeMessage := isb.Message{
@@ -1186,8 +1188,6 @@ func (f mySourceForwardTest) ApplyMapStream(ctx context.Context, message *isb.Re
 		_ = payload
 		// copy the payload
 		result := payload
-		// assign new event time
-		parentPaneInfo.EventTime = testSourceNewEventTime
 		var key []string
 
 		writeMessage := isb.Message{
@@ -1214,7 +1214,7 @@ func (p TestSourceWatermarkPublisher) PublishSourceWatermarks([]*isb.ReadMessage
 	// PublishSourceWatermarks is not tested in forwarder_test.go
 }
 
-func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
+func TestInterStepDataForwardSinglePartition(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
 	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
 	toSteps := map[string][]isb.BufferWriter{
@@ -1223,7 +1223,7 @@ func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
+			Name: "receivingVertex",
 		},
 	}}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -1233,14 +1233,8 @@ func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
 	fetchWatermark := &testForwardFetcher{}
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
-	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
-	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
-	assert.True(t, failedForwarder == nil)
-	assert.Error(t, err)
-	assert.Equal(t, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder"), err)
-
-	// create a valid source forwarder
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
+	// create a forwarder
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1256,13 +1250,8 @@ func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, int(count))
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{writeMessages[0].Header.ID + "-0-0", writeMessages[1].Header.ID + "-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
-	for _, m := range readMessages {
-		// verify new event time gets assigned to messages.
-		assert.Equal(t, testSourceNewEventTime, m.EventTime)
-		// verify messages are marked as late because of event time update.
-		assert.Equal(t, true, m.IsLate)
-	}
+	assert.Equal(t, []interface{}{"0-receivingVertex-0-0", "1-receivingVertex-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+
 	f.Stop()
 	time.Sleep(1 * time.Millisecond)
 	// only for shutdown will work as from buffer is not empty
@@ -1270,7 +1259,7 @@ func TestSourceInterStepDataForwardSinglePartition(t *testing.T) {
 	<-stopped
 }
 
-func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
+func TestInterStepDataForwardMultiplePartition(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
 	to11 := simplebuffer.NewInMemoryBuffer("to1-0", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
 	to12 := simplebuffer.NewInMemoryBuffer("to1-1", 10, 1, simplebuffer.WithReadTimeOut(time.Second*10))
@@ -1280,7 +1269,7 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
+			Name: "receivingVertex",
 		},
 	}}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -1290,14 +1279,8 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 	fetchWatermark := &testForwardFetcher{}
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
-	// verify if source watermark publisher is not set, NewInterStepDataForward throws.
-	failedForwarder, err := NewInterStepDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource))
-	assert.True(t, failedForwarder == nil)
-	assert.Error(t, err)
-	assert.Equal(t, fmt.Errorf("failed to assign a non-nil source watermark publisher for source vertex data forwarder"), err)
-
-	// create a valid source forwarder
-	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeSource), WithSourceWatermarkPublisher(TestSourceWatermarkPublisher{}))
+	// create a forwarder
+	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(5), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to11.IsFull())
 	assert.False(t, to12.IsFull())
@@ -1317,13 +1300,7 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[2].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{writeMessages[0].Header.ID + "-0-0", writeMessages[2].Header.ID + "-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
-	for _, m := range readMessages {
-		// verify new event time gets assigned to messages.
-		assert.Equal(t, testSourceNewEventTime, m.EventTime)
-		// verify messages are marked as late because of event time update.
-		assert.Equal(t, true, m.IsLate)
-	}
+	assert.Equal(t, []interface{}{"0-receivingVertex-0-0", "2-receivingVertex-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 
 	time.Sleep(time.Second)
 
@@ -1331,13 +1308,8 @@ func TestSourceInterStepDataForwardMultiplePartition(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[1].Header.Keys, writeMessages[3].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{writeMessages[1].Header.ID + "-0-0", writeMessages[3].Header.ID + "-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
-	for _, m := range readMessages {
-		// verify new event time gets assigned to messages.
-		assert.Equal(t, testSourceNewEventTime, m.EventTime)
-		// verify messages are marked as late because of event time update.
-		assert.Equal(t, true, m.IsLate)
-	}
+	assert.Equal(t, []interface{}{"1-receivingVertex-0-0", "3-receivingVertex-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+
 	f.Stop()
 	time.Sleep(1 * time.Millisecond)
 	// only for shutdown will work as from buffer is not empty
@@ -1559,7 +1531,7 @@ func validateMetrics(t *testing.T, batchSize int64) {
 		forwarder_read_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
-	err := testutil.CollectAndCompare(ReadMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
+	err := testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -1581,7 +1553,7 @@ func validateMetrics(t *testing.T, batchSize int64) {
 	`
 	}
 
-	err = testutil.CollectAndCompare(WriteMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
+	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
@@ -1594,16 +1566,16 @@ func validateMetrics(t *testing.T, batchSize int64) {
 		forwarder_ack_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
 	`
 
-	err = testutil.CollectAndCompare(AckMessagesCount, strings.NewReader(ackMetadata+ackExpected), "forwarder_ack_total")
+	err = testutil.CollectAndCompare(ackMessagesCount, strings.NewReader(ackMetadata+ackExpected), "forwarder_ack_total")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}
 }
 
 func metricsReset() {
-	ReadMessagesCount.Reset()
-	WriteMessagesCount.Reset()
-	AckMessagesCount.Reset()
+	readMessagesCount.Reset()
+	writeMessagesCount.Reset()
+	ackMessagesCount.Reset()
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer

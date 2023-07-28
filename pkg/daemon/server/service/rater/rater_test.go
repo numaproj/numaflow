@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/goleak"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -46,6 +45,8 @@ func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 		m.podOneCount = m.podOneCount + 20
 		resp := &http.Response{
 			StatusCode: 200,
+			// the test uses an abstract vertex without specifying vertex type, meaning it's neither source nor reduce,
+			// hence the default forwarder metric name "forwarder_read_total" is used to retrieve the metric
 			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
 # HELP forwarder_read_total Total number of Messages Read
 # TYPE forwarder_read_total counter
@@ -81,10 +82,6 @@ func (m *raterMockHttpClient) Head(url string) (*http.Response, error) {
 	} else {
 		return nil, fmt.Errorf("unknown url: %s", url)
 	}
-}
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
 }
 
 // TestRater_Start tests the rater by mocking the http client

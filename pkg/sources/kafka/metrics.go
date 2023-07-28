@@ -43,3 +43,10 @@ var kafkaSourceOffsetAckErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name:      "ack_error_total",
 	Help:      "Total number of Kafka ID Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline})
+
+// kafkaPending is used to indicate the number of messages pending in the kafka source
+var kafkaPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Subsystem: "kafka_source",
+	Name:      "pending_total",
+	Help:      "number of messages pending",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, "topic", "consumer"})

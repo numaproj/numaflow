@@ -64,7 +64,7 @@ func WithReadBatchSize(f int64) Option {
 	}
 }
 
-// WithTransformerConcurrency sets concurrency for UDF processing
+// WithTransformerConcurrency sets concurrency for source transformer processing
 func WithTransformerConcurrency(f int) Option {
 	return func(o *options) error {
 		o.transformerConcurrency = f
