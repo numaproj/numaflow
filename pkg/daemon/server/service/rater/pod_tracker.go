@@ -114,29 +114,13 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 	return nil
 }
 
-// LeastRecentlyUsed returns the least recently used pod from the active pod list.
-// if there is no active pods, it returns an empty string.
-func (pt *PodTracker) LeastRecentlyUsed() string {
-	if e := pt.activePods.Front(); e != "" {
-		pt.activePods.MoveToBack(e)
-		return e
-	}
-	return ""
-}
-
-// IsActive returns true if the pod is active, false otherwise.
-func (pt *PodTracker) IsActive(podKey string) bool {
-	return pt.activePods.Contains(podKey)
-}
-
-// GetActivePodsCount returns the number of active pods.
-func (pt *PodTracker) GetActivePodsCount() int {
-	return pt.activePods.Length()
-}
-
 func (pt *PodTracker) getPodKey(index int, vertexName string, vertexType string) string {
 	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
 	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index), vertexType}, PodInfoSeparator)
+}
+
+func (pt *PodTracker) GetActivePods() *UniqueStringList {
+	return pt.activePods
 }
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {
