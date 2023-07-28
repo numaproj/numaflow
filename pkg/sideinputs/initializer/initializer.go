@@ -19,6 +19,7 @@ package initializer
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/sideinputs/store"
 	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
 	"path"
 	"sync"
@@ -72,31 +73,14 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", sii.isbSvcType)
 	}
 	bucketName := isbsvc.JetStreamSideInputsStoreBucket(sii.sideInputsStore)
-	watch, err := jetstream.NewKVJetStreamKVWatch(ctx, sii.pipelineName, bucketName, natsClient)
+	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, sii.pipelineName, bucketName, natsClient)
 	if err != nil {
 		return err
 	}
 	retCh := make(chan []byte, 1)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		watchCh, stopped := watch.Watch(ctx)
-		for {
-			select {
-			case <-stopped:
-				retCh <- nil
-			case value := <-watchCh:
-				if value == nil {
-					log.Warnw("nil value received from SideInput watcher")
-					continue
-				}
-				log.Debug("SideInput value received ",
-					zap.String("key", value.Key()), zap.String("value", string(value.Value())))
-				retCh <- value.Value()
-			}
-		}
-	}()
+	go startSideInputWatcher(ctx, sideInputWatcher, &wg, retCh, log)
 	wg.Wait()
 	close(retCh)
 
@@ -112,4 +96,25 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func startSideInputWatcher(ctx context.Context, watch store.SideInputWatcher, wg *sync.WaitGroup, c chan<- []byte, log *zap.SugaredLogger) {
+	defer wg.Done()
+	watchCh, stopped := watch.Watch(ctx)
+	for {
+		select {
+		case <-stopped:
+			c <- nil
+			return
+		case value := <-watchCh:
+			if value == nil {
+				log.Warnw("nil value received from SideInput watcher")
+				continue
+			}
+			log.Debug("SideInput value received ",
+				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+			c <- value.Value()
+			return
+		}
+	}
 }

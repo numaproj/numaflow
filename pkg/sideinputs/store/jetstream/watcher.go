@@ -23,6 +23,8 @@ type jetStreamWatch struct {
 	opts              *options
 }
 
+var _ store.SideInputWatcher = (*jetStreamWatch)(nil)
+
 // SideInputEntry is each key-value entry in the store and the operation associated with the kv pair.
 type SideInputEntry struct {
 	key   string
@@ -67,7 +69,8 @@ func (j *jetStreamWatch) Watch(ctx context.Context) (<-chan store.SideInputKVEnt
 				}
 				j.kvwTimer.Reset(j.opts.watcherCreationThreshold)
 
-				j.log.Debugw("Received a value from the watcher", zap.String("watcher", j.GetKVName()), zap.Any("value", value), zap.Bool("ok", ok))
+				j.log.Debugw("Received a value from the watcher", zap.String("watcher", j.GetKVName()),
+					zap.Any("value", value), zap.Bool("ok", ok))
 				if !ok {
 					// there are no more values to receive and the channel is closed, but context is not done yet
 					// meaning: there could be an auto reconnection to JetStream while the service is still running
@@ -97,11 +100,14 @@ func (j *jetStreamWatch) Watch(ctx context.Context) (<-chan store.SideInputKVEnt
 				// if the last update time is before the previous fetch time, it means that the store is not getting any updates
 				// therefore, we don't have to recreate the watcher
 				if kvLastUpdatedTime.Before(j.previousFetchTime) {
-					j.log.Debug("The watcher is not receiving any updates, but the store is not getting any updates either", zap.String("watcher", j.GetKVName()), zap.Time("lastUpdateKVTime", kvLastUpdatedTime), zap.Time("previousFetchTime", jsw.previousFetchTime))
+					j.log.Debug("The watcher is not receiving any updates, but the store is not getting any updates either",
+						zap.String("watcher", j.GetKVName()), zap.Time("lastUpdateKVTime", kvLastUpdatedTime),
+						zap.Time("previousFetchTime", j.previousFetchTime))
 				} else {
 					// if the last update time is after the previous fetch time, it means that the store is getting updates but the watcher is not receiving any
 					// therefore, we have to recreate the watcher
-					j.log.Warn("The watcher is not receiving any updates", zap.String("watcher", j.GetKVName()), zap.Time("lastUpdateKVTime", kvLastUpdatedTime), zap.Time("previousFetchTime", j.previousFetchTime))
+					j.log.Warn("The watcher is not receiving any updates", zap.String("watcher", j.GetKVName()),
+						zap.Time("lastUpdateKVTime", kvLastUpdatedTime), zap.Time("previousFetchTime", j.previousFetchTime))
 					j.log.Warn("Recreating the watcher")
 					tempWatcher := kvWatcher
 					kvWatcher = j.newWatcher(ctx)
@@ -124,6 +130,7 @@ func (j *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
 		kvWatcher, err = j.client.CreateKVWatcher(j.kvBucketName)
 		time.Sleep(100 * time.Millisecond)
 	}
+	fmt.Println("Creating watcher success", kvWatcher)
 	return kvWatcher
 }
 
@@ -152,7 +159,7 @@ func (jsw *jetStreamWatch) lastUpdateKVTime() time.Time {
 
 func (j *jetStreamWatch) GetKVName() string {
 	//TODO implement me
-	panic("implement me")
+	return j.kvBucketName
 }
 
 func (j *jetStreamWatch) Close() {
