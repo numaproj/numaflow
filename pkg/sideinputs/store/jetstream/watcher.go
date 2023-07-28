@@ -130,7 +130,7 @@ func (j *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
 		kvWatcher, err = j.client.CreateKVWatcher(j.kvBucketName)
 		time.Sleep(100 * time.Millisecond)
 	}
-	fmt.Println("Creating watcher success", kvWatcher)
+	fmt.Println("Creating watcher success", kvWatcher.Context())
 	return kvWatcher
 }
 

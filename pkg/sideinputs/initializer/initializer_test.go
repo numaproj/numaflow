@@ -55,16 +55,17 @@ func TestSideInputsInitializer_Run(t *testing.T) {
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
 	fmt.Println("KV", sideInputWatcher.GetKVName())
 	dataTest := []byte("HELLO")
+	retCh := make(chan []byte, 1)
+	wg.Add(1)
+	go startSideInputWatcher(ctx, sideInputWatcher, &wg, retCh, log)
+	time.Sleep(5 * time.Second)
 	_, err = kv.Put("TEST", dataTest)
 	if err != nil {
 		fmt.Println("ERROR ", err)
 	}
 	val, _ := kv.Get("TEST")
 	fmt.Println("CHECK", string(val.Value()))
-	//
-	retCh := make(chan []byte, 1)
-	wg.Add(1)
-	go startSideInputWatcher(ctx, sideInputWatcher, &wg, retCh, log)
+
 	wg.Wait()
 	close(retCh)
 }
