@@ -135,7 +135,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	vertexType := podInfo[3]
 	podName := strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-")
 	var podReadCount *PodReadCount
-	if r.podTracker.IsActive(podName) {
+	if r.podTracker.IsActive(key) {
 		podReadCount = r.getPodReadCounts(vertexName, vertexType, podName)
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podName)
