@@ -164,13 +164,15 @@ func Test_reconcileEvents(t *testing.T) {
 			recorder: record.NewFakeRecorder(64),
 		}
 		testObj := testPipeline.DeepCopy()
+		testObj.Status.Phase = "Paused"
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
 		testObj.Name = "very-very-very-loooooooooooooooooooooooooooooooooooong"
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
-		events := getEvents(r, 1)
-		assert.Equal(t, "Warning ReconcilePipelineFailed the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]", events[0])
+		events := getEvents(r, 2)
+		assert.Equal(t, "Normal UpdatePipelinePhase Updated pipeline phase from Paused to Running", events[0])
+		assert.Equal(t, "Warning ReconcilePipelineFailed the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]", events[1])
 	})
 
 	t.Run("test reconcile - duplicate vertex", func(t *testing.T) {

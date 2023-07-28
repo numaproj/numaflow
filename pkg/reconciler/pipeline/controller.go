@@ -129,18 +129,23 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 	// New, or reconciliation failed pipeline
 	if pl.Status.Phase == dfv1.PipelinePhaseUnknown || pl.Status.Phase == dfv1.PipelinePhaseFailed {
-		return r.reconcileNonLifecycleChanges(ctx, pl)
+		result, err := r.reconcileNonLifecycleChanges(ctx, pl)
+		if err != nil {
+			r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", err.Error())
+		}
+		return result, err
 	}
 
 	if oldPhase := pl.Status.Phase; oldPhase != pl.Spec.Lifecycle.GetDesiredPhase() {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			log.Errorw("Updated desired pipeline phase failed", zap.Error(err))
-			r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to create buffer clean up job")
+			r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Updated desired pipeline phase failed")
 			return ctrl.Result{}, err
 		}
 		if pl.Status.Phase != oldPhase {
 			log.Infow("Updated pipeline phase", zap.String("originalPhase", string(oldPhase)), zap.String("currentPhase", string(pl.Status.Phase)))
+			r.recorder.Eventf(pl, corev1.EventTypeNormal, "UpdatePipelinePhase", "Updated pipeline phase from %s to %s", string(oldPhase), string(pl.Status.Phase))
 		}
 		if requeue {
 			return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
@@ -786,7 +791,7 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 				return false, err
 			}
 			log.Infow("Scaled vertex", zap.Int32("from", origin), zap.Int32("to", replicas), zap.String("vertex", vertex.Name))
-			r.recorder.Event(pl, corev1.EventTypeNormal, "ScalingVertex", fmt.Sprintf("Scaled vertex %s to %d", vertex.Name, replicas))
+			r.recorder.Eventf(pl, corev1.EventTypeNormal, "ScalingVertex", "Scaled vertex %s from %d to %d replicas", vertex.Name, origin, replicas)
 			isVertexPatched = true
 		}
 	}
