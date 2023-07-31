@@ -315,13 +315,10 @@ export const usePipelineViewFetch = (
         newNode.data.nodeInfo = vertex;
         if (vertex?.source) {
           newNode.data.type = "source";
-          // newNode.data.source = vertex;
         } else if (vertex?.sink) {
           newNode.data.type = "sink";
-          // newNode.data.sink = vertex;
           newNode.data.test = vertex.name;
         } else {
-          // newNode.data.udf = vertex;
           newNode.data.type = "udf";
         }
         newNode.data.vertexMetrics = vertexMetrics.has(vertex?.name)

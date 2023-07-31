@@ -53,12 +53,15 @@ const CustomEdge: FC<EdgeProps> = ({
 
   return (
     <>
-      <path
-        id={id}
-        className="react-flow__edge-path"
-        d={edgePath}
-        style={edgeStyle}
-      />
+      <svg>
+        <path
+          id={id}
+          className="react-flow__edge-path"
+          d={edgePath}
+          style={edgeStyle}
+          data-testid={id}
+        />
+      </svg>
       <EdgeLabelRenderer>
         <div
           className={"edge"}

@@ -46,7 +46,7 @@ const CustomNode: FC<NodeProps> = ({
   };
 
   return (
-    <div>
+    <div data-testid={data?.name}>
       <Tooltip
         title={
           <div className={"node-tooltip"}> 1 or more pods are not running </div>

@@ -1,5 +1,3 @@
-import { SyntheticEvent, useState } from "react";
-
 import {
   Box,
   Paper,
@@ -18,22 +16,12 @@ import { SpecProps } from "../../../../../../../types/declarations/graph";
 export default function Spec(props: SpecProps) {
   const { pipeline } = props;
 
-  const [value, setValue] = useState(0);
-
-  const handleChange = (event: SyntheticEvent, newValue: number) => {
-    setValue(newValue);
-  };
-
   const fontWeightStyle = { fontWeight: "bold" };
 
   return (
     <Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs
-          value={value}
-          onChange={handleChange}
-          aria-label="pipeline details"
-        >
+        <Tabs value={0} aria-label="pipeline details">
           <Tab
             sx={fontWeightStyle}
             label="Pipeline Details"
@@ -41,7 +29,7 @@ export default function Spec(props: SpecProps) {
           />
         </Tabs>
       </Box>
-      <TabPanel value={value} index={0}>
+      <TabPanel value={0} index={0}>
         <TableContainer
           component={Paper}
           sx={{ borderBottom: 1, borderColor: "divider", width: 600 }}
