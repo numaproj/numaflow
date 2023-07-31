@@ -135,8 +135,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	vertexType := podInfo[3]
 	podName := strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-")
 	var podReadCount *PodReadCount
-	activePods := r.podTracker.GetActivePods()
-	if activePods.Contains(key) {
+	if r.podTracker.IsActive(key) {
 		podReadCount = r.getPodReadCounts(vertexName, vertexType, podName)
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podName)
@@ -168,12 +167,9 @@ func (r *Rater) Start(ctx context.Context) error {
 		go r.monitor(ctx, i, keyCh)
 	}
 
-	// Function assign() moves an element in the list from the front to the back,
-	// and send to the channel so that it can be picked up by a worker.
+	// Function assign() sends the least recently used podKey to the channel so that it can be picked up by a worker.
 	assign := func() {
-		activePods := r.podTracker.GetActivePods()
-		if e := activePods.Front(); e != "" {
-			activePods.MoveToBack(e)
+		if e := r.podTracker.LeastRecentlyUsed(); e != "" {
 			keyCh <- e
 			return
 		}
@@ -190,7 +186,7 @@ func (r *Rater) Start(ctx context.Context) error {
 			assign()
 			// Make sure each of the key will be assigned at least every taskInterval milliseconds.
 			sleep(ctx, time.Millisecond*time.Duration(func() int {
-				l := r.podTracker.GetActivePods().Length()
+				l := r.podTracker.GetActivePodsCount()
 				if l == 0 {
 					return r.options.taskInterval
 				}
