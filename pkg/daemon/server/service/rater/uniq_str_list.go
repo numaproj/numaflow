@@ -59,7 +59,7 @@ func (l *UniqueStringList) MoveToBack(value string) {
 func (l *UniqueStringList) Front() string {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
-	if l.Length() == 0 {
+	if l.l.Len() == 0 {
 		return ""
 	}
 	return l.l.Front().Value.(string)
