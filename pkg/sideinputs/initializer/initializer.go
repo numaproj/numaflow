@@ -77,15 +77,16 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	retCh := make(chan []byte, 1)
+	retCh := make(chan map[string][]byte, 1)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go startSideInputWatcher(ctx, sideInputWatcher, &wg, retCh, log)
+	m := createSideInputMap(sii.sideInputs)
+	go startSideInputWatcher(ctx, sideInputWatcher, &wg, retCh, log, m)
 	wg.Wait()
 	close(retCh)
 
 	for val := range retCh {
-		fmt.Println(string(val))
+		fmt.Println(val)
 	}
 	// TODO(SI): do something
 	// Wait for the data is ready in the side input store, and then copy the data to the disk
@@ -98,13 +99,15 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	return nil
 }
 
-func startSideInputWatcher(ctx context.Context, watch store.SideInputWatcher, wg *sync.WaitGroup, c chan<- []byte, log *zap.SugaredLogger) {
+func startSideInputWatcher(ctx context.Context, watch store.SideInputWatcher,
+	wg *sync.WaitGroup, c chan<- map[string][]byte, log *zap.SugaredLogger, m map[string][]byte) {
 	defer wg.Done()
 	watchCh, stopped := watch.Watch(ctx)
 	for {
 		select {
 		case <-stopped:
 			c <- nil
+			fmt.Println("Stopped value received ")
 			return
 		case value := <-watchCh:
 			if value == nil {
@@ -113,8 +116,30 @@ func startSideInputWatcher(ctx context.Context, watch store.SideInputWatcher, wg
 			}
 			log.Debug("SideInput value received ",
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
-			c <- value.Value()
-			return
+			m[value.Key()] = value.Value()
+			if gotAllSideInputVals(m) {
+				c <- m
+				return
+			} else {
+				continue
+			}
 		}
 	}
+}
+
+func createSideInputMap(sideInputs []string) map[string][]byte {
+	m := make(map[string][]byte)
+	for _, input := range sideInputs {
+		m[input] = nil
+	}
+	return m
+}
+
+func gotAllSideInputVals(m map[string][]byte) bool {
+	for key := range m {
+		if m[key] == nil {
+			return false
+		}
+	}
+	return true
 }
