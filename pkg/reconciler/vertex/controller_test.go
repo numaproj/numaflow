@@ -554,3 +554,34 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
 	})
 }
+
+func Test_reconcileEvents(t *testing.T) {
+	t.Run("test reconcile - isbsvc doesn't exist", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		r := &vertexReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   fakeConfig,
+			image:    testFlowImage,
+			scaler:   scaling.NewScaler(cl),
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.InterStepBufferServiceName = "notDefault"
+		_, err := r.reconcile(ctx, testObj)
+		assert.Error(t, err)
+		events := getEvents(r, 1)
+		assert.Equal(t, "Warning ISBSvcNotFound isbsvc notDefault not found", events[0])
+	})
+}
+
+func getEvents(reconciler *vertexReconciler, num int) []string {
+	c := reconciler.recorder.(*record.FakeRecorder).Events
+	events := make([]string, num)
+	for i := 0; i < num; i++ {
+		events[i] = <-c
+	}
+	return events
+}
