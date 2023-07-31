@@ -105,7 +105,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
 					log.Errorw("Failed to check if it's safe to delete the pipeline", zap.Error(err))
-					r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to check if it's safe to delete the pipeline")
+					r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to check if it's safe to delete the pipeline: %v", err.Error())
 					return ctrl.Result{}, err
 				}
 
@@ -118,7 +118,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			// Finalizer logic should be added here.
 			if err := r.cleanUpBuffers(ctx, pl, log); err != nil {
 				log.Errorw("Failed to create buffer clean up job", zap.Error(err))
-				r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to create buffer clean up job")
+				r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to create buffer clean up job: %v", err.Error())
 				return ctrl.Result{}, err
 
 			}
@@ -131,7 +131,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	if pl.Status.Phase == dfv1.PipelinePhaseUnknown || pl.Status.Phase == dfv1.PipelinePhaseFailed {
 		result, err := r.reconcileNonLifecycleChanges(ctx, pl)
 		if err != nil {
-			r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", err.Error())
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
 		}
 		return result, err
 	}
@@ -140,7 +140,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			log.Errorw("Updated desired pipeline phase failed", zap.Error(err))
-			r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Updated desired pipeline phase failed")
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Updated desired pipeline phase failed: %v", zap.Error(err))
 			return ctrl.Result{}, err
 		}
 		if pl.Status.Phase != oldPhase {
@@ -156,7 +156,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	// Regular pipeline update
 	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
 	if err != nil {
-		r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", err.Error())
+		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
 	}
 	return result, err
 }

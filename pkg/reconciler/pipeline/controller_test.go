@@ -172,7 +172,7 @@ func Test_reconcileEvents(t *testing.T) {
 		assert.Error(t, err)
 		events := getEvents(r, 2)
 		assert.Equal(t, "Normal UpdatePipelinePhase Updated pipeline phase from Paused to Running", events[0])
-		assert.Equal(t, "Warning ReconcilePipelineFailed the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]", events[1])
+		assert.Equal(t, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]", events[1])
 	})
 
 	t.Run("test reconcile - duplicate vertex", func(t *testing.T) {
@@ -198,7 +198,7 @@ func Test_reconcileEvents(t *testing.T) {
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
 		events := getEvents(r, 1)
-		assert.Equal(t, "Warning ReconcilePipelineFailed duplicate vertex name \"input\"", events[0])
+		assert.Equal(t, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: duplicate vertex name \"input\"", events[0])
 	})
 }
 
