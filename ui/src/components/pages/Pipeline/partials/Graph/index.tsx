@@ -1,4 +1,5 @@
 import { MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
+
 import ReactFlow, {
   addEdge,
   applyEdgeChanges,
@@ -9,30 +10,28 @@ import ReactFlow, {
   Node,
   NodeChange,
   NodeTypes,
-  Position,
   EdgeTypes,
+  Position,
   Controls,
 } from "reactflow";
-import "reactflow/dist/style.css";
-import dagre from "dagre";
-import EdgeInfo from "../edgeinfo/EdgeInfo";
-import NodeInfo from "../nodeinfo/NodeInfo";
-import { GraphData } from "../../../types/declarations/pipeline";
-import "./Graph.css";
-import Spec from "../spec/Spec";
 import { Card } from "@mui/material";
-import SourceNode from "./SourceNode";
-import UDFNode from "./UDFNode";
-import SinkNode from "./SinkNode";
-import CustomEdge from "./CustomEdge";
+import { graphlib, layout } from "dagre";
+import EdgeInfo from "./partials/EdgeInfo";
+import NodeInfo from "./partials/NodeInfo";
+import Spec from "./partials/Spec";
+import CustomEdge from "./partials/CustomEdge";
+import CustomNode from "./partials/CustomNode";
+import { GraphProps } from "../../../../../types/declarations/graph";
+
+import "reactflow/dist/style.css";
+import "./style.css";
 
 const nodeWidth = 172;
 const nodeHeight = 36;
+const graphDirection = "LR";
 
 const defaultNodeTypes: NodeTypes = {
-  udf: UDFNode,
-  sink: SinkNode,
-  source: SourceNode,
+  custom: CustomNode,
 };
 
 const defaultEdgeTypes: EdgeTypes = {
@@ -42,9 +41,9 @@ const defaultEdgeTypes: EdgeTypes = {
 const getLayoutedElements = (
   nodes: Node[],
   edges: Edge[],
-  direction = "LR"
+  direction: string
 ) => {
-  const dagreGraph = new dagre.graphlib.Graph();
+  const dagreGraph = new graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   const isHorizontal = direction === "LR";
   dagreGraph.setGraph({ rankdir: direction, ranksep: 80 });
@@ -57,37 +56,29 @@ const getLayoutedElements = (
     dagreGraph.setEdge(edge.source, edge.target);
   });
 
-  dagre.layout(dagreGraph);
+  layout(dagreGraph);
 
   nodes.forEach((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
     node.targetPosition = isHorizontal ? Position.Left : Position.Top;
     node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
 
-    // We are shifting the dagre node position (anchor=center center) to the top left
-    // so it matches the React Flow node anchor point (top left).
+    // We are shifting the dagre node position (anchor=center) to the top left
+    // so that it matches the React Flow node anchor point (top left).
     node.position = {
       x: nodeWithPosition.x + Math.random() / 1000,
       y: nodeWithPosition.y,
     };
-
-    return node;
   });
 
   return { nodes, edges };
 };
 
-interface GraphProps {
-  data: GraphData;
-  namespaceId: string | undefined;
-  pipelineId: string | undefined;
-}
-
 export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId } = props;
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
-    return getLayoutedElements(data.vertices, data.edges);
+    return getLayoutedElements(data.vertices, data.edges, graphDirection);
   }, [data]);
 
   const [nodes, setNodes] = useState<Node[]>(layoutedNodes);
@@ -175,22 +166,8 @@ export default function Graph(props: GraphProps) {
   const [showSpec, setShowSpec] = useState(true);
 
   return (
-    <div
-      style={{
-        overflow: "scroll",
-      }}
-    >
-      <div
-        className="Graph"
-        data-testid="graph"
-        style={{
-          width: "100%",
-          height: 500,
-          overflow: "scroll !important",
-          border: "2px solid",
-          borderColor: "whitesmoke",
-        }}
-      >
+    <div>
+      <div className="Graph" data-testid="graph">
         <ReactFlow
           preventScrolling={false}
           nodeTypes={defaultNodeTypes}
@@ -217,9 +194,7 @@ export default function Graph(props: GraphProps) {
         variant={"outlined"}
       >
         {showSpec && <Spec pipeline={data.pipeline} />}
-        {edgeOpen && (
-          <EdgeInfo data-testid="edge-info" edge={edge} edges={edges} />
-        )}
+        {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} />}
         {nodeOpen && (
           <NodeInfo
             data-testid="node-info"
