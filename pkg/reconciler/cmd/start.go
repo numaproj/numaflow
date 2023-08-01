@@ -124,7 +124,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Pipeline controller
 	pipelineController, err := controller.New(dfv1.ControllerPipeline, mgr, controller.Options{
-		Reconciler: plctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, logger),
+		Reconciler: plctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, logger, mgr.GetEventRecorderFor(dfv1.ControllerPipeline)),
 	})
 	if err != nil {
 		logger.Fatalw("Unable to set up Pipeline controller", zap.Error(err))
@@ -167,7 +167,7 @@ func Start(namespaced bool, managedNamespace string) {
 	// Vertex controller
 	autoscaler := scaling.NewScaler(mgr.GetClient(), scaling.WithWorkers(20))
 	vertexController, err := controller.New(dfv1.ControllerVertex, mgr, controller.Options{
-		Reconciler: vertexctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, autoscaler, logger),
+		Reconciler: vertexctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, autoscaler, logger, mgr.GetEventRecorderFor(dfv1.ControllerVertex)),
 	})
 	if err != nil {
 		logger.Fatalw("Unable to set up Vertex controller", zap.Error(err))

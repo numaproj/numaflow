@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,13 +56,14 @@ type pipelineReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 
-	config *reconciler.GlobalConfig
-	image  string
-	logger *zap.SugaredLogger
+	config   *reconciler.GlobalConfig
+	image    string
+	logger   *zap.SugaredLogger
+	recorder record.EventRecorder
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &pipelineReconciler{client: client, scheme: scheme, config: config, image: image, logger: logger}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, logger *zap.SugaredLogger, recorder record.EventRecorder) reconcile.Reconciler {
+	return &pipelineReconciler{client: client, scheme: scheme, config: config, image: image, logger: logger, recorder: recorder}
 }
 
 func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -102,7 +104,9 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetDeleteGracePeriodSeconds()) * time.Second)) {
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
-					log.Errorw("Failed to check if it's safe to delete the pipeline", zap.Error(err))
+					logMsg := fmt.Sprintf("Failed to check if it's safe to delete the pipeline: %v", err.Error())
+					log.Error(logMsg)
+					r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", logMsg)
 					return ctrl.Result{}, err
 				}
 
@@ -114,7 +118,9 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			}
 			// Finalizer logic should be added here.
 			if err := r.cleanUpBuffers(ctx, pl, log); err != nil {
-				log.Errorw("Failed to create buffer clean up job", zap.Error(err))
+				logMsg := fmt.Sprintf("Failed to create buffer clean up job: %v", err.Error())
+				log.Error(logMsg)
+				r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", logMsg)
 				return ctrl.Result{}, err
 
 			}
@@ -125,17 +131,24 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 	// New, or reconciliation failed pipeline
 	if pl.Status.Phase == dfv1.PipelinePhaseUnknown || pl.Status.Phase == dfv1.PipelinePhaseFailed {
-		return r.reconcileNonLifecycleChanges(ctx, pl)
+		result, err := r.reconcileNonLifecycleChanges(ctx, pl)
+		if err != nil {
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
+		}
+		return result, err
 	}
 
 	if oldPhase := pl.Status.Phase; oldPhase != pl.Spec.Lifecycle.GetDesiredPhase() {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
-			log.Errorw("Updated desired pipeline phase failed", zap.Error(err))
+			logMsg := fmt.Sprintf("Updated desired pipeline phase failed: %v", zap.Error(err))
+			log.Error(logMsg)
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", logMsg)
 			return ctrl.Result{}, err
 		}
 		if pl.Status.Phase != oldPhase {
 			log.Infow("Updated pipeline phase", zap.String("originalPhase", string(oldPhase)), zap.String("currentPhase", string(pl.Status.Phase)))
+			r.recorder.Eventf(pl, corev1.EventTypeNormal, "UpdatePipelinePhase", "Updated pipeline phase from %s to %s", string(oldPhase), string(pl.Status.Phase))
 		}
 		if requeue {
 			return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
@@ -144,7 +157,11 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	}
 
 	// Regular pipeline update
-	return r.reconcileNonLifecycleChanges(ctx, pl)
+	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
+	if err != nil {
+		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
+	}
+	return result, err
 }
 
 // reconcileNonLifecycleChanges do the jobs not related to pipeline lifecycle changes.
@@ -692,6 +709,7 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 				return false, err
 			}
 			log.Infow("Scaled vertex", zap.Int32("from", origin), zap.Int32("to", replicas), zap.String("vertex", vertex.Name))
+			r.recorder.Eventf(pl, corev1.EventTypeNormal, "ScalingVertex", "Scaled vertex %s from %d to %d replicas", vertex.Name, origin, replicas)
 			isVertexPatched = true
 		}
 	}

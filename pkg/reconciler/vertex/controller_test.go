@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -168,7 +169,7 @@ func init() {
 
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
-	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, scaling.NewScaler(cl), zaptest.NewLogger(t).Sugar())
+	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, scaling.NewScaler(cl), zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 	_, ok := r.(*vertexReconciler)
 	assert.True(t, ok)
 }
@@ -501,4 +502,35 @@ func Test_reconcile(t *testing.T) {
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
 		assert.Equal(t, 2, len(pods.Items[0].Spec.Containers))
 	})
+}
+
+func Test_reconcileEvents(t *testing.T) {
+	t.Run("test reconcile - isbsvc doesn't exist", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		r := &vertexReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   fakeConfig,
+			image:    testFlowImage,
+			scaler:   scaling.NewScaler(cl),
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.InterStepBufferServiceName = "notDefault"
+		_, err := r.reconcile(ctx, testObj)
+		assert.Error(t, err)
+		events := getEvents(r, 1)
+		assert.Equal(t, "Warning ISBSvcNotFound isbsvc notDefault not found", events[0])
+	})
+}
+
+func getEvents(reconciler *vertexReconciler, num int) []string {
+	c := reconciler.recorder.(*record.FakeRecorder).Events
+	events := make([]string, num)
+	for i := 0; i < num; i++ {
+		events[i] = <-c
+	}
+	return events
 }
