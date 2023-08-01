@@ -1,0 +1,30 @@
+.edge {
+    position: absolute;
+    cursor: pointer;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 400;
+    font-size: 0.6rem;
+    width: fit-content;
+    display: flex;
+    justify-content: center;
+}
+
+.edge-tooltip {
+    font-size: 1.2em;
+    text-align: center;
+
+}
+
+.edge-label {
+    width: fit-content;
+    background: white;
+    position: absolute;
+    border-radius: 0.125rem;
+    padding: 0 0.3rem;
+    font-size: 0.48rem;
+    text-transform: lowercase;
+    text-align: center;
+    font-family: "IBM Plex Sans", sans-serif;
+    pointer-events: all;
+    align-content: center;
+}

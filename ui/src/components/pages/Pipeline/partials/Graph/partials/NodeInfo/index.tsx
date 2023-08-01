@@ -1,5 +1,5 @@
-import ReactJson from "react-json-view";
-import { a11yProps, handleCopy } from "../../../utils";
+import { SyntheticEvent, useState } from "react";
+
 import {
   Box,
   Tab,
@@ -12,23 +12,14 @@ import {
   TableHead,
   Paper,
 } from "@mui/material";
-import { SyntheticEvent, useState } from "react";
-import TabPanel from "../../common/Tab-Panel";
-import { Pods } from "../../pods/Pods";
-import { Node } from "reactflow";
-
-interface NodeInfoProps {
-  node: Node;
-  namespaceId: string | undefined;
-  pipelineId: string | undefined;
-}
+import ReactJson from "react-json-view";
+import TabPanel from "../../../../../../common/Tab-Panel";
+import { a11yProps, handleCopy } from "../../../../../../../utils";
+import { Pods } from "../../../../../../pods/Pods";
+import { NodeInfoProps } from "../../../../../../../types/declarations/graph";
 
 export default function NodeInfo(props: NodeInfoProps) {
   const { node, namespaceId, pipelineId } = props;
-
-  if (!namespaceId || !pipelineId) {
-    return null;
-  }
 
   const [value, setValue] = useState(0);
 
@@ -37,12 +28,33 @@ export default function NodeInfo(props: NodeInfoProps) {
   };
 
   const label = node?.id + " Vertex";
+  const fontWeightStyle = { fontWeight: "bold" };
+
+  if (!namespaceId || !pipelineId) {
+    return (
+      <Box>
+        <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+          <Tabs value={0}>
+            <Tab style={fontWeightStyle} label={label} />
+          </Tabs>
+        </Box>
+        <Box
+          sx={{ mx: 3, my: 2 }}
+        >{`Missing namespace or pipeline information`}</Box>
+      </Box>
+    );
+  }
 
   return (
     <Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Tabs value={0}>
-          <Tab data-testid={node?.id} label={label} {...a11yProps(0)} />
+          <Tab
+            style={fontWeightStyle}
+            data-testid={node?.id}
+            label={label}
+            {...a11yProps(0)}
+          />
         </Tabs>
       </Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -53,38 +65,39 @@ export default function NodeInfo(props: NodeInfoProps) {
         >
           {node?.id && (
             <Tab
+              style={fontWeightStyle}
               data-testid="pods-view"
-              style={{ fontWeight: "bold" }}
               label="Pods View"
               {...a11yProps(0)}
             />
           )}
-          {node?.data && (
+          {node?.data?.nodeInfo && (
             <Tab
-              data-testid="vertex-info"
-              style={{ fontWeight: "bold" }}
+              style={fontWeightStyle}
+              data-testid="spec"
               label="Spec"
               {...a11yProps(1)}
             />
           )}
           {node?.data?.vertexMetrics && (
             <Tab
+              style={fontWeightStyle}
               data-testid="processing-rates"
-              style={{ fontWeight: "bold" }}
               label="Processing Rates"
               {...a11yProps(2)}
             />
           )}
           {node?.data?.buffers && (
             <Tab
+              style={fontWeightStyle}
               data-testid="buffers"
-              style={{ fontWeight: "bold" }}
               label="Buffers"
               {...a11yProps(3)}
             />
           )}
         </Tabs>
       </Box>
+
       {node?.id && (
         <TabPanel data-testid="link" value={value} index={0}>
           <Pods
@@ -94,19 +107,14 @@ export default function NodeInfo(props: NodeInfoProps) {
           />
         </TabPanel>
       )}
-      {node?.data && (
+
+      {node?.data?.nodeInfo && (
         <TabPanel value={value} index={1}>
           <ReactJson
             name="spec"
             enableClipboard={handleCopy}
             theme="apathy:inverted"
-            src={
-              node.data?.source
-                ? node.data.source
-                : node.data?.udf
-                ? node.data.udf
-                : node.data.sink
-            }
+            src={node.data.nodeInfo}
             style={{
               width: "100%",
               borderRadius: "4px",
@@ -115,9 +123,10 @@ export default function NodeInfo(props: NodeInfoProps) {
           />
         </TabPanel>
       )}
+
       {node?.data?.vertexMetrics && (
         <TabPanel value={value} index={2}>
-          {node?.data?.vertexMetrics?.podMetrics && (
+          {node.data.vertexMetrics?.podMetrics && (
             <TableContainer
               component={Paper}
               sx={{ borderBottom: 1, borderColor: "divider" }}
@@ -125,10 +134,10 @@ export default function NodeInfo(props: NodeInfoProps) {
               <Table aria-label="pod-backpressure">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Partition</TableCell>
-                    <TableCell>1m</TableCell>
-                    <TableCell>5m</TableCell>
-                    <TableCell>15m</TableCell>
+                    <TableCell style={fontWeightStyle}>Partition</TableCell>
+                    <TableCell style={fontWeightStyle}>1m</TableCell>
+                    <TableCell style={fontWeightStyle}>5m</TableCell>
+                    <TableCell style={fontWeightStyle}>15m</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -158,11 +167,10 @@ export default function NodeInfo(props: NodeInfoProps) {
               </Table>
             </TableContainer>
           )}
-          {!node?.data?.vertexMetrics?.podMetrics && (
-            <Box>{`No pods found`}</Box>
-          )}
+          {!node.data.vertexMetrics?.podMetrics && <Box>{`No pods found`}</Box>}
         </TabPanel>
       )}
+
       {node?.data?.buffers && (
         <TabPanel value={value} index={3}>
           <TableContainer
@@ -172,13 +180,15 @@ export default function NodeInfo(props: NodeInfoProps) {
             <Table aria-label="edge-info">
               <TableHead>
                 <TableRow>
-                  <TableCell>Partition</TableCell>
-                  <TableCell>isFull</TableCell>
-                  <TableCell>AckPending</TableCell>
-                  <TableCell>Pending</TableCell>
-                  <TableCell>Buffer Length</TableCell>
-                  <TableCell>Buffer Usage</TableCell>
-                  <TableCell>Total Pending Messages</TableCell>
+                  <TableCell style={fontWeightStyle}>Partition</TableCell>
+                  <TableCell style={fontWeightStyle}>isFull</TableCell>
+                  <TableCell style={fontWeightStyle}>AckPending</TableCell>
+                  <TableCell style={fontWeightStyle}>Pending</TableCell>
+                  <TableCell style={fontWeightStyle}>Buffer Length</TableCell>
+                  <TableCell style={fontWeightStyle}>Buffer Usage</TableCell>
+                  <TableCell style={fontWeightStyle}>
+                    Total Pending Messages
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -191,15 +201,11 @@ export default function NodeInfo(props: NodeInfoProps) {
                   }
                   let bufferUsage = "";
                   if (typeof buffer?.bufferUsage !== "undefined") {
-                    bufferUsage = (
-                      buffer?.bufferUsage * 100
-                    ).toFixed(2);
+                    bufferUsage = (buffer?.bufferUsage * 100).toFixed(2);
                   }
                   return (
-                    <TableRow key={`edge-info-${idx}`}>
-                      <TableCell>
-                        {buffer?.bufferName}
-                      </TableCell>
+                    <TableRow key={`node-buffer-info-${idx}`}>
+                      <TableCell>{buffer?.bufferName}</TableCell>
                       <TableCell data-testid="isFull">{isFull}</TableCell>
                       <TableCell data-testid="ackPending">
                         {buffer?.ackPendingCount}
@@ -210,9 +216,7 @@ export default function NodeInfo(props: NodeInfoProps) {
                       <TableCell data-testid="bufferLength">
                         {buffer?.bufferLength}
                       </TableCell>
-                      <TableCell data-testid="usage">
-                        {bufferUsage}%
-                      </TableCell>
+                      <TableCell data-testid="usage">{bufferUsage}%</TableCell>
                       <TableCell data-testid="totalMessages">
                         {buffer?.totalMessages}
                       </TableCell>
